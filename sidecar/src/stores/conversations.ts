@@ -96,12 +96,16 @@ export class ConversationStore {
 
   // Retourne l'id de la ligne insérée : le broadcast WS le rediffuse tel quel.
   appendEvent(conversationId: string, event: AppEvent): number {
-    const result = this.db
-      .query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
-      .run(conversationId, JSON.stringify(event), new Date().toISOString());
-    this.db.query("UPDATE conversations SET updated_at = ? WHERE id = ?")
-      .run(new Date().toISOString(), conversationId);
-    return Number(result.lastInsertRowid);
+    const append = this.db.transaction(() => {
+      const now = new Date().toISOString();
+      const result = this.db
+        .query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
+        .run(conversationId, JSON.stringify(event), now);
+      this.db.query("UPDATE conversations SET updated_at = ? WHERE id = ?")
+        .run(now, conversationId);
+      return Number(result.lastInsertRowid);
+    });
+    return append();
   }
 
   listEvents(conversationId: string): StoredEvent[] {

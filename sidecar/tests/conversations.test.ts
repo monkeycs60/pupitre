@@ -155,6 +155,21 @@ test("appendEvent retourne l'id inséré, exposé par listEvents en ordre croiss
   ]);
 });
 
+test("appendEvent annule l'insertion si la mise à jour de conversation échoue", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  db.exec(`
+    CREATE TRIGGER refuse_conversation_update
+    BEFORE UPDATE ON conversations
+    BEGIN
+      SELECT RAISE(ABORT, 'mise à jour refusée');
+    END;
+  `);
+
+  expect(() => convs.appendEvent(c.id, { type: "text-delta", text: "perdu" }))
+    .toThrow("mise à jour refusée");
+  expect(convs.listEvents(c.id)).toEqual([]);
+});
+
 test("les ids d'événements sont uniques entre conversations", () => {
   const first = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
   const second = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "y" });
