@@ -4,6 +4,7 @@ import type { MediaStore } from "./media";
 import type { AppEvent, StoredEvent } from "./events";
 import { runClaudeTurn } from "./adapters/claude";
 import { runCodexTurn } from "./adapters/codex";
+import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -89,7 +90,10 @@ export class ConversationRunner {
         signal: controller.signal,
       };
       if (conv.provider === "claude") await runClaudeTurn(opts, emit);
-      else await runCodexTurn(opts, emit);
+      // Codex passe par l'app-server (vrais deltas, quotas natifs) ; le chemin
+      // `codex exec` historique reste accessible via PUPITRE_CODEX_MODE=exec.
+      else if (process.env.PUPITRE_CODEX_MODE === "exec") await runCodexTurn(opts, emit);
+      else await runCodexAppServerTurn(opts, emit);
     } finally {
       const activeTurn = this.active.get(conversationId);
       this.active.delete(conversationId);

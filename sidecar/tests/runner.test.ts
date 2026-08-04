@@ -7,6 +7,7 @@ import { ProjectStore } from "../src/stores/projects";
 import { ConversationStore } from "../src/stores/conversations";
 import { MediaStore } from "../src/media";
 import { ConversationRunner, sweepOrphanedRuns } from "../src/runner";
+import { codexAppServer } from "../src/adapters/codex-app-server";
 import type { AppEvent } from "../src/events";
 
 let runner: ConversationRunner;
@@ -56,10 +57,11 @@ test("transmet l'effort de la conversation à l'adapter", async () => {
   }
 });
 
-test("transmet la vitesse de la conversation à l'adapter Codex", async () => {
+test("PUPITRE_CODEX_MODE=exec retombe sur l'adapter codex exec, vitesse comprise", async () => {
   const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-speed-")), "args");
   const previousCodexBin = process.env.PUPITRE_CODEX_BIN;
   const previousArgsFile = process.env.FAKE_CODEX_ARGS_FILE;
+  process.env.PUPITRE_CODEX_MODE = "exec";
   process.env.PUPITRE_CODEX_BIN = join(import.meta.dir, "fake-bins/fake-codex");
   process.env.FAKE_CODEX_ARGS_FILE = argsFile;
   const c = convs.create({
@@ -76,10 +78,35 @@ test("transmet la vitesse de la conversation à l'adapter Codex", async () => {
       '--enable fast_mode -c service_tier="fast"',
     );
   } finally {
+    delete process.env.PUPITRE_CODEX_MODE;
     if (previousCodexBin === undefined) delete process.env.PUPITRE_CODEX_BIN;
     else process.env.PUPITRE_CODEX_BIN = previousCodexBin;
     if (previousArgsFile === undefined) delete process.env.FAKE_CODEX_ARGS_FILE;
     else process.env.FAKE_CODEX_ARGS_FILE = previousArgsFile;
+  }
+});
+
+test("provider codex par défaut : passe par l'app-server et persiste le threadId", async () => {
+  const previousCodexBin = process.env.PUPITRE_CODEX_BIN;
+  process.env.PUPITRE_CODEX_BIN = join(import.meta.dir, "fake-bins/fake-codex-app-server");
+  const c = convs.create({
+    projectId,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "salut",
+  });
+
+  try {
+    await runner.runTurn(c.id, "salut", []);
+    const stored = convs.listEvents(c.id);
+    expect(stored.some((event) => event.type === "text-delta")).toBe(true);
+    expect(stored.some((event) => event.type === "rate-limit")).toBe(true);
+    expect(convs.get(c.id)!.cli_session_id).toBe("fake-thread-0001");
+    expect(stored.at(-1)).toMatchObject({ type: "status", state: "done" });
+  } finally {
+    codexAppServer.shutdown();
+    if (previousCodexBin === undefined) delete process.env.PUPITRE_CODEX_BIN;
+    else process.env.PUPITRE_CODEX_BIN = previousCodexBin;
   }
 });
 

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Wrapper : bun a besoin de l'extension .ts pour choisir son loader.
+exec bun "$(dirname "$0")/fake-codex-app-server.ts" "$@"

@@ -7,6 +7,9 @@ export type AppEvent =
   | { type: "tool-start"; toolId: string; toolName: string; input: unknown }
   | { type: "tool-end"; toolId: string; output: string; images: string[] }
   | { type: "usage"; inputTokens: number; outputTokens: number }
+  // Introspection de quota native du provider (payload brut, interprété par le
+  // QuotaTracker — cf. M2 phase C).
+  | { type: "rate-limit"; provider: Provider; payload: unknown }
   | { type: "status"; state: "running" | "done" | "error"; error?: string };
 
 // Un événement persisté porte l'id (rowid) de sa ligne : c'est la clé de dédup
