@@ -24,6 +24,8 @@ bun run --cwd ui dev
 | 6 | Épinglage conversation (`POST /pin` → 204) | ✅ remonte en tête de liste |
 | 7 | **Test réel** (sans fake bins) : conversation claude haiku « Lis demo.txt » | ✅ session réelle, `tool-start Read`, réponse `**hello**` (contenu réel du fichier), usage, done |
 | 8 | Coquille Tauri (`bunx tauri dev`) | ✅ app native compilée et lancée, sidecar spawné par le hook Rust, tué au kill de l'app |
+| 9 | **Test réel codex** (`gpt-5.6-sol`) : tour 1 via sidecar | ✅ session (thread_id), réponse `hello` (contenu réel de demo.txt), done |
+| 10 | **Test réel codex resume** via sidecar | ⚠️→✅ échec initial (`resume` ne supporte ni `-C` ni `-s` — risque n°2 du plan confirmé), adapter corrigé (cwd via spawn, sandbox via `-c sandbox_mode`), puis tour 2 réel OK — la réponse `demo.txt` à « quel fichier as-tu lu ? » prouve la vraie reprise de contexte |
 
 Screenshot UI : conservé dans le scratchpad de la session d'implémentation (`pupitre-ui-m1.png`).
 

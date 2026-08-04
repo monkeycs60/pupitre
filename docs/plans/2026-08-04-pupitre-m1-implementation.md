@@ -1123,8 +1123,18 @@ Contenu : pitch une phrase, architecture (schéma du design §2), prérequis (bu
 3. **Ids de modèles codex** (`gpt-5.6-sol`, `gpt-5.6-luna`) : à valider une fois en réel (Task 15).
 4. **Spawn sidecar depuis Rust** : si capricieux en dev, fallback documenté = lancer le sidecar à la main (`bun run dev`), le durcissement vient avec le packaging (M2+).
 
-## Backlog post-review milestone adapters (à traiter en M2)
+## Backlog M2 consolidé (reviews milestone + review finale)
 
-- M7 : `appendEvent` en transaction (2 statements + 2 timestamps aujourd'hui).
-- M8 : tronquer stderr à l'accumulation dans spawn-jsonl, pas seulement à l'émission.
-- Coalescing des `text-delta` persistés (aujourd'hui deltas + final ≈ 2× le texte en DB ; le replay « rejoue » le streaming).
+**Tête de M2 (avant l'orchestration)** :
+1. Raccord replay/WS dédupé par id d'event (fenêtre de perte actuelle : ouvrir le WS d'abord en bufferisant, fetch replay, déduper par l'id AUTOINCREMENT — un `status done` perdu verrouille le composer jusqu'au reload).
+2. Gestion close/error du WebSocket côté UI : état « connexion perdue » visible + reconnexion.
+3. ~~Smoke test réel codex (tour 1 + resume + id `gpt-5.6-sol`)~~ → exécuté à la clôture M1, voir e2e/basic-flow.md.
+
+**Divers** :
+- `appendEvent` en transaction ; troncature stderr à l'accumulation ; coalescing des `text-delta` persistés.
+- `sweepOrphanedRuns` en requête SQL (dernier event par conversation) au lieu de charger toute la DB.
+- Validation des noms d'images à la route messages/conversations (400 avant de créer la conversation).
+- Limite de taille sur POST /api/media + `MediaStore.importBytes` (éviter le round-trip base64) ; retirer svg de la whitelist si /media devient navigable.
+- try/catch sur le JSON.parse des messages WS côté UI.
+- Câblage prod Tauri (packaging) : origin check compatible `tauri://localhost`, CSP, identifier, spawn sidecar compilé (`bun build --compile` + externalBin), backstop kill du sidecar sur `RunEvent::Exit`.
+- Rafraîchissement de l'ordre des conversations pendant l'usage (updated_at).

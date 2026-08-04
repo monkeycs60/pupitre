@@ -31,8 +31,8 @@ test("premier tour : exec --json avec cwd et modèle, sans resume", async () => 
     images: [],
   });
   const args = readFileSync(argsFile, "utf8");
-  expect(args).toContain("exec --json --skip-git-repo-check -C /tmp -m gpt-5.6-luna");
-  expect(args).toContain("--skip-git-repo-check");
+  expect(args).toContain("exec --json --skip-git-repo-check -m gpt-5.6-luna -s workspace-write");
+  expect(args).not.toContain("-C"); // le cwd passe par le spawn, pas par -C
   expect(args.trimEnd().endsWith("-- salut")).toBe(true);
   expect(args).not.toContain("resume");
   expect(events.some((event) => event.type === "session")).toBe(true);
@@ -49,7 +49,12 @@ test("tour suivant : utilise exec resume <sessionId>", async () => {
     permissionMode: "acceptEdits",
     images: [],
   });
-  expect(readFileSync(argsFile, "utf8")).toContain("exec resume abc-123");
+  const args = readFileSync(argsFile, "utf8");
+  expect(args).toContain("exec resume abc-123");
+  // resume ne supporte ni -C ni -s : sandbox via -c sandbox_mode (vérifié en réel)
+  expect(args).not.toContain("-C");
+  expect(args).not.toContain("-s workspace-write");
+  expect(args).toContain('sandbox_mode="workspace-write"');
 });
 
 test("sépare un prompt ressemblant à une option avec --", async () => {
