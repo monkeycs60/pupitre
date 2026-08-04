@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import './App.css'
+import { Chat } from './Chat'
 import { Sidebar } from './Sidebar'
 import type { Conversation, Project } from './types'
 import { useConversationEvents } from './useConversationEvents'
@@ -39,9 +40,7 @@ function App() {
                 </p>
               </div>
             </header>
-            <div className="events-view">
-              <pre>{JSON.stringify(events, null, 2)}</pre>
-            </div>
+            <Chat key={selectedConversation.id} events={events} />
           </>
         )}
       </section>
