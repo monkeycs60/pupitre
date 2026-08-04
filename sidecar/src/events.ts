@@ -14,6 +14,16 @@ export type AppEvent =
   // lancement : l'UI s'en sert pour afficher la carte de sub-agent et pour
   // s'abonner au flux de la subtask (/ws?conversation=<subtaskId>).
   | { type: "subtask-ref"; subtaskId: string; provider: Provider; model: string; label?: string }
+  // Snapshot du débrief dans l'event append-only : le replay UI ne dépend pas
+  // d'une seconde requête et la table `debriefs` reste la source versionnée.
+  | {
+      type: "debrief-ref";
+      debriefId: string;
+      eventIdFrom: number;
+      eventIdTo: number;
+      contentMd: string;
+      createdAt: string;
+    }
   | { type: "status"; state: "running" | "done" | "error"; error?: string };
 
 // Un événement persisté porte l'id (rowid) de sa ligne : c'est la clé de dédup

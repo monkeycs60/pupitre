@@ -1,6 +1,7 @@
 import type {
   Conversation,
   ConversationSpeed,
+  Debrief,
   GardienMode,
   GardienStatus,
   Project,
@@ -249,6 +250,21 @@ export function handoffConversation(
     `/api/conversations/${routeId(conversationId)}/handoff`,
     jsonPost(input),
   )
+}
+
+export function createDebrief(conversationId: string): Promise<Debrief> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/debrief`,
+    jsonPost({}),
+  )
+}
+
+export function listDebriefs(conversationId: string): Promise<Debrief[]> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/debriefs`)
+}
+
+export function getDebrief(debriefId: string): Promise<Debrief> {
+  return fetchJson(`/api/debriefs/${routeId(debriefId)}`)
 }
 
 export function cancelConversation(conversationId: string): Promise<void> {

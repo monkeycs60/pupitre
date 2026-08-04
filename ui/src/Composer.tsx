@@ -8,6 +8,7 @@ import type {
 import {
   ApiError,
   cancelConversation,
+  createDebrief,
   createConversation,
   createPreset,
   deletePreset,
@@ -70,6 +71,7 @@ export function Composer({
   const [pendingUploads, setPendingUploads] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [isCreatingDebrief, setIsCreatingDebrief] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const now = useNow()
   const providerQuota = quotas[provider]
@@ -271,6 +273,20 @@ export function Composer({
     }
   }
 
+  async function handleDebrief() {
+    if (conversationId === null || isCreatingDebrief || isRunning) return
+    setIsCreatingDebrief(true)
+    setToast(null)
+    try {
+      await createDebrief(conversationId)
+      setToast('Débrief ajouté au fil.')
+    } catch (error: unknown) {
+      setToast(errorMessage(error))
+    } finally {
+      setIsCreatingDebrief(false)
+    }
+  }
+
   return (
     <div className="composer-area">
       {toast !== null ? (
@@ -468,6 +484,16 @@ export function Composer({
         <div className="composer-actions">
           <span>Entrée pour envoyer · Shift+Entrée pour une nouvelle ligne</span>
           <div>
+            {!isNewConversation ? (
+              <button
+                type="button"
+                className="debrief-button"
+                onClick={() => void handleDebrief()}
+                disabled={isRunning || isCreatingDebrief || isSubmitting}
+              >
+                {isCreatingDebrief ? 'Débrief en cours…' : 'Reprendre le contrôle'}
+              </button>
+            ) : null}
             {isRunning && conversationId !== null ? (
               <button
                 type="button"

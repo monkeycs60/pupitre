@@ -33,3 +33,25 @@ test("les clés restent uniques quand un outil réutilise son id sur plusieurs t
   const ids = groupEvents(events).map((block) => block.id);
   expect(new Set(ids).size).toBe(ids.length);
 });
+
+test("un debrief-ref devient un bloc éditorial autonome", () => {
+  const [block] = groupEvents([{
+    id: 42,
+    type: "debrief-ref",
+    debriefId: "debrief-1",
+    eventIdFrom: 3,
+    eventIdTo: 40,
+    contentMd: "## Décisions et pourquoi\nSQLite.",
+    createdAt: "2026-08-04T10:00:00.000Z",
+  }]);
+
+  expect(block).toEqual({
+    kind: "debrief",
+    id: "debrief-42-debrief-1",
+    debriefId: "debrief-1",
+    eventIdFrom: 3,
+    eventIdTo: 40,
+    contentMd: "## Décisions et pourquoi\nSQLite.",
+    createdAt: "2026-08-04T10:00:00.000Z",
+  });
+});

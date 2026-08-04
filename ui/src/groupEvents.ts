@@ -10,7 +10,17 @@ export interface SubtaskBlock {
   label?: string
 }
 
-export type StreamBlock = EventBlock | SubtaskBlock
+export interface DebriefBlock {
+  kind: 'debrief'
+  id: string
+  debriefId: string
+  eventIdFrom: number
+  eventIdTo: number
+  contentMd: string
+  createdAt: string
+}
+
+export type StreamBlock = EventBlock | SubtaskBlock | DebriefBlock
 
 /** Regroupe les événements bruts d'une conversation en blocs affichables. */
 export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): StreamBlock[] {
@@ -101,6 +111,18 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
           provider: event.provider,
           model: event.model,
           ...(event.label === undefined ? {} : { label: event.label }),
+        })
+        break
+      case 'debrief-ref':
+        assistant = null
+        blocks.push({
+          kind: 'debrief',
+          id: `debrief-${eventKey}-${event.debriefId}`,
+          debriefId: event.debriefId,
+          eventIdFrom: event.eventIdFrom,
+          eventIdTo: event.eventIdTo,
+          contentMd: event.contentMd,
+          createdAt: event.createdAt,
         })
         break
       case 'usage': {

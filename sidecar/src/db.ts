@@ -59,6 +59,16 @@ export function openDb(dir: string = dataDir()): Database {
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_subtasks_conv ON subtasks(conversation_id, created_at);
+    CREATE TABLE IF NOT EXISTS debriefs (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      event_id_from INTEGER NOT NULL,
+      event_id_to INTEGER NOT NULL,
+      content_md TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_debriefs_conv
+      ON debriefs(conversation_id, created_at, id);
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id),

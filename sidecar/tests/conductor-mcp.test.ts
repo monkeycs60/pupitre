@@ -23,6 +23,8 @@ import { codexAppServer } from "../src/adapters/codex-app-server";
 import { conductorMcpPath } from "../src/conductor";
 import { ReviewStore } from "../src/stores/reviews";
 import { ReviewRunner } from "../src/reviews";
+import { DebriefRunner } from "../src/debriefs";
+import { DebriefStore } from "../src/stores/debriefs";
 
 const BRIDGE_ENV_KEYS = ["PUPITRE_CLAUDE_BIN", "PUPITRE_CODEX_BIN", "PUPITRE_CODEX_MODE"];
 
@@ -120,9 +122,12 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
   const reviews = new ReviewRunner(new ReviewStore(db), projects, conversations, quotas);
+  const debriefs = new DebriefRunner(
+    new DebriefStore(db), conversations, projects, quotas, events.broadcast,
+  );
   server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
-    reviews,
+    reviews, debriefs,
   });
   parentId = conversations.create({
     projectId: project.id, provider: "claude", model: "opus", firstMessage: "orchestre",

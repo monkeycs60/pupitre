@@ -550,7 +550,8 @@ button {
 }
 
 .send-button,
-.cancel-button {
+.cancel-button,
+.debrief-button {
   padding: 7px 11px;
   font-size: 12px;
   border-radius: 7px;
@@ -570,13 +571,21 @@ button {
   border: 1px solid #684039;
 }
 
+.debrief-button {
+  color: #d8c7ae;
+  background: transparent;
+  border: 1px solid #675e51;
+}
+
 .send-button:hover:not(:disabled),
-.cancel-button:hover:not(:disabled) {
+.cancel-button:hover:not(:disabled),
+.debrief-button:hover:not(:disabled) {
   filter: brightness(1.08);
 }
 
 .send-button:disabled,
-.cancel-button:disabled {
+.cancel-button:disabled,
+.debrief-button:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -616,6 +625,72 @@ button {
   color: #77736c;
   font-size: 13px;
   text-align: center;
+}
+
+.debrief-card {
+  margin: 8px 0 18px;
+  overflow: hidden;
+  color: var(--ink);
+  background: #f5efe5;
+  border: 1px solid #d8cbbb;
+  border-left: 3px solid #a66443;
+  border-radius: 4px;
+}
+
+.debrief-card summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 11px;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.debrief-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.debrief-card summary::before {
+  content: '›';
+  color: var(--accent-dark);
+  font-size: 15px;
+  transform: rotate(0deg);
+}
+
+.debrief-card[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.debrief-card-kicker {
+  color: var(--accent-dark);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.debrief-card-range {
+  margin-left: auto;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+.debrief-card-content {
+  padding: 2px 14px 13px 32px;
+  border-top: 1px solid #e3d8ca;
+  font-size: 13px;
+  line-height: 1.58;
+}
+
+.debrief-card-content h2 {
+  margin: 13px 0 5px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.debrief-card-content p,
+.debrief-card-content ul {
+  margin: 5px 0;
 }
 
 .message-row {
@@ -1757,11 +1832,17 @@ body,
 }
 
 .cancel-button,
-.secondary-button {
+.secondary-button,
+.debrief-button {
   color: #6b3a2c;
   background: transparent;
   border-color: #cba495;
   border-radius: 6px;
+}
+
+.debrief-button {
+  color: #695746;
+  border-color: #c7b7a2;
 }
 
 .composer-models {

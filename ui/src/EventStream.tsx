@@ -1,5 +1,6 @@
 import { EventView } from './EventView'
 import { SubtaskCard } from './SubtaskCard'
+import { DebriefCard } from './DebriefCard'
 import type { StreamBlock } from './groupEvents'
 import type { SubtaskStatus } from './types'
 
@@ -32,6 +33,8 @@ export function EventStream({
             onImageLoad={onImageLoad}
             onStatusChange={onSubtaskStatusChange}
           />
+        ) : block.kind === 'debrief' ? (
+          <DebriefCard key={block.id} block={block} />
         ) : (
           <EventView
             key={block.id}

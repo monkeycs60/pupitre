@@ -12,6 +12,11 @@ import type { QuotaTracker } from "./quotas";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
 import type { ReviewRunner } from "./reviews";
 import { CounterAlreadyRunningError } from "./stores/reviews";
+import {
+  DebriefAlreadyRunningError,
+  NoNewDebriefEventsError,
+  type DebriefRunner,
+} from "./debriefs";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -40,6 +45,7 @@ export interface ServerDeps {
   presets: PresetStore;
   settings: SettingsStore;
   reviews: ReviewRunner;
+  debriefs: DebriefRunner;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -595,6 +601,51 @@ export function createServer(deps: ServerDeps) {
             conversation: deps.conversations.get(conversationModelId),
             estimatedReingestionTokens,
           });
+        }
+
+        const conversationDebriefId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/debrief$/,
+        );
+        if (request.method === "POST" && conversationDebriefId !== null) {
+          if (!deps.conversations.get(conversationDebriefId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          if (deps.runner.isRunning(conversationDebriefId)) {
+            throw new HttpError(409, "un tour est déjà en cours");
+          }
+          try {
+            return json(await deps.debriefs.generate(conversationDebriefId), 201);
+          } catch (error) {
+            if (
+              error instanceof DebriefAlreadyRunningError
+              || error instanceof NoNewDebriefEventsError
+            ) {
+              throw new HttpError(409, error.message);
+            }
+            throw new HttpError(
+              502,
+              error instanceof Error ? error.message : "échec du débrief",
+            );
+          }
+        }
+
+        const conversationDebriefsId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/debriefs$/,
+        );
+        if (request.method === "GET" && conversationDebriefsId !== null) {
+          if (!deps.conversations.get(conversationDebriefsId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          return json(deps.debriefs.listByConversation(conversationDebriefsId));
+        }
+
+        const debriefId = routeId(pathname, /^\/api\/debriefs\/([^/]+)$/);
+        if (request.method === "GET" && debriefId !== null) {
+          const debrief = deps.debriefs.get(debriefId);
+          if (!debrief) throw new HttpError(404, "débrief inconnu");
+          return json(debrief);
         }
 
         const conversationHandoffId = routeId(

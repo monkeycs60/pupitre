@@ -16,6 +16,8 @@ import { QuotaTracker } from "../src/quotas";
 import { SubtaskRunner } from "../src/subtasks";
 import { ReviewStore } from "../src/stores/reviews";
 import { ReviewRunner } from "../src/reviews";
+import { DebriefStore } from "../src/stores/debriefs";
+import { DebriefRunner } from "../src/debriefs";
 
 interface TestServer {
   baseUrl: string;
@@ -185,6 +187,23 @@ cat "${fixture}"
     async () => '{"flags":[]}',
     subtasks,
   );
+  const debriefs = new DebriefRunner(
+    new DebriefStore(db),
+    conversations,
+    projects,
+    quotas,
+    events.broadcast,
+    async () => [
+      "## Décisions et pourquoi",
+      "SQLite est retenu [événement #1].",
+      "## Alternatives écartées",
+      "Postgres.",
+      "## Implications",
+      "Le produit reste local-first.",
+      "## Points ouverts",
+      "Aucun.",
+    ].join("\n\n"),
+  );
   const server = createServer({
     port: 0,
     projects,
@@ -197,6 +216,7 @@ cat "${fixture}"
     presets,
     settings,
     reviews,
+    debriefs,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -832,6 +852,46 @@ test("handoff cross-provider résume, crée et seed une conversation liée", asy
   expect(list).toEqual(expect.arrayContaining([
     expect.objectContaining({ id: continuation.id, continued_from: source.id }),
   ]));
+});
+
+test("POST debrief versionne le bilan, le diffuse et l'expose en lecture", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "sonnet",
+    effort: "high",
+    orchestrator: true,
+    message: "Décidons de rester local-first",
+    images: [],
+  });
+  expect(created.status).toBe(201);
+  const conversation = await created.json() as { id: string };
+  await waitForRunnerIdle(conversation.id);
+  const wsEvent = waitForWebSocketEvent(
+    `ws://127.0.0.1:${current.server.port}/ws?conversation=${conversation.id}`,
+    (event) => event.type === "debrief-ref",
+  );
+
+  const response = await postJson(`/api/conversations/${conversation.id}/debrief`, {});
+
+  expect(response.status).toBe(201);
+  const debrief = await response.json() as { id: string; content_md: string };
+  expect(debrief.content_md).toContain("## Décisions et pourquoi");
+  expect(await wsEvent).toEqual(expect.objectContaining({
+    type: "debrief-ref",
+    debriefId: debrief.id,
+  }));
+  const versions = await fetch(
+    `${current.baseUrl}/api/conversations/${conversation.id}/debriefs`,
+  );
+  expect(await versions.json()).toEqual([expect.objectContaining({ id: debrief.id })]);
+  const detail = await fetch(`${current.baseUrl}/api/debriefs/${debrief.id}`);
+  expect(await detail.json()).toEqual(expect.objectContaining({ id: debrief.id }));
+
+  const duplicate = await postJson(`/api/conversations/${conversation.id}/debrief`, {});
+  expect(duplicate.status).toBe(409);
 });
 
 test("un tour actif répond 409, puis cancel l'annule et déverrouille la conversation", async () => {

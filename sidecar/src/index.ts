@@ -12,6 +12,8 @@ import { codexAppServer } from "./adapters/codex-app-server";
 import { runConductorMcp } from "./conductor-mcp";
 import { ReviewStore } from "./stores/reviews";
 import { ReviewRunner } from "./reviews";
+import { DebriefStore } from "./stores/debriefs";
+import { DebriefRunner } from "./debriefs";
 
 if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
@@ -53,6 +55,13 @@ if (process.argv.includes("--conductor-mcp")) {
     undefined,
     subtasks,
   );
+  const debriefs = new DebriefRunner(
+    new DebriefStore(db),
+    conversations,
+    projects,
+    quotas,
+    events.broadcast,
+  );
   server = createServer({
     port,
     projects,
@@ -65,6 +74,7 @@ if (process.argv.includes("--conductor-mcp")) {
     presets,
     settings,
     reviews,
+    debriefs,
   });
 
   // Si l'app-server codex tourne déjà, on part avec un état de quota frais.

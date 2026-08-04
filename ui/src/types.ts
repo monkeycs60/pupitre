@@ -46,6 +46,15 @@ export interface Conversation {
   updated_at: string
 }
 
+export interface Debrief {
+  id: string
+  conversation_id: string
+  event_id_from: number
+  event_id_to: number
+  content_md: string
+  created_at: string
+}
+
 // Miroir de sidecar/src/quotas.ts : forme normalisée des deux providers.
 export interface QuotaWindow {
   label: string
@@ -174,6 +183,14 @@ export type AppEvent =
       provider: Provider
       model: string
       label?: string
+    }
+  | {
+      type: 'debrief-ref'
+      debriefId: string
+      eventIdFrom: number
+      eventIdTo: number
+      contentMd: string
+      createdAt: string
     }
   // Introspection de quota native du provider (payload brut, interprété côté
   // sidecar par le QuotaTracker — cf. sidecar/src/events.ts).
