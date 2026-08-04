@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import type { AppEvent } from "../events";
 import type { EmitFn, TurnOptions } from "./types";
+import { codexMcpConfig } from "../conductor";
 
 // Client du protocole `codex app-server` (JSON-RPC newline-delimited sur stdio).
 // Un SEUL process partagé par tout le sidecar : démarrage paresseux au premier
@@ -227,9 +228,18 @@ export class CodexAppServerClient {
       sandbox: "workspace-write",
       ...(opts.speed === "fast" ? { serviceTier: "fast" } : {}),
     };
+    // `config` est un override de configuration PAR THREAD (ThreadStartParams /
+    // ThreadResumeParams, objet libre aux clés de `config.toml`). C'est ce qui
+    // permet de câbler le bridge MCP `conductor` avec le bon
+    // PUPITRE_CONVERSATION_ID alors que le process app-server est partagé par
+    // tout le sidecar : chaque thread démarre ses propres serveurs MCP.
     // L'effort passe par `turn/start` (champ `effort` des types v2) ; on le
     // duplique en config pour les versions qui ne l'honorent qu'au niveau thread.
-    const config = opts.effort ? { config: { model_reasoning_effort: opts.effort } } : {};
+    const overrides = {
+      ...(opts.effort ? { model_reasoning_effort: opts.effort } : {}),
+      ...(opts.conductor ? codexMcpConfig(opts.conductor) : {}),
+    };
+    const config = Object.keys(overrides).length ? { config: overrides } : {};
     const result = opts.cliSessionId
       ? await this.request("thread/resume", {
           threadId: opts.cliSessionId,

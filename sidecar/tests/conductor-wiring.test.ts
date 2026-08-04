@@ -1,0 +1,158 @@
+// Câblage du bridge MCP « conductor » : QUI reçoit les outils de délégation.
+// Le bridge lui-même (aller-retour réel) est testé dans conductor-mcp.test.ts.
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { openDb } from "../src/db";
+import { MediaStore } from "../src/media";
+import { QuotaTracker } from "../src/quotas";
+import { ConversationRunner } from "../src/runner";
+import { ConversationStore } from "../src/stores/conversations";
+import { ProjectStore } from "../src/stores/projects";
+import { SubtaskRunner } from "../src/subtasks";
+import { codexAppServer } from "../src/adapters/codex-app-server";
+import { conductorMcpPath } from "../src/conductor";
+
+let dir: string;
+let argsFile: string;
+let appServerLog: string;
+let convs: ConversationStore;
+let projects: ProjectStore;
+let projectId: string;
+let runner: ConversationRunner;
+let subtasks: SubtaskRunner;
+const previousEnv: Record<string, string | undefined> = {};
+
+const ENV_KEYS = [
+  "PUPITRE_CLAUDE_BIN", "PUPITRE_CODEX_BIN", "PUPITRE_CODEX_MODE",
+  "FAKE_CLAUDE_ARGS_FILE", "FAKE_APP_SERVER_LOG",
+];
+
+beforeEach(() => {
+  for (const key of ENV_KEYS) previousEnv[key] = process.env[key];
+  dir = mkdtempSync(join(tmpdir(), "pupitre-conductor-wiring-"));
+  argsFile = join(dir, "args");
+  appServerLog = join(dir, "app-server.log");
+  // fake-claude n'écrit qu'une ligne : les args d'un tour de sous-tâche
+  // écraseraient ceux du parent. On appende à la place.
+  const fakeClaude = join(dir, "fake-claude");
+  writeFileSync(fakeClaude, `#!/usr/bin/env bash
+echo "$@" >> "${argsFile}"
+cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
+`);
+  chmodSync(fakeClaude, 0o755);
+  writeFileSync(argsFile, "");
+
+  process.env.PUPITRE_CLAUDE_BIN = fakeClaude;
+  process.env.PUPITRE_CODEX_BIN = join(import.meta.dir, "fake-bins/fake-codex-app-server");
+  process.env.FAKE_APP_SERVER_LOG = appServerLog;
+  delete process.env.PUPITRE_CODEX_MODE;
+
+  const db = openDb(dir);
+  projects = new ProjectStore(db);
+  projectId = projects.create({ name: "p", path: tmpdir() }).id;
+  convs = new ConversationStore(db);
+  const quotas = new QuotaTracker(db);
+  runner = new ConversationRunner(
+    convs, projects, new MediaStore(dir), () => {}, quotas, () => 4321,
+  );
+  subtasks = new SubtaskRunner(db, convs, projects, () => {}, quotas);
+});
+
+afterEach(() => {
+  codexAppServer.shutdown();
+  for (const [key, value] of Object.entries(previousEnv)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
+
+function claudeArgs(): string {
+  return readFileSync(argsFile, "utf8");
+}
+
+/** Les messages JSON-RPC reçus par le faux app-server. */
+function appServerMessages(): { method?: string; params?: any }[] {
+  return readFileSync(appServerLog, "utf8").trim().split("\n").filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+test("conversation orchestratrice claude : --mcp-config inline pointant sur le bridge", async () => {
+  const conv = convs.create({
+    projectId, provider: "claude", model: "haiku", firstMessage: "orchestre",
+  });
+  expect(conv.orchestrator).toBe(true); // défaut ON
+  await runner.runTurn(conv.id, "orchestre", []);
+
+  const args = claudeArgs();
+  expect(args).toContain("--mcp-config");
+  const config = JSON.parse(args.slice(args.indexOf("{"), args.lastIndexOf("}") + 1));
+  expect(config.mcpServers.conductor.args).toEqual([conductorMcpPath()]);
+  expect(config.mcpServers.conductor.env).toEqual({
+    PUPITRE_PORT: "4321",
+    PUPITRE_CONVERSATION_ID: conv.id,
+  });
+});
+
+test("orchestrator = false : aucun câblage conductor", async () => {
+  const conv = convs.create({
+    projectId, provider: "claude", model: "haiku",
+    orchestrator: false, firstMessage: "simple",
+  });
+  expect(conv.orchestrator).toBe(false);
+  await runner.runTurn(conv.id, "simple", []);
+  expect(claudeArgs()).not.toContain("--mcp-config");
+});
+
+test("conversation orchestratrice codex : mcp_servers dans la config du thread", async () => {
+  const conv = convs.create({
+    projectId, provider: "codex", model: "gpt-5.6-luna", effort: "low",
+    firstMessage: "orchestre",
+  });
+  await runner.runTurn(conv.id, "orchestre", []);
+
+  const start = appServerMessages().find((message) => message.method === "thread/start");
+  expect(start).toBeDefined();
+  // La config est PAR THREAD : c'est ce qui permet de donner à chaque tour son
+  // propre PUPITRE_CONVERSATION_ID malgré le process app-server partagé.
+  expect(start!.params.config.mcp_servers.conductor.args).toEqual([conductorMcpPath()]);
+  expect(start!.params.config.mcp_servers.conductor.env).toEqual({
+    PUPITRE_PORT: "4321",
+    PUPITRE_CONVERSATION_ID: conv.id,
+  });
+  // L'effort reste transmis à côté.
+  expect(start!.params.config.model_reasoning_effort).toBe("low");
+});
+
+test("garde de profondeur : un tour de sous-tâche ne reçoit jamais le conductor", async () => {
+  const conv = convs.create({
+    projectId, provider: "claude", model: "haiku", firstMessage: "orchestre",
+  });
+  await runner.runTurn(conv.id, "orchestre", []);
+  expect(claudeArgs()).toContain("--mcp-config"); // le parent, lui, l'a
+
+  const subtask = subtasks.start({
+    conversationId: conv.id, provider: "claude", model: "haiku", prompt: "sous-tâche",
+  });
+  await subtasks.waitResult(subtask.id);
+
+  const turns = claudeArgs().trim().split("\n");
+  expect(turns).toHaveLength(2);
+  expect(turns[1]).toContain("-- sous-tâche");
+  expect(turns[1]).not.toContain("--mcp-config");
+});
+
+test("garde de profondeur (codex) : la sous-tâche démarre un thread sans mcp_servers", async () => {
+  const conv = convs.create({
+    projectId, provider: "claude", model: "haiku", firstMessage: "orchestre",
+  });
+  const subtask = subtasks.start({
+    conversationId: conv.id, provider: "codex", model: "gpt-5.6-luna", prompt: "sous-tâche",
+  });
+  await subtasks.waitResult(subtask.id);
+
+  const starts = appServerMessages().filter((message) => message.method === "thread/start");
+  expect(starts).toHaveLength(1);
+  expect(starts[0]!.params.config?.mcp_servers).toBeUndefined();
+});

@@ -1,6 +1,7 @@
 import { parseCodexLine } from "./codex-parser";
 import { spawnJsonl } from "./spawn-jsonl";
 import type { TurnOptions, EmitFn } from "./types";
+import { codexExecConfigArgs } from "../conductor";
 
 export function runCodexTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   const bin = process.env.PUPITRE_CODEX_BIN ?? "codex";
@@ -20,6 +21,7 @@ export function runCodexTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     ...(opts.speed === "fast"
       ? ["--enable", "fast_mode", "-c", 'service_tier="fast"']
       : []),
+    ...(opts.conductor ? codexExecConfigArgs(opts.conductor) : []),
     ...opts.images.flatMap((image) => ["-i", image]),
     "--", opts.prompt,
   ];

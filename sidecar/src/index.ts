@@ -21,6 +21,8 @@ const runner = new ConversationRunner(
   media,
   events.broadcast,
   quotas,
+  // Résolu à chaque tour : `server` n'existe qu'en dessous.
+  () => server.port ?? port,
 );
 // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
 // tournent en parallèle du tour parent qui les a demandées.

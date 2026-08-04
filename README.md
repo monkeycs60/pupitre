@@ -31,8 +31,36 @@ Une conversation peut déléguer du travail à un autre modèle (le Conductor de
 - `GET /api/subtasks/:id/events` → replay, et `GET /api/conversations/:id/subtasks` → les sous-tâches d'une conversation.
 - Les événements d'une sous-tâche sont stockés dans la table `events` sous **son propre id** : le replay HTTP et le canal `/ws?conversation=<subtaskId>` fonctionnent à l'identique d'une conversation.
 - Au lancement, un event `subtask-ref` est appendé à la **conversation parente** : c'est ce qui permet à l'UI d'afficher la carte de sub-agent.
+- `POST /api/subtasks/:id/cancel` → `202` (interrompt la sous-tâche en vol, statut terminal `error: annulé`), `409` si elle est déjà terminée, `404` si l'id est inconnu.
 
 **Limite de concurrence : 4 sous-tâches simultanées par conversation parente** (`MAX_CONCURRENT_SUBTASKS`). Au-delà, l'API répond `429` et c'est à l'appelant (le bridge MCP de D2) de séquencer ses délégations. La limite est par conversation, pas globale : deux conversations peuvent orchestrer en parallèle sans se gêner. Elle protège du fan-out incontrôlé — autant de process CLI, de quota consommé et d'écritures concurrentes dans le même working directory qu'il y a d'appels.
+
+## Bridge MCP « conductor » (M2-D2)
+
+C'est ce qui donne à l'orchestrateur la *main* sur les sous-tâches : un serveur MCP stdio maison, `sidecar/src/conductor-mcp.ts`, lancé **par le CLI** et qui rappelle le sidecar en HTTP local.
+
+```
+bun sidecar/src/conductor-mcp.ts     # PUPITRE_PORT, PUPITRE_CONVERSATION_ID
+```
+
+Le bridge est **sans état** : chaque outil est un appel à l'API D1 ci-dessus. Un process par tour orchestrateur, rien à nettoyer.
+
+| Outil | Effet |
+| --- | --- |
+| `delegate({provider, model, effort?, speed?, prompt, label?})` | `POST /api/subtasks`, puis poll de `GET /api/subtasks/:id` toutes les 2 s jusqu'à `done`/`error` (timeout 15 min). Rend le `resultText` ou l'erreur. |
+| `delegate_parallel({tasks:[…max 4]})` | Crée toutes les sous-tâches (le `429` de la limite de concurrence est encaissé et réessayé — c'est le séquençage attendu côté appelant), attend tout, rend les résultats dans l'ordre des tâches. |
+| `check_quotas()` | `GET /api/quotas` mis en forme lisible (fenêtres, % utilisé, reset). |
+
+Les descriptions d'outils sont la doc que lit l'orchestrateur : modèles disponibles (`claude` : fable-5 / opus / sonnet / haiku ; `codex` : gpt-5.6-sol / gpt-5.6-luna), efforts, `speed: fast` **codex uniquement**, et la recommandation de routage (sous-tâche d'exécution → `gpt-5.6-luna`, effort low/medium, fast ; `check_quotas` avant de choisir en cas d'hésitation).
+
+**Câblage, par tour** — piloté par la colonne de conversation `orchestrator` (INTEGER, **défaut 1**, acceptée par `POST /api/conversations`) :
+
+- **claude** : `--mcp-config '<JSON inline>'` avec `{mcpServers:{conductor:{command, args:[<chemin absolu>], env:{PUPITRE_PORT, PUPITRE_CONVERSATION_ID}}}}`. Pas de `--strict-mcp-config` : les serveurs MCP de l'utilisateur restent actifs.
+- **codex (app-server)** : le champ `config` de `thread/start` / `thread/resume` est un **override de configuration par thread** (clés de `config.toml`) — on y met `mcp_servers.conductor`. C'est ce qui résout le problème du process app-server *partagé* par tout le sidecar : chaque thread démarre ses propres serveurs MCP, donc chaque tour reçoit son propre `PUPITRE_CONVERSATION_ID` par l'environnement. Aucun besoin de passer l'id par le prompt.
+- **codex exec** (chemin historique `PUPITRE_CODEX_MODE=exec`) : les mêmes valeurs en overrides `-c mcp_servers.conductor.*`.
+- Filet documenté : chaque outil accepte aussi un paramètre optionnel `conversation_id` qui prime sur l'environnement, pour un hôte incapable de transmettre un environnement par tour.
+
+**Garde de profondeur** : un tour de sous-tâche ne reçoit **jamais** le câblage conductor. Ce n'est pas une convention mais une propriété de structure — `SubtaskRunner` ne construit pas le champ `conductor` de `TurnOptions` et aucun chemin ne permet de l'y ajouter. Un sub-agent ne voit donc pas les outils de délégation : pas de sous-sous-tâche, pas de récursion (testé dans `tests/conductor-wiring.test.ts`).
 
 ## Prérequis
 

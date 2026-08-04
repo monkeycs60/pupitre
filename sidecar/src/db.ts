@@ -52,6 +52,9 @@ export function openDb(dir: string = dataDir()): Database {
   dropEventsForeignKey(db);
   addColumn(db, "conversations", "effort TEXT NULL");
   addColumn(db, "conversations", "speed TEXT NULL");
+  // M2-D2 : une conversation orchestratrice reçoit le bridge MCP `conductor`.
+  // Défaut ON — les conversations existantes en héritent aussi.
+  addColumn(db, "conversations", "orchestrator INTEGER NOT NULL DEFAULT 1");
   db.exec("PRAGMA foreign_keys = ON");
   return db;
 }

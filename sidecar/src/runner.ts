@@ -42,6 +42,12 @@ export class ConversationRunner {
     private media: MediaStore,
     private broadcast: BroadcastFn,
     private quotas: QuotaTracker,
+    /**
+     * Port HTTP du sidecar, lu à chaque tour (et non capturé au démarrage) : le
+     * serveur est construit APRÈS le runner, et en test il écoute sur un port
+     * éphémère. C'est ce port que le bridge MCP rappellera.
+     */
+    private port: () => number = () => 0,
   ) {
     sweepOrphanedRuns(convs, projects);
   }
@@ -93,6 +99,12 @@ export class ConversationRunner {
         permissionMode: project.permission_mode,
         images: imageNames.map((name) => this.media.absolutePath(name)),
         signal: controller.signal,
+        // Câblage du bridge MCP `conductor`, par tour : seule une conversation
+        // orchestratrice peut déléguer. Les tours de sous-tâches passent par
+        // SubtaskRunner, qui ne construit JAMAIS ce champ (garde de profondeur).
+        ...(conv.orchestrator
+          ? { conductor: { port: this.port(), conversationId: conversationId } }
+          : {}),
       };
       if (conv.provider === "claude") await runClaudeTurn(opts, emit);
       // Codex passe par l'app-server (vrais deltas, quotas natifs) ; le chemin

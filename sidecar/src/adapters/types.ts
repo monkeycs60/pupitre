@@ -1,4 +1,5 @@
 import type { AppEvent } from "../events";
+import type { ConductorTarget } from "../conductor";
 
 export interface TurnOptions {
   cwd: string;
@@ -10,6 +11,13 @@ export interface TurnOptions {
   permissionMode: string;
   images: string[]; // chemins absolus d'images jointes par l'utilisateur
   signal?: AbortSignal;
+  /**
+   * Présent uniquement pour les tours d'une conversation ORCHESTRATRICE : le CLI
+   * reçoit alors le serveur MCP `conductor` et peut déléguer. Toujours absent
+   * pour un tour de sous-tâche (garde de profondeur : un sub-agent ne délègue
+   * pas — cf. SubtaskRunner).
+   */
+  conductor?: ConductorTarget;
 }
 
 export type EmitFn = (event: AppEvent) => void;

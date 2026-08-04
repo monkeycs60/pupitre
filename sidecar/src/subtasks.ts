@@ -109,6 +109,8 @@ export class SubtaskRunner {
   private active = new Map<string, Set<string>>();
   /** Promesse de fin par subtask, consommée par waitResult. */
   private runs = new Map<string, Promise<void>>();
+  /** Annulation par subtask (POST /api/subtasks/:id/cancel), en vol seulement. */
+  private controllers = new Map<string, AbortController>();
 
   constructor(
     db: Database,
@@ -172,14 +174,30 @@ export class SubtaskRunner {
     const refId = this.convs.appendEvent(input.conversationId, ref);
     this.broadcast(input.conversationId, { ...ref, id: refId });
 
-    const run = this.run(subtask, project.path, project.permission_mode)
+    const controller = new AbortController();
+    this.controllers.set(subtask.id, controller);
+    const run = this.run(subtask, project.path, project.permission_mode, controller.signal)
       .catch((error) => console.error("Échec d'une sous-tâche", error))
       .finally(() => {
+        this.controllers.delete(subtask.id);
         siblings!.delete(subtask.id);
         if (siblings!.size === 0) this.active.delete(input.conversationId);
       });
     this.runs.set(subtask.id, run);
     return subtask;
+  }
+
+  /**
+   * Annule une sous-tâche en vol. Retourne false si elle est déjà terminée (ou
+   * inconnue de ce process). Le tour se clôt en `error: annulé` comme un tour
+   * de conversation annulé.
+   */
+  async cancel(subtaskId: string): Promise<boolean> {
+    const controller = this.controllers.get(subtaskId);
+    if (!controller) return false;
+    controller.abort();
+    await this.runs.get(subtaskId);
+    return true;
   }
 
   /** Attend la fin de la subtask (si elle tourne dans ce process) puis rend son résultat. */
@@ -198,7 +216,12 @@ export class SubtaskRunner {
     return { status: subtask.status, resultText, subtask };
   }
 
-  private async run(subtask: Subtask, cwd: string, permissionMode: string): Promise<void> {
+  private async run(
+    subtask: Subtask,
+    cwd: string,
+    permissionMode: string,
+    signal: AbortSignal,
+  ): Promise<void> {
     // Objet mutable plutôt qu'une variable locale : `emit` est une closure, et
     // l'analyse de flux de TS ne suit pas les affectations faites dedans.
     const outcome: { terminal: SubtaskStatus | null } = { terminal: null };
@@ -224,6 +247,11 @@ export class SubtaskRunner {
         cliSessionId: null, // une subtask est un one-shot : jamais de reprise
         permissionMode,
         images: [],
+        signal,
+        // GARDE DE PROFONDEUR : pas de `conductor` ici, et il n'y a aucun
+        // chemin pour en ajouter un. Un sub-agent ne voit donc pas les outils
+        // de délégation et ne peut pas créer de sous-sous-tâche — la
+        // récursion est structurellement impossible, pas simplement découragée.
       };
       if (subtask.provider === "claude") await runClaudeTurn(opts, emit);
       else if (process.env.PUPITRE_CODEX_MODE === "exec") await runCodexTurn(opts, emit);

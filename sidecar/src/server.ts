@@ -135,6 +135,17 @@ function optionalLabel(body: Record<string, unknown>): string | null {
   return value;
 }
 
+function optionalBoolean(
+  body: Record<string, unknown>,
+  field: string,
+  fallback: boolean,
+): boolean {
+  const value = body[field];
+  if (value === undefined || value === null) return fallback;
+  if (typeof value !== "boolean") throw new HttpError(400, `champ ${field} invalide`);
+  return value;
+}
+
 function requiredPinned(body: Record<string, unknown>): boolean {
   if (typeof body.pinned !== "boolean") {
     throw new HttpError(400, "champ pinned invalide");
@@ -265,12 +276,15 @@ export function createServer(deps: ServerDeps) {
           const speed = optionalSpeed(body, provider as Provider);
           const message = requiredString(body, "message");
           const images = optionalImages(body);
+          // Défaut ON : une conversation peut déléguer sauf mention contraire.
+          const orchestrator = optionalBoolean(body, "orchestrator", true);
           const conversation = deps.conversations.create({
             projectId,
             provider: provider as Provider,
             model,
             effort,
             speed,
+            orchestrator,
             firstMessage: message,
           });
           void deps.runner.runTurn(conversation.id, message, images)
@@ -380,6 +394,19 @@ export function createServer(deps: ServerDeps) {
           }
           // Même table, même replay que pour une conversation.
           return json(deps.conversations.listEvents(subtaskEventsId));
+        }
+
+        const subtaskCancelId = routeId(
+          pathname,
+          /^\/api\/subtasks\/([^/]+)\/cancel$/,
+        );
+        if (request.method === "POST" && subtaskCancelId !== null) {
+          if (!deps.subtasks.get(subtaskCancelId)) {
+            throw new HttpError(404, "sous-tâche inconnue");
+          }
+          const cancelled = await deps.subtasks.cancel(subtaskCancelId);
+          if (!cancelled) throw new HttpError(409, "sous-tâche déjà terminée");
+          return empty(202);
         }
 
         const subtaskId = routeId(pathname, /^\/api\/subtasks\/([^/]+)$/);

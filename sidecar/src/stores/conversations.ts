@@ -5,6 +5,8 @@ export interface Conversation {
   id: string; project_id: string; title: string; provider: Provider;
   model: string; effort: string | null; speed: "standard" | "fast" | null;
   cli_session_id: string | null; pinned: boolean;
+  /** Reçoit le bridge MCP `conductor` (délégation de sous-tâches). */
+  orchestrator: boolean;
   created_at: string; updated_at: string;
 }
 
@@ -19,6 +21,8 @@ export class ConversationStore {
     model: string;
     effort?: string | null;
     speed?: "standard" | "fast" | null;
+    /** Défaut ON : toute nouvelle conversation peut déléguer. */
+    orchestrator?: boolean;
     firstMessage: string;
   }): Conversation {
     const id = crypto.randomUUID();
@@ -28,8 +32,9 @@ export class ConversationStore {
       : input.firstMessage;
     this.db.query(
       `INSERT INTO conversations
-         (id, project_id, title, provider, model, effort, speed, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, project_id, title, provider, model, effort, speed, orchestrator,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -38,6 +43,7 @@ export class ConversationStore {
       input.model,
       input.effort ?? null,
       input.speed ?? null,
+      input.orchestrator === false ? 0 : 1,
       now,
       now,
     );
@@ -46,14 +52,14 @@ export class ConversationStore {
 
   get(id: string): Conversation | null {
     const row = this.db.query("SELECT * FROM conversations WHERE id = ?").get(id) as any;
-    return row ? { ...row, pinned: !!row.pinned } : null;
+    return row ? { ...row, pinned: !!row.pinned, orchestrator: !!row.orchestrator } : null;
   }
 
   listByProject(projectId: string): Conversation[] {
     const rows = this.db.query(
       "SELECT * FROM conversations WHERE project_id = ? ORDER BY pinned DESC, updated_at DESC"
     ).all(projectId) as any[];
-    return rows.map((r) => ({ ...r, pinned: !!r.pinned }));
+    return rows.map((r) => ({ ...r, pinned: !!r.pinned, orchestrator: !!r.orchestrator }));
   }
 
   setPinned(id: string, pinned: boolean): void {
