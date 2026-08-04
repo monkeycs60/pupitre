@@ -49,6 +49,8 @@ const EFFORTS_BY_PROVIDER = {
   codex: ["low", "medium", "high", "xhigh"],
 } as const satisfies Record<Provider, readonly string[]>;
 const SPEEDS = ["standard", "fast"] as const;
+const DEFAULT_MEDIA_MAX_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MESSAGE_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
 
 export const HANDOFF_PROMPT = [
   "Prépare une passation concise pour un autre modèle qui va reprendre cette conversation.",
@@ -104,6 +106,37 @@ function optionalImages(body: Record<string, unknown>): string[] {
     throw new HttpError(400, "champ images invalide");
   }
   return value as string[];
+}
+
+function byteLimit(envName: string, fallback: number): number {
+  const value = Number(process.env[envName]);
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+function validatedImages(body: Record<string, unknown>, media: MediaStore): string[] {
+  const images = optionalImages(body);
+  const imageLimit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
+  const totalLimit = byteLimit(
+    "PUPITRE_MESSAGE_MEDIA_MAX_BYTES",
+    DEFAULT_MESSAGE_MEDIA_MAX_BYTES,
+  );
+  let total = 0;
+  for (const name of images) {
+    let size: number;
+    try {
+      size = media.byteLength(name);
+    } catch {
+      throw new HttpError(400, `media inconnu ou invalide : ${name}`);
+    }
+    if (size > imageLimit) {
+      throw new HttpError(413, `image trop volumineuse : ${name}`);
+    }
+    total += size;
+    if (total > totalLimit) {
+      throw new HttpError(413, "taille totale des images dépassée");
+    }
+  }
+  return images;
 }
 
 function optionalEffort(
@@ -399,7 +432,7 @@ export function createServer(deps: ServerDeps) {
           const effort = optionalEffort(body, provider as Provider);
           const speed = optionalSpeed(body, provider as Provider);
           const message = requiredString(body, "message");
-          const images = optionalImages(body);
+          const images = validatedImages(body, deps.media);
           // Défaut ON : une conversation peut déléguer sauf mention contraire.
           const orchestrator = optionalBoolean(body, "orchestrator", true);
           const conversation = deps.conversations.create({
@@ -523,7 +556,7 @@ export function createServer(deps: ServerDeps) {
           }
           const body = await readObject(request);
           const message = requiredString(body, "message");
-          const images = optionalImages(body);
+          const images = validatedImages(body, deps.media);
           if (deps.runner.isRunning(messageConversationId)) {
             throw new HttpError(409, "un tour est déjà en cours");
           }
@@ -658,10 +691,16 @@ export function createServer(deps: ServerDeps) {
         }
 
         if (request.method === "POST" && pathname === "/api/media") {
+          const limit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
+          const declaredLength = Number(request.headers.get("content-length"));
+          if (Number.isFinite(declaredLength) && declaredLength > limit) {
+            throw new HttpError(413, "image trop volumineuse");
+          }
           const bytes = Buffer.from(await request.arrayBuffer());
           if (bytes.length === 0) throw new HttpError(400, "image vide");
-          const name = deps.media.importFromBase64(
-            bytes.toString("base64"),
+          if (bytes.length > limit) throw new HttpError(413, "image trop volumineuse");
+          const name = deps.media.importBytes(
+            bytes,
             mediaExtension(request.headers.get("content-type")),
           );
           return json({ name }, 201);

@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
 
 export class MediaStore {
@@ -12,10 +12,13 @@ export class MediaStore {
     copyFileSync(absPath, join(this.dir, name));
     return name;
   }
-  importFromBase64(b64: string, ext: string): string {
+  importBytes(bytes: Uint8Array, ext: string): string {
     const name = `${crypto.randomUUID()}.${ext}`;
-    writeFileSync(join(this.dir, name), Buffer.from(b64, "base64"));
+    writeFileSync(join(this.dir, name), bytes);
     return name;
+  }
+  byteLength(name: string): number {
+    return statSync(this.absolutePath(name)).size;
   }
   absolutePath(name: string): string {
     if (name.includes("/") || name.includes("..")) throw new Error("nom media invalide");

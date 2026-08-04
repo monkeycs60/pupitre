@@ -750,6 +750,53 @@ test("upload media binaire puis GET redonne exactement les bytes", async () => {
   expect(new Uint8Array(await download.arrayBuffer())).toEqual(bytes);
 });
 
+test("refuse avec 413 une image qui dépasse la taille maximale", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  process.env.PUPITRE_MEDIA_MAX_BYTES = "5";
+  try {
+    const upload = await fetch(`${current.baseUrl}/api/media`, {
+      method: "POST",
+      headers: { "content-type": "image/png" },
+      body: new Uint8Array([0, 1, 2, 3, 4, 5]),
+    });
+    expect(upload.status).toBe(413);
+  } finally {
+    delete process.env.PUPITRE_MEDIA_MAX_BYTES;
+  }
+});
+
+test("refuse avec 413 un message dont les images dépassent le total autorisé", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  process.env.PUPITRE_MEDIA_MAX_BYTES = "5";
+  process.env.PUPITRE_MESSAGE_MEDIA_MAX_BYTES = "8";
+  try {
+    const upload = async (bytes: Uint8Array<ArrayBuffer>) => {
+      const response = await fetch(`${current!.baseUrl}/api/media`, {
+        method: "POST",
+        headers: { "content-type": "image/png" },
+        body: bytes,
+      });
+      expect(response.status).toBe(201);
+      return (await response.json() as { name: string }).name;
+    };
+    const first = await upload(new Uint8Array([0, 1, 2, 3, 4]));
+    const second = await upload(new Uint8Array([5, 6, 7, 8, 9]));
+    const project = await createProject(tmpdir());
+
+    const created = await postJson("/api/conversations", {
+      projectId: project.id,
+      provider: "claude",
+      model: "haiku",
+      message: "trop d'images",
+      images: [first, second],
+    });
+    expect(created.status).toBe(413);
+  } finally {
+    delete process.env.PUPITRE_MEDIA_MAX_BYTES;
+    delete process.env.PUPITRE_MESSAGE_MEDIA_MAX_BYTES;
+  }
+});
+
 test("GET /api/quotas est vide au démarrage puis reflète le tour claude", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const empty = await fetch(`${current.baseUrl}/api/quotas`);

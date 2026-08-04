@@ -14,8 +14,9 @@ test("importe un fichier image et renvoie un nom servable", () => {
   expect(existsSync(store.absolutePath(name))).toBe(true);
 });
 
-test("importFromBase64 écrit le fichier décodé", () => {
+test("importBytes écrit directement les octets reçus", async () => {
   const store = new MediaStore(mkdtempSync(join(tmpdir(), "pupitre-")));
-  const name = store.importFromBase64(Buffer.from("hello").toString("base64"), "png");
-  expect(Bun.file(store.absolutePath(name)).size).toBe(5);
+  const name = store.importBytes(new Uint8Array([0, 1, 2, 255]), "png");
+  expect(new Uint8Array(await Bun.file(store.absolutePath(name)).arrayBuffer()))
+    .toEqual(new Uint8Array([0, 1, 2, 255]));
 });
