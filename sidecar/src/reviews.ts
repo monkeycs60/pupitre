@@ -5,7 +5,17 @@ import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 import type { QuotaTracker } from "./quotas";
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
-import type { Review, ReviewFlagInput, ReviewSeverity, ReviewStore } from "./stores/reviews";
+import { defaultReviewConfig } from "./stores/presets";
+import type {
+  CounterVerdict,
+  Review,
+  ReviewFlag,
+  ReviewFlagInput,
+  ReviewSeverity,
+  ReviewStore,
+} from "./stores/reviews";
+import { MAX_CONCURRENT_SUBTASKS } from "./subtasks";
+import type { SubtaskResult, SubtaskRunner } from "./subtasks";
 
 const DEFAULT_ZONE_CHARS = 48_000;
 const DEFAULT_DIFF_MAX_BYTES = 2 * 1024 * 1024;
@@ -31,10 +41,24 @@ export interface StartReviewInput {
   effort: string;
 }
 
+export interface CounterOpinionConfig {
+  model?: string;
+  effort?: string;
+}
+
+export interface CounterOpinionDefaults {
+  provider: Provider;
+  model: string;
+  effort: string;
+}
+
+type CounterSubtasks = Pick<SubtaskRunner, "start" | "waitResult">;
+
 class ReviewOutputError extends Error {}
 
 export class ReviewRunner {
   private active = new Map<string, Promise<void>>();
+  private activeCounters = new Map<string, Promise<void>>();
   private scanner: ReviewScanner;
 
   constructor(
@@ -43,6 +67,7 @@ export class ReviewRunner {
     private conversations: ConversationStore,
     private quotas: QuotaTracker,
     scanner?: ReviewScanner,
+    private subtasks?: CounterSubtasks,
   ) {
     this.scanner = scanner ?? ((input) => scanWithAdapters(input, this.quotas));
   }
@@ -82,6 +107,55 @@ export class ReviewRunner {
     const project = this.projects.get(projectId);
     if (!project) return null;
     return this.store.gardienStatus(projectId, project.gardien_mode);
+  }
+
+  counterDefaults(flagId: string): CounterOpinionDefaults | null {
+    const flag = this.store.getFlag(flagId);
+    if (!flag) return null;
+    const review = this.store.get(flag.review_id);
+    if (!review) return null;
+    return defaultReviewConfig(oppositeProvider(review.code_provider));
+  }
+
+  startCounterOpinions(
+    flagIds: string[],
+    config: CounterOpinionConfig = {},
+  ): ReviewFlag[] {
+    if (!this.subtasks) throw new Error("moteur de sous-tâches indisponible");
+    const uniqueIds = [...new Set(flagIds)];
+    if (uniqueIds.length === 0) throw new Error("aucun flag à contre-expertiser");
+    const flags = uniqueIds.map((id) => {
+      const flag = this.store.getFlag(id);
+      if (!flag) throw new Error("flag inconnu");
+      return flag;
+    });
+    const reviewIds = new Set(flags.map((flag) => flag.review_id));
+    if (reviewIds.size !== 1) throw new Error("les flags doivent appartenir à la même review");
+    const review = this.store.get(flags[0]!.review_id);
+    if (!review) throw new Error("review inconnue");
+    const defaults = defaultReviewConfig(oppositeProvider(review.code_provider));
+    const selected = {
+      provider: defaults.provider,
+      model: config.model?.trim() || defaults.model,
+      effort: config.effort?.trim() || defaults.effort,
+    };
+    const queued = flags.map((flag) => this.store.queueCounter(
+      flag.id,
+      selected.provider,
+      selected.model,
+      selected.effort,
+    )!);
+    const run = this.executeCounterBatch(review, queued)
+      .finally(() => {
+        for (const flag of queued) this.activeCounters.delete(flag.id);
+      });
+    for (const flag of queued) this.activeCounters.set(flag.id, run);
+    return queued;
+  }
+
+  async waitCounter(flagId: string): Promise<ReviewFlag | null> {
+    await this.activeCounters.get(flagId);
+    return this.store.getFlag(flagId);
   }
 
   async wait(id: string): Promise<Review | null> {
@@ -125,6 +199,43 @@ export class ReviewRunner {
       }, zone));
     }
     this.store.complete(id, deduplicateFlags(flags));
+    const project = this.projects.get(input.projectId);
+    if (project?.auto_counter_red && this.subtasks) {
+      const redIds = this.store.get(id)?.flags
+        .filter((flag) => flag.severity === "red")
+        .map((flag) => flag.id) ?? [];
+      if (redIds.length > 0) this.startCounterOpinions(redIds);
+    }
+  }
+
+  private async executeCounterBatch(review: Review, flags: ReviewFlag[]): Promise<void> {
+    for (let index = 0; index < flags.length; index += MAX_CONCURRENT_SUBTASKS) {
+      const chunk = flags.slice(index, index + MAX_CONCURRENT_SUBTASKS);
+      await Promise.all(chunk.map((flag) => this.executeCounter(review, flag)));
+    }
+  }
+
+  private async executeCounter(review: Review, flag: ReviewFlag): Promise<void> {
+    try {
+      const subtask = this.subtasks!.start({
+        conversationId: review.conversation_id,
+        provider: flag.counter_provider!,
+        model: flag.counter_model!,
+        effort: flag.counter_effort,
+        prompt: counterOpinionPrompt(review, flag),
+        label: `Contre-avis · ${flag.file}:${flag.line_start}`,
+        readOnly: true,
+      });
+      this.store.beginCounter(flag.id, subtask.id);
+      const result = await this.subtasks!.waitResult(subtask.id);
+      if (!result || result.status !== "done") {
+        throw new Error(counterResultError(result));
+      }
+      const opinion = parseCounterOpinionOutput(result.resultText);
+      this.store.completeCounter(flag.id, opinion.verdict, opinion.text);
+    } catch (error) {
+      this.store.failCounter(flag.id, errorMessage(error));
+    }
   }
 
   private async scanZone(input: ReviewScanInput, diff: string): Promise<ReviewFlagInput[]> {
@@ -140,6 +251,24 @@ export class ReviewRunner {
       return parseReviewOutput(response, diff);
     }
   }
+}
+
+export function parseCounterOpinionOutput(output: string): {
+  verdict: CounterVerdict;
+  text: string;
+} {
+  const parsed = parseJsonObject(output);
+  if (
+    parsed.verdict !== "confirmed"
+    && parsed.verdict !== "dismissed"
+    && parsed.verdict !== "nuanced"
+  ) {
+    throw new ReviewOutputError("verdict de contre-avis invalide");
+  }
+  return {
+    verdict: parsed.verdict,
+    text: nonEmptyString(parsed.text, "texte du contre-avis"),
+  };
 }
 
 export async function scanWithAdapters(
@@ -357,6 +486,70 @@ function formatRetryPrompt(original: string, response: string, reason: string): 
     "Réponse précédente :",
     response.slice(0, 4_000),
   ].join("\n");
+}
+
+function oppositeProvider(provider: Provider): Provider {
+  return provider === "claude" ? "codex" : "claude";
+}
+
+function counterResultError(result: SubtaskResult | null): string {
+  if (!result) return "sous-tâche de contre-avis introuvable";
+  return result.error || `contre-avis terminé avec le statut ${result.status}`;
+}
+
+function counterOpinionPrompt(review: Review, flag: ReviewFlag): string {
+  return [
+    "Tu rends un contre-avis de code indépendant. Ton objectif est la certitude,",
+    "pas la chasse au faux positif ni la contradiction systématique.",
+    `Le code a été écrit par ${review.code_provider}. Rejuge uniquement ce signal :`,
+    `Fichier : ${flag.file}:${flag.line_start}-${flag.line_end}`,
+    `Sévérité initiale : ${flag.severity}`,
+    `Catégorie : ${flag.category}`,
+    `Signal : ${flag.message}`,
+    "Confirme, infirme ou nuance le risque à partir du diff ci-dessous.",
+    "N'utilise aucun outil d'écriture et ne modifie aucun fichier.",
+    "Réponds UNIQUEMENT par ce JSON :",
+    '{"verdict":"confirmed|dismissed|nuanced","text":"Explication concrète et concise."}',
+    "",
+    counterContext(review.diff_text, flag),
+  ].join("\n");
+}
+
+function counterContext(diff: string, flag: ReviewFlag): string {
+  const patches = diff.split(/(?=^diff --git )/m).filter((patch) => patch.trim() !== "");
+  const patch = patches.find((candidate) => {
+    const firstLine = candidate.split("\n", 1)[0] ?? "";
+    return firstLine.includes(` a/${flag.file} `) || firstLine.endsWith(` b/${flag.file}`);
+  });
+  if (!patch || patch.length <= DEFAULT_ZONE_CHARS) return patch ?? diff.slice(0, DEFAULT_ZONE_CHARS);
+
+  const lines = patch.split("\n");
+  let oldLine = 0;
+  let newLine = 0;
+  let anchor = -1;
+  for (const [index, line] of lines.entries()) {
+    const hunk = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunk) {
+      oldLine = Number(hunk[1]);
+      newLine = Number(hunk[2]);
+      continue;
+    }
+    let changedLine: number | null = null;
+    if (line.startsWith("+") && !line.startsWith("+++")) changedLine = newLine++;
+    else if (line.startsWith("-") && !line.startsWith("---")) changedLine = oldLine++;
+    else if (line.startsWith(" ")) {
+      oldLine += 1;
+      newLine += 1;
+    }
+    if (changedLine !== null && changedLine >= flag.line_start && changedLine <= flag.line_end) {
+      anchor = index;
+      break;
+    }
+  }
+  if (anchor < 0) return patch.slice(0, DEFAULT_ZONE_CHARS);
+  const start = Math.max(0, anchor - 30);
+  const end = Math.min(lines.length, anchor + 31);
+  return [lines[0], ...lines.slice(start, end)].filter(Boolean).join("\n");
 }
 
 function deduplicateFlags(flags: ReviewFlagInput[]): ReviewFlagInput[] {

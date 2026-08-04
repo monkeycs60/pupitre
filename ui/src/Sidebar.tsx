@@ -128,7 +128,9 @@ export function Sidebar({
   }, [selectedProject?.id, conversationListVersion, reviewListVersion])
 
   const pendingReviews = reviews.filter((review) =>
-    review.status === 'running' || review.flags.some((flag) => flag.status === 'open'),
+    review.status === 'running' || review.flags.some(
+      (flag) => flag.status === 'open' || flag.status === 'countered',
+    ),
   ).length
 
   async function handleProjectButtonClick() {

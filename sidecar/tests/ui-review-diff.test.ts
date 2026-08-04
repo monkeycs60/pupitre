@@ -13,6 +13,14 @@ function flag(overrides: Partial<ReviewFlag> = {}): ReviewFlag {
     category: "contrat API",
     message: "Vérifie le consommateur.",
     status: "open",
+    counter_state: "idle",
+    counter_verdict: null,
+    counter_text: null,
+    counter_provider: null,
+    counter_model: null,
+    counter_effort: null,
+    counter_subtask_id: null,
+    counter_error: null,
     ...overrides,
   };
 }

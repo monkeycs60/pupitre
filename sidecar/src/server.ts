@@ -109,6 +109,14 @@ function requiredString(
   return value;
 }
 
+function strongReviewModel(model: string, field: string): string {
+  const value = model.trim();
+  if (/haiku|luna/i.test(value)) {
+    throw new HttpError(400, `${field} doit être un modèle fort`);
+  }
+  return value;
+}
+
 function optionalImages(body: Record<string, unknown>): string[] {
   const value = body.images;
   if (value === undefined) return [];
@@ -222,6 +230,9 @@ function presetInput(body: Record<string, unknown>): PresetInput {
   ) {
     throw new HttpError(400, "review_model invalide");
   }
+  if (typeof reviewModelValue === "string") {
+    strongReviewModel(reviewModelValue, "review_model");
+  }
   const reviewEffortValue = body.review_effort;
   if (reviewEffortValue !== undefined) {
     const effortProvider = reviewProvider ?? provider;
@@ -301,9 +312,10 @@ function reviewModelConfig(
   ) {
     throw new HttpError(400, `reviewEffort invalide pour ${provider}`);
   }
+  const model = typeof rawModel === "string" ? rawModel.trim() : providerFallback.model;
   return {
     provider,
-    model: typeof rawModel === "string" ? rawModel.trim() : providerFallback.model,
+    model: strongReviewModel(model, "reviewModel"),
     effort: typeof rawEffort === "string" ? rawEffort : providerFallback.effort,
   };
 }
@@ -428,6 +440,22 @@ export function createServer(deps: ServerDeps) {
           }
           deps.projects.setGardienMode(projectGardienModeId, body.mode);
           return json(deps.projects.get(projectGardienModeId));
+        }
+
+        const projectAutoCounterId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/auto-counter-red$/,
+        );
+        if (request.method === "PUT" && projectAutoCounterId !== null) {
+          if (!deps.projects.get(projectAutoCounterId)) {
+            throw new HttpError(404, "projet inconnu");
+          }
+          const body = await readObject(request);
+          if (typeof body.enabled !== "boolean") {
+            throw new HttpError(400, "option de contre-avis automatique invalide");
+          }
+          deps.projects.setAutoCounterRed(projectAutoCounterId, body.enabled);
+          return json(deps.projects.get(projectAutoCounterId));
         }
 
         const projectPinId = routeId(
@@ -780,6 +808,29 @@ export function createServer(deps: ServerDeps) {
           return json(review);
         }
 
+        const reviewCountersId = routeId(
+          pathname,
+          /^\/api\/reviews\/([^/]+)\/counter-opinions$/,
+        );
+        if (request.method === "POST" && reviewCountersId !== null) {
+          const review = deps.reviews.get(reviewCountersId);
+          if (!review) throw new HttpError(404, "review inconnue");
+          if (review.flags.length === 0) throw new HttpError(400, "aucun flag à contre-expertiser");
+          const body = await readObject(request);
+          const defaults = deps.reviews.counterDefaults(review.flags[0]!.id)!;
+          const model = strongReviewModel(
+            body.model === undefined ? defaults.model : requiredString(body, "model"),
+            "model de contre-avis",
+          );
+          const effort = body.effort === undefined
+            ? defaults.effort
+            : optionalEffort(body, defaults.provider);
+          return json(deps.reviews.startCounterOpinions(
+            review.flags.map((flag) => flag.id),
+            { model, effort: effort ?? defaults.effort },
+          ), 202);
+        }
+
         const reviewFlagId = routeId(pathname, /^\/api\/review-flags\/([^/]+)$/);
         if (request.method === "PATCH" && reviewFlagId !== null) {
           const body = await readObject(request);
@@ -789,6 +840,26 @@ export function createServer(deps: ServerDeps) {
           const flag = deps.reviews.setFlagStatus(reviewFlagId, body.status);
           if (!flag) throw new HttpError(404, "flag inconnu");
           return json(flag);
+        }
+        const reviewFlagCounterId = routeId(
+          pathname,
+          /^\/api\/review-flags\/([^/]+)\/counter-opinion$/,
+        );
+        if (request.method === "POST" && reviewFlagCounterId !== null) {
+          const defaults = deps.reviews.counterDefaults(reviewFlagCounterId);
+          if (!defaults) throw new HttpError(404, "flag inconnu");
+          const body = await readObject(request);
+          const model = strongReviewModel(
+            body.model === undefined ? defaults.model : requiredString(body, "model"),
+            "model de contre-avis",
+          );
+          const effort = body.effort === undefined
+            ? defaults.effort
+            : optionalEffort(body, defaults.provider);
+          return json(deps.reviews.startCounterOpinions([reviewFlagCounterId], {
+            model,
+            effort: effort ?? defaults.effort,
+          }), 202);
         }
 
         if (request.method === "POST" && pathname === "/api/subtasks") {

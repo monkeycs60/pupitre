@@ -44,6 +44,8 @@ export interface SubtaskInput {
   speed?: "standard" | "fast" | null;
   prompt: string;
   label?: string | null;
+  /** Force les deux adapters en lecture seule pour les tâches de jugement. */
+  readOnly?: boolean;
 }
 
 export interface SubtaskResult {
@@ -196,7 +198,14 @@ export class SubtaskRunner {
 
     const controller = new AbortController();
     this.controllers.set(subtask.id, controller);
-    const run = this.run(subtask, project.path, project.permission_mode, controller.signal)
+    const readOnly = input.readOnly === true;
+    const run = this.run(
+      subtask,
+      project.path,
+      readOnly ? "plan" : project.permission_mode,
+      controller.signal,
+      readOnly,
+    )
       .catch((error) => console.error("Échec d'une sous-tâche", error))
       .finally(() => {
         this.controllers.delete(subtask.id);
@@ -260,6 +269,7 @@ export class SubtaskRunner {
     cwd: string,
     permissionMode: string,
     signal: AbortSignal,
+    readOnly = false,
   ): Promise<void> {
     // Objet mutable plutôt qu'une variable locale : `emit` est une closure, et
     // l'analyse de flux de TS ne suit pas les affectations faites dedans.
@@ -287,6 +297,7 @@ export class SubtaskRunner {
         permissionMode,
         images: [],
         signal,
+        ...(readOnly ? { sandboxMode: "read-only" as const } : {}),
         // GARDE DE PROFONDEUR : pas de `conductor` ici, et il n'y a aucun
         // chemin pour en ajouter un. Un sub-agent ne voit donc pas les outils
         // de délégation et ne peut pas créer de sous-sous-tâche — la

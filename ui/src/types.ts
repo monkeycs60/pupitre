@@ -11,6 +11,7 @@ export interface Project {
   created_at: string
   default_preset_id: string | null
   gardien_mode: GardienMode
+  auto_counter_red: boolean
 }
 
 export interface Preset {
@@ -99,6 +100,8 @@ export interface SubtaskResult {
 export type ReviewStatus = 'running' | 'done' | 'error'
 export type ReviewSeverity = 'red' | 'orange' | 'grey'
 export type ReviewFlagStatus = 'open' | 'acked' | 'dismissed' | 'countered'
+export type CounterState = 'idle' | 'queued' | 'running' | 'done' | 'error'
+export type CounterVerdict = 'confirmed' | 'dismissed' | 'nuanced'
 
 export interface ReviewFlag {
   id: string
@@ -110,6 +113,14 @@ export interface ReviewFlag {
   category: string
   message: string
   status: ReviewFlagStatus
+  counter_state: CounterState
+  counter_verdict: CounterVerdict | null
+  counter_text: string | null
+  counter_provider: Provider | null
+  counter_model: string | null
+  counter_effort: string | null
+  counter_subtask_id: string | null
+  counter_error: string | null
 }
 
 export interface Review {
@@ -127,6 +138,7 @@ export interface Review {
   created_at: string
   updated_at: string
   flags: ReviewFlag[]
+  code_provider: Provider
 }
 
 export interface GardienStatus {

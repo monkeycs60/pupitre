@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { listPresets, startReview, updatePreset } from './api'
-import { PROVIDER_EFFORTS, PROVIDER_MODELS } from './modelOptions'
+import { PROVIDER_EFFORTS, REVIEW_MODELS } from './modelOptions'
 import type { Conversation, Preset, Project, Provider, Review } from './types'
 
 interface ReviewDialogProps {
@@ -159,7 +159,7 @@ export function ReviewDialog({
             <label>
               <span>Modèle fort</span>
               <select value={model} onChange={(event) => setModel(event.target.value)}>
-                {PROVIDER_MODELS[provider].map((name) => (
+                {REVIEW_MODELS[provider].map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}
               </select>

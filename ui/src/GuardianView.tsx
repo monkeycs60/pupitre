@@ -3,8 +3,10 @@ import {
   getGardienStatus,
   listProjectReviews,
   setProjectGardienMode,
+  setProjectAutoCounterRed,
   setReviewFlagStatus,
 } from './api'
+import { CounterOpinionDialog } from './CounterOpinionDialog'
 import { parseUnifiedDiff } from './reviewDiff'
 import type {
   GardienMode,
@@ -27,8 +29,17 @@ function errorMessage(error: unknown): string {
 }
 
 function pending(review: Review): boolean {
-  return review.status === 'running' || review.flags.some((flag) => flag.status === 'open')
+  return review.status === 'running' || review.flags.some((flag) =>
+    flag.status === 'open' || flag.status === 'countered'
+      || flag.counter_state === 'queued' || flag.counter_state === 'running',
+  )
 }
+
+const VERDICT_LABEL = {
+  confirmed: 'Risque confirmé',
+  dismissed: 'Risque infirmé',
+  nuanced: 'Risque nuancé',
+} as const
 
 function shortRef(ref: string): string {
   return /^[0-9a-f]{40}$/i.test(ref) ? ref.slice(0, 8) : ref
@@ -60,6 +71,7 @@ export function GuardianView({
   const [expandedFlagId, setExpandedFlagId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [counterTarget, setCounterTarget] = useState<ReviewFlag | 'all' | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -80,7 +92,11 @@ export function GuardianView({
         })
         setError(null)
         setIsLoading(false)
-        if (loadedReviews.some((review) => review.status === 'running')) {
+        if (loadedReviews.some((review) =>
+          review.status === 'running' || review.flags.some((flag) =>
+            flag.counter_state === 'queued' || flag.counter_state === 'running',
+          ),
+        )) {
           pollTimer = setTimeout(() => void load(), 1_000)
         }
       } catch (loadError: unknown) {
@@ -135,6 +151,15 @@ export function GuardianView({
     }
   }
 
+  async function handleAutoCounterChange(enabled: boolean) {
+    setError(null)
+    try {
+      onProjectUpdated(await setProjectAutoCounterRed(project.id, enabled))
+    } catch (updateError: unknown) {
+      setError(errorMessage(updateError))
+    }
+  }
+
   return (
     <div className="guardian-workspace">
       <header className="guardian-header">
@@ -142,16 +167,26 @@ export function GuardianView({
           <h1>Gardien · {project.name}</h1>
           <p>{pendingCount} review{pendingCount === 1 ? '' : 's'} à traiter</p>
         </div>
-        <label className="guardian-mode">
-          <span>Mode</span>
-          <select
-            value={gardienStatus.mode}
-            onChange={(event) => void handleModeChange(event.target.value as GardienMode)}
-          >
-            <option value="informatif">Informatif</option>
-            <option value="bloquant">Bloquant</option>
-          </select>
-        </label>
+        <div className="guardian-settings">
+          <label className="guardian-auto-counter">
+            <input
+              type="checkbox"
+              checked={project.auto_counter_red}
+              onChange={(event) => void handleAutoCounterChange(event.target.checked)}
+            />
+            <span>Contre-avis auto sur rouge</span>
+          </label>
+          <label className="guardian-mode">
+            <span>Mode</span>
+            <select
+              value={gardienStatus.mode}
+              onChange={(event) => void handleModeChange(event.target.value as GardienMode)}
+            >
+              <option value="informatif">Informatif</option>
+              <option value="bloquant">Bloquant</option>
+            </select>
+          </label>
+        </div>
       </header>
 
       {gardienStatus.blocked ? (
@@ -176,7 +211,9 @@ export function GuardianView({
             </div>
           ) : null}
           {reviews.map((review) => {
-            const openFlags = review.flags.filter((flag) => flag.status === 'open').length
+            const openFlags = review.flags.filter(
+              (flag) => flag.status === 'open' || flag.status === 'countered',
+            ).length
             return (
               <button
                 type="button"
@@ -256,7 +293,14 @@ export function GuardianView({
         </section>
 
         <aside className="review-decisions" aria-label="Décisions ciblées">
-          <h2>Décisions</h2>
+          <div className="review-decisions-heading">
+            <h2>Décisions</h2>
+            {selected?.flags.length ? (
+              <button type="button" onClick={() => setCounterTarget('all')}>
+                Contre-avis global
+              </button>
+            ) : null}
+          </div>
           {selected?.flags.length ? selected.flags.map((flag) => (
             <article className={`review-decision severity-${flag.severity}`} key={flag.id}>
               <header>
@@ -264,8 +308,24 @@ export function GuardianView({
                 <span>{flag.severity}</span>
               </header>
               <p>{flag.message}</p>
+              {flag.counter_state === 'queued' || flag.counter_state === 'running' ? (
+                <p className="counter-opinion-state">
+                  Contre-avis {flag.counter_state === 'queued' ? 'en attente' : 'en cours'} avec{' '}
+                  {flag.counter_provider} · {flag.counter_model}
+                </p>
+              ) : null}
+              {flag.counter_text && flag.counter_verdict ? (
+                <div className={`counter-opinion verdict-${flag.counter_verdict}`}>
+                  <strong>{VERDICT_LABEL[flag.counter_verdict]}</strong>
+                  <p>{flag.counter_text}</p>
+                  <span>{flag.counter_provider} · {flag.counter_model} · {flag.counter_effort}</span>
+                </div>
+              ) : null}
+              {flag.counter_error ? (
+                <p className="counter-opinion-error">Contre-avis échoué : {flag.counter_error}</p>
+              ) : null}
               <div className="review-decision-actions">
-                {flag.status === 'open' ? (
+                {flag.status === 'open' || flag.status === 'countered' ? (
                   <>
                     <button type="button" onClick={() => void handleFlagStatus(flag, 'acked')}>
                       Acquitter ce point
@@ -277,6 +337,13 @@ export function GuardianView({
                 ) : (
                   <span>{flag.status === 'acked' ? 'Acquitté' : 'Écarté'}</span>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setCounterTarget(flag)}
+                  disabled={flag.counter_state === 'queued' || flag.counter_state === 'running'}
+                >
+                  {flag.counter_state === 'done' ? 'Redemander un contre-avis' : 'Contre-avis'}
+                </button>
               </div>
             </article>
           )) : (
@@ -288,6 +355,17 @@ export function GuardianView({
           )}
         </aside>
       </div>
+      {selected && counterTarget ? (
+        <CounterOpinionDialog
+          review={selected}
+          flag={counterTarget === 'all' ? null : counterTarget}
+          onClose={() => setCounterTarget(null)}
+          onStarted={() => {
+            setCounterTarget(null)
+            onReviewsChanged()
+          }}
+        />
+      ) : null}
     </div>
   )
 }

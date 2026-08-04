@@ -176,6 +176,13 @@ export function setProjectGardienMode(
   return fetchJson(`/api/projects/${routeId(id)}/gardien-mode`, jsonPut({ mode }))
 }
 
+export function setProjectAutoCounterRed(
+  id: string,
+  enabled: boolean,
+): Promise<Project> {
+  return fetchJson(`/api/projects/${routeId(id)}/auto-counter-red`, jsonPut({ enabled }))
+}
+
 export function listPresets(signal?: AbortSignal): Promise<Preset[]> {
   return fetchJson('/api/presets', { signal })
 }
@@ -289,6 +296,28 @@ export function setReviewFlagStatus(
   status: 'open' | 'acked' | 'dismissed',
 ): Promise<ReviewFlag> {
   return fetchJson(`/api/review-flags/${routeId(flagId)}`, jsonPatch({ status }))
+}
+
+export function startFlagCounterOpinion(
+  flagId: string,
+  model: string,
+  effort: string,
+): Promise<ReviewFlag[]> {
+  return fetchJson(
+    `/api/review-flags/${routeId(flagId)}/counter-opinion`,
+    jsonPost({ model, effort }),
+  )
+}
+
+export function startReviewCounterOpinions(
+  reviewId: string,
+  model: string,
+  effort: string,
+): Promise<ReviewFlag[]> {
+  return fetchJson(
+    `/api/reviews/${routeId(reviewId)}/counter-opinions`,
+    jsonPost({ model, effort }),
+  )
 }
 
 export function getGardienStatus(

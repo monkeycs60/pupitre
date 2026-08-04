@@ -94,6 +94,15 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "continued_from TEXT NULL");
   addColumn(db, "projects", "default_preset_id TEXT NULL");
   addColumn(db, "projects", "gardien_mode TEXT NOT NULL DEFAULT 'informatif'");
+  addColumn(db, "projects", "auto_counter_red INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "review_flags", "counter_state TEXT NOT NULL DEFAULT 'idle'");
+  addColumn(db, "review_flags", "counter_verdict TEXT NULL");
+  addColumn(db, "review_flags", "counter_text TEXT NULL");
+  addColumn(db, "review_flags", "counter_provider TEXT NULL");
+  addColumn(db, "review_flags", "counter_model TEXT NULL");
+  addColumn(db, "review_flags", "counter_effort TEXT NULL");
+  addColumn(db, "review_flags", "counter_subtask_id TEXT NULL");
+  addColumn(db, "review_flags", "counter_error TEXT NULL");
   const addedReviewProvider = addColumn(
     db,
     "presets",

@@ -10,6 +10,7 @@ import { ConversationStore } from "../src/stores/conversations";
 import { PresetStore } from "../src/stores/presets";
 import { ProjectStore } from "../src/stores/projects";
 import { ReviewStore } from "../src/stores/reviews";
+import type { Subtask, SubtaskInput, SubtaskResult } from "../src/subtasks";
 
 let dir: string;
 let repo: string;
@@ -215,6 +216,151 @@ test("une sortie invalide reçoit une seule relance de correction de format", as
   expect(await runner.wait(review.id)).toMatchObject({ status: "done", flags: [] });
   expect(prompts).toHaveLength(2);
   expect(prompts[1]).toContain("CORRECTION DE FORMAT");
+});
+
+test("le contre-avis passe au provider opposé en lecture seule et persiste son verdict", async () => {
+  const project = projects.create({ name: "contre-avis", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "écris le changement",
+  });
+  const review = store.create({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "base",
+    gitRefHead: "head",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+  store.setDiff(review.id, "base", "head", [
+    "diff --git a/src/config.ts b/src/config.ts",
+    "--- a/src/config.ts",
+    "+++ b/src/config.ts",
+    "@@ -1 +1 @@",
+    "-export const secret = false",
+    "+export const secret = true",
+  ].join("\n"));
+  store.complete(review.id, [{
+    file: "src/config.ts",
+    line_start: 1,
+    line_end: 1,
+    severity: "red",
+    category: "secret/credential",
+    message: "Vérifie que cette valeur ne divulgue pas un secret.",
+  }]);
+
+  const inputs: SubtaskInput[] = [];
+  const fakeSubtasks = {
+    start(input: SubtaskInput) {
+      inputs.push(input);
+      return { id: "counter-subtask" } as Subtask;
+    },
+    async waitResult(): Promise<SubtaskResult> {
+      return {
+        status: "done",
+        resultText: '{"verdict":"nuanced","text":"Le risque existe seulement si la valeur est sérialisée."}',
+        error: null,
+        subtask: { id: "counter-subtask" } as SubtaskResult["subtask"],
+      };
+    },
+  };
+  const runner = new ReviewRunner(
+    store,
+    projects,
+    conversations,
+    quotas,
+    undefined,
+    fakeSubtasks,
+  );
+  const flagId = store.get(review.id)!.flags[0]!.id;
+  runner.startCounterOpinions([flagId]);
+  const countered = await runner.waitCounter(flagId);
+
+  expect(inputs).toHaveLength(1);
+  expect(inputs[0]).toMatchObject({
+    provider: "claude",
+    model: "opus",
+    effort: "high",
+    readOnly: true,
+  });
+  expect(inputs[0]!.prompt).toContain("objectif est la certitude");
+  expect(countered).toMatchObject({
+    status: "countered",
+    counter_state: "done",
+    counter_verdict: "nuanced",
+    counter_provider: "claude",
+    counter_model: "opus",
+    counter_text: "Le risque existe seulement si la valeur est sérialisée.",
+  });
+  projects.setGardienMode(project.id, "bloquant");
+  expect(runner.gardienStatus(project.id)).toEqual({
+    mode: "bloquant",
+    blocked: true,
+    openRedCount: 1,
+  });
+  runner.setFlagStatus(flagId, "acked");
+  expect(runner.gardienStatus(project.id)?.blocked).toBe(false);
+});
+
+test("l'option projet lance automatiquement les contre-avis rouges", async () => {
+  writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
+  git("add", ".");
+  git("commit", "-qm", "head auto");
+  const project = projects.create({ name: "auto", path: repo });
+  projects.setAutoCounterRed(project.id, true);
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "modifie la configuration",
+  });
+  let counterStarts = 0;
+  const fakeSubtasks = {
+    start() {
+      counterStarts += 1;
+      return { id: `counter-${counterStarts}` } as Subtask;
+    },
+    async waitResult(): Promise<SubtaskResult> {
+      return {
+        status: "done",
+        resultText: '{"verdict":"confirmed","text":"Le secret serait exposé dans les logs."}',
+        error: null,
+        subtask: { id: "counter-1" } as Subtask,
+      };
+    },
+  };
+  const runner = new ReviewRunner(
+    store,
+    projects,
+    conversations,
+    quotas,
+    async () => '{"flags":[{"file":"src/config.ts","line_start":1,"line_end":1,'
+      + '"severity":"red","category":"secret/credential",'
+      + '"message":"Ne journalise pas le secret."}]}',
+    fakeSubtasks,
+  );
+  const review = runner.start({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "HEAD^",
+    gitRefHead: "HEAD",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+  const completed = await runner.wait(review.id);
+  const flagId = completed!.flags[0]!.id;
+  await runner.waitCounter(flagId);
+
+  expect(counterStarts).toBe(1);
+  expect(store.getFlag(flagId)).toMatchObject({
+    counter_state: "done",
+    counter_verdict: "confirmed",
+    counter_provider: "claude",
+  });
 });
 
 test("un scan running orphelin est clôturé au redémarrage", () => {

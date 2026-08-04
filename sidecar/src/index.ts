@@ -45,7 +45,14 @@ if (process.argv.includes("--conductor-mcp")) {
   // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
   // tournent en parallèle du tour parent qui les a demandées.
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
-  const reviews = new ReviewRunner(reviewStore, projects, conversations, quotas);
+  const reviews = new ReviewRunner(
+    reviewStore,
+    projects,
+    conversations,
+    quotas,
+    undefined,
+    subtasks,
+  );
   server = createServer({
     port,
     projects,
