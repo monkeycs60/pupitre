@@ -307,7 +307,7 @@ test("persiste les seuils de quota dans settings", async () => {
   expect(invalid.status).toBe(400);
 });
 
-test("rejette les Origin distants et accepte localhost ou l'absence d'Origin", async () => {
+test("rejette les Origin distants et accepte localhost, Tauri ou l'absence d'Origin", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const evil = await fetch(`${current.baseUrl}/api/health`, {
     headers: { Origin: "https://evil.com" },
@@ -318,6 +318,23 @@ test("rejette les Origin distants et accepte localhost ou l'absence d'Origin", a
     headers: { Origin: "http://localhost:5173" },
   });
   expect(localhost.status).toBe(200);
+
+  const tauri = await fetch(`${current.baseUrl}/api/health`, {
+    headers: { Origin: "tauri://localhost" },
+  });
+  expect(tauri.status).toBe(200);
+  expect(tauri.headers.get("access-control-allow-origin")).toBe("tauri://localhost");
+
+  const preflight = await fetch(`${current.baseUrl}/api/conversations`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: "tauri://localhost",
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "content-type",
+    },
+  });
+  expect(preflight.status).toBe(204);
+  expect(preflight.headers.get("access-control-allow-methods")).toContain("POST");
 
   const noOrigin = await fetch(`${current.baseUrl}/api/health`);
   expect(noOrigin.status).toBe(200);

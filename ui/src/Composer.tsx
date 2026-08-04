@@ -28,6 +28,7 @@ import type {
 } from './types'
 import { useNow } from './useNow'
 import { PROVIDER_EFFORTS, PROVIDER_MODELS } from './modelOptions'
+import { mediaUrl } from './transport'
 
 interface ComposerProps {
   conversationId: string | null
@@ -45,10 +46,6 @@ interface UploadedImage {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Une erreur est survenue.'
-}
-
-function mediaUrl(name: string): string {
-  return `/media/${encodeURIComponent(name)}`
 }
 
 export function Composer({

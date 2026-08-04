@@ -3,6 +3,7 @@ import { getConversationEvents, getSubtaskEvents } from './api'
 import { reconnectDelayMs } from './backoff'
 import { mergeReplayAndBuffer } from './mergeEvents'
 import type { StoredEvent } from './types'
+import { webSocketUrl } from './transport'
 
 export type ConnectionState = 'connecting' | 'open' | 'reconnecting'
 
@@ -47,7 +48,7 @@ export function useConversationEvents(
       abortController = controller
 
       const currentSocket = new WebSocket(
-        `ws://${location.host}/ws?conversation=${encodeURIComponent(id)}`,
+        webSocketUrl(`/ws?conversation=${encodeURIComponent(id)}`),
       )
       socket = currentSocket
 

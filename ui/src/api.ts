@@ -9,6 +9,7 @@ import type {
   SubtaskResult,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
+import { httpUrl } from './transport'
 
 interface ErrorResponse {
   error?: string
@@ -83,18 +84,18 @@ async function ensureOk(response: Response): Promise<Response> {
 }
 
 async function fetchJson<T>(
-  input: RequestInfo | URL,
+  input: string,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await ensureOk(await fetch(input, init))
+  const response = await ensureOk(await fetch(httpUrl(input), init))
   return response.json() as Promise<T>
 }
 
 async function fetchVoid(
-  input: RequestInfo | URL,
+  input: string,
   init?: RequestInit,
 ): Promise<void> {
-  await ensureOk(await fetch(input, init))
+  await ensureOk(await fetch(httpUrl(input), init))
 }
 
 function jsonPost(body: unknown): RequestInit {
@@ -270,6 +271,6 @@ export function uploadMedia(image: Blob): Promise<{ name: string }> {
 }
 
 export async function fetchMedia(name: string): Promise<Blob> {
-  const response = await ensureOk(await fetch(`/media/${routeId(name)}`))
+  const response = await ensureOk(await fetch(httpUrl(`/media/${routeId(name)}`)))
   return response.blob()
 }

@@ -68,12 +68,19 @@ class HttpError extends Error {
   }
 }
 
+const TAURI_CORS_HEADERS = {
+  "access-control-allow-origin": "tauri://localhost",
+  "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "access-control-allow-headers": "content-type",
+  vary: "Origin",
+};
+
 function json(data: unknown, status = 200): Response {
-  return Response.json(data, { status });
+  return Response.json(data, { status, headers: TAURI_CORS_HEADERS });
 }
 
 function empty(status: number): Response {
-  return new Response(null, { status });
+  return new Response(null, { status, headers: TAURI_CORS_HEADERS });
 }
 
 async function readObject(request: Request): Promise<Record<string, unknown>> {
@@ -293,11 +300,13 @@ export function createServer(deps: ServerDeps) {
         const origin = request.headers.get("origin");
         if (
           origin !== null
+          && origin !== "tauri://localhost"
           && !origin.startsWith("http://localhost:")
           && !origin.startsWith("http://127.0.0.1:")
         ) {
           throw new HttpError(403, "origine interdite");
         }
+        if (request.method === "OPTIONS") return empty(204);
 
         const url = new URL(request.url);
         const { pathname } = url;
@@ -715,7 +724,7 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(400, "nom media invalide");
           }
           if (!(await file.exists())) throw new HttpError(404, "media inconnu");
-          return new Response(file);
+          return new Response(file, { headers: TAURI_CORS_HEADERS });
         }
 
         if (request.method === "GET" && pathname === "/api/quotas") {

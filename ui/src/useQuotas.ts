@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getQuotas, getSettings, updateSettings } from './api'
 import { reconnectDelayMs } from './backoff'
+import { webSocketUrl } from './transport'
 import {
   DEFAULT_QUOTA_THRESHOLDS,
   nextQuotaReevaluationDelay,
@@ -96,7 +97,7 @@ export function useQuotas(): Quotas {
 
     function connect() {
       const currentSocket = new WebSocket(
-        `ws://${location.host}/ws?channel=quotas`,
+        webSocketUrl('/ws?channel=quotas'),
       )
       socket = currentSocket
 

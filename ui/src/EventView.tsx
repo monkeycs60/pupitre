@@ -1,14 +1,11 @@
 import ReactMarkdown from 'react-markdown'
 import type { EventBlock } from './eventBlocks'
+import { mediaUrl } from './transport'
 
 interface EventViewProps {
   block: EventBlock
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
-}
-
-function mediaUrl(name: string): string {
-  return `/media/${encodeURIComponent(name)}`
 }
 
 function formatPreValue(value: unknown): string {

@@ -1,18 +1,23 @@
-#[cfg(debug_assertions)]
-use std::{
-    process::{Child, Command},
-    sync::Mutex,
-};
-#[cfg(debug_assertions)]
+use std::sync::Mutex;
 use tauri::Manager;
+use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
-#[cfg(debug_assertions)]
-struct SidecarProcess(Mutex<Option<Child>>);
+struct SidecarProcess(Mutex<Option<CommandChild>>);
+
+fn stop_sidecar(app: &tauri::AppHandle) {
+    let sidecar = app.state::<SidecarProcess>();
+    if let Ok(mut child_slot) = sidecar.0.lock() {
+        if let Some(child) = child_slot.take() {
+            let _ = child.kill();
+        }
+    };
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -26,34 +31,36 @@ pub fn run() {
                     .parent()
                     .expect("src-tauri doit être situé à la racine du dépôt");
                 let sidecar_directory = repository_root.join("sidecar");
+                let command = app.shell().command("bun").args([
+                    "run".to_string(),
+                    "--cwd".to_string(),
+                    sidecar_directory.to_string_lossy().into_owned(),
+                    "src/index.ts".to_string(),
+                ]);
+                let (_events, child) = command.spawn()?;
+                app.manage(SidecarProcess(Mutex::new(Some(child))));
+            }
 
-                // Le packaging du sidecar en binaire embarqué (`bun build --compile`
-                // + `externalBin`) est volontairement hors périmètre du M1.
-                let child = Command::new("bun")
-                    .arg("run")
-                    .arg("--cwd")
-                    .arg(sidecar_directory)
-                    .arg("src/index.ts")
-                    .spawn()?;
-
+            #[cfg(not(debug_assertions))]
+            {
+                let command = app.shell().sidecar("pupitre-sidecar")?;
+                let (_events, child) = command.spawn()?;
                 app.manage(SidecarProcess(Mutex::new(Some(child))));
             }
 
             Ok(())
         })
         .on_window_event(|window, event| {
-            #[cfg(debug_assertions)]
             if matches!(event, tauri::WindowEvent::Destroyed) {
-                let sidecar = window.app_handle().state::<SidecarProcess>();
-
-                if let Ok(mut child_slot) = sidecar.0.lock() {
-                    if let Some(mut child) = child_slot.take() {
-                        let _ = child.kill();
-                        let _ = child.wait();
-                    }
-                };
+                stop_sidecar(window.app_handle());
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            stop_sidecar(app_handle);
+        }
+    });
 }
