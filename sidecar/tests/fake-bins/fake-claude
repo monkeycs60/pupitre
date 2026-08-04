@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Rejoue la fixture ; enregistre les args reçus pour les assertions.
+echo "$@" > "${FAKE_CLAUDE_ARGS_FILE:-/dev/null}"
+cat "$(dirname "$0")/../fixtures/claude-basic.jsonl"
