@@ -213,7 +213,8 @@ export class ReviewStore {
     const reserve = this.db.transaction(() => {
       const update = this.db.query(`
         UPDATE review_flags
-        SET counter_state = 'queued', counter_verdict = NULL, counter_text = NULL,
+        SET status = CASE WHEN status = 'countered' THEN 'open' ELSE status END,
+            counter_state = 'queued', counter_verdict = NULL, counter_text = NULL,
             counter_provider = ?, counter_model = ?, counter_effort = ?,
             code_provider = ?, counter_subtask_id = NULL, counter_error = NULL
         WHERE id = ? AND counter_state NOT IN ('queued', 'running')
@@ -228,6 +229,7 @@ export class ReviewStore {
         ).changes !== 1) {
           throw new CounterAlreadyRunningError("un contre-avis est déjà en cours");
         }
+        this.syncDecisionStatuses(input.id);
       }
       return inputs.map((input) => this.getFlag(input.id)!);
     });

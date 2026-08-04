@@ -497,6 +497,55 @@ test("contre-expertise chaque flag avec le provider opposé à son auteur réel"
     ]));
 });
 
+test("un re-contre-avis échoué ne conserve pas un statut countered sans verdict", async () => {
+  const project = projects.create({ name: "re-contre-avis", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "base",
+    gitRefHead: "head",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+  store.complete(review.id, [{
+    file: "src/a.ts", line_start: 1, line_end: 1, severity: "red",
+    category: "données", message: "Risque initial.",
+  }]);
+  const flagId = store.get(review.id)!.flags[0]!.id;
+  store.completeCounter(flagId, "confirmed", "Ancien verdict.");
+  const fakeSubtasks = {
+    start() {
+      return { id: "counter-error" } as Subtask;
+    },
+    async waitResult(): Promise<SubtaskResult> {
+      return {
+        status: "error",
+        resultText: "",
+        error: "échec simulé",
+        subtask: { id: "counter-error" } as Subtask,
+      };
+    },
+  };
+  const runner = new ReviewRunner(
+    store, projects, conversations, quotas, undefined, fakeSubtasks,
+  );
+  runner.startCounterOpinions([flagId], { codeProvider: "claude" });
+  await runner.waitCounter(flagId);
+
+  expect(store.getFlag(flagId)).toMatchObject({
+    code_provider: "claude",
+    status: "open",
+    counter_state: "error",
+    counter_verdict: null,
+    counter_text: null,
+  });
+  expect(store.get(review.id)!.decisions[0]!.status).toBe("open");
+});
+
 test("synchronise les statuts flag-décision et préserve les acquis au backfill", () => {
   const project = projects.create({ name: "migration décisions", path: repo });
   const conversation = conversations.create({
