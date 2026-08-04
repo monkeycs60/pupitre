@@ -131,6 +131,15 @@ export function createServer(deps: ServerDeps) {
     hostname: "127.0.0.1",
     async fetch(request, server) {
       try {
+        const origin = request.headers.get("origin");
+        if (
+          origin !== null
+          && !origin.startsWith("http://localhost:")
+          && !origin.startsWith("http://127.0.0.1:")
+        ) {
+          throw new HttpError(403, "origine interdite");
+        }
+
         const url = new URL(request.url);
         const { pathname } = url;
 
@@ -210,12 +219,12 @@ export function createServer(deps: ServerDeps) {
           if (!deps.conversations.get(messageConversationId)) {
             throw new HttpError(404, "conversation inconnue");
           }
-          if (deps.runner.isRunning(messageConversationId)) {
-            throw new HttpError(409, "un tour est déjà en cours");
-          }
           const body = await readObject(request);
           const message = requiredString(body, "message");
           const images = optionalImages(body);
+          if (deps.runner.isRunning(messageConversationId)) {
+            throw new HttpError(409, "un tour est déjà en cours");
+          }
           void deps.runner.runTurn(messageConversationId, message, images)
             .catch((error) => console.error("Échec du tour", error));
           return empty(202);

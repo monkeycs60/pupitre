@@ -44,6 +44,35 @@ test("deux tours simultanés sur la même conversation → le second est refusé
   await firstTurn;
 });
 
+test("deux tours simultanés sur deux conversations différentes aboutissent", async () => {
+  const first = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "premier",
+  });
+  const second = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "second",
+  });
+
+  await Promise.all([
+    runner.runTurn(first.id, "premier", []),
+    runner.runTurn(second.id, "second", []),
+  ]);
+
+  expect(convs.listEvents(first.id).at(-1)).toEqual({
+    type: "status",
+    state: "done",
+  });
+  expect(convs.listEvents(second.id).at(-1)).toEqual({
+    type: "status",
+    state: "done",
+  });
+});
+
 test("le sweep marque en erreur un status running orphelin", () => {
   const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "x" });
   convs.appendEvent(c.id, { type: "status", state: "running" });

@@ -14,6 +14,7 @@ import { ProjectStore } from "../src/stores/projects";
 interface TestServer {
   baseUrl: string;
   db: Database;
+  runner: ConversationRunner;
   server: ReturnType<typeof createServer>;
 }
 
@@ -37,6 +38,35 @@ async function createProject(path: string): Promise<{ id: string }> {
   const response = await postJson("/api/projects", { name: "test", path });
   expect(response.status).toBe(201);
   return response.json();
+}
+
+async function waitForPersistedEvent(
+  conversationId: string,
+  predicate: (event: AppEvent) => boolean,
+): Promise<AppEvent> {
+  if (!current) throw new Error("serveur de test non démarré");
+  const deadline = Date.now() + 3_000;
+  while (Date.now() < deadline) {
+    const response = await fetch(
+      `${current.baseUrl}/api/conversations/${conversationId}/events`,
+    );
+    const events = await response.json() as AppEvent[];
+    const event = events.find(predicate);
+    if (event) return event;
+    await Bun.sleep(20);
+  }
+  throw new Error("timeout événement persisté");
+}
+
+async function waitForRunnerIdle(conversationId: string): Promise<void> {
+  if (!current) throw new Error("serveur de test non démarré");
+  const deadline = Date.now() + 3_000;
+  while (current.runner.isRunning(conversationId) && Date.now() < deadline) {
+    await Bun.sleep(20);
+  }
+  if (current.runner.isRunning(conversationId)) {
+    throw new Error("timeout runner actif");
+  }
 }
 
 function waitForWebSocketEvent(
@@ -71,6 +101,8 @@ beforeEach(() => {
   const fixture = join(import.meta.dir, "fixtures/claude-basic.jsonl");
   writeFileSync(fakeClaude, `#!/usr/bin/env bash
 case "$*" in
+  *DECONNECTE_WS*) sleep 0.5 ;;
+  *CONCURRENT_SAME*) sleep 0.3 ;;
   *ATTENDS_WS*) sleep 0.2 ;;
   *BLOQUE*) exec sleep 30 ;;
 esac
@@ -102,6 +134,7 @@ cat "${fixture}"
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
     db,
+    runner,
     server,
   };
 });
@@ -132,6 +165,22 @@ test("health, création et liste des projets, avec 400 pour un path inexistant",
   expect(await list.json()).toEqual([
     expect.objectContaining({ id: project.id, name: "test", path: tmpdir() }),
   ]);
+});
+
+test("rejette les Origin distants et accepte localhost ou l'absence d'Origin", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const evil = await fetch(`${current.baseUrl}/api/health`, {
+    headers: { Origin: "https://evil.com" },
+  });
+  expect(evil.status).toBe(403);
+
+  const localhost = await fetch(`${current.baseUrl}/api/health`, {
+    headers: { Origin: "http://localhost:5173" },
+  });
+  expect(localhost.status).toBe(200);
+
+  const noOrigin = await fetch(`${current.baseUrl}/api/health`);
+  expect(noOrigin.status).toBe(200);
 });
 
 test("une conversation termine en live via WS et son replay commence par user-message", async () => {
@@ -222,6 +271,102 @@ test("un tour actif répond 409, puis cancel l'annule et déverrouille la conver
   );
   expect(next.status).toBe(202);
   await unlockedDone;
+});
+
+test("deux POST messages quasi simultanés ne peuvent pas répondre tous deux 202", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "initial",
+  });
+  const conversation = await created.json() as { id: string };
+  await waitForRunnerIdle(conversation.id);
+
+  const path = `/api/conversations/${conversation.id}/messages`;
+  const responses = await Promise.all([
+    postJson(path, { message: "CONCURRENT_SAME premier" }),
+    postJson(path, { message: "CONCURRENT_SAME second" }),
+  ]);
+
+  expect(responses.map((response) => response.status).sort()).toEqual([202, 409]);
+  await waitForRunnerIdle(conversation.id);
+});
+
+test("un Origin distant est aussi refusé pendant l'upgrade WebSocket", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "initial",
+  });
+  const conversation = await created.json() as { id: string };
+  const wsUrl = `${current.baseUrl.replace("http", "ws")}/ws?conversation=${conversation.id}`;
+
+  await new Promise<void>((resolve, reject) => {
+    const BunWebSocket = WebSocket as unknown as {
+      new (url: string, options: Bun.WebSocketOptions): WebSocket;
+    };
+    const socket = new BunWebSocket(wsUrl, {
+      headers: { Origin: "https://evil.com" },
+    });
+    let opened = false;
+    const timeout = setTimeout(() => reject(new Error("timeout WebSocket")), 3_000);
+    socket.addEventListener("open", () => {
+      opened = true;
+      clearTimeout(timeout);
+      socket.close();
+      reject(new Error("upgrade WebSocket accepté"));
+    });
+    socket.addEventListener("error", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+    socket.addEventListener("close", () => {
+      if (opened) return;
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+  await waitForRunnerIdle(conversation.id);
+});
+
+test("la déconnexion d'un client WS en plein tour n'empêche pas le status done", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "DECONNECTE_WS",
+  });
+  const conversation = await created.json() as { id: string };
+  const wsUrl = `${current.baseUrl.replace("http", "ws")}/ws?conversation=${conversation.id}`;
+
+  await new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(wsUrl);
+    const timeout = setTimeout(() => reject(new Error("timeout WebSocket")), 3_000);
+    socket.addEventListener("open", () => socket.close());
+    socket.addEventListener("close", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+    socket.addEventListener("error", () => {
+      clearTimeout(timeout);
+      reject(new Error("erreur WebSocket"));
+    });
+  });
+
+  const done = await waitForPersistedEvent(
+    conversation.id,
+    (event) => event.type === "status" && event.state === "done",
+  );
+  expect(done).toEqual({ type: "status", state: "done" });
+  await waitForRunnerIdle(conversation.id);
 });
 
 test("upload media binaire puis GET redonne exactement les bytes", async () => {

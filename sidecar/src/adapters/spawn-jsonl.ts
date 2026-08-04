@@ -28,10 +28,12 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
     let sawTerminal = false;
     let settled = false;
     let aborted = false;
+    let killTimer: ReturnType<typeof setTimeout> | undefined;
 
     const settle = () => {
       if (settled) return;
       settled = true;
+      if (killTimer !== undefined) clearTimeout(killTimer);
       opts.signal?.removeEventListener("abort", abort);
       resolve();
     };
@@ -41,7 +43,14 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
       aborted = true;
       sawTerminal = true;
       opts.emit({ type: "status", state: "error", error: "annulé" });
-      if (!child.kill()) settle();
+      if (!child.kill()) {
+        settle();
+        return;
+      }
+      killTimer = setTimeout(() => {
+        if (!settled) child.kill("SIGKILL");
+      }, 3_000);
+      killTimer.unref();
     };
     opts.signal?.addEventListener("abort", abort, { once: true });
 
