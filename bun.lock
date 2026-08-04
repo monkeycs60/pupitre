@@ -1,0 +1,20 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "pupitre",
+    },
+    "sidecar": {
+      "name": "@pupitre/sidecar",
+    },
+    "ui": {
+      "name": "@pupitre/ui",
+    },
+  },
+  "packages": {
+    "@pupitre/sidecar": ["@pupitre/sidecar@workspace:sidecar"],
+
+    "@pupitre/ui": ["@pupitre/ui@workspace:ui"],
+  }
+}

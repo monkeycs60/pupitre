@@ -1,0 +1,6 @@
+{
+  "name": "@pupitre/sidecar",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "bun run --watch src/index.ts", "test": "bun test" }
+}
