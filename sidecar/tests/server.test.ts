@@ -11,6 +11,7 @@ import { ConversationEventBus, createServer } from "../src/server";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
 import { QuotaTracker } from "../src/quotas";
+import { SubtaskRunner } from "../src/subtasks";
 
 interface TestServer {
   baseUrl: string;
@@ -156,6 +157,7 @@ cat "${fixture}"
     events.broadcast,
     quotas,
   );
+  const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
   const server = createServer({
     port: 0,
     projects,
@@ -164,6 +166,7 @@ cat "${fixture}"
     runner,
     events,
     quotas,
+    subtasks,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

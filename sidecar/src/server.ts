@@ -6,6 +6,7 @@ import type { ConversationRunner } from "./runner";
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
 import type { QuotaTracker } from "./quotas";
+import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -30,6 +31,7 @@ export interface ServerDeps {
   runner: ConversationRunner;
   events: ConversationEventBus;
   quotas: QuotaTracker;
+  subtasks: SubtaskRunner;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -124,6 +126,13 @@ function optionalSpeed(
     throw new HttpError(400, "vitesse fast indisponible pour claude");
   }
   return value as "standard" | "fast";
+}
+
+function optionalLabel(body: Record<string, unknown>): string | null {
+  const value = body.label;
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") throw new HttpError(400, "champ label invalide");
+  return value;
 }
 
 function requiredPinned(body: Record<string, unknown>): boolean {
@@ -325,6 +334,72 @@ export function createServer(deps: ServerDeps) {
           return json(deps.conversations.listEvents(conversationEventsId));
         }
 
+        if (request.method === "POST" && pathname === "/api/subtasks") {
+          const body = await readObject(request);
+          const conversationId = requiredString(body, "conversationId");
+          if (!deps.conversations.get(conversationId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          const provider = requiredString(body, "provider");
+          if (provider !== "claude" && provider !== "codex") {
+            throw new HttpError(400, "provider invalide");
+          }
+          const model = requiredString(body, "model");
+          const effort = optionalEffort(body, provider as Provider);
+          const speed = optionalSpeed(body, provider as Provider);
+          const prompt = requiredString(body, "prompt");
+          const label = optionalLabel(body);
+          try {
+            // Lancement asynchrone : on rend l'id tout de suite, le suivi passe
+            // par /ws?conversation=<id> ou GET /api/subtasks/:id.
+            const subtask = deps.subtasks.start({
+              conversationId,
+              provider: provider as Provider,
+              model,
+              effort,
+              speed,
+              prompt,
+              label,
+            });
+            return json({ id: subtask.id }, 201);
+          } catch (error) {
+            if (error instanceof SubtaskLimitError) {
+              throw new HttpError(429, error.message);
+            }
+            throw error;
+          }
+        }
+
+        const subtaskEventsId = routeId(
+          pathname,
+          /^\/api\/subtasks\/([^/]+)\/events$/,
+        );
+        if (request.method === "GET" && subtaskEventsId !== null) {
+          if (!deps.subtasks.get(subtaskEventsId)) {
+            throw new HttpError(404, "sous-tâche inconnue");
+          }
+          // Même table, même replay que pour une conversation.
+          return json(deps.conversations.listEvents(subtaskEventsId));
+        }
+
+        const subtaskId = routeId(pathname, /^\/api\/subtasks\/([^/]+)$/);
+        if (request.method === "GET" && subtaskId !== null) {
+          const result = deps.subtasks.result(subtaskId);
+          if (!result) throw new HttpError(404, "sous-tâche inconnue");
+          return json(result);
+        }
+
+        const conversationSubtasksId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/subtasks$/,
+        );
+        if (request.method === "GET" && conversationSubtasksId !== null) {
+          if (!deps.conversations.get(conversationSubtasksId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          return json(deps.subtasks.listByConversation(conversationSubtasksId));
+        }
+
         if (request.method === "POST" && pathname === "/api/media") {
           const bytes = Buffer.from(await request.arrayBuffer());
           if (bytes.length === 0) throw new HttpError(400, "image vide");
@@ -360,8 +435,13 @@ export function createServer(deps: ServerDeps) {
           if (channel !== null && channel !== "conversation") {
             throw new HttpError(400, "canal inconnu");
           }
+          // Le canal accepte un id de conversation OU de subtask : les events
+          // d'une subtask sont diffusés sous son propre id (cf. SubtaskRunner).
           const conversationId = url.searchParams.get("conversation");
-          if (!conversationId || !deps.conversations.get(conversationId)) {
+          if (
+            !conversationId
+            || (!deps.conversations.get(conversationId) && !deps.subtasks.get(conversationId))
+          ) {
             throw new HttpError(404, "conversation inconnue");
           }
           const data = { channel: "conversation", conversationId } as const;

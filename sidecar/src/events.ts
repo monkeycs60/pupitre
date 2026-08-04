@@ -10,6 +10,10 @@ export type AppEvent =
   // Introspection de quota native du provider (payload brut, interprété par le
   // QuotaTracker — cf. M2 phase C).
   | { type: "rate-limit"; provider: Provider; payload: unknown }
+  // Référence à une sous-tâche déléguée, appendée à la conversation PARENTE au
+  // lancement : l'UI s'en sert pour afficher la carte de sub-agent et pour
+  // s'abonner au flux de la subtask (/ws?conversation=<subtaskId>).
+  | { type: "subtask-ref"; subtaskId: string; provider: Provider; model: string; label?: string }
   | { type: "status"; state: "running" | "done" | "error"; error?: string };
 
 // Un événement persisté porte l'id (rowid) de sa ligne : c'est la clé de dédup

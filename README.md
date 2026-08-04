@@ -22,6 +22,18 @@ Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Code
 
 Les deux CLIs sont normalisés en un schéma d'événements unifié (`sidecar/src/events.ts`) ; le frontend ne connaît jamais Claude ou Codex directement. Les sessions sont celles des vrais CLIs (`claude -r`, `codex exec resume`) : reprise gratuite, et tes skills/CLAUDE.md/AGENTS.md marchent tels quels.
 
+## Sous-tâches déléguées (M2-D1)
+
+Une conversation peut déléguer du travail à un autre modèle (le Conductor de la phase D). Le moteur vit dans `sidecar/src/subtasks.ts` :
+
+- `POST /api/subtasks {conversationId, provider, model, effort?, speed?, prompt, label?}` → `201 {id}`, tour lancé en arrière-plan dans le cwd du projet parent, **sans prendre le verrou de conversation** (une sous-tâche tourne délibérément en parallèle du tour parent qui l'a demandée).
+- `GET /api/subtasks/:id` → `{status, resultText, subtask}` — `resultText` = concaténation des `text-final`.
+- `GET /api/subtasks/:id/events` → replay, et `GET /api/conversations/:id/subtasks` → les sous-tâches d'une conversation.
+- Les événements d'une sous-tâche sont stockés dans la table `events` sous **son propre id** : le replay HTTP et le canal `/ws?conversation=<subtaskId>` fonctionnent à l'identique d'une conversation.
+- Au lancement, un event `subtask-ref` est appendé à la **conversation parente** : c'est ce qui permet à l'UI d'afficher la carte de sub-agent.
+
+**Limite de concurrence : 4 sous-tâches simultanées par conversation parente** (`MAX_CONCURRENT_SUBTASKS`). Au-delà, l'API répond `429` et c'est à l'appelant (le bridge MCP de D2) de séquencer ses délégations. La limite est par conversation, pas globale : deux conversations peuvent orchestrer en parallèle sans se gêner. Elle protège du fan-out incontrôlé — autant de process CLI, de quota consommé et d'écritures concurrentes dans le même working directory qu'il y a d'appels.
+
 ## Prérequis
 
 - [Bun](https://bun.sh) ≥ 1.3, Rust ≥ 1.77 (+ deps Tauri Linux : `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`…)

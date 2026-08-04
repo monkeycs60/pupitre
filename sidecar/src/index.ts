@@ -5,6 +5,7 @@ import { ConversationEventBus, createServer } from "./server";
 import { ConversationStore } from "./stores/conversations";
 import { ProjectStore } from "./stores/projects";
 import { QuotaTracker } from "./quotas";
+import { SubtaskRunner } from "./subtasks";
 import { codexAppServer } from "./adapters/codex-app-server";
 
 const dir = dataDir();
@@ -21,6 +22,9 @@ const runner = new ConversationRunner(
   events.broadcast,
   quotas,
 );
+// Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
+// tournent en parallèle du tour parent qui les a demandées.
+const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
 const configuredPort = process.env.PUPITRE_PORT;
 const port = configuredPort === undefined ? 4820 : Number(configuredPort);
 if (configuredPort?.trim() === "" || !Number.isInteger(port) || port < 0 || port > 65_535) {
@@ -35,6 +39,7 @@ const server = createServer({
   runner,
   events,
   quotas,
+  subtasks,
 });
 
 // Si l'app-server codex tourne déjà, on part avec un état de quota frais.
