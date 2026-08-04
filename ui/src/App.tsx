@@ -2,6 +2,7 @@ import { useState } from 'react'
 import './App.css'
 import { Chat } from './Chat'
 import { Sidebar } from './Sidebar'
+import { SwitchModelModal } from './SwitchModelModal'
 import type { Conversation, Project } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
@@ -12,6 +13,8 @@ function App() {
     useState<Conversation | null>(null)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
   const [conversationListVersion, setConversationListVersion] = useState(0)
+  const [projectListVersion, setProjectListVersion] = useState(0)
+  const [showSwitchModel, setShowSwitchModel] = useState(false)
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
   // conversation ouverte — la sidebar n'en affiche l'indicateur que pour elle.
   const [runningSubtasks, setRunningSubtasks] = useState(0)
@@ -24,6 +27,7 @@ function App() {
     if (project.id !== selectedProject?.id) {
       setSelectedConversation(null)
       setIsCreatingConversation(false)
+      setShowSwitchModel(false)
     }
     setSelectedProject(project)
   }
@@ -31,12 +35,14 @@ function App() {
   function handleConversationSelect(conversation: Conversation) {
     setSelectedConversation(conversation)
     setIsCreatingConversation(false)
+    setShowSwitchModel(false)
   }
 
   function handleConversationCreate() {
     if (selectedProject === null) return
     setSelectedConversation(null)
     setIsCreatingConversation(true)
+    setShowSwitchModel(false)
   }
 
   function handleConversationCreated(conversation: Conversation) {
@@ -47,6 +53,20 @@ function App() {
 
   function handleProjectUpdated(project: Project) {
     setSelectedProject(project)
+    setProjectListVersion((current) => current + 1)
+  }
+
+  function handleConversationSwitched(conversation: Conversation) {
+    setSelectedConversation(conversation)
+    setShowSwitchModel(false)
+    setConversationListVersion((current) => current + 1)
+  }
+
+  function handleConversationHandoff(conversation: Conversation) {
+    setSelectedConversation(conversation)
+    setIsCreatingConversation(false)
+    setShowSwitchModel(false)
+    setConversationListVersion((current) => current + 1)
   }
 
   return (
@@ -58,6 +78,7 @@ function App() {
         onConversationSelect={handleConversationSelect}
         onConversationCreate={handleConversationCreate}
         conversationListVersion={conversationListVersion}
+        projectListVersion={projectListVersion}
         quotas={quotas}
         runningSubtasks={runningSubtasks}
       />
@@ -81,6 +102,15 @@ function App() {
                   </p>
                 ) : null}
               </div>
+              {selectedConversation !== null ? (
+                <button
+                  type="button"
+                  className="header-action"
+                  onClick={() => setShowSwitchModel(true)}
+                >
+                  Changer de modèle
+                </button>
+              ) : null}
             </header>
             <Chat
               key={selectedConversation?.id ?? `new-${selectedProject.id}`}
@@ -93,6 +123,16 @@ function App() {
               onProjectUpdated={handleProjectUpdated}
               onRunningSubtasksChange={setRunningSubtasks}
             />
+            {showSwitchModel && selectedConversation !== null ? (
+              <SwitchModelModal
+                key={selectedConversation.id}
+                conversation={selectedConversation}
+                events={events}
+                onClose={() => setShowSwitchModel(false)}
+                onSwitched={handleConversationSwitched}
+                onHandoff={handleConversationHandoff}
+              />
+            ) : null}
           </>
         )}
       </section>

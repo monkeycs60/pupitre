@@ -35,6 +35,14 @@ export interface SendMessageInput {
   images?: string[]
 }
 
+export interface ModelConfigInput {
+  provider: Provider
+  model: string
+  effort: string | null
+  speed: ConversationSpeed | null
+  orchestrator?: boolean
+}
+
 export interface PresetInput {
   name: string
   provider: Provider
@@ -177,6 +185,26 @@ export function sendMessage(
 ): Promise<void> {
   return fetchVoid(
     `/api/conversations/${routeId(conversationId)}/messages`,
+    jsonPost(input),
+  )
+}
+
+export function switchConversationModel(
+  conversationId: string,
+  input: ModelConfigInput,
+): Promise<{ conversation: Conversation; estimatedReingestionTokens: number }> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/model`,
+    jsonPut(input),
+  )
+}
+
+export function handoffConversation(
+  conversationId: string,
+  input: ModelConfigInput,
+): Promise<Conversation> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/handoff`,
     jsonPost(input),
   )
 }

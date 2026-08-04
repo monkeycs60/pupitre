@@ -50,6 +50,13 @@ const EFFORTS_BY_PROVIDER = {
 } as const satisfies Record<Provider, readonly string[]>;
 const SPEEDS = ["standard", "fast"] as const;
 
+export const HANDOFF_PROMPT = [
+  "Prépare une passation concise pour un autre modèle qui va reprendre cette conversation.",
+  "Résume l'objectif, les décisions prises, l'état actuel, les fichiers importants,",
+  "les vérifications déjà faites et les prochaines étapes. N'utilise aucun outil,",
+  "ne poursuis pas l'implémentation et retourne uniquement le résumé de passation.",
+].join(" ");
+
 class HttpError extends Error {
   constructor(
     readonly status: number,
@@ -406,6 +413,103 @@ export function createServer(deps: ServerDeps) {
           void deps.runner.runTurn(conversation.id, message, images)
             .catch((error) => console.error("Échec du tour", error));
           return json(conversation, 201);
+        }
+
+        const conversationModelId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/model$/,
+        );
+        if (request.method === "PUT" && conversationModelId !== null) {
+          const conversation = deps.conversations.get(conversationModelId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          if (deps.runner.isRunning(conversationModelId)) {
+            throw new HttpError(409, "un tour est déjà en cours");
+          }
+          const body = await readObject(request);
+          const provider = requiredString(body, "provider");
+          if (provider !== "claude" && provider !== "codex") {
+            throw new HttpError(400, "provider invalide");
+          }
+          if (provider !== conversation.provider) {
+            throw new HttpError(409, "un changement de provider exige une passation");
+          }
+          const model = requiredString(body, "model");
+          const effort = optionalEffort(body, conversation.provider);
+          const speed = optionalSpeed(body, conversation.provider);
+          const estimatedReingestionTokens = deps.conversations.usageTokens(
+            conversationModelId,
+          );
+          deps.conversations.updateModel(conversationModelId, { model, effort, speed });
+          return json({
+            conversation: deps.conversations.get(conversationModelId),
+            estimatedReingestionTokens,
+          });
+        }
+
+        const conversationHandoffId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/handoff$/,
+        );
+        if (request.method === "POST" && conversationHandoffId !== null) {
+          const source = deps.conversations.get(conversationHandoffId);
+          if (!source) throw new HttpError(404, "conversation inconnue");
+          if (deps.runner.isRunning(source.id)) {
+            throw new HttpError(409, "un tour est déjà en cours");
+          }
+          const body = await readObject(request);
+          const provider = requiredString(body, "provider");
+          if (provider !== "claude" && provider !== "codex") {
+            throw new HttpError(400, "provider invalide");
+          }
+          if (provider === source.provider) {
+            throw new HttpError(409, "la passation exige un autre provider");
+          }
+          const model = requiredString(body, "model");
+          const effort = optionalEffort(body, provider);
+          const speed = optionalSpeed(body, provider);
+          const orchestrator = optionalBoolean(body, "orchestrator", true);
+          const lastEventId = deps.conversations.listEvents(source.id).at(-1)?.id ?? 0;
+
+          try {
+            await deps.runner.runTurn(source.id, HANDOFF_PROMPT, []);
+          } catch (error) {
+            if (error instanceof Error && error.message.includes("déjà en cours")) {
+              throw new HttpError(409, error.message);
+            }
+            throw error;
+          }
+          const handoffEvents = deps.conversations.listEvents(source.id)
+            .filter((event) => event.id > lastEventId);
+          const terminal = handoffEvents.findLast((event) => event.type === "status");
+          if (terminal?.type === "status" && terminal.state === "error") {
+            throw new HttpError(502, terminal.error ?? "échec du résumé de passation");
+          }
+          const summary = handoffEvents
+            .filter((event) => event.type === "text-final")
+            .map((event) => event.text)
+            .join("\n")
+            .trim();
+          if (!summary) throw new HttpError(502, "résumé de passation vide");
+
+          const continuation = deps.conversations.create({
+            projectId: source.project_id,
+            provider,
+            model,
+            effort,
+            speed,
+            orchestrator,
+            continuedFrom: source.id,
+            firstMessage: `Suite — ${source.title}`,
+          });
+          const seed = [
+            `Voici la passation de la conversation ${source.title} :`,
+            "",
+            summary,
+            "",
+            "Prends ce contexte comme point de départ et confirme brièvement la reprise.",
+          ].join("\n");
+          await deps.runner.runTurn(continuation.id, seed, []);
+          return json(deps.conversations.get(continuation.id), 201);
         }
 
         const messageConversationId = routeId(

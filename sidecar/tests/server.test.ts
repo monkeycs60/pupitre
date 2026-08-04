@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -147,6 +147,7 @@ case "$*" in
   *ATTENDS_WS*) sleep 0.2 ;;
   *BLOQUE*) exec sleep 30 ;;
 esac
+if [ -n "$FAKE_CLAUDE_ARGS_FILE" ]; then printf '%s\n' "$*" >> "$FAKE_CLAUDE_ARGS_FILE"; fi
 cat "${fixture}"
 `);
   chmodSync(fakeClaude, 0o755);
@@ -200,6 +201,8 @@ afterEach(() => {
   else process.env.PUPITRE_CLAUDE_BIN = previousClaudeBin;
   if (previousCodexBin === undefined) delete process.env.PUPITRE_CODEX_BIN;
   else process.env.PUPITRE_CODEX_BIN = previousCodexBin;
+  delete process.env.FAKE_CLAUDE_ARGS_FILE;
+  delete process.env.PUPITRE_CODEX_MODE;
 });
 
 test("health, création et liste des projets, avec 400 pour un path inexistant", async () => {
@@ -487,6 +490,88 @@ test("rejette avec 400 une vitesse invalide et fast pour Claude", async () => {
 
   expect(invalidSpeed.status).toBe(400);
   expect(fastClaude.status).toBe(400);
+});
+
+test("change de modèle dans le même provider et le tour suivant l'utilise", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    effort: "low",
+    message: "premier tour",
+  });
+  const conversation = await created.json() as { id: string };
+  await waitForRunnerIdle(conversation.id);
+
+  const argsFile = join(tmpdir(), `pupitre-switch-${crypto.randomUUID()}`);
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  const switched = await putJson(`/api/conversations/${conversation.id}/model`, {
+    provider: "claude",
+    model: "sonnet",
+    effort: "high",
+    speed: null,
+  });
+  expect(switched.status).toBe(200);
+  expect(await switched.json()).toEqual({
+    conversation: expect.objectContaining({ model: "sonnet", effort: "high" }),
+    estimatedReingestionTokens: expect.any(Number),
+  });
+
+  expect((await postJson(`/api/conversations/${conversation.id}/messages`, {
+    message: "après switch",
+  })).status).toBe(202);
+  await waitForRunnerIdle(conversation.id);
+  expect(readFileSync(argsFile, "utf8")).toContain("--model sonnet");
+});
+
+test("handoff cross-provider résume, crée et seed une conversation liée", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  process.env.PUPITRE_CODEX_MODE = "exec";
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "construis la feature",
+  });
+  const source = await created.json() as { id: string };
+  await waitForRunnerIdle(source.id);
+
+  const response = await postJson(`/api/conversations/${source.id}/handoff`, {
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "low",
+    speed: "fast",
+    orchestrator: true,
+  });
+  expect(response.status).toBe(201);
+  const continuation = await response.json() as {
+    id: string;
+    continued_from: string;
+    provider: string;
+  };
+  expect(continuation).toMatchObject({
+    continued_from: source.id,
+    provider: "codex",
+  });
+
+  const events = await fetch(
+    `${current.baseUrl}/api/conversations/${continuation.id}/events`,
+  ).then((result) => result.json()) as StoredEvent[];
+  expect(events[0]).toMatchObject({
+    type: "user-message",
+    text: expect.stringContaining("BONJOUR PUPITRE"),
+  });
+  expect(events.at(-1)).toMatchObject({ type: "status", state: "done" });
+
+  const list = await fetch(
+    `${current.baseUrl}/api/projects/${project.id}/conversations`,
+  ).then((result) => result.json()) as Array<{ id: string; continued_from: string | null }>;
+  expect(list).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: continuation.id, continued_from: source.id }),
+  ]));
 });
 
 test("un tour actif répond 409, puis cancel l'annule et déverrouille la conversation", async () => {

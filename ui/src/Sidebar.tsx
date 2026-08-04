@@ -25,6 +25,7 @@ interface SidebarProps {
   onConversationSelect: (conversation: Conversation) => void
   onConversationCreate: () => void
   conversationListVersion: number
+  projectListVersion: number
   quotas: Quotas
   /** Sous-tâches en cours dans la conversation ouverte (cf. App). */
   runningSubtasks: number
@@ -43,6 +44,20 @@ function pathBasename(path: string): string {
   return trimmedPath.split(/[\\/]/).pop() || path
 }
 
+function conversationRelation(
+  conversation: Conversation,
+  conversations: Conversation[],
+): string | null {
+  if (conversation.continued_from) {
+    const source = conversations.find((item) => item.id === conversation.continued_from)
+    return `↳ suite de ${source?.title ?? 'la conversation précédente'}`
+  }
+  const continuation = conversations.find(
+    (item) => item.continued_from === conversation.id,
+  )
+  return continuation ? `→ passation vers ${continuation.title}` : null
+}
+
 export function Sidebar({
   selectedProject,
   selectedConversation,
@@ -50,6 +65,7 @@ export function Sidebar({
   onConversationSelect,
   onConversationCreate,
   conversationListVersion,
+  projectListVersion,
   quotas,
   runningSubtasks,
 }: SidebarProps) {
@@ -75,7 +91,7 @@ export function Sidebar({
     return () => {
       ignore = true
     }
-  }, [])
+  }, [projectListVersion])
 
   useEffect(() => {
     let ignore = false
@@ -310,6 +326,11 @@ export function Sidebar({
                     {conversation.effort ?? 'default'}
                     {conversation.speed === 'fast' ? ' · rapide' : ''}
                   </span>
+                  {conversationRelation(conversation, conversations) ? (
+                    <span className="conversation-link">
+                      {conversationRelation(conversation, conversations)}
+                    </span>
+                  ) : null}
                 </button>
                 <button
                   type="button"

@@ -5,6 +5,7 @@ export interface Conversation {
   id: string; project_id: string; title: string; provider: Provider;
   model: string; effort: string | null; speed: "standard" | "fast" | null;
   cli_session_id: string | null; pinned: boolean;
+  continued_from: string | null;
   /** Reçoit le bridge MCP `conductor` (délégation de sous-tâches). */
   orchestrator: boolean;
   created_at: string; updated_at: string;
@@ -23,6 +24,7 @@ export class ConversationStore {
     speed?: "standard" | "fast" | null;
     /** Défaut ON : toute nouvelle conversation peut déléguer. */
     orchestrator?: boolean;
+    continuedFrom?: string | null;
     firstMessage: string;
   }): Conversation {
     const id = crypto.randomUUID();
@@ -33,8 +35,8 @@ export class ConversationStore {
     this.db.query(
       `INSERT INTO conversations
          (id, project_id, title, provider, model, effort, speed, orchestrator,
-          created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          continued_from, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -44,6 +46,7 @@ export class ConversationStore {
       input.effort ?? null,
       input.speed ?? null,
       input.orchestrator === false ? 0 : 1,
+      input.continuedFrom ?? null,
       now,
       now,
     );
@@ -69,6 +72,26 @@ export class ConversationStore {
   setCliSessionId(id: string, cliSessionId: string): void {
     this.db.query("UPDATE conversations SET cli_session_id = ?, updated_at = ? WHERE id = ?")
       .run(cliSessionId, new Date().toISOString(), id);
+  }
+
+  updateModel(id: string, input: {
+    model: string;
+    effort: string | null;
+    speed: "standard" | "fast" | null;
+  }): void {
+    this.db.query(`
+      UPDATE conversations
+      SET model = ?, effort = ?, speed = ?, updated_at = ?
+      WHERE id = ?
+    `).run(input.model, input.effort, input.speed, new Date().toISOString(), id);
+  }
+
+  /** Estimation de cache à ré-ingérer : somme des tokens déjà comptabilisés. */
+  usageTokens(id: string): number {
+    return this.listEvents(id).reduce((total, event) => {
+      if (event.type !== "usage") return total;
+      return total + event.inputTokens + event.outputTokens;
+    }, 0);
   }
 
   // Retourne l'id de la ligne insérée : le broadcast WS le rediffuse tel quel.

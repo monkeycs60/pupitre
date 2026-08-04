@@ -71,6 +71,13 @@ Les configurations de nouveau tour sont persistées dans `presets` (`provider`, 
 
 Les réglages transverses vivent dans la table key/value `settings` (`GET/PUT /api/settings`). Au premier démarrage E1, l'UI importe les anciens seuils de notification de quota depuis `localStorage`, les enregistre côté sidecar puis retire la clé historique. Les clés de déduplication des notifications restent locales à la webview.
 
+## Changement de modèle et passation (M2-E2)
+
+Depuis un fil ouvert, la modale « Changer de modèle » distingue deux opérations :
+
+- même provider : `PUT /api/conversations/:id/model` met à jour modèle, effort et vitesse sans casser la session CLI ; l'UI prévient que le cache sera perdu et estime la ré-ingestion en additionnant les événements `usage` du fil ;
+- autre provider : `POST /api/conversations/:id/handoff` demande au modèle sortant un résumé fixe sans outils, crée une conversation cible reliée par `continued_from`, puis lui transmet ce résumé pour initialiser sa propre session. La sidebar matérialise le lien dans les deux sens.
+
 ## Prérequis
 
 - [Bun](https://bun.sh) ≥ 1.3, Rust ≥ 1.77 (+ deps Tauri Linux : `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`…)

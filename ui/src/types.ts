@@ -33,6 +33,7 @@ export interface Conversation {
   effort: string | null
   speed: ConversationSpeed | null
   orchestrator: boolean
+  continued_from: string | null
   cli_session_id: string | null
   pinned: boolean
   created_at: string

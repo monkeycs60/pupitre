@@ -50,6 +50,53 @@ test("crée une conversation avec un effort persisté", () => {
   expect(convs.get(c.id)?.effort).toBe("xhigh");
 });
 
+test("met à jour le modèle dans le même provider et estime la ré-ingestion", () => {
+  const c = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    effort: "low",
+    firstMessage: "Analyse",
+  });
+  convs.appendEvent(c.id, { type: "usage", inputTokens: 120, outputTokens: 30 });
+  convs.appendEvent(c.id, { type: "usage", inputTokens: 80, outputTokens: 20 });
+
+  convs.updateModel(c.id, {
+    model: "sonnet",
+    effort: "high",
+    speed: null,
+  });
+
+  expect(convs.get(c.id)).toMatchObject({
+    provider: "claude",
+    model: "sonnet",
+    effort: "high",
+    speed: null,
+  });
+  expect(convs.usageTokens(c.id)).toBe(250);
+});
+
+test("lie une conversation de passation à sa source", () => {
+  const source = convs.create({
+    projectId,
+    provider: "claude",
+    model: "sonnet",
+    firstMessage: "Construis la fonctionnalité",
+  });
+  const continuation = convs.create({
+    projectId,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    continuedFrom: source.id,
+    firstMessage: `Suite de ${source.title}`,
+  });
+
+  expect(continuation.continued_from).toBe(source.id);
+  expect(convs.listByProject(projectId)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: continuation.id, continued_from: source.id }),
+  ]));
+});
+
 test("migre une base existante et la migration reste idempotente", () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-legacy-"));
   const legacy = new Database(join(dir, "pupitre.db"));
@@ -76,9 +123,15 @@ test("migre une base existante et la migration reste idempotente", () => {
     type: string;
     notnull: number;
   }>).find((column) => column.name === "speed");
+  const continuedFromColumn = (reopened.query("PRAGMA table_info(conversations)").all() as Array<{
+    name: string;
+    type: string;
+    notnull: number;
+  }>).find((column) => column.name === "continued_from");
 
   expect(effortColumn).toMatchObject({ type: "TEXT", notnull: 0 });
   expect(speedColumn).toMatchObject({ type: "TEXT", notnull: 0 });
+  expect(continuedFromColumn).toMatchObject({ type: "TEXT", notnull: 0 });
   reopened.close();
 });
 
