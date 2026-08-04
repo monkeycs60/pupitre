@@ -38,3 +38,14 @@ Champs observés (10 lignes) :
   - `command_execution` : champs `command`, `aggregated_output`, `exit_code`, `status`.
   - `error` : bénin (ex : warning budget skills) — à mapper en no-op ou log, pas en échec.
 - `gpt-5.6-luna` est un id de modèle valide. `codex exec` exige un répertoire trusted (repo git) ou `--skip-git-repo-check`, et **stdin doit être fermé** (`</dev/null`) sinon il attend l'EOF.
+
+## codex-app-server-basic.jsonl (spike M2-B1, 2026-08-04)
+
+Trafic JSON-RPC réel (newline-delimited sur stdio, champ `dir` = out/in ajouté par le spike) de `codex app-server`. Constats :
+- Handshake : `initialize` (clientInfo) → notification `initialized` → `thread/start` {model, cwd, approvalPolicy:"never"} → réponse avec `threadId` → `turn/start` {threadId, input:[{type:"text",text}]}.
+- **Vrais deltas** : notifications `item/agentMessage/delta` (23 dans la fixture) — le streaming token par token que `exec --json` n'a pas.
+- Items : `item/started`/`item/completed` ; approbations via requêtes serveur `item/*/requestApproval` auxquelles il faut répondre.
+- **Quotas natifs** : `account/rateLimits/updated` (spontané) et `account/rateLimits/read` (pollable) → `{rateLimits:{primary:{usedPercent, windowDurationMins, resetsAt},…}}`. `windowDurationMins:10080` = fenêtre 7 jours.
+- Usage : `thread/tokenUsage/updated`. Fin de tour : `turn/completed`/`turn/failed`. Reprise : `thread/resume` {threadId}.
+- `thread/start` accepte aussi `serviceTier` (fast mode natif).
+- Protocole auto-documenté : `codex app-server generate-ts --out <dir>` (types v2 dans `v2/`).
