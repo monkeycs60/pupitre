@@ -164,3 +164,72 @@ test("le verrou partagé couvre toute la génération du débrief", async () => 
   expect(activity.isBusy(conversation.id)).toBe(false);
   db.close();
 });
+
+test("hiérarchise un long segment au lieu de refuser le débrief", async () => {
+  const { db, projects, conversations, conversation } = setup();
+  for (let index = 0; index < 30; index += 1) {
+    conversations.appendEvent(conversation.id, {
+      type: "text-final",
+      text: `Événement long ${index} ${"x".repeat(7_900)}`,
+    });
+  }
+  const prompts: string[] = [];
+  const runner = new DebriefRunner(
+    new DebriefStore(db),
+    conversations,
+    projects,
+    new QuotaTracker(db),
+    () => {},
+    async (input) => {
+      prompts.push(input.prompt);
+      return "## Ce qui a été construit\nSocle.\n\n## Décisions et pourquoi\nRAS.\n\n## Alternatives écartées\nRAS.\n\n## Implications\nRAS.\n\n## Points ouverts\nRAS.";
+    },
+  );
+
+  const debrief = await runner.generate(conversation.id);
+
+  expect(debrief.event_id_to).toBeGreaterThan(debrief.event_id_from);
+  expect(prompts.length).toBeGreaterThan(2);
+  expect(prompts.at(-1)).toContain("SYNTHÈSES PARTIELLES");
+  db.close();
+});
+
+test("condense un historique de passation qui dépasse son budget", async () => {
+  const { db, projects, conversations, conversation } = setup();
+  const store = new DebriefStore(db);
+  let lastEventId = 0;
+  for (let index = 0; index < 20; index += 1) {
+    lastEventId = conversations.appendEvent(conversation.id, {
+      type: "text-final",
+      text: `lot ${index}`,
+    });
+    store.createWithReference({
+      conversationId: conversation.id,
+      eventIdFrom: lastEventId,
+      eventIdTo: lastEventId,
+      contentMd: `## Ce qui a été construit\n${"x".repeat(7_000)}\n\n## Décisions et pourquoi\nDécision [événement #${lastEventId}].\n\n## Alternatives écartées\nRAS.\n\n## Implications\nRAS.\n\n## Points ouverts\nRAS.`,
+    });
+  }
+  const prompts: string[] = [];
+  const runner = new DebriefRunner(
+    store,
+    conversations,
+    projects,
+    new QuotaTracker(db),
+    () => {},
+    async (input) => {
+      prompts.push(input.prompt);
+      return "## Ce qui a été construit\nSynthèse cumulative.\n\n## Décisions et pourquoi\nDécisions référencées.\n\n## Alternatives écartées\nRAS.\n\n## Implications\nRAS.\n\n## Points ouverts\nRAS.";
+    },
+  );
+
+  let artifact = "";
+  await runner.withHandoff(conversation.id, async (value) => {
+    artifact = value.contentMd;
+  });
+
+  expect(prompts.some((prompt) => prompt.includes("HISTORIQUE DE DÉBRIEFS"))).toBe(true);
+  expect(artifact).toContain("Synthèse cumulative");
+  expect(artifact.length).toBeLessThan(120_000);
+  db.close();
+});

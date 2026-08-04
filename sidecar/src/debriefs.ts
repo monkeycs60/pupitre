@@ -13,6 +13,9 @@ import {
 
 const MAX_TRANSCRIPT_CHARS = 180_000;
 const MAX_EVENT_CHARS = 8_000;
+const MAX_HANDOFF_CHARS = 120_000;
+const MAX_GENERATED_DEBRIEF_CHARS = 32_000;
+const MAX_CONSOLIDATION_SOURCE_CHARS = 100_000;
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -92,27 +95,38 @@ export class DebriefRunner {
     const candidates = this.conversations.listEvents(conversationId)
       .filter((event) => event.id > (previous?.event_id_to ?? 0))
       .filter((event) => event.type !== "debrief-ref");
-    const transcript = transcriptFor(candidates);
-    if (candidates.length === 0 || transcript.trim() === "") {
+    const transcriptChunks = transcriptChunksFor(candidates);
+    if (candidates.length === 0 || transcriptChunks.length === 0) {
       throw new NoNewDebriefEventsError("aucun nouvel événement à débriefer");
-    }
-    if (transcript.length > MAX_TRANSCRIPT_CHARS) {
-      throw new Error(
-        `segment trop volumineux pour un débrief (${transcript.length} caractères)`,
-      );
     }
 
     this.active.add(conversationId);
     try {
-      const contentMd = (await this.generator({
+      const generation = {
         cwd: project.path,
         provider: conversation.provider,
         model: conversation.model,
         effort: conversation.effort ?? undefined,
         speed: conversation.speed ?? undefined,
-        prompt: debriefPrompt(transcript, previous !== null),
-      })).trim();
-      validateDebrief(contentMd);
+      };
+      const partials: string[] = [];
+      for (const transcript of transcriptChunks) {
+        partials.push(await this.generateValidated({
+          ...generation,
+          prompt: debriefPrompt(
+            transcript,
+            previous !== null,
+            transcriptChunks.length > 1,
+          ),
+        }));
+      }
+      const contentMd = partials.length === 1
+        ? partials[0]!
+        : await this.consolidateDebriefs(
+            generation,
+            partials,
+            "SYNTHÈSES PARTIELLES",
+          );
       const created = this.store.createWithReference({
         conversationId,
         eventIdFrom: candidates[0]!.id,
@@ -162,11 +176,27 @@ export class DebriefRunner {
       return await this.activity.runExclusive(conversationId, "handoff", async () => {
         const latest = await this.latestOrGenerateUnlocked(conversationId);
         const versions = this.store.listByConversation(conversationId);
-        const contentMd = versions.map((version, index) => [
+        let contentMd = versions.map((version, index) => [
           `# Débrief ${index + 1} — événements ${version.event_id_from} à ${version.event_id_to}`,
           "",
           version.content_md,
         ].join("\n")).join("\n\n---\n\n");
+        if (contentMd.length > MAX_HANDOFF_CHARS) {
+          const conversation = this.conversations.get(conversationId)!;
+          const project = this.projects.get(conversation.project_id)!;
+          const consolidated = await this.consolidateDebriefs(
+            {
+              cwd: project.path,
+              provider: conversation.provider,
+              model: conversation.model,
+              effort: conversation.effort ?? undefined,
+              speed: conversation.speed ?? undefined,
+            },
+            versions.map((version) => version.content_md),
+            "HISTORIQUE DE DÉBRIEFS",
+          );
+          contentMd = `# Synthèse cumulative des débriefs\n\n${consolidated}`;
+        }
         return operation({ latest, contentMd });
       });
     } catch (error) {
@@ -175,6 +205,35 @@ export class DebriefRunner {
       }
       throw error;
     }
+  }
+
+  private async generateValidated(input: DebriefGenerationInput): Promise<string> {
+    const content = (await this.generator(input)).trim();
+    validateDebrief(content);
+    if (content.length > MAX_GENERATED_DEBRIEF_CHARS) {
+      throw new Error(`débrief trop long (${content.length} caractères)`);
+    }
+    return content;
+  }
+
+  private async consolidateDebriefs(
+    generation: Omit<DebriefGenerationInput, "prompt">,
+    debriefs: string[],
+    label: string,
+  ): Promise<string> {
+    let current = debriefs;
+    while (current.length > 1) {
+      const groups = groupTexts(current, MAX_CONSOLIDATION_SOURCE_CHARS);
+      const next: string[] = [];
+      for (const group of groups) {
+        next.push(await this.generateValidated({
+          ...generation,
+          prompt: consolidationPrompt(group.join("\n\n---\n\n"), label),
+        }));
+      }
+      current = next;
+    }
+    return current[0]!;
   }
 }
 
@@ -214,10 +273,52 @@ function transcriptFor(events: StoredEvent[]): string {
   return lines.join("\n\n");
 }
 
-function debriefPrompt(transcript: string, incremental: boolean): string {
+function transcriptChunksFor(events: StoredEvent[]): string[] {
+  const chunks: string[] = [];
+  let current = "";
+  for (const event of events) {
+    const item = transcriptFor([event]);
+    if (!item) continue;
+    const candidate = current ? `${current}\n\n${item}` : item;
+    if (candidate.length <= MAX_TRANSCRIPT_CHARS) {
+      current = candidate;
+      continue;
+    }
+    if (current) chunks.push(current);
+    current = item;
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function groupTexts(values: string[], limit: number): string[][] {
+  const groups: string[][] = [];
+  let current: string[] = [];
+  let length = 0;
+  for (const value of values) {
+    const extra = value.length + (current.length > 0 ? 5 : 0);
+    if (current.length > 0 && length + extra > limit) {
+      groups.push(current);
+      current = [];
+      length = 0;
+    }
+    current.push(value);
+    length += extra;
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+}
+
+function debriefPrompt(
+  transcript: string,
+  incremental: boolean,
+  partial = false,
+): string {
   return [
     "Tu produis un débrief opérationnel en français pour un collègue qui doit reprendre le contrôle du travail.",
-    incremental
+    partial
+      ? "Le segment ci-dessous est une tranche d'une longue conversation : résume fidèlement cette tranche."
+      : incremental
       ? "Le segment ci-dessous commence après le dernier débrief : résume uniquement ce qui a changé depuis."
       : "Le segment ci-dessous couvre la conversation depuis son début.",
     "Appuie chaque décision ou point important sur les identifiants [événement #N] fournis.",
@@ -244,6 +345,22 @@ function validateDebrief(content: string): void {
   ]) {
     if (!content.includes(heading)) throw new Error(`débrief invalide : section manquante « ${heading} »`);
   }
+}
+
+function consolidationPrompt(content: string, label: string): string {
+  return [
+    "Fusionne les débriefs suivants en un bilan cumulatif fidèle et concis.",
+    "Conserve les références [événement #N], élimine seulement les répétitions et n'invente rien.",
+    "Retourne uniquement du Markdown avec exactement ces cinq titres :",
+    "## Ce qui a été construit",
+    "## Décisions et pourquoi",
+    "## Alternatives écartées",
+    "## Implications",
+    "## Points ouverts",
+    "",
+    label,
+    content,
+  ].join("\n");
 }
 
 async function generateWithAdapters(

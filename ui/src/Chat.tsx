@@ -20,7 +20,7 @@ import type {
 } from './types'
 import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
-import { debriefQuestionPrompt } from './debriefQuestion'
+import { appendDebriefQuestionPrompt } from './debriefQuestion'
 import type { DebriefBlock } from './groupEvents'
 
 interface ChatProps {
@@ -135,7 +135,7 @@ export function Chat({
   }
 
   function handleDebriefQuestion(block: DebriefBlock) {
-    setMessage(debriefQuestionPrompt(block))
+    setMessage((current) => appendDebriefQuestionPrompt(current, block))
     setFocusRequest((current) => current + 1)
   }
 

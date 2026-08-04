@@ -11,3 +11,13 @@ export function debriefQuestionPrompt(block: DebriefBlock): string {
     block.contentMd,
   ].join('\n')
 }
+
+export function appendDebriefQuestionPrompt(
+  draft: string,
+  block: DebriefBlock,
+): string {
+  const question = debriefQuestionPrompt(block)
+  return draft.trim().length === 0
+    ? question
+    : `${draft.trimEnd()}\n\n---\n\n${question}`
+}

@@ -869,6 +869,32 @@ test("handoff cross-provider résume, crée et seed une conversation liée", asy
   ]));
 });
 
+test("un handoff dont le provider cible échoue ne conserve pas de continuation", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "source stable",
+  });
+  const source = await created.json() as { id: string };
+  await waitForRunnerIdle(source.id);
+  process.env.PUPITRE_CODEX_MODE = "exec";
+  process.env.PUPITRE_CODEX_BIN = join(tmpdir(), `codex-absent-${crypto.randomUUID()}`);
+
+  const response = await postJson(`/api/conversations/${source.id}/handoff`, {
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "low",
+  });
+
+  expect(response.status).toBe(502);
+  expect(new ConversationStore(current.db).listByProject(project.id)).toEqual([
+    expect.objectContaining({ id: source.id }),
+  ]);
+});
+
 test("POST debrief versionne le bilan, le diffuse et l'expose en lecture", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());

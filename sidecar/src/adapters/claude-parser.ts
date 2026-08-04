@@ -77,10 +77,12 @@ export function parseClaudeLine(line: string): AppEvent[] {
           (largest, model) => Math.max(largest, numberOrZero(model.contextWindow)),
           0,
         );
-        const contextTokens = numberOrZero(usage.input_tokens)
-          + numberOrZero(usage.cache_creation_input_tokens)
-          + numberOrZero(usage.cache_read_input_tokens)
-          + numberOrZero(usage.output_tokens);
+        const iterations = Array.isArray(usage.iterations) ? usage.iterations : [];
+        const currentUsage = iterations.at(-1) ?? usage;
+        const contextTokens = numberOrZero(currentUsage.input_tokens)
+          + numberOrZero(currentUsage.cache_creation_input_tokens)
+          + numberOrZero(currentUsage.cache_read_input_tokens)
+          + numberOrZero(currentUsage.output_tokens);
         out.push({
           type: "usage",
           inputTokens: numberOrZero(usage.input_tokens),

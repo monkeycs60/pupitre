@@ -691,8 +691,16 @@ export function createServer(deps: ServerDeps) {
                 "Prends ce contexte comme point de départ. Cite les références [événement #N]",
                 "quand elles étayent ta réponse, puis confirme brièvement la reprise.",
               ].join("\n");
-              await deps.runner.runTurn(continuation.id, seed, []);
-              return json(deps.conversations.get(continuation.id), 201);
+              try {
+                const outcome = await deps.runner.runTurn(continuation.id, seed, []);
+                if (outcome.state === "error") {
+                  throw new Error(outcome.error ?? "échec du provider cible");
+                }
+                return json(deps.conversations.get(continuation.id), 201);
+              } catch (error) {
+                deps.conversations.deleteFailedContinuation(continuation.id);
+                throw error;
+              }
             });
           } catch (error) {
             if (error instanceof DebriefAlreadyRunningError) {

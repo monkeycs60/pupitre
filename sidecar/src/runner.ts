@@ -16,6 +16,11 @@ interface ActiveTurn {
   finish: () => void;
 }
 
+export interface TurnOutcome {
+  state: "done" | "error";
+  error?: string;
+}
+
 export function sweepOrphanedRuns(
   convs: ConversationStore,
 ): void {
@@ -57,7 +62,11 @@ export class ConversationRunner {
     return true;
   }
 
-  async runTurn(conversationId: string, prompt: string, imageNames: string[]): Promise<void> {
+  async runTurn(
+    conversationId: string,
+    prompt: string,
+    imageNames: string[],
+  ): Promise<TurnOutcome> {
     const conv = this.convs.get(conversationId);
     if (!conv) throw new Error("conversation inconnue");
     const releaseActivity = this.activity.acquire(conversationId, "turn");
@@ -68,8 +77,15 @@ export class ConversationRunner {
       finish = resolve;
     });
     this.active.set(conversationId, { controller, done, finish });
+    let outcome: TurnOutcome = {
+      state: "error",
+      error: "le provider n'a pas publié de statut terminal",
+    };
 
     const emit = (event: AppEvent) => {
+      if (event.type === "status" && event.state !== "running") {
+        outcome = { state: event.state, ...(event.error ? { error: event.error } : {}) };
+      }
       if (event.type === "session") {
         this.convs.setCliSessionId(conversationId, event.cliSessionId);
       }
@@ -128,5 +144,6 @@ export class ConversationRunner {
       activeTurn?.finish();
       releaseActivity();
     }
+    return outcome;
   }
 }

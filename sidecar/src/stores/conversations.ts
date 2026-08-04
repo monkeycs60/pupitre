@@ -69,6 +69,19 @@ export class ConversationStore {
     this.db.query("UPDATE conversations SET pinned = ? WHERE id = ?").run(pinned ? 1 : 0, id);
   }
 
+  /** Retire une continuation ratée et ses événements sans toucher à sa source. */
+  deleteFailedContinuation(id: string): boolean {
+    const remove = this.db.transaction(() => {
+      const row = this.db.query(
+        "SELECT continued_from FROM conversations WHERE id = ?",
+      ).get(id) as { continued_from: string | null } | null;
+      if (!row?.continued_from) return false;
+      this.db.query("DELETE FROM events WHERE conversation_id = ?").run(id);
+      return this.db.query("DELETE FROM conversations WHERE id = ?").run(id).changes === 1;
+    });
+    return remove();
+  }
+
   setCliSessionId(id: string, cliSessionId: string): void {
     this.db.query("UPDATE conversations SET cli_session_id = ?, updated_at = ? WHERE id = ?")
       .run(cliSessionId, new Date().toISOString(), id);
