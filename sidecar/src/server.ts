@@ -5,6 +5,7 @@ import type { MediaStore } from "./media";
 import type { ConversationRunner } from "./runner";
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
+import type { QuotaTracker } from "./quotas";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -28,11 +29,14 @@ export interface ServerDeps {
   media: MediaStore;
   runner: ConversationRunner;
   events: ConversationEventBus;
+  quotas: QuotaTracker;
 }
 
-interface WebSocketData {
-  conversationId: string;
-}
+// Deux canaux WS sur la même route : par conversation (défaut historique) et le
+// canal global `quotas`.
+type WebSocketData =
+  | { channel: "conversation"; conversationId: string }
+  | { channel: "quotas" };
 
 const EFFORTS_BY_PROVIDER = {
   claude: ["low", "medium", "high", "xhigh", "max"],
@@ -154,6 +158,7 @@ function routeId(pathname: string, pattern: RegExp): string | null {
 
 export function createServer(deps: ServerDeps) {
   const sockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
+  const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
   deps.events.subscribe((conversationId, event) => {
     const message = JSON.stringify(event);
     for (const socket of sockets.get(conversationId) ?? []) {
@@ -161,6 +166,16 @@ export function createServer(deps: ServerDeps) {
         socket.send(message);
       } catch {
         sockets.get(conversationId)?.delete(socket);
+      }
+    }
+  });
+  deps.quotas.subscribe((state) => {
+    const message = JSON.stringify(state);
+    for (const socket of quotaSockets) {
+      try {
+        socket.send(message);
+      } catch {
+        quotaSockets.delete(socket);
       }
     }
   });
@@ -332,12 +347,25 @@ export function createServer(deps: ServerDeps) {
           return new Response(file);
         }
 
+        if (request.method === "GET" && pathname === "/api/quotas") {
+          return json(deps.quotas.snapshot());
+        }
+
         if (request.method === "GET" && pathname === "/ws") {
+          const channel = url.searchParams.get("channel");
+          if (channel === "quotas") {
+            if (server.upgrade(request, { data: { channel: "quotas" } })) return;
+            throw new HttpError(400, "upgrade WebSocket refusé");
+          }
+          if (channel !== null && channel !== "conversation") {
+            throw new HttpError(400, "canal inconnu");
+          }
           const conversationId = url.searchParams.get("conversation");
           if (!conversationId || !deps.conversations.get(conversationId)) {
             throw new HttpError(404, "conversation inconnue");
           }
-          if (server.upgrade(request, { data: { conversationId } })) {
+          const data = { channel: "conversation", conversationId } as const;
+          if (server.upgrade(request, { data })) {
             return;
           }
           throw new HttpError(400, "upgrade WebSocket refusé");
@@ -354,6 +382,14 @@ export function createServer(deps: ServerDeps) {
     },
     websocket: {
       open(socket) {
+        if (socket.data.channel === "quotas") {
+          quotaSockets.add(socket);
+          // État courant à la connexion : pas d'attente du prochain event.
+          for (const state of Object.values(deps.quotas.snapshot())) {
+            if (state) socket.send(JSON.stringify(state));
+          }
+          return;
+        }
         const { conversationId } = socket.data;
         let subscribers = sockets.get(conversationId);
         if (!subscribers) {
@@ -363,6 +399,10 @@ export function createServer(deps: ServerDeps) {
         subscribers.add(socket);
       },
       close(socket) {
+        if (socket.data.channel === "quotas") {
+          quotaSockets.delete(socket);
+          return;
+        }
         const { conversationId } = socket.data;
         const subscribers = sockets.get(conversationId);
         subscribers?.delete(socket);

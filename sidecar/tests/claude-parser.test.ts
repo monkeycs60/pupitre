@@ -32,6 +32,20 @@ test("émet au moins un tool-start (le ls de la fixture) et l'usage final", () =
   expect(status.state).toBe("done");
 });
 
+test("mappe le rate_limit_event de la fixture en event rate-limit claude", () => {
+  const event = eventsFromFixture().find((e) => e.type === "rate-limit") as any;
+  expect(event).toBeDefined();
+  expect(event.provider).toBe("claude");
+  // Payload brut = rate_limit_info, normalisé plus loin par le QuotaTracker.
+  expect(event.payload).toMatchObject({ rateLimitType: "five_hour", status: "allowed" });
+  expect(typeof event.payload.resetsAt).toBe("number");
+});
+
+test("ignore un rate_limit_event sans rate_limit_info exploitable", () => {
+  expect(parseClaudeLine('{"type":"rate_limit_event"}')).toEqual([]);
+  expect(parseClaudeLine('{"type":"rate_limit_event","rate_limit_info":42}')).toEqual([]);
+});
+
 test("ignore les contenus de message valides JSON mais non itérables", () => {
   expect(parseClaudeLine('{"type":"assistant","message":{"content":42}}')).toEqual([]);
   expect(parseClaudeLine('{"type":"user","message":{"content":42}}')).toEqual([]);

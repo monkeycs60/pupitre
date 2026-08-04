@@ -56,6 +56,15 @@ export function parseClaudeLine(line: string): AppEvent[] {
       }
       break;
     }
+    case "rate_limit_event": {
+      // {"type":"rate_limit_event","rate_limit_info":{"status":…,"resetsAt":…,
+      //  "rateLimitType":"five_hour",…}} — payload brut, normalisé par le QuotaTracker.
+      const info = obj.rate_limit_info;
+      if (typeof info === "object" && info !== null && !Array.isArray(info)) {
+        out.push({ type: "rate-limit", provider: "claude", payload: info });
+      }
+      break;
+    }
     case "result": {
       const usage = obj.usage as any;
       if (usage) {

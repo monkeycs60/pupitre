@@ -31,6 +31,9 @@ export function openDb(dir: string = dataDir()): Database {
       payload TEXT NOT NULL, created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_events_conv ON events(conversation_id, id);
+    CREATE TABLE IF NOT EXISTS quota_state (
+      key TEXT PRIMARY KEY, value TEXT NOT NULL
+    );
   `);
   try {
     db.exec("ALTER TABLE conversations ADD COLUMN effort TEXT NULL");

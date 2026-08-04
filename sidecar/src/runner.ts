@@ -5,6 +5,7 @@ import type { AppEvent, StoredEvent } from "./events";
 import { runClaudeTurn } from "./adapters/claude";
 import { runCodexTurn } from "./adapters/codex";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
+import type { QuotaTracker } from "./quotas";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -40,6 +41,7 @@ export class ConversationRunner {
     private projects: ProjectStore,
     private media: MediaStore,
     private broadcast: BroadcastFn,
+    private quotas: QuotaTracker,
   ) {
     sweepOrphanedRuns(convs, projects);
   }
@@ -72,6 +74,9 @@ export class ConversationRunner {
       if (event.type === "session") {
         this.convs.setCliSessionId(conversationId, event.cliSessionId);
       }
+      // Les events de quota restent des events de conversation (replay intact)
+      // ET alimentent le tracker global au passage.
+      this.quotas.ingest(event);
       const id = this.convs.appendEvent(conversationId, event);
       this.broadcast(conversationId, { ...event, id });
     };

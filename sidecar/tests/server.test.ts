@@ -10,6 +10,7 @@ import { ConversationRunner } from "../src/runner";
 import { ConversationEventBus, createServer } from "../src/server";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
+import { QuotaTracker } from "../src/quotas";
 
 interface TestServer {
   baseUrl: string;
@@ -147,11 +148,13 @@ cat "${fixture}"
   const conversations = new ConversationStore(db);
   const media = new MediaStore(dir);
   const events = new ConversationEventBus();
+  const quotas = new QuotaTracker(db);
   const runner = new ConversationRunner(
     conversations,
     projects,
     media,
     events.broadcast,
+    quotas,
   );
   const server = createServer({
     port: 0,
@@ -160,6 +163,7 @@ cat "${fixture}"
     media,
     runner,
     events,
+    quotas,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -554,4 +558,95 @@ test("upload media binaire puis GET redonne exactement les bytes", async () => {
   const download = await fetch(`${current.baseUrl}/media/${name}`);
   expect(download.status).toBe(200);
   expect(new Uint8Array(await download.arrayBuffer())).toEqual(bytes);
+});
+
+test("GET /api/quotas est vide au démarrage puis reflète le tour claude", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const empty = await fetch(`${current.baseUrl}/api/quotas`);
+  expect(empty.status).toBe(200);
+  expect(await empty.json()).toEqual({ claude: null, codex: null });
+
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "quotas",
+  });
+  const conversation = await created.json() as { id: string };
+  await waitForPersistedEvent(
+    conversation.id,
+    (event) => event.type === "status" && event.state === "done",
+  );
+  await waitForRunnerIdle(conversation.id);
+
+  // La fixture claude contient un rate_limit_event five_hour.
+  const filled = await fetch(`${current.baseUrl}/api/quotas`);
+  const snapshot = await filled.json() as {
+    claude: { provider: string; windows: { label: string }[] } | null;
+    codex: unknown;
+  };
+  expect(snapshot.codex).toBeNull();
+  expect(snapshot.claude).toMatchObject({ provider: "claude" });
+  expect(snapshot.claude!.windows).toEqual([
+    expect.objectContaining({ label: "five_hour", windowDurationMins: 300 }),
+  ]);
+});
+
+test("le canal WS quotas reçoit les mises à jour puis l'état courant à la connexion", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const quotasUrl = `ws://127.0.0.1:${current.server.port}/ws?channel=quotas`;
+  const received = new Promise<any>((resolve, reject) => {
+    const socket = new WebSocket(quotasUrl);
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error("timeout WebSocket quotas"));
+    }, 5_000);
+    socket.addEventListener("message", (message) => {
+      clearTimeout(timeout);
+      socket.close();
+      resolve(JSON.parse(String(message.data)));
+    });
+    socket.addEventListener("error", () => {
+      clearTimeout(timeout);
+      reject(new Error("erreur WebSocket quotas"));
+    });
+    socket.addEventListener("open", () => {
+      void (async () => {
+        const project = await createProject(tmpdir());
+        await postJson("/api/conversations", {
+          projectId: project.id,
+          provider: "claude",
+          model: "haiku",
+          message: "quotas WS",
+        });
+      })();
+    });
+  });
+  const state = await received;
+  expect(state).toMatchObject({ provider: "claude" });
+  expect(state.windows[0]).toMatchObject({ label: "five_hour" });
+
+  // Un client qui se connecte après coup reçoit immédiatement l'état connu.
+  const replayed = await new Promise<any>((resolve, reject) => {
+    const socket = new WebSocket(quotasUrl);
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error("timeout état initial quotas"));
+    }, 3_000);
+    socket.addEventListener("message", (message) => {
+      clearTimeout(timeout);
+      socket.close();
+      resolve(JSON.parse(String(message.data)));
+    });
+  });
+  expect(replayed).toEqual(state);
+});
+
+test("refuse un canal WS inconnu et exige une conversation valide sinon", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const unknownChannel = await fetch(`${current.baseUrl}/ws?channel=nimporte`);
+  expect(unknownChannel.status).toBe(400);
+  const missingConversation = await fetch(`${current.baseUrl}/ws`);
+  expect(missingConversation.status).toBe(404);
 });

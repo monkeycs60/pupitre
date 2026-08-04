@@ -8,6 +8,7 @@ import { ConversationStore } from "../src/stores/conversations";
 import { MediaStore } from "../src/media";
 import { ConversationRunner, sweepOrphanedRuns } from "../src/runner";
 import { codexAppServer } from "../src/adapters/codex-app-server";
+import { QuotaTracker } from "../src/quotas";
 import type { AppEvent } from "../src/events";
 
 let runner: ConversationRunner;
@@ -25,7 +26,7 @@ beforeEach(() => {
   broadcast = [];
   process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude");
   runner = new ConversationRunner(convs, projects, new MediaStore(dir),
-    (_convId, event) => broadcast.push(event));
+    (_convId, event) => broadcast.push(event), new QuotaTracker(db));
 });
 
 test("un tour persiste user-message + événements, capture le session id, diffuse en live", async () => {

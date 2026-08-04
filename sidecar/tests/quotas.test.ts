@@ -1,0 +1,135 @@
+import { test, expect, beforeEach } from "bun:test";
+import type { Database } from "bun:sqlite";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { openDb } from "../src/db";
+import { QuotaTracker, type QuotaState } from "../src/quotas";
+import { parseClaudeLine } from "../src/adapters/claude-parser";
+import type { AppEvent } from "../src/events";
+
+let dir: string;
+let db: Database;
+let tracker: QuotaTracker;
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "pupitre-quotas-"));
+  db = openDb(dir);
+  tracker = new QuotaTracker(db);
+});
+
+/** Le rate-limit claude tel que le parser le produit depuis la vraie fixture. */
+function claudeRateLimitEvent(): AppEvent {
+  const raw = readFileSync(join(import.meta.dir, "fixtures/claude-basic.jsonl"), "utf8");
+  const event = raw
+    .split("\n")
+    .flatMap((line) => parseClaudeLine(line))
+    .find((e) => e.type === "rate-limit");
+  if (!event) throw new Error("aucun rate-limit dans la fixture claude");
+  return event;
+}
+
+/** Le payload `rateLimits` de la vraie notification codex app-server. */
+function codexRateLimitsPayload(): unknown {
+  const raw = readFileSync(
+    join(import.meta.dir, "fixtures/codex-app-server-basic.jsonl"),
+    "utf8",
+  );
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    const entry = JSON.parse(line) as { msg?: any };
+    if (entry.msg?.method === "account/rateLimits/updated") {
+      return entry.msg.params.rateLimits;
+    }
+  }
+  throw new Error("aucun account/rateLimits/updated dans la fixture codex");
+}
+
+test("ingère le rate-limit claude de la fixture en une fenêtre normalisée", () => {
+  const state = tracker.ingest(claudeRateLimitEvent());
+  expect(state).toMatchObject({ provider: "claude" });
+  expect(state!.windows).toEqual([
+    {
+      label: "five_hour",
+      usedPercent: null,
+      resetsAt: new Date(1785855000 * 1000).toISOString(),
+      windowDurationMins: 300,
+    },
+  ]);
+  expect(tracker.snapshot().claude).toEqual(state!);
+  expect(tracker.snapshot().codex).toBeNull();
+});
+
+test("ingère le payload rateLimits codex de la fixture", () => {
+  const state = tracker.ingest({
+    type: "rate-limit",
+    provider: "codex",
+    payload: codexRateLimitsPayload(),
+  });
+  expect(state!.windows).toEqual([
+    {
+      label: "primary",
+      usedPercent: 10,
+      resetsAt: new Date(1786191460 * 1000).toISOString(),
+      windowDurationMins: 10_080,
+    },
+  ]);
+});
+
+test("accepte aussi le résultat enveloppé de account/rateLimits/read", () => {
+  const state = tracker.ingestPayload("codex", { rateLimits: codexRateLimitsPayload() });
+  expect(state!.windows[0]).toMatchObject({ label: "primary", usedPercent: 10 });
+});
+
+test("fusionne les fenêtres par label sans perdre les précédentes", () => {
+  tracker.ingest(claudeRateLimitEvent());
+  const state = tracker.ingestPayload("claude", {
+    rateLimitType: "seven_day",
+    resetsAt: 1786191460,
+    usedPercent: 42,
+  });
+  expect(state!.windows.map((w) => w.label)).toEqual(["five_hour", "seven_day"]);
+  expect(state!.windows[1]).toMatchObject({ usedPercent: 42, windowDurationMins: 10_080 });
+
+  // Ré-ingestion de la même fenêtre : mise à jour en place, pas de doublon.
+  const updated = tracker.ingestPayload("claude", {
+    rateLimitType: "seven_day",
+    resetsAt: 1786191460,
+    usedPercent: 55,
+  });
+  expect(updated!.windows.map((w) => w.label)).toEqual(["five_hour", "seven_day"]);
+  expect(updated!.windows[1]!.usedPercent).toBe(55);
+});
+
+test("ignore les events non rate-limit et les payloads inexploitables", () => {
+  expect(tracker.ingest({ type: "text-delta", text: "x" })).toBeNull();
+  expect(tracker.ingestPayload("claude", { status: "allowed" })).toBeNull();
+  expect(tracker.ingestPayload("codex", { primary: null, secondary: null })).toBeNull();
+  expect(tracker.ingestPayload("codex", "pas un objet")).toBeNull();
+  expect(tracker.snapshot()).toEqual({ claude: null, codex: null });
+});
+
+test("l'état survit à la réouverture de la base", () => {
+  tracker.ingest(claudeRateLimitEvent());
+  tracker.ingestPayload("codex", codexRateLimitsPayload());
+  const before = tracker.snapshot();
+  db.close();
+
+  const reopened = openDb(dir);
+  const restored = new QuotaTracker(reopened).snapshot();
+  expect(restored).toEqual(before);
+  reopened.close();
+});
+
+test("notifie les abonnés à chaque mise à jour et cesse après désinscription", () => {
+  const seen: QuotaState[] = [];
+  const unsubscribe = tracker.subscribe((state) => seen.push(state));
+  tracker.ingest(claudeRateLimitEvent());
+  tracker.ingestPayload("codex", codexRateLimitsPayload());
+  tracker.ingestPayload("claude", { status: "allowed" }); // ignoré : pas de notif
+  expect(seen.map((s) => s.provider)).toEqual(["claude", "codex"]);
+
+  unsubscribe();
+  tracker.ingestPayload("codex", codexRateLimitsPayload());
+  expect(seen).toHaveLength(2);
+});
