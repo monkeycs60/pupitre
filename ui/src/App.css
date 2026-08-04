@@ -351,6 +351,7 @@ button {
 
 .composer-models {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 10px 12px;
   border-bottom: 1px solid #302f2c;

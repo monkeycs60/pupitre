@@ -3,6 +3,7 @@ import type { AppEvent } from "../events";
 export interface TurnOptions {
   cwd: string;
   model: string;
+  effort?: string;
   prompt: string;
   cliSessionId: string | null; // null = premier tour
   permissionMode: string;

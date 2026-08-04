@@ -13,6 +13,7 @@ export interface CreateConversationInput {
   projectId: string
   provider: Provider
   model: string
+  effort?: string
   message: string
   images?: string[]
 }

@@ -34,6 +34,11 @@ interface WebSocketData {
   conversationId: string;
 }
 
+const EFFORTS_BY_PROVIDER = {
+  claude: ["low", "medium", "high", "xhigh", "max"],
+  codex: ["low", "medium", "high", "xhigh"],
+} as const satisfies Record<Provider, readonly string[]>;
+
 class HttpError extends Error {
   constructor(
     readonly status: number,
@@ -81,6 +86,21 @@ function optionalImages(body: Record<string, unknown>): string[] {
     throw new HttpError(400, "champ images invalide");
   }
   return value as string[];
+}
+
+function optionalEffort(
+  body: Record<string, unknown>,
+  provider: Provider,
+): string | null {
+  const value = body.effort;
+  if (value === undefined || value === null) return null;
+  if (
+    typeof value !== "string"
+    || !(EFFORTS_BY_PROVIDER[provider] as readonly string[]).includes(value)
+  ) {
+    throw new HttpError(400, `effort invalide pour ${provider}`);
+  }
+  return value;
 }
 
 function requiredPinned(body: Record<string, unknown>): boolean {
@@ -198,12 +218,14 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(400, "provider invalide");
           }
           const model = requiredString(body, "model");
+          const effort = optionalEffort(body, provider as Provider);
           const message = requiredString(body, "message");
           const images = optionalImages(body);
           const conversation = deps.conversations.create({
             projectId,
             provider: provider as Provider,
             model,
+            effort,
             firstMessage: message,
           });
           void deps.runner.runTurn(conversation.id, message, images)

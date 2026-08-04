@@ -1,4 +1,5 @@
 import { test, expect, beforeEach } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,6 +20,46 @@ test("crée une conversation avec titre dérivé du premier message", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "Corrige le bug du lightbox sur mobile s'il te plaît" });
   expect(c.title).toBe("Corrige le bug du lightbox sur mobile s'il te p…");
   expect(c.cli_session_id).toBeNull();
+  expect(c.effort).toBeNull();
+});
+
+test("crée une conversation avec un effort persisté", () => {
+  const c = convs.create({
+    projectId,
+    provider: "claude",
+    model: "opus",
+    effort: "xhigh",
+    firstMessage: "Analyse ce bug",
+  });
+
+  expect(c.effort).toBe("xhigh");
+  expect(convs.get(c.id)?.effort).toBe("xhigh");
+});
+
+test("migre une base existante et la migration reste idempotente", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-legacy-"));
+  const legacy = new Database(join(dir, "pupitre.db"));
+  legacy.exec(`
+    CREATE TABLE conversations (
+      id TEXT PRIMARY KEY, project_id TEXT NOT NULL,
+      title TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL,
+      cli_session_id TEXT, pinned INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+  `);
+  legacy.close();
+
+  const migrated = openDb(dir);
+  migrated.close();
+  const reopened = openDb(dir);
+  const effortColumn = (reopened.query("PRAGMA table_info(conversations)").all() as Array<{
+    name: string;
+    type: string;
+    notnull: number;
+  }>).find((column) => column.name === "effort");
+
+  expect(effortColumn).toMatchObject({ type: "TEXT", notnull: 0 });
+  reopened.close();
 });
 
 test("appendEvent + listEvents rejouent dans l'ordre", () => {

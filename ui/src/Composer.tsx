@@ -19,6 +19,11 @@ export const PROVIDER_MODELS = {
   codex: ['gpt-5.6-sol', 'gpt-5.6-luna'],
 } as const satisfies Record<Provider, readonly string[]>
 
+export const PROVIDER_EFFORTS = {
+  claude: ['low', 'medium', 'high', 'xhigh', 'max'],
+  codex: ['low', 'medium', 'high', 'xhigh'],
+} as const satisfies Record<Provider, readonly string[]>
+
 interface ComposerProps {
   conversationId: string | null
   projectId: string
@@ -48,6 +53,7 @@ export function Composer({
   const [message, setMessage] = useState('')
   const [provider, setProvider] = useState<Provider>('claude')
   const [model, setModel] = useState<string>(PROVIDER_MODELS.claude[0])
+  const [effort, setEffort] = useState<string>('high')
   const [images, setImages] = useState<UploadedImage[]>([])
   const [pendingUploads, setPendingUploads] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -64,6 +70,7 @@ export function Composer({
     const nextProvider = event.target.value as Provider
     setProvider(nextProvider)
     setModel(PROVIDER_MODELS[nextProvider][0])
+    setEffort('high')
   }
 
   async function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
@@ -110,6 +117,7 @@ export function Composer({
           projectId,
           provider,
           model,
+          effort,
           message: trimmedMessage,
           images: imageNames,
         })
@@ -194,6 +202,20 @@ export function Composer({
                 {PROVIDER_MODELS[provider].map((modelName) => (
                   <option key={modelName} value={modelName}>
                     {modelName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span>Effort</span>
+              <select
+                value={effort}
+                onChange={(event) => setEffort(event.target.value)}
+              >
+                {PROVIDER_EFFORTS[provider].map((effortName) => (
+                  <option key={effortName} value={effortName}>
+                    {effortName}
                   </option>
                 ))}
               </select>

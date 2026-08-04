@@ -32,5 +32,12 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_events_conv ON events(conversation_id, id);
   `);
+  try {
+    db.exec("ALTER TABLE conversations ADD COLUMN effort TEXT NULL");
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("duplicate column")) {
+      throw error;
+    }
+  }
   return db;
 }

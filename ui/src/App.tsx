@@ -62,7 +62,8 @@ function App() {
                 <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
                 {selectedConversation !== null ? (
                   <p>
-                    {selectedConversation.provider} · {selectedConversation.model}
+                    {selectedConversation.provider} · {selectedConversation.model} ·{' '}
+                    {selectedConversation.effort ?? 'default'}
                   </p>
                 ) : null}
               </div>

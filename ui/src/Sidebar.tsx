@@ -279,7 +279,8 @@ export function Sidebar({
                 >
                   <span>{conversation.title}</span>
                   <span className="navigation-detail">
-                    {conversation.provider} · {conversation.model}
+                    {conversation.provider} · {conversation.model} ·{' '}
+                    {conversation.effort ?? 'default'}
                   </span>
                 </button>
                 <button

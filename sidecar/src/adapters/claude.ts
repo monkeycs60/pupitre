@@ -13,6 +13,7 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     "-p", "--output-format", "stream-json", "--include-partial-messages",
     "--verbose", "--model", opts.model, "--permission-mode", opts.permissionMode,
   ];
+  if (opts.effort) args.push("--effort", opts.effort);
   if (opts.cliSessionId) args.push("-r", opts.cliSessionId);
   args.push("--", prompt);
 

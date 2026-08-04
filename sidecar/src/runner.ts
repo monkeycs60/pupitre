@@ -80,6 +80,7 @@ export class ConversationRunner {
       const opts = {
         cwd: project.path,
         model: conv.model,
+        effort: conv.effort ?? undefined,
         prompt,
         cliSessionId: conv.cli_session_id,
         permissionMode: project.permission_mode,

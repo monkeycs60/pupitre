@@ -226,6 +226,51 @@ test("une conversation termine en live via WS et son replay commence par user-me
     .toBe(204);
 });
 
+test("création avec effort le persiste et l'expose dans les listes", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    effort: "xhigh",
+    message: "effort persisté",
+  });
+
+  expect(created.status).toBe(201);
+  const conversation = await created.json() as { id: string; effort: string | null };
+  expect(conversation.effort).toBe("xhigh");
+  await waitForRunnerIdle(conversation.id);
+
+  const response = await fetch(
+    `${current.baseUrl}/api/projects/${project.id}/conversations`,
+  );
+  expect(await response.json()).toEqual([
+    expect.objectContaining({ id: conversation.id, effort: "xhigh" }),
+  ]);
+});
+
+test("rejette avec 400 les efforts invalides pour chaque provider", async () => {
+  const project = await createProject(tmpdir());
+  const invalidClaude = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    effort: "ultra",
+    message: "invalide claude",
+  });
+  const invalidCodex = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "max",
+    message: "invalide codex",
+  });
+
+  expect(invalidClaude.status).toBe(400);
+  expect(invalidCodex.status).toBe(400);
+});
+
 test("un tour actif répond 409, puis cancel l'annule et déverrouille la conversation", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());

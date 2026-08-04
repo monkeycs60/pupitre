@@ -3,7 +3,7 @@ import type { AppEvent, Provider } from "../events";
 
 export interface Conversation {
   id: string; project_id: string; title: string; provider: Provider;
-  model: string; cli_session_id: string | null; pinned: boolean;
+  model: string; effort: string | null; cli_session_id: string | null; pinned: boolean;
   created_at: string; updated_at: string;
 }
 
@@ -12,16 +12,32 @@ const TITLE_MAX = 47;
 export class ConversationStore {
   constructor(private db: Database) {}
 
-  create(input: { projectId: string; provider: Provider; model: string; firstMessage: string }): Conversation {
+  create(input: {
+    projectId: string;
+    provider: Provider;
+    model: string;
+    effort?: string | null;
+    firstMessage: string;
+  }): Conversation {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const title = input.firstMessage.length > TITLE_MAX
       ? input.firstMessage.slice(0, TITLE_MAX) + "…"
       : input.firstMessage;
     this.db.query(
-      `INSERT INTO conversations (id, project_id, title, provider, model, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(id, input.projectId, title, input.provider, input.model, now, now);
+      `INSERT INTO conversations
+         (id, project_id, title, provider, model, effort, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      id,
+      input.projectId,
+      title,
+      input.provider,
+      input.model,
+      input.effort ?? null,
+      now,
+      now,
+    );
     return this.get(id)!;
   }
 

@@ -33,10 +33,28 @@ test("premier tour : exec --json avec cwd et modèle, sans resume", async () => 
   const args = readFileSync(argsFile, "utf8");
   expect(args).toContain("exec --json --skip-git-repo-check -m gpt-5.6-luna -s workspace-write");
   expect(args).not.toContain("-C"); // le cwd passe par le spawn, pas par -C
+  expect(args).not.toContain("model_reasoning_effort");
   expect(args.trimEnd().endsWith("-- salut")).toBe(true);
   expect(args).not.toContain("resume");
   expect(events.some((event) => event.type === "session")).toBe(true);
   expect(events.at(-1)).toEqual({ type: "status", state: "done" });
+});
+
+test("premier tour : ajoute model_reasoning_effort avec -c", async () => {
+  const argsFile = useFakeCodex();
+  await collect({
+    cwd: "/tmp",
+    model: "gpt-5.6-luna",
+    effort: "xhigh",
+    prompt: "analyse",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+  });
+
+  expect(readFileSync(argsFile, "utf8")).toContain(
+    '-c model_reasoning_effort="xhigh"',
+  );
 });
 
 test("tour suivant : utilise exec resume <sessionId>", async () => {
@@ -44,6 +62,7 @@ test("tour suivant : utilise exec resume <sessionId>", async () => {
   await collect({
     cwd: "/tmp",
     model: "gpt-5.6-luna",
+    effort: "high",
     prompt: "suite",
     cliSessionId: "abc-123",
     permissionMode: "acceptEdits",
@@ -55,6 +74,7 @@ test("tour suivant : utilise exec resume <sessionId>", async () => {
   expect(args).not.toContain("-C");
   expect(args).not.toContain("-s workspace-write");
   expect(args).toContain('sandbox_mode="workspace-write"');
+  expect(args).toContain('-c model_reasoning_effort="high"');
 });
 
 test("sépare un prompt ressemblant à une option avec --", async () => {

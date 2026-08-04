@@ -1,5 +1,5 @@
 import { test, expect, beforeEach } from "bun:test";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -35,6 +35,25 @@ test("un tour persiste user-message + événements, capture le session id, diffu
   expect(stored.some((event) => event.type === "session")).toBe(true);
   expect(convs.get(c.id)!.cli_session_id).not.toBeNull();
   expect(broadcast.length).toBeGreaterThan(2);
+});
+
+test("transmet l'effort de la conversation à l'adapter", async () => {
+  const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-effort-")), "args");
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  const c = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    effort: "xhigh",
+    firstMessage: "analyse",
+  });
+
+  try {
+    await runner.runTurn(c.id, "analyse", []);
+    expect(readFileSync(argsFile, "utf8")).toContain("--effort xhigh");
+  } finally {
+    delete process.env.FAKE_CLAUDE_ARGS_FILE;
+  }
 });
 
 test("deux tours simultanés sur la même conversation → le second est refusé", async () => {

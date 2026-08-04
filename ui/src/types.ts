@@ -15,6 +15,7 @@ export interface Conversation {
   title: string
   provider: Provider
   model: string
+  effort: string | null
   cli_session_id: string | null
   pinned: boolean
   created_at: string

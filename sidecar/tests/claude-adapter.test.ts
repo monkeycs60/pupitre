@@ -20,10 +20,28 @@ test("premier tour : pas de -r, événements émis, status done", async () => {
   const events = await collect({ cwd: "/tmp", model: "opus", prompt: "salut", cliSessionId: null, permissionMode: "acceptEdits", images: [] });
   const args = readFileSync(argsFile, "utf8");
   expect(args).not.toContain("-r ");
+  expect(args).not.toContain("--effort");
   expect(args).toContain("--output-format stream-json");
   expect(args.trimEnd().endsWith("-- salut")).toBe(true);
   expect(events.some((e) => e.type === "session")).toBe(true);
   expect((events.at(-1) as any).state).toBe("done");
+});
+
+test("ajoute --effort quand un effort est fourni", async () => {
+  const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
+  process.env.PUPITRE_CLAUDE_BIN = FAKE;
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  await collect({
+    cwd: "/tmp",
+    model: "opus",
+    effort: "xhigh",
+    prompt: "analyse",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+  });
+
+  expect(readFileSync(argsFile, "utf8")).toContain("--effort xhigh");
 });
 
 test("tour suivant : ajoute -r <sessionId>", async () => {
