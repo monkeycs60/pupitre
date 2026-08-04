@@ -94,6 +94,15 @@ test("le sidecar compilé relance son bridge conductor embarqué", () => {
   });
 });
 
+test("bun.exe lance le source conductor en développement Windows", () => {
+  const config = conductorServerConfig(
+    { port: 4820, conversationId: "conversation-windows" },
+    "C:\\Users\\clement\\.bun\\bin\\bun.exe",
+  );
+  expect(config.command).toBe("C:\\Users\\clement\\.bun\\bin\\bun.exe");
+  expect(config.args).toEqual([conductorMcpPath()]);
+});
+
 test("conversation orchestratrice claude : --mcp-config inline pointant sur le bridge", async () => {
   const conv = convs.create({
     projectId, provider: "claude", model: "haiku", firstMessage: "orchestre",

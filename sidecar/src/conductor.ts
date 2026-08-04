@@ -32,7 +32,8 @@ export function conductorServerConfig(
   target: ConductorTarget,
   executable = process.execPath,
 ): ConductorServerConfig {
-  const runsFromBun = executable.endsWith("bun");
+  const executableName = executable.split(/[\\/]/).at(-1)?.toLowerCase();
+  const runsFromBun = executableName === "bun" || executableName === "bun.exe";
   return {
     command: executable,
     args: runsFromBun ? [conductorMcpPath()] : ["--conductor-mcp"],
