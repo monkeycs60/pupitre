@@ -40,6 +40,7 @@ Principes fondateurs :
 └─────────────────────────────────────────────┘
 ```
 
+- **Pourquoi « Rust minimal »** : dans Tauri l'UI est de toute façon du web (webview système) ; le Rust ne fait que la coquille native (fenêtre, tray, notifs, spawn du sidecar). La logique métier vit en TypeScript car (1) le goulot de perf est dans les CLIs, pas dans la plomberie JSON/process de l'app, (2) c'est la stack de Clement et des sub-agents de dev, (3) l'Agent SDK Claude est TS. La légèreté anti-Electron vient de Tauri (pas de Chromium embarqué), pas du langage de la logique. Si un morceau devient un vrai goulot (parsing massif, FTS), migration ponctuelle en Rust possible.
 - **Schéma d'événements unifié** : les deux adapters normalisent tout (deltas de texte, tool calls, images produites, demandes de permission, usage tokens). Le frontend ne connaît jamais Claude ou Codex directement — c'est ce qui rend le choix d'orchestrateur par conversation trivial côté UI.
 - **Images/artefacts** : stockés sur disque avec miniatures, référencés dans SQLite.
 - **Les sessions sont celles des vrais CLIs** (`claude --resume <id>`, `codex resume`) : les skills, MCP servers, CLAUDE.md/AGENTS.md existants marchent tels quels, et le handoff terminal ⇄ app est naturel.
@@ -118,6 +119,11 @@ Après chaque session de travail d'un agent, review automatique du diff **avant*
 **Fleet view** : grille de tout ce qui tourne, tous projets confondus — statut, durée, dernier screenshot, « rejoindre la conversation ».
 
 **Recherche globale** : plein-texte (SQLite FTS) sur conversations, débriefs, épingles. **Palette Ctrl+K** : navigation, workflows, skills, Tester/Débrief/Review au clavier.
+
+**Aide intégrée** (l'app a beaucoup de concepts maison — Gardien, Débrief, presets, contre-avis — ils doivent s'expliquer eux-mêmes) :
+- **Onglet Aide** : documentation des features de l'app, searchable, une page par concept avec capture annotée. Alimenté depuis des fichiers markdown du repo (`docs/help/`) pour rester à jour avec le code.
+- **Tooltips systématiques** au survol de tout bouton ou badge non évident (chips de quota, pulse use-it-or-lose-it, flags du Gardien, boutons Tester/Débrief/contre-avis) : une phrase qui dit ce que ça fait ET pourquoi on s'en sert, avec lien « en savoir plus » vers la page d'aide.
+- **Empty states explicatifs** : un écran vide (aucune review en attente, aucune routine) explique ce que la feature fera quand elle servira, au lieu d'un vide muet.
 
 ## 11. Le bouton « Tester »
 
