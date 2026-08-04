@@ -23,6 +23,7 @@ export interface CreateConversationInput {
   model: string
   effort?: string
   speed?: ConversationSpeed
+  orchestrator: boolean
   message: string
   images?: string[]
 }

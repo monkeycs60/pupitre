@@ -18,6 +18,7 @@ export interface Conversation {
   model: string
   effort: string | null
   speed: ConversationSpeed | null
+  orchestrator: boolean
   cli_session_id: string | null
   pinned: boolean
   created_at: string

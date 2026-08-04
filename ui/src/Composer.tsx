@@ -12,6 +12,7 @@ import {
   sendMessage,
   uploadMedia,
 } from './api'
+import { buildCreateConversationInput } from './conversationDraft'
 import { quotaChipLabel, shouldPulse } from './quotaSignals'
 import type {
   Conversation,
@@ -64,6 +65,7 @@ export function Composer({
   const [model, setModel] = useState<string>(PROVIDER_MODELS.claude[0])
   const [effort, setEffort] = useState<string>('high')
   const [speed, setSpeed] = useState<ConversationSpeed>('standard')
+  const [orchestrator, setOrchestrator] = useState(true)
   const [images, setImages] = useState<UploadedImage[]>([])
   const [pendingUploads, setPendingUploads] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -129,15 +131,16 @@ export function Composer({
 
     try {
       if (conversationId === null) {
-        const conversation = await createConversation({
+        const conversation = await createConversation(buildCreateConversationInput({
           projectId,
           provider,
           model,
           effort,
-          speed: provider === 'codex' ? speed : undefined,
+          speed,
+          orchestrator,
           message: trimmedMessage,
           images: imageNames,
-        })
+        }))
         onConversationCreated(conversation)
       } else {
         await sendMessage(conversationId, {
@@ -265,6 +268,15 @@ export function Composer({
                 </select>
               </label>
             ) : null}
+
+            <label className="orchestrator-toggle">
+              <input
+                type="checkbox"
+                checked={orchestrator}
+                onChange={(event) => setOrchestrator(event.target.checked)}
+              />
+              <span>Autoriser la délégation à des sub-agents</span>
+            </label>
           </div>
         ) : null}
 
