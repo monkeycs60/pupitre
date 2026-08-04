@@ -17,7 +17,7 @@ Tu reprends l'exécution du plan `docs/plans/2026-08-04-pupitre-m2-implementatio
 
 ## ⚠️ En vol au moment de la passation
 
-**M2-D2 (bridge MCP conductor)** : un sub-agent tournait dessus (spec = section D2 du plan + consignes ci-dessous). À ta reprise : `git status` — si `sidecar/src/conductor-mcp.ts` + `sidecar/tests/` associés existent, vérifie la suite complète et commite ; sinon implémente D2 toi-même. Points de spec importants :
+**M2-D2 (bridge MCP conductor)** : ✅ finalement livré, vérifié (140 tests verts) et commité (`e005277`) juste avant la passation — plus rien en vol. Deux restes signalés par l'agent D2 : le **toggle orchestrator dans le formulaire UI** (câblage front simple, la colonne est exposée par GET/POST conversations) et brancher le **bouton ✕ des cartes D3 sur la route cancel** (existante). Points de spec pour référence :
 - Outils MCP : `delegate`, `delegate_parallel` (max 4, gère le 429), `check_quotas` ; descriptions d'outils soignées avec la reco « exécution → gpt-5.6-luna effort low/medium speed fast ».
 - Câblage par tour si `conversations.orchestrator` (nouvelle colonne, défaut 1) : claude via `--mcp-config` inline ; codex : à trancher selon ce que le process app-server partagé permet par thread (le rapport de l'agent D2 doit documenter son choix).
 - **Garde structurelle : les tours de subtasks ne reçoivent jamais le câblage conductor** (pas de délégation récursive). Test obligatoire.
