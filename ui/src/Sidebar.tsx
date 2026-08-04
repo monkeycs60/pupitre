@@ -26,6 +26,8 @@ interface SidebarProps {
   onConversationCreate: () => void
   conversationListVersion: number
   quotas: Quotas
+  /** Sous-tâches en cours dans la conversation ouverte (cf. App). */
+  runningSubtasks: number
 }
 
 function pinnedFirst<T extends { pinned: boolean }>(items: T[]): T[] {
@@ -49,6 +51,7 @@ export function Sidebar({
   onConversationCreate,
   conversationListVersion,
   quotas,
+  runningSubtasks,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -281,7 +284,27 @@ export function Sidebar({
                   className="navigation-main"
                   onClick={() => onConversationSelect(conversation)}
                 >
-                  <span>{conversation.title}</span>
+                  <span>
+                    {conversation.title}
+                    {selectedConversation?.id === conversation.id &&
+                    runningSubtasks > 0 ? (
+                      <span
+                        className="subtask-dot"
+                        title={
+                          runningSubtasks === 1
+                            ? '1 sous-tâche en cours'
+                            : `${runningSubtasks} sous-tâches en cours`
+                        }
+                        aria-label={
+                          runningSubtasks === 1
+                            ? '1 sous-tâche en cours'
+                            : `${runningSubtasks} sous-tâches en cours`
+                        }
+                      >
+                        ●
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="navigation-detail">
                     {conversation.provider} · {conversation.model} ·{' '}
                     {conversation.effort ?? 'default'}

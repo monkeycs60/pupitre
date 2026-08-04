@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getConversationEvents } from './api'
+import { getConversationEvents, getSubtaskEvents } from './api'
 import { reconnectDelayMs } from './backoff'
 import { mergeReplayAndBuffer } from './mergeEvents'
 import type { StoredEvent } from './types'
@@ -15,8 +15,14 @@ export interface ConversationEvents {
 // le fetch sont bufferisés puis fusionnés (dédup par id), sans fenêtre de perte.
 // Même séquence à chaque reconnexion : le replay est refetché en entier et
 // fusionné avec ce qui est déjà affiché — la fusion par id la rend idempotente.
+// Le canal WS `/ws?conversation=<id>` accepte indifféremment un id de
+// conversation ou de sous-tâche ; le replay HTTP, lui, a deux routes distinctes.
+// C'est la seule différence entre les deux flux : `kind` la porte.
+export type EventsKind = 'conversation' | 'subtask'
+
 export function useConversationEvents(
   conversationId: string | null,
+  kind: EventsKind = 'conversation',
 ): ConversationEvents {
   const [events, setEvents] = useState<StoredEvent[]>([])
   const [connection, setConnection] = useState<ConnectionState>('connecting')
@@ -83,7 +89,10 @@ export function useConversationEvents(
       currentSocket.addEventListener('close', dropAndRetry)
       currentSocket.addEventListener('error', dropAndRetry)
 
-      void getConversationEvents(id, controller.signal)
+      const fetchReplay =
+        kind === 'subtask' ? getSubtaskEvents : getConversationEvents
+
+      void fetchReplay(id, controller.signal)
         .then((replay) => {
           if (controller.signal.aborted || disposed) return
 
@@ -109,7 +118,7 @@ export function useConversationEvents(
       abortController?.abort()
       socket?.close()
     }
-  }, [conversationId])
+  }, [conversationId, kind])
 
   return { events, connection }
 }

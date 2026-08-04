@@ -12,6 +12,9 @@ function App() {
     useState<Conversation | null>(null)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
   const [conversationListVersion, setConversationListVersion] = useState(0)
+  // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
+  // conversation ouverte — la sidebar n'en affiche l'indicateur que pour elle.
+  const [runningSubtasks, setRunningSubtasks] = useState(0)
   const { events, connection } = useConversationEvents(
     selectedConversation?.id ?? null,
   )
@@ -52,6 +55,7 @@ function App() {
         onConversationCreate={handleConversationCreate}
         conversationListVersion={conversationListVersion}
         quotas={quotas}
+        runningSubtasks={runningSubtasks}
       />
 
       <section className="workspace" aria-label="Conversation">
@@ -82,6 +86,7 @@ function App() {
               projectId={selectedProject.id}
               quotas={quotas.snapshot}
               onConversationCreated={handleConversationCreated}
+              onRunningSubtasksChange={setRunningSubtasks}
             />
           </>
         )}

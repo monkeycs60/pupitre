@@ -972,3 +972,167 @@ textarea:focus-visible {
     border-color: #c69a61;
   }
 }
+
+/* --- Sous-tâches déléguées ---------------------------------------------- */
+
+.subtask-card {
+  margin: 4px 0 18px;
+  overflow: hidden;
+  background: #191919;
+  border: 1px solid #302f2c;
+  border-left: 2px solid #4a453d;
+  border-radius: 8px;
+}
+
+.subtask-card.is-running {
+  border-left-color: #b79568;
+}
+
+.subtask-card.is-error {
+  border-left-color: #a4574d;
+}
+
+.subtask-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+}
+
+.subtask-card-toggle {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.subtask-caret {
+  color: #8e8981;
+  font-size: 11px;
+}
+
+.subtask-badge {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  color: #d2cdc5;
+  font-size: 11px;
+  white-space: nowrap;
+  background: #232220;
+  border: 1px solid #383632;
+  border-radius: 999px;
+}
+
+.subtask-label {
+  overflow: hidden;
+  color: #c8c3bb;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subtask-status {
+  flex-shrink: 0;
+  color: #77736c;
+  font-size: 11px;
+}
+
+.subtask-status.is-running {
+  color: #b79568;
+}
+
+.subtask-status.is-running > span {
+  display: inline-block;
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+.subtask-status.is-done {
+  color: #8aa87f;
+}
+
+.subtask-status.is-error {
+  color: #d99b91;
+}
+
+.subtask-duration {
+  flex-shrink: 0;
+  color: #77736c;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.subtask-cancel {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: #b3aea6;
+  font-size: 11px;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid #3b3935;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.subtask-cancel:hover:not(:disabled) {
+  color: #f0ece5;
+  border-color: #5a5650;
+}
+
+.subtask-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.subtask-error {
+  padding: 8px 11px;
+  margin: 0 11px 9px;
+  color: #f4c4bd;
+  font-size: 12px;
+  line-height: 1.45;
+  background: #3b211f;
+  border: 1px solid #64332e;
+  border-radius: 7px;
+}
+
+.subtask-transcript {
+  padding: 12px 12px 2px;
+  border-top: 1px solid #2b2a28;
+}
+
+.subtask-empty {
+  margin: 0 0 10px;
+  color: #77736c;
+  font-size: 12px;
+}
+
+.subtask-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 11px 8px;
+  color: #77736c;
+  font-size: 11px;
+}
+
+/* Indicateur discret sur la conversation ouverte (décision D1). */
+.navigation-main .subtask-dot {
+  display: inline-block;
+  margin-left: 6px;
+  color: #b79568;
+  font-size: 9px;
+  vertical-align: middle;
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subtask-status.is-running > span,
+  .navigation-main .subtask-dot {
+    animation: none;
+  }
+}

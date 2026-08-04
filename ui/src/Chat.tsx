@@ -1,9 +1,20 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { EventView } from './EventView'
-import type { EventBlock } from './EventView'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { EventStream, groupEvents } from './EventStream'
 import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
-import type { AppEvent, Conversation, QuotaSnapshot } from './types'
+import type {
+  AppEvent,
+  Conversation,
+  QuotaSnapshot,
+  SubtaskStatus,
+} from './types'
 import type { ConnectionState } from './useConversationEvents'
 
 interface ChatProps {
@@ -13,123 +24,13 @@ interface ChatProps {
   projectId: string
   quotas: QuotaSnapshot
   onConversationCreated: (conversation: Conversation) => void
+  /** Nombre de sous-tâches en cours dans ce fil (indicateur sidebar). */
+  onRunningSubtasksChange?: (count: number) => void
 }
 
 interface LightboxImage {
   src: string
   alt: string
-}
-
-function groupEvents(events: AppEvent[]): EventBlock[] {
-  const blocks: EventBlock[] = []
-  const tools = new Map<string, Extract<EventBlock, { kind: 'tool' }>>()
-  let assistant: Extract<EventBlock, { kind: 'assistant' }> | null = null
-  let turnNumber = 0
-  let turnFooter: Extract<EventBlock, { kind: 'turn-footer' }> | null = null
-
-  function ensureTurnFooter() {
-    turnFooter ??= {
-      kind: 'turn-footer',
-      id: `turn-footer-${turnNumber}`,
-    }
-    return turnFooter
-  }
-
-  function flushTurnFooter() {
-    if (turnFooter !== null) blocks.push(turnFooter)
-    turnFooter = null
-  }
-
-  events.forEach((event, index) => {
-    switch (event.type) {
-      case 'session':
-        break
-
-      case 'user-message':
-        flushTurnFooter()
-        turnNumber += 1
-        assistant = null
-        blocks.push({
-          kind: 'user',
-          id: `user-${index}`,
-          text: event.text,
-          images: event.images,
-        })
-        break
-
-      case 'text-delta':
-        if (assistant === null) {
-          assistant = {
-            kind: 'assistant',
-            id: `assistant-${index}`,
-            text: '',
-            streaming: true,
-          }
-          blocks.push(assistant)
-        }
-        assistant.text += event.text
-        assistant.streaming = true
-        break
-
-      case 'text-final':
-        if (assistant === null) {
-          assistant = {
-            kind: 'assistant',
-            id: `assistant-${index}`,
-            text: event.text,
-            streaming: false,
-          }
-          blocks.push(assistant)
-        } else {
-          assistant.text = event.text
-          assistant.streaming = false
-        }
-        assistant = null
-        break
-
-      case 'tool-start': {
-        assistant = null
-        const tool: Extract<EventBlock, { kind: 'tool' }> = {
-          kind: 'tool',
-          id: `tool-${event.toolId}`,
-          toolId: event.toolId,
-          toolName: event.toolName,
-          input: event.input,
-          images: [],
-        }
-        tools.set(event.toolId, tool)
-        blocks.push(tool)
-        break
-      }
-
-      case 'tool-end': {
-        assistant = null
-        const tool = tools.get(event.toolId)
-        if (tool !== undefined) {
-          tool.output = event.output
-          tool.images = event.images
-        }
-        break
-      }
-
-      case 'usage': {
-        const footer = ensureTurnFooter()
-        footer.usage = {
-          inputTokens: event.inputTokens,
-          outputTokens: event.outputTokens,
-        }
-        break
-      }
-
-      case 'status':
-        ensureTurnFooter().status = event
-        if (event.state !== 'running') assistant = null
-        break
-    }
-  })
-
-  flushTurnFooter()
-  return blocks
 }
 
 function lastStatusIsRunning(events: AppEvent[]): boolean {
@@ -147,12 +48,42 @@ export function Chat({
   projectId,
   quotas,
   onConversationCreated,
+  onRunningSubtasksChange,
 }: ChatProps) {
   const blocks = useMemo(() => groupEvents(events), [events])
   const isRunning = lastStatusIsRunning(events)
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
+  const [subtaskStatuses, setSubtaskStatuses] = useState<
+    Record<string, SubtaskStatus>
+  >({})
+
+  // Les cartes remontent leur statut (null = démontée) : le fil est la seule
+  // source de vérité sur les sous-tâches en vol, y compris pour la sidebar.
+  const handleSubtaskStatusChange = useCallback(
+    (subtaskId: string, status: SubtaskStatus | null) => {
+      setSubtaskStatuses((current) => {
+        if (status === null) {
+          if (!(subtaskId in current)) return current
+          const { [subtaskId]: _removed, ...rest } = current
+          return rest
+        }
+        if (current[subtaskId] === status) return current
+        return { ...current, [subtaskId]: status }
+      })
+    },
+    [],
+  )
+
+  const runningSubtasks = Object.values(subtaskStatuses).filter(
+    (status) => status === 'running',
+  ).length
+
+  useEffect(() => {
+    onRunningSubtasksChange?.(runningSubtasks)
+    return () => onRunningSubtasksChange?.(0)
+  }, [runningSubtasks, onRunningSubtasksChange])
 
   const scrollToBottomIfFollowing = useCallback(() => {
     const viewport = viewportRef.current
@@ -197,14 +128,12 @@ export function Chat({
                 : 'Aucun événement dans cette conversation.'}
             </p>
           ) : (
-            blocks.map((block) => (
-              <EventView
-                key={block.id}
-                block={block}
-                onImageOpen={handleImageOpen}
-                onImageLoad={scrollToBottomIfFollowing}
-              />
-            ))
+            <EventStream
+              blocks={blocks}
+              onImageOpen={handleImageOpen}
+              onImageLoad={scrollToBottomIfFollowing}
+              onSubtaskStatusChange={handleSubtaskStatusChange}
+            />
           )}
         </div>
       </div>

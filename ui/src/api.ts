@@ -5,6 +5,7 @@ import type {
   Provider,
   QuotaSnapshot,
   StoredEvent,
+  SubtaskResult,
 } from './types'
 
 interface ErrorResponse {
@@ -147,6 +148,27 @@ export function getConversationEvents(
     `/api/conversations/${routeId(conversationId)}/events`,
     { signal },
   )
+}
+
+export function getSubtask(
+  subtaskId: string,
+  signal?: AbortSignal,
+): Promise<SubtaskResult> {
+  return fetchJson(`/api/subtasks/${routeId(subtaskId)}`, { signal })
+}
+
+// Les events d'une sous-tâche vivent dans la même table que ceux d'une
+// conversation, mais sous une route distincte : `/api/conversations/:id/events`
+// refuse un id de sous-tâche.
+export function getSubtaskEvents(
+  subtaskId: string,
+  signal?: AbortSignal,
+): Promise<StoredEvent[]> {
+  return fetchJson(`/api/subtasks/${routeId(subtaskId)}/events`, { signal })
+}
+
+export function cancelSubtask(subtaskId: string): Promise<void> {
+  return fetchVoid(`/api/subtasks/${routeId(subtaskId)}/cancel`, jsonPost({}))
 }
 
 export function getQuotas(signal?: AbortSignal): Promise<QuotaSnapshot> {

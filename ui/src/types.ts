@@ -45,6 +45,31 @@ export interface QuotaSnapshot {
   codex: QuotaState | null
 }
 
+// Miroir de sidecar/src/subtasks.ts : une sous-tâche déléguée par une
+// conversation à un autre modèle (le Conductor de la phase D).
+export type SubtaskStatus = 'running' | 'done' | 'error'
+
+export interface Subtask {
+  id: string
+  conversation_id: string
+  provider: Provider
+  model: string
+  effort: string | null
+  speed: ConversationSpeed | null
+  prompt: string
+  label: string | null
+  status: SubtaskStatus
+  created_at: string
+  updated_at: string
+}
+
+export interface SubtaskResult {
+  status: SubtaskStatus
+  /** Concaténation des `text-final` de la sous-tâche. */
+  resultText: string
+  subtask: Subtask
+}
+
 export type AppEvent =
   | { type: 'session'; provider: Provider; cliSessionId: string; model: string }
   | { type: 'user-message'; text: string; images: string[] }
@@ -53,6 +78,15 @@ export type AppEvent =
   | { type: 'tool-start'; toolId: string; toolName: string; input: unknown }
   | { type: 'tool-end'; toolId: string; output: string; images: string[] }
   | { type: 'usage'; inputTokens: number; outputTokens: number }
+  // Appendé à la conversation PARENTE au lancement d'une sous-tâche : l'UI en
+  // fait une carte de sub-agent, dont le flux vit sous l'id de la sous-tâche.
+  | {
+      type: 'subtask-ref'
+      subtaskId: string
+      provider: Provider
+      model: string
+      label?: string
+    }
   // Introspection de quota native du provider (payload brut, interprété côté
   // sidecar par le QuotaTracker — cf. sidecar/src/events.ts).
   | { type: 'rate-limit'; provider: Provider; payload: unknown }
