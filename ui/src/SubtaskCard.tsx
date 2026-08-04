@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { cancelSubtask, getSubtask } from './api'
-import { EventStream, groupEvents } from './EventStream'
-import type { SubtaskBlock } from './EventStream'
+import { EventStream } from './EventStream'
+import { groupEvents, type SubtaskBlock } from './groupEvents'
 import {
   lastStreamStatus,
   shouldStreamSubtask,

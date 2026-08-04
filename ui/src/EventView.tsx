@@ -1,45 +1,5 @@
 import ReactMarkdown from 'react-markdown'
-import type { AppEvent } from './types'
-
-interface UserBlock {
-  kind: 'user'
-  id: string
-  text: string
-  images: string[]
-}
-
-interface AssistantBlock {
-  kind: 'assistant'
-  id: string
-  text: string
-  streaming: boolean
-}
-
-interface ToolBlock {
-  kind: 'tool'
-  id: string
-  toolId: string
-  toolName: string
-  input: unknown
-  output?: string
-  images: string[]
-}
-
-interface TurnFooterBlock {
-  kind: 'turn-footer'
-  id: string
-  usage?: {
-    inputTokens: number
-    outputTokens: number
-  }
-  status?: Extract<AppEvent, { type: 'status' }>
-}
-
-export type EventBlock =
-  | UserBlock
-  | AssistantBlock
-  | ToolBlock
-  | TurnFooterBlock
+import type { EventBlock } from './eventBlocks'
 
 interface EventViewProps {
   block: EventBlock

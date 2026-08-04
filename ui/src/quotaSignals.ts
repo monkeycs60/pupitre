@@ -1,4 +1,4 @@
-import type { Provider, QuotaState, QuotaWindow } from './types'
+import type { Provider, QuotaSnapshot, QuotaState, QuotaWindow } from './types'
 
 // Logique pure des signaux de quota : formatage, pulse « use it or lose it » et
 // franchissement de seuils de notification. Aucune dépendance DOM ni React —
@@ -51,9 +51,12 @@ export function windowTitle(window: QuotaWindow): string {
     case 'seven_day_opus':
       return 'hebdo opus'
     case 'primary':
-      return '5 h'
     case 'secondary':
-      return 'hebdo'
+      // Les noms primary/secondary ne garantissent pas la durée : la fixture
+      // réelle Codex publie notamment une fenêtre primary hebdomadaire.
+      if (window.windowDurationMins === 300) return '5 h'
+      if (window.windowDurationMins === 10_080) return 'hebdo'
+      break
     default:
       break
   }
@@ -226,4 +229,28 @@ export function quotaAlerts(
   }
 
   return alerts
+}
+
+/**
+ * Prochain instant où une fenêtre connue entrera dans sa dernière heure.
+ * Les seuils en pourcentage ne dépendent pas du temps et attendent un nouveau
+ * snapshot provider ; seule l'alerte temporelle nécessite ce réveil local.
+ */
+export function nextQuotaReevaluationDelay(
+  snapshot: QuotaSnapshot,
+  thresholds: QuotaThresholds,
+  now: number = Date.now(),
+): number | null {
+  if (!thresholds.lastHour) return null
+  let next: number | null = null
+  for (const state of Object.values(snapshot)) {
+    if (state === null) continue
+    for (const window of state.windows) {
+      const remaining = msUntilReset(window, now)
+      if (remaining === null || remaining <= HOUR_MS) continue
+      const delay = remaining - HOUR_MS
+      next = next === null ? delay : Math.min(next, delay)
+    }
+  }
+  return next
 }

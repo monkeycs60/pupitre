@@ -339,8 +339,9 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "POST" && pathname === "/api/presets") {
           const body = await readObject(request);
+          const input = presetInput(body);
           try {
-            return json(deps.presets.create(presetInput(body)), 201);
+            return json(deps.presets.create(input), 201);
           } catch {
             throw new HttpError(409, "nom de preset déjà utilisé");
           }

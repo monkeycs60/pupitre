@@ -81,6 +81,48 @@ test("accepte aussi le résultat enveloppé de account/rateLimits/read", () => {
   expect(state!.windows[0]).toMatchObject({ label: "primary", usedPercent: 10 });
 });
 
+test("remplace le snapshot codex et retire une fenêtre devenue absente", () => {
+  tracker.ingestPayload("codex", {
+    primary: { usedPercent: 10, windowDurationMins: 300, resetsAt: 1786191460 },
+    secondary: { usedPercent: 20, windowDurationMins: 10_080, resetsAt: 1786796260 },
+  });
+
+  const state = tracker.ingestPayload("codex", {
+    primary: { usedPercent: 11, windowDurationMins: 300, resetsAt: 1786191460 },
+    secondary: null,
+  });
+
+  expect(state!.windows).toHaveLength(1);
+  expect(state!.windows[0]).toMatchObject({ label: "primary", usedPercent: 11 });
+
+  const empty = tracker.ingestPayload("codex", { primary: null, secondary: null });
+  expect(empty!.windows).toEqual([]);
+});
+
+test("fusionne une notification codex clairsemée sans effacer la fenêtre absente", () => {
+  tracker.ingest({
+    type: "rate-limit",
+    provider: "codex",
+    payload: {
+      primary: { usedPercent: 10, windowDurationMins: 300, resetsAt: 1786191460 },
+      secondary: { usedPercent: 20, windowDurationMins: 10_080, resetsAt: 1786796260 },
+    },
+  });
+
+  const state = tracker.ingest({
+    type: "rate-limit",
+    provider: "codex",
+    payload: {
+      primary: { usedPercent: 11, windowDurationMins: 300, resetsAt: 1786191460 },
+      secondary: null,
+    },
+  });
+
+  expect(state!.windows).toHaveLength(2);
+  expect(state!.windows[0]).toMatchObject({ label: "primary", usedPercent: 11 });
+  expect(state!.windows[1]).toMatchObject({ label: "secondary", usedPercent: 20 });
+});
+
 test("fusionne les fenêtres par label sans perdre les précédentes", () => {
   tracker.ingest(claudeRateLimitEvent());
   const state = tracker.ingestPayload("claude", {
@@ -104,7 +146,7 @@ test("fusionne les fenêtres par label sans perdre les précédentes", () => {
 test("ignore les events non rate-limit et les payloads inexploitables", () => {
   expect(tracker.ingest({ type: "text-delta", text: "x" })).toBeNull();
   expect(tracker.ingestPayload("claude", { status: "allowed" })).toBeNull();
-  expect(tracker.ingestPayload("codex", { primary: null, secondary: null })).toBeNull();
+  expect(tracker.ingestPayload("codex", { status: "allowed" })).toBeNull();
   expect(tracker.ingestPayload("codex", "pas un objet")).toBeNull();
   expect(tracker.snapshot()).toEqual({ claude: null, codex: null });
 });

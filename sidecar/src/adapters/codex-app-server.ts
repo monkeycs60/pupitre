@@ -108,12 +108,17 @@ export class CodexAppServerClient {
     const ctx = new TurnContext(threadId, emit, done);
     this.turns.set(threadId, ctx);
 
-    const abort = () => {
-      if (ctx.isSettled) return;
+    let abortRequested = false;
+    let interruptSent = false;
+    const interruptStartedTurn = () => {
+      if (!ctx.turnId || interruptSent) return;
+      interruptSent = true;
       // turn/interrupt {threadId, turnId} — confirmé par les types v2 générés.
-      if (ctx.turnId) {
-        this.request("turn/interrupt", { threadId, turnId: ctx.turnId }).catch(() => {});
-      }
+      this.request("turn/interrupt", { threadId, turnId: ctx.turnId }).catch(() => {});
+    };
+    const abort = () => {
+      abortRequested = true;
+      interruptStartedTurn();
       ctx.finish({ type: "status", state: "error", error: "annulé" });
     };
     opts.signal?.addEventListener("abort", abort, { once: true });
@@ -127,10 +132,12 @@ export class CodexAppServerClient {
         ],
         model: opts.model,
         ...(opts.effort ? { effort: opts.effort } : {}),
-        ...(opts.speed === "fast" ? { serviceTier: "fast" } : {}),
+        serviceTier: opts.speed === "fast" ? "fast" : null,
       });
       ctx.turnId = (started?.turn as { id?: string } | undefined)?.id ?? null;
-      if (opts.signal?.aborted) abort();
+      // Une annulation peut arriver pendant que turn/start attend sa réponse :
+      // le tour existe alors côté app-server, mais son id n'est connu qu'ici.
+      if (abortRequested || opts.signal?.aborted) interruptStartedTurn();
       await finished;
     } catch (error) {
       ctx.finish({ type: "status", state: "error", error: String(error) });
@@ -226,7 +233,8 @@ export class CodexAppServerClient {
       cwd: opts.cwd,
       approvalPolicy: "never",
       sandbox: "workspace-write",
-      ...(opts.speed === "fast" ? { serviceTier: "fast" } : {}),
+      // null est volontaire : un thread repris conserve sinon son tier `fast`.
+      serviceTier: opts.speed === "fast" ? "fast" : null,
     };
     // `config` est un override de configuration PAR THREAD (ThreadStartParams /
     // ThreadResumeParams, objet libre aux clés de `config.toml`). C'est ce qui

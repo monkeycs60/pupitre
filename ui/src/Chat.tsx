@@ -6,7 +6,8 @@ import {
   useRef,
   useState,
 } from 'react'
-import { EventStream, groupEvents } from './EventStream'
+import { EventStream } from './EventStream'
+import { groupEvents } from './groupEvents'
 import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
 import type {

@@ -78,21 +78,40 @@ export class QuotaTracker {
   /** No-op sur les events non rate-limit : branchable tel quel sur un emit. */
   ingest(event: AppEvent): QuotaState | null {
     if (event.type !== "rate-limit") return null;
-    return this.ingestPayload(event.provider, event.payload);
+    // account/rateLimits/updated est une mise à jour clairsemée : un champ null
+    // signifie « indisponible dans cet update », pas « fenêtre supprimée ».
+    return this.update(event.provider, event.payload, false);
   }
 
-  /** Ingestion directe (poll `account/rateLimits/read` au démarrage). */
+  /** Ingestion directe du snapshot complet `account/rateLimits/read`. */
   ingestPayload(provider: Provider, payload: unknown): QuotaState | null {
+    return this.update(provider, payload, true);
+  }
+
+  private update(
+    provider: Provider,
+    payload: unknown,
+    replaceCodexSnapshot: boolean,
+  ): QuotaState | null {
     const windows = provider === "claude"
       ? claudeWindows(payload)
       : codexWindows(payload);
-    if (windows.length === 0) return null;
+    if (
+      windows.length === 0
+      && (
+        provider === "claude"
+        || !replaceCodexSnapshot
+        || !isCodexSnapshot(payload)
+      )
+    ) return null;
 
-    // Merge par label : claude n'envoie qu'une fenêtre à la fois, les autres
-    // fenêtres déjà connues doivent survivre.
+    // Claude et les notifications Codex sont clairsemés : merge. Seul le poll
+    // Codex explicite est un snapshot complet et peut retirer une fenêtre.
     const merged = new Map<string, QuotaWindow>();
-    for (const window of this.get(provider)?.windows ?? []) {
-      merged.set(window.label, window);
+    if (provider === "claude" || !replaceCodexSnapshot) {
+      for (const window of this.get(provider)?.windows ?? []) {
+        merged.set(window.label, window);
+      }
     }
     for (const window of windows) merged.set(window.label, window);
 
@@ -164,4 +183,11 @@ function codexWindows(payload: unknown): QuotaWindow[] {
     windows.push({ label, usedPercent, resetsAt, windowDurationMins });
   }
   return windows;
+}
+
+/** Un snapshot Codex avec primary/secondary à null reste un snapshot valide. */
+function isCodexSnapshot(payload: unknown): boolean {
+  const root = asRecord(payload);
+  const limits = asRecord(root?.rateLimits) ?? root;
+  return limits !== null && ("primary" in limits || "secondary" in limits);
 }

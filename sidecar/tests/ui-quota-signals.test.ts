@@ -6,6 +6,7 @@ import {
   formatResetClock,
   quotaAlerts,
   quotaChipLabel,
+  nextQuotaReevaluationDelay,
   shouldPulse,
   tightestWindow,
   windowTitle,
@@ -56,7 +57,10 @@ test("les libellés de fenêtre sont normalisés entre providers", () => {
   expect(windowTitle(window({ label: "five_hour" }))).toBe("5 h");
   expect(windowTitle(window({ label: "seven_day" }))).toBe("hebdo");
   expect(windowTitle(window({ label: "primary" }))).toBe("5 h");
-  expect(windowTitle(window({ label: "secondary" }))).toBe("hebdo");
+  expect(windowTitle(window({ label: "secondary", windowDurationMins: 10_080 })))
+    .toBe("hebdo");
+  expect(windowTitle(window({ label: "primary", windowDurationMins: 10_080 })))
+    .toBe("hebdo");
   // Label inconnu : on retombe sur la durée publiée.
   expect(windowTitle(window({ label: "bizarre", windowDurationMins: 10_080 })))
     .toBe("7 j");
@@ -157,6 +161,18 @@ test("alerte dernière heure : déclenchée dans l'heure, pas avant, pas après 
 
   expect(quotaAlerts(outside, DEFAULT_QUOTA_THRESHOLDS, NOW)).toEqual([]);
   expect(quotaAlerts(past, DEFAULT_QUOTA_THRESHOLDS, NOW)).toEqual([]);
+});
+
+test("programme une réévaluation à l'entrée dans la dernière heure", () => {
+  const snapshot = {
+    claude: state("claude", [window({ resetsAt: isoIn(75) })]),
+    codex: state("codex", [window({ resetsAt: isoIn(180) })]),
+  };
+
+  expect(nextQuotaReevaluationDelay(snapshot, DEFAULT_QUOTA_THRESHOLDS, NOW))
+    .toBe(15 * MINUTE);
+  expect(nextQuotaReevaluationDelay(snapshot, { lastHour: false, usedPercent: 80 }, NOW))
+    .toBeNull();
 });
 
 test("alerte de seuil d'usage : au-delà du seuil seulement", () => {

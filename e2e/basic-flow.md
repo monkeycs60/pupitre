@@ -52,3 +52,54 @@ Points de contrôle : 0 erreur console autre que l'échec WS attendu à l'étape
 2. Ouvrir http://localhost:5173, dérouler les scénarios 1-6.
 3. Pour le test réel : relancer le sidecar sans les overrides `PUPITRE_*_BIN` (consomme ~1 centime de quota Claude).
 4. Pour Tauri : `bunx tauri dev` à la racine (la coquille lance elle-même sidecar + vite).
+
+## E2E M2 — streaming, orchestration, quotas et changement de modèle
+
+Exécuté le 2026-08-04. Les parcours déterministes utilisent les fake bins ; les
+deux validations provider signalées « réel » ont été jouées sur les abonnements
+CLI, sans API payante.
+
+| # | Scénario | Résultat |
+|---|---|---|
+| 11 | Streaming Codex réel via `codex app-server` (`gpt-5.6-luna`) | ✅ session `threadId`, deltas texte, outils, usage et statut terminal reçus ; reprise du même thread validée |
+| 12 | Quotas après un tour provider réel | ✅ notification native Codex normalisée et persistée ; `GET /api/quotas`, flux WS, jauge sidebar et chips modèle cohérents avec la fenêtre publiée (primary hebdomadaire dans la fixture réelle) |
+| 13 | Orchestration réelle Claude Sonnet → Codex `gpt-5.6-luna` | ✅ l'outil MCP `delegate` lit `demo.txt`, crée le `subtask-ref`, la carte suit le flux puis affiche le résultat `PUPITRE_M2_DELEGATION_OK`, revenu aussi au tour parent ; subtask `0a429e84-4c05-41cd-996e-20360771000a` |
+| 14 | Presets M2 avec fake bins | ✅ les trois presets intégrés sont proposés, un preset personnalisé peut être sauvé/supprimé et le défaut projet est réappliqué à une nouvelle conversation |
+| 15 | Switch dans le même provider | ✅ la modale affiche l'estimation de cache (somme des usages), met à jour le modèle et le tour suivant utilise ce modèle sur la même conversation |
+| 16 | Handoff cross-provider | ✅ résumé fixe généré sur la conversation source, nouvelle conversation seedée et initialisée chez le provider cible, liens « suite de / continuée par » visibles dans la sidebar |
+| 17 | Annulation d'une carte déléguée | ✅ `POST /api/subtasks/:id/cancel`, statut erreur « annulé », capacité de délégation libérée |
+
+### Rejouer les scénarios M2 sans consommer de quota
+
+Utiliser le même environnement que plus haut, en remplaçant le fake Codex CLI
+historique par le faux app-server :
+
+```bash
+PUPITRE_DATA_DIR=/tmp/pupitre-e2e-m2-data \
+PUPITRE_CLAUDE_BIN=$PWD/sidecar/tests/fake-bins/fake-claude \
+PUPITRE_CODEX_BIN=$PWD/sidecar/tests/fake-bins/fake-codex-app-server \
+bun run --cwd sidecar dev
+bun run --cwd ui dev
+```
+
+1. Créer un projet et deux conversations, une par provider.
+2. Envoyer deux messages dans la conversation Codex ; contrôler le streaming,
+   la reprise (`cli_session_id`) et l'apparition du quota après le premier tour.
+3. Créer puis sélectionner un preset personnalisé, le définir par défaut et
+   ouvrir une nouvelle conversation ; les paramètres doivent être restaurés.
+4. Dans une conversation existante, changer de modèle du même provider ; la
+   modale doit conserver la conversation et annoncer le coût de cache estimé.
+5. Choisir un modèle de l'autre provider ; la modale doit créer une passation et
+   la sidebar doit relier les deux conversations.
+
+### Rejouer l'orchestration réelle
+
+Cette étape consomme du quota CLI provider. Lancer le sidecar sans overrides,
+créer une conversation Claude Sonnet avec l'orchestration active, puis envoyer :
+
+> Délègue à gpt-5.6-luna la lecture de demo.txt via l'outil delegate.
+
+Contrôler dans l'ordre : appel `delegate`, événement `subtask-ref`, carte Codex
+en cours puis terminée, contenu réel du fichier dans `resultText`, et reprise de
+ce résultat dans la réponse finale du parent. Ne pas relancer ce test lorsque le
+quota Claude de la session est épuisé ; le résultat réel ci-dessus fait foi.

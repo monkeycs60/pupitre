@@ -3,6 +3,7 @@ import { getQuotas, getSettings, updateSettings } from './api'
 import { reconnectDelayMs } from './backoff'
 import {
   DEFAULT_QUOTA_THRESHOLDS,
+  nextQuotaReevaluationDelay,
   quotaAlerts,
   type QuotaThresholds,
 } from './quotaSignals'
@@ -52,7 +53,10 @@ export function useQuotas(): Quotas {
     let disposed = false
     let socket: WebSocket | null = null
     let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let alertTimer: ReturnType<typeof setTimeout> | undefined
+    let alertScheduleVersion = 0
     let failedAttempts = 0
+    let latestSnapshot = EMPTY_SNAPSHOT
     const abortController = new AbortController()
 
     notifiedRef.current ??= new Set(loadNotifiedKeys())
@@ -68,9 +72,26 @@ export function useQuotas(): Quotas {
       return DEFAULT_QUOTA_THRESHOLDS
     })
 
+    function evaluateAndScheduleAlerts() {
+      const version = ++alertScheduleVersion
+      clearTimeout(alertTimer)
+      void thresholds.then((resolved) => {
+        if (disposed || version !== alertScheduleVersion) return
+        for (const state of Object.values(latestSnapshot)) {
+          if (state !== null) void notifyCrossings(state, resolved, notified)
+        }
+        const delay = nextQuotaReevaluationDelay(latestSnapshot, resolved)
+        if (delay !== null) {
+          // Une petite marge évite de se réveiller une fraction de ms avant le seuil.
+          alertTimer = setTimeout(evaluateAndScheduleAlerts, delay + 50)
+        }
+      })
+    }
+
     function apply(state: QuotaState) {
-      setSnapshot((current) => ({ ...current, [state.provider]: state }))
-      void thresholds.then((resolved) => notifyCrossings(state, resolved, notified))
+      latestSnapshot = { ...latestSnapshot, [state.provider]: state }
+      setSnapshot(latestSnapshot)
+      evaluateAndScheduleAlerts()
     }
 
     function connect() {
@@ -123,6 +144,8 @@ export function useQuotas(): Quotas {
     return () => {
       disposed = true
       clearTimeout(retryTimer)
+      clearTimeout(alertTimer)
+      alertScheduleVersion += 1
       abortController.abort()
       socket?.close()
     }

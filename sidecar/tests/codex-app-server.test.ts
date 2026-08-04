@@ -61,6 +61,7 @@ afterEach(() => {
   delete process.env.FAKE_APP_SERVER_HANG;
   delete process.env.FAKE_APP_SERVER_SILENT;
   delete process.env.FAKE_APP_SERVER_SLOW_MS;
+  delete process.env.FAKE_APP_SERVER_SLOW_TURN_MS;
   delete process.env.FAKE_APP_SERVER_INIT_ERROR;
   delete process.env.PUPITRE_APPSERVER_TIMEOUT_MS;
 });
@@ -132,6 +133,20 @@ test("un cliSessionId présent déclenche thread/resume, pas thread/start", asyn
     cliSessionId: "thread-abc",
   });
   expect(events.at(-1)).toEqual({ type: "status", state: "done" });
+});
+
+test("un thread fast repris en standard réinitialise explicitement le service tier", async () => {
+  const files = useFake();
+  await collect(newClient(), {
+    cliSessionId: "thread-fast",
+    speed: "standard",
+  });
+
+  const requests = sentRequests(files.log);
+  expect(requests.find((request) => request.method === "thread/resume")?.params.serviceTier)
+    .toBeNull();
+  expect(requests.find((request) => request.method === "turn/start")?.params.serviceTier)
+    .toBeNull();
 });
 
 test("account/rateLimits/updated devient un event rate-limit", async () => {
@@ -269,6 +284,29 @@ test("annulation pendant le setup (thread/start lent) : status error « annulé 
   expect(events.some((e) => e.type === "session")).toBe(false);
   await Bun.sleep(400);
   expect(sentRequests(files.log).some((r) => r.method === "turn/start")).toBe(false);
+});
+
+test("annulation pendant la réponse à turn/start : interrompt le tour dès que son id arrive", async () => {
+  const files = useFake();
+  process.env.FAKE_APP_SERVER_SLOW_TURN_MS = "300";
+  process.env.FAKE_APP_SERVER_HANG = "1";
+  const controller = new AbortController();
+
+  const events: AppEvent[] = [];
+  const turn = newClient().runTurn(
+    turnOptions({ signal: controller.signal }),
+    (event) => events.push(event),
+  );
+  await Bun.sleep(100);
+  controller.abort();
+  await turn;
+
+  expect(events.at(-1)).toEqual({ type: "status", state: "error", error: "annulé" });
+  await Bun.sleep(350);
+  const requests = sentRequests(files.log);
+  expect(requests.filter((request) => request.method === "turn/interrupt")).toHaveLength(1);
+  expect(requests.find((request) => request.method === "turn/interrupt")?.params)
+    .toMatchObject({ threadId: "fake-thread-0001", turnId: "fake-turn-0001" });
 });
 
 test("multiplexage : deux tours concurrents ne reçoivent chacun que leurs deltas", async () => {

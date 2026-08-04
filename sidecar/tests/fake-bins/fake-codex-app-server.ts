@@ -7,6 +7,7 @@
 // - FAKE_APP_SERVER_HANG=1     : le tour ne se termine jamais tout seul (test d'annulation)
 // - FAKE_APP_SERVER_SILENT=m,m : méthodes auxquelles ne jamais répondre (test de timeout)
 // - FAKE_APP_SERVER_SLOW_MS=n  : délai avant la réponse à thread/start (test d'annulation au setup)
+// - FAKE_APP_SERVER_SLOW_TURN_MS=n : délai avant la réponse à turn/start
 // - FAKE_APP_SERVER_INIT_ERROR=1 : `initialize` répond une erreur JSON-RPC, process vivant
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
@@ -24,6 +25,7 @@ if (process.env.FAKE_APP_SERVER_PID) {
 
 const silent = new Set((process.env.FAKE_APP_SERVER_SILENT ?? "").split(",").filter(Boolean));
 const slowMs = Number(process.env.FAKE_APP_SERVER_SLOW_MS ?? 0);
+const slowTurnMs = Number(process.env.FAKE_APP_SERVER_SLOW_TURN_MS ?? 0);
 
 // Notifications du tour : tout ce qui suit `turn/start` dans la fixture réelle.
 const turnNotifications = (() => {
@@ -113,8 +115,12 @@ lines.on("line", (line) => {
     case "turn/start": {
       const threadId = String(params?.threadId ?? "");
       const turnId = `fake-turn-${pad(++turnCounter)}`;
-      send({ jsonrpc: "2.0", id, result: { turn: { id: turnId, status: "inProgress" } } });
-      void replayTurn(threadId, turnId);
+      const reply = () => {
+        send({ jsonrpc: "2.0", id, result: { turn: { id: turnId, status: "inProgress" } } });
+        void replayTurn(threadId, turnId);
+      };
+      if (slowTurnMs > 0) setTimeout(reply, slowTurnMs);
+      else reply();
       return;
     }
     case "turn/interrupt":

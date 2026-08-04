@@ -276,6 +276,18 @@ test("CRUD des presets, intégrés immuables et défaut par projet", async () =>
   ]);
 });
 
+test("la création d'un preset invalide conserve son erreur de validation", async () => {
+  const response = await postJson("/api/presets", {
+    name: "Invalide",
+    provider: "claude",
+    model: "fable-5",
+    speed: "fast",
+  });
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "vitesse fast indisponible pour claude" });
+});
+
 test("persiste les seuils de quota dans settings", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const emptySettings = await fetch(`${current.baseUrl}/api/settings`);
