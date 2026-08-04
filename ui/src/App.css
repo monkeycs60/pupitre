@@ -2408,6 +2408,46 @@ textarea:focus-visible {
   line-height: 1.48;
 }
 
+.review-decision .review-decision-question {
+  margin: 0 0 10px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.decision-flag {
+  padding: 8px 0 9px 8px;
+  border-top: 1px solid var(--line);
+  border-left: 3px solid #8c8982;
+}
+
+.decision-flag.severity-orange {
+  border-left-color: #c77b38;
+}
+
+.decision-flag.severity-red {
+  border-left-color: #b74a40;
+}
+
+.decision-flag > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 9px;
+}
+
+.counter-opinion-action {
+  padding: 3px 5px;
+  color: #5a544c;
+  font-size: 9px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
 .review-decision-actions {
   display: flex;
   align-items: center;
@@ -2590,7 +2630,7 @@ textarea:focus-visible {
 
 .review-dialog-grid {
   display: grid;
-  grid-template-columns: 1fr 1.4fr 0.8fr;
+  grid-template-columns: 0.9fr 0.9fr 1.3fr 0.7fr;
   gap: 10px;
 }
 

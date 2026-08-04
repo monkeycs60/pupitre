@@ -11,6 +11,7 @@ import type { SettingsStore } from "./stores/settings";
 import type { QuotaTracker } from "./quotas";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
 import type { ReviewRunner } from "./reviews";
+import { CounterAlreadyRunningError } from "./stores/reviews";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -756,6 +757,14 @@ export function createServer(deps: ServerDeps) {
               }
             : defaultReviewConfig(conversation.provider);
           const reviewModel = reviewModelConfig(body, fallback);
+          const rawCodeProvider = body.codeProvider;
+          if (
+            rawCodeProvider !== undefined
+            && rawCodeProvider !== "claude"
+            && rawCodeProvider !== "codex"
+          ) {
+            throw new HttpError(400, "codeProvider invalide");
+          }
           const gitRefBase = body.gitRefBase === undefined
             ? "HEAD^"
             : requiredString(body, "gitRefBase");
@@ -771,6 +780,7 @@ export function createServer(deps: ServerDeps) {
               provider: reviewModel.provider,
               model: reviewModel.model,
               effort: reviewModel.effort,
+              codeProvider: (rawCodeProvider as Provider | undefined) ?? conversation.provider,
             }), 201);
           } catch (error) {
             if (error instanceof Error && error.message.includes("inconnu")) {
@@ -825,10 +835,17 @@ export function createServer(deps: ServerDeps) {
           const effort = body.effort === undefined
             ? defaults.effort
             : optionalEffort(body, defaults.provider);
-          return json(deps.reviews.startCounterOpinions(
-            review.flags.map((flag) => flag.id),
-            { model, effort: effort ?? defaults.effort },
-          ), 202);
+          try {
+            return json(deps.reviews.startCounterOpinions(
+              review.flags.map((flag) => flag.id),
+              { model, effort: effort ?? defaults.effort },
+            ), 202);
+          } catch (error) {
+            if (error instanceof CounterAlreadyRunningError) {
+              throw new HttpError(409, error.message);
+            }
+            throw error;
+          }
         }
 
         const reviewFlagId = routeId(pathname, /^\/api\/review-flags\/([^/]+)$/);
@@ -856,10 +873,31 @@ export function createServer(deps: ServerDeps) {
           const effort = body.effort === undefined
             ? defaults.effort
             : optionalEffort(body, defaults.provider);
-          return json(deps.reviews.startCounterOpinions([reviewFlagCounterId], {
-            model,
-            effort: effort ?? defaults.effort,
-          }), 202);
+          try {
+            return json(deps.reviews.startCounterOpinions([reviewFlagCounterId], {
+              model,
+              effort: effort ?? defaults.effort,
+            }), 202);
+          } catch (error) {
+            if (error instanceof CounterAlreadyRunningError) {
+              throw new HttpError(409, error.message);
+            }
+            throw error;
+          }
+        }
+
+        const reviewDecisionId = routeId(
+          pathname,
+          /^\/api\/review-decisions\/([^/]+)$/,
+        );
+        if (request.method === "PATCH" && reviewDecisionId !== null) {
+          const body = await readObject(request);
+          if (body.status !== "acked" && body.status !== "dismissed") {
+            throw new HttpError(400, "statut de décision invalide");
+          }
+          const decision = deps.reviews.setDecisionStatus(reviewDecisionId, body.status);
+          if (!decision) throw new HttpError(404, "décision inconnue");
+          return json(decision);
         }
 
         if (request.method === "POST" && pathname === "/api/subtasks") {

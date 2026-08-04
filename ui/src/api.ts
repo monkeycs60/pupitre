@@ -8,6 +8,7 @@ import type {
   Provider,
   QuotaSnapshot,
   Review,
+  ReviewDecision,
   ReviewFlag,
   StoredEvent,
   SubtaskResult,
@@ -68,6 +69,7 @@ export interface StartReviewInput {
   reviewProvider?: Provider
   reviewModel?: string
   reviewEffort?: string
+  codeProvider?: Provider
 }
 
 export interface Settings {
@@ -296,6 +298,16 @@ export function setReviewFlagStatus(
   status: 'open' | 'acked' | 'dismissed',
 ): Promise<ReviewFlag> {
   return fetchJson(`/api/review-flags/${routeId(flagId)}`, jsonPatch({ status }))
+}
+
+export function setReviewDecisionStatus(
+  decisionId: string,
+  status: 'acked' | 'dismissed',
+): Promise<ReviewDecision> {
+  return fetchJson(
+    `/api/review-decisions/${routeId(decisionId)}`,
+    jsonPatch({ status }),
+  )
 }
 
 export function startFlagCounterOpinion(

@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   getGardienStatus,
   listProjectReviews,
   setProjectGardienMode,
   setProjectAutoCounterRed,
-  setReviewFlagStatus,
+  setReviewDecisionStatus,
 } from './api'
 import { CounterOpinionDialog } from './CounterOpinionDialog'
 import { parseUnifiedDiff } from './reviewDiff'
@@ -13,6 +13,7 @@ import type {
   GardienStatus,
   Project,
   Review,
+  ReviewDecision,
   ReviewFlag,
 } from './types'
 
@@ -72,6 +73,7 @@ export function GuardianView({
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [counterTarget, setCounterTarget] = useState<ReviewFlag | 'all' | null>(null)
+  const hadActiveReview = useRef(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -92,11 +94,14 @@ export function GuardianView({
         })
         setError(null)
         setIsLoading(false)
-        if (loadedReviews.some((review) =>
+        const hasActiveReview = loadedReviews.some((review) =>
           review.status === 'running' || review.flags.some((flag) =>
             flag.counter_state === 'queued' || flag.counter_state === 'running',
           ),
-        )) {
+        )
+        if (hadActiveReview.current && !hasActiveReview) onReviewsChanged()
+        hadActiveReview.current = hasActiveReview
+        if (hasActiveReview) {
           pollTimer = setTimeout(() => void load(), 1_000)
         }
       } catch (loadError: unknown) {
@@ -136,13 +141,19 @@ export function GuardianView({
     }
   }
 
-  async function handleFlagStatus(flag: ReviewFlag, status: 'acked' | 'dismissed') {
+  async function handleDecisionStatus(
+    decision: ReviewDecision,
+    status: 'acked' | 'dismissed',
+  ) {
     setError(null)
     try {
-      const updated = await setReviewFlagStatus(flag.id, status)
+      const updated = await setReviewDecisionStatus(decision.id, status)
       setReviews((current) => current.map((review) => ({
         ...review,
-        flags: review.flags.map((item) => item.id === updated.id ? updated : item),
+        decisions: review.decisions.map((item) => item.id === updated.id ? updated : item),
+        flags: review.flags.map((flag) =>
+          updated.flag_ids.includes(flag.id) ? { ...flag, status } : flag,
+        ),
       })))
       setGardienStatus(await getGardienStatus(project.id))
       onReviewsChanged()
@@ -301,49 +312,55 @@ export function GuardianView({
               </button>
             ) : null}
           </div>
-          {selected?.flags.length ? selected.flags.map((flag) => (
-            <article className={`review-decision severity-${flag.severity}`} key={flag.id}>
-              <header>
-                <span>{flag.file}:{flag.line_start}</span>
-                <span>{flag.severity}</span>
-              </header>
-              <p>{flag.message}</p>
-              {flag.counter_state === 'queued' || flag.counter_state === 'running' ? (
-                <p className="counter-opinion-state">
-                  Contre-avis {flag.counter_state === 'queued' ? 'en attente' : 'en cours'} avec{' '}
-                  {flag.counter_provider} · {flag.counter_model}
-                </p>
-              ) : null}
-              {flag.counter_text && flag.counter_verdict ? (
-                <div className={`counter-opinion verdict-${flag.counter_verdict}`}>
-                  <strong>{VERDICT_LABEL[flag.counter_verdict]}</strong>
-                  <p>{flag.counter_text}</p>
-                  <span>{flag.counter_provider} · {flag.counter_model} · {flag.counter_effort}</span>
+          {selected?.decisions.length ? selected.decisions.map((decision) => (
+            <article className="review-decision" key={decision.id}>
+              <p className="review-decision-question">{decision.question}</p>
+              {selected.flags.filter((flag) => decision.flag_ids.includes(flag.id)).map((flag) => (
+                <div className={`decision-flag severity-${flag.severity}`} key={flag.id}>
+                  <header>
+                    <span>{flag.file}:{flag.line_start}</span>
+                    <span>{flag.severity}</span>
+                  </header>
+                  <p>{flag.message}</p>
+                  {flag.counter_state === 'queued' || flag.counter_state === 'running' ? (
+                    <p className="counter-opinion-state">
+                      Contre-avis {flag.counter_state === 'queued' ? 'en attente' : 'en cours'} avec{' '}
+                      {flag.counter_provider} · {flag.counter_model}
+                    </p>
+                  ) : null}
+                  {flag.counter_text && flag.counter_verdict ? (
+                    <div className={`counter-opinion verdict-${flag.counter_verdict}`}>
+                      <strong>{VERDICT_LABEL[flag.counter_verdict]}</strong>
+                      <p>{flag.counter_text}</p>
+                      <span>{flag.counter_provider} · {flag.counter_model} · {flag.counter_effort}</span>
+                    </div>
+                  ) : null}
+                  {flag.counter_error ? (
+                    <p className="counter-opinion-error">Contre-avis échoué : {flag.counter_error}</p>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="counter-opinion-action"
+                    onClick={() => setCounterTarget(flag)}
+                    disabled={flag.counter_state === 'queued' || flag.counter_state === 'running'}
+                  >
+                    {flag.counter_state === 'done' ? 'Redemander un contre-avis' : 'Contre-avis ciblé'}
+                  </button>
                 </div>
-              ) : null}
-              {flag.counter_error ? (
-                <p className="counter-opinion-error">Contre-avis échoué : {flag.counter_error}</p>
-              ) : null}
+              ))}
               <div className="review-decision-actions">
-                {flag.status === 'open' || flag.status === 'countered' ? (
+                {decision.status === 'open' ? (
                   <>
-                    <button type="button" onClick={() => void handleFlagStatus(flag, 'acked')}>
-                      Acquitter ce point
+                    <button type="button" onClick={() => void handleDecisionStatus(decision, 'acked')}>
+                      Acquitter cette décision
                     </button>
-                    <button type="button" onClick={() => void handleFlagStatus(flag, 'dismissed')}>
+                    <button type="button" onClick={() => void handleDecisionStatus(decision, 'dismissed')}>
                       Écarter
                     </button>
                   </>
                 ) : (
-                  <span>{flag.status === 'acked' ? 'Acquitté' : 'Écarté'}</span>
+                  <span>{decision.status === 'acked' ? 'Acquittée' : 'Écartée'}</span>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setCounterTarget(flag)}
-                  disabled={flag.counter_state === 'queued' || flag.counter_state === 'running'}
-                >
-                  {flag.counter_state === 'done' ? 'Redemander un contre-avis' : 'Contre-avis'}
-                </button>
               </div>
             </article>
           )) : (

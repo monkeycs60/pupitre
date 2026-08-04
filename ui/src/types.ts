@@ -112,6 +112,7 @@ export interface ReviewFlag {
   severity: ReviewSeverity
   category: string
   message: string
+  decision?: string
   status: ReviewFlagStatus
   counter_state: CounterState
   counter_verdict: CounterVerdict | null
@@ -121,6 +122,14 @@ export interface ReviewFlag {
   counter_effort: string | null
   counter_subtask_id: string | null
   counter_error: string | null
+}
+
+export interface ReviewDecision {
+  id: string
+  review_id: string
+  question: string
+  flag_ids: string[]
+  status: 'open' | 'acked' | 'dismissed'
 }
 
 export interface Review {
@@ -139,6 +148,7 @@ export interface Review {
   updated_at: string
   flags: ReviewFlag[]
   code_provider: Provider
+  decisions: ReviewDecision[]
 }
 
 export interface GardienStatus {

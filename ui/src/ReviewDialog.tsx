@@ -31,6 +31,7 @@ export function ReviewDialog({
   const [provider, setProvider] = useState<Provider>(initial.provider)
   const [model, setModel] = useState(initial.model)
   const [effort, setEffort] = useState(initial.effort)
+  const [codeProvider, setCodeProvider] = useState<Provider>(conversation.provider)
   const [gitRefBase, setGitRefBase] = useState('HEAD^')
   const [gitRefHead, setGitRefHead] = useState('HEAD')
   const [presets, setPresets] = useState<Preset[]>([])
@@ -98,6 +99,7 @@ export function ReviewDialog({
         reviewProvider: provider,
         reviewModel: model,
         reviewEffort: effort,
+        codeProvider,
       }))
     } catch (submitError: unknown) {
       setError(errorMessage(submitError))
@@ -139,6 +141,16 @@ export function ReviewDialog({
           </label>
 
           <div className="review-dialog-grid">
+            <label>
+              <span>Provider auteur du code</span>
+              <select
+                value={codeProvider}
+                onChange={(event) => setCodeProvider(event.target.value as Provider)}
+              >
+                <option value="codex">codex</option>
+                <option value="claude">claude</option>
+              </select>
+            </label>
             <label>
               <span>Provider de review</span>
               <select
@@ -198,7 +210,9 @@ export function ReviewDialog({
 
           <p className="review-dialog-note">
             Le Gardien lit le diff en sandbox lecture seule. Le pré-découpage est
-            déterministe ; seul le modèle fort juge les risques.
+            déterministe ; seul le modèle fort juge les risques. Si un sub-agent a
+            écrit le diff, indiquez son provider comme auteur pour garantir un
+            contre-avis réellement croisé.
           </p>
           {error ? <p className="modal-error" role="alert">{error}</p> : null}
 

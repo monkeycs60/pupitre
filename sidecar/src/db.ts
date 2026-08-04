@@ -67,7 +67,7 @@ export function openDb(dir: string = dataDir()): Database {
       status TEXT NOT NULL DEFAULT 'running'
         CHECK (status IN ('running', 'done', 'error')),
       review_provider TEXT NOT NULL, review_model TEXT NOT NULL,
-      review_effort TEXT NOT NULL,
+      review_effort TEXT NOT NULL, code_provider TEXT NULL,
       diff_text TEXT NOT NULL DEFAULT '', error TEXT NULL,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
@@ -84,6 +84,15 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_review_flags_review
       ON review_flags(review_id, severity, line_start);
+    CREATE TABLE IF NOT EXISTS review_decisions (
+      id TEXT PRIMARY KEY,
+      review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+      question TEXT NOT NULL, flag_ids TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open', 'acked', 'dismissed'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_review_decisions_review
+      ON review_decisions(review_id, id);
   `);
   dropEventsForeignKey(db);
   addColumn(db, "conversations", "effort TEXT NULL");
@@ -95,6 +104,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "projects", "default_preset_id TEXT NULL");
   addColumn(db, "projects", "gardien_mode TEXT NOT NULL DEFAULT 'informatif'");
   addColumn(db, "projects", "auto_counter_red INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "reviews", "code_provider TEXT NULL");
   addColumn(db, "review_flags", "counter_state TEXT NOT NULL DEFAULT 'idle'");
   addColumn(db, "review_flags", "counter_verdict TEXT NULL");
   addColumn(db, "review_flags", "counter_text TEXT NULL");
@@ -103,6 +113,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "review_flags", "counter_effort TEXT NULL");
   addColumn(db, "review_flags", "counter_subtask_id TEXT NULL");
   addColumn(db, "review_flags", "counter_error TEXT NULL");
+  addColumn(db, "review_flags", "decision TEXT NULL");
   const addedReviewProvider = addColumn(
     db,
     "presets",

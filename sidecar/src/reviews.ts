@@ -14,7 +14,7 @@ import type {
   ReviewSeverity,
   ReviewStore,
 } from "./stores/reviews";
-import { MAX_CONCURRENT_SUBTASKS } from "./subtasks";
+import { MAX_CONCURRENT_SUBTASKS, SubtaskLimitError } from "./subtasks";
 import type { SubtaskResult, SubtaskRunner } from "./subtasks";
 
 const DEFAULT_ZONE_CHARS = 48_000;
@@ -39,6 +39,7 @@ export interface StartReviewInput {
   provider: Provider;
   model: string;
   effort: string;
+  codeProvider?: Provider;
 }
 
 export interface CounterOpinionConfig {
@@ -79,7 +80,10 @@ export class ReviewRunner {
     if (!conversation || conversation.project_id !== project.id) {
       throw new Error("conversation inconnue pour ce projet");
     }
-    const review = this.store.create(input);
+    const review = this.store.create({
+      ...input,
+      codeProvider: input.codeProvider ?? conversation.provider,
+    });
     const run = this.execute(review.id, project.path, input)
       .catch((error) => {
         this.store.fail(review.id, errorMessage(error));
@@ -101,6 +105,10 @@ export class ReviewRunner {
 
   setFlagStatus(id: string, status: "open" | "acked" | "dismissed") {
     return this.store.setFlagStatus(id, status);
+  }
+
+  setDecisionStatus(id: string, status: "acked" | "dismissed") {
+    return this.store.setDecisionStatus(id, status);
   }
 
   gardienStatus(projectId: string) {
@@ -139,12 +147,12 @@ export class ReviewRunner {
       model: config.model?.trim() || defaults.model,
       effort: config.effort?.trim() || defaults.effort,
     };
-    const queued = flags.map((flag) => this.store.queueCounter(
-      flag.id,
+    const queued = this.store.queueCounters(
+      flags.map((flag) => flag.id),
       selected.provider,
       selected.model,
       selected.effort,
-    )!);
+    );
     const run = this.executeCounterBatch(review, queued)
       .finally(() => {
         for (const flag of queued) this.activeCounters.delete(flag.id);
@@ -217,15 +225,24 @@ export class ReviewRunner {
 
   private async executeCounter(review: Review, flag: ReviewFlag): Promise<void> {
     try {
-      const subtask = this.subtasks!.start({
-        conversationId: review.conversation_id,
-        provider: flag.counter_provider!,
-        model: flag.counter_model!,
-        effort: flag.counter_effort,
-        prompt: counterOpinionPrompt(review, flag),
-        label: `Contre-avis · ${flag.file}:${flag.line_start}`,
-        readOnly: true,
-      });
+      let subtask;
+      for (;;) {
+        try {
+          subtask = this.subtasks!.start({
+            conversationId: review.conversation_id,
+            provider: flag.counter_provider!,
+            model: flag.counter_model!,
+            effort: flag.counter_effort,
+            prompt: counterOpinionPrompt(review, flag),
+            label: `Contre-avis · ${flag.file}:${flag.line_start}`,
+            readOnly: true,
+          });
+          break;
+        } catch (error) {
+          if (!(error instanceof SubtaskLimitError)) throw error;
+          await Bun.sleep(100);
+        }
+      }
       this.store.beginCounter(flag.id, subtask.id);
       const result = await this.subtasks!.waitResult(subtask.id);
       if (!result || result.status !== "done") {
@@ -307,7 +324,12 @@ export async function scanWithAdapters(
 }
 
 export function splitDiffIntoZones(diff: string, maxChars = DEFAULT_ZONE_CHARS): string[] {
-  const patches = diff.split(/(?=^diff --git )/m).filter((patch) => patch.trim() !== "");
+  if (!Number.isSafeInteger(maxChars) || maxChars < 1) {
+    throw new Error("taille de zone de review invalide");
+  }
+  const patches = diff.split(/(?=^diff --git )/m)
+    .filter((patch) => patch.trim() !== "")
+    .flatMap((patch) => splitOversizedPatch(patch, maxChars));
   if (patches.length === 0) return diff.trim() ? [diff] : [];
   const zones: string[] = [];
   let current = "";
@@ -316,12 +338,69 @@ export function splitDiffIntoZones(diff: string, maxChars = DEFAULT_ZONE_CHARS):
       zones.push(current);
       current = "";
     }
-    // Un fichier reste atomique : couper au milieu d'un hunk enlèverait au
-    // reviewer ses numéros de lignes et son contexte d'ancrage.
     current += patch;
   }
   if (current) zones.push(current);
   return zones;
+}
+
+function splitOversizedPatch(patch: string, maxChars: number): string[] {
+  if (patch.length <= maxChars) return [patch];
+  const lines = patch.split("\n");
+  const firstHunk = lines.findIndex((line) => line.startsWith("@@ "));
+  if (firstHunk < 0) throw new Error("patch Git trop volumineux sans hunk découpable");
+  const preamble = `${lines.slice(0, firstHunk).join("\n")}\n`;
+  if (preamble.length >= maxChars) throw new Error("en-tête de patch Git trop volumineux");
+  const hunks: string[][] = [];
+  for (const line of lines.slice(firstHunk)) {
+    if (line.startsWith("@@ ")) hunks.push([line]);
+    else hunks.at(-1)!.push(line);
+  }
+  return hunks.flatMap((hunk) => splitOversizedHunk(preamble, hunk, maxChars));
+}
+
+function splitOversizedHunk(preamble: string, hunk: string[], maxChars: number): string[] {
+  const match = hunk[0]!.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
+  if (!match) throw new Error("hunk Git invalide");
+  const suffix = match[5] ?? "";
+  let oldCursor = Number(match[1]);
+  let newCursor = Number(match[3]);
+  const result: string[] = [];
+  let body: string[] = [];
+  let chunkOld = oldCursor;
+  let chunkNew = newCursor;
+
+  const flush = () => {
+    if (body.length === 0) return;
+    let oldCount = 0;
+    let newCount = 0;
+    for (const line of body) {
+      if (!line.startsWith("+")) oldCount += line.startsWith("\\") ? 0 : 1;
+      if (!line.startsWith("-")) newCount += line.startsWith("\\") ? 0 : 1;
+    }
+    const header = `@@ -${chunkOld},${oldCount} +${chunkNew},${newCount} @@${suffix}\n`;
+    result.push(`${preamble}${header}${body.join("\n")}\n`);
+    chunkOld = oldCursor;
+    chunkNew = newCursor;
+    body = [];
+  };
+
+  for (const line of hunk.slice(1)) {
+    const probe = [...body, line];
+    const headerBudget = `@@ -${chunkOld},0 +${chunkNew},0 @@${suffix}\n`.length;
+    if (preamble.length + headerBudget + probe.join("\n").length + 1 > maxChars) {
+      if (body.length === 0) throw new Error("ligne de diff trop volumineuse pour le Gardien");
+      flush();
+    }
+    body.push(line);
+    if (!line.startsWith("+") && !line.startsWith("\\")) oldCursor += 1;
+    if (!line.startsWith("-") && !line.startsWith("\\")) newCursor += 1;
+  }
+  flush();
+  if (result.some((zone) => zone.length > maxChars)) {
+    throw new Error("hunk Git impossible à découper dans la limite configurée");
+  }
+  return result;
 }
 
 export function parseReviewOutput(output: string, diff: string): ReviewFlagInput[] {
@@ -376,6 +455,9 @@ function validateFlag(
   }
   const category = nonEmptyString(flag.category, `flag ${index + 1}.category`);
   const message = nonEmptyString(flag.message, `flag ${index + 1}.message`);
+  const decision = typeof flag.decision === "string" && flag.decision.trim() !== ""
+    ? flag.decision.trim()
+    : `OK pour accepter ce point : ${message}`;
   const lines = changed.get(file);
   if (!lines || ![...lines].some((line) => line >= lineStart && line <= lineEnd)) {
     throw new ReviewOutputError(
@@ -389,6 +471,7 @@ function validateFlag(
     severity: flag.severity as ReviewSeverity,
     category,
     message,
+    decision,
   };
 }
 
@@ -468,7 +551,8 @@ function reviewPrompt(diff: string, index: number, total: number): string {
     "Réponds UNIQUEMENT par ce JSON, sans markdown ni commentaire :",
     '{"flags":[{"file":"src/fichier.ts","line_start":12,"line_end":14,',
     '"severity":"red|orange|grey","category":"catégorie",',
-    '"message":"Une phrase concrète et actionnable."}]}',
+    '"message":"Une phrase concrète et actionnable.",',
+    '"decision":"Question explicite commençant par OK pour… ?"}]}',
     "S'il n'y a aucun risque réel, réponds exactement {\"flags\":[]}.",
     "",
     diff,

@@ -327,6 +327,7 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
     reviewProvider: "codex",
     reviewModel: "gpt-5.6-sol",
     reviewEffort: "high",
+    codeProvider: "claude",
   });
   expect(started.status).toBe(201);
   const created = await started.json() as { id: string; status: string };
@@ -342,6 +343,7 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
     status: "done",
     review_provider: "codex",
     review_model: "gpt-5.6-sol",
+    code_provider: "claude",
     flags: [],
   }));
   const list = await fetch(`${current.baseUrl}/api/projects/${project.id}/reviews`);
@@ -378,7 +380,9 @@ test("le mode bloquant et l'acquittement ciblé sont exposés sans approbation g
     category: "perte de données",
     message: "Conserve une sauvegarde avant la suppression.",
   }]);
-  const flag = reviewStore.get(review.id)!.flags[0]!;
+  const storedReview = reviewStore.get(review.id)!;
+  const flag = storedReview.flags[0]!;
+  const decision = storedReview.decisions[0]!;
 
   const mode = await putJson(`/api/projects/${project.id}/gardien-mode`, {
     mode: "bloquant",
@@ -388,13 +392,17 @@ test("le mode bloquant et l'acquittement ciblé sont exposés sans approbation g
   const blocked = await fetch(`${current.baseUrl}/api/projects/${project.id}/gardien-status`);
   expect(await blocked.json()).toEqual({ mode: "bloquant", blocked: true, openRedCount: 1 });
 
-  const acked = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
+  const acked = await fetch(`${current.baseUrl}/api/review-decisions/${decision.id}`, {
     method: "PATCH",
     headers: jsonHeaders(),
     body: JSON.stringify({ status: "acked" }),
   });
   expect(acked.status).toBe(200);
-  expect(await acked.json()).toEqual(expect.objectContaining({ id: flag.id, status: "acked" }));
+  expect(await acked.json()).toEqual(expect.objectContaining({
+    id: decision.id,
+    status: "acked",
+    flag_ids: [flag.id],
+  }));
   const unblocked = await fetch(`${current.baseUrl}/api/projects/${project.id}/gardien-status`);
   expect(await unblocked.json()).toEqual({ mode: "bloquant", blocked: false, openRedCount: 0 });
 });
@@ -453,6 +461,11 @@ test("expose le contre-avis opposé, global ou ciblé, et l'option automatique r
       counter_state: "queued",
     }),
   ]);
+  const duplicate = await postJson(`/api/review-flags/${flag.id}/counter-opinion`, {
+    model: "opus",
+    effort: "high",
+  });
+  expect(duplicate.status).toBe(409);
   await current.reviews.waitCounter(flag.id);
 
   const targeted = await postJson(`/api/review-flags/${flag.id}/counter-opinion`, {

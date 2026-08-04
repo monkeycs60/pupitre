@@ -11,6 +11,7 @@ import { PresetStore } from "../src/stores/presets";
 import { ProjectStore } from "../src/stores/projects";
 import { ReviewStore } from "../src/stores/reviews";
 import type { Subtask, SubtaskInput, SubtaskResult } from "../src/subtasks";
+import { SubtaskLimitError } from "../src/subtasks";
 
 let dir: string;
 let repo: string;
@@ -65,6 +66,22 @@ test("découpe le diff par fichiers sans passer par un modèle cheap", () => {
   expect(splitDiffIntoZones(first + second, first.length + 1)).toEqual([first, second]);
 });
 
+test("découpe aussi un hunk unique sans jamais dépasser la limite", () => {
+  const diff = [
+    "diff --git a/src/large.ts b/src/large.ts",
+    "--- a/src/large.ts",
+    "+++ b/src/large.ts",
+    "@@ -1,120 +1,120 @@",
+    ...Array.from({ length: 120 }, (_, index) => `-ancienne ligne ${index}`),
+    ...Array.from({ length: 120 }, (_, index) => `+nouvelle ligne ${index}`),
+  ].join("\n");
+  const zones = splitDiffIntoZones(diff, 600);
+
+  expect(zones.length).toBeGreaterThan(1);
+  expect(zones.every((zone) => zone.length <= 600)).toBe(true);
+  expect(zones.every((zone) => zone.startsWith("diff --git a/src/large.ts"))).toBe(true);
+});
+
 test("parse une sortie JSON fenced et refuse un flag hors des lignes modifiées", () => {
   const diff = [
     "diff --git a/src/config.ts b/src/config.ts",
@@ -85,6 +102,7 @@ test("parse une sortie JSON fenced et refuse un flag hors des lignes modifiées"
     severity: "red",
     category: "secret/credential",
     message: "Ne journalisez pas process.env.SECRET, car sa valeur sera exposée dans les logs ; supprimez ce log ou remplacez-le par un indicateur non sensible.",
+    decision: "OK pour accepter ce point : Ne journalisez pas process.env.SECRET, car sa valeur sera exposée dans les logs ; supprimez ce log ou remplacez-le par un indicateur non sensible.",
   }]);
   expect(() => parseReviewOutput(
     '{"flags":[{"file":"src/config.ts","line_start":99,"line_end":99,'
@@ -253,8 +271,11 @@ test("le contre-avis passe au provider opposé en lecture seule et persiste son 
   }]);
 
   const inputs: SubtaskInput[] = [];
+  let attempts = 0;
   const fakeSubtasks = {
     start(input: SubtaskInput) {
+      attempts += 1;
+      if (attempts === 1) throw new SubtaskLimitError("slots occupés");
       inputs.push(input);
       return { id: "counter-subtask" } as Subtask;
     },
@@ -301,8 +322,43 @@ test("le contre-avis passe au provider opposé en lecture seule et persiste son 
     blocked: true,
     openRedCount: 1,
   });
-  runner.setFlagStatus(flagId, "acked");
+  const decisionId = store.get(review.id)!.decisions[0]!.id;
+  runner.setDecisionStatus(decisionId, "acked");
   expect(runner.gardienStatus(project.id)?.blocked).toBe(false);
+  runner.startCounterOpinions([flagId]);
+  expect((await runner.waitCounter(flagId))?.status).toBe("countered");
+  expect(store.get(review.id)!.decisions[0]!.status).toBe("open");
+  expect(runner.gardienStatus(project.id)?.blocked).toBe(true);
+});
+
+test("regroupe les flags en quatre décisions ciblées au maximum", () => {
+  const project = projects.create({ name: "décisions", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "base",
+    gitRefHead: "head",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+  store.complete(review.id, Array.from({ length: 7 }, (_, index) => ({
+    file: `src/fichier-${index}.ts`,
+    line_start: index + 1,
+    line_end: index + 1,
+    severity: index < 2 ? "red" as const : "orange" as const,
+    category: "contrat API",
+    message: `Risque concret ${index}.`,
+    decision: `OK pour le changement ${index} ?`,
+  })));
+
+  const completed = store.get(review.id)!;
+  expect(completed.decisions).toHaveLength(4);
+  expect(completed.decisions.flatMap((decision) => decision.flag_ids).sort())
+    .toEqual(completed.flags.map((flag) => flag.id).sort());
 });
 
 test("l'option projet lance automatiquement les contre-avis rouges", async () => {
