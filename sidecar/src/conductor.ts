@@ -28,10 +28,14 @@ export interface ConductorServerConfig {
 }
 
 /** Description du serveur MCP, commune aux deux providers. */
-export function conductorServerConfig(target: ConductorTarget): ConductorServerConfig {
+export function conductorServerConfig(
+  target: ConductorTarget,
+  executable = process.execPath,
+): ConductorServerConfig {
+  const runsFromBun = executable.endsWith("bun");
   return {
-    command: process.execPath.endsWith("bun") ? process.execPath : "bun",
-    args: [conductorMcpPath()],
+    command: executable,
+    args: runsFromBun ? [conductorMcpPath()] : ["--conductor-mcp"],
     env: {
       PUPITRE_PORT: String(target.port),
       PUPITRE_CONVERSATION_ID: target.conversationId,

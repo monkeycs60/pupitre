@@ -362,6 +362,12 @@ export function createConductorServer(): McpServer {
   return server;
 }
 
+/** Branche le bridge MCP sur stdio, y compris depuis le sidecar compilé. */
+export async function runConductorMcp(): Promise<void> {
+  const server = createConductorServer();
+  await server.connect(new StdioServerTransport());
+}
+
 function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
@@ -369,6 +375,5 @@ function toError(value: unknown): Error {
 // Exécuté directement (`bun src/conductor-mcp.ts`) : on branche stdio.
 // Importé par les tests : rien ne démarre.
 if (import.meta.main) {
-  const server = createConductorServer();
-  await server.connect(new StdioServerTransport());
+  await runConductorMcp();
 }

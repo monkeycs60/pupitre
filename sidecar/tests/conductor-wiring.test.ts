@@ -12,7 +12,7 @@ import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
 import { SubtaskRunner } from "../src/subtasks";
 import { codexAppServer } from "../src/adapters/codex-app-server";
-import { conductorMcpPath } from "../src/conductor";
+import { conductorMcpPath, conductorServerConfig } from "../src/conductor";
 
 let dir: string;
 let argsFile: string;
@@ -78,6 +78,21 @@ function appServerMessages(): { method?: string; params?: any }[] {
   return readFileSync(appServerLog, "utf8").trim().split("\n").filter(Boolean)
     .map((line) => JSON.parse(line));
 }
+
+test("le sidecar compilé relance son bridge conductor embarqué", () => {
+  const config = conductorServerConfig(
+    { port: 4820, conversationId: "conversation-release" },
+    "/usr/bin/pupitre-sidecar",
+  );
+  expect(config).toEqual({
+    command: "/usr/bin/pupitre-sidecar",
+    args: ["--conductor-mcp"],
+    env: {
+      PUPITRE_PORT: "4820",
+      PUPITRE_CONVERSATION_ID: "conversation-release",
+    },
+  });
+});
 
 test("conversation orchestratrice claude : --mcp-config inline pointant sur le bridge", async () => {
   const conv = convs.create({
