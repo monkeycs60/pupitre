@@ -6,6 +6,7 @@ import {
   formatResetClock,
   quotaAlerts,
   quotaChipLabel,
+  quotaFreshness,
   nextQuotaReevaluationDelay,
   shouldPulse,
   tightestWindow,
@@ -106,6 +107,16 @@ test("quota inconnu : pas de chip", () => {
       NOW,
     ),
   ).toBeNull();
+});
+
+test("la fraîcheur retient le relevé provider le plus récent", () => {
+  const snapshot = {
+    claude: { ...state("claude", []), updatedAt: new Date(NOW - 80 * MINUTE).toISOString() },
+    codex: { ...state("codex", []), updatedAt: new Date(NOW - 3 * MINUTE).toISOString() },
+  };
+
+  expect(quotaFreshness(snapshot, NOW)).toBe("mis à jour il y a 3 min");
+  expect(quotaFreshness({ claude: null, codex: null }, NOW)).toBeNull();
 });
 
 test("pulse : quota peu entamé et reset dans moins d'une heure, modèles chers", () => {

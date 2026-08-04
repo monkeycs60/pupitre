@@ -9,6 +9,7 @@ export type ConnectionState = 'connecting' | 'open' | 'reconnecting'
 export interface ConversationEvents {
   events: StoredEvent[]
   connection: ConnectionState
+  retryAt: number | null
 }
 
 // Ouvre le WebSocket AVANT de charger le replay : les événements reçus pendant
@@ -26,10 +27,12 @@ export function useConversationEvents(
 ): ConversationEvents {
   const [events, setEvents] = useState<StoredEvent[]>([])
   const [connection, setConnection] = useState<ConnectionState>('connecting')
+  const [retryAt, setRetryAt] = useState<number | null>(null)
 
   useEffect(() => {
     setEvents([])
     setConnection('connecting')
+    setRetryAt(null)
     if (conversationId === null) return
 
     let disposed = false
@@ -57,9 +60,12 @@ export function useConversationEvents(
         currentSocket.close()
         failedAttempts += 1
         setConnection('reconnecting')
+        const delay = reconnectDelayMs(failedAttempts)
+        setRetryAt(Date.now() + delay)
         retryTimer = setTimeout(() => {
+          setRetryAt(null)
           connect(id)
-        }, reconnectDelayMs(failedAttempts))
+        }, delay)
       }
 
       // Le socket ouvert ne suffit pas : tant que le replay n'est pas remergé,
@@ -69,6 +75,7 @@ export function useConversationEvents(
       currentSocket.addEventListener('open', () => {
         if (disposed || socket !== currentSocket) return
         setConnection('open')
+        setRetryAt(null)
       })
 
       currentSocket.addEventListener('message', (message) => {
@@ -120,5 +127,5 @@ export function useConversationEvents(
     }
   }, [conversationId, kind])
 
-  return { events, connection }
+  return { events, connection, retryAt }
 }

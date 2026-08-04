@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { EventStream } from './EventStream'
 import { groupEvents } from './groupEvents'
+import { retryCountdownSeconds } from './backoff'
 import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
 import type {
@@ -18,10 +19,12 @@ import type {
   SubtaskStatus,
 } from './types'
 import type { ConnectionState } from './useConversationEvents'
+import { useNow } from './useNow'
 
 interface ChatProps {
   events: AppEvent[]
   connection: ConnectionState
+  retryAt: number | null
   conversation: Conversation | null
   project: Project
   quotas: QuotaSnapshot
@@ -44,9 +47,21 @@ function lastStatusIsRunning(events: AppEvent[]): boolean {
   return false
 }
 
+function ReconnectBanner({ retryAt }: { retryAt: number | null }) {
+  const now = useNow(1_000)
+  const retryIn = retryCountdownSeconds(retryAt, now)
+  return (
+    <p className="connection-banner" role="status">
+      Connexion perdue · nouvelle tentative
+      {retryIn === null || retryIn === 0 ? ' maintenant' : ` dans ${retryIn} s`}
+    </p>
+  )
+}
+
 export function Chat({
   events,
   connection,
+  retryAt,
   conversation,
   project,
   quotas,
@@ -118,9 +133,7 @@ export function Chat({
   return (
     <>
       {connection === 'reconnecting' ? (
-        <p className="connection-banner" role="status">
-          Connexion perdue, reconnexion…
-        </p>
+        <ReconnectBanner retryAt={retryAt} />
       ) : null}
 
       <div className="events-view" ref={viewportRef} onScroll={handleScroll}>

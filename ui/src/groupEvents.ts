@@ -13,7 +13,7 @@ export interface SubtaskBlock {
 export type StreamBlock = EventBlock | SubtaskBlock
 
 /** Regroupe les événements bruts d'une conversation en blocs affichables. */
-export function groupEvents(events: AppEvent[]): StreamBlock[] {
+export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): StreamBlock[] {
   const blocks: StreamBlock[] = []
   const tools = new Map<string, Extract<EventBlock, { kind: 'tool' }>>()
   let assistant: Extract<EventBlock, { kind: 'assistant' }> | null = null
@@ -31,6 +31,7 @@ export function groupEvents(events: AppEvent[]): StreamBlock[] {
   }
 
   events.forEach((event, index) => {
+    const eventKey = event.id ?? index
     switch (event.type) {
       case 'session':
         break
@@ -38,13 +39,13 @@ export function groupEvents(events: AppEvent[]): StreamBlock[] {
         flushTurnFooter()
         turnNumber += 1
         assistant = null
-        blocks.push({ kind: 'user', id: `user-${index}`, text: event.text, images: event.images })
+        blocks.push({ kind: 'user', id: `user-${eventKey}`, text: event.text, images: event.images })
         break
       case 'text-delta':
         if (assistant === null) {
           assistant = {
             kind: 'assistant',
-            id: `assistant-${index}`,
+            id: `assistant-${eventKey}`,
             text: '',
             streaming: true,
           }
@@ -57,7 +58,7 @@ export function groupEvents(events: AppEvent[]): StreamBlock[] {
         if (assistant === null) {
           assistant = {
             kind: 'assistant',
-            id: `assistant-${index}`,
+            id: `assistant-${eventKey}`,
             text: event.text,
             streaming: false,
           }
@@ -72,7 +73,7 @@ export function groupEvents(events: AppEvent[]): StreamBlock[] {
         assistant = null
         const tool: Extract<EventBlock, { kind: 'tool' }> = {
           kind: 'tool',
-          id: `tool-${event.toolId}`,
+          id: `tool-${eventKey}-${event.toolId}`,
           toolId: event.toolId,
           toolName: event.toolName,
           input: event.input,
@@ -95,7 +96,7 @@ export function groupEvents(events: AppEvent[]): StreamBlock[] {
         assistant = null
         blocks.push({
           kind: 'subtask',
-          id: `subtask-${event.subtaskId}`,
+          id: `subtask-${eventKey}-${event.subtaskId}`,
           subtaskId: event.subtaskId,
           provider: event.provider,
           model: event.model,

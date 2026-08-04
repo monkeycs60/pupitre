@@ -174,7 +174,7 @@ export function SubtaskCard({
           </span>
           <span className="subtask-badge">{badge}</span>
           <span className="subtask-label">
-            {block.label ?? subtask?.prompt ?? 'Sous-tâche déléguée'}
+            {block.label ?? 'Sous-tâche déléguée'}
           </span>
         </button>
 
@@ -200,6 +200,13 @@ export function SubtaskCard({
           </button>
         ) : null}
       </header>
+
+      {subtask?.prompt ? (
+        <details className="subtask-prompt">
+          <summary>Consigne</summary>
+          <p>{subtask.prompt}</p>
+        </details>
+      ) : null}
 
       {failure !== null ? (
         <p className="subtask-error" role="alert">

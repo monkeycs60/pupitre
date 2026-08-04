@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { groupEvents } from "../../ui/src/groupEvents";
-import type { AppEvent } from "../../ui/src/types";
+import type { AppEvent, StoredEvent } from "../../ui/src/types";
 
 test("cumule les mises à jour d'usage incrémentales d'un même tour", () => {
   const events: AppEvent[] = [
@@ -16,4 +16,20 @@ test("cumule les mises à jour d'usage incrémentales d'un même tour", () => {
     kind: "turn-footer",
     usage: { inputTokens: 30, outputTokens: 5 },
   });
+});
+
+test("les clés restent uniques quand un outil réutilise son id sur plusieurs tours", () => {
+  const events: StoredEvent[] = [
+    { id: 1, type: "user-message", text: "un", images: [] },
+    { id: 2, type: "tool-start", toolId: "shell", toolName: "shell", input: {} },
+    { id: 3, type: "tool-end", toolId: "shell", output: "ok", images: [] },
+    { id: 4, type: "status", state: "done" },
+    { id: 5, type: "user-message", text: "deux", images: [] },
+    { id: 6, type: "tool-start", toolId: "shell", toolName: "shell", input: {} },
+    { id: 7, type: "tool-end", toolId: "shell", output: "ok", images: [] },
+    { id: 8, type: "status", state: "done" },
+  ];
+
+  const ids = groupEvents(events).map((block) => block.id);
+  expect(new Set(ids).size).toBe(ids.length);
 });

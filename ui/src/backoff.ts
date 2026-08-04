@@ -10,3 +10,11 @@ export function reconnectDelayMs(attempt: number): number {
   )
   return RECONNECT_DELAYS_MS[index]
 }
+
+export function retryCountdownSeconds(
+  retryAt: number | null,
+  now: number = Date.now(),
+): number | null {
+  if (retryAt === null) return null
+  return Math.max(0, Math.ceil((retryAt - now) / 1000))
+}

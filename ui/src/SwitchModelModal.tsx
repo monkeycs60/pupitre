@@ -89,7 +89,6 @@ export function SwitchModelModal({
       >
         <header>
           <div>
-            <span className="modal-eyebrow">Configuration du fil</span>
             <h2 id="switch-model-title">Changer de modèle</h2>
           </div>
           <button

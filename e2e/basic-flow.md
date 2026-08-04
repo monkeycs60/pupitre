@@ -103,3 +103,17 @@ Contrôler dans l'ordre : appel `delegate`, événement `subtask-ref`, carte Cod
 en cours puis terminée, contenu réel du fichier dans `resultText`, et reprise de
 ce résultat dans la réponse finale du parent. Ne pas relancer ce test lorsque le
 quota Claude de la session est épuisé ; le résultat réel ci-dessus fait foi.
+
+## F2 — validation visuelle
+
+Passe réalisée au viewport 1440 × 1000 avec les mêmes données avant/après.
+
+- Avant : [`pupitre-m2-before-f2.png`](./pupitre-m2-before-f2.png)
+- Après, conversation : [`pupitre-m2-after-f2.png`](./pupitre-m2-after-f2.png)
+- Après, création : [`pupitre-m2-after-f2-new-conversation.png`](./pupitre-m2-after-f2-new-conversation.png)
+- Après, reconnexion : [`pupitre-m2-after-f2-reconnecting.png`](./pupitre-m2-after-f2-reconnecting.png)
+
+Contrôles : navigation et fil lisibles, presets/modèles accessibles, compteur de
+reconnexion visible puis retiré après resync, fraîcheur des quotas affichée, et
+aucune erreur console après reprise. La capture de reconnexion a été obtenue en
+coupant uniquement le sidecar temporaire puis en le relançant sur la même base.

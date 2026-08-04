@@ -18,7 +18,7 @@ function App() {
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
   // conversation ouverte — la sidebar n'en affiche l'indicateur que pour elle.
   const [runningSubtasks, setRunningSubtasks] = useState(0)
-  const { events, connection } = useConversationEvents(
+  const { events, connection, retryAt } = useConversationEvents(
     selectedConversation?.id ?? null,
   )
   const quotas = useQuotas()
@@ -116,6 +116,7 @@ function App() {
               key={selectedConversation?.id ?? `new-${selectedProject.id}`}
               events={selectedConversation === null ? [] : events}
               connection={connection}
+              retryAt={retryAt}
               conversation={selectedConversation}
               project={selectedProject}
               quotas={quotas.snapshot}

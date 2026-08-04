@@ -263,7 +263,7 @@ export function Sidebar({
                   aria-pressed={project.pinned}
                   title={project.pinned ? 'Désépingler' : 'Épingler'}
                 >
-                  📌
+                  <span aria-hidden="true">{project.pinned ? '◆' : '◇'}</span>
                 </button>
               </div>
             ))
@@ -344,7 +344,7 @@ export function Sidebar({
                   aria-pressed={conversation.pinned}
                   title={conversation.pinned ? 'Désépingler' : 'Épingler'}
                 >
-                  📌
+                  <span aria-hidden="true">{conversation.pinned ? '◆' : '◇'}</span>
                 </button>
               </div>
             ))

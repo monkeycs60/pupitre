@@ -1,6 +1,6 @@
 // Teste la logique pure de raccord replay/WS du frontend (aucun DOM requis).
 import { expect, test } from "bun:test";
-import { reconnectDelayMs } from "../../ui/src/backoff";
+import { reconnectDelayMs, retryCountdownSeconds } from "../../ui/src/backoff";
 import { mergeReplayAndBuffer } from "../../ui/src/mergeEvents";
 import type { StoredEvent } from "../../ui/src/types";
 
@@ -68,4 +68,10 @@ test("le backoff de reconnexion suit 1s, 2s puis plafonne à 5s", () => {
 test("une tentative hors bornes retombe sur le premier délai", () => {
   expect(reconnectDelayMs(0)).toBe(1000);
   expect(reconnectDelayMs(-3)).toBe(1000);
+});
+
+test("le compte à rebours de reconnexion arrondit vers la prochaine seconde", () => {
+  expect(retryCountdownSeconds(12_001, 10_000)).toBe(3);
+  expect(retryCountdownSeconds(9_000, 10_000)).toBe(0);
+  expect(retryCountdownSeconds(null, 10_000)).toBeNull();
 });

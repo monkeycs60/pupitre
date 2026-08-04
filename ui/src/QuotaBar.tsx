@@ -1,10 +1,16 @@
-import { describeWindow, formatCountdown, msUntilReset, windowTitle } from './quotaSignals'
+import {
+  describeWindow,
+  formatCountdown,
+  msUntilReset,
+  quotaFreshness,
+  windowTitle,
+} from './quotaSignals'
 import type { Provider, QuotaSnapshot, QuotaState, QuotaWindow } from './types'
 import { useNow } from './useNow'
 
 const PROVIDER_NAMES: Record<Provider, string> = {
   claude: 'Claude',
-  codex: 'ChatGPT',
+  codex: 'Codex',
 }
 
 function WindowGauge({ window, now }: { window: QuotaWindow; now: number }) {
@@ -71,6 +77,7 @@ export function QuotaBar({ snapshot, isUnknown }: {
   isUnknown: boolean
 }) {
   const now = useNow()
+  const freshness = quotaFreshness(snapshot, now)
 
   return (
     <section className="quota-bar" aria-label="Quotas">
@@ -84,6 +91,7 @@ export function QuotaBar({ snapshot, isUnknown }: {
           <ProviderQuota provider="codex" state={snapshot.codex} now={now} />
         </>
       )}
+      {freshness !== null ? <span className="quota-freshness">{freshness}</span> : null}
     </section>
   )
 }

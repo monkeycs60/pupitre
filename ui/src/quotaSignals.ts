@@ -254,3 +254,22 @@ export function nextQuotaReevaluationDelay(
   }
   return next
 }
+
+/** Âge lisible du relevé provider le plus récent. */
+export function quotaFreshness(
+  snapshot: QuotaSnapshot,
+  now: number = Date.now(),
+): string | null {
+  const timestamps = Object.values(snapshot).flatMap((state) => {
+    if (state === null) return []
+    const timestamp = Date.parse(state.updatedAt)
+    return Number.isNaN(timestamp) ? [] : [timestamp]
+  })
+  if (timestamps.length === 0) return null
+
+  const elapsedMs = Math.max(0, now - Math.max(...timestamps))
+  const minutes = Math.floor(elapsedMs / 60_000)
+  if (minutes < 1) return 'mis à jour à l’instant'
+  if (minutes < 60) return `mis à jour il y a ${minutes} min`
+  return `mis à jour il y a ${Math.floor(minutes / 60)} h`
+}
