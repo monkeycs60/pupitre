@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
+import { open } from '@tauri-apps/plugin-dialog'
 import {
   createProject,
   listProjectConversations,
@@ -8,6 +9,12 @@ import {
   setProjectPinned,
 } from './api'
 import type { Conversation, Project } from './types'
+
+declare global {
+  interface Window {
+    __TAURI__?: Record<string, unknown>
+  }
+}
 
 interface SidebarProps {
   selectedProject: Project | null
@@ -24,6 +31,11 @@ function pinnedFirst<T extends { pinned: boolean }>(items: T[]): T[] {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Une erreur est survenue.'
+}
+
+function pathBasename(path: string): string {
+  const trimmedPath = path.replace(/[\\/]+$/, '')
+  return trimmedPath.split(/[\\/]/).pop() || path
 }
 
 export function Sidebar({
@@ -76,6 +88,27 @@ export function Sidebar({
       ignore = true
     }
   }, [selectedProject, conversationListVersion])
+
+  async function handleProjectButtonClick() {
+    if (window.__TAURI__) {
+      setError(null)
+
+      try {
+        const selectedPath = await open({ directory: true })
+        if (typeof selectedPath !== 'string') return
+
+        setProjectName(pathBasename(selectedPath))
+        setProjectPath(selectedPath)
+        setShowProjectForm(true)
+      } catch (dialogError: unknown) {
+        setError(errorMessage(dialogError))
+      }
+
+      return
+    }
+
+    setShowProjectForm((visible) => !visible)
+  }
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -141,7 +174,7 @@ export function Sidebar({
           <button
             type="button"
             className="text-button"
-            onClick={() => setShowProjectForm((visible) => !visible)}
+            onClick={() => void handleProjectButtonClick()}
             aria-expanded={showProjectForm}
           >
             + Projet
