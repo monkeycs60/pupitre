@@ -64,6 +64,7 @@ afterEach(() => {
   delete process.env.FAKE_APP_SERVER_SLOW_TURN_MS;
   delete process.env.FAKE_APP_SERVER_INIT_ERROR;
   delete process.env.PUPITRE_APPSERVER_TIMEOUT_MS;
+  delete process.env.PUPITRE_APPSERVER_IDLE_MS;
 });
 
 test("premier tour : session avec le threadId, deltas dans l'ordre, tool + usage, done", async () => {
@@ -177,6 +178,23 @@ test("le process est partagé entre deux tours puis relancé s'il meurt", async 
   const events = await collect(client);
   const secondPid = Number(readFileSync(files.pid, "utf8"));
   expect(secondPid).not.toBe(firstPid); // process relancé
+  expect(events.at(-1)).toEqual({ type: "status", state: "done" });
+});
+
+test("le watchdog arrête l'app-server inactif puis le relance au tour suivant", async () => {
+  const files = useFake();
+  process.env.PUPITRE_APPSERVER_IDLE_MS = "50";
+  const client = newClient();
+
+  await collect(client);
+  const firstPid = Number(readFileSync(files.pid, "utf8"));
+
+  await Bun.sleep(120);
+  expect(() => process.kill(firstPid, 0)).toThrow();
+
+  const events = await collect(client);
+  const secondPid = Number(readFileSync(files.pid, "utf8"));
+  expect(secondPid).not.toBe(firstPid);
   expect(events.at(-1)).toEqual({ type: "status", state: "done" });
 });
 

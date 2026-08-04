@@ -15,11 +15,18 @@ import { codexMcpConfig } from "../conductor";
 
 const OUTPUT_LIMIT = 10_000;
 const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_IDLE_MS = 5 * 60_000;
 
 /** Délai au-delà duquel une requête JSON-RPC sans réponse est rejetée. */
 function requestTimeoutMs(): number {
   const raw = Number(process.env.PUPITRE_APPSERVER_TIMEOUT_MS);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
+}
+
+/** Durée d'inactivité hors tour avant d'arrêter le process partagé. */
+function appServerIdleMs(): number {
+  const raw = Number(process.env.PUPITRE_APPSERVER_IDLE_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_IDLE_MS;
 }
 
 interface JsonRpcMessage {
@@ -64,11 +71,24 @@ export class CodexAppServerClient {
   private nextId = 1;
   private pending = new Map<number, PendingRequest>();
   private turns = new Map<string, TurnContext>();
+  private activeRuns = 0;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
   /** Tue le process courant ET fait son cleanup (cf. shutdown). */
   private killCurrent: (() => void) | null = null;
 
   /** Même signature que runCodexTurn : un tour complet, streamé via emit. */
   async runTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
+    this.activeRuns += 1;
+    this.clearIdleWatchdog();
+    try {
+      await this.runActiveTurn(opts, emit);
+    } finally {
+      this.activeRuns -= 1;
+      this.scheduleIdleWatchdog();
+    }
+  }
+
+  private async runActiveTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     emit({ type: "status", state: "running" });
     const cancelled = () => {
       if (!opts.signal?.aborted) return false;
@@ -155,9 +175,14 @@ export class CodexAppServerClient {
    */
   async readRateLimits(): Promise<unknown | null> {
     if (!this.ready || !this.proc) return null;
-    await this.ready;
-    const result = await this.request("account/rateLimits/read", {});
-    return (result as { rateLimits?: unknown } | null)?.rateLimits ?? null;
+    this.clearIdleWatchdog();
+    try {
+      await this.ready;
+      const result = await this.request("account/rateLimits/read", {});
+      return (result as { rateLimits?: unknown } | null)?.rateLimits ?? null;
+    } finally {
+      this.scheduleIdleWatchdog();
+    }
   }
 
   /**
@@ -166,6 +191,7 @@ export class CodexAppServerClient {
    * le handler `close` et laisserait les tours actifs suspendus pour toujours.
    */
   shutdown(): void {
+    this.clearIdleWatchdog();
     const kill = this.killCurrent;
     this.killCurrent = null;
     kill?.();
@@ -174,6 +200,32 @@ export class CodexAppServerClient {
   }
 
   // --- Process partagé -----------------------------------------------------
+
+  private clearIdleWatchdog(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+  }
+
+  private scheduleIdleWatchdog(): void {
+    this.clearIdleWatchdog();
+    if (!this.proc || this.activeRuns > 0 || this.pending.size > 0) return;
+
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      if (!this.proc || this.activeRuns > 0 || this.pending.size > 0) {
+        this.scheduleIdleWatchdog();
+        return;
+      }
+      const kill = this.killCurrent;
+      this.killCurrent = null;
+      kill?.();
+    }, appServerIdleMs());
+    this.idleTimer.unref?.();
+  }
+
+  private noteProcessOutput(): void {
+    if (this.activeRuns === 0) this.scheduleIdleWatchdog();
+  }
 
   private ensureProcess(): Promise<void> {
     if (this.ready) return this.ready;
@@ -187,12 +239,14 @@ export class CodexAppServerClient {
     let stderr = "";
     child.stderr!.on("data", (data) => {
       stderr = (stderr + data).slice(-2000);
+      this.noteProcessOutput();
     });
     const onDead = (reason: string) => {
       if (this.proc !== child) return;
       this.proc = null;
       this.ready = null;
       this.killCurrent = null;
+      this.clearIdleWatchdog();
       const error = new Error(reason + (stderr ? ` : ${stderr}` : ""));
       for (const request of this.pending.values()) request.reject(error);
       this.pending.clear();
@@ -306,6 +360,7 @@ export class CodexAppServerClient {
     try {
       message = JSON.parse(line);
     } catch {
+      this.noteProcessOutput();
       return; // ligne non-JSON (bruit de démarrage) : ignorée
     }
     if (message.id !== undefined && message.method === undefined) {
@@ -314,8 +369,10 @@ export class CodexAppServerClient {
       this.pending.delete(message.id as number);
       if (message.error) request.reject(new Error(message.error.message ?? "erreur JSON-RPC"));
       else request.resolve(message.result as any);
+      this.noteProcessOutput();
       return;
     }
+    this.noteProcessOutput();
     if (message.id !== undefined && message.method) {
       this.handleServerRequest(message.id, message.method);
       return;
