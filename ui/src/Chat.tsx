@@ -3,7 +3,7 @@ import { EventView } from './EventView'
 import type { EventBlock } from './EventView'
 import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
-import type { AppEvent, Conversation } from './types'
+import type { AppEvent, Conversation, QuotaSnapshot } from './types'
 import type { ConnectionState } from './useConversationEvents'
 
 interface ChatProps {
@@ -11,6 +11,7 @@ interface ChatProps {
   connection: ConnectionState
   conversation: Conversation | null
   projectId: string
+  quotas: QuotaSnapshot
   onConversationCreated: (conversation: Conversation) => void
 }
 
@@ -144,6 +145,7 @@ export function Chat({
   connection,
   conversation,
   projectId,
+  quotas,
   onConversationCreated,
 }: ChatProps) {
   const blocks = useMemo(() => groupEvents(events), [events])
@@ -210,6 +212,7 @@ export function Chat({
       <Composer
         conversationId={conversation?.id ?? null}
         projectId={projectId}
+        quotas={quotas}
         isRunning={isRunning}
         onConversationCreated={onConversationCreated}
       />

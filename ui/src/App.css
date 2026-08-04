@@ -836,3 +836,139 @@ textarea:focus-visible {
   outline: 2px solid #c69a61;
   outline-offset: 2px;
 }
+
+/* --- Quotas ------------------------------------------------------------- */
+
+.quota-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid #2c2b29;
+  background: #171717;
+}
+
+.quota-empty,
+.quota-unknown {
+  color: #7d786f;
+  font-size: 11px;
+}
+
+.quota-empty {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.quota-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quota-provider-name {
+  color: #a5a097;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.quota-window {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: default;
+}
+
+.quota-window-label {
+  min-width: 46px;
+  color: #7d786f;
+  font-size: 11px;
+}
+
+.quota-gauge {
+  display: block;
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  background: #2c2b29;
+  border-radius: 2px;
+}
+
+.quota-gauge-fill {
+  display: block;
+  height: 100%;
+  background: #c69a61;
+  border-radius: 2px;
+}
+
+.quota-window-value {
+  color: #8e8981;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.model-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.model-picker-title {
+  color: #8e8981;
+  font-size: 12px;
+}
+
+.model-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 5px 9px;
+  color: #e5e1da;
+  font-size: 12px;
+  text-align: left;
+  background: #151515;
+  border: 1px solid #3b3935;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.model-option.is-selected {
+  border-color: #c69a61;
+  background: #221d16;
+}
+
+.quota-chip {
+  color: #a5a097;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quota-chip.is-unknown {
+  color: #66625b;
+}
+
+/* Pulse discret : appel à consommer un quota qui va expirer. */
+.model-option.is-pulsing {
+  animation: quota-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes quota-pulse {
+  0%,
+  100% {
+    border-color: #3b3935;
+  }
+
+  50% {
+    border-color: #c69a61;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-option.is-pulsing {
+    animation: none;
+    border-color: #c69a61;
+  }
+}

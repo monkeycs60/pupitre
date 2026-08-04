@@ -8,7 +8,9 @@ import {
   setConversationPinned,
   setProjectPinned,
 } from './api'
+import { QuotaBar } from './QuotaBar'
 import type { Conversation, Project } from './types'
+import type { Quotas } from './useQuotas'
 
 declare global {
   interface Window {
@@ -23,6 +25,7 @@ interface SidebarProps {
   onConversationSelect: (conversation: Conversation) => void
   onConversationCreate: () => void
   conversationListVersion: number
+  quotas: Quotas
 }
 
 function pinnedFirst<T extends { pinned: boolean }>(items: T[]): T[] {
@@ -45,6 +48,7 @@ export function Sidebar({
   onConversationSelect,
   onConversationCreate,
   conversationListVersion,
+  quotas,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -309,6 +313,8 @@ export function Sidebar({
           {error}
         </p>
       )}
+
+      <QuotaBar snapshot={quotas.snapshot} isUnknown={quotas.isUnknown} />
     </aside>
   )
 }

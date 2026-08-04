@@ -1,0 +1,196 @@
+import { useEffect, useRef, useState } from 'react'
+import { getQuotas } from './api'
+import { reconnectDelayMs } from './backoff'
+import {
+  DEFAULT_QUOTA_THRESHOLDS,
+  quotaAlerts,
+  type QuotaThresholds,
+} from './quotaSignals'
+import type { QuotaSnapshot, QuotaState } from './types'
+
+const EMPTY_SNAPSHOT: QuotaSnapshot = { claude: null, codex: null }
+
+// Seuils de notification : provisoirement en localStorage. La table `settings`
+// (key/value + GET/PUT /api/settings) arrive avec la phase E — cette lecture
+// deviendra un fetch, la forme `QuotaThresholds` ne bougera pas.
+const THRESHOLDS_KEY = 'pupitre.quota-thresholds'
+// Clés d'alertes déjà poussées, persistées pour ne pas re-notifier au rechargement.
+const NOTIFIED_KEY = 'pupitre.quota-notified'
+const NOTIFIED_MAX = 50
+
+export function loadQuotaThresholds(): QuotaThresholds {
+  try {
+    const raw = localStorage.getItem(THRESHOLDS_KEY)
+    if (raw === null) return DEFAULT_QUOTA_THRESHOLDS
+    const parsed = JSON.parse(raw) as Partial<QuotaThresholds>
+    return {
+      lastHour: typeof parsed.lastHour === 'boolean'
+        ? parsed.lastHour
+        : DEFAULT_QUOTA_THRESHOLDS.lastHour,
+      usedPercent: typeof parsed.usedPercent === 'number' || parsed.usedPercent === null
+        ? parsed.usedPercent
+        : DEFAULT_QUOTA_THRESHOLDS.usedPercent,
+    }
+  } catch (error) {
+    console.error('Seuils de quota illisibles', error)
+    return DEFAULT_QUOTA_THRESHOLDS
+  }
+}
+
+export function saveQuotaThresholds(thresholds: QuotaThresholds): void {
+  try {
+    localStorage.setItem(THRESHOLDS_KEY, JSON.stringify(thresholds))
+  } catch (error) {
+    console.error('Seuils de quota non enregistrés', error)
+  }
+}
+
+function loadNotifiedKeys(): string[] {
+  try {
+    const raw = localStorage.getItem(NOTIFIED_KEY)
+    const parsed: unknown = raw === null ? [] : JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((key) => typeof key === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function persistNotifiedKeys(keys: string[]): void {
+  try {
+    localStorage.setItem(NOTIFIED_KEY, JSON.stringify(keys.slice(-NOTIFIED_MAX)))
+  } catch {
+    // Stockage indisponible : on se contente de la dédup en mémoire.
+  }
+}
+
+export interface Quotas {
+  snapshot: QuotaSnapshot
+  /** Aucun état reçu pour aucun provider : « quotas inconnus ». */
+  isUnknown: boolean
+}
+
+/**
+ * Quotas des deux providers : snapshot HTTP initial puis flux WS `channel=quotas`
+ * (le serveur renvoie l'état courant à l'ouverture, donc la reconnexion se
+ * resynchronise seule). Même mécanique de backoff que useConversationEvents.
+ */
+export function useQuotas(): Quotas {
+  const [snapshot, setSnapshot] = useState<QuotaSnapshot>(EMPTY_SNAPSHOT)
+  const notifiedRef = useRef<Set<string> | null>(null)
+
+  useEffect(() => {
+    let disposed = false
+    let socket: WebSocket | null = null
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let failedAttempts = 0
+    const abortController = new AbortController()
+
+    notifiedRef.current ??= new Set(loadNotifiedKeys())
+    const notified = notifiedRef.current
+    const thresholds = loadQuotaThresholds()
+
+    function apply(state: QuotaState) {
+      setSnapshot((current) => ({ ...current, [state.provider]: state }))
+      void notifyCrossings(state, thresholds, notified)
+    }
+
+    function connect() {
+      const currentSocket = new WebSocket(
+        `ws://${location.host}/ws?channel=quotas`,
+      )
+      socket = currentSocket
+
+      function dropAndRetry() {
+        if (disposed || socket !== currentSocket) return
+        socket = null
+        currentSocket.close()
+        failedAttempts += 1
+        retryTimer = setTimeout(connect, reconnectDelayMs(failedAttempts))
+      }
+
+      currentSocket.addEventListener('open', () => {
+        if (disposed || socket !== currentSocket) return
+        failedAttempts = 0
+      })
+
+      currentSocket.addEventListener('message', (message) => {
+        if (disposed || socket !== currentSocket) return
+        try {
+          apply(JSON.parse(String(message.data)) as QuotaState)
+        } catch (error) {
+          console.error('État de quota illisible', error)
+        }
+      })
+
+      currentSocket.addEventListener('close', dropAndRetry)
+      currentSocket.addEventListener('error', dropAndRetry)
+    }
+
+    // Le snapshot HTTP couvre le cas « WS pas encore ouvert » ; l'état renvoyé à
+    // l'ouverture du socket l'écrase ensuite (même source, dernier reçu gagne).
+    void getQuotas(abortController.signal)
+      .then((initial) => {
+        if (disposed) return
+        for (const state of Object.values(initial)) {
+          if (state !== null) apply(state)
+        }
+      })
+      .catch((error: unknown) => {
+        if (!abortController.signal.aborted) console.error(error)
+      })
+
+    connect()
+
+    return () => {
+      disposed = true
+      clearTimeout(retryTimer)
+      abortController.abort()
+      socket?.close()
+    }
+  }, [])
+
+  return {
+    snapshot,
+    isUnknown: snapshot.claude === null && snapshot.codex === null,
+  }
+}
+
+/**
+ * Notification native (API web — la webview Tauri la supporte ; le plugin Tauri
+ * notification viendra plus tard). Permission demandée au premier franchissement
+ * seulement, pas au démarrage.
+ */
+async function notifyCrossings(
+  state: QuotaState,
+  thresholds: QuotaThresholds,
+  notified: Set<string>,
+): Promise<void> {
+  const fresh = quotaAlerts(state, thresholds).filter(
+    (alert) => !notified.has(alert.key),
+  )
+  if (fresh.length === 0) return
+
+  // Marqué avant l'await : deux états reçus coup sur coup ne doublonnent pas.
+  for (const alert of fresh) notified.add(alert.key)
+  persistNotifiedKeys([...notified])
+
+  if (typeof Notification === 'undefined') return
+  let permission = Notification.permission
+  if (permission === 'default') {
+    try {
+      permission = await Notification.requestPermission()
+    } catch (error) {
+      console.error('Permission de notification refusée', error)
+      return
+    }
+  }
+  if (permission !== 'granted') return
+
+  for (const alert of fresh) {
+    try {
+      new Notification(alert.title, { body: alert.body, tag: alert.key })
+    } catch (error) {
+      console.error('Notification impossible', error)
+    }
+  }
+}

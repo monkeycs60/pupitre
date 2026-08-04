@@ -24,6 +24,27 @@ export interface Conversation {
   updated_at: string
 }
 
+// Miroir de sidecar/src/quotas.ts : forme normalisée des deux providers.
+export interface QuotaWindow {
+  label: string
+  /** null = le provider ne publie pas de pourcentage pour cette fenêtre. */
+  usedPercent: number | null
+  /** Date ISO 8601 de remise à zéro, ou null si inconnue. */
+  resetsAt: string | null
+  windowDurationMins: number | null
+}
+
+export interface QuotaState {
+  provider: Provider
+  windows: QuotaWindow[]
+  updatedAt: string
+}
+
+export interface QuotaSnapshot {
+  claude: QuotaState | null
+  codex: QuotaState | null
+}
+
 export type AppEvent =
   | { type: 'session'; provider: Provider; cliSessionId: string; model: string }
   | { type: 'user-message'; text: string; images: string[] }

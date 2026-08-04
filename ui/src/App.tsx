@@ -4,6 +4,7 @@ import { Chat } from './Chat'
 import { Sidebar } from './Sidebar'
 import type { Conversation, Project } from './types'
 import { useConversationEvents } from './useConversationEvents'
+import { useQuotas } from './useQuotas'
 
 function App() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
@@ -14,6 +15,7 @@ function App() {
   const { events, connection } = useConversationEvents(
     selectedConversation?.id ?? null,
   )
+  const quotas = useQuotas()
 
   function handleProjectSelect(project: Project) {
     if (project.id !== selectedProject?.id) {
@@ -49,6 +51,7 @@ function App() {
         onConversationSelect={handleConversationSelect}
         onConversationCreate={handleConversationCreate}
         conversationListVersion={conversationListVersion}
+        quotas={quotas}
       />
 
       <section className="workspace" aria-label="Conversation">
@@ -77,6 +80,7 @@ function App() {
               connection={connection}
               conversation={selectedConversation}
               projectId={selectedProject.id}
+              quotas={quotas.snapshot}
               onConversationCreated={handleConversationCreated}
             />
           </>

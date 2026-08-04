@@ -12,7 +12,14 @@ import {
   sendMessage,
   uploadMedia,
 } from './api'
-import type { Conversation, ConversationSpeed, Provider } from './types'
+import { quotaChipLabel, shouldPulse } from './quotaSignals'
+import type {
+  Conversation,
+  ConversationSpeed,
+  Provider,
+  QuotaSnapshot,
+} from './types'
+import { useNow } from './useNow'
 
 export const PROVIDER_MODELS = {
   claude: ['fable-5', 'opus', 'sonnet', 'haiku'],
@@ -27,6 +34,7 @@ export const PROVIDER_EFFORTS = {
 interface ComposerProps {
   conversationId: string | null
   projectId: string
+  quotas: QuotaSnapshot
   isRunning: boolean
   onConversationCreated: (conversation: Conversation) => void
 }
@@ -47,6 +55,7 @@ function mediaUrl(name: string): string {
 export function Composer({
   conversationId,
   projectId,
+  quotas,
   isRunning,
   onConversationCreated,
 }: ComposerProps) {
@@ -60,6 +69,11 @@ export function Composer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const now = useNow()
+  const providerQuota = quotas[provider]
+  // Tous les modèles de la liste partagent le provider sélectionné : la chip est
+  // donc l'état de CE provider, répété en face de chaque modèle.
+  const chip = quotaChipLabel(providerQuota, now)
   const isNewConversation = conversationId === null
   const canSubmit =
     message.trim().length > 0 &&
@@ -196,19 +210,32 @@ export function Composer({
               </select>
             </label>
 
-            <label>
-              <span>Modèle</span>
-              <select
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
-              >
-                {PROVIDER_MODELS[provider].map((modelName) => (
-                  <option key={modelName} value={modelName}>
-                    {modelName}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="model-picker" role="radiogroup" aria-label="Modèle">
+              <span className="model-picker-title">Modèle</span>
+              {PROVIDER_MODELS[provider].map((modelName) => {
+                // Pulse « use it or lose it » : quota largement dispo et fenêtre
+                // qui expire dans l'heure → on pousse les modèles chers.
+                const pulses = shouldPulse(providerQuota, modelName, now)
+                return (
+                  <button
+                    type="button"
+                    key={modelName}
+                    role="radio"
+                    aria-checked={model === modelName}
+                    className={`model-option ${model === modelName ? 'is-selected' : ''} ${pulses ? 'is-pulsing' : ''}`}
+                    onClick={() => setModel(modelName)}
+                    title={pulses ? 'Quota peu entamé et bientôt réinitialisé' : undefined}
+                  >
+                    <span className="model-option-name">{modelName}</span>
+                    <span
+                      className={`quota-chip ${chip === null ? 'is-unknown' : ''}`}
+                    >
+                      {chip ?? 'quota inconnu'}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
 
             <label>
               <span>Effort</span>

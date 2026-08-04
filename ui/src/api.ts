@@ -3,6 +3,7 @@ import type {
   ConversationSpeed,
   Project,
   Provider,
+  QuotaSnapshot,
   StoredEvent,
 } from './types'
 
@@ -146,6 +147,10 @@ export function getConversationEvents(
     `/api/conversations/${routeId(conversationId)}/events`,
     { signal },
   )
+}
+
+export function getQuotas(signal?: AbortSignal): Promise<QuotaSnapshot> {
+  return fetchJson('/api/quotas', { signal })
 }
 
 export function uploadMedia(image: Blob): Promise<{ name: string }> {
