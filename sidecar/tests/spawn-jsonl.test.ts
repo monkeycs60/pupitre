@@ -30,3 +30,24 @@ test("ignore une erreur de parsing et continue le flux JSONL", async () => {
     { type: "status", state: "done" },
   ]);
 });
+
+test("AbortSignal tue le child et émet status error annulé", async () => {
+  const events: AppEvent[] = [];
+  const controller = new AbortController();
+  const turn = spawnJsonl({
+    bin: "/bin/sh",
+    args: ["-c", "exec sleep 30"],
+    cwd: "/tmp",
+    parseLine: () => [],
+    emit: (event) => events.push(event),
+    signal: controller.signal,
+  });
+
+  controller.abort();
+  await turn;
+
+  expect(events).toEqual([
+    { type: "status", state: "running" },
+    { type: "status", state: "error", error: "annulé" },
+  ]);
+});

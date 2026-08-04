@@ -7,6 +7,7 @@ export interface TurnOptions {
   cliSessionId: string | null; // null = premier tour
   permissionMode: string;
   images: string[]; // chemins absolus d'images jointes par l'utilisateur
+  signal?: AbortSignal;
 }
 
 export type EmitFn = (event: AppEvent) => void;

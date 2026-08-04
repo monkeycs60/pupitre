@@ -22,5 +22,6 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     cwd: opts.cwd,
     parseLine: parseClaudeLine,
     emit,
+    signal: opts.signal,
   });
 }

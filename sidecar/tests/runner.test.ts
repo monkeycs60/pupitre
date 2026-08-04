@@ -1,5 +1,5 @@
 import { test, expect, beforeEach } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -54,5 +54,31 @@ test("le sweep marque en erreur un status running orphelin", () => {
     type: "status",
     state: "error",
     error: "interrompu (sidecar redémarré)",
+  });
+});
+
+test("cancelTurn annule le process actif et déverrouille la conversation", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-cancel-"));
+  const hangingBin = join(dir, "fake-claude-hanging");
+  writeFileSync(hangingBin, "#!/bin/sh\nexec sleep 30\n");
+  chmodSync(hangingBin, 0o755);
+  process.env.PUPITRE_CLAUDE_BIN = hangingBin;
+  const c = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "x",
+  });
+
+  const turn = runner.runTurn(c.id, "bloque", []);
+  expect(runner.isRunning(c.id)).toBe(true);
+  expect(await runner.cancelTurn(c.id)).toBe(true);
+  await turn;
+
+  expect(runner.isRunning(c.id)).toBe(false);
+  expect(convs.listEvents(c.id).at(-1)).toEqual({
+    type: "status",
+    state: "error",
+    error: "annulé",
   });
 });

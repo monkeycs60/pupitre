@@ -21,5 +21,6 @@ export function runCodexTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     cwd: opts.cwd,
     parseLine: parseCodexLine,
     emit,
+    signal: opts.signal,
   });
 }

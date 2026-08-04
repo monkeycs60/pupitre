@@ -7,6 +7,12 @@ import { runCodexTurn } from "./adapters/codex";
 
 type BroadcastFn = (conversationId: string, event: AppEvent) => void;
 
+interface ActiveTurn {
+  controller: AbortController;
+  done: Promise<void>;
+  finish: () => void;
+}
+
 export function sweepOrphanedRuns(
   convs: ConversationStore,
   projects: ProjectStore,
@@ -26,7 +32,7 @@ export function sweepOrphanedRuns(
 }
 
 export class ConversationRunner {
-  private active = new Set<string>();
+  private active = new Map<string, ActiveTurn>();
 
   constructor(
     private convs: ConversationStore,
@@ -41,12 +47,25 @@ export class ConversationRunner {
     return this.active.has(conversationId);
   }
 
+  async cancelTurn(conversationId: string): Promise<boolean> {
+    const turn = this.active.get(conversationId);
+    if (!turn) return false;
+    turn.controller.abort();
+    await turn.done;
+    return true;
+  }
+
   async runTurn(conversationId: string, prompt: string, imageNames: string[]): Promise<void> {
     if (this.active.has(conversationId)) throw new Error("un tour est déjà en cours");
     const conv = this.convs.get(conversationId);
     if (!conv) throw new Error("conversation inconnue");
     const project = this.projects.get(conv.project_id)!;
-    this.active.add(conversationId);
+    const controller = new AbortController();
+    let finish!: () => void;
+    const done = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    this.active.set(conversationId, { controller, done, finish });
 
     const emit = (event: AppEvent) => {
       if (event.type === "session") {
@@ -65,11 +84,14 @@ export class ConversationRunner {
         cliSessionId: conv.cli_session_id,
         permissionMode: project.permission_mode,
         images: imageNames.map((name) => this.media.absolutePath(name)),
+        signal: controller.signal,
       };
       if (conv.provider === "claude") await runClaudeTurn(opts, emit);
       else await runCodexTurn(opts, emit);
     } finally {
+      const activeTurn = this.active.get(conversationId);
       this.active.delete(conversationId);
+      activeTurn?.finish();
     }
   }
 }
