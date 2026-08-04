@@ -1,0 +1,58 @@
+import { test, expect, beforeEach } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { openDb } from "../src/db";
+import { ProjectStore } from "../src/stores/projects";
+import { ConversationStore } from "../src/stores/conversations";
+import { MediaStore } from "../src/media";
+import { ConversationRunner, sweepOrphanedRuns } from "../src/runner";
+import type { AppEvent } from "../src/events";
+
+let runner: ConversationRunner;
+let convs: ConversationStore;
+let projects: ProjectStore;
+let projectId: string;
+let broadcast: AppEvent[];
+
+beforeEach(() => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-"));
+  const db = openDb(dir);
+  projects = new ProjectStore(db);
+  projectId = projects.create({ name: "p", path: "/tmp" }).id;
+  convs = new ConversationStore(db);
+  broadcast = [];
+  process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude");
+  runner = new ConversationRunner(convs, projects, new MediaStore(dir),
+    (_convId, event) => broadcast.push(event));
+});
+
+test("un tour persiste user-message + événements, capture le session id, diffuse en live", async () => {
+  const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "salut" });
+  await runner.runTurn(c.id, "salut", []);
+  const stored = convs.listEvents(c.id);
+  expect(stored[0]).toMatchObject({ type: "user-message", text: "salut" });
+  expect(stored.some((event) => event.type === "session")).toBe(true);
+  expect(convs.get(c.id)!.cli_session_id).not.toBeNull();
+  expect(broadcast.length).toBeGreaterThan(2);
+});
+
+test("deux tours simultanés sur la même conversation → le second est refusé", async () => {
+  const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "x" });
+  const firstTurn = runner.runTurn(c.id, "a", []);
+  await expect(runner.runTurn(c.id, "b", [])).rejects.toThrow("déjà en cours");
+  await firstTurn;
+});
+
+test("le sweep marque en erreur un status running orphelin", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "x" });
+  convs.appendEvent(c.id, { type: "status", state: "running" });
+
+  sweepOrphanedRuns(convs, projects);
+
+  expect(convs.listEvents(c.id).at(-1)).toEqual({
+    type: "status",
+    state: "error",
+    error: "interrompu (sidecar redémarré)",
+  });
+});
