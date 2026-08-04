@@ -9,11 +9,33 @@ function App() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null)
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false)
+  const [conversationListVersion, setConversationListVersion] = useState(0)
   const events = useConversationEvents(selectedConversation?.id ?? null)
 
   function handleProjectSelect(project: Project) {
-    if (project.id !== selectedProject?.id) setSelectedConversation(null)
+    if (project.id !== selectedProject?.id) {
+      setSelectedConversation(null)
+      setIsCreatingConversation(false)
+    }
     setSelectedProject(project)
+  }
+
+  function handleConversationSelect(conversation: Conversation) {
+    setSelectedConversation(conversation)
+    setIsCreatingConversation(false)
+  }
+
+  function handleConversationCreate() {
+    if (selectedProject === null) return
+    setSelectedConversation(null)
+    setIsCreatingConversation(true)
+  }
+
+  function handleConversationCreated(conversation: Conversation) {
+    setSelectedConversation(conversation)
+    setIsCreatingConversation(false)
+    setConversationListVersion((current) => current + 1)
   }
 
   return (
@@ -22,11 +44,14 @@ function App() {
         selectedProject={selectedProject}
         selectedConversation={selectedConversation}
         onProjectSelect={handleProjectSelect}
-        onConversationSelect={setSelectedConversation}
+        onConversationSelect={handleConversationSelect}
+        onConversationCreate={handleConversationCreate}
+        conversationListVersion={conversationListVersion}
       />
 
       <section className="workspace" aria-label="Conversation">
-        {selectedConversation === null ? (
+        {selectedProject === null ||
+        (selectedConversation === null && !isCreatingConversation) ? (
           <div className="empty-state">
             <p>Sélectionnez une conversation pour afficher ses événements.</p>
           </div>
@@ -34,13 +59,21 @@ function App() {
           <>
             <header className="conversation-header">
               <div>
-                <h1>{selectedConversation.title}</h1>
-                <p>
-                  {selectedConversation.provider} · {selectedConversation.model}
-                </p>
+                <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
+                {selectedConversation !== null ? (
+                  <p>
+                    {selectedConversation.provider} · {selectedConversation.model}
+                  </p>
+                ) : null}
               </div>
             </header>
-            <Chat key={selectedConversation.id} events={events} />
+            <Chat
+              key={selectedConversation?.id ?? `new-${selectedProject.id}`}
+              events={selectedConversation === null ? [] : events}
+              conversation={selectedConversation}
+              projectId={selectedProject.id}
+              onConversationCreated={handleConversationCreated}
+            />
           </>
         )}
       </section>

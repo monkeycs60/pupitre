@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
-  createConversation,
   createProject,
   listProjectConversations,
   listProjects,
@@ -15,6 +14,8 @@ interface SidebarProps {
   selectedConversation: Conversation | null
   onProjectSelect: (project: Project) => void
   onConversationSelect: (conversation: Conversation) => void
+  onConversationCreate: () => void
+  conversationListVersion: number
 }
 
 function pinnedFirst<T extends { pinned: boolean }>(items: T[]): T[] {
@@ -30,6 +31,8 @@ export function Sidebar({
   selectedConversation,
   onProjectSelect,
   onConversationSelect,
+  onConversationCreate,
+  conversationListVersion,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -72,7 +75,7 @@ export function Sidebar({
     return () => {
       ignore = true
     }
-  }, [selectedProject])
+  }, [selectedProject, conversationListVersion])
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -107,30 +110,6 @@ export function Sidebar({
       if (selectedProject?.id === project.id) onProjectSelect(updated)
     } catch (pinError: unknown) {
       setError(errorMessage(pinError))
-    }
-  }
-
-  async function handleCreateConversation() {
-    if (selectedProject === null) return
-
-    const initialPrompt = window.prompt('Prompt initial de la conversation')?.trim()
-    if (!initialPrompt) return
-
-    setIsSubmitting(true)
-    setError(null)
-    try {
-      const conversation = await createConversation({
-        projectId: selectedProject.id,
-        provider: 'claude',
-        model: 'haiku',
-        message: initialPrompt,
-      })
-      setConversations((current) => pinnedFirst([conversation, ...current]))
-      onConversationSelect(conversation)
-    } catch (createError: unknown) {
-      setError(errorMessage(createError))
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -242,7 +221,7 @@ export function Sidebar({
           <button
             type="button"
             className="text-button"
-            onClick={() => void handleCreateConversation()}
+            onClick={onConversationCreate}
             disabled={selectedProject === null || isSubmitting}
           >
             + Conversation

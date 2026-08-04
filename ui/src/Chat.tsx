@@ -2,10 +2,14 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { EventView } from './EventView'
 import type { EventBlock } from './EventView'
 import { Lightbox } from './Lightbox'
-import type { AppEvent } from './types'
+import { Composer } from './Composer'
+import type { AppEvent, Conversation } from './types'
 
 interface ChatProps {
   events: AppEvent[]
+  conversation: Conversation | null
+  projectId: string
+  onConversationCreated: (conversation: Conversation) => void
 }
 
 interface LightboxImage {
@@ -125,8 +129,22 @@ function groupEvents(events: AppEvent[]): EventBlock[] {
   return blocks
 }
 
-export function Chat({ events }: ChatProps) {
+function lastStatusIsRunning(events: AppEvent[]): boolean {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event.type === 'status') return event.state === 'running'
+  }
+  return false
+}
+
+export function Chat({
+  events,
+  conversation,
+  projectId,
+  onConversationCreated,
+}: ChatProps) {
   const blocks = useMemo(() => groupEvents(events), [events])
+  const isRunning = lastStatusIsRunning(events)
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
@@ -162,7 +180,11 @@ export function Chat({ events }: ChatProps) {
       <div className="events-view" ref={viewportRef} onScroll={handleScroll}>
         <div className="events-list" aria-live="polite">
           {blocks.length === 0 ? (
-            <p className="events-empty">Aucun événement dans cette conversation.</p>
+            <p className="events-empty">
+              {conversation === null
+                ? 'Écrivez un premier message pour créer la conversation.'
+                : 'Aucun événement dans cette conversation.'}
+            </p>
           ) : (
             blocks.map((block) => (
               <EventView
@@ -175,6 +197,13 @@ export function Chat({ events }: ChatProps) {
           )}
         </div>
       </div>
+
+      <Composer
+        conversationId={conversation?.id ?? null}
+        projectId={projectId}
+        isRunning={isRunning}
+        onConversationCreated={onConversationCreated}
+      />
 
       {lightboxImage !== null ? (
         <Lightbox
