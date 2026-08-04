@@ -22,7 +22,14 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
 
     const lines = createInterface({ input: child.stdout });
     lines.on("line", (line) => {
-      for (const event of opts.parseLine(line)) {
+      let events: AppEvent[];
+      try {
+        events = opts.parseLine(line);
+      } catch (error) {
+        console.error("Impossible de parser une ligne JSONL, ligne ignorée", error);
+        return;
+      }
+      for (const event of events) {
         if (event.type === "status") sawTerminal = true;
         opts.emit(event);
       }

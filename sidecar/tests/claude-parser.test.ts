@@ -31,3 +31,31 @@ test("émet au moins un tool-start (le ls de la fixture) et l'usage final", () =
   const status = evts.filter((e) => e.type === "status").at(-1) as any;
   expect(status.state).toBe("done");
 });
+
+test("ignore les contenus de message valides JSON mais non itérables", () => {
+  expect(parseClaudeLine('{"type":"assistant","message":{"content":42}}')).toEqual([]);
+  expect(parseClaudeLine('{"type":"user","message":{"content":42}}')).toEqual([]);
+});
+
+test("n'émet un tool-start qu'avec un id et un nom textuels", () => {
+  const line = JSON.stringify({
+    type: "assistant",
+    message: {
+      content: [
+        { type: "tool_use", id: 42, name: "Bash", input: {} },
+        { type: "tool_use", id: "tool-1", name: null, input: {} },
+        { type: "tool_use", id: "tool-2", name: "Read", input: {} },
+      ],
+    },
+  });
+
+  expect(parseClaudeLine(line)).toEqual([
+    { type: "tool-start", toolId: "tool-2", toolName: "Read", input: {} },
+  ]);
+});
+
+test("utilise le résultat comme message d'erreur Claude", () => {
+  expect(parseClaudeLine('{"type":"result","subtype":"error","result":"échec détaillé"}')).toEqual([
+    { type: "status", state: "error", error: "échec détaillé" },
+  ]);
+});

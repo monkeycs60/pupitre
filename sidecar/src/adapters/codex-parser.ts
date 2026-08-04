@@ -59,6 +59,14 @@ export function parseCodexLine(line: string): AppEvent[] {
       events.push({ type: "status", state: "done" });
       return events;
     }
+    case "turn.failed": {
+      const error = obj.error as Record<string, unknown> | undefined;
+      return [{
+        type: "status",
+        state: "error",
+        error: String(error?.message ?? obj.message ?? "Codex turn failed"),
+      }];
+    }
     default:
       return [];
   }

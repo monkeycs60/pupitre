@@ -26,10 +26,16 @@ export function parseClaudeLine(line: string): AppEvent[] {
     }
     case "assistant": {
       const content = (obj.message as any)?.content ?? [];
+      if (!Array.isArray(content)) break;
       for (const block of content) {
+        if (!block || typeof block !== "object") continue;
         if (block.type === "text" && block.text) {
           out.push({ type: "text-final", text: block.text });
-        } else if (block.type === "tool_use") {
+        } else if (
+          block.type === "tool_use"
+          && typeof block.id === "string"
+          && typeof block.name === "string"
+        ) {
           out.push({ type: "tool-start", toolId: block.id, toolName: block.name, input: block.input });
         }
       }
@@ -37,7 +43,9 @@ export function parseClaudeLine(line: string): AppEvent[] {
     }
     case "user": {
       const content = (obj.message as any)?.content ?? [];
+      if (!Array.isArray(content)) break;
       for (const block of content) {
+        if (!block || typeof block !== "object") continue;
         if (block.type === "tool_result") {
           out.push({
             type: "tool-end", toolId: block.tool_use_id,
@@ -60,7 +68,7 @@ export function parseClaudeLine(line: string): AppEvent[] {
       out.push(
         obj.subtype === "success"
           ? { type: "status", state: "done" }
-          : { type: "status", state: "error", error: String(obj.subtype) }
+          : { type: "status", state: "error", error: String(obj.result ?? obj.subtype) }
       );
       break;
     }

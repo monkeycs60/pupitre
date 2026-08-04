@@ -927,7 +927,9 @@ export class ConversationRunner {
 }
 ```
 
-**Step 3: PASS, commit** — `git commit -am "feat: ConversationRunner (tour = un process CLI, resume auto)"`
+**Step 3 (ajout review milestone, issue I3): sweep des `running` orphelins.** Si le sidecar meurt en plein tour, le dernier event persisté est `status running` → replay mensonger. Ajouter à la construction du runner (ou une fonction `sweepOrphanedRuns(convs)` appelée au démarrage du serveur) : pour chaque conversation dont le DERNIER event est `status running`, appender `{type:"status",state:"error",error:"interrompu (sidecar redémarré)"}`. Test : insérer un running orphelin, appeler le sweep, vérifier l'event d'erreur appendé.
+
+**Step 4: PASS, commit** — `git commit -am "feat: ConversationRunner (tour = un process CLI, resume auto)"`
 
 ---
 
@@ -956,6 +958,8 @@ export class ConversationRunner {
 **Step 1: Tests d'abord** (`server.test.ts`, via `fetch` sur un serveur démarré sur port 0) : création projet (+ 400 sur path inexistant), création conversation avec fake bin → attendre le status done via WS, replay `GET /events` non vide et commençant par `user-message`, 409 si message pendant un tour, upload media puis GET media redonne les bytes.
 
 **Step 2: Implémenter** avec `Bun.serve` (routes manuelles sur `URL.pathname`, `server.upgrade` pour le WS, un `Map<conversationId, Set<WebSocket>>` pour le broadcast). `index.ts` assemble : `openDb()` → stores → `MediaStore` → `ConversationRunner` (broadcast = envoyer aux sockets abonnés) → `Bun.serve({port: env.PUPITRE_PORT ?? 4820})`, et loggue `pupitre sidecar prêt sur http://localhost:4820`.
+
+**Note (review milestone, issue I2)** : prévoir l'annulation de tour — `spawnJsonl` accepte un `AbortSignal` (kill du child + `status error "annulé"`), route `POST /api/conversations/:id/cancel`, et le runner garde la référence du tour actif. Un CLI qui pend ne doit pas verrouiller la conversation pour toujours.
 
 **Step 3: PASS, commit** — `git commit -am "feat: serveur HTTP+WS du sidecar"`
 
@@ -1118,3 +1122,9 @@ Contenu : pitch une phrase, architecture (schéma du design §2), prérequis (bu
 2. **`codex exec resume` + `--json`** : vérifier que les flags globaux s'appliquent au subcommand (Task 8, Step 4).
 3. **Ids de modèles codex** (`gpt-5.6-sol`, `gpt-5.6-luna`) : à valider une fois en réel (Task 15).
 4. **Spawn sidecar depuis Rust** : si capricieux en dev, fallback documenté = lancer le sidecar à la main (`bun run dev`), le durcissement vient avec le packaging (M2+).
+
+## Backlog post-review milestone adapters (à traiter en M2)
+
+- M7 : `appendEvent` en transaction (2 statements + 2 timestamps aujourd'hui).
+- M8 : tronquer stderr à l'accumulation dans spawn-jsonl, pas seulement à l'émission.
+- Coalescing des `text-delta` persistés (aujourd'hui deltas + final ≈ 2× le texte en DB ; le replay « rejoue » le streaming).

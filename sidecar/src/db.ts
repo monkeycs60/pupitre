@@ -12,6 +12,7 @@ export function openDb(dir: string = dataDir()): Database {
   mkdirSync(join(dir, "media"), { recursive: true });
   const db = new Database(join(dir, "pupitre.db"));
   db.exec(`
+    PRAGMA foreign_keys = ON;
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL UNIQUE,

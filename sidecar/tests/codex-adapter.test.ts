@@ -31,7 +31,9 @@ test("premier tour : exec --json avec cwd et modèle, sans resume", async () => 
     images: [],
   });
   const args = readFileSync(argsFile, "utf8");
-  expect(args).toContain("exec --json -C /tmp -m gpt-5.6-luna");
+  expect(args).toContain("exec --json --skip-git-repo-check -C /tmp -m gpt-5.6-luna");
+  expect(args).toContain("--skip-git-repo-check");
+  expect(args.trimEnd().endsWith("-- salut")).toBe(true);
   expect(args).not.toContain("resume");
   expect(events.some((event) => event.type === "session")).toBe(true);
   expect(events.at(-1)).toEqual({ type: "status", state: "done" });
@@ -48,6 +50,19 @@ test("tour suivant : utilise exec resume <sessionId>", async () => {
     images: [],
   });
   expect(readFileSync(argsFile, "utf8")).toContain("exec resume abc-123");
+});
+
+test("sépare un prompt ressemblant à une option avec --", async () => {
+  const argsFile = useFakeCodex();
+  await collect({
+    cwd: "/tmp",
+    model: "gpt-5.6-luna",
+    prompt: "--danger",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+  });
+  expect(readFileSync(argsFile, "utf8").trimEnd().endsWith("-- --danger")).toBe(true);
 });
 
 test("ajoute -i <path> pour chaque image", async () => {

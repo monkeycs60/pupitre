@@ -9,10 +9,10 @@ export function runCodexTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     : ["exec"];
   const args = [
     ...base,
-    "--json", "-C", opts.cwd, "-m", opts.model,
+    "--json", "--skip-git-repo-check", "-C", opts.cwd, "-m", opts.model,
     "-s", "workspace-write",
     ...opts.images.flatMap((image) => ["-i", image]),
-    opts.prompt,
+    "--", opts.prompt,
   ];
 
   return spawnJsonl({

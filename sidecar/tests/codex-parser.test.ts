@@ -42,3 +42,13 @@ test("émet la commande, l'usage et un dernier status done", () => {
     state: "done",
   });
 });
+
+test("ignore un contenu de message valide JSON mais de forme inattendue", () => {
+  expect(parseCodexLine('{"type":"user","message":{"content":42}}')).toEqual([]);
+});
+
+test("mappe turn.failed vers un status error", () => {
+  expect(parseCodexLine('{"type":"turn.failed","error":{"message":"échec Codex"}}')).toEqual([
+    { type: "status", state: "error", error: "échec Codex" },
+  ]);
+});

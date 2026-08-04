@@ -1,5 +1,5 @@
 {
   "name": "pupitre",
   "private": true,
-  "workspaces": ["sidecar", "ui"]
+  "workspaces": ["sidecar"]
 }

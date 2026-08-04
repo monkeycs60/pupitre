@@ -21,6 +21,7 @@ test("premier tour : pas de -r, événements émis, status done", async () => {
   const args = readFileSync(argsFile, "utf8");
   expect(args).not.toContain("-r ");
   expect(args).toContain("--output-format stream-json");
+  expect(args.trimEnd().endsWith("-- salut")).toBe(true);
   expect(events.some((e) => e.type === "session")).toBe(true);
   expect((events.at(-1) as any).state).toBe("done");
 });
@@ -31,6 +32,14 @@ test("tour suivant : ajoute -r <sessionId>", async () => {
   process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
   await collect({ cwd: "/tmp", model: "opus", prompt: "suite", cliSessionId: "abc-123", permissionMode: "acceptEdits", images: [] });
   expect(readFileSync(argsFile, "utf8")).toContain("-r abc-123");
+});
+
+test("sépare un prompt ressemblant à une option avec --", async () => {
+  const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
+  process.env.PUPITRE_CLAUDE_BIN = FAKE;
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  await collect({ cwd: "/tmp", model: "opus", prompt: "--danger", cliSessionId: null, permissionMode: "acceptEdits", images: [] });
+  expect(readFileSync(argsFile, "utf8").trimEnd().endsWith("-- --danger")).toBe(true);
 });
 
 test("binaire introuvable → status error, pas d'exception", async () => {

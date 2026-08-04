@@ -14,7 +14,7 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     "--verbose", "--model", opts.model, "--permission-mode", opts.permissionMode,
   ];
   if (opts.cliSessionId) args.push("-r", opts.cliSessionId);
-  args.push(prompt);
+  args.push("--", prompt);
 
   return spawnJsonl({
     bin,

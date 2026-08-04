@@ -57,6 +57,14 @@ export class ConversationStore {
     const rows = this.db.query(
       "SELECT payload FROM events WHERE conversation_id = ? ORDER BY id"
     ).all(conversationId) as any[];
-    return rows.map((r) => JSON.parse(r.payload));
+    const events: AppEvent[] = [];
+    for (const row of rows) {
+      try {
+        events.push(JSON.parse(row.payload));
+      } catch (error) {
+        console.error("Événement de conversation corrompu, ligne ignorée", error);
+      }
+    }
+    return events;
   }
 }
