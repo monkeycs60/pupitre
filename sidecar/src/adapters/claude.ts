@@ -18,7 +18,16 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   // `--mcp-config` accepte un chemin de fichier OU un JSON inline (cf.
   // `claude --help`) ; pas de `--strict-mcp-config` : les serveurs MCP que
   // l'utilisateur a configurés lui-même restent disponibles.
-  if (opts.conductor) args.push("--mcp-config", claudeMcpConfigArg(opts.conductor));
+  if (opts.conductor) {
+    args.push(
+      "--mcp-config",
+      claudeMcpConfigArg(opts.conductor),
+      // Un run headless ne peut pas demander une permission MCP à l'UI. On
+      // pré-autorise uniquement les trois outils du bridge que Pupitre injecte.
+      "--allowedTools",
+      "mcp__conductor__delegate,mcp__conductor__delegate_parallel,mcp__conductor__check_quotas",
+    );
+  }
   if (opts.cliSessionId) args.push("-r", opts.cliSessionId);
   args.push("--", prompt);
 

@@ -87,6 +87,7 @@ test("conversation orchestratrice claude : --mcp-config inline pointant sur le b
 
   const args = claudeArgs();
   expect(args).toContain("--mcp-config");
+  expect(args).toContain("--allowedTools mcp__conductor__delegate,mcp__conductor__delegate_parallel,mcp__conductor__check_quotas");
   const config = JSON.parse(args.slice(args.indexOf("{"), args.lastIndexOf("}") + 1));
   expect(config.mcpServers.conductor.args).toEqual([conductorMcpPath()]);
   expect(config.mcpServers.conductor.env).toEqual({
