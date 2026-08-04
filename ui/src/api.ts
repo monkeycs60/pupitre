@@ -1,9 +1,9 @@
 import type {
-  AppEvent,
   Conversation,
   ConversationSpeed,
   Project,
   Provider,
+  StoredEvent,
 } from './types'
 
 interface ErrorResponse {
@@ -141,7 +141,7 @@ export function setConversationPinned(
 export function getConversationEvents(
   conversationId: string,
   signal?: AbortSignal,
-): Promise<AppEvent[]> {
+): Promise<StoredEvent[]> {
   return fetchJson(
     `/api/conversations/${routeId(conversationId)}/events`,
     { signal },

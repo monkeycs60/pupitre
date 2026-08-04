@@ -9,6 +9,10 @@ export type AppEvent =
   | { type: "usage"; inputTokens: number; outputTokens: number }
   | { type: "status"; state: "running" | "done" | "error"; error?: string };
 
+// Un événement persisté porte l'id (rowid) de sa ligne : c'est la clé de dédup
+// entre le replay HTTP et le flux WS côté UI.
+export type StoredEvent = AppEvent & { id: number };
+
 export type Provider = "claude" | "codex";
 
 export function parseJsonlLine(line: string): Record<string, unknown> | null {

@@ -1,32 +1,43 @@
 import { useEffect, useState } from 'react'
 import { getConversationEvents } from './api'
-import type { AppEvent } from './types'
+import { mergeReplayAndBuffer } from './mergeEvents'
+import type { StoredEvent } from './types'
 
-// Charge le replay avant de s'abonner aux nouveaux événements en WebSocket.
+// Ouvre le WebSocket AVANT de charger le replay : les événements reçus pendant
+// le fetch sont bufferisés puis fusionnés (dédup par id), sans fenêtre de perte.
 export function useConversationEvents(
   conversationId: string | null,
-): AppEvent[] {
-  const [events, setEvents] = useState<AppEvent[]>([])
+): StoredEvent[] {
+  const [events, setEvents] = useState<StoredEvent[]>([])
 
   useEffect(() => {
     setEvents([])
     if (conversationId === null) return
 
     const abortController = new AbortController()
-    let socket: WebSocket | null = null
+    let buffer: StoredEvent[] | null = []
+
+    const socket = new WebSocket(
+      `ws://${location.host}/ws?conversation=${encodeURIComponent(conversationId)}`,
+    )
+    socket.addEventListener('message', (message) => {
+      let event: StoredEvent
+      try {
+        event = JSON.parse(String(message.data)) as StoredEvent
+      } catch (error) {
+        console.error('Message WebSocket illisible', error)
+        return
+      }
+      if (buffer !== null) buffer.push(event)
+      else setEvents((current) => mergeReplayAndBuffer(current, [event]))
+    })
 
     void getConversationEvents(conversationId, abortController.signal)
       .then((replay) => {
         if (abortController.signal.aborted) return
 
-        setEvents(replay)
-        socket = new WebSocket(
-          `ws://${location.host}/ws?conversation=${encodeURIComponent(conversationId)}`,
-        )
-        socket.addEventListener('message', (message) => {
-          const event = JSON.parse(String(message.data)) as AppEvent
-          setEvents((current) => [...current, event])
-        })
+        setEvents(mergeReplayAndBuffer(replay, buffer ?? []))
+        buffer = null
       })
       .catch((error: unknown) => {
         if (!abortController.signal.aborted) console.error(error)
@@ -34,7 +45,7 @@ export function useConversationEvents(
 
     return () => {
       abortController.abort()
-      socket?.close()
+      socket.close()
     }
   }, [conversationId])
 

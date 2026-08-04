@@ -89,20 +89,42 @@ test("appendEvent + listEvents rejouent dans l'ordre", () => {
   expect(convs.listEvents(c.id).map((e: any) => e.text)).toEqual(["a", "b"]);
 });
 
+test("appendEvent retourne l'id inséré, exposé par listEvents en ordre croissant", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  const firstId = convs.appendEvent(c.id, { type: "text-delta", text: "a" });
+  const secondId = convs.appendEvent(c.id, { type: "text-delta", text: "b" });
+
+  expect(typeof firstId).toBe("number");
+  expect(secondId).toBeGreaterThan(firstId);
+  expect(convs.listEvents(c.id)).toEqual([
+    { id: firstId, type: "text-delta", text: "a" },
+    { id: secondId, type: "text-delta", text: "b" },
+  ]);
+});
+
+test("les ids d'événements sont uniques entre conversations", () => {
+  const first = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  const second = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "y" });
+  const firstId = convs.appendEvent(first.id, { type: "text-delta", text: "a" });
+  const secondId = convs.appendEvent(second.id, { type: "text-delta", text: "b" });
+
+  expect(firstId).not.toBe(secondId);
+});
+
 test("listEvents ignore une ligne corrompue et poursuit la lecture", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
-  convs.appendEvent(c.id, { type: "text-delta", text: "avant" });
+  const beforeId = convs.appendEvent(c.id, { type: "text-delta", text: "avant" });
   db.query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
     .run(c.id, "{invalide", new Date().toISOString());
-  convs.appendEvent(c.id, { type: "text-delta", text: "après" });
+  const afterId = convs.appendEvent(c.id, { type: "text-delta", text: "après" });
   const errors: unknown[][] = [];
   const originalConsoleError = console.error;
   console.error = (...args: unknown[]) => errors.push(args);
 
   try {
     expect(convs.listEvents(c.id)).toEqual([
-      { type: "text-delta", text: "avant" },
-      { type: "text-delta", text: "après" },
+      { id: beforeId, type: "text-delta", text: "avant" },
+      { id: afterId, type: "text-delta", text: "après" },
     ]);
   } finally {
     console.error = originalConsoleError;

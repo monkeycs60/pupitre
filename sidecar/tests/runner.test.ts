@@ -109,11 +109,11 @@ test("deux tours simultanés sur deux conversations différentes aboutissent", a
     runner.runTurn(second.id, "second", []),
   ]);
 
-  expect(convs.listEvents(first.id).at(-1)).toEqual({
+  expect(convs.listEvents(first.id).at(-1)).toMatchObject({
     type: "status",
     state: "done",
   });
-  expect(convs.listEvents(second.id).at(-1)).toEqual({
+  expect(convs.listEvents(second.id).at(-1)).toMatchObject({
     type: "status",
     state: "done",
   });
@@ -125,7 +125,7 @@ test("le sweep marque en erreur un status running orphelin", () => {
 
   sweepOrphanedRuns(convs, projects);
 
-  expect(convs.listEvents(c.id).at(-1)).toEqual({
+  expect(convs.listEvents(c.id).at(-1)).toMatchObject({
     type: "status",
     state: "error",
     error: "interrompu (sidecar redémarré)",
@@ -151,7 +151,7 @@ test("cancelTurn annule le process actif et déverrouille la conversation", asyn
   await turn;
 
   expect(runner.isRunning(c.id)).toBe(false);
-  expect(convs.listEvents(c.id).at(-1)).toEqual({
+  expect(convs.listEvents(c.id).at(-1)).toMatchObject({
     type: "status",
     state: "error",
     error: "annulé",

@@ -1,11 +1,11 @@
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
 import type { MediaStore } from "./media";
-import type { AppEvent } from "./events";
+import type { AppEvent, StoredEvent } from "./events";
 import { runClaudeTurn } from "./adapters/claude";
 import { runCodexTurn } from "./adapters/codex";
 
-type BroadcastFn = (conversationId: string, event: AppEvent) => void;
+type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
 interface ActiveTurn {
   controller: AbortController;
@@ -71,8 +71,8 @@ export class ConversationRunner {
       if (event.type === "session") {
         this.convs.setCliSessionId(conversationId, event.cliSessionId);
       }
-      this.convs.appendEvent(conversationId, event);
-      this.broadcast(conversationId, event);
+      const id = this.convs.appendEvent(conversationId, event);
+      this.broadcast(conversationId, { ...event, id });
     };
 
     try {

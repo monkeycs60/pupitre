@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
-import type { AppEvent } from "../src/events";
+import type { AppEvent, StoredEvent } from "../src/events";
 import { MediaStore } from "../src/media";
 import { ConversationRunner } from "../src/runner";
 import { ConversationEventBus, createServer } from "../src/server";
@@ -44,14 +44,14 @@ async function createProject(path: string): Promise<{ id: string }> {
 async function waitForPersistedEvent(
   conversationId: string,
   predicate: (event: AppEvent) => boolean,
-): Promise<AppEvent> {
+): Promise<StoredEvent> {
   if (!current) throw new Error("serveur de test non démarré");
   const deadline = Date.now() + 3_000;
   while (Date.now() < deadline) {
     const response = await fetch(
       `${current.baseUrl}/api/conversations/${conversationId}/events`,
     );
-    const events = await response.json() as AppEvent[];
+    const events = await response.json() as StoredEvent[];
     const event = events.find(predicate);
     if (event) return event;
     await Bun.sleep(20);
@@ -73,7 +73,7 @@ async function waitForRunnerIdle(conversationId: string): Promise<void> {
 function waitForWebSocketEvent(
   url: string,
   predicate: (event: AppEvent) => boolean,
-): Promise<AppEvent> {
+): Promise<StoredEvent> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
     const timeout = setTimeout(() => {
@@ -82,11 +82,38 @@ function waitForWebSocketEvent(
     }, 3_000);
 
     socket.addEventListener("message", (message) => {
-      const event = JSON.parse(String(message.data)) as AppEvent;
+      const event = JSON.parse(String(message.data)) as StoredEvent;
       if (!predicate(event)) return;
       clearTimeout(timeout);
       socket.close();
       resolve(event);
+    });
+    socket.addEventListener("error", () => {
+      clearTimeout(timeout);
+      reject(new Error("erreur WebSocket"));
+    });
+  });
+}
+
+function collectWebSocketEvents(
+  url: string,
+  isLast: (event: AppEvent) => boolean,
+): Promise<StoredEvent[]> {
+  return new Promise((resolve, reject) => {
+    const collected: StoredEvent[] = [];
+    const socket = new WebSocket(url);
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error("timeout WebSocket"));
+    }, 3_000);
+
+    socket.addEventListener("message", (message) => {
+      const event = JSON.parse(String(message.data)) as StoredEvent;
+      collected.push(event);
+      if (!isLast(event)) return;
+      clearTimeout(timeout);
+      socket.close();
+      resolve(collected);
     });
     socket.addEventListener("error", () => {
       clearTimeout(timeout);
@@ -205,15 +232,15 @@ test("une conversation termine en live via WS et son replay commence par user-me
     wsUrl,
     (event) => event.type === "status" && event.state === "done",
   );
-  expect(done).toEqual({ type: "status", state: "done" });
+  expect(done).toMatchObject({ type: "status", state: "done" });
 
   const replay = await fetch(
     `${current.baseUrl}/api/conversations/${conversation.id}/events`,
   );
   expect(replay.status).toBe(200);
-  const stored = await replay.json() as AppEvent[];
+  const stored = await replay.json() as StoredEvent[];
   expect(stored.length).toBeGreaterThan(1);
-  expect(stored[0]).toEqual({
+  expect(stored[0]).toMatchObject({
     type: "user-message",
     text: "ATTENDS_WS",
     images: [],
@@ -229,6 +256,38 @@ test("une conversation termine en live via WS et son replay commence par user-me
     .toBe(204);
   expect((await postJson(`/api/conversations/${conversation.id}/pin`, { pinned: true })).status)
     .toBe(204);
+});
+
+test("les événements diffusés en WS portent les mêmes ids croissants que le replay", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "ATTENDS_WS",
+  });
+  const conversation = await created.json() as { id: string };
+
+  const wsUrl = `${current.baseUrl.replace("http", "ws")}/ws?conversation=${conversation.id}`;
+  const live = await collectWebSocketEvents(
+    wsUrl,
+    (event) => event.type === "status" && event.state === "done",
+  );
+
+  const replay = await fetch(
+    `${current.baseUrl}/api/conversations/${conversation.id}/events`,
+  );
+  const stored = await replay.json() as StoredEvent[];
+
+  expect(live.length).toBeGreaterThan(0);
+  for (const [index, event] of live.entries()) {
+    expect(typeof event.id).toBe("number");
+    if (index > 0) expect(event.id).toBeGreaterThan(live[index - 1]!.id);
+    expect(stored.find((candidate) => candidate.id === event.id)).toEqual(event);
+  }
+  const storedIds = stored.map((event) => event.id);
+  expect(storedIds).toEqual([...storedIds].sort((a, b) => a - b));
 });
 
 test("création avec effort le persiste et l'expose dans les listes", async () => {
@@ -364,8 +423,8 @@ test("un tour actif répond 409, puis cancel l'annule et déverrouille la conver
   const replay = await fetch(
     `${current.baseUrl}/api/conversations/${conversation.id}/events`,
   );
-  const events = await replay.json() as AppEvent[];
-  expect(events.at(-1)).toEqual({
+  const events = await replay.json() as StoredEvent[];
+  expect(events.at(-1)).toMatchObject({
     type: "status",
     state: "error",
     error: "annulé",
@@ -476,7 +535,7 @@ test("la déconnexion d'un client WS en plein tour n'empêche pas le status done
     conversation.id,
     (event) => event.type === "status" && event.state === "done",
   );
-  expect(done).toEqual({ type: "status", state: "done" });
+  expect(done).toMatchObject({ type: "status", state: "done" });
   await waitForRunnerIdle(conversation.id);
 });
 

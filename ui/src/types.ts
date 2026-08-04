@@ -33,3 +33,7 @@ export type AppEvent =
   | { type: 'tool-end'; toolId: string; output: string; images: string[] }
   | { type: 'usage'; inputTokens: number; outputTokens: number }
   | { type: 'status'; state: 'running' | 'done' | 'error'; error?: string }
+
+// Tout événement venant du sidecar (replay HTTP ou WS) porte l'id de sa ligne :
+// c'est la clé de dédup du raccord replay/live.
+export type StoredEvent = AppEvent & { id: number }

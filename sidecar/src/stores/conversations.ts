@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { AppEvent, Provider } from "../events";
+import type { AppEvent, Provider, StoredEvent } from "../events";
 
 export interface Conversation {
   id: string; project_id: string; title: string; provider: Provider;
@@ -65,21 +65,24 @@ export class ConversationStore {
       .run(cliSessionId, new Date().toISOString(), id);
   }
 
-  appendEvent(conversationId: string, event: AppEvent): void {
-    this.db.query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
+  // Retourne l'id de la ligne insérée : le broadcast WS le rediffuse tel quel.
+  appendEvent(conversationId: string, event: AppEvent): number {
+    const result = this.db
+      .query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
       .run(conversationId, JSON.stringify(event), new Date().toISOString());
     this.db.query("UPDATE conversations SET updated_at = ? WHERE id = ?")
       .run(new Date().toISOString(), conversationId);
+    return Number(result.lastInsertRowid);
   }
 
-  listEvents(conversationId: string): AppEvent[] {
+  listEvents(conversationId: string): StoredEvent[] {
     const rows = this.db.query(
-      "SELECT payload FROM events WHERE conversation_id = ? ORDER BY id"
+      "SELECT id, payload FROM events WHERE conversation_id = ? ORDER BY id"
     ).all(conversationId) as any[];
-    const events: AppEvent[] = [];
+    const events: StoredEvent[] = [];
     for (const row of rows) {
       try {
-        events.push(JSON.parse(row.payload));
+        events.push({ ...JSON.parse(row.payload), id: Number(row.id) });
       } catch (error) {
         console.error("Événement de conversation corrompu, ligne ignorée", error);
       }

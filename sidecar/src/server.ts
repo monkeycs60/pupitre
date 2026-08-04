@@ -1,17 +1,17 @@
 import type { ServerWebSocket } from "bun";
 import { existsSync } from "node:fs";
-import type { AppEvent, Provider } from "./events";
+import type { Provider, StoredEvent } from "./events";
 import type { MediaStore } from "./media";
 import type { ConversationRunner } from "./runner";
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
 
-type EventListener = (conversationId: string, event: AppEvent) => void;
+type EventListener = (conversationId: string, event: StoredEvent) => void;
 
 export class ConversationEventBus {
   private listeners = new Set<EventListener>();
 
-  broadcast = (conversationId: string, event: AppEvent): void => {
+  broadcast = (conversationId: string, event: StoredEvent): void => {
     for (const listener of this.listeners) listener(conversationId, event);
   };
 
