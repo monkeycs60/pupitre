@@ -73,7 +73,7 @@ class HttpError extends Error {
 
 const TAURI_CORS_HEADERS = {
   "access-control-allow-origin": "tauri://localhost",
-  "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
   "access-control-allow-headers": "content-type",
   vary: "Origin",
 };
@@ -414,6 +414,22 @@ export function createServer(deps: ServerDeps) {
           return json(deps.projects.get(projectDefaultPresetId));
         }
 
+        const projectGardienModeId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/gardien-mode$/,
+        );
+        if (request.method === "PUT" && projectGardienModeId !== null) {
+          if (!deps.projects.get(projectGardienModeId)) {
+            throw new HttpError(404, "projet inconnu");
+          }
+          const body = await readObject(request);
+          if (body.mode !== "informatif" && body.mode !== "bloquant") {
+            throw new HttpError(400, "mode Gardien invalide");
+          }
+          deps.projects.setGardienMode(projectGardienModeId, body.mode);
+          return json(deps.projects.get(projectGardienModeId));
+        }
+
         const projectPinId = routeId(
           pathname,
           /^\/api\/projects\/([^/]+)\/pin$/,
@@ -747,11 +763,32 @@ export function createServer(deps: ServerDeps) {
           return json(deps.reviews.listByProject(projectReviewsId));
         }
 
+        const projectGardienStatusId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/gardien-status$/,
+        );
+        if (request.method === "GET" && projectGardienStatusId !== null) {
+          const status = deps.reviews.gardienStatus(projectGardienStatusId);
+          if (!status) throw new HttpError(404, "projet inconnu");
+          return json(status);
+        }
+
         const reviewId = routeId(pathname, /^\/api\/reviews\/([^/]+)$/);
         if (request.method === "GET" && reviewId !== null) {
           const review = deps.reviews.get(reviewId);
           if (!review) throw new HttpError(404, "review inconnue");
           return json(review);
+        }
+
+        const reviewFlagId = routeId(pathname, /^\/api\/review-flags\/([^/]+)$/);
+        if (request.method === "PATCH" && reviewFlagId !== null) {
+          const body = await readObject(request);
+          if (body.status !== "open" && body.status !== "acked" && body.status !== "dismissed") {
+            throw new HttpError(400, "statut de flag invalide");
+          }
+          const flag = deps.reviews.setFlagStatus(reviewFlagId, body.status);
+          if (!flag) throw new HttpError(404, "flag inconnu");
+          return json(flag);
         }
 
         if (request.method === "POST" && pathname === "/api/subtasks") {

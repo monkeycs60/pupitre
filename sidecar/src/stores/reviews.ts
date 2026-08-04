@@ -90,6 +90,30 @@ export class ReviewStore {
     return rows.map((row) => this.hydrate(row));
   }
 
+  setFlagStatus(id: string, status: Exclude<ReviewFlagStatus, "countered">): ReviewFlag | null {
+    this.db.query("UPDATE review_flags SET status = ? WHERE id = ?").run(status, id);
+    return this.getFlag(id);
+  }
+
+  getFlag(id: string): ReviewFlag | null {
+    return this.db.query("SELECT * FROM review_flags WHERE id = ?").get(id) as ReviewFlag | null;
+  }
+
+  gardienStatus(projectId: string, mode: "informatif" | "bloquant"): {
+    mode: "informatif" | "bloquant";
+    blocked: boolean;
+    openRedCount: number;
+  } {
+    const row = this.db.query(`
+      SELECT COUNT(*) AS count
+      FROM review_flags f
+      JOIN reviews r ON r.id = f.review_id
+      WHERE r.project_id = ? AND f.severity = 'red' AND f.status = 'open'
+    `).get(projectId) as { count: number | bigint };
+    const openRedCount = Number(row.count);
+    return { mode, blocked: mode === "bloquant" && openRedCount > 0, openRedCount };
+  }
+
   setDiff(id: string, base: string, head: string, diff: string): void {
     this.db.query(`
       UPDATE reviews

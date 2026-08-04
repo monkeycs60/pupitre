@@ -4,6 +4,7 @@ export interface Project {
   id: string; name: string; path: string;
   permission_mode: string; pinned: boolean; created_at: string;
   default_preset_id: string | null;
+  gardien_mode: "informatif" | "bloquant";
 }
 
 export class ProjectStore {
@@ -35,5 +36,9 @@ export class ProjectStore {
 
   setDefaultPreset(id: string, presetId: string | null): void {
     this.db.query("UPDATE projects SET default_preset_id = ? WHERE id = ?").run(presetId, id);
+  }
+
+  setGardienMode(id: string, mode: "informatif" | "bloquant"): void {
+    this.db.query("UPDATE projects SET gardien_mode = ? WHERE id = ?").run(mode, id);
   }
 }

@@ -4,12 +4,13 @@ import { open } from '@tauri-apps/plugin-dialog'
 import {
   createProject,
   listProjectConversations,
+  listProjectReviews,
   listProjects,
   setConversationPinned,
   setProjectPinned,
 } from './api'
 import { QuotaBar } from './QuotaBar'
-import type { Conversation, Project } from './types'
+import type { Conversation, Project, Review } from './types'
 import type { Quotas } from './useQuotas'
 
 declare global {
@@ -29,6 +30,9 @@ interface SidebarProps {
   quotas: Quotas
   /** Sous-tâches en cours dans la conversation ouverte (cf. App). */
   runningSubtasks: number
+  workspaceView: 'conversations' | 'guardian'
+  onGuardianSelect: () => void
+  reviewListVersion: number
 }
 
 function pinnedFirst<T extends { pinned: boolean }>(items: T[]): T[] {
@@ -68,9 +72,13 @@ export function Sidebar({
   projectListVersion,
   quotas,
   runningSubtasks,
+  workspaceView,
+  onGuardianSelect,
+  reviewListVersion,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
+  const [reviews, setReviews] = useState<Review[]>([])
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [projectName, setProjectName] = useState('')
   const [projectPath, setProjectPath] = useState('')
@@ -96,12 +104,19 @@ export function Sidebar({
   useEffect(() => {
     let ignore = false
     setConversations([])
+    setReviews([])
 
     if (selectedProject === null) return
 
-    void listProjectConversations(selectedProject.id)
-      .then((items) => {
-        if (!ignore) setConversations(pinnedFirst(items))
+    void Promise.all([
+      listProjectConversations(selectedProject.id),
+      listProjectReviews(selectedProject.id),
+    ])
+      .then(([items, loadedReviews]) => {
+        if (!ignore) {
+          setConversations(pinnedFirst(items))
+          setReviews(loadedReviews)
+        }
       })
       .catch((loadError: unknown) => {
         if (!ignore) setError(errorMessage(loadError))
@@ -110,7 +125,11 @@ export function Sidebar({
     return () => {
       ignore = true
     }
-  }, [selectedProject, conversationListVersion])
+  }, [selectedProject?.id, conversationListVersion, reviewListVersion])
+
+  const pendingReviews = reviews.filter((review) =>
+    review.status === 'running' || review.flags.some((flag) => flag.status === 'open'),
+  ).length
 
   async function handleProjectButtonClick() {
     if (window.__TAURI__) {
@@ -284,6 +303,17 @@ export function Sidebar({
           </button>
         </div>
 
+        <button
+          type="button"
+          className={`guardian-nav-button ${workspaceView === 'guardian' ? 'is-selected' : ''}`}
+          onClick={onGuardianSelect}
+          disabled={selectedProject === null}
+          title="Voir les reviews de risques du projet"
+        >
+          <span>Gardien</span>
+          {pendingReviews > 0 ? <strong>{pendingReviews}</strong> : null}
+        </button>
+
         <div className="navigation-list">
           {selectedProject === null ? (
             <p className="list-empty">Sélectionnez un projet</p>
@@ -292,7 +322,7 @@ export function Sidebar({
           ) : (
             conversations.map((conversation) => (
               <div
-                className={`navigation-row ${selectedConversation?.id === conversation.id ? 'is-selected' : ''}`}
+                className={`navigation-row ${workspaceView === 'conversations' && selectedConversation?.id === conversation.id ? 'is-selected' : ''}`}
                 key={conversation.id}
               >
                 <button

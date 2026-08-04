@@ -93,6 +93,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "orchestrator INTEGER NOT NULL DEFAULT 1");
   addColumn(db, "conversations", "continued_from TEXT NULL");
   addColumn(db, "projects", "default_preset_id TEXT NULL");
+  addColumn(db, "projects", "gardien_mode TEXT NOT NULL DEFAULT 'informatif'");
   const addedReviewProvider = addColumn(
     db,
     "presets",

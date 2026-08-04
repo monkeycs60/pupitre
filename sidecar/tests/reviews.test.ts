@@ -162,6 +162,20 @@ cat "${join(import.meta.dir, "fixtures/review-scan-codex.jsonl")}"
   });
   expect(readFileSync(argsFile, "utf8")).toContain("-s read-only");
   expect(readFileSync(argsFile, "utf8")).toContain("model_reasoning_effort=\"high\"");
+
+  projects.setGardienMode(project.id, "bloquant");
+  expect(runner.gardienStatus(project.id)).toEqual({
+    mode: "bloquant",
+    blocked: true,
+    openRedCount: 1,
+  });
+  expect(runner.setFlagStatus(completed!.flags[0]!.id, "acked"))
+    .toMatchObject({ status: "acked" });
+  expect(runner.gardienStatus(project.id)).toEqual({
+    mode: "bloquant",
+    blocked: false,
+    openRedCount: 0,
+  });
 });
 
 test("une sortie invalide reçoit une seule relance de correction de format", async () => {

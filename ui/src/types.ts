@@ -1,5 +1,6 @@
 export type Provider = 'claude' | 'codex'
 export type ConversationSpeed = 'standard' | 'fast'
+export type GardienMode = 'informatif' | 'bloquant'
 
 export interface Project {
   id: string
@@ -9,6 +10,7 @@ export interface Project {
   pinned: boolean
   created_at: string
   default_preset_id: string | null
+  gardien_mode: GardienMode
 }
 
 export interface Preset {
@@ -19,6 +21,9 @@ export interface Preset {
   effort: string | null
   speed: ConversationSpeed | null
   orchestrator: boolean
+  review_provider: Provider
+  review_model: string
+  review_effort: string
   built_in: boolean
   created_at: string
   updated_at: string
@@ -89,6 +94,45 @@ export interface SubtaskResult {
    */
   error: string | null
   subtask: Subtask
+}
+
+export type ReviewStatus = 'running' | 'done' | 'error'
+export type ReviewSeverity = 'red' | 'orange' | 'grey'
+export type ReviewFlagStatus = 'open' | 'acked' | 'dismissed' | 'countered'
+
+export interface ReviewFlag {
+  id: string
+  review_id: string
+  file: string
+  line_start: number
+  line_end: number
+  severity: ReviewSeverity
+  category: string
+  message: string
+  status: ReviewFlagStatus
+}
+
+export interface Review {
+  id: string
+  project_id: string
+  conversation_id: string
+  git_ref_base: string
+  git_ref_head: string
+  status: ReviewStatus
+  review_provider: Provider
+  review_model: string
+  review_effort: string
+  diff_text: string
+  error: string | null
+  created_at: string
+  updated_at: string
+  flags: ReviewFlag[]
+}
+
+export interface GardienStatus {
+  mode: GardienMode
+  blocked: boolean
+  openRedCount: number
 }
 
 export type AppEvent =

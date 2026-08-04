@@ -350,6 +350,54 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
   ]);
 });
 
+test("le mode bloquant et l'acquittement ciblé sont exposés sans approbation globale", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const conversation = new ConversationStore(current.db).create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "risque",
+  });
+  const reviewStore = new ReviewStore(current.db);
+  const review = reviewStore.create({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "base",
+    gitRefHead: "head",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+  reviewStore.complete(review.id, [{
+    file: "src/danger.ts",
+    line_start: 12,
+    line_end: 12,
+    severity: "red",
+    category: "perte de données",
+    message: "Conserve une sauvegarde avant la suppression.",
+  }]);
+  const flag = reviewStore.get(review.id)!.flags[0]!;
+
+  const mode = await putJson(`/api/projects/${project.id}/gardien-mode`, {
+    mode: "bloquant",
+  });
+  expect(mode.status).toBe(200);
+  expect(await mode.json()).toEqual(expect.objectContaining({ gardien_mode: "bloquant" }));
+  const blocked = await fetch(`${current.baseUrl}/api/projects/${project.id}/gardien-status`);
+  expect(await blocked.json()).toEqual({ mode: "bloquant", blocked: true, openRedCount: 1 });
+
+  const acked = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
+    method: "PATCH",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ status: "acked" }),
+  });
+  expect(acked.status).toBe(200);
+  expect(await acked.json()).toEqual(expect.objectContaining({ id: flag.id, status: "acked" }));
+  const unblocked = await fetch(`${current.baseUrl}/api/projects/${project.id}/gardien-status`);
+  expect(await unblocked.json()).toEqual({ mode: "bloquant", blocked: false, openRedCount: 0 });
+});
+
 test("la création d'un preset invalide conserve son erreur de validation", async () => {
   const response = await postJson("/api/presets", {
     name: "Invalide",

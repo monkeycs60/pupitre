@@ -74,6 +74,16 @@ export class ReviewRunner {
     return this.store.listByProject(projectId);
   }
 
+  setFlagStatus(id: string, status: "open" | "acked" | "dismissed") {
+    return this.store.setFlagStatus(id, status);
+  }
+
+  gardienStatus(projectId: string) {
+    const project = this.projects.get(projectId);
+    if (!project) return null;
+    return this.store.gardienStatus(projectId, project.gardien_mode);
+  }
+
   async wait(id: string): Promise<Review | null> {
     await this.active.get(id);
     return this.store.get(id);

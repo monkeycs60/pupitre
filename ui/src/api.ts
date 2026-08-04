@@ -1,10 +1,14 @@
 import type {
   Conversation,
   ConversationSpeed,
+  GardienMode,
+  GardienStatus,
   Project,
   Preset,
   Provider,
   QuotaSnapshot,
+  Review,
+  ReviewFlag,
   StoredEvent,
   SubtaskResult,
 } from './types'
@@ -51,6 +55,19 @@ export interface PresetInput {
   effort: string | null
   speed: ConversationSpeed | null
   orchestrator: boolean
+  review_provider?: Provider
+  review_model?: string
+  review_effort?: string
+}
+
+export interface StartReviewInput {
+  conversationId: string
+  gitRefBase?: string
+  gitRefHead?: string
+  presetId?: string | null
+  reviewProvider?: Provider
+  reviewModel?: string
+  reviewEffort?: string
 }
 
 export interface Settings {
@@ -114,6 +131,14 @@ function jsonPut(body: unknown): RequestInit {
   }
 }
 
+function jsonPatch(body: unknown): RequestInit {
+  return {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }
+}
+
 function routeId(id: string): string {
   return encodeURIComponent(id)
 }
@@ -142,6 +167,13 @@ export function setProjectDefaultPreset(
     `/api/projects/${routeId(id)}/default-preset`,
     jsonPut({ presetId }),
   )
+}
+
+export function setProjectGardienMode(
+  id: string,
+  mode: GardienMode,
+): Promise<Project> {
+  return fetchJson(`/api/projects/${routeId(id)}/gardien-mode`, jsonPut({ mode }))
 }
 
 export function listPresets(signal?: AbortSignal): Promise<Preset[]> {
@@ -235,6 +267,35 @@ export function getConversationEvents(
     `/api/conversations/${routeId(conversationId)}/events`,
     { signal },
   )
+}
+
+export function startReview(input: StartReviewInput): Promise<Review> {
+  return fetchJson('/api/reviews', jsonPost(input))
+}
+
+export function listProjectReviews(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<Review[]> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/reviews`, { signal })
+}
+
+export function getReview(reviewId: string, signal?: AbortSignal): Promise<Review> {
+  return fetchJson(`/api/reviews/${routeId(reviewId)}`, { signal })
+}
+
+export function setReviewFlagStatus(
+  flagId: string,
+  status: 'open' | 'acked' | 'dismissed',
+): Promise<ReviewFlag> {
+  return fetchJson(`/api/review-flags/${routeId(flagId)}`, jsonPatch({ status }))
+}
+
+export function getGardienStatus(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<GardienStatus> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/gardien-status`, { signal })
 }
 
 export function getSubtask(
