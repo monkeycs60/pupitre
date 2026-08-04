@@ -148,6 +148,7 @@ case "$*" in
   *DECONNECTE_WS*) sleep 0.5 ;;
   *CONCURRENT_SAME*) sleep 0.3 ;;
   *ATTENDS_WS*) sleep 0.2 ;;
+  *certitude*) sleep 0.2 ;;
   *BLOQUE*) exec sleep 30 ;;
 esac
 if [ -n "$FAKE_CLAUDE_ARGS_FILE" ]; then printf '%s\n' "$*" >> "$FAKE_CLAUDE_ARGS_FILE"; fi
@@ -468,13 +469,23 @@ test("expose le contre-avis opposé, global ou ciblé, et l'option automatique r
   expect(duplicate.status).toBe(409);
   await current.reviews.waitCounter(flag.id);
 
+  const author = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
+    method: "PATCH",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ codeProvider: "claude" }),
+  });
+  expect(author.status).toBe(200);
+  expect(await author.json()).toEqual(expect.objectContaining({
+    id: flag.id,
+    code_provider: "claude",
+  }));
   const targeted = await postJson(`/api/review-flags/${flag.id}/counter-opinion`, {
-    model: "opus",
+    model: "gpt-5.6-sol",
     effort: "high",
   });
   expect(targeted.status).toBe(202);
   expect(await targeted.json()).toEqual([
-    expect.objectContaining({ id: flag.id, counter_provider: "claude" }),
+    expect.objectContaining({ id: flag.id, counter_provider: "codex" }),
   ]);
   await current.reviews.waitCounter(flag.id);
 });

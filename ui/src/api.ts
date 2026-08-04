@@ -300,6 +300,16 @@ export function setReviewFlagStatus(
   return fetchJson(`/api/review-flags/${routeId(flagId)}`, jsonPatch({ status }))
 }
 
+export function setReviewFlagCodeProvider(
+  flagId: string,
+  codeProvider: Provider,
+): Promise<ReviewFlag> {
+  return fetchJson(
+    `/api/review-flags/${routeId(flagId)}`,
+    jsonPatch({ codeProvider }),
+  )
+}
+
 export function setReviewDecisionStatus(
   decisionId: string,
   status: 'acked' | 'dismissed',
@@ -314,21 +324,22 @@ export function startFlagCounterOpinion(
   flagId: string,
   model: string,
   effort: string,
+  codeProvider: Provider,
 ): Promise<ReviewFlag[]> {
   return fetchJson(
     `/api/review-flags/${routeId(flagId)}/counter-opinion`,
-    jsonPost({ model, effort }),
+    jsonPost({ model, effort, codeProvider }),
   )
 }
 
 export function startReviewCounterOpinions(
   reviewId: string,
-  model: string,
-  effort: string,
+  model?: string,
+  effort?: string,
 ): Promise<ReviewFlag[]> {
   return fetchJson(
     `/api/reviews/${routeId(reviewId)}/counter-opinions`,
-    jsonPost({ model, effort }),
+    jsonPost(model && effort ? { model, effort } : {}),
   )
 }
 

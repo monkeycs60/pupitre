@@ -29,8 +29,11 @@ export function CounterOpinionDialog({
   onClose,
   onStarted,
 }: CounterOpinionDialogProps) {
-  const provider = opposite(review.code_provider)
-  const [model, setModel] = useState(defaultModel(provider))
+  const storedProviders = new Set(review.flags.map((item) => item.code_provider))
+  const mixedProviders = !flag && storedProviders.size > 1
+  const [codeProvider, setCodeProvider] = useState(flag?.code_provider ?? review.code_provider)
+  const provider = mixedProviders ? null : opposite(codeProvider)
+  const [model, setModel] = useState(defaultModel(provider ?? 'codex'))
   const [effort, setEffort] = useState('high')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +44,8 @@ export function CounterOpinionDialog({
     setIsSubmitting(true)
     setError(null)
     try {
-      if (flag) await startFlagCounterOpinion(flag.id, model, effort)
+      if (flag) await startFlagCounterOpinion(flag.id, model, effort, codeProvider)
+      else if (mixedProviders) await startReviewCounterOpinions(review.id)
       else await startReviewCounterOpinions(review.id, model, effort)
       onStarted()
     } catch (submitError: unknown) {
@@ -65,7 +69,9 @@ export function CounterOpinionDialog({
               {flag ? 'Contre-avis ciblé' : 'Contre-avis sur tous les points'}
             </h2>
             <p>
-              Le code vient de {review.code_provider} : le jugement passe à {provider}.
+              {mixedProviders
+                ? 'Les auteurs sont mémorisés point par point : chaque jugement passe au provider opposé.'
+                : `Le code vient de ${codeProvider} : le jugement passe à ${provider}.`}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Fermer">×</button>
@@ -85,26 +91,48 @@ export function CounterOpinionDialog({
           )}
 
           <div className="counter-dialog-grid">
+            {flag ? (
+              <label>
+                <span>Auteur de ce point</span>
+                <select
+                  value={codeProvider}
+                  onChange={(event) => {
+                    const author = event.target.value as Provider
+                    const nextProvider = opposite(author)
+                    setCodeProvider(author)
+                    setModel(defaultModel(nextProvider))
+                    setEffort('high')
+                  }}
+                >
+                  <option value="codex">codex</option>
+                  <option value="claude">claude</option>
+                </select>
+              </label>
+            ) : null}
             <label>
-              <span>Provider opposé</span>
-              <input value={provider} readOnly />
+              <span>{mixedProviders ? 'Providers opposés' : 'Provider opposé'}</span>
+              <input value={mixedProviders ? 'codex + claude' : provider ?? ''} readOnly />
             </label>
-            <label>
-              <span>Modèle fort</span>
-              <select value={model} onChange={(event) => setModel(event.target.value)}>
-                {REVIEW_MODELS[provider].map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Effort</span>
-              <select value={effort} onChange={(event) => setEffort(event.target.value)}>
-                {PROVIDER_EFFORTS[provider].map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </label>
+            {provider ? (
+              <>
+                <label>
+                  <span>Modèle fort</span>
+                  <select value={model} onChange={(event) => setModel(event.target.value)}>
+                    {REVIEW_MODELS[provider].map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Effort</span>
+                  <select value={effort} onChange={(event) => setEffort(event.target.value)}>
+                    {PROVIDER_EFFORTS[provider].map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : null}
           </div>
 
           <p className="counter-dialog-note">

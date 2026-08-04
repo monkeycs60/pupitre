@@ -2438,6 +2438,21 @@ textarea:focus-visible {
   font-size: 9px;
 }
 
+.decision-flag-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.decision-flag-author select {
+  min-height: 22px;
+  padding: 2px 20px 2px 5px;
+  font-size: 9px;
+}
+
 .counter-opinion-action {
   padding: 3px 5px;
   color: #5a544c;

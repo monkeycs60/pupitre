@@ -114,6 +114,7 @@ export interface ReviewFlag {
   message: string
   decision?: string
   status: ReviewFlagStatus
+  code_provider: Provider
   counter_state: CounterState
   counter_verdict: CounterVerdict | null
   counter_text: string | null

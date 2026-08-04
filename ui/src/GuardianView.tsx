@@ -4,6 +4,7 @@ import {
   listProjectReviews,
   setProjectGardienMode,
   setProjectAutoCounterRed,
+  setReviewFlagCodeProvider,
   setReviewDecisionStatus,
 } from './api'
 import { CounterOpinionDialog } from './CounterOpinionDialog'
@@ -157,6 +158,19 @@ export function GuardianView({
       })))
       setGardienStatus(await getGardienStatus(project.id))
       onReviewsChanged()
+    } catch (updateError: unknown) {
+      setError(errorMessage(updateError))
+    }
+  }
+
+  async function handleFlagCodeProvider(flag: ReviewFlag, codeProvider: 'claude' | 'codex') {
+    setError(null)
+    try {
+      const updated = await setReviewFlagCodeProvider(flag.id, codeProvider)
+      setReviews((current) => current.map((review) => ({
+        ...review,
+        flags: review.flags.map((item) => item.id === updated.id ? updated : item),
+      })))
     } catch (updateError: unknown) {
       setError(errorMessage(updateError))
     }
@@ -321,6 +335,19 @@ export function GuardianView({
                     <span>{flag.file}:{flag.line_start}</span>
                     <span>{flag.severity}</span>
                   </header>
+                  <label className="decision-flag-author">
+                    <span>Auteur du code</span>
+                    <select
+                      value={flag.code_provider}
+                      onChange={(event) => void handleFlagCodeProvider(
+                        flag,
+                        event.target.value as 'claude' | 'codex',
+                      )}
+                    >
+                      <option value="codex">codex</option>
+                      <option value="claude">claude</option>
+                    </select>
+                  </label>
                   <p>{flag.message}</p>
                   {flag.counter_state === 'queued' || flag.counter_state === 'running' ? (
                     <p className="counter-opinion-state">

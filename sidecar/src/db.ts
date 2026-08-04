@@ -79,6 +79,7 @@ export function openDb(dir: string = dataDir()): Database {
       file TEXT NOT NULL, line_start INTEGER NOT NULL, line_end INTEGER NOT NULL,
       severity TEXT NOT NULL CHECK (severity IN ('red', 'orange', 'grey')),
       category TEXT NOT NULL, message TEXT NOT NULL,
+      code_provider TEXT NULL,
       status TEXT NOT NULL DEFAULT 'open'
         CHECK (status IN ('open', 'acked', 'dismissed', 'countered'))
     );
@@ -114,6 +115,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "review_flags", "counter_subtask_id TEXT NULL");
   addColumn(db, "review_flags", "counter_error TEXT NULL");
   addColumn(db, "review_flags", "decision TEXT NULL");
+  addColumn(db, "review_flags", "code_provider TEXT NULL");
   const addedReviewProvider = addColumn(
     db,
     "presets",

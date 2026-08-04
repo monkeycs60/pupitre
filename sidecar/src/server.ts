@@ -827,6 +827,15 @@ export function createServer(deps: ServerDeps) {
           if (!review) throw new HttpError(404, "review inconnue");
           if (review.flags.length === 0) throw new HttpError(400, "aucun flag à contre-expertiser");
           const body = await readObject(request);
+          const isMixedProvider = new Set(
+            review.flags.map((flag) => flag.code_provider),
+          ).size > 1;
+          if (isMixedProvider && (body.model !== undefined || body.effort !== undefined)) {
+            throw new HttpError(
+              400,
+              "une review multi-provider utilise le modèle fort de chaque provider opposé",
+            );
+          }
           const defaults = deps.reviews.counterDefaults(review.flags[0]!.id)!;
           const model = strongReviewModel(
             body.model === undefined ? defaults.model : requiredString(body, "model"),
@@ -838,7 +847,7 @@ export function createServer(deps: ServerDeps) {
           try {
             return json(deps.reviews.startCounterOpinions(
               review.flags.map((flag) => flag.id),
-              { model, effort: effort ?? defaults.effort },
+              isMixedProvider ? {} : { model, effort: effort ?? defaults.effort },
             ), 202);
           } catch (error) {
             if (error instanceof CounterAlreadyRunningError) {
@@ -851,11 +860,23 @@ export function createServer(deps: ServerDeps) {
         const reviewFlagId = routeId(pathname, /^\/api\/review-flags\/([^/]+)$/);
         if (request.method === "PATCH" && reviewFlagId !== null) {
           const body = await readObject(request);
-          if (body.status !== "open" && body.status !== "acked" && body.status !== "dismissed") {
-            throw new HttpError(400, "statut de flag invalide");
-          }
-          const flag = deps.reviews.setFlagStatus(reviewFlagId, body.status);
+          let flag = deps.reviews.getFlag(reviewFlagId);
           if (!flag) throw new HttpError(404, "flag inconnu");
+          if (body.status !== undefined) {
+            if (body.status !== "open" && body.status !== "acked" && body.status !== "dismissed") {
+              throw new HttpError(400, "statut de flag invalide");
+            }
+            flag = deps.reviews.setFlagStatus(reviewFlagId, body.status);
+          }
+          if (body.codeProvider !== undefined) {
+            if (body.codeProvider !== "claude" && body.codeProvider !== "codex") {
+              throw new HttpError(400, "codeProvider invalide");
+            }
+            flag = deps.reviews.setFlagCodeProvider(reviewFlagId, body.codeProvider);
+          }
+          if (body.status === undefined && body.codeProvider === undefined) {
+            throw new HttpError(400, "aucune modification de flag demandée");
+          }
           return json(flag);
         }
         const reviewFlagCounterId = routeId(
@@ -863,9 +884,17 @@ export function createServer(deps: ServerDeps) {
           /^\/api\/review-flags\/([^/]+)\/counter-opinion$/,
         );
         if (request.method === "POST" && reviewFlagCounterId !== null) {
+          const body = await readObject(request);
+          if (body.codeProvider !== undefined) {
+            if (body.codeProvider !== "claude" && body.codeProvider !== "codex") {
+              throw new HttpError(400, "codeProvider invalide");
+            }
+            if (!deps.reviews.setFlagCodeProvider(reviewFlagCounterId, body.codeProvider)) {
+              throw new HttpError(404, "flag inconnu");
+            }
+          }
           const defaults = deps.reviews.counterDefaults(reviewFlagCounterId);
           if (!defaults) throw new HttpError(404, "flag inconnu");
-          const body = await readObject(request);
           const model = strongReviewModel(
             body.model === undefined ? defaults.model : requiredString(body, "model"),
             "model de contre-avis",

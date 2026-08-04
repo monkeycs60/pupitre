@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
 import { QuotaTracker } from "../src/quotas";
-import { parseReviewOutput, ReviewRunner, splitDiffIntoZones } from "../src/reviews";
+import {
+  parseReviewDecisionOutput,
+  parseReviewOutput,
+  ReviewRunner,
+  splitDiffIntoZones,
+} from "../src/reviews";
 import { ConversationStore } from "../src/stores/conversations";
 import { PresetStore } from "../src/stores/presets";
 import { ProjectStore } from "../src/stores/projects";
@@ -128,6 +133,20 @@ test("une ligne supprimée reste ancrable sur son ancien chemin", () => {
   )).toHaveLength(1);
 });
 
+test("valide un regroupement sémantique de 2 à 4 décisions sans perdre de flag", () => {
+  expect(parseReviewDecisionOutput(JSON.stringify({ decisions: [
+    { question: "OK pour changer le contrat API ?", flag_numbers: [1, 3, 5] },
+    { question: "OK pour migrer les données ?", flag_numbers: [2, 4] },
+  ] }), 5)).toEqual([
+    { question: "OK pour changer le contrat API ?", flag_indexes: [0, 2, 4] },
+    { question: "OK pour migrer les données ?", flag_indexes: [1, 3] },
+  ]);
+  expect(() => parseReviewDecisionOutput(JSON.stringify({ decisions: [
+    { question: "Décision incomplète", flag_numbers: [1, 2] },
+    { question: "Autre décision", flag_numbers: [2, 3] },
+  ] }), 3)).toThrow(/exactement une fois/);
+});
+
 test("le scan headless rejoue la fixture via l'adapter Codex et persiste ses flags", async () => {
   writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
   git("add", ".");
@@ -236,6 +255,54 @@ test("une sortie invalide reçoit une seule relance de correction de format", as
   expect(prompts[1]).toContain("CORRECTION DE FORMAT");
 });
 
+test("demande au modèle fort de regrouper sémantiquement plus de quatre flags", async () => {
+  writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
+  git("add", ".");
+  git("commit", "-qm", "head décisions");
+  const project = projects.create({ name: "regroupement modèle", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "modifie",
+  });
+  const prompts: string[] = [];
+  const runner = new ReviewRunner(
+    store,
+    projects,
+    conversations,
+    quotas,
+    async ({ prompt }) => {
+      prompts.push(prompt);
+      if (prompt.includes("Regroupe ces risques")) {
+        return JSON.stringify({ decisions: [
+          { question: "OK pour exposer les valeurs sensibles ?", flag_numbers: [1, 2, 3] },
+          { question: "OK pour modifier le contrat de logs ?", flag_numbers: [4, 5] },
+        ] });
+      }
+      return JSON.stringify({ flags: Array.from({ length: 5 }, (_, index) => ({
+        file: "src/config.ts",
+        line_start: 1,
+        line_end: 1,
+        severity: index < 2 ? "red" : "orange",
+        category: index < 3 ? "secret" : "contrat",
+        message: `Risque ${index + 1}`,
+        decision: `OK pour le risque ${index + 1} ?`,
+      })) });
+    },
+  );
+  const review = runner.start({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "HEAD^",
+    gitRefHead: "HEAD",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+
+  const completed = await runner.wait(review.id);
+  expect(prompts).toHaveLength(2);
+  expect(completed?.decisions.map((decision) => decision.flag_ids.length)).toEqual([3, 2]);
+});
+
 test("le contre-avis passe au provider opposé en lecture seule et persiste son verdict", async () => {
   const project = projects.create({ name: "contre-avis", path: repo });
   const conversation = conversations.create({
@@ -298,6 +365,7 @@ test("le contre-avis passe au provider opposé en lecture seule et persiste son 
   );
   const flagId = store.get(review.id)!.flags[0]!.id;
   runner.startCounterOpinions([flagId]);
+  expect(() => runner.startCounterOpinions([flagId])).toThrow(/déjà en cours/);
   const countered = await runner.waitCounter(flagId);
 
   expect(inputs).toHaveLength(1);
@@ -331,7 +399,7 @@ test("le contre-avis passe au provider opposé en lecture seule et persiste son 
   expect(runner.gardienStatus(project.id)?.blocked).toBe(true);
 });
 
-test("regroupe les flags en quatre décisions ciblées au maximum", () => {
+test("persiste quatre décisions sémantiques explicites sans regroupement implicite", () => {
   const project = projects.create({ name: "décisions", path: repo });
   const conversation = conversations.create({
     projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
@@ -345,7 +413,7 @@ test("regroupe les flags en quatre décisions ciblées au maximum", () => {
     model: "gpt-5.6-sol",
     effort: "high",
   });
-  store.complete(review.id, Array.from({ length: 7 }, (_, index) => ({
+  const flags = Array.from({ length: 7 }, (_, index) => ({
     file: `src/fichier-${index}.ts`,
     line_start: index + 1,
     line_end: index + 1,
@@ -353,12 +421,108 @@ test("regroupe les flags en quatre décisions ciblées au maximum", () => {
     category: "contrat API",
     message: `Risque concret ${index}.`,
     decision: `OK pour le changement ${index} ?`,
-  })));
+  }));
+  store.complete(review.id, flags, [
+    { question: "OK pour les deux changements de contrat ?", flag_indexes: [0, 4] },
+    { question: "OK pour les deux migrations liées ?", flag_indexes: [1, 5] },
+    { question: "OK pour les deux comportements silencieux ?", flag_indexes: [2, 6] },
+    { question: "OK pour la gestion d'erreur ?", flag_indexes: [3] },
+  ]);
 
   const completed = store.get(review.id)!;
   expect(completed.decisions).toHaveLength(4);
   expect(completed.decisions.flatMap((decision) => decision.flag_ids).sort())
     .toEqual(completed.flags.map((flag) => flag.id).sort());
+});
+
+test("contre-expertise chaque flag avec le provider opposé à son auteur réel", async () => {
+  const project = projects.create({ name: "auteurs mixtes", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "base",
+    gitRefHead: "head",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+  store.complete(review.id, [
+    {
+      file: "src/codex.ts", line_start: 1, line_end: 1, severity: "red",
+      category: "données", message: "Risque Codex.",
+    },
+    {
+      file: "src/claude.ts", line_start: 1, line_end: 1, severity: "orange",
+      category: "contrat", message: "Risque Claude.",
+    },
+  ]);
+  const flags = store.get(review.id)!.flags;
+  store.setFlagCodeProvider(flags[1]!.id, "claude");
+  const inputs: SubtaskInput[] = [];
+  const fakeSubtasks = {
+    start(input: SubtaskInput) {
+      inputs.push(input);
+      return { id: `counter-${inputs.length}` } as Subtask;
+    },
+    async waitResult(id: string): Promise<SubtaskResult> {
+      return {
+        status: "done",
+        resultText: '{"verdict":"confirmed","text":"Risque confirmé."}',
+        error: null,
+        subtask: { id } as Subtask,
+      };
+    },
+  };
+  const runner = new ReviewRunner(
+    store, projects, conversations, quotas, undefined, fakeSubtasks,
+  );
+  runner.startCounterOpinions(flags.map((flag) => flag.id));
+  await Promise.all(flags.map((flag) => runner.waitCounter(flag.id)));
+
+  expect(inputs.map(({ provider, model }) => ({ provider, model })))
+    .toEqual(expect.arrayContaining([
+      { provider: "claude", model: "opus" },
+      { provider: "codex", model: "gpt-5.6-sol" },
+    ]));
+});
+
+test("synchronise les statuts flag-décision et préserve les acquis au backfill", () => {
+  const project = projects.create({ name: "migration décisions", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "base",
+    gitRefHead: "head",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+  store.complete(review.id, [
+    {
+      file: "src/a.ts", line_start: 1, line_end: 1, severity: "red",
+      category: "données", message: "Préserve A.",
+    },
+    {
+      file: "src/b.ts", line_start: 2, line_end: 2, severity: "orange",
+      category: "contrat", message: "Préserve B.",
+    },
+  ]);
+  const completed = store.get(review.id)!;
+  store.setDecisionStatus(completed.decisions[0]!.id, "acked");
+  store.setFlagStatus(completed.flags[0]!.id, "open");
+  expect(store.getDecision(completed.decisions[0]!.id)?.status).toBe("open");
+  for (const flag of completed.flags) store.setFlagStatus(flag.id, "acked");
+  db.query("DELETE FROM review_decisions WHERE review_id = ?").run(review.id);
+
+  const reopened = new ReviewStore(db).get(review.id)!;
+  expect(reopened.decisions).toHaveLength(2);
+  expect(reopened.decisions.every((decision) => decision.status === "acked")).toBe(true);
 });
 
 test("l'option projet lance automatiquement les contre-avis rouges", async () => {

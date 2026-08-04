@@ -9,6 +9,7 @@ import { defaultReviewConfig } from "./stores/presets";
 import type {
   CounterVerdict,
   Review,
+  ReviewDecisionInput,
   ReviewFlag,
   ReviewFlagInput,
   ReviewSeverity,
@@ -103,8 +104,16 @@ export class ReviewRunner {
     return this.store.listByProject(projectId);
   }
 
+  getFlag(id: string): ReviewFlag | null {
+    return this.store.getFlag(id);
+  }
+
   setFlagStatus(id: string, status: "open" | "acked" | "dismissed") {
     return this.store.setFlagStatus(id, status);
+  }
+
+  setFlagCodeProvider(id: string, provider: Provider) {
+    return this.store.setFlagCodeProvider(id, provider);
   }
 
   setDecisionStatus(id: string, status: "acked" | "dismissed") {
@@ -120,9 +129,7 @@ export class ReviewRunner {
   counterDefaults(flagId: string): CounterOpinionDefaults | null {
     const flag = this.store.getFlag(flagId);
     if (!flag) return null;
-    const review = this.store.get(flag.review_id);
-    if (!review) return null;
-    return defaultReviewConfig(oppositeProvider(review.code_provider));
+    return defaultReviewConfig(oppositeProvider(flag.code_provider));
   }
 
   startCounterOpinions(
@@ -141,18 +148,19 @@ export class ReviewRunner {
     if (reviewIds.size !== 1) throw new Error("les flags doivent appartenir à la même review");
     const review = this.store.get(flags[0]!.review_id);
     if (!review) throw new Error("review inconnue");
-    const defaults = defaultReviewConfig(oppositeProvider(review.code_provider));
-    const selected = {
-      provider: defaults.provider,
-      model: config.model?.trim() || defaults.model,
-      effort: config.effort?.trim() || defaults.effort,
-    };
-    const queued = this.store.queueCounters(
-      flags.map((flag) => flag.id),
-      selected.provider,
-      selected.model,
-      selected.effort,
-    );
+    const targetProviders = new Set(flags.map((flag) => oppositeProvider(flag.code_provider)));
+    if (targetProviders.size > 1 && (config.model || config.effort)) {
+      throw new Error("une review multi-provider utilise les modèles forts par défaut de chaque point");
+    }
+    const queued = this.store.queueCounters(flags.map((flag) => {
+      const defaults = defaultReviewConfig(oppositeProvider(flag.code_provider));
+      return {
+        id: flag.id,
+        provider: defaults.provider,
+        model: config.model?.trim() || defaults.model,
+        effort: config.effort?.trim() || defaults.effort,
+      };
+    }));
     const run = this.executeCounterBatch(review, queued)
       .finally(() => {
         for (const flag of queued) this.activeCounters.delete(flag.id);
@@ -206,7 +214,9 @@ export class ReviewRunner {
         prompt,
       }, zone));
     }
-    this.store.complete(id, deduplicateFlags(flags));
+    const uniqueFlags = deduplicateFlags(flags);
+    const decisions = await this.extractDecisions(cwd, input, uniqueFlags);
+    this.store.complete(id, uniqueFlags, decisions);
     const project = this.projects.get(input.projectId);
     if (project?.auto_counter_red && this.subtasks) {
       const redIds = this.store.get(id)?.flags
@@ -266,6 +276,32 @@ export class ReviewRunner {
         prompt: formatRetryPrompt(input.prompt, response, error.message),
       });
       return parseReviewOutput(response, diff);
+    }
+  }
+
+  private async extractDecisions(
+    cwd: string,
+    input: StartReviewInput,
+    flags: ReviewFlagInput[],
+  ): Promise<ReviewDecisionInput[] | undefined> {
+    if (flags.length <= 4) return undefined;
+    const scanInput: ReviewScanInput = {
+      cwd,
+      provider: input.provider,
+      model: input.model,
+      effort: input.effort,
+      prompt: decisionPrompt(flags),
+    };
+    let response = await this.scanner(scanInput);
+    try {
+      return parseReviewDecisionOutput(response, flags.length);
+    } catch (error) {
+      if (!(error instanceof ReviewOutputError)) throw error;
+      response = await this.scanner({
+        ...scanInput,
+        prompt: decisionRetryPrompt(scanInput.prompt, response, error.message),
+      });
+      return parseReviewDecisionOutput(response, flags.length);
     }
   }
 }
@@ -370,16 +406,20 @@ function splitOversizedHunk(preamble: string, hunk: string[], maxChars: number):
   let chunkOld = oldCursor;
   let chunkNew = newCursor;
 
-  const flush = () => {
-    if (body.length === 0) return;
+  const render = (lines: string[]) => {
     let oldCount = 0;
     let newCount = 0;
-    for (const line of body) {
-      if (!line.startsWith("+")) oldCount += line.startsWith("\\") ? 0 : 1;
-      if (!line.startsWith("-")) newCount += line.startsWith("\\") ? 0 : 1;
+    for (const line of lines) {
+      if (!line.startsWith("+") && !line.startsWith("\\")) oldCount += 1;
+      if (!line.startsWith("-") && !line.startsWith("\\")) newCount += 1;
     }
     const header = `@@ -${chunkOld},${oldCount} +${chunkNew},${newCount} @@${suffix}\n`;
-    result.push(`${preamble}${header}${body.join("\n")}\n`);
+    return `${preamble}${header}${lines.join("\n")}\n`;
+  };
+
+  const flush = () => {
+    if (body.length === 0) return;
+    result.push(render(body));
     chunkOld = oldCursor;
     chunkNew = newCursor;
     body = [];
@@ -387,10 +427,12 @@ function splitOversizedHunk(preamble: string, hunk: string[], maxChars: number):
 
   for (const line of hunk.slice(1)) {
     const probe = [...body, line];
-    const headerBudget = `@@ -${chunkOld},0 +${chunkNew},0 @@${suffix}\n`.length;
-    if (preamble.length + headerBudget + probe.join("\n").length + 1 > maxChars) {
+    if (render(probe).length > maxChars) {
       if (body.length === 0) throw new Error("ligne de diff trop volumineuse pour le Gardien");
       flush();
+      if (render([line]).length > maxChars) {
+        throw new Error("ligne de diff trop volumineuse pour le Gardien");
+      }
     }
     body.push(line);
     if (!line.startsWith("+") && !line.startsWith("\\")) oldCursor += 1;
@@ -410,6 +452,41 @@ export function parseReviewOutput(output: string, diff: string): ReviewFlagInput
   }
   const changed = changedLines(diff);
   return parsed.flags.map((raw, index) => validateFlag(raw, index, changed));
+}
+
+export function parseReviewDecisionOutput(
+  output: string,
+  flagCount: number,
+): ReviewDecisionInput[] {
+  const parsed = parseJsonObject(output);
+  if (!Array.isArray(parsed.decisions) || parsed.decisions.length < 2 || parsed.decisions.length > 4) {
+    throw new ReviewOutputError("la clé decisions doit contenir entre 2 et 4 décisions");
+  }
+  const plans = parsed.decisions.map((raw, index) => {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      throw new ReviewOutputError(`décision ${index + 1} invalide`);
+    }
+    const decision = raw as Record<string, unknown>;
+    const question = nonEmptyString(decision.question, `décision ${index + 1}.question`);
+    if (!Array.isArray(decision.flag_numbers) || decision.flag_numbers.length === 0) {
+      throw new ReviewOutputError(`décision ${index + 1}.flag_numbers invalide`);
+    }
+    return {
+      question,
+      flag_indexes: decision.flag_numbers.map((number) =>
+        positiveInteger(number, `décision ${index + 1}.flag_numbers`) - 1,
+      ),
+    };
+  });
+  const indexes = plans.flatMap((plan) => plan.flag_indexes);
+  if (
+    indexes.some((index) => index >= flagCount)
+    || new Set(indexes).size !== indexes.length
+    || indexes.length !== flagCount
+  ) {
+    throw new ReviewOutputError("les décisions doivent couvrir chaque flag exactement une fois");
+  }
+  return plans;
 }
 
 function parseJsonObject(output: string): Record<string, unknown> {
@@ -559,6 +636,26 @@ function reviewPrompt(diff: string, index: number, total: number): string {
   ].join("\n");
 }
 
+function decisionPrompt(flags: ReviewFlagInput[]): string {
+  const inventory = flags.map((flag, index) => ({
+    number: index + 1,
+    file: flag.file,
+    lines: `${flag.line_start}-${flag.line_end}`,
+    severity: flag.severity,
+    risk: flag.message,
+    suggested_decision: flag.decision,
+  }));
+  return [
+    "Regroupe ces risques de review en 2 à 4 décisions utilisateur sémantiques.",
+    "Une décision peut couvrir plusieurs risques uniquement s'ils relèvent réellement du même choix.",
+    "Chaque numéro de flag doit apparaître exactement une fois, sans duplication ni oubli.",
+    "Réponds UNIQUEMENT par ce JSON :",
+    '{"decisions":[{"question":"OK pour… ?","flag_numbers":[1,3]}]}',
+    "Risques :",
+    JSON.stringify(inventory),
+  ].join("\n");
+}
+
 function formatRetryPrompt(original: string, response: string, reason: string): string {
   return [
     original,
@@ -567,6 +664,18 @@ function formatRetryPrompt(original: string, response: string, reason: string): 
     `Cause : ${reason}.`,
     "Retourne maintenant uniquement l'objet JSON demandé, avec des flags ancrés",
     "aux lignes modifiées. Aucun texte avant ou après.",
+    "Réponse précédente :",
+    response.slice(0, 4_000),
+  ].join("\n");
+}
+
+function decisionRetryPrompt(original: string, response: string, reason: string): string {
+  return [
+    original,
+    "",
+    "CORRECTION DE FORMAT : le regroupement précédent est inexploitable.",
+    `Cause : ${reason}.`,
+    "Retourne uniquement l'objet JSON demandé avec 2 à 4 décisions et chaque numéro exactement une fois.",
     "Réponse précédente :",
     response.slice(0, 4_000),
   ].join("\n");
@@ -585,7 +694,7 @@ function counterOpinionPrompt(review: Review, flag: ReviewFlag): string {
   return [
     "Tu rends un contre-avis de code indépendant. Ton objectif est la certitude,",
     "pas la chasse au faux positif ni la contradiction systématique.",
-    `Le code a été écrit par ${review.code_provider}. Rejuge uniquement ce signal :`,
+    `Le code de ce point a été écrit par ${flag.code_provider}. Rejuge uniquement ce signal :`,
     `Fichier : ${flag.file}:${flag.line_start}-${flag.line_end}`,
     `Sévérité initiale : ${flag.severity}`,
     `Catégorie : ${flag.category}`,
