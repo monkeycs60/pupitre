@@ -45,9 +45,12 @@ export class ConversationRunner {
     /**
      * Port HTTP du sidecar, lu à chaque tour (et non capturé au démarrage) : le
      * serveur est construit APRÈS le runner, et en test il écoute sur un port
-     * éphémère. C'est ce port que le bridge MCP rappellera.
+     * éphémère. C'est ce port que le bridge MCP rappellera — d'où l'absence de
+     * valeur par défaut : un fournisseur oublié donnait `0`, donc un bridge qui
+     * appelait un port mort, et des délégations qui expiraient 15 min plus tard
+     * sans autre signal.
      */
-    private port: () => number = () => 0,
+    private port: () => number,
   ) {
     sweepOrphanedRuns(convs, projects);
   }
@@ -89,6 +92,22 @@ export class ConversationRunner {
 
     try {
       emit({ type: "user-message", text: prompt, images: imageNames });
+      // Câblage du bridge MCP `conductor`, par tour : seule une conversation
+      // orchestratrice peut déléguer. Les tours de sous-tâches passent par
+      // SubtaskRunner, qui ne construit JAMAIS ce champ (garde de profondeur).
+      let conductor: { port: number; conversationId: string } | undefined;
+      if (conv.orchestrator) {
+        const port = this.port();
+        if (!Number.isInteger(port) || port <= 0) {
+          // Échec immédiat et lisible plutôt qu'un tour lancé vers un bridge
+          // injoignable : le CLI aurait tourné, appelé `delegate`, et attendu.
+          const message = `port du sidecar indisponible (${port}) : `
+            + "impossible de câbler le bridge conductor";
+          emit({ type: "status", state: "error", error: message });
+          throw new Error(message);
+        }
+        conductor = { port, conversationId };
+      }
       const opts = {
         cwd: project.path,
         model: conv.model,
@@ -99,12 +118,7 @@ export class ConversationRunner {
         permissionMode: project.permission_mode,
         images: imageNames.map((name) => this.media.absolutePath(name)),
         signal: controller.signal,
-        // Câblage du bridge MCP `conductor`, par tour : seule une conversation
-        // orchestratrice peut déléguer. Les tours de sous-tâches passent par
-        // SubtaskRunner, qui ne construit JAMAIS ce champ (garde de profondeur).
-        ...(conv.orchestrator
-          ? { conductor: { port: this.port(), conversationId: conversationId } }
-          : {}),
+        ...(conductor ? { conductor } : {}),
       };
       if (conv.provider === "claude") await runClaudeTurn(opts, emit);
       // Codex passe par l'app-server (vrais deltas, quotas natifs) ; le chemin

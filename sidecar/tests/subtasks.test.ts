@@ -18,6 +18,7 @@ interface Harness {
   baseUrl: string;
   db: Database;
   server: ReturnType<typeof createServer>;
+  runner: ConversationRunner;
   subtasks: SubtaskRunner;
   conversations: ConversationStore;
   releaseFile: string;
@@ -59,6 +60,7 @@ function parentConversation(provider: "claude" | "codex" = "claude"): string {
 interface SubtaskResultBody {
   status: string;
   resultText: string;
+  error: string | null;
   subtask: { id: string; provider: string; model: string; label: string | null };
 }
 
@@ -101,14 +103,16 @@ cat "${fixture}"
   const media = new MediaStore(dir);
   const events = new ConversationEventBus();
   const quotas = new QuotaTracker(db);
-  const runner = new ConversationRunner(conversations, projects, media, events.broadcast, quotas);
+  const runner = new ConversationRunner(
+    conversations, projects, media, events.broadcast, quotas, () => 4321,
+  );
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
   const server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
-    db, server, subtasks, conversations, releaseFile,
+    db, server, runner, subtasks, conversations, releaseFile,
   };
 });
 
@@ -264,6 +268,9 @@ test("binaire introuvable : la sous-tâche finit en error, statut persisté", as
   const result = await waitForSubtask(id);
   expect(result.status).toBe("error");
   expect(result.resultText).toBe("");
+  // Le message d'échec remonte dans le résultat : sans lui, l'orchestrateur (et
+  // la carte repliée de l'UI) ne voient qu'un « ÉCHEC » sans cause.
+  expect(result.error).toContain("absent-");
   const events = await getJson<StoredEvent[]>(`/api/subtasks/${id}/events`);
   expect(events.at(-1)).toMatchObject({ type: "status", state: "error" });
   // La ligne en base porte bien le statut terminal (pas de 'running' fantôme).
@@ -303,6 +310,79 @@ test(`au-delà de ${MAX_CONCURRENT_SUBTASKS} sous-tâches simultanées, l'API r�
   const again = await spawn(parentId);
   expect(again.status).toBe(201);
   await waitForSubtask((await again.json() as { id: string }).id);
+});
+
+test("annuler le tour parent annule EN CASCADE ses sous-tâches en vol", async () => {
+  const parentId = parentConversation();
+  const otherParentId = parentConversation();
+  const parentRun = harness().runner.runTurn(parentId, "BLOQUE parent", []);
+  expect(harness().runner.isRunning(parentId)).toBe(true);
+  const spawn = (conversationId: string) => postJson("/api/subtasks", {
+    conversationId, provider: "claude", model: "haiku", prompt: "BLOQUE ici",
+  });
+
+  const ids: string[] = [];
+  for (let index = 0; index < 2; index += 1) {
+    const response = await spawn(parentId);
+    expect(response.status).toBe(201);
+    ids.push((await response.json() as { id: string }).id);
+  }
+  // Une sous-tâche d'une AUTRE conversation : la cascade ne doit pas la toucher.
+  const untouched = (await (await spawn(otherParentId)).json() as { id: string }).id;
+  expect(harness().subtasks.runningCount(parentId)).toBe(2);
+
+  // Aucun tour parent en cours ici, mais deux sous-tâches en vol : l'annulation
+  // reste acceptée (202) et clôt les deux, sinon elles resteraient orphelines.
+  const cancelled = await postJson(`/api/conversations/${parentId}/cancel`, {});
+  expect(cancelled.status).toBe(202);
+  await parentRun;
+  expect(harness().runner.isRunning(parentId)).toBe(false);
+
+  for (const id of ids) {
+    expect(harness().subtasks.get(id)!.status).toBe("error");
+    expect(harness().conversations.listEvents(id).at(-1))
+      .toMatchObject({ type: "status", state: "error", error: "annulé" });
+  }
+  expect(harness().subtasks.runningCount(parentId)).toBe(0);
+  expect(harness().subtasks.get(untouched)!.status).toBe("running");
+
+  // Plus rien à annuler sur ce parent : 409, comme pour un tour absent.
+  expect((await postJson(`/api/conversations/${parentId}/cancel`, {})).status).toBe(409);
+
+  writeFileSync(harness().releaseFile, "go");
+  await waitForSubtask(untouched);
+});
+
+test("le résultat d'une sous-tâche annulée porte l'erreur terminale", async () => {
+  const parentId = parentConversation();
+  const { id } = await (await postJson("/api/subtasks", {
+    conversationId: parentId, provider: "claude", model: "haiku", prompt: "BLOQUE ici",
+  })).json() as { id: string };
+
+  expect((await postJson(`/api/subtasks/${id}/cancel`, {})).status).toBe(202);
+  const result = await getJson<SubtaskResultBody>(`/api/subtasks/${id}`);
+  expect(result).toMatchObject({ status: "error", error: "annulé" });
+
+  writeFileSync(harness().releaseFile, "go");
+});
+
+test("une sous-tâche terminée ne laisse pas sa promesse dans la table des runs", async () => {
+  const parentId = parentConversation();
+  const runner = harness().subtasks;
+  const subtask = runner.start({
+    conversationId: parentId, provider: "claude", model: "haiku", prompt: "salut",
+  });
+  // Accès à l'état interne : la fuite mémoire visée n'est pas observable
+  // autrement (une Map qui grossit à chaque délégation d'une session longue).
+  const runs = (runner as unknown as { runs: Map<string, unknown> }).runs;
+  expect(runs.size).toBe(1);
+
+  await runner.waitResult(subtask.id);
+  expect(runs.size).toBe(0);
+
+  // Et les deux consommateurs de la table continuent de répondre correctement.
+  expect(await runner.waitResult(subtask.id)).toMatchObject({ status: "done" });
+  expect(await runner.cancel(subtask.id)).toBe(false);
 });
 
 test("routes de sous-tâche : 404 sur id inconnu, 404 sur conversation parente inconnue", async () => {

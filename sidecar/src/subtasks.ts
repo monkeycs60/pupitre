@@ -49,6 +49,13 @@ export interface SubtaskInput {
 export interface SubtaskResult {
   status: SubtaskStatus;
   resultText: string;
+  /**
+   * Message du dernier événement terminal en erreur (`annulé`, stderr du CLI,
+   * exception…), ou null si la sous-tâche ne s'est pas terminée en échec. Un
+   * sub-agent qui plante n'écrit souvent AUCUN `text-final` : sans ce champ,
+   * l'orchestrateur et la carte UI n'ont qu'un « ÉCHEC » sans cause.
+   */
+  error: string | null;
   subtask: Subtask;
 }
 
@@ -56,6 +63,19 @@ export interface SubtaskResult {
 export class SubtaskLimitError extends Error {}
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
+
+/**
+ * Message du DERNIER `status` du flux, s'il est en erreur. On ne remonte pas
+ * plus loin : une erreur suivie d'un statut terminal sain n'est pas un échec.
+ */
+function lastError(events: StoredEvent[]): string | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]!;
+    if (event.type !== "status") continue;
+    return event.state === "error" ? event.error ?? null : null;
+  }
+  return null;
+}
 
 export class SubtaskStore {
   constructor(private db: Database) {}
@@ -180,6 +200,11 @@ export class SubtaskRunner {
       .catch((error) => console.error("Échec d'une sous-tâche", error))
       .finally(() => {
         this.controllers.delete(subtask.id);
+        // La promesse ne sert plus à rien une fois réglée : la garder ferait
+        // grossir la table à chaque délégation d'une session longue. `cancel` et
+        // `waitResult` traitent l'absence d'entrée comme « déjà terminée » —
+        // c'est déjà le cas pour une subtask d'un process précédent.
+        this.runs.delete(subtask.id);
         siblings!.delete(subtask.id);
         if (siblings!.size === 0) this.active.delete(input.conversationId);
       });
@@ -200,6 +225,19 @@ export class SubtaskRunner {
     return true;
   }
 
+  /**
+   * Annule TOUTES les sous-tâches en vol d'une conversation parente et rend
+   * leur nombre. Appelé quand on annule le tour parent : sans ça, tuer
+   * l'orchestrateur laissait ses sub-agents tourner (process, quota et
+   * écritures dans le working directory) sans plus personne pour lire leur
+   * résultat.
+   */
+  async cancelByConversation(conversationId: string): Promise<number> {
+    const ids = [...(this.active.get(conversationId) ?? [])];
+    const cancelled = await Promise.all(ids.map((id) => this.cancel(id)));
+    return cancelled.filter(Boolean).length;
+  }
+
   /** Attend la fin de la subtask (si elle tourne dans ce process) puis rend son résultat. */
   async waitResult(subtaskId: string): Promise<SubtaskResult | null> {
     await this.runs.get(subtaskId);
@@ -210,10 +248,11 @@ export class SubtaskRunner {
   result(subtaskId: string): SubtaskResult | null {
     const subtask = this.store.get(subtaskId);
     if (!subtask) return null;
-    const resultText = this.convs.listEvents(subtaskId)
+    const events = this.convs.listEvents(subtaskId);
+    const resultText = events
       .flatMap((event) => (event.type === "text-final" ? [event.text] : []))
       .join("\n");
-    return { status: subtask.status, resultText, subtask };
+    return { status: subtask.status, resultText, error: lastError(events), subtask };
   }
 
   private async run(

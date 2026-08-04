@@ -22,6 +22,8 @@ let projects: ProjectStore;
 let projectId: string;
 let runner: ConversationRunner;
 let subtasks: SubtaskRunner;
+let media: MediaStore;
+let quotas: QuotaTracker;
 const previousEnv: Record<string, string | undefined> = {};
 
 const ENV_KEYS = [
@@ -53,10 +55,9 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
   projects = new ProjectStore(db);
   projectId = projects.create({ name: "p", path: tmpdir() }).id;
   convs = new ConversationStore(db);
-  const quotas = new QuotaTracker(db);
-  runner = new ConversationRunner(
-    convs, projects, new MediaStore(dir), () => {}, quotas, () => 4321,
-  );
+  quotas = new QuotaTracker(db);
+  media = new MediaStore(dir);
+  runner = new ConversationRunner(convs, projects, media, () => {}, quotas, () => 4321);
   subtasks = new SubtaskRunner(db, convs, projects, () => {}, quotas);
 });
 
@@ -124,6 +125,32 @@ test("conversation orchestratrice codex : mcp_servers dans la config du thread",
   });
   // L'effort reste transmis à côté.
   expect(start!.params.config.model_reasoning_effort).toBe("low");
+});
+
+test("port du sidecar non résolu : le tour orchestrateur échoue explicitement", async () => {
+  // Un runner mal câblé (fournisseur de port qui rend 0) donnait silencieusement
+  // PUPITRE_PORT=0 au bridge : les délégations partaient vers un port mort et
+  // l'orchestrateur ne voyait qu'un timeout d'outil, 15 min plus tard.
+  const broken = new ConversationRunner(
+    convs, projects, media, () => {}, quotas, () => 0,
+  );
+  const conv = convs.create({
+    projectId, provider: "claude", model: "haiku", firstMessage: "orchestre",
+  });
+
+  await expect(broken.runTurn(conv.id, "orchestre", [])).rejects.toThrow(/port/i);
+  expect(claudeArgs()).toBe(""); // aucun CLI lancé
+  expect(convs.listEvents(conv.id).at(-1))
+    .toMatchObject({ type: "status", state: "error" });
+
+  // Sans orchestration, le même runner tourne normalement : la garde ne
+  // concerne que le câblage du bridge.
+  const plain = convs.create({
+    projectId, provider: "claude", model: "haiku",
+    orchestrator: false, firstMessage: "simple",
+  });
+  await broken.runTurn(plain.id, "simple", []);
+  expect(claudeArgs()).toContain("-- simple");
 });
 
 test("garde de profondeur : un tour de sous-tâche ne reçoit jamais le conductor", async () => {

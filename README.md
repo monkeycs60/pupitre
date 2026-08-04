@@ -27,11 +27,12 @@ Les deux CLIs sont normalisés en un schéma d'événements unifié (`sidecar/sr
 Une conversation peut déléguer du travail à un autre modèle (le Conductor de la phase D). Le moteur vit dans `sidecar/src/subtasks.ts` :
 
 - `POST /api/subtasks {conversationId, provider, model, effort?, speed?, prompt, label?}` → `201 {id}`, tour lancé en arrière-plan dans le cwd du projet parent, **sans prendre le verrou de conversation** (une sous-tâche tourne délibérément en parallèle du tour parent qui l'a demandée).
-- `GET /api/subtasks/:id` → `{status, resultText, subtask}` — `resultText` = concaténation des `text-final`.
+- `GET /api/subtasks/:id` → `{status, resultText, error, subtask}` — `resultText` = concaténation des `text-final`, `error` = message du dernier statut terminal en échec (`null` sinon). Un sub-agent qui plante n'écrit souvent aucun `text-final` : sans `error`, l'orchestrateur et la carte UI n'ont qu'un « ÉCHEC » sans cause.
 - `GET /api/subtasks/:id/events` → replay, et `GET /api/conversations/:id/subtasks` → les sous-tâches d'une conversation.
 - Les événements d'une sous-tâche sont stockés dans la table `events` sous **son propre id** : le replay HTTP et le canal `/ws?conversation=<subtaskId>` fonctionnent à l'identique d'une conversation.
-- Au lancement, un event `subtask-ref` est appendé à la **conversation parente** : c'est ce qui permet à l'UI d'afficher la carte de sub-agent.
+- Au lancement, un event `subtask-ref` est appendé à la **conversation parente** : c'est ce qui permet à l'UI d'afficher la carte de sub-agent. La carte charge d'abord le snapshot HTTP et n'ouvre un WebSocket que si elle est **dépliée** ou si la sous-tâche **tourne encore** (`ui/src/subtaskStream.ts`) : un fil qui a délégué trente fois ne tient pas trente sockets sur des flux définitivement muets. Tant que le snapshot n'est pas revenu, la carte est dans un état neutre (« chargement ») — jamais « en cours », sinon les cartes historiques gonfleraient le compteur de sub-agents de la sidebar à chaque ouverture du fil.
 - `POST /api/subtasks/:id/cancel` → `202` (interrompt la sous-tâche en vol, statut terminal `error: annulé`), `409` si elle est déjà terminée, `404` si l'id est inconnu.
+- `POST /api/conversations/:id/cancel` annule **en cascade** : le tour parent *et* toutes ses sous-tâches en vol (`SubtaskRunner.cancelByConversation`). `202` dès qu'il y avait quelque chose à annuler (même sans tour parent en cours), `409` sinon. Sans la cascade, tuer l'orchestrateur laissait ses sub-agents tourner sans plus personne pour lire leur résultat.
 
 **Limite de concurrence : 4 sous-tâches simultanées par conversation parente** (`MAX_CONCURRENT_SUBTASKS`). Au-delà, l'API répond `429` et c'est à l'appelant (le bridge MCP de D2) de séquencer ses délégations. La limite est par conversation, pas globale : deux conversations peuvent orchestrer en parallèle sans se gêner. Elle protège du fan-out incontrôlé — autant de process CLI, de quota consommé et d'écritures concurrentes dans le même working directory qu'il y a d'appels.
 
@@ -59,6 +60,8 @@ Les descriptions d'outils sont la doc que lit l'orchestrateur : modèles disponi
 - **codex (app-server)** : le champ `config` de `thread/start` / `thread/resume` est un **override de configuration par thread** (clés de `config.toml`) — on y met `mcp_servers.conductor`. C'est ce qui résout le problème du process app-server *partagé* par tout le sidecar : chaque thread démarre ses propres serveurs MCP, donc chaque tour reçoit son propre `PUPITRE_CONVERSATION_ID` par l'environnement. Aucun besoin de passer l'id par le prompt.
 - **codex exec** (chemin historique `PUPITRE_CODEX_MODE=exec`) : les mêmes valeurs en overrides `-c mcp_servers.conductor.*`.
 - Filet documenté : chaque outil accepte aussi un paramètre optionnel `conversation_id` qui prime sur l'environnement, pour un hôte incapable de transmettre un environnement par tour.
+
+Le port du sidecar est fourni au `ConversationRunner` par une fonction **obligatoire** (résolue à chaque tour, le serveur étant construit après le runner). Un tour orchestrateur qui résout un port invalide échoue immédiatement avec un `status: error` explicite, au lieu de lancer un CLI dont les délégations partiraient vers un port mort.
 
 **Garde de profondeur** : un tour de sous-tâche ne reçoit **jamais** le câblage conductor. Ce n'est pas une convention mais une propriété de structure — `SubtaskRunner` ne construit pas le champ `conductor` de `TurnOptions` et aucun chemin ne permet de l'y ajouter. Un sub-agent ne voit donc pas les outils de délégation : pas de sous-sous-tâche, pas de récursion (testé dans `tests/conductor-wiring.test.ts`).
 

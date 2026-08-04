@@ -68,6 +68,11 @@ export interface SubtaskResult {
   status: SubtaskStatus
   /** Concaténation des `text-final` de la sous-tâche. */
   resultText: string
+  /**
+   * Message du dernier événement terminal en erreur, null sinon. C'est la seule
+   * source de la cause d'un échec pour une carte repliée (donc non abonnée).
+   */
+  error: string | null
   subtask: Subtask
 }
 

@@ -59,6 +59,8 @@ function conversationId(explicit?: string): string {
 interface SubtaskResultBody {
   status: "running" | "done" | "error";
   resultText: string;
+  /** Message de l'échec terminal (null si la sous-tâche n'a pas échoué). */
+  error: string | null;
   subtask: {
     id: string;
     provider: string;
@@ -167,7 +169,10 @@ function describeSubtask(result: SubtaskResultBody): string {
   if (result.status === "done") {
     return `[${badge}] terminé\n\n${result.resultText || "(aucun texte final)"}`;
   }
-  return `[${badge}] ÉCHEC\n\n${result.resultText || "(aucun texte final)"}`;
+  // Un sub-agent en échec n'écrit souvent aucun `text-final` : sans la cause,
+  // l'orchestrateur ne peut ni corriger ni décider de réessayer.
+  const cause = result.error ? ` : ${result.error}` : "";
+  return `[${badge}] ÉCHEC${cause}\n\n${result.resultText || "(aucun texte final)"}`;
 }
 
 function describeQuotas(snapshot: QuotaSnapshotBody): string {

@@ -319,8 +319,17 @@ export function createServer(deps: ServerDeps) {
           if (!deps.conversations.get(cancelConversationId)) {
             throw new HttpError(404, "conversation inconnue");
           }
-          const cancelled = await deps.runner.cancelTurn(cancelConversationId);
-          if (!cancelled) throw new HttpError(409, "aucun tour en cours");
+          // Annulation en cascade : le tour parent ET ses sous-tâches en vol.
+          // Les sub-agents tournent en parallèle du parent (ils ne prennent pas
+          // son verrou) ; ne tuer que le parent les laisserait continuer sans
+          // personne pour lire leur résultat.
+          const [cancelledTurn, cancelledSubtasks] = await Promise.all([
+            deps.runner.cancelTurn(cancelConversationId),
+            deps.subtasks.cancelByConversation(cancelConversationId),
+          ]);
+          if (!cancelledTurn && cancelledSubtasks === 0) {
+            throw new HttpError(409, "aucun tour en cours");
+          }
           return empty(202);
         }
 

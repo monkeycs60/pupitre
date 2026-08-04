@@ -32,7 +32,13 @@ let clients: Client[];
 const previousEnv: Record<string, string | undefined> = {};
 
 function baseUrl(): string {
-  return `http://127.0.0.1:${server.port}`;
+  return `http://127.0.0.1:${serverPort()}`;
+}
+
+/** Port éphémère du sidecar de test — c'est lui que le bridge rappelle. */
+function serverPort(): number {
+  if (server.port === undefined) throw new Error("serveur de test non démarré");
+  return server.port;
 }
 
 /** Un client MCP branché sur un process bridge frais. */
@@ -43,7 +49,7 @@ async function connect(env: Record<string, string> = {}): Promise<Client> {
     args: [conductorMcpPath()],
     env: {
       PATH: process.env.PATH ?? "",
-      PUPITRE_PORT: String(server.port),
+      PUPITRE_PORT: String(serverPort()),
       PUPITRE_CONVERSATION_ID: parentId,
       // Poll rapide : le comportement testé est la boucle, pas sa cadence.
       PUPITRE_CONDUCTOR_POLL_MS: "25",
@@ -104,7 +110,7 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
   });
   const media = new MediaStore(dir);
   const runner = new ConversationRunner(
-    conversations, projects, media, events.broadcast, quotas, () => server.port ?? 0,
+    conversations, projects, media, events.broadcast, quotas, serverPort,
   );
   subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
   server = createServer({
@@ -175,7 +181,41 @@ test("delegate : une sous-tâche en échec revient en isError avec le contexte",
     provider: "claude", model: "haiku", prompt: "va échouer",
   });
   expect(result.isError).toBe(true);
-  expect(textOf(result)).toContain("ÉCHEC");
+  const rendered = textOf(result);
+  expect(rendered).toContain("ÉCHEC");
+  // La cause remonte à l'orchestrateur : sans elle, il ne peut ni corriger ni
+  // décider de réessayer.
+  expect(rendered).toContain("ENOENT");
+});
+
+test("delegate : le 429 de la limite de concurrence est encaissé et réessayé", async () => {
+  // Les 4 slots de la conversation parente sont pris par des sous-tâches
+  // bloquées : l'API répond 429 à toute création supplémentaire.
+  const blocking = Array.from({ length: 4 }, () => subtasks.start({
+    conversationId: parentId, provider: "claude", model: "haiku", prompt: "BLOQUE ici",
+  }));
+  expect(subtasks.runningCount(parentId)).toBe(4);
+
+  // PUPITRE_CONDUCTOR_POLL_MS=25 (cf. connect) : le bridge repasse toutes les
+  // 25 ms tant qu'aucun slot n'est libre, au lieu d'abandonner sur le 429.
+  const client = await connect();
+  const pending = call(client, "delegate", {
+    provider: "claude", model: "haiku", prompt: "liste le dossier", label: "attend",
+  });
+
+  // Le temps de plusieurs tentatives refusées : rien de neuf n'est créé.
+  await Bun.sleep(300);
+  expect(subtasks.listByConversation(parentId)).toHaveLength(4);
+
+  writeFileSync(releaseFile, "go");
+  const result = await pending;
+
+  expect(result.isError).toBeFalsy();
+  expect(textOf(result)).toContain("BONJOUR PUPITRE.");
+  const rows = subtasks.listByConversation(parentId);
+  expect(rows).toHaveLength(5);
+  expect(rows.find((row) => row.label === "attend")).toMatchObject({ status: "done" });
+  await Promise.all(blocking.map((row) => subtasks.waitResult(row.id)));
 });
 
 test("delegate_parallel : deux sous-tâches concurrentes, résultats dans l'ordre", async () => {
