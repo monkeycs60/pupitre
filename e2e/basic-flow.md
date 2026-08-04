@@ -29,6 +29,23 @@ bun run --cwd ui dev
 
 Screenshot UI : conservé dans le scratchpad de la session d'implémentation (`pupitre-ui-m1.png`).
 
+## M2-A2 — reconnexion WebSocket (test manuel)
+
+Vérifie le bandeau de reconnexion et le resync du replay après une coupure du sidecar
+en plein tour. Le fake claude suffit (aucun quota consommé).
+
+| Étape | Action | Attendu |
+|---|---|---|
+| 1 | Lancer sidecar + ui (env vars ci-dessus), ouvrir une conversation et envoyer un message long | streaming en cours, pas de bandeau |
+| 2 | Pendant le streaming, tuer le sidecar (`Ctrl-C` ou `pkill -f "sidecar.*dev"`) | le bandeau « reconnexion… » apparaît ; les événements déjà reçus restent affichés |
+| 3 | Laisser le bandeau ~15 s | les tentatives s'espacent (backoff exponentiel), aucune boucle serrée dans l'onglet Réseau |
+| 4 | Relancer le sidecar (mêmes env vars, même `PUPITRE_DATA_DIR`) | le bandeau disparaît en quelques secondes |
+| 5 | Observer la conversation | resync : le replay complet est refetché et fusionné par id — aucun doublon, aucun trou ; le tour interrompu se termine en `status: error` (le process CLI est mort avec le sidecar) |
+| 6 | Envoyer un nouveau message | tour normal sur la même conversation (reprise via `cli_session_id`) |
+
+Points de contrôle : 0 erreur console autre que l'échec WS attendu à l'étape 2, et
+`GET /conversations/:id/events` appelé une seule fois par reconnexion réussie.
+
 ## Rejouer le protocole
 
 1. Lancer les deux serveurs avec les env vars ci-dessus.

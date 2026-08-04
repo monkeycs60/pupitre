@@ -13,6 +13,13 @@ import type { EmitFn, TurnOptions } from "./types";
 // tests/fixtures/codex-app-server-basic.jsonl.
 
 const OUTPUT_LIMIT = 10_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+/** Délai au-delà duquel une requête JSON-RPC sans réponse est rejetée. */
+function requestTimeoutMs(): number {
+  const raw = Number(process.env.PUPITRE_APPSERVER_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
+}
 
 interface JsonRpcMessage {
   id?: number | string;
@@ -56,21 +63,40 @@ export class CodexAppServerClient {
   private nextId = 1;
   private pending = new Map<number, PendingRequest>();
   private turns = new Map<string, TurnContext>();
+  /** Tue le process courant ET fait son cleanup (cf. shutdown). */
+  private killCurrent: (() => void) | null = null;
 
   /** Même signature que runCodexTurn : un tour complet, streamé via emit. */
   async runTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     emit({ type: "status", state: "running" });
-    if (opts.signal?.aborted) {
+    const cancelled = () => {
+      if (!opts.signal?.aborted) return false;
       emit({ type: "status", state: "error", error: "annulé" });
-      return;
-    }
+      return true;
+    };
+    if (cancelled()) return;
 
+    // Le setup (spawn + handshake + thread) peut durer : on revérifie le signal
+    // entre chaque await pour qu'une annulation pendant cette phase aboutisse.
     let threadId: string;
     try {
       await this.ensureProcess();
+      if (cancelled()) return;
       threadId = await this.openThread(opts);
     } catch (error) {
       emit({ type: "status", state: "error", error: String(error) });
+      return;
+    }
+    if (cancelled()) return;
+
+    // Un même thread ne peut pas porter deux tours simultanés : le routage des
+    // notifications se fait par threadId, on refuse plutôt que de mélanger.
+    if (this.turns.has(threadId)) {
+      emit({
+        type: "status",
+        state: "error",
+        error: `un tour est déjà actif sur le thread ${threadId}`,
+      });
       return;
     }
 
@@ -113,9 +139,28 @@ export class CodexAppServerClient {
     }
   }
 
-  /** Ferme le process partagé (tests / arrêt du sidecar). */
+  /**
+   * Poll de l'état de quota (`account/rateLimits/read`, cf. fixture du spike).
+   * Ne démarre PAS le process : appelé au boot du sidecar, il ne renvoie un
+   * état que si un tour codex a déjà réveillé l'app-server. Sinon le premier
+   * tour codex fournira l'état via `account/rateLimits/updated`.
+   */
+  async readRateLimits(): Promise<unknown | null> {
+    if (!this.ready || !this.proc) return null;
+    await this.ready;
+    const result = await this.request("account/rateLimits/read", {});
+    return (result as { rateLimits?: unknown } | null)?.rateLimits ?? null;
+  }
+
+  /**
+   * Ferme le process partagé (tests / arrêt du sidecar). Fait le MÊME cleanup
+   * que la mort du process : sans ça, remettre `proc` à null court-circuiterait
+   * le handler `close` et laisserait les tours actifs suspendus pour toujours.
+   */
   shutdown(): void {
-    this.proc?.kill();
+    const kill = this.killCurrent;
+    this.killCurrent = null;
+    kill?.();
     this.proc = null;
     this.ready = null;
   }
@@ -139,6 +184,7 @@ export class CodexAppServerClient {
       if (this.proc !== child) return;
       this.proc = null;
       this.ready = null;
+      this.killCurrent = null;
       const error = new Error(reason + (stderr ? ` : ${stderr}` : ""));
       for (const request of this.pending.values()) request.reject(error);
       this.pending.clear();
@@ -149,6 +195,10 @@ export class CodexAppServerClient {
     };
     child.on("error", (error) => onDead(String(error)));
     child.on("close", (code) => onDead(`codex app-server arrêté (exit ${code})`));
+    this.killCurrent = () => {
+      child.kill();
+      onDead("codex app-server arrêté (shutdown)");
+    };
 
     this.ready = this.request("initialize", {
       clientInfo: { name: "pupitre", title: "Pupitre", version: "0.1.0" },
@@ -156,11 +206,14 @@ export class CodexAppServerClient {
     }).then(() => {
       this.notify("initialized", {});
     });
-    // Un handshake raté ne doit pas empoisonner les tours suivants.
+    // Un handshake raté ne doit pas empoisonner les tours suivants — ni laisser
+    // un process orphelin quand l'échec est une erreur JSON-RPC (process vivant).
     this.ready.catch(() => {
       if (this.proc === child) {
+        child.kill();
         this.proc = null;
         this.ready = null;
+        this.killCurrent = null;
       }
     });
     return this.ready;
@@ -195,8 +248,25 @@ export class CodexAppServerClient {
     const child = this.proc;
     if (!child) return Promise.reject(new Error("codex app-server non démarré"));
     const id = this.nextId++;
+    const timeoutMs = requestTimeoutMs();
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      // Sans réponse au bout de `timeoutMs`, la requête est abandonnée : sinon
+      // un app-server muet suspendrait le tour indéfiniment.
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`timeout ${method} après ${timeoutMs} ms`));
+      }, timeoutMs);
+      timer.unref?.();
+      this.pending.set(id, {
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
       this.write({ jsonrpc: "2.0", id, method, params });
     });
   }
@@ -250,6 +320,7 @@ export class CodexAppServerClient {
     if (method === "account/rateLimits/updated") {
       // Pas de threadId sur cet event : il concerne le compte entier.
       for (const ctx of this.turns.values()) {
+        if (ctx.isSettled) continue; // pas d'event après le status terminal
         ctx.emit({ type: "rate-limit", provider: "codex", payload: params.rateLimits ?? params });
       }
       return;

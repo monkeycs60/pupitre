@@ -32,6 +32,9 @@ export type AppEvent =
   | { type: 'tool-start'; toolId: string; toolName: string; input: unknown }
   | { type: 'tool-end'; toolId: string; output: string; images: string[] }
   | { type: 'usage'; inputTokens: number; outputTokens: number }
+  // Introspection de quota native du provider (payload brut, interprété côté
+  // sidecar par le QuotaTracker — cf. sidecar/src/events.ts).
+  | { type: 'rate-limit'; provider: Provider; payload: unknown }
   | { type: 'status'; state: 'running' | 'done' | 'error'; error?: string }
 
 // Tout événement venant du sidecar (replay HTTP ou WS) porte l'id de sa ligne :

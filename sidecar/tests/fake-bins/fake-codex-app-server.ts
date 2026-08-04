@@ -2,16 +2,17 @@
 // rejoue les notifications de tests/fixtures/codex-app-server-basic.jsonl.
 //
 // Variables d'environnement (toutes optionnelles) :
-// - FAKE_APP_SERVER_LOG    : fichier où logger chaque message reçu (une ligne JSON)
-// - FAKE_APP_SERVER_PID    : fichier où écrire le pid (test de restart)
-// - FAKE_APP_SERVER_HANG=1 : le tour ne se termine jamais tout seul (test d'annulation)
+// - FAKE_APP_SERVER_LOG        : fichier où logger chaque message reçu (une ligne JSON)
+// - FAKE_APP_SERVER_PID        : fichier où écrire le pid (test de restart)
+// - FAKE_APP_SERVER_HANG=1     : le tour ne se termine jamais tout seul (test d'annulation)
+// - FAKE_APP_SERVER_SILENT=m,m : méthodes auxquelles ne jamais répondre (test de timeout)
+// - FAKE_APP_SERVER_SLOW_MS=n  : délai avant la réponse à thread/start (test d'annulation au setup)
+// - FAKE_APP_SERVER_INIT_ERROR=1 : `initialize` répond une erreur JSON-RPC, process vivant
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { dirname, join } from "node:path";
 
 const FIXTURE = join(dirname(import.meta.dir), "fixtures/codex-app-server-basic.jsonl");
-const THREAD_ID = "fake-thread-0001";
-const TURN_ID = "fake-turn-0001";
 
 if (process.argv[2] !== "app-server") {
   console.error(`fake-codex-app-server: sous-commande inattendue ${process.argv[2]}`);
@@ -20,6 +21,9 @@ if (process.argv[2] !== "app-server") {
 if (process.env.FAKE_APP_SERVER_PID) {
   writeFileSync(process.env.FAKE_APP_SERVER_PID, String(process.pid));
 }
+
+const silent = new Set((process.env.FAKE_APP_SERVER_SILENT ?? "").split(",").filter(Boolean));
+const slowMs = Number(process.env.FAKE_APP_SERVER_SLOW_MS ?? 0);
 
 // Notifications du tour : tout ce qui suit `turn/start` dans la fixture réelle.
 const turnNotifications = (() => {
@@ -36,23 +40,41 @@ function send(message: unknown): void {
   process.stdout.write(JSON.stringify(message) + "\n");
 }
 
-let currentThreadId = THREAD_ID;
+function pad(n: number): string {
+  return String(n).padStart(4, "0");
+}
 
-function retarget(params: Record<string, unknown>): Record<string, unknown> {
+// Chaque thread/start rend un id distinct : c'est ce qui permet de tester le
+// multiplexage (deux conversations en parallèle sur le même process).
+let threadCounter = 0;
+let turnCounter = 0;
+
+function retarget(
+  params: Record<string, unknown>,
+  threadId: string,
+  turnId: string,
+): Record<string, unknown> {
   const rewritten: Record<string, unknown> = { ...params };
-  if ("threadId" in rewritten) rewritten.threadId = currentThreadId;
-  if ("turnId" in rewritten) rewritten.turnId = TURN_ID;
+  if ("threadId" in rewritten) rewritten.threadId = threadId;
+  if ("turnId" in rewritten) rewritten.turnId = turnId;
   if (rewritten.turn && typeof rewritten.turn === "object") {
-    rewritten.turn = { ...(rewritten.turn as object), id: TURN_ID };
+    rewritten.turn = { ...(rewritten.turn as object), id: turnId };
   }
   return rewritten;
 }
 
-function replayTurn(): void {
+// Rejoué de façon asynchrone : deux tours concurrents s'entrelacent réellement,
+// ce qui est le point du test de multiplexage.
+async function replayTurn(threadId: string, turnId: string): Promise<void> {
   for (const notification of turnNotifications) {
+    await new Promise((resolve) => setTimeout(resolve, 1));
     const isCompleted = notification.method === "turn/completed";
     if (isCompleted && process.env.FAKE_APP_SERVER_HANG === "1") return;
-    send({ jsonrpc: "2.0", method: notification.method, params: retarget(notification.params) });
+    send({
+      jsonrpc: "2.0",
+      method: notification.method,
+      params: retarget(notification.params, threadId, turnId),
+    });
   }
 }
 
@@ -63,24 +85,38 @@ lines.on("line", (line) => {
   const message = JSON.parse(line) as { id?: number; method?: string; params?: any };
   const { id, method, params } = message;
   if (id === undefined) return; // notification cliente (`initialized`) : rien à faire
+  if (method && silent.has(method)) return; // jamais de réponse : déclenche le timeout client
 
   switch (method) {
     case "initialize":
+      if (process.env.FAKE_APP_SERVER_INIT_ERROR === "1") {
+        send({ jsonrpc: "2.0", id, error: { code: -32000, message: "handshake refusé" } });
+        return;
+      }
       send({ jsonrpc: "2.0", id, result: { userAgent: "fake-codex-app-server/0.0.0" } });
       return;
-    case "thread/start":
-      currentThreadId = THREAD_ID;
-      send({ jsonrpc: "2.0", id, result: { thread: { id: THREAD_ID }, model: params?.model } });
-      send({ jsonrpc: "2.0", method: "thread/started", params: { thread: { id: THREAD_ID } } });
+    case "thread/start": {
+      const threadId = `fake-thread-${pad(++threadCounter)}`;
+      const reply = () => {
+        send({ jsonrpc: "2.0", id, result: { thread: { id: threadId }, model: params?.model } });
+        send({ jsonrpc: "2.0", method: "thread/started", params: { thread: { id: threadId } } });
+      };
+      if (slowMs > 0) setTimeout(reply, slowMs);
+      else reply();
       return;
-    case "thread/resume":
-      currentThreadId = params?.threadId ?? THREAD_ID;
-      send({ jsonrpc: "2.0", id, result: { thread: { id: currentThreadId } } });
+    }
+    case "thread/resume": {
+      const threadId = params?.threadId ?? `fake-thread-${pad(++threadCounter)}`;
+      send({ jsonrpc: "2.0", id, result: { thread: { id: threadId } } });
       return;
-    case "turn/start":
-      send({ jsonrpc: "2.0", id, result: { turn: { id: TURN_ID, status: "inProgress" } } });
-      replayTurn();
+    }
+    case "turn/start": {
+      const threadId = String(params?.threadId ?? "");
+      const turnId = `fake-turn-${pad(++turnCounter)}`;
+      send({ jsonrpc: "2.0", id, result: { turn: { id: turnId, status: "inProgress" } } });
+      void replayTurn(threadId, turnId);
       return;
+    }
     case "turn/interrupt":
       send({ jsonrpc: "2.0", id, result: {} });
       return;

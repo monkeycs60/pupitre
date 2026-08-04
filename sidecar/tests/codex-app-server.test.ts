@@ -59,6 +59,10 @@ afterEach(() => {
   delete process.env.FAKE_APP_SERVER_LOG;
   delete process.env.FAKE_APP_SERVER_PID;
   delete process.env.FAKE_APP_SERVER_HANG;
+  delete process.env.FAKE_APP_SERVER_SILENT;
+  delete process.env.FAKE_APP_SERVER_SLOW_MS;
+  delete process.env.FAKE_APP_SERVER_INIT_ERROR;
+  delete process.env.PUPITRE_APPSERVER_TIMEOUT_MS;
 });
 
 test("premier tour : session avec le threadId, deltas dans l'ordre, tool + usage, done", async () => {
@@ -216,4 +220,122 @@ test("binaire introuvable → status error, pas d'exception", async () => {
   const events = await collect(newClient());
 
   expect(events.at(-1)).toMatchObject({ type: "status", state: "error" });
+});
+
+test("shutdown pendant un tour : le tour est résolu en erreur, pas suspendu", async () => {
+  useFake();
+  process.env.FAKE_APP_SERVER_HANG = "1";
+  const client = newClient();
+
+  const events: AppEvent[] = [];
+  const turn = client.runTurn(turnOptions(), (event) => events.push(event));
+  await Bun.sleep(200);
+  expect(events.some((e) => e.type === "text-delta")).toBe(true);
+
+  client.shutdown();
+  // Sans le cleanup dans shutdown(), ce await ne se résoudrait jamais.
+  await Promise.race([turn, Bun.sleep(2000).then(() => Promise.reject(new Error("tour suspendu")))]);
+
+  expect(events.at(-1)).toMatchObject({ type: "status", state: "error" });
+});
+
+test("requête JSON-RPC sans réponse : timeout → status error", async () => {
+  useFake();
+  process.env.FAKE_APP_SERVER_SILENT = "turn/start";
+  process.env.PUPITRE_APPSERVER_TIMEOUT_MS = "200";
+
+  const events = await collect(newClient());
+
+  const last = events.at(-1) as any;
+  expect(last).toMatchObject({ type: "status", state: "error" });
+  expect(last.error).toContain("timeout turn/start");
+});
+
+test("annulation pendant le setup (thread/start lent) : status error « annulé », pas de tour lancé", async () => {
+  const files = useFake();
+  process.env.FAKE_APP_SERVER_SLOW_MS = "300";
+  const controller = new AbortController();
+
+  const events: AppEvent[] = [];
+  const turn = newClient().runTurn(
+    turnOptions({ signal: controller.signal }),
+    (event) => events.push(event),
+  );
+  await Bun.sleep(100);
+  controller.abort();
+  await turn;
+
+  expect(events.at(-1)).toEqual({ type: "status", state: "error", error: "annulé" });
+  expect(events.some((e) => e.type === "session")).toBe(false);
+  await Bun.sleep(400);
+  expect(sentRequests(files.log).some((r) => r.method === "turn/start")).toBe(false);
+});
+
+test("multiplexage : deux tours concurrents ne reçoivent chacun que leurs deltas", async () => {
+  useFake();
+  // Référence : le flux exact d'un tour seul, sur son propre process.
+  const solo = await collect(newClient());
+  const text = (events: AppEvent[]) =>
+    events.filter((e) => e.type === "text-delta").map((e: any) => e.text).join("");
+  const count = (events: AppEvent[], type: string) =>
+    events.filter((e) => e.type === type).length;
+
+  const client = newClient();
+  const first: AppEvent[] = [];
+  const second: AppEvent[] = [];
+  await Promise.all([
+    client.runTurn(turnOptions({ prompt: "un" }), (event) => first.push(event)),
+    client.runTurn(turnOptions({ prompt: "deux" }), (event) => second.push(event)),
+  ]);
+
+  const sessions = [first, second].map((events) => events.find((e) => e.type === "session") as any);
+  expect(sessions[0].cliSessionId).toBe("fake-thread-0001");
+  expect(sessions[1].cliSessionId).toBe("fake-thread-0002");
+
+  for (const events of [first, second]) {
+    // Exactement le flux d'UN tour : un mélange se verrait en doublons.
+    expect(text(events)).toBe(text(solo));
+    expect(count(events, "text-final")).toBe(count(solo, "text-final"));
+    expect(count(events, "tool-start")).toBe(count(solo, "tool-start"));
+    expect(events.at(-1)).toEqual({ type: "status", state: "done" });
+  }
+});
+
+test("deux tours sur le même thread : le second termine en erreur explicite", async () => {
+  useFake();
+  process.env.FAKE_APP_SERVER_HANG = "1";
+  const client = newClient();
+  const controller = new AbortController();
+
+  const first: AppEvent[] = [];
+  const firstTurn = client.runTurn(
+    turnOptions({ cliSessionId: "thread-abc", signal: controller.signal }),
+    (event) => first.push(event),
+  );
+  await Bun.sleep(200);
+
+  const second = await collect(client, { cliSessionId: "thread-abc" });
+  expect(second.at(-1)).toMatchObject({
+    type: "status",
+    state: "error",
+    error: expect.stringContaining("déjà actif"),
+  });
+  expect(second.some((e) => e.type === "session")).toBe(false);
+  // Le premier tour n'a pas été perturbé.
+  expect(first.some((e) => e.type === "text-delta")).toBe(true);
+
+  controller.abort();
+  await firstTurn;
+});
+
+test("handshake initialize en erreur : status error et pas de process orphelin", async () => {
+  const files = useFake();
+  process.env.FAKE_APP_SERVER_INIT_ERROR = "1";
+
+  const events = await collect(newClient());
+  expect(events.at(-1)).toMatchObject({ type: "status", state: "error" });
+
+  const pid = Number(readFileSync(files.pid, "utf8"));
+  await Bun.sleep(200);
+  expect(() => process.kill(pid, 0)).toThrow(); // ESRCH : le process a bien été tué
 });

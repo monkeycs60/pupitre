@@ -56,9 +56,12 @@ export function useConversationEvents(
         }, reconnectDelayMs(failedAttempts))
       }
 
+      // Le socket ouvert ne suffit pas : tant que le replay n'est pas remergé,
+      // la reconnexion n'est pas réussie. Le compteur de backoff n'est donc
+      // remis à zéro qu'après la fusion (sinon un sidecar qui accepte le WS
+      // puis échoue sur /events ferait boucler la reconnexion sans délai).
       currentSocket.addEventListener('open', () => {
         if (disposed || socket !== currentSocket) return
-        failedAttempts = 0
         setConnection('open')
       })
 
@@ -89,6 +92,7 @@ export function useConversationEvents(
           setEvents((current) =>
             mergeReplayAndBuffer(replay, [...current, ...pending]),
           )
+          failedAttempts = 0
         })
         .catch((error: unknown) => {
           if (controller.signal.aborted || disposed) return
