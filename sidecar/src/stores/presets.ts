@@ -8,16 +8,27 @@ export interface PresetInput {
   effort: string | null;
   speed: "standard" | "fast" | null;
   orchestrator: boolean;
+  review_provider?: Provider;
+  review_model?: string;
+  review_effort?: string;
 }
 
-export interface Preset extends PresetInput {
+export interface Preset extends Omit<PresetInput, "review_provider" | "review_model" | "review_effort"> {
   id: string;
+  review_provider: Provider;
+  review_model: string;
+  review_effort: string;
   built_in: boolean;
   created_at: string;
   updated_at: string;
 }
 
-const BUILT_INS: ReadonlyArray<PresetInput & { id: string }> = [
+const BUILT_INS: ReadonlyArray<PresetInput & {
+  id: string;
+  review_provider: Provider;
+  review_model: string;
+  review_effort: string;
+}> = [
   {
     id: "builtin-eco",
     name: "Éco",
@@ -26,6 +37,9 @@ const BUILT_INS: ReadonlyArray<PresetInput & { id: string }> = [
     effort: "low",
     speed: "standard",
     orchestrator: true,
+    review_provider: "codex",
+    review_model: "gpt-5.6-sol",
+    review_effort: "high",
   },
   {
     id: "builtin-quality",
@@ -35,6 +49,9 @@ const BUILT_INS: ReadonlyArray<PresetInput & { id: string }> = [
     effort: "max",
     speed: null,
     orchestrator: true,
+    review_provider: "claude",
+    review_model: "opus",
+    review_effort: "high",
   },
   {
     id: "builtin-speed",
@@ -44,6 +61,9 @@ const BUILT_INS: ReadonlyArray<PresetInput & { id: string }> = [
     effort: "low",
     speed: "fast",
     orchestrator: true,
+    review_provider: "codex",
+    review_model: "gpt-5.6-sol",
+    review_effort: "high",
   },
 ];
 
@@ -52,8 +72,9 @@ export class PresetStore {
     const now = new Date().toISOString();
     const insert = this.db.query(`
       INSERT OR IGNORE INTO presets
-        (id, name, provider, model, effort, speed, orchestrator, built_in, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        (id, name, provider, model, effort, speed, orchestrator,
+         review_provider, review_model, review_effort, built_in, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `);
     for (const preset of BUILT_INS) {
       insert.run(
@@ -64,8 +85,23 @@ export class PresetStore {
         preset.effort,
         preset.speed,
         preset.orchestrator ? 1 : 0,
+        preset.review_provider,
+        preset.review_model,
+        preset.review_effort,
         now,
         now,
+      );
+      // Les presets intégrés peuvent déjà exister dans une base M2 : leur
+      // configuration Gardien doit tout de même recevoir les valeurs tranchées M3.
+      this.db.query(`
+        UPDATE presets
+        SET review_provider = ?, review_model = ?, review_effort = ?
+        WHERE id = ?
+      `).run(
+        preset.review_provider,
+        preset.review_model,
+        preset.review_effort,
+        preset.id,
       );
     }
   }
@@ -93,10 +129,12 @@ export class PresetStore {
   create(input: PresetInput): Preset {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
+    const review = reviewConfig(input, defaultReviewConfig(input.provider));
     this.db.query(`
       INSERT INTO presets
-        (id, name, provider, model, effort, speed, orchestrator, built_in, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        (id, name, provider, model, effort, speed, orchestrator,
+         review_provider, review_model, review_effort, built_in, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `).run(
       id,
       input.name,
@@ -105,6 +143,9 @@ export class PresetStore {
       input.effort,
       input.speed,
       input.orchestrator ? 1 : 0,
+      review.provider,
+      review.model,
+      review.effort,
       now,
       now,
     );
@@ -115,10 +156,16 @@ export class PresetStore {
     const preset = this.get(id);
     if (!preset) return null;
     if (preset.built_in) throw new Error("preset intégré immuable");
+    const review = reviewConfig(input, {
+      provider: preset.review_provider,
+      model: preset.review_model,
+      effort: preset.review_effort,
+    });
     this.db.query(`
       UPDATE presets
       SET name = ?, provider = ?, model = ?, effort = ?, speed = ?,
-          orchestrator = ?, updated_at = ?
+          orchestrator = ?, review_provider = ?, review_model = ?,
+          review_effort = ?, updated_at = ?
       WHERE id = ?
     `).run(
       input.name,
@@ -127,6 +174,9 @@ export class PresetStore {
       input.effort,
       input.speed,
       input.orchestrator ? 1 : 0,
+      review.provider,
+      review.model,
+      review.effort,
       new Date().toISOString(),
       id,
     );
@@ -152,4 +202,28 @@ export class PresetStore {
       built_in: !!row.built_in,
     };
   }
+}
+
+export interface ReviewModelConfig {
+  provider: Provider;
+  model: string;
+  effort: string;
+}
+
+export function defaultReviewConfig(provider: Provider): ReviewModelConfig {
+  return provider === "claude"
+    ? { provider, model: "opus", effort: "high" }
+    : { provider, model: "gpt-5.6-sol", effort: "high" };
+}
+
+function reviewConfig(input: PresetInput, fallback: ReviewModelConfig): ReviewModelConfig {
+  const provider = input.review_provider ?? fallback.provider;
+  const providerFallback = provider === fallback.provider
+    ? fallback
+    : defaultReviewConfig(provider);
+  return {
+    provider,
+    model: input.review_model ?? providerFallback.model,
+    effort: input.review_effort ?? providerFallback.effort,
+  };
 }

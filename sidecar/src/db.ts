@@ -59,6 +59,31 @@ export function openDb(dir: string = dataDir()): Database {
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_subtasks_conv ON subtasks(conversation_id, created_at);
+    CREATE TABLE IF NOT EXISTS reviews (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      conversation_id TEXT NOT NULL REFERENCES conversations(id),
+      git_ref_base TEXT NOT NULL, git_ref_head TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running', 'done', 'error')),
+      review_provider TEXT NOT NULL, review_model TEXT NOT NULL,
+      review_effort TEXT NOT NULL,
+      diff_text TEXT NOT NULL DEFAULT '', error TEXT NULL,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_reviews_project
+      ON reviews(project_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS review_flags (
+      id TEXT PRIMARY KEY,
+      review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+      file TEXT NOT NULL, line_start INTEGER NOT NULL, line_end INTEGER NOT NULL,
+      severity TEXT NOT NULL CHECK (severity IN ('red', 'orange', 'grey')),
+      category TEXT NOT NULL, message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open', 'acked', 'dismissed', 'countered'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_review_flags_review
+      ON review_flags(review_id, severity, line_start);
   `);
   dropEventsForeignKey(db);
   addColumn(db, "conversations", "effort TEXT NULL");
@@ -68,17 +93,36 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "orchestrator INTEGER NOT NULL DEFAULT 1");
   addColumn(db, "conversations", "continued_from TEXT NULL");
   addColumn(db, "projects", "default_preset_id TEXT NULL");
+  const addedReviewProvider = addColumn(
+    db,
+    "presets",
+    "review_provider TEXT NOT NULL DEFAULT 'codex'",
+  );
+  addColumn(db, "presets", "review_model TEXT NOT NULL DEFAULT 'gpt-5.6-sol'");
+  addColumn(db, "presets", "review_effort TEXT NOT NULL DEFAULT 'high'");
+  if (addedReviewProvider) {
+    // Lors du passage M2 → M3, un preset Claude hérite du reviewer fort Claude.
+    // Cette correction ne tourne qu'à l'ajout de colonne et ne peut donc pas
+    // écraser un choix utilisateur lors des démarrages suivants.
+    db.exec(`
+      UPDATE presets
+      SET review_provider = 'claude', review_model = 'opus', review_effort = 'high'
+      WHERE provider = 'claude'
+    `);
+  }
   db.exec("PRAGMA foreign_keys = ON");
   return db;
 }
 
-function addColumn(db: Database, table: string, definition: string): void {
+function addColumn(db: Database, table: string, definition: string): boolean {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+    return true;
   } catch (error) {
     if (!(error instanceof Error) || !error.message.includes("duplicate column")) {
       throw error;
     }
+    return false;
   }
 }
 

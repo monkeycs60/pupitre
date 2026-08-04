@@ -6,6 +6,10 @@ Enregistrées le 2026-08-04 avec :
 - `claude` 2.1.221 (Claude Code)
 - `codex-cli` 0.144.5
 
+`review-scan-codex.jsonl` est la capture d'un vrai scan Gardien avec
+`gpt-5.6-sol`, effort `high`, sandbox `read-only`, sur le diff minimal
+`console.log("configuration prête")` → `console.log(process.env.SECRET)`.
+
 ## claude-basic.jsonl
 
 Commande (depuis un dossier vide `/tmp/pupitre-fixture`) :

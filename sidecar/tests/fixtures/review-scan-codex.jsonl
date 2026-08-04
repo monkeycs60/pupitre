@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"019fceaa-fe09-7632-92e6-6176a838de3f"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Skill descriptions were shortened to fit the 2% skills context budget. Codex can still see every skill, but some descriptions are shorter. Disable unused skills or plugins to leave more room for the rest."}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"{\"flags\":[{\"file\":\"src/config.ts\",\"line_start\":1,\"line_end\":1,\"severity\":\"red\",\"category\":\"secret/credential\",\"message\":\"Ne journalisez pas process.env.SECRET, car sa valeur sera exposée dans les logs ; supprimez ce log ou remplacez-le par un indicateur non sensible.\"}]}"}}
+{"type":"turn.completed","usage":{"input_tokens":18529,"cached_input_tokens":9984,"output_tokens":74,"reasoning_output_tokens":0}}

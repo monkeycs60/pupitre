@@ -22,6 +22,16 @@ test("seed les trois presets M2 une seule fois", () => {
     "Vitesse",
   ]);
   expect(presets.list().every((preset) => preset.built_in)).toBe(true);
+  expect(presets.get("builtin-quality")).toMatchObject({
+    review_provider: "claude",
+    review_model: "opus",
+    review_effort: "high",
+  });
+  expect(presets.get("builtin-eco")).toMatchObject({
+    review_provider: "codex",
+    review_model: "gpt-5.6-sol",
+    review_effort: "high",
+  });
 });
 
 test("CRUD d'un preset personnalisé", () => {
@@ -34,6 +44,11 @@ test("CRUD d'un preset personnalisé", () => {
     orchestrator: true,
   });
   expect(created).toMatchObject({ name: "Revue Codex", built_in: false });
+  expect(created).toMatchObject({
+    review_provider: "codex",
+    review_model: "gpt-5.6-sol",
+    review_effort: "high",
+  });
 
   const updated = presets.update(created.id, {
     name: "Revue rapide",

@@ -10,9 +10,10 @@ export function runCodexTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     : ["exec"];
   // Le subcommand `resume` n'accepte ni -C ni -s (vérifié codex-cli 0.144.5) :
   // le cwd passe par le spawn, et le sandbox par -c sandbox_mode sur un resume.
+  const sandboxMode = opts.sandboxMode ?? "workspace-write";
   const sandbox = opts.cliSessionId
-    ? ["-c", 'sandbox_mode="workspace-write"']
-    : ["-s", "workspace-write"];
+    ? ["-c", `sandbox_mode=${JSON.stringify(sandboxMode)}`]
+    : ["-s", sandboxMode];
   const args = [
     ...base,
     "--json", "--skip-git-repo-check", "-m", opts.model,

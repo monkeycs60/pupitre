@@ -9,6 +9,8 @@ export interface TurnOptions {
   prompt: string;
   cliSessionId: string | null; // null = premier tour
   permissionMode: string;
+  /** Sandbox Codex ; les scans Gardien sont explicitement en lecture seule. */
+  sandboxMode?: "read-only" | "workspace-write";
   images: string[]; // chemins absolus d'images jointes par l'utilisateur
   signal?: AbortSignal;
   /**

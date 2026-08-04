@@ -6,9 +6,11 @@ import type { ConversationRunner } from "./runner";
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
 import type { PresetInput, PresetStore } from "./stores/presets";
+import { defaultReviewConfig } from "./stores/presets";
 import type { SettingsStore } from "./stores/settings";
 import type { QuotaTracker } from "./quotas";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
+import type { ReviewRunner } from "./reviews";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -36,6 +38,7 @@ export interface ServerDeps {
   subtasks: SubtaskRunner;
   presets: PresetStore;
   settings: SettingsStore;
+  reviews: ReviewRunner;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -203,6 +206,32 @@ function presetInput(body: Record<string, unknown>): PresetInput {
   if (provider !== "claude" && provider !== "codex") {
     throw new HttpError(400, "provider invalide");
   }
+  const reviewProviderValue = body.review_provider;
+  if (
+    reviewProviderValue !== undefined
+    && reviewProviderValue !== "claude"
+    && reviewProviderValue !== "codex"
+  ) {
+    throw new HttpError(400, "review_provider invalide");
+  }
+  const reviewProvider = reviewProviderValue as Provider | undefined;
+  const reviewModelValue = body.review_model;
+  if (
+    reviewModelValue !== undefined
+    && (typeof reviewModelValue !== "string" || reviewModelValue.trim() === "")
+  ) {
+    throw new HttpError(400, "review_model invalide");
+  }
+  const reviewEffortValue = body.review_effort;
+  if (reviewEffortValue !== undefined) {
+    const effortProvider = reviewProvider ?? provider;
+    if (
+      typeof reviewEffortValue !== "string"
+      || !(EFFORTS_BY_PROVIDER[effortProvider] as readonly string[]).includes(reviewEffortValue)
+    ) {
+      throw new HttpError(400, `review_effort invalide pour ${effortProvider}`);
+    }
+  }
   return {
     name,
     provider,
@@ -210,6 +239,9 @@ function presetInput(body: Record<string, unknown>): PresetInput {
     effort: optionalEffort(body, provider),
     speed: optionalSpeed(body, provider),
     orchestrator: optionalBoolean(body, "orchestrator", true),
+    ...(reviewProvider ? { review_provider: reviewProvider } : {}),
+    ...(typeof reviewModelValue === "string" ? { review_model: reviewModelValue } : {}),
+    ...(typeof reviewEffortValue === "string" ? { review_effort: reviewEffortValue } : {}),
   };
 }
 
@@ -243,6 +275,37 @@ function requiredPinned(body: Record<string, unknown>): boolean {
     throw new HttpError(400, "champ pinned invalide");
   }
   return body.pinned;
+}
+
+function reviewModelConfig(
+  body: Record<string, unknown>,
+  fallback: { provider: Provider; model: string; effort: string },
+): { provider: Provider; model: string; effort: string } {
+  const rawProvider = body.reviewProvider;
+  if (rawProvider !== undefined && rawProvider !== "claude" && rawProvider !== "codex") {
+    throw new HttpError(400, "reviewProvider invalide");
+  }
+  const provider = (rawProvider as Provider | undefined) ?? fallback.provider;
+  const providerFallback = provider === fallback.provider
+    ? fallback
+    : defaultReviewConfig(provider);
+  const rawModel = body.reviewModel;
+  if (rawModel !== undefined && (typeof rawModel !== "string" || rawModel.trim() === "")) {
+    throw new HttpError(400, "reviewModel invalide");
+  }
+  const rawEffort = body.reviewEffort;
+  if (
+    rawEffort !== undefined
+    && (typeof rawEffort !== "string"
+      || !(EFFORTS_BY_PROVIDER[provider] as readonly string[]).includes(rawEffort))
+  ) {
+    throw new HttpError(400, `reviewEffort invalide pour ${provider}`);
+  }
+  return {
+    provider,
+    model: typeof rawModel === "string" ? rawModel.trim() : providerFallback.model,
+    effort: typeof rawEffort === "string" ? rawEffort : providerFallback.effort,
+  };
 }
 
 function mediaExtension(contentType: string | null): string {
@@ -618,6 +681,77 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(404, "conversation inconnue");
           }
           return json(deps.conversations.listEvents(conversationEventsId));
+        }
+
+        if (request.method === "POST" && pathname === "/api/reviews") {
+          const body = await readObject(request);
+          const conversationId = requiredString(body, "conversationId");
+          const conversation = deps.conversations.get(conversationId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const project = deps.projects.get(conversation.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+
+          const requestedPresetId = body.presetId;
+          if (
+            requestedPresetId !== undefined
+            && requestedPresetId !== null
+            && typeof requestedPresetId !== "string"
+          ) {
+            throw new HttpError(400, "presetId invalide");
+          }
+          const presetId = typeof requestedPresetId === "string"
+            ? requestedPresetId
+            : project.default_preset_id;
+          const preset = presetId ? deps.presets.get(presetId) : null;
+          if (presetId && !preset) throw new HttpError(404, "preset inconnu");
+          const fallback = preset
+            ? {
+                provider: preset.review_provider,
+                model: preset.review_model,
+                effort: preset.review_effort,
+              }
+            : defaultReviewConfig(conversation.provider);
+          const reviewModel = reviewModelConfig(body, fallback);
+          const gitRefBase = body.gitRefBase === undefined
+            ? "HEAD^"
+            : requiredString(body, "gitRefBase");
+          const gitRefHead = body.gitRefHead === undefined
+            ? "HEAD"
+            : requiredString(body, "gitRefHead");
+          try {
+            return json(deps.reviews.start({
+              projectId: project.id,
+              conversationId,
+              gitRefBase,
+              gitRefHead,
+              provider: reviewModel.provider,
+              model: reviewModel.model,
+              effort: reviewModel.effort,
+            }), 201);
+          } catch (error) {
+            if (error instanceof Error && error.message.includes("inconnu")) {
+              throw new HttpError(404, error.message);
+            }
+            throw error;
+          }
+        }
+
+        const projectReviewsId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/reviews$/,
+        );
+        if (request.method === "GET" && projectReviewsId !== null) {
+          if (!deps.projects.get(projectReviewsId)) {
+            throw new HttpError(404, "projet inconnu");
+          }
+          return json(deps.reviews.listByProject(projectReviewsId));
+        }
+
+        const reviewId = routeId(pathname, /^\/api\/reviews\/([^/]+)$/);
+        if (request.method === "GET" && reviewId !== null) {
+          const review = deps.reviews.get(reviewId);
+          if (!review) throw new HttpError(404, "review inconnue");
+          return json(review);
         }
 
         if (request.method === "POST" && pathname === "/api/subtasks") {

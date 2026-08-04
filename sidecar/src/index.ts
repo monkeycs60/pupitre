@@ -10,6 +10,8 @@ import { QuotaTracker } from "./quotas";
 import { SubtaskRunner } from "./subtasks";
 import { codexAppServer } from "./adapters/codex-app-server";
 import { runConductorMcp } from "./conductor-mcp";
+import { ReviewStore } from "./stores/reviews";
+import { ReviewRunner } from "./reviews";
 
 if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
@@ -23,6 +25,7 @@ if (process.argv.includes("--conductor-mcp")) {
   const media = new MediaStore(dir);
   const events = new ConversationEventBus();
   const quotas = new QuotaTracker(db);
+  const reviewStore = new ReviewStore(db);
   const configuredPort = process.env.PUPITRE_PORT;
   const port = configuredPort === undefined ? 4820 : Number(configuredPort);
   if (configuredPort?.trim() === "" || !Number.isInteger(port) || port < 0 || port > 65_535) {
@@ -42,6 +45,7 @@ if (process.argv.includes("--conductor-mcp")) {
   // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
   // tournent en parallèle du tour parent qui les a demandées.
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
+  const reviews = new ReviewRunner(reviewStore, projects, conversations, quotas);
   server = createServer({
     port,
     projects,
@@ -53,6 +57,7 @@ if (process.argv.includes("--conductor-mcp")) {
     subtasks,
     presets,
     settings,
+    reviews,
   });
 
   // Si l'app-server codex tourne déjà, on part avec un état de quota frais.

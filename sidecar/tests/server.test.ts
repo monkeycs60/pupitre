@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -14,12 +14,15 @@ import { PresetStore } from "../src/stores/presets";
 import { SettingsStore } from "../src/stores/settings";
 import { QuotaTracker } from "../src/quotas";
 import { SubtaskRunner } from "../src/subtasks";
+import { ReviewStore } from "../src/stores/reviews";
+import { ReviewRunner } from "../src/reviews";
 
 interface TestServer {
   baseUrl: string;
   db: Database;
   runner: ConversationRunner;
   server: ReturnType<typeof createServer>;
+  reviews: ReviewRunner;
 }
 
 let current: TestServer | undefined;
@@ -173,6 +176,13 @@ cat "${fixture}"
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
+  const reviews = new ReviewRunner(
+    new ReviewStore(db),
+    projects,
+    conversations,
+    quotas,
+    async () => '{"flags":[]}',
+  );
   const server = createServer({
     port: 0,
     projects,
@@ -184,12 +194,14 @@ cat "${fixture}"
     subtasks,
     presets,
     settings,
+    reviews,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
     db,
     runner,
     server,
+    reviews,
   };
 });
 
@@ -239,6 +251,9 @@ test("CRUD des presets, intégrés immuables et défaut par projet", async () =>
     effort: "high",
     speed: "standard",
     orchestrator: true,
+    review_provider: "claude",
+    review_model: "opus",
+    review_effort: "high",
   });
   expect(created.status).toBe(201);
   const preset = await created.json() as { id: string };
@@ -252,7 +267,12 @@ test("CRUD des presets, intégrés immuables et défaut par projet", async () =>
     orchestrator: false,
   });
   expect(updated.status).toBe(200);
-  expect(await updated.json()).toEqual(expect.objectContaining({ name: "Revue rapide" }));
+  expect(await updated.json()).toEqual(expect.objectContaining({
+    name: "Revue rapide",
+    review_provider: "claude",
+    review_model: "opus",
+    review_effort: "high",
+  }));
 
   const project = await createProject(tmpdir());
   const selected = await putJson(`/api/projects/${project.id}/default-preset`, {
@@ -273,6 +293,60 @@ test("CRUD des presets, intégrés immuables et défaut par projet", async () =>
   const projects = await fetch(`${current.baseUrl}/api/projects`);
   expect(await projects.json()).toEqual([
     expect.objectContaining({ id: project.id, default_preset_id: null }),
+  ]);
+});
+
+test("POST /api/reviews lance un scan headless et l'expose par review et projet", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const repo = mkdtempSync(join(tmpdir(), "pupitre-review-api-"));
+  const runGit = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: repo });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+  };
+  runGit("init", "-q");
+  runGit("config", "user.email", "api@example.test");
+  runGit("config", "user.name", "API Fixture");
+  mkdirSync(join(repo, "src"));
+  writeFileSync(join(repo, "src/value.ts"), "export const value = 1\n");
+  runGit("add", ".");
+  runGit("commit", "-qm", "base");
+  writeFileSync(join(repo, "src/value.ts"), "export const value = 2\n");
+  runGit("add", ".");
+  runGit("commit", "-qm", "head");
+
+  const project = await createProject(repo);
+  const conversation = new ConversationStore(current.db).create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "change la valeur",
+  });
+  const started = await postJson("/api/reviews", {
+    conversationId: conversation.id,
+    reviewProvider: "codex",
+    reviewModel: "gpt-5.6-sol",
+    reviewEffort: "high",
+  });
+  expect(started.status).toBe(201);
+  const created = await started.json() as { id: string; status: string };
+  expect(created.status).toBe("running");
+  await current.reviews.wait(created.id);
+
+  const detail = await fetch(`${current.baseUrl}/api/reviews/${created.id}`);
+  expect(detail.status).toBe(200);
+  expect(await detail.json()).toEqual(expect.objectContaining({
+    id: created.id,
+    project_id: project.id,
+    conversation_id: conversation.id,
+    status: "done",
+    review_provider: "codex",
+    review_model: "gpt-5.6-sol",
+    flags: [],
+  }));
+  const list = await fetch(`${current.baseUrl}/api/projects/${project.id}/reviews`);
+  expect(list.status).toBe(200);
+  expect(await list.json()).toEqual([
+    expect.objectContaining({ id: created.id, status: "done" }),
   ]);
 });
 

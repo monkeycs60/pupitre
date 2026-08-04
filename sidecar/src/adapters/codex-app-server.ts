@@ -286,7 +286,7 @@ export class CodexAppServerClient {
       model: opts.model,
       cwd: opts.cwd,
       approvalPolicy: "never",
-      sandbox: "workspace-write",
+      sandbox: opts.sandboxMode ?? "workspace-write",
       // null est volontaire : un thread repris conserve sinon son tier `fast`.
       serviceTier: opts.speed === "fast" ? "fast" : null,
     };
