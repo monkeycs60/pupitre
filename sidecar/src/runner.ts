@@ -17,20 +17,8 @@ interface ActiveTurn {
 
 export function sweepOrphanedRuns(
   convs: ConversationStore,
-  projects: ProjectStore,
 ): void {
-  for (const project of projects.list()) {
-    for (const conversation of convs.listByProject(project.id)) {
-      const lastEvent = convs.listEvents(conversation.id).at(-1);
-      if (lastEvent?.type === "status" && lastEvent.state === "running") {
-        convs.appendEvent(conversation.id, {
-          type: "status",
-          state: "error",
-          error: "interrompu (sidecar redémarré)",
-        });
-      }
-    }
-  }
+  convs.sweepOrphanedRuns();
 }
 
 export class ConversationRunner {
@@ -52,7 +40,7 @@ export class ConversationRunner {
      */
     private port: () => number,
   ) {
-    sweepOrphanedRuns(convs, projects);
+    sweepOrphanedRuns(convs);
   }
 
   isRunning(conversationId: string): boolean {

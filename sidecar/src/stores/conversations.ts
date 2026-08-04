@@ -157,6 +157,33 @@ export class ConversationStore {
     return compact();
   }
 
+  /**
+   * Clôt en une seule requête les tours que le redémarrage du sidecar a
+   * forcément interrompus. La jointure sur conversations exclut les subtasks,
+   * dont le statut métier doit aussi être synchronisé par SubtaskRunner.
+   */
+  sweepOrphanedRuns(): number {
+    const result = this.db.query(`
+      WITH last_events AS (
+        SELECT MAX(events.id) AS id
+        FROM events
+        INNER JOIN conversations ON conversations.id = events.conversation_id
+        GROUP BY events.conversation_id
+      )
+      UPDATE events
+      SET payload = json_set(
+        payload,
+        '$.state', 'error',
+        '$.error', 'interrompu (sidecar redémarré)'
+      )
+      WHERE id IN (SELECT id FROM last_events)
+        AND json_valid(payload)
+        AND json_extract(payload, '$.type') = 'status'
+        AND json_extract(payload, '$.state') = 'running'
+    `).run();
+    return result.changes;
+  }
+
   listEvents(conversationId: string): StoredEvent[] {
     const rows = this.db.query(
       "SELECT id, payload FROM events WHERE conversation_id = ? ORDER BY id"

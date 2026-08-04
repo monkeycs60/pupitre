@@ -154,11 +154,12 @@ test("deux tours simultanés sur deux conversations différentes aboutissent", a
 
 test("le sweep marque en erreur un status running orphelin", () => {
   const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "x" });
-  convs.appendEvent(c.id, { type: "status", state: "running" });
+  const runningId = convs.appendEvent(c.id, { type: "status", state: "running" });
 
-  sweepOrphanedRuns(convs, projects);
+  sweepOrphanedRuns(convs);
 
   expect(convs.listEvents(c.id).at(-1)).toMatchObject({
+    id: runningId,
     type: "status",
     state: "error",
     error: "interrompu (sidecar redémarré)",

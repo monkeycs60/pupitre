@@ -227,6 +227,36 @@ test("active les contraintes de clés étrangères", () => {
   expect(pragma.foreign_keys).toBe(1);
 });
 
+test("le sweep SQL clôt seulement le dernier status running des conversations", () => {
+  const running = convs.create({
+    projectId,
+    provider: "claude",
+    model: "opus",
+    firstMessage: "running",
+  });
+  const done = convs.create({
+    projectId,
+    provider: "claude",
+    model: "opus",
+    firstMessage: "done",
+  });
+  const runningId = convs.appendEvent(running.id, { type: "status", state: "running" });
+  convs.appendEvent(done.id, { type: "status", state: "running" });
+  convs.appendEvent(done.id, { type: "status", state: "done" });
+  convs.appendEvent("subtask-sans-conversation", { type: "status", state: "running" });
+
+  expect(convs.sweepOrphanedRuns()).toBe(1);
+  expect(convs.listEvents(running.id)).toEqual([{
+    id: runningId,
+    type: "status",
+    state: "error",
+    error: "interrompu (sidecar redémarré)",
+  }]);
+  expect(convs.listEvents(done.id).at(-1)).toMatchObject({ state: "done" });
+  expect(convs.listEvents("subtask-sans-conversation").at(-1))
+    .toMatchObject({ state: "running" });
+});
+
 test("setCliSessionId persiste pour la reprise", () => {
   const c = convs.create({ projectId, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x" });
   convs.setCliSessionId(c.id, "abc-123");
