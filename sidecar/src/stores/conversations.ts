@@ -76,6 +76,15 @@ export class ConversationStore {
         "SELECT continued_from FROM conversations WHERE id = ?",
       ).get(id) as { continued_from: string | null } | null;
       if (!row?.continued_from) return false;
+      const subtasks = this.db.query(
+        "SELECT id FROM subtasks WHERE conversation_id = ?",
+      ).all(id) as Array<{ id: string }>;
+      const deleteEvents = this.db.query("DELETE FROM events WHERE conversation_id = ?");
+      for (const subtask of subtasks) deleteEvents.run(subtask.id);
+      this.db.query("DELETE FROM subtasks WHERE conversation_id = ?").run(id);
+      // Par prudence, une intégration future peut avoir attaché une review
+      // pendant le seed ; ses flags/décisions suivent par ON DELETE CASCADE.
+      this.db.query("DELETE FROM reviews WHERE conversation_id = ?").run(id);
       this.db.query("DELETE FROM events WHERE conversation_id = ?").run(id);
       return this.db.query("DELETE FROM conversations WHERE id = ?").run(id).changes === 1;
     });

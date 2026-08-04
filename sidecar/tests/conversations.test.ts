@@ -97,6 +97,37 @@ test("lie une conversation de passation à sa source", () => {
   ]));
 });
 
+test("supprime une continuation ratée avec ses sous-tâches et tous leurs événements", () => {
+  const source = convs.create({
+    projectId,
+    provider: "claude",
+    model: "sonnet",
+    firstMessage: "Source",
+  });
+  const continuation = convs.create({
+    projectId,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    continuedFrom: source.id,
+    firstMessage: "Suite",
+  });
+  convs.appendEvent(continuation.id, { type: "status", state: "error" });
+  db.query(`
+    INSERT INTO subtasks
+      (id, conversation_id, provider, model, prompt, status, created_at, updated_at)
+    VALUES ('subtask-test', ?, 'claude', 'haiku', 'test', 'error', ?, ?)
+  `).run(continuation.id, new Date().toISOString(), new Date().toISOString());
+  convs.appendEvent("subtask-test", { type: "status", state: "error" });
+
+  expect(convs.deleteFailedContinuation(continuation.id)).toBe(true);
+  expect(convs.get(continuation.id)).toBeNull();
+  expect(convs.listEvents(continuation.id)).toEqual([]);
+  expect(convs.listEvents("subtask-test")).toEqual([]);
+  expect(db.query("SELECT id FROM subtasks WHERE conversation_id = ?")
+    .all(continuation.id)).toEqual([]);
+  expect(convs.get(source.id)).not.toBeNull();
+});
+
 test("migre une base existante et la migration reste idempotente", () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-legacy-"));
   const legacy = new Database(join(dir, "pupitre.db"));

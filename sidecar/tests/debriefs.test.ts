@@ -233,3 +233,40 @@ test("condense un historique de passation qui dépasse son budget", async () => 
   expect(artifact.length).toBeLessThan(120_000);
   db.close();
 });
+
+test("condense aussi un unique débrief historique déjà surdimensionné", async () => {
+  const { db, projects, conversations, conversation } = setup();
+  const eventId = conversations.appendEvent(conversation.id, {
+    type: "text-final",
+    text: "ancien lot",
+  });
+  const store = new DebriefStore(db);
+  store.createWithReference({
+    conversationId: conversation.id,
+    eventIdFrom: eventId,
+    eventIdTo: eventId,
+    contentMd: `## Ce qui a été construit\n${"x".repeat(130_000)}\n\n## Décisions et pourquoi\nRAS.\n\n## Alternatives écartées\nRAS.\n\n## Implications\nRAS.\n\n## Points ouverts\nRAS.`,
+  });
+  let calls = 0;
+  const runner = new DebriefRunner(
+    store,
+    conversations,
+    projects,
+    new QuotaTracker(db),
+    () => {},
+    async () => {
+      calls += 1;
+      return "## Ce qui a été construit\nSynthèse historique.\n\n## Décisions et pourquoi\nRAS.\n\n## Alternatives écartées\nRAS.\n\n## Implications\nRAS.\n\n## Points ouverts\nRAS.";
+    },
+  );
+
+  let artifact = "";
+  await runner.withHandoff(conversation.id, async (value) => {
+    artifact = value.contentMd;
+  });
+
+  expect(calls).toBeGreaterThan(0);
+  expect(artifact).toContain("Synthèse historique");
+  expect(artifact.length).toBeLessThan(120_000);
+  db.close();
+});

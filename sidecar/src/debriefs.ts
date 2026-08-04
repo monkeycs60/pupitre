@@ -194,6 +194,7 @@ export class DebriefRunner {
             },
             versions.map((version) => version.content_md),
             "HISTORIQUE DE DÉBRIEFS",
+            true,
           );
           contentMd = `# Synthèse cumulative des débriefs\n\n${consolidated}`;
         }
@@ -220,9 +221,11 @@ export class DebriefRunner {
     generation: Omit<DebriefGenerationInput, "prompt">,
     debriefs: string[],
     label: string,
+    forceFirstPass = false,
   ): Promise<string> {
     let current = debriefs;
-    while (current.length > 1) {
+    let mustConsolidate = forceFirstPass;
+    while (current.length > 1 || mustConsolidate) {
       const groups = groupTexts(current, MAX_CONSOLIDATION_SOURCE_CHARS);
       const next: string[] = [];
       for (const group of groups) {
@@ -232,6 +235,7 @@ export class DebriefRunner {
         }));
       }
       current = next;
+      mustConsolidate = false;
     }
     return current[0]!;
   }
@@ -296,6 +300,17 @@ function groupTexts(values: string[], limit: number): string[][] {
   let current: string[] = [];
   let length = 0;
   for (const value of values) {
+    if (value.length > limit) {
+      if (current.length > 0) {
+        groups.push(current);
+        current = [];
+        length = 0;
+      }
+      for (let offset = 0; offset < value.length; offset += limit) {
+        groups.push([value.slice(offset, offset + limit)]);
+      }
+      continue;
+    }
     const extra = value.length + (current.length > 0 ? 5 : 0);
     if (current.length > 0 && length + extra > limit) {
       groups.push(current);
