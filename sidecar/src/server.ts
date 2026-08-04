@@ -572,28 +572,36 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "PUT" && conversationModelId !== null) {
           const conversation = deps.conversations.get(conversationModelId);
           if (!conversation) throw new HttpError(404, "conversation inconnue");
-          if (deps.runner.isRunning(conversationModelId)) {
+          if (deps.runner.activity.isBusy(conversationModelId)) {
             throw new HttpError(409, "un tour est déjà en cours");
           }
-          const body = await readObject(request);
-          const provider = requiredString(body, "provider");
-          if (provider !== "claude" && provider !== "codex") {
-            throw new HttpError(400, "provider invalide");
-          }
-          if (provider !== conversation.provider) {
-            throw new HttpError(409, "un changement de provider exige une passation");
-          }
-          const model = requiredString(body, "model");
-          const effort = optionalEffort(body, conversation.provider);
-          const speed = optionalSpeed(body, conversation.provider);
-          const estimatedReingestionTokens = deps.conversations.usageTokens(
+          const releaseActivity = deps.runner.activity.acquire(
             conversationModelId,
+            "model-change",
           );
-          deps.conversations.updateModel(conversationModelId, { model, effort, speed });
-          return json({
-            conversation: deps.conversations.get(conversationModelId),
-            estimatedReingestionTokens,
-          });
+          try {
+            const body = await readObject(request);
+            const provider = requiredString(body, "provider");
+            if (provider !== "claude" && provider !== "codex") {
+              throw new HttpError(400, "provider invalide");
+            }
+            if (provider !== conversation.provider) {
+              throw new HttpError(409, "un changement de provider exige une passation");
+            }
+            const model = requiredString(body, "model");
+            const effort = optionalEffort(body, conversation.provider);
+            const speed = optionalSpeed(body, conversation.provider);
+            const estimatedReingestionTokens = deps.conversations.usageTokens(
+              conversationModelId,
+            );
+            deps.conversations.updateModel(conversationModelId, { model, effort, speed });
+            return json({
+              conversation: deps.conversations.get(conversationModelId),
+              estimatedReingestionTokens,
+            });
+          } finally {
+            releaseActivity();
+          }
         }
 
         const conversationDebriefId = routeId(
@@ -604,7 +612,7 @@ export function createServer(deps: ServerDeps) {
           if (!deps.conversations.get(conversationDebriefId)) {
             throw new HttpError(404, "conversation inconnue");
           }
-          if (deps.runner.isRunning(conversationDebriefId)) {
+          if (deps.runner.activity.isBusy(conversationDebriefId)) {
             throw new HttpError(409, "un tour est déjà en cours");
           }
           try {
@@ -648,7 +656,7 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "POST" && conversationHandoffId !== null) {
           const source = deps.conversations.get(conversationHandoffId);
           if (!source) throw new HttpError(404, "conversation inconnue");
-          if (deps.runner.isRunning(source.id) || deps.debriefs.isRunning(source.id)) {
+          if (deps.runner.activity.isBusy(source.id)) {
             throw new HttpError(409, "un tour est déjà en cours");
           }
           const body = await readObject(request);
@@ -663,9 +671,29 @@ export function createServer(deps: ServerDeps) {
           const effort = optionalEffort(body, provider);
           const speed = optionalSpeed(body, provider);
           const orchestrator = optionalBoolean(body, "orchestrator", true);
-          let debrief;
           try {
-            debrief = await deps.debriefs.latestOrGenerate(source.id);
+            return await deps.debriefs.withHandoff(source.id, async (artifact) => {
+              const continuation = deps.conversations.create({
+                projectId: source.project_id,
+                provider,
+                model,
+                effort,
+                speed,
+                orchestrator,
+                continuedFrom: source.id,
+                firstMessage: `Suite — ${source.title}`,
+              });
+              const seed = [
+                `Voici l'historique des débriefs de passation de la conversation ${source.title} :`,
+                "",
+                artifact.contentMd,
+                "",
+                "Prends ce contexte comme point de départ. Cite les références [événement #N]",
+                "quand elles étayent ta réponse, puis confirme brièvement la reprise.",
+              ].join("\n");
+              await deps.runner.runTurn(continuation.id, seed, []);
+              return json(deps.conversations.get(continuation.id), 201);
+            });
           } catch (error) {
             if (error instanceof DebriefAlreadyRunningError) {
               throw new HttpError(409, error.message);
@@ -675,27 +703,6 @@ export function createServer(deps: ServerDeps) {
               error instanceof Error ? error.message : "échec du débrief de passation",
             );
           }
-
-          const continuation = deps.conversations.create({
-            projectId: source.project_id,
-            provider,
-            model,
-            effort,
-            speed,
-            orchestrator,
-            continuedFrom: source.id,
-            firstMessage: `Suite — ${source.title}`,
-          });
-          const seed = [
-            `Voici le débrief de passation de la conversation ${source.title} :`,
-            "",
-            debrief.content_md,
-            "",
-            "Prends ce contexte comme point de départ. Cite les références [événement #N]",
-            "quand elles étayent ta réponse, puis confirme brièvement la reprise.",
-          ].join("\n");
-          await deps.runner.runTurn(continuation.id, seed, []);
-          return json(deps.conversations.get(continuation.id), 201);
         }
 
         const messageConversationId = routeId(
@@ -709,7 +716,7 @@ export function createServer(deps: ServerDeps) {
           const body = await readObject(request);
           const message = requiredString(body, "message");
           const images = validatedImages(body, deps.media);
-          if (deps.runner.isRunning(messageConversationId)) {
+          if (deps.runner.activity.isBusy(messageConversationId)) {
             throw new HttpError(409, "un tour est déjà en cours");
           }
           void deps.runner.runTurn(messageConversationId, message, images)

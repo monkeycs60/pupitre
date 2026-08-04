@@ -6,6 +6,7 @@ import { runClaudeTurn } from "./adapters/claude";
 import { runCodexTurn } from "./adapters/codex";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 import type { QuotaTracker } from "./quotas";
+import { ConversationActivity } from "./conversation-activity";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -39,6 +40,7 @@ export class ConversationRunner {
      * sans autre signal.
      */
     private port: () => number,
+    readonly activity = new ConversationActivity(),
   ) {
     sweepOrphanedRuns(convs);
   }
@@ -56,9 +58,9 @@ export class ConversationRunner {
   }
 
   async runTurn(conversationId: string, prompt: string, imageNames: string[]): Promise<void> {
-    if (this.active.has(conversationId)) throw new Error("un tour est déjà en cours");
     const conv = this.convs.get(conversationId);
     if (!conv) throw new Error("conversation inconnue");
+    const releaseActivity = this.activity.acquire(conversationId, "turn");
     const project = this.projects.get(conv.project_id)!;
     const controller = new AbortController();
     let finish!: () => void;
@@ -124,6 +126,7 @@ export class ConversationRunner {
       const activeTurn = this.active.get(conversationId);
       this.active.delete(conversationId);
       activeTurn?.finish();
+      releaseActivity();
     }
   }
 }

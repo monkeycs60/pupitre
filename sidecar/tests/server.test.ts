@@ -88,17 +88,22 @@ async function waitForRunnerIdle(conversationId: string): Promise<void> {
   }
 }
 
-function waitForWebSocketEvent(
+function webSocketEventWaiter(
   url: string,
   predicate: (event: AppEvent) => boolean,
-): Promise<StoredEvent> {
-  return new Promise((resolve, reject) => {
+): { opened: Promise<void>; event: Promise<StoredEvent> } {
+  let markOpened!: () => void;
+  const opened = new Promise<void>((resolve) => {
+    markOpened = resolve;
+  });
+  const event = new Promise<StoredEvent>((resolve, reject) => {
     const socket = new WebSocket(url);
     const timeout = setTimeout(() => {
       socket.close();
       reject(new Error("timeout WebSocket"));
     }, 3_000);
 
+    socket.addEventListener("open", markOpened);
     socket.addEventListener("message", (message) => {
       const event = JSON.parse(String(message.data)) as StoredEvent;
       if (!predicate(event)) return;
@@ -111,6 +116,7 @@ function waitForWebSocketEvent(
       reject(new Error("erreur WebSocket"));
     });
   });
+  return { opened, event };
 }
 
 function collectWebSocketEvents(
@@ -194,6 +200,8 @@ cat "${fixture}"
     quotas,
     events.broadcast,
     async () => [
+      "## Ce qui a été construit",
+      "Un socle local.",
       "## Décisions et pourquoi",
       "SQLite est retenu [événement #1].",
       "## Alternatives écartées",
@@ -203,6 +211,7 @@ cat "${fixture}"
       "## Points ouverts",
       "Aucun.",
     ].join("\n\n"),
+    runner.activity,
   );
   const server = createServer({
     port: 0,
@@ -600,10 +609,11 @@ test("une conversation termine en live via WS et son replay commence par user-me
   const conversation = await created.json() as { id: string };
 
   const wsUrl = `${current.baseUrl.replace("http", "ws")}/ws?conversation=${conversation.id}`;
-  const done = await waitForWebSocketEvent(
+  const waiter = webSocketEventWaiter(
     wsUrl,
     (event) => event.type === "status" && event.state === "done",
   );
+  const done = await waiter.event;
   expect(done).toMatchObject({ type: "status", state: "done" });
 
   const replay = await fetch(
@@ -874,17 +884,18 @@ test("POST debrief versionne le bilan, le diffuse et l'expose en lecture", async
   expect(created.status).toBe(201);
   const conversation = await created.json() as { id: string };
   await waitForRunnerIdle(conversation.id);
-  const wsEvent = waitForWebSocketEvent(
+  const wsWaiter = webSocketEventWaiter(
     `ws://127.0.0.1:${current.server.port}/ws?conversation=${conversation.id}`,
     (event) => event.type === "debrief-ref",
   );
+  await wsWaiter.opened;
 
   const response = await postJson(`/api/conversations/${conversation.id}/debrief`, {});
 
   expect(response.status).toBe(201);
   const debrief = await response.json() as { id: string; content_md: string };
   expect(debrief.content_md).toContain("## Décisions et pourquoi");
-  expect(await wsEvent).toEqual(expect.objectContaining({
+  expect(await wsWaiter.event).toEqual(expect.objectContaining({
     type: "debrief-ref",
     debriefId: debrief.id,
   }));
@@ -934,16 +945,17 @@ test("un tour actif répond 409, puis cancel l'annule et déverrouille la conver
   });
 
   const wsUrl = `${current.baseUrl.replace("http", "ws")}/ws?conversation=${conversation.id}`;
-  const unlockedDone = waitForWebSocketEvent(
+  const unlockedWaiter = webSocketEventWaiter(
     wsUrl,
     (event) => event.type === "status" && event.state === "done",
   );
+  await unlockedWaiter.opened;
   const next = await postJson(
     `/api/conversations/${conversation.id}/messages`,
     { message: "ATTENDS_WS après annulation" },
   );
   expect(next.status).toBe(202);
-  await unlockedDone;
+  await unlockedWaiter.event;
 });
 
 test("deux POST messages quasi simultanés ne peuvent pas répondre tous deux 202", async () => {

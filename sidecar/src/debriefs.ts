@@ -6,6 +6,10 @@ import type { QuotaTracker } from "./quotas";
 import type { ConversationStore } from "./stores/conversations";
 import type { Debrief, DebriefStore } from "./stores/debriefs";
 import type { ProjectStore } from "./stores/projects";
+import {
+  ConversationActivity,
+  ConversationBusyError,
+} from "./conversation-activity";
 
 const MAX_TRANSCRIPT_CHARS = 180_000;
 const MAX_EVENT_CHARS = 8_000;
@@ -19,6 +23,11 @@ export interface DebriefGenerationInput {
   effort?: string;
   speed?: "standard" | "fast";
   prompt: string;
+}
+
+export interface HandoffDebriefArtifact {
+  latest: Debrief;
+  contentMd: string;
 }
 
 export type DebriefGenerator = (input: DebriefGenerationInput) => Promise<string>;
@@ -37,6 +46,7 @@ export class DebriefRunner {
     private quotas: QuotaTracker,
     private broadcast: BroadcastFn,
     generator?: DebriefGenerator,
+    private activity = new ConversationActivity(),
   ) {
     this.generator = generator ?? ((input) => generateWithAdapters(input, this.quotas));
   }
@@ -58,9 +68,21 @@ export class DebriefRunner {
   }
 
   async generate(conversationId: string): Promise<Debrief> {
-    if (this.active.has(conversationId)) {
-      throw new DebriefAlreadyRunningError("un débrief est déjà en cours");
+    try {
+      return await this.activity.runExclusive(
+        conversationId,
+        "debrief",
+        () => this.generateUnlocked(conversationId),
+      );
+    } catch (error) {
+      if (error instanceof ConversationBusyError) {
+        throw new DebriefAlreadyRunningError(error.message);
+      }
+      throw error;
     }
+  }
+
+  private async generateUnlocked(conversationId: string): Promise<Debrief> {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) throw new Error("conversation inconnue");
     const project = this.projects.get(conversation.project_id);
@@ -107,12 +129,51 @@ export class DebriefRunner {
   /** Le handoff réutilise la dernière version si aucun événement ne l'a périmée. */
   async latestOrGenerate(conversationId: string): Promise<Debrief> {
     try {
-      return await this.generate(conversationId);
+      return await this.activity.runExclusive(
+        conversationId,
+        "debrief",
+        () => this.latestOrGenerateUnlocked(conversationId),
+      );
+    } catch (error) {
+      if (error instanceof ConversationBusyError) {
+        throw new DebriefAlreadyRunningError(error.message);
+      }
+      throw error;
+    }
+  }
+
+  private async latestOrGenerateUnlocked(conversationId: string): Promise<Debrief> {
+    try {
+      return await this.generateUnlocked(conversationId);
     } catch (error) {
       if (!(error instanceof NoNewDebriefEventsError)) throw error;
       const latest = this.store.latest(conversationId);
       if (!latest) throw error;
       return latest;
+    }
+  }
+
+  /** Garde la source verrouillée jusqu'à la fin de la création de la continuation. */
+  async withHandoff<T>(
+    conversationId: string,
+    operation: (artifact: HandoffDebriefArtifact) => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await this.activity.runExclusive(conversationId, "handoff", async () => {
+        const latest = await this.latestOrGenerateUnlocked(conversationId);
+        const versions = this.store.listByConversation(conversationId);
+        const contentMd = versions.map((version, index) => [
+          `# Débrief ${index + 1} — événements ${version.event_id_from} à ${version.event_id_to}`,
+          "",
+          version.content_md,
+        ].join("\n")).join("\n\n---\n\n");
+        return operation({ latest, contentMd });
+      });
+    } catch (error) {
+      if (error instanceof ConversationBusyError) {
+        throw new DebriefAlreadyRunningError(error.message);
+      }
+      throw error;
     }
   }
 }
@@ -160,7 +221,8 @@ function debriefPrompt(transcript: string, incremental: boolean): string {
       ? "Le segment ci-dessous commence après le dernier débrief : résume uniquement ce qui a changé depuis."
       : "Le segment ci-dessous couvre la conversation depuis son début.",
     "Appuie chaque décision ou point important sur les identifiants [événement #N] fournis.",
-    "N'invente rien, n'utilise aucun outil et retourne uniquement du Markdown avec exactement ces quatre titres :",
+    "N'invente rien, n'utilise aucun outil et retourne uniquement du Markdown avec exactement ces cinq titres :",
+    "## Ce qui a été construit",
     "## Décisions et pourquoi",
     "## Alternatives écartées",
     "## Implications",
@@ -174,6 +236,7 @@ function debriefPrompt(transcript: string, incremental: boolean): string {
 function validateDebrief(content: string): void {
   if (!content) throw new Error("débrief vide");
   for (const heading of [
+    "## Ce qui a été construit",
     "## Décisions et pourquoi",
     "## Alternatives écartées",
     "## Implications",

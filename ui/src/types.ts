@@ -174,7 +174,13 @@ export type AppEvent =
   | { type: 'text-final'; text: string }
   | { type: 'tool-start'; toolId: string; toolName: string; input: unknown }
   | { type: 'tool-end'; toolId: string; output: string; images: string[] }
-  | { type: 'usage'; inputTokens: number; outputTokens: number }
+  | {
+      type: 'usage'
+      inputTokens: number
+      outputTokens: number
+      contextTokens?: number
+      contextWindowTokens?: number
+    }
   // Appendé à la conversation PARENTE au lancement d'une sous-tâche : l'UI en
   // fait une carte de sub-agent, dont le flux vit sous l'id de la sous-tâche.
   | {

@@ -94,7 +94,12 @@ test("premier tour : session avec le threadId, deltas dans l'ordre, tool + usage
   expect(toolEnd.output).toBe("hello\n");
 
   const usage = events.filter((e) => e.type === "usage") as any[];
-  expect(usage.at(-1)).toMatchObject({ inputTokens: 17339, outputTokens: 55 });
+  expect(usage.at(-1)).toMatchObject({
+    inputTokens: 17339,
+    outputTokens: 55,
+    contextTokens: 17394,
+    contextWindowTokens: 258400,
+  });
 
   expect(events.at(-1)).toEqual({ type: "status", state: "done" });
 

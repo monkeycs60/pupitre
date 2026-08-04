@@ -422,10 +422,15 @@ export class CodexAppServerClient {
         const usage = params.tokenUsage as Record<string, any> | undefined;
         const last = usage?.last ?? usage?.total;
         if (last) {
+          const contextTokens = numberOrZero(last.totalTokens)
+            || numberOrZero(last.inputTokens) + numberOrZero(last.outputTokens);
+          const contextWindowTokens = numberOrZero(usage?.modelContextWindow);
           ctx.emit({
             type: "usage",
             inputTokens: numberOrZero(last.inputTokens),
             outputTokens: numberOrZero(last.outputTokens),
+            ...(contextTokens > 0 ? { contextTokens } : {}),
+            ...(contextWindowTokens > 0 ? { contextWindowTokens } : {}),
           });
         }
         return;

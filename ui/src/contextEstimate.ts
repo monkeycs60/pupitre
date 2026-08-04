@@ -1,4 +1,3 @@
-import { estimatedReingestionTokens } from './modelSwitch'
 import type { AppEvent, Provider } from './types'
 
 const MODEL_CONTEXT_WINDOWS: Partial<Record<Provider, Record<string, number>>> = {
@@ -37,8 +36,10 @@ export function contextEstimate(
   provider: Provider,
   model: string,
 ): ContextEstimate {
-  const usedTokens = estimatedReingestionTokens(events)
-  const windowTokens = contextWindowTokens(provider, model)
+  const usage = events.filter((event) => event.type === 'usage').at(-1)
+  const usedTokens = usage?.contextTokens
+    ?? ((usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0))
+  const windowTokens = usage?.contextWindowTokens ?? contextWindowTokens(provider, model)
   const percent = Math.min(100, Math.round((usedTokens / windowTokens) * 100))
   return {
     usedTokens,

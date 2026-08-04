@@ -6,7 +6,14 @@ export type AppEvent =
   | { type: "text-final"; text: string }
   | { type: "tool-start"; toolId: string; toolName: string; input: unknown }
   | { type: "tool-end"; toolId: string; output: string; images: string[] }
-  | { type: "usage"; inputTokens: number; outputTokens: number }
+  | {
+      type: "usage";
+      inputTokens: number;
+      outputTokens: number;
+      /** Snapshot du contexte courant, distinct de l'usage facturé cumulé. */
+      contextTokens?: number;
+      contextWindowTokens?: number;
+    }
   // Introspection de quota native du provider (payload brut, interprété par le
   // QuotaTracker — cf. M2 phase C).
   | { type: "rate-limit"; provider: Provider; payload: unknown }

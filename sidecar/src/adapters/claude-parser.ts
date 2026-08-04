@@ -68,10 +68,25 @@ export function parseClaudeLine(line: string): AppEvent[] {
     case "result": {
       const usage = obj.usage as any;
       if (usage) {
+        const modelUsage = Object.values(
+          typeof obj.modelUsage === "object" && obj.modelUsage !== null
+            ? obj.modelUsage as Record<string, Record<string, unknown>>
+            : {},
+        );
+        const contextWindowTokens = modelUsage.reduce(
+          (largest, model) => Math.max(largest, numberOrZero(model.contextWindow)),
+          0,
+        );
+        const contextTokens = numberOrZero(usage.input_tokens)
+          + numberOrZero(usage.cache_creation_input_tokens)
+          + numberOrZero(usage.cache_read_input_tokens)
+          + numberOrZero(usage.output_tokens);
         out.push({
           type: "usage",
-          inputTokens: usage.input_tokens ?? 0,
-          outputTokens: usage.output_tokens ?? 0,
+          inputTokens: numberOrZero(usage.input_tokens),
+          outputTokens: numberOrZero(usage.output_tokens),
+          ...(contextTokens > 0 ? { contextTokens } : {}),
+          ...(contextWindowTokens > 0 ? { contextWindowTokens } : {}),
         });
       }
       out.push(
@@ -83,4 +98,8 @@ export function parseClaudeLine(line: string): AppEvent[] {
     }
   }
   return out;
+}
+
+function numberOrZero(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }

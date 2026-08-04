@@ -61,6 +61,8 @@ if (process.argv.includes("--conductor-mcp")) {
     projects,
     quotas,
     events.broadcast,
+    undefined,
+    runner.activity,
   );
   server = createServer({
     port,
