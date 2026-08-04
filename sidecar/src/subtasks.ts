@@ -301,6 +301,11 @@ export class SubtaskRunner {
     } catch (error) {
       emit({ type: "status", state: "error", error: String(error) });
     } finally {
+      try {
+        this.convs.compactTextDeltas(subtask.id);
+      } catch (error) {
+        console.error("Compaction des deltas de sous-tâche impossible", error);
+      }
       this.store.setStatus(subtask.id, outcome.terminal ?? "error");
     }
   }

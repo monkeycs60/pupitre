@@ -142,6 +142,28 @@ test("appendEvent + listEvents rejouent dans l'ordre", () => {
   expect(convs.listEvents(c.id).map((e: any) => e.text)).toEqual(["a", "b"]);
 });
 
+test("compacte les suites de text-delta sans déplacer les autres événements", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  const firstDeltaId = convs.appendEvent(c.id, { type: "text-delta", text: "bon" });
+  convs.appendEvent(c.id, { type: "text-delta", text: "jour" });
+  const toolId = convs.appendEvent(c.id, {
+    type: "tool-start",
+    toolId: "outil-1",
+    toolName: "Read",
+    input: {},
+  });
+  const secondDeltaId = convs.appendEvent(c.id, { type: "text-delta", text: "ap" });
+  convs.appendEvent(c.id, { type: "text-delta", text: "rès" });
+
+  expect(convs.compactTextDeltas(c.id)).toBe(2);
+  expect(convs.listEvents(c.id)).toEqual([
+    { id: firstDeltaId, type: "text-delta", text: "bonjour" },
+    { id: toolId, type: "tool-start", toolId: "outil-1", toolName: "Read", input: {} },
+    { id: secondDeltaId, type: "text-delta", text: "après" },
+  ]);
+  expect(convs.compactTextDeltas(c.id)).toBe(0);
+});
+
 test("appendEvent retourne l'id inséré, exposé par listEvents en ordre croissant", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
   const firstId = convs.appendEvent(c.id, { type: "text-delta", text: "a" });

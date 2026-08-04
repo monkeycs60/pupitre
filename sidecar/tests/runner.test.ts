@@ -37,6 +37,11 @@ test("un tour persiste user-message + événements, capture le session id, diffu
   expect(stored.some((event) => event.type === "session")).toBe(true);
   expect(convs.get(c.id)!.cli_session_id).not.toBeNull();
   expect(broadcast.length).toBeGreaterThan(2);
+  const streamedDeltas = broadcast.filter((event) => event.type === "text-delta");
+  const replayDeltas = stored.filter((event) => event.type === "text-delta");
+  expect(streamedDeltas.length).toBeGreaterThan(replayDeltas.length);
+  expect(replayDeltas.map((event) => event.text).join(""))
+    .toBe(streamedDeltas.map((event) => event.text).join(""));
 });
 
 test("transmet l'effort de la conversation à l'adapter", async () => {

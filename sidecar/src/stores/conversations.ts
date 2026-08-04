@@ -108,6 +108,55 @@ export class ConversationStore {
     return append();
   }
 
+  /**
+   * Réduit le replay après un tour sans modifier le flux WebSocket déjà émis.
+   * Seules les suites CONTIGUËS de deltas sont fusionnées : un outil ou tout
+   * autre événement conserve ainsi exactement sa position dans le transcript.
+   * L'id du premier delta est conservé, les suivants sont supprimés.
+   */
+  compactTextDeltas(conversationId: string): number {
+    const compact = this.db.transaction(() => {
+      const rows = this.db.query(
+        "SELECT id, payload FROM events WHERE conversation_id = ? ORDER BY id",
+      ).all(conversationId) as Array<{ id: number | bigint; payload: string }>;
+      let removed = 0;
+      let run: Array<{ id: number; event: { type: "text-delta"; text: string } }> = [];
+
+      const flush = () => {
+        if (run.length < 2) {
+          run = [];
+          return;
+        }
+        const [first, ...rest] = run;
+        this.db.query("UPDATE events SET payload = ? WHERE id = ?")
+          .run(JSON.stringify({ ...first.event, text: run.map((item) => item.event.text).join("") }), first.id);
+        const remove = this.db.query("DELETE FROM events WHERE id = ?");
+        for (const item of rest) remove.run(item.id);
+        removed += rest.length;
+        run = [];
+      };
+
+      for (const row of rows) {
+        try {
+          const event = JSON.parse(row.payload) as Partial<AppEvent>;
+          if (event.type === "text-delta" && typeof event.text === "string") {
+            run.push({
+              id: Number(row.id),
+              event: { type: "text-delta", text: event.text },
+            });
+            continue;
+          }
+        } catch {
+          // Une ligne corrompue coupe la suite ; listEvents la signalera comme avant.
+        }
+        flush();
+      }
+      flush();
+      return removed;
+    });
+    return compact();
+  }
+
   listEvents(conversationId: string): StoredEvent[] {
     const rows = this.db.query(
       "SELECT id, payload FROM events WHERE conversation_id = ? ORDER BY id"

@@ -126,6 +126,13 @@ export class ConversationRunner {
       else if (process.env.PUPITRE_CODEX_MODE === "exec") await runCodexTurn(opts, emit);
       else await runCodexAppServerTurn(opts, emit);
     } finally {
+      try {
+        this.convs.compactTextDeltas(conversationId);
+      } catch (error) {
+        // Le tour et son flux sont déjà persistés : une compaction opportuniste
+        // ne doit jamais transformer un succès provider en échec utilisateur.
+        console.error("Compaction des deltas impossible", error);
+      }
       const activeTurn = this.active.get(conversationId);
       this.active.delete(conversationId);
       activeTurn?.finish();

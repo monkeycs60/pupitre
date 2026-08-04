@@ -366,7 +366,7 @@ test("une conversation termine en live via WS et son replay commence par user-me
     .toBe(204);
 });
 
-test("les événements diffusés en WS portent les mêmes ids croissants que le replay", async () => {
+test("les événements WS gardent des ids croissants après compaction du replay", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());
   const created = await postJson("/api/conversations", {
@@ -392,7 +392,11 @@ test("les événements diffusés en WS portent les mêmes ids croissants que le 
   for (const [index, event] of live.entries()) {
     expect(typeof event.id).toBe("number");
     if (index > 0) expect(event.id).toBeGreaterThan(live[index - 1]!.id);
-    expect(stored.find((candidate) => candidate.id === event.id)).toEqual(event);
+    // Les text-delta restent fins en WS puis sont compactés en DB après le tour.
+    // Tous les autres événements conservent leur ligne et leur id à l'identique.
+    if (event.type !== "text-delta") {
+      expect(stored.find((candidate) => candidate.id === event.id)).toEqual(event);
+    }
   }
   const storedIds = stored.map((event) => event.id);
   expect(storedIds).toEqual([...storedIds].sort((a, b) => a - b));
