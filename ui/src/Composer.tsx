@@ -12,7 +12,7 @@ import {
   sendMessage,
   uploadMedia,
 } from './api'
-import type { Conversation, Provider } from './types'
+import type { Conversation, ConversationSpeed, Provider } from './types'
 
 export const PROVIDER_MODELS = {
   claude: ['fable-5', 'opus', 'sonnet', 'haiku'],
@@ -54,6 +54,7 @@ export function Composer({
   const [provider, setProvider] = useState<Provider>('claude')
   const [model, setModel] = useState<string>(PROVIDER_MODELS.claude[0])
   const [effort, setEffort] = useState<string>('high')
+  const [speed, setSpeed] = useState<ConversationSpeed>('standard')
   const [images, setImages] = useState<UploadedImage[]>([])
   const [pendingUploads, setPendingUploads] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -71,6 +72,7 @@ export function Composer({
     setProvider(nextProvider)
     setModel(PROVIDER_MODELS[nextProvider][0])
     setEffort('high')
+    setSpeed('standard')
   }
 
   async function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
@@ -118,6 +120,7 @@ export function Composer({
           provider,
           model,
           effort,
+          speed: provider === 'codex' ? speed : undefined,
           message: trimmedMessage,
           images: imageNames,
         })
@@ -220,6 +223,21 @@ export function Composer({
                 ))}
               </select>
             </label>
+
+            {provider === 'codex' ? (
+              <label>
+                <span>Vitesse</span>
+                <select
+                  value={speed}
+                  onChange={(event) =>
+                    setSpeed(event.target.value as ConversationSpeed)
+                  }
+                >
+                  <option value="standard">Standard</option>
+                  <option value="fast">Rapide 1,5×</option>
+                </select>
+              </label>
+            ) : null}
           </div>
         ) : null}
 

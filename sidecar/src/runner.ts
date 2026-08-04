@@ -81,6 +81,7 @@ export class ConversationRunner {
         cwd: project.path,
         model: conv.model,
         effort: conv.effort ?? undefined,
+        speed: conv.speed ?? undefined,
         prompt,
         cliSessionId: conv.cli_session_id,
         permissionMode: project.permission_mode,

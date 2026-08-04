@@ -1,4 +1,10 @@
-import type { AppEvent, Conversation, Project, Provider } from './types'
+import type {
+  AppEvent,
+  Conversation,
+  ConversationSpeed,
+  Project,
+  Provider,
+} from './types'
 
 interface ErrorResponse {
   error?: string
@@ -14,6 +20,7 @@ export interface CreateConversationInput {
   provider: Provider
   model: string
   effort?: string
+  speed?: ConversationSpeed
   message: string
   images?: string[]
 }

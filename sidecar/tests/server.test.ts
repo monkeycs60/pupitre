@@ -20,6 +20,7 @@ interface TestServer {
 
 let current: TestServer | undefined;
 let previousClaudeBin: string | undefined;
+let previousCodexBin: string | undefined;
 
 function jsonHeaders(): HeadersInit {
   return { "content-type": "application/json" };
@@ -110,7 +111,9 @@ cat "${fixture}"
 `);
   chmodSync(fakeClaude, 0o755);
   previousClaudeBin = process.env.PUPITRE_CLAUDE_BIN;
+  previousCodexBin = process.env.PUPITRE_CODEX_BIN;
   process.env.PUPITRE_CLAUDE_BIN = fakeClaude;
+  process.env.PUPITRE_CODEX_BIN = join(import.meta.dir, "fake-bins/fake-codex");
 
   const db = openDb(dir);
   const projects = new ProjectStore(db);
@@ -145,6 +148,8 @@ afterEach(() => {
   current = undefined;
   if (previousClaudeBin === undefined) delete process.env.PUPITRE_CLAUDE_BIN;
   else process.env.PUPITRE_CLAUDE_BIN = previousClaudeBin;
+  if (previousCodexBin === undefined) delete process.env.PUPITRE_CODEX_BIN;
+  else process.env.PUPITRE_CODEX_BIN = previousCodexBin;
 });
 
 test("health, création et liste des projets, avec 400 pour un path inexistant", async () => {
@@ -269,6 +274,67 @@ test("rejette avec 400 les efforts invalides pour chaque provider", async () => 
 
   expect(invalidClaude.status).toBe(400);
   expect(invalidCodex.status).toBe(400);
+});
+
+test("création Codex avec vitesse fast la persiste et l'expose", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const standard = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    speed: "standard",
+    message: "réponse standard",
+  });
+  expect(standard.status).toBe(201);
+  const standardConversation = await standard.json() as {
+    id: string;
+    speed: string | null;
+  };
+  expect(standardConversation.speed).toBe("standard");
+  await waitForRunnerIdle(standardConversation.id);
+
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    speed: "fast",
+    message: "réponse rapide",
+  });
+
+  expect(created.status).toBe(201);
+  const conversation = await created.json() as { id: string; speed: string | null };
+  expect(conversation.speed).toBe("fast");
+  await waitForRunnerIdle(conversation.id);
+
+  const response = await fetch(
+    `${current.baseUrl}/api/projects/${project.id}/conversations`,
+  );
+  expect(await response.json()).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: conversation.id, speed: "fast" }),
+    expect.objectContaining({ id: standardConversation.id, speed: "standard" }),
+  ]));
+});
+
+test("rejette avec 400 une vitesse invalide et fast pour Claude", async () => {
+  const project = await createProject(tmpdir());
+  const invalidSpeed = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    speed: "turbo",
+    message: "vitesse invalide",
+  });
+  const fastClaude = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    speed: "fast",
+    message: "fast indisponible",
+  });
+
+  expect(invalidSpeed.status).toBe(400);
+  expect(fastClaude.status).toBe(400);
 });
 
 test("un tour actif répond 409, puis cancel l'annule et déverrouille la conversation", async () => {

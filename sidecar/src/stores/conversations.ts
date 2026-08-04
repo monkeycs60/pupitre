@@ -3,7 +3,8 @@ import type { AppEvent, Provider } from "../events";
 
 export interface Conversation {
   id: string; project_id: string; title: string; provider: Provider;
-  model: string; effort: string | null; cli_session_id: string | null; pinned: boolean;
+  model: string; effort: string | null; speed: "standard" | "fast" | null;
+  cli_session_id: string | null; pinned: boolean;
   created_at: string; updated_at: string;
 }
 
@@ -17,6 +18,7 @@ export class ConversationStore {
     provider: Provider;
     model: string;
     effort?: string | null;
+    speed?: "standard" | "fast" | null;
     firstMessage: string;
   }): Conversation {
     const id = crypto.randomUUID();
@@ -26,8 +28,8 @@ export class ConversationStore {
       : input.firstMessage;
     this.db.query(
       `INSERT INTO conversations
-         (id, project_id, title, provider, model, effort, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, project_id, title, provider, model, effort, speed, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -35,6 +37,7 @@ export class ConversationStore {
       input.provider,
       input.model,
       input.effort ?? null,
+      input.speed ?? null,
       now,
       now,
     );

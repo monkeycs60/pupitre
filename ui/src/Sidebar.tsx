@@ -281,6 +281,7 @@ export function Sidebar({
                   <span className="navigation-detail">
                     {conversation.provider} · {conversation.model} ·{' '}
                     {conversation.effort ?? 'default'}
+                    {conversation.speed === 'fast' ? ' · rapide' : ''}
                   </span>
                 </button>
                 <button

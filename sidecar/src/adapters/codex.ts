@@ -17,6 +17,9 @@ export function runCodexTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     "--json", "--skip-git-repo-check", "-m", opts.model,
     ...sandbox,
     ...(opts.effort ? ["-c", `model_reasoning_effort="${opts.effort}"`] : []),
+    ...(opts.speed === "fast"
+      ? ["--enable", "fast_mode", "-c", 'service_tier="fast"']
+      : []),
     ...opts.images.flatMap((image) => ["-i", image]),
     "--", opts.prompt,
   ];

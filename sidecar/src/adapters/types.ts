@@ -4,6 +4,7 @@ export interface TurnOptions {
   cwd: string;
   model: string;
   effort?: string;
+  speed?: string;
   prompt: string;
   cliSessionId: string | null; // null = premier tour
   permissionMode: string;

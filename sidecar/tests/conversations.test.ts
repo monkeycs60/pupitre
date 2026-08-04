@@ -21,6 +21,20 @@ test("crée une conversation avec titre dérivé du premier message", () => {
   expect(c.title).toBe("Corrige le bug du lightbox sur mobile s'il te p…");
   expect(c.cli_session_id).toBeNull();
   expect(c.effort).toBeNull();
+  expect(c.speed).toBeNull();
+});
+
+test("crée une conversation avec une vitesse persistée", () => {
+  const c = convs.create({
+    projectId,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    speed: "fast",
+    firstMessage: "Réponds vite",
+  });
+
+  expect(c.speed).toBe("fast");
+  expect(convs.get(c.id)?.speed).toBe("fast");
 });
 
 test("crée une conversation avec un effort persisté", () => {
@@ -57,8 +71,14 @@ test("migre une base existante et la migration reste idempotente", () => {
     type: string;
     notnull: number;
   }>).find((column) => column.name === "effort");
+  const speedColumn = (reopened.query("PRAGMA table_info(conversations)").all() as Array<{
+    name: string;
+    type: string;
+    notnull: number;
+  }>).find((column) => column.name === "speed");
 
   expect(effortColumn).toMatchObject({ type: "TEXT", notnull: 0 });
+  expect(speedColumn).toMatchObject({ type: "TEXT", notnull: 0 });
   reopened.close();
 });
 

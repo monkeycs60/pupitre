@@ -1,4 +1,5 @@
 export type Provider = 'claude' | 'codex'
+export type ConversationSpeed = 'standard' | 'fast'
 
 export interface Project {
   id: string
@@ -16,6 +17,7 @@ export interface Conversation {
   provider: Provider
   model: string
   effort: string | null
+  speed: ConversationSpeed | null
   cli_session_id: string | null
   pinned: boolean
   created_at: string

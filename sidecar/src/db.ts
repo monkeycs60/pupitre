@@ -39,5 +39,12 @@ export function openDb(dir: string = dataDir()): Database {
       throw error;
     }
   }
+  try {
+    db.exec("ALTER TABLE conversations ADD COLUMN speed TEXT NULL");
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("duplicate column")) {
+      throw error;
+    }
+  }
   return db;
 }

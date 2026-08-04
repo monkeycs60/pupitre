@@ -38,6 +38,7 @@ const EFFORTS_BY_PROVIDER = {
   claude: ["low", "medium", "high", "xhigh", "max"],
   codex: ["low", "medium", "high", "xhigh"],
 } as const satisfies Record<Provider, readonly string[]>;
+const SPEEDS = ["standard", "fast"] as const;
 
 class HttpError extends Error {
   constructor(
@@ -101,6 +102,24 @@ function optionalEffort(
     throw new HttpError(400, `effort invalide pour ${provider}`);
   }
   return value;
+}
+
+function optionalSpeed(
+  body: Record<string, unknown>,
+  provider: Provider,
+): "standard" | "fast" | null {
+  const value = body.speed;
+  if (value === undefined || value === null) return null;
+  if (
+    typeof value !== "string"
+    || !(SPEEDS as readonly string[]).includes(value)
+  ) {
+    throw new HttpError(400, "vitesse invalide");
+  }
+  if (provider === "claude" && value === "fast") {
+    throw new HttpError(400, "vitesse fast indisponible pour claude");
+  }
+  return value as "standard" | "fast";
 }
 
 function requiredPinned(body: Record<string, unknown>): boolean {
@@ -219,6 +238,7 @@ export function createServer(deps: ServerDeps) {
           }
           const model = requiredString(body, "model");
           const effort = optionalEffort(body, provider as Provider);
+          const speed = optionalSpeed(body, provider as Provider);
           const message = requiredString(body, "message");
           const images = optionalImages(body);
           const conversation = deps.conversations.create({
@@ -226,6 +246,7 @@ export function createServer(deps: ServerDeps) {
             provider: provider as Provider,
             model,
             effort,
+            speed,
             firstMessage: message,
           });
           void deps.runner.runTurn(conversation.id, message, images)

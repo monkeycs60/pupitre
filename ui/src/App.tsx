@@ -64,6 +64,7 @@ function App() {
                   <p>
                     {selectedConversation.provider} · {selectedConversation.model} ·{' '}
                     {selectedConversation.effort ?? 'default'}
+                    {selectedConversation.speed === 'fast' ? ' · rapide' : ''}
                   </p>
                 ) : null}
               </div>

@@ -17,10 +17,12 @@ test("premier tour : pas de -r, événements émis, status done", async () => {
   const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
   process.env.PUPITRE_CLAUDE_BIN = FAKE;
   process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
-  const events = await collect({ cwd: "/tmp", model: "opus", prompt: "salut", cliSessionId: null, permissionMode: "acceptEdits", images: [] });
+  const events = await collect({ cwd: "/tmp", model: "opus", speed: "fast", prompt: "salut", cliSessionId: null, permissionMode: "acceptEdits", images: [] });
   const args = readFileSync(argsFile, "utf8");
   expect(args).not.toContain("-r ");
   expect(args).not.toContain("--effort");
+  expect(args).not.toContain("fast_mode");
+  expect(args).not.toContain("service_tier");
   expect(args).toContain("--output-format stream-json");
   expect(args.trimEnd().endsWith("-- salut")).toBe(true);
   expect(events.some((e) => e.type === "session")).toBe(true);

@@ -25,6 +25,7 @@ test("premier tour : exec --json avec cwd et modèle, sans resume", async () => 
   const events = await collect({
     cwd: "/tmp",
     model: "gpt-5.6-luna",
+    speed: "standard",
     prompt: "salut",
     cliSessionId: null,
     permissionMode: "acceptEdits",
@@ -34,10 +35,29 @@ test("premier tour : exec --json avec cwd et modèle, sans resume", async () => 
   expect(args).toContain("exec --json --skip-git-repo-check -m gpt-5.6-luna -s workspace-write");
   expect(args).not.toContain("-C"); // le cwd passe par le spawn, pas par -C
   expect(args).not.toContain("model_reasoning_effort");
+  expect(args).not.toContain("fast_mode");
+  expect(args).not.toContain("service_tier");
   expect(args.trimEnd().endsWith("-- salut")).toBe(true);
   expect(args).not.toContain("resume");
   expect(events.some((event) => event.type === "session")).toBe(true);
   expect(events.at(-1)).toEqual({ type: "status", state: "done" });
+});
+
+test("premier tour : active fast_mode et le service tier fast", async () => {
+  const argsFile = useFakeCodex();
+  await collect({
+    cwd: "/tmp",
+    model: "gpt-5.6-luna",
+    speed: "fast",
+    prompt: "vite",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+  });
+
+  expect(readFileSync(argsFile, "utf8")).toContain(
+    '--enable fast_mode -c service_tier="fast"',
+  );
 });
 
 test("premier tour : ajoute model_reasoning_effort avec -c", async () => {
@@ -63,6 +83,7 @@ test("tour suivant : utilise exec resume <sessionId>", async () => {
     cwd: "/tmp",
     model: "gpt-5.6-luna",
     effort: "high",
+    speed: "fast",
     prompt: "suite",
     cliSessionId: "abc-123",
     permissionMode: "acceptEdits",
@@ -75,6 +96,7 @@ test("tour suivant : utilise exec resume <sessionId>", async () => {
   expect(args).not.toContain("-s workspace-write");
   expect(args).toContain('sandbox_mode="workspace-write"');
   expect(args).toContain('-c model_reasoning_effort="high"');
+  expect(args).toContain('--enable fast_mode -c service_tier="fast"');
 });
 
 test("sépare un prompt ressemblant à une option avec --", async () => {

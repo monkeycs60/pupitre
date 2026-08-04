@@ -56,6 +56,33 @@ test("transmet l'effort de la conversation à l'adapter", async () => {
   }
 });
 
+test("transmet la vitesse de la conversation à l'adapter Codex", async () => {
+  const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-speed-")), "args");
+  const previousCodexBin = process.env.PUPITRE_CODEX_BIN;
+  const previousArgsFile = process.env.FAKE_CODEX_ARGS_FILE;
+  process.env.PUPITRE_CODEX_BIN = join(import.meta.dir, "fake-bins/fake-codex");
+  process.env.FAKE_CODEX_ARGS_FILE = argsFile;
+  const c = convs.create({
+    projectId,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    speed: "fast",
+    firstMessage: "vite",
+  });
+
+  try {
+    await runner.runTurn(c.id, "vite", []);
+    expect(readFileSync(argsFile, "utf8")).toContain(
+      '--enable fast_mode -c service_tier="fast"',
+    );
+  } finally {
+    if (previousCodexBin === undefined) delete process.env.PUPITRE_CODEX_BIN;
+    else process.env.PUPITRE_CODEX_BIN = previousCodexBin;
+    if (previousArgsFile === undefined) delete process.env.FAKE_CODEX_ARGS_FILE;
+    else process.env.FAKE_CODEX_ARGS_FILE = previousArgsFile;
+  }
+});
+
 test("deux tours simultanés sur la même conversation → le second est refusé", async () => {
   const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "x" });
   const firstTurn = runner.runTurn(c.id, "a", []);
