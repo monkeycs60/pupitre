@@ -54,6 +54,22 @@ test("le replay fait foi quand un même id existe des deux côtés", () => {
   expect(merged).toEqual([delta(1, "replay")]);
 });
 
+test("le replay compacté retire les anciens deltas supprimés en base", () => {
+  const current: StoredEvent[] = [
+    { id: 1, type: "user-message", text: "x", images: [] },
+    delta(2, "hel"),
+    delta(3, "lo"),
+    { id: 4, type: "status", state: "error", error: "annulé" },
+  ];
+  const replay: StoredEvent[] = [
+    current[0]!,
+    delta(2, "hello"),
+    current[3]!,
+  ];
+
+  expect(mergeReplayAndBuffer(replay, current)).toEqual(replay);
+});
+
 test("le refetch complet après reconnexion est idempotent", () => {
   const affiche = [delta(1, "a"), delta(2, "b")];
   const replay = [delta(1, "a"), delta(2, "b"), delta(3, "c")];
