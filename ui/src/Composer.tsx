@@ -38,6 +38,9 @@ interface ComposerProps {
   isRunning: boolean
   onConversationCreated: (conversation: Conversation) => void
   onProjectUpdated: (project: Project) => void
+  message: string
+  onMessageChange: (message: string) => void
+  focusRequest: number
 }
 
 interface UploadedImage {
@@ -56,8 +59,10 @@ export function Composer({
   isRunning,
   onConversationCreated,
   onProjectUpdated,
+  message,
+  onMessageChange,
+  focusRequest,
 }: ComposerProps) {
-  const [message, setMessage] = useState('')
   const [provider, setProvider] = useState<Provider>('claude')
   const [model, setModel] = useState<string>(PROVIDER_MODELS.claude[0])
   const [effort, setEffort] = useState<string>('high')
@@ -236,7 +241,7 @@ export function Composer({
           message: trimmedMessage,
           images: imageNames,
         })
-        setMessage('')
+        onMessageChange('')
         setImages([])
       }
     } catch (error: unknown) {
@@ -470,15 +475,16 @@ export function Composer({
         ) : null}
 
         <textarea
+          key={`composer-message-${focusRequest}`}
           value={message}
-          onChange={(event) => setMessage(event.target.value)}
+          onChange={(event) => onMessageChange(event.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={(event) => void handlePaste(event)}
           placeholder={isRunning ? 'tour en cours…' : 'Écrivez un message…'}
           aria-label="Message"
           rows={3}
           disabled={isRunning}
-          autoFocus={isNewConversation}
+          autoFocus={isNewConversation || focusRequest > 0}
         />
 
         <div className="composer-actions">

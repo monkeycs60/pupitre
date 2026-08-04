@@ -842,9 +842,14 @@ test("handoff cross-provider résume, crée et seed une conversation liée", asy
   ).then((result) => result.json()) as StoredEvent[];
   expect(events[0]).toMatchObject({
     type: "user-message",
-    text: expect.stringContaining("BONJOUR PUPITRE"),
+    text: expect.stringContaining("## Décisions et pourquoi"),
   });
   expect(events.at(-1)).toMatchObject({ type: "status", state: "done" });
+
+  const sourceEvents = await fetch(
+    `${current.baseUrl}/api/conversations/${source.id}/events`,
+  ).then((result) => result.json()) as StoredEvent[];
+  expect(sourceEvents.at(-1)).toMatchObject({ type: "debrief-ref" });
 
   const list = await fetch(
     `${current.baseUrl}/api/projects/${project.id}/conversations`,

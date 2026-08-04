@@ -146,8 +146,9 @@ export function SwitchModelModal({
 
           {isHandoff ? (
             <p className="switch-warning">
-              Pupitre demandera à {conversation.model} un résumé de passation, puis
-              initialisera une nouvelle conversation {provider}. Les deux fils resteront liés.
+              Pupitre générera avec {conversation.model} un débrief versionné, l’épinglera
+              dans ce fil, puis initialisera une conversation {provider} avec ce contexte.
+              Les deux fils resteront liés.
             </p>
           ) : (
             <p className="switch-warning">

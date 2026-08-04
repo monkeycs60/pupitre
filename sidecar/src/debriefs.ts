@@ -103,6 +103,18 @@ export class DebriefRunner {
       this.active.delete(conversationId);
     }
   }
+
+  /** Le handoff réutilise la dernière version si aucun événement ne l'a périmée. */
+  async latestOrGenerate(conversationId: string): Promise<Debrief> {
+    try {
+      return await this.generate(conversationId);
+    } catch (error) {
+      if (!(error instanceof NoNewDebriefEventsError)) throw error;
+      const latest = this.store.latest(conversationId);
+      if (!latest) throw error;
+      return latest;
+    }
+  }
 }
 
 function clip(value: string): string {

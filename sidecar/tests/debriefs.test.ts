@@ -96,5 +96,7 @@ test("la version suivante ne résume que les événements postérieurs au dernie
   expect(prompts[1]).not.toContain("Ancienne décision");
   expect(new DebriefStore(db).listByConversation(conversation.id)).toHaveLength(2);
   await expect(runner.generate(conversation.id)).rejects.toThrow("aucun nouvel événement");
+  expect(await runner.latestOrGenerate(conversation.id)).toEqual(second);
+  expect(new DebriefStore(db).listByConversation(conversation.id)).toHaveLength(2);
   db.close();
 });

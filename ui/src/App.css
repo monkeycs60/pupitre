@@ -337,6 +337,45 @@ button {
   font-size: 12px;
 }
 
+.context-gauge {
+  display: flex;
+  min-height: 17px;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.context-gauge-track {
+  width: 54px;
+  height: 3px;
+  overflow: hidden;
+  background: #ddd5c9;
+  border-radius: 2px;
+}
+
+.context-gauge-track span {
+  display: block;
+  height: 100%;
+  background: #77816e;
+}
+
+.context-gauge.is-near-limit .context-gauge-track span {
+  background: #b56a3d;
+}
+
+.context-gauge button {
+  padding: 0;
+  color: #8b4b2e;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
 .connection-banner {
   flex: none;
   padding: 8px 24px;
@@ -691,6 +730,18 @@ button {
 .debrief-card-content p,
 .debrief-card-content ul {
   margin: 5px 0;
+}
+
+.debrief-question {
+  padding: 4px 0 1px;
+  margin-top: 8px;
+  color: var(--accent-dark);
+  font-size: 10px;
+  font-weight: 650;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #c9a28c;
+  cursor: pointer;
 }
 
 .message-row {

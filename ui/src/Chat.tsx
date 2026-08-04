@@ -20,6 +20,8 @@ import type {
 } from './types'
 import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
+import { debriefQuestionPrompt } from './debriefQuestion'
+import type { DebriefBlock } from './groupEvents'
 
 interface ChatProps {
   events: AppEvent[]
@@ -74,6 +76,8 @@ export function Chat({
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
+  const [message, setMessage] = useState('')
+  const [focusRequest, setFocusRequest] = useState(0)
   const [subtaskStatuses, setSubtaskStatuses] = useState<
     Record<string, SubtaskStatus>
   >({})
@@ -130,6 +134,11 @@ export function Chat({
     followsBottomRef.current = distanceFromBottom <= 64
   }
 
+  function handleDebriefQuestion(block: DebriefBlock) {
+    setMessage(debriefQuestionPrompt(block))
+    setFocusRequest((current) => current + 1)
+  }
+
   return (
     <>
       {connection === 'reconnecting' ? (
@@ -150,6 +159,7 @@ export function Chat({
               onImageOpen={handleImageOpen}
               onImageLoad={scrollToBottomIfFollowing}
               onSubtaskStatusChange={handleSubtaskStatusChange}
+              onDebriefQuestion={handleDebriefQuestion}
             />
           )}
         </div>
@@ -162,6 +172,9 @@ export function Chat({
         isRunning={isRunning}
         onConversationCreated={onConversationCreated}
         onProjectUpdated={onProjectUpdated}
+        message={message}
+        onMessageChange={setMessage}
+        focusRequest={focusRequest}
       />
 
       {lightboxImage !== null ? (

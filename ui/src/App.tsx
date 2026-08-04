@@ -8,6 +8,7 @@ import { ReviewDialog } from './ReviewDialog'
 import type { Conversation, Project, Review } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
+import { ContextGauge } from './ContextGauge'
 
 function App() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
@@ -144,6 +145,13 @@ function App() {
                     {selectedConversation.effort ?? 'default'}
                     {selectedConversation.speed === 'fast' ? ' · rapide' : ''}
                   </p>
+                ) : null}
+                {selectedConversation !== null ? (
+                  <ContextGauge
+                    conversation={selectedConversation}
+                    events={events}
+                    onHandoffSuggested={() => setShowSwitchModel(true)}
+                  />
                 ) : null}
               </div>
               {selectedConversation !== null ? (

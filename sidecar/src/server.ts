@@ -62,13 +62,6 @@ const SPEEDS = ["standard", "fast"] as const;
 const DEFAULT_MEDIA_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MESSAGE_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
 
-export const HANDOFF_PROMPT = [
-  "Prépare une passation concise pour un autre modèle qui va reprendre cette conversation.",
-  "Résume l'objectif, les décisions prises, l'état actuel, les fichiers importants,",
-  "les vérifications déjà faites et les prochaines étapes. N'utilise aucun outil,",
-  "ne poursuis pas l'implémentation et retourne uniquement le résumé de passation.",
-].join(" ");
-
 class HttpError extends Error {
   constructor(
     readonly status: number,
@@ -655,7 +648,7 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "POST" && conversationHandoffId !== null) {
           const source = deps.conversations.get(conversationHandoffId);
           if (!source) throw new HttpError(404, "conversation inconnue");
-          if (deps.runner.isRunning(source.id)) {
+          if (deps.runner.isRunning(source.id) || deps.debriefs.isRunning(source.id)) {
             throw new HttpError(409, "un tour est déjà en cours");
           }
           const body = await readObject(request);
@@ -670,28 +663,18 @@ export function createServer(deps: ServerDeps) {
           const effort = optionalEffort(body, provider);
           const speed = optionalSpeed(body, provider);
           const orchestrator = optionalBoolean(body, "orchestrator", true);
-          const lastEventId = deps.conversations.listEvents(source.id).at(-1)?.id ?? 0;
-
+          let debrief;
           try {
-            await deps.runner.runTurn(source.id, HANDOFF_PROMPT, []);
+            debrief = await deps.debriefs.latestOrGenerate(source.id);
           } catch (error) {
-            if (error instanceof Error && error.message.includes("déjà en cours")) {
+            if (error instanceof DebriefAlreadyRunningError) {
               throw new HttpError(409, error.message);
             }
-            throw error;
+            throw new HttpError(
+              502,
+              error instanceof Error ? error.message : "échec du débrief de passation",
+            );
           }
-          const handoffEvents = deps.conversations.listEvents(source.id)
-            .filter((event) => event.id > lastEventId);
-          const terminal = handoffEvents.findLast((event) => event.type === "status");
-          if (terminal?.type === "status" && terminal.state === "error") {
-            throw new HttpError(502, terminal.error ?? "échec du résumé de passation");
-          }
-          const summary = handoffEvents
-            .filter((event) => event.type === "text-final")
-            .map((event) => event.text)
-            .join("\n")
-            .trim();
-          if (!summary) throw new HttpError(502, "résumé de passation vide");
 
           const continuation = deps.conversations.create({
             projectId: source.project_id,
@@ -704,11 +687,12 @@ export function createServer(deps: ServerDeps) {
             firstMessage: `Suite — ${source.title}`,
           });
           const seed = [
-            `Voici la passation de la conversation ${source.title} :`,
+            `Voici le débrief de passation de la conversation ${source.title} :`,
             "",
-            summary,
+            debrief.content_md,
             "",
-            "Prends ce contexte comme point de départ et confirme brièvement la reprise.",
+            "Prends ce contexte comme point de départ. Cite les références [événement #N]",
+            "quand elles étayent ta réponse, puis confirme brièvement la reprise.",
           ].join("\n");
           await deps.runner.runTurn(continuation.id, seed, []);
           return json(deps.conversations.get(continuation.id), 201);
