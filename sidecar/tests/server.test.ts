@@ -10,6 +10,8 @@ import { ConversationRunner } from "../src/runner";
 import { ConversationEventBus, createServer } from "../src/server";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
+import { PresetStore } from "../src/stores/presets";
+import { SettingsStore } from "../src/stores/settings";
 import { QuotaTracker } from "../src/quotas";
 import { SubtaskRunner } from "../src/subtasks";
 
@@ -32,6 +34,15 @@ async function postJson(path: string, body: unknown): Promise<Response> {
   if (!current) throw new Error("serveur de test non démarré");
   return fetch(`${current.baseUrl}${path}`, {
     method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify(body),
+  });
+}
+
+async function putJson(path: string, body: unknown): Promise<Response> {
+  if (!current) throw new Error("serveur de test non démarré");
+  return fetch(`${current.baseUrl}${path}`, {
+    method: "PUT",
     headers: jsonHeaders(),
     body: JSON.stringify(body),
   });
@@ -159,6 +170,8 @@ cat "${fixture}"
     () => 4321,
   );
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
+  const presets = new PresetStore(db);
+  const settings = new SettingsStore(db);
   const server = createServer({
     port: 0,
     projects,
@@ -168,6 +181,8 @@ cat "${fixture}"
     events,
     quotas,
     subtasks,
+    presets,
+    settings,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -205,6 +220,76 @@ test("health, création et liste des projets, avec 400 pour un path inexistant",
   expect(await list.json()).toEqual([
     expect.objectContaining({ id: project.id, name: "test", path: tmpdir() }),
   ]);
+});
+
+test("CRUD des presets, intégrés immuables et défaut par projet", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const initial = await fetch(`${current.baseUrl}/api/presets`);
+  expect(initial.status).toBe(200);
+  const builtIns = await initial.json() as Array<{ id: string; name: string }>;
+  expect(builtIns.map((preset) => preset.name)).toEqual(["Éco", "Qualité max", "Vitesse"]);
+
+  const created = await postJson("/api/presets", {
+    name: "Revue",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+    speed: "standard",
+    orchestrator: true,
+  });
+  expect(created.status).toBe(201);
+  const preset = await created.json() as { id: string };
+
+  const updated = await putJson(`/api/presets/${preset.id}`, {
+    name: "Revue rapide",
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "medium",
+    speed: "fast",
+    orchestrator: false,
+  });
+  expect(updated.status).toBe(200);
+  expect(await updated.json()).toEqual(expect.objectContaining({ name: "Revue rapide" }));
+
+  const project = await createProject(tmpdir());
+  const selected = await putJson(`/api/projects/${project.id}/default-preset`, {
+    presetId: preset.id,
+  });
+  expect(selected.status).toBe(200);
+  expect(await selected.json()).toEqual(expect.objectContaining({ default_preset_id: preset.id }));
+
+  const immutable = await fetch(`${current.baseUrl}/api/presets/${builtIns[0]!.id}`, {
+    method: "DELETE",
+  });
+  expect(immutable.status).toBe(409);
+
+  const deleted = await fetch(`${current.baseUrl}/api/presets/${preset.id}`, {
+    method: "DELETE",
+  });
+  expect(deleted.status).toBe(204);
+  const projects = await fetch(`${current.baseUrl}/api/projects`);
+  expect(await projects.json()).toEqual([
+    expect.objectContaining({ id: project.id, default_preset_id: null }),
+  ]);
+});
+
+test("persiste les seuils de quota dans settings", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const emptySettings = await fetch(`${current.baseUrl}/api/settings`);
+  expect(await emptySettings.json()).toEqual({});
+
+  const saved = await putJson("/api/settings", {
+    quotaThresholds: { lastHour: false, usedPercent: 91 },
+  });
+  expect(saved.status).toBe(200);
+  expect(await saved.json()).toEqual({
+    quotaThresholds: { lastHour: false, usedPercent: 91 },
+  });
+
+  const invalid = await putJson("/api/settings", {
+    quotaThresholds: { lastHour: true, usedPercent: 101 },
+  });
+  expect(invalid.status).toBe(400);
 });
 
 test("rejette les Origin distants et accepte localhost ou l'absence d'Origin", async () => {

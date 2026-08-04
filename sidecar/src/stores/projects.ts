@@ -3,6 +3,7 @@ import type { Database } from "bun:sqlite";
 export interface Project {
   id: string; name: string; path: string;
   permission_mode: string; pinned: boolean; created_at: string;
+  default_preset_id: string | null;
 }
 
 export class ProjectStore {
@@ -30,5 +31,9 @@ export class ProjectStore {
 
   setPinned(id: string, pinned: boolean): void {
     this.db.query("UPDATE projects SET pinned = ? WHERE id = ?").run(pinned ? 1 : 0, id);
+  }
+
+  setDefaultPreset(id: string, presetId: string | null): void {
+    this.db.query("UPDATE projects SET default_preset_id = ? WHERE id = ?").run(presetId, id);
   }
 }

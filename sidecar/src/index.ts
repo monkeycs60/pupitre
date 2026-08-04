@@ -4,6 +4,8 @@ import { ConversationRunner } from "./runner";
 import { ConversationEventBus, createServer } from "./server";
 import { ConversationStore } from "./stores/conversations";
 import { ProjectStore } from "./stores/projects";
+import { PresetStore } from "./stores/presets";
+import { SettingsStore } from "./stores/settings";
 import { QuotaTracker } from "./quotas";
 import { SubtaskRunner } from "./subtasks";
 import { codexAppServer } from "./adapters/codex-app-server";
@@ -11,6 +13,8 @@ import { codexAppServer } from "./adapters/codex-app-server";
 const dir = dataDir();
 const db = openDb(dir);
 const projects = new ProjectStore(db);
+const presets = new PresetStore(db);
+const settings = new SettingsStore(db);
 const conversations = new ConversationStore(db);
 const media = new MediaStore(dir);
 const events = new ConversationEventBus();
@@ -42,6 +46,8 @@ const server = createServer({
   events,
   quotas,
   subtasks,
+  presets,
+  settings,
 });
 
 // Si l'app-server codex tourne déjà, on part avec un état de quota frais.

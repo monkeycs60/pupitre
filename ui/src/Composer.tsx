@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   ChangeEvent,
   ClipboardEvent,
@@ -9,7 +9,11 @@ import {
   ApiError,
   cancelConversation,
   createConversation,
+  createPreset,
+  deletePreset,
+  listPresets,
   sendMessage,
+  setProjectDefaultPreset,
   uploadMedia,
 } from './api'
 import { buildCreateConversationInput } from './conversationDraft'
@@ -17,6 +21,8 @@ import { quotaChipLabel, shouldPulse } from './quotaSignals'
 import type {
   Conversation,
   ConversationSpeed,
+  Preset,
+  Project,
   Provider,
   QuotaSnapshot,
 } from './types'
@@ -34,10 +40,11 @@ export const PROVIDER_EFFORTS = {
 
 interface ComposerProps {
   conversationId: string | null
-  projectId: string
+  project: Project
   quotas: QuotaSnapshot
   isRunning: boolean
   onConversationCreated: (conversation: Conversation) => void
+  onProjectUpdated: (project: Project) => void
 }
 
 interface UploadedImage {
@@ -55,10 +62,11 @@ function mediaUrl(name: string): string {
 
 export function Composer({
   conversationId,
-  projectId,
+  project,
   quotas,
   isRunning,
   onConversationCreated,
+  onProjectUpdated,
 }: ComposerProps) {
   const [message, setMessage] = useState('')
   const [provider, setProvider] = useState<Provider>('claude')
@@ -66,6 +74,10 @@ export function Composer({
   const [effort, setEffort] = useState<string>('high')
   const [speed, setSpeed] = useState<ConversationSpeed>('standard')
   const [orchestrator, setOrchestrator] = useState(true)
+  const [presets, setPresets] = useState<Preset[]>([])
+  const [selectedPresetId, setSelectedPresetId] = useState('')
+  const [presetName, setPresetName] = useState('')
+  const [isSavingPreset, setIsSavingPreset] = useState(false)
   const [images, setImages] = useState<UploadedImage[]>([])
   const [pendingUploads, setPendingUploads] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -83,12 +95,99 @@ export function Composer({
     !isSubmitting &&
     !isRunning
 
+  const selectedPreset = presets.find((preset) => preset.id === selectedPresetId)
+
+  function applyPreset(preset: Preset) {
+    setProvider(preset.provider)
+    setModel(preset.model)
+    setEffort(preset.effort ?? 'high')
+    setSpeed(preset.speed ?? 'standard')
+    setOrchestrator(preset.orchestrator)
+    setSelectedPresetId(preset.id)
+  }
+
+  useEffect(() => {
+    if (!isNewConversation) return
+    const abortController = new AbortController()
+    void listPresets(abortController.signal)
+      .then((loaded) => {
+        setPresets(loaded)
+        const projectDefault = loaded.find(
+          (preset) => preset.id === project.default_preset_id,
+        )
+        if (projectDefault) applyPreset(projectDefault)
+      })
+      .catch((error: unknown) => {
+        if (!abortController.signal.aborted) setToast(errorMessage(error))
+      })
+    return () => abortController.abort()
+  }, [isNewConversation, project.default_preset_id])
+
   function handleProviderChange(event: ChangeEvent<HTMLSelectElement>) {
     const nextProvider = event.target.value as Provider
     setProvider(nextProvider)
     setModel(PROVIDER_MODELS[nextProvider][0])
     setEffort('high')
     setSpeed('standard')
+    setSelectedPresetId('')
+  }
+
+  function handlePresetChange(event: ChangeEvent<HTMLSelectElement>) {
+    const preset = presets.find((candidate) => candidate.id === event.target.value)
+    if (preset) applyPreset(preset)
+    else setSelectedPresetId('')
+  }
+
+  async function handleSavePreset() {
+    const name = presetName.trim()
+    if (!name || isSavingPreset) return
+    setIsSavingPreset(true)
+    setToast(null)
+    try {
+      const created = await createPreset({
+        name,
+        provider,
+        model,
+        effort,
+        speed: provider === 'codex' ? speed : null,
+        orchestrator,
+      })
+      setPresets((current) => [...current, created])
+      setSelectedPresetId(created.id)
+      setPresetName('')
+    } catch (error: unknown) {
+      setToast(errorMessage(error))
+    } finally {
+      setIsSavingPreset(false)
+    }
+  }
+
+  async function handleDefaultPreset() {
+    setToast(null)
+    try {
+      const updated = await setProjectDefaultPreset(
+        project.id,
+        selectedPresetId || null,
+      )
+      onProjectUpdated(updated)
+    } catch (error: unknown) {
+      setToast(errorMessage(error))
+    }
+  }
+
+  async function handleDeletePreset() {
+    if (!selectedPreset || selectedPreset.built_in) return
+    setToast(null)
+    try {
+      await deletePreset(selectedPreset.id)
+      setPresets((current) => current.filter((preset) => preset.id !== selectedPreset.id))
+      setSelectedPresetId('')
+      if (project.default_preset_id === selectedPreset.id) {
+        onProjectUpdated({ ...project, default_preset_id: null })
+      }
+    } catch (error: unknown) {
+      setToast(errorMessage(error))
+    }
   }
 
   async function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
@@ -132,7 +231,7 @@ export function Composer({
     try {
       if (conversationId === null) {
         const conversation = await createConversation(buildCreateConversationInput({
-          projectId,
+          projectId: project.id,
           provider,
           model,
           effort,
@@ -202,6 +301,57 @@ export function Composer({
       <form className="composer" onSubmit={(event) => void handleSubmit(event)}>
         {isNewConversation ? (
           <div className="composer-models">
+            <div className="preset-controls">
+              <label>
+                <span>Preset</span>
+                <select value={selectedPresetId} onChange={handlePresetChange}>
+                  <option value="">Configuration manuelle</option>
+                  {presets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}{preset.built_in ? '' : ' · perso'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="preset-secondary"
+                onClick={() => void handleDefaultPreset()}
+                disabled={(project.default_preset_id ?? '') === selectedPresetId}
+              >
+                {(project.default_preset_id ?? '') === selectedPresetId
+                  ? selectedPresetId ? 'Défaut du projet' : 'Aucun défaut'
+                  : selectedPresetId
+                    ? 'Définir par défaut'
+                    : 'Retirer le défaut'}
+              </button>
+              {selectedPreset && !selectedPreset.built_in ? (
+                <button
+                  type="button"
+                  className="preset-danger"
+                  onClick={() => void handleDeletePreset()}
+                >
+                  Supprimer
+                </button>
+              ) : null}
+              <div className="preset-save">
+                <input
+                  value={presetName}
+                  onChange={(event) => setPresetName(event.target.value)}
+                  placeholder="Nom du preset"
+                  aria-label="Nom du nouveau preset"
+                />
+                <button
+                  type="button"
+                  className="preset-secondary"
+                  disabled={!presetName.trim() || isSavingPreset}
+                  onClick={() => void handleSavePreset()}
+                >
+                  {isSavingPreset ? 'Enregistrement…' : 'Enregistrer la config'}
+                </button>
+              </div>
+            </div>
+
             <label>
               <span>Provider</span>
               <select value={provider} onChange={handleProviderChange}>
@@ -226,7 +376,10 @@ export function Composer({
                     role="radio"
                     aria-checked={model === modelName}
                     className={`model-option ${model === modelName ? 'is-selected' : ''} ${pulses ? 'is-pulsing' : ''}`}
-                    onClick={() => setModel(modelName)}
+                    onClick={() => {
+                      setModel(modelName)
+                      setSelectedPresetId('')
+                    }}
                     title={pulses ? 'Quota peu entamé et bientôt réinitialisé' : undefined}
                   >
                     <span className="model-option-name">{modelName}</span>
@@ -244,7 +397,10 @@ export function Composer({
               <span>Effort</span>
               <select
                 value={effort}
-                onChange={(event) => setEffort(event.target.value)}
+                onChange={(event) => {
+                  setEffort(event.target.value)
+                  setSelectedPresetId('')
+                }}
               >
                 {PROVIDER_EFFORTS[provider].map((effortName) => (
                   <option key={effortName} value={effortName}>
@@ -259,9 +415,10 @@ export function Composer({
                 <span>Vitesse</span>
                 <select
                   value={speed}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setSpeed(event.target.value as ConversationSpeed)
-                  }
+                    setSelectedPresetId('')
+                  }}
                 >
                   <option value="standard">Standard</option>
                   <option value="fast">Rapide 1,5×</option>
@@ -273,7 +430,10 @@ export function Composer({
               <input
                 type="checkbox"
                 checked={orchestrator}
-                onChange={(event) => setOrchestrator(event.target.checked)}
+                onChange={(event) => {
+                  setOrchestrator(event.target.checked)
+                  setSelectedPresetId('')
+                }}
               />
               <span>Autoriser la délégation à des sub-agents</span>
             </label>

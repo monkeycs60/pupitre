@@ -8,6 +8,20 @@ export interface Project {
   permission_mode: string
   pinned: boolean
   created_at: string
+  default_preset_id: string | null
+}
+
+export interface Preset {
+  id: string
+  name: string
+  provider: Provider
+  model: string
+  effort: string | null
+  speed: ConversationSpeed | null
+  orchestrator: boolean
+  built_in: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface Conversation {

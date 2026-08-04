@@ -10,6 +10,8 @@ import { ConversationRunner } from "../src/runner";
 import { ConversationEventBus, createServer } from "../src/server";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
+import { PresetStore } from "../src/stores/presets";
+import { SettingsStore } from "../src/stores/settings";
 import { QuotaTracker } from "../src/quotas";
 import { MAX_CONCURRENT_SUBTASKS, SubtaskRunner } from "../src/subtasks";
 import { codexAppServer } from "../src/adapters/codex-app-server";
@@ -107,8 +109,10 @@ cat "${fixture}"
     conversations, projects, media, events.broadcast, quotas, () => 4321,
   );
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
+  const presets = new PresetStore(db);
+  const settings = new SettingsStore(db);
   const server = createServer({
-    port: 0, projects, conversations, media, runner, events, quotas, subtasks,
+    port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

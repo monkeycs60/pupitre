@@ -2,11 +2,13 @@ import type {
   Conversation,
   ConversationSpeed,
   Project,
+  Preset,
   Provider,
   QuotaSnapshot,
   StoredEvent,
   SubtaskResult,
 } from './types'
+import type { QuotaThresholds } from './quotaSignals'
 
 interface ErrorResponse {
   error?: string
@@ -31,6 +33,19 @@ export interface CreateConversationInput {
 export interface SendMessageInput {
   message: string
   images?: string[]
+}
+
+export interface PresetInput {
+  name: string
+  provider: Provider
+  model: string
+  effort: string | null
+  speed: ConversationSpeed | null
+  orchestrator: boolean
+}
+
+export interface Settings {
+  quotaThresholds?: QuotaThresholds
 }
 
 export class ApiError extends Error {
@@ -82,6 +97,14 @@ function jsonPost(body: unknown): RequestInit {
   }
 }
 
+function jsonPut(body: unknown): RequestInit {
+  return {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }
+}
+
 function routeId(id: string): string {
   return encodeURIComponent(id)
 }
@@ -100,6 +123,40 @@ export function createProject(input: CreateProjectInput): Promise<Project> {
 
 export function setProjectPinned(id: string, pinned: boolean): Promise<void> {
   return fetchVoid(`/api/projects/${routeId(id)}/pin`, jsonPost({ pinned }))
+}
+
+export function setProjectDefaultPreset(
+  id: string,
+  presetId: string | null,
+): Promise<Project> {
+  return fetchJson(
+    `/api/projects/${routeId(id)}/default-preset`,
+    jsonPut({ presetId }),
+  )
+}
+
+export function listPresets(signal?: AbortSignal): Promise<Preset[]> {
+  return fetchJson('/api/presets', { signal })
+}
+
+export function createPreset(input: PresetInput): Promise<Preset> {
+  return fetchJson('/api/presets', jsonPost(input))
+}
+
+export function updatePreset(id: string, input: PresetInput): Promise<Preset> {
+  return fetchJson(`/api/presets/${routeId(id)}`, jsonPut(input))
+}
+
+export function deletePreset(id: string): Promise<void> {
+  return fetchVoid(`/api/presets/${routeId(id)}`, { method: 'DELETE' })
+}
+
+export function getSettings(signal?: AbortSignal): Promise<Settings> {
+  return fetchJson('/api/settings', { signal })
+}
+
+export function updateSettings(settings: Settings): Promise<Settings> {
+  return fetchJson('/api/settings', jsonPut(settings))
 }
 
 export function listProjectConversations(

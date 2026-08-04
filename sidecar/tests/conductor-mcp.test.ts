@@ -16,6 +16,8 @@ import { ConversationRunner } from "../src/runner";
 import { ConversationEventBus, createServer } from "../src/server";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
+import { PresetStore } from "../src/stores/presets";
+import { SettingsStore } from "../src/stores/settings";
 import { SubtaskRunner } from "../src/subtasks";
 import { codexAppServer } from "../src/adapters/codex-app-server";
 import { conductorMcpPath } from "../src/conductor";
@@ -113,8 +115,10 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
     conversations, projects, media, events.broadcast, quotas, serverPort,
   );
   subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
+  const presets = new PresetStore(db);
+  const settings = new SettingsStore(db);
   server = createServer({
-    port: 0, projects, conversations, media, runner, events, quotas, subtasks,
+    port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
   });
   parentId = conversations.create({
     projectId: project.id, provider: "claude", model: "opus", firstMessage: "orchestre",

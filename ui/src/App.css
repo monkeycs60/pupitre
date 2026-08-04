@@ -384,6 +384,55 @@ button {
   border-radius: 6px;
 }
 
+.preset-controls {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #2b2a28;
+}
+
+.preset-controls label select {
+  min-width: 170px;
+}
+
+.preset-save {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.preset-save input {
+  width: 150px;
+  padding: 5px 8px;
+  color: #e5e1da;
+  background: #151515;
+  border: 1px solid #3b3935;
+  border-radius: 6px;
+}
+
+.preset-secondary,
+.preset-danger {
+  padding: 5px 8px;
+  color: #c8c3bb;
+  font-size: 11px;
+  background: #22211f;
+  border: 1px solid #45413b;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.preset-danger {
+  color: #e4b7b0;
+  border-color: #684039;
+}
+
+.preset-secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .composer-images {
   display: flex;
   min-height: 62px;

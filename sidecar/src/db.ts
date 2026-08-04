@@ -21,6 +21,17 @@ export function openDb(dir: string = dataDir()): Database {
       permission_mode TEXT NOT NULL DEFAULT 'acceptEdits',
       pinned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS presets (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+      provider TEXT NOT NULL, model TEXT NOT NULL,
+      effort TEXT NULL, speed TEXT NULL,
+      orchestrator INTEGER NOT NULL DEFAULT 1,
+      built_in INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY, value TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
       title TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL,
@@ -55,6 +66,7 @@ export function openDb(dir: string = dataDir()): Database {
   // M2-D2 : une conversation orchestratrice reçoit le bridge MCP `conductor`.
   // Défaut ON — les conversations existantes en héritent aussi.
   addColumn(db, "conversations", "orchestrator INTEGER NOT NULL DEFAULT 1");
+  addColumn(db, "projects", "default_preset_id TEXT NULL");
   db.exec("PRAGMA foreign_keys = ON");
   return db;
 }

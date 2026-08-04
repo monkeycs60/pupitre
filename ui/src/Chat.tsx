@@ -12,6 +12,7 @@ import { Composer } from './Composer'
 import type {
   AppEvent,
   Conversation,
+  Project,
   QuotaSnapshot,
   SubtaskStatus,
 } from './types'
@@ -21,9 +22,10 @@ interface ChatProps {
   events: AppEvent[]
   connection: ConnectionState
   conversation: Conversation | null
-  projectId: string
+  project: Project
   quotas: QuotaSnapshot
   onConversationCreated: (conversation: Conversation) => void
+  onProjectUpdated: (project: Project) => void
   /** Nombre de sous-tâches en cours dans ce fil (indicateur sidebar). */
   onRunningSubtasksChange?: (count: number) => void
 }
@@ -45,9 +47,10 @@ export function Chat({
   events,
   connection,
   conversation,
-  projectId,
+  project,
   quotas,
   onConversationCreated,
+  onProjectUpdated,
   onRunningSubtasksChange,
 }: ChatProps) {
   const blocks = useMemo(() => groupEvents(events), [events])
@@ -140,10 +143,11 @@ export function Chat({
 
       <Composer
         conversationId={conversation?.id ?? null}
-        projectId={projectId}
+        project={project}
         quotas={quotas}
         isRunning={isRunning}
         onConversationCreated={onConversationCreated}
+        onProjectUpdated={onProjectUpdated}
       />
 
       {lightboxImage !== null ? (

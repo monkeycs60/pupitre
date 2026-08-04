@@ -45,6 +45,10 @@ function App() {
     setConversationListVersion((current) => current + 1)
   }
 
+  function handleProjectUpdated(project: Project) {
+    setSelectedProject(project)
+  }
+
   return (
     <main className="app-shell">
       <Sidebar
@@ -83,9 +87,10 @@ function App() {
               events={selectedConversation === null ? [] : events}
               connection={connection}
               conversation={selectedConversation}
-              projectId={selectedProject.id}
+              project={selectedProject}
               quotas={quotas.snapshot}
               onConversationCreated={handleConversationCreated}
+              onProjectUpdated={handleProjectUpdated}
               onRunningSubtasksChange={setRunningSubtasks}
             />
           </>

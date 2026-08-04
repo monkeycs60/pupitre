@@ -65,6 +65,12 @@ Le port du sidecar est fourni au `ConversationRunner` par une fonction **obligat
 
 **Garde de profondeur** : un tour de sous-tâche ne reçoit **jamais** le câblage conductor. Ce n'est pas une convention mais une propriété de structure — `SubtaskRunner` ne construit pas le champ `conductor` de `TurnOptions` et aucun chemin ne permet de l'y ajouter. Un sub-agent ne voit donc pas les outils de délégation : pas de sous-sous-tâche, pas de récursion (testé dans `tests/conductor-wiring.test.ts`).
 
+## Presets et réglages (M2-E1)
+
+Les configurations de nouveau tour sont persistées dans `presets` (`provider`, modèle, effort, vitesse et orchestration). Trois presets intégrés immuables sont créés idempotemment — **Éco**, **Qualité max**, **Vitesse** — et les presets personnels disposent d'un CRUD HTTP (`/api/presets`). Chaque projet peut mémoriser son choix avec `PUT /api/projects/:id/default-preset`; supprimer un preset personnel efface aussi les défauts projet qui le référencent.
+
+Les réglages transverses vivent dans la table key/value `settings` (`GET/PUT /api/settings`). Au premier démarrage E1, l'UI importe les anciens seuils de notification de quota depuis `localStorage`, les enregistre côté sidecar puis retire la clé historique. Les clés de déduplication des notifications restent locales à la webview.
+
 ## Prérequis
 
 - [Bun](https://bun.sh) ≥ 1.3, Rust ≥ 1.77 (+ deps Tauri Linux : `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`…)

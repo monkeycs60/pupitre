@@ -5,6 +5,8 @@ import type { MediaStore } from "./media";
 import type { ConversationRunner } from "./runner";
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
+import type { PresetInput, PresetStore } from "./stores/presets";
+import type { SettingsStore } from "./stores/settings";
 import type { QuotaTracker } from "./quotas";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
 
@@ -32,6 +34,8 @@ export interface ServerDeps {
   events: ConversationEventBus;
   quotas: QuotaTracker;
   subtasks: SubtaskRunner;
+  presets: PresetStore;
+  settings: SettingsStore;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -146,6 +150,47 @@ function optionalBoolean(
   return value;
 }
 
+function presetInput(body: Record<string, unknown>): PresetInput {
+  const name = requiredString(body, "name");
+  const provider = requiredString(body, "provider");
+  if (provider !== "claude" && provider !== "codex") {
+    throw new HttpError(400, "provider invalide");
+  }
+  return {
+    name,
+    provider,
+    model: requiredString(body, "model"),
+    effort: optionalEffort(body, provider),
+    speed: optionalSpeed(body, provider),
+    orchestrator: optionalBoolean(body, "orchestrator", true),
+  };
+}
+
+function quotaThresholds(body: Record<string, unknown>): {
+  lastHour: boolean;
+  usedPercent: number | null;
+} {
+  const value = body.quotaThresholds;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new HttpError(400, "champ quotaThresholds invalide");
+  }
+  const thresholds = value as Record<string, unknown>;
+  if (typeof thresholds.lastHour !== "boolean") {
+    throw new HttpError(400, "seuil lastHour invalide");
+  }
+  const usedPercent = thresholds.usedPercent;
+  if (
+    usedPercent !== null
+    && (typeof usedPercent !== "number"
+      || !Number.isFinite(usedPercent)
+      || usedPercent < 0
+      || usedPercent > 100)
+  ) {
+    throw new HttpError(400, "seuil usedPercent invalide");
+  }
+  return { lastHour: thresholds.lastHour, usedPercent };
+}
+
 function requiredPinned(body: Record<string, unknown>): boolean {
   if (typeof body.pinned !== "boolean") {
     throw new HttpError(400, "champ pinned invalide");
@@ -237,6 +282,26 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        const projectDefaultPresetId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/default-preset$/,
+        );
+        if (request.method === "PUT" && projectDefaultPresetId !== null) {
+          if (!deps.projects.get(projectDefaultPresetId)) {
+            throw new HttpError(404, "projet inconnu");
+          }
+          const body = await readObject(request);
+          const presetId = body.presetId;
+          if (presetId !== null && typeof presetId !== "string") {
+            throw new HttpError(400, "champ presetId invalide");
+          }
+          if (typeof presetId === "string" && !deps.presets.get(presetId)) {
+            throw new HttpError(404, "preset inconnu");
+          }
+          deps.projects.setDefaultPreset(projectDefaultPresetId, presetId as string | null);
+          return json(deps.projects.get(projectDefaultPresetId));
+        }
+
         const projectPinId = routeId(
           pathname,
           /^\/api\/projects\/([^/]+)\/pin$/,
@@ -259,6 +324,57 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(404, "projet inconnu");
           }
           return json(deps.conversations.listByProject(projectConversationsId));
+        }
+
+        if (request.method === "GET" && pathname === "/api/presets") {
+          return json(deps.presets.list());
+        }
+
+        if (request.method === "POST" && pathname === "/api/presets") {
+          const body = await readObject(request);
+          try {
+            return json(deps.presets.create(presetInput(body)), 201);
+          } catch {
+            throw new HttpError(409, "nom de preset déjà utilisé");
+          }
+        }
+
+        const presetId = routeId(pathname, /^\/api\/presets\/([^/]+)$/);
+        if (request.method === "PUT" && presetId !== null) {
+          const body = await readObject(request);
+          try {
+            const preset = deps.presets.update(presetId, presetInput(body));
+            if (!preset) throw new HttpError(404, "preset inconnu");
+            return json(preset);
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            if (error instanceof Error && error.message === "preset intégré immuable") {
+              throw new HttpError(409, error.message);
+            }
+            throw new HttpError(409, "nom de preset déjà utilisé");
+          }
+        }
+
+        if (request.method === "DELETE" && presetId !== null) {
+          try {
+            if (!deps.presets.delete(presetId)) {
+              throw new HttpError(404, "preset inconnu");
+            }
+            return empty(204);
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            throw new HttpError(409, "preset intégré immuable");
+          }
+        }
+
+        if (request.method === "GET" && pathname === "/api/settings") {
+          return json(deps.settings.all());
+        }
+
+        if (request.method === "PUT" && pathname === "/api/settings") {
+          const body = await readObject(request);
+          deps.settings.set("quotaThresholds", quotaThresholds(body));
+          return json(deps.settings.all());
         }
 
         if (request.method === "POST" && pathname === "/api/conversations") {

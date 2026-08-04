@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getQuotas } from './api'
+import { getQuotas, getSettings, updateSettings } from './api'
 import { reconnectDelayMs } from './backoff'
 import {
   DEFAULT_QUOTA_THRESHOLDS,
@@ -7,43 +7,13 @@ import {
   type QuotaThresholds,
 } from './quotaSignals'
 import type { QuotaSnapshot, QuotaState } from './types'
+import { loadQuotaThresholds } from './quotaSettings'
 
 const EMPTY_SNAPSHOT: QuotaSnapshot = { claude: null, codex: null }
 
-// Seuils de notification : provisoirement en localStorage. La table `settings`
-// (key/value + GET/PUT /api/settings) arrive avec la phase E — cette lecture
-// deviendra un fetch, la forme `QuotaThresholds` ne bougera pas.
-const THRESHOLDS_KEY = 'pupitre.quota-thresholds'
 // Clés d'alertes déjà poussées, persistées pour ne pas re-notifier au rechargement.
 const NOTIFIED_KEY = 'pupitre.quota-notified'
 const NOTIFIED_MAX = 50
-
-export function loadQuotaThresholds(): QuotaThresholds {
-  try {
-    const raw = localStorage.getItem(THRESHOLDS_KEY)
-    if (raw === null) return DEFAULT_QUOTA_THRESHOLDS
-    const parsed = JSON.parse(raw) as Partial<QuotaThresholds>
-    return {
-      lastHour: typeof parsed.lastHour === 'boolean'
-        ? parsed.lastHour
-        : DEFAULT_QUOTA_THRESHOLDS.lastHour,
-      usedPercent: typeof parsed.usedPercent === 'number' || parsed.usedPercent === null
-        ? parsed.usedPercent
-        : DEFAULT_QUOTA_THRESHOLDS.usedPercent,
-    }
-  } catch (error) {
-    console.error('Seuils de quota illisibles', error)
-    return DEFAULT_QUOTA_THRESHOLDS
-  }
-}
-
-export function saveQuotaThresholds(thresholds: QuotaThresholds): void {
-  try {
-    localStorage.setItem(THRESHOLDS_KEY, JSON.stringify(thresholds))
-  } catch (error) {
-    console.error('Seuils de quota non enregistrés', error)
-  }
-}
 
 function loadNotifiedKeys(): string[] {
   try {
@@ -87,11 +57,20 @@ export function useQuotas(): Quotas {
 
     notifiedRef.current ??= new Set(loadNotifiedKeys())
     const notified = notifiedRef.current
-    const thresholds = loadQuotaThresholds()
+    const thresholds = loadQuotaThresholds(
+      () => getSettings(abortController.signal),
+      updateSettings,
+      localStorage,
+    ).catch((error: unknown) => {
+      if (!abortController.signal.aborted) {
+        console.error('Seuils de quota indisponibles', error)
+      }
+      return DEFAULT_QUOTA_THRESHOLDS
+    })
 
     function apply(state: QuotaState) {
       setSnapshot((current) => ({ ...current, [state.provider]: state }))
-      void notifyCrossings(state, thresholds, notified)
+      void thresholds.then((resolved) => notifyCrossings(state, resolved, notified))
     }
 
     function connect() {
