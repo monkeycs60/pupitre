@@ -46,6 +46,7 @@ export interface StartReviewInput {
 export interface CounterOpinionConfig {
   model?: string;
   effort?: string;
+  codeProvider?: Provider;
 }
 
 export interface CounterOpinionDefaults {
@@ -116,6 +117,13 @@ export class ReviewRunner {
     return this.store.setFlagCodeProvider(id, provider);
   }
 
+  updateFlag(
+    id: string,
+    input: { status?: "open" | "acked" | "dismissed"; codeProvider?: Provider },
+  ) {
+    return this.store.updateFlag(id, input);
+  }
+
   setDecisionStatus(id: string, status: "acked" | "dismissed") {
     return this.store.setDecisionStatus(id, status);
   }
@@ -148,17 +156,27 @@ export class ReviewRunner {
     if (reviewIds.size !== 1) throw new Error("les flags doivent appartenir à la même review");
     const review = this.store.get(flags[0]!.review_id);
     if (!review) throw new Error("review inconnue");
-    const targetProviders = new Set(flags.map((flag) => oppositeProvider(flag.code_provider)));
+    if (config.codeProvider && flags.length !== 1) {
+      throw new Error("l'auteur ne peut être précisé que pour un contre-avis ciblé");
+    }
+    const effectiveFlags = flags.map((flag) => ({
+      ...flag,
+      code_provider: config.codeProvider ?? flag.code_provider,
+    }));
+    const targetProviders = new Set(
+      effectiveFlags.map((flag) => oppositeProvider(flag.code_provider)),
+    );
     if (targetProviders.size > 1 && (config.model || config.effort)) {
       throw new Error("une review multi-provider utilise les modèles forts par défaut de chaque point");
     }
-    const queued = this.store.queueCounters(flags.map((flag) => {
+    const queued = this.store.queueCounters(effectiveFlags.map((flag) => {
       const defaults = defaultReviewConfig(oppositeProvider(flag.code_provider));
       return {
         id: flag.id,
         provider: defaults.provider,
         model: config.model?.trim() || defaults.model,
         effort: config.effort?.trim() || defaults.effort,
+        codeProvider: flag.code_provider,
       };
     }));
     const run = this.executeCounterBatch(review, queued)

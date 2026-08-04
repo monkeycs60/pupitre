@@ -79,6 +79,7 @@ export class ReviewStore {
       WHERE counter_state IN ('queued', 'running')
     `).run();
     this.backfillDecisions();
+    this.reconcileAllDecisionStatuses();
   }
 
   create(input: {
@@ -127,17 +128,46 @@ export class ReviewStore {
   }
 
   setFlagStatus(id: string, status: Exclude<ReviewFlagStatus, "countered">): ReviewFlag | null {
-    const update = this.db.transaction(() => {
-      this.db.query("UPDATE review_flags SET status = ? WHERE id = ?").run(status, id);
-      this.syncDecisionStatuses(id);
-    });
-    update();
-    return this.getFlag(id);
+    return this.updateFlag(id, { status });
   }
 
   setFlagCodeProvider(id: string, provider: Provider): ReviewFlag | null {
-    this.db.query("UPDATE review_flags SET code_provider = ? WHERE id = ?").run(provider, id);
-    return this.getFlag(id);
+    return this.updateFlag(id, { codeProvider: provider });
+  }
+
+  updateFlag(
+    id: string,
+    input: {
+      status?: Exclude<ReviewFlagStatus, "countered">;
+      codeProvider?: Provider;
+    },
+  ): ReviewFlag | null {
+    const update = this.db.transaction(() => {
+      const current = this.getFlag(id);
+      if (!current) return null;
+      if (input.codeProvider && input.codeProvider !== current.code_provider) {
+        if (current.counter_state === "queued" || current.counter_state === "running") {
+          throw new CounterAlreadyRunningError(
+            "l'auteur ne peut pas changer pendant un contre-avis",
+          );
+        }
+        this.db.query(`
+          UPDATE review_flags
+          SET code_provider = ?,
+              status = CASE WHEN status = 'countered' THEN 'open' ELSE status END,
+              counter_state = 'idle', counter_verdict = NULL, counter_text = NULL,
+              counter_provider = NULL, counter_model = NULL, counter_effort = NULL,
+              counter_subtask_id = NULL, counter_error = NULL
+          WHERE id = ?
+        `).run(input.codeProvider, id);
+      }
+      if (input.status) {
+        this.db.query("UPDATE review_flags SET status = ? WHERE id = ?").run(input.status, id);
+      }
+      this.syncDecisionStatuses(id);
+      return this.getFlag(id);
+    });
+    return update();
   }
 
   setDecisionStatus(
@@ -172,18 +202,30 @@ export class ReviewStore {
   }
 
   queueCounters(
-    inputs: Array<{ id: string; provider: Provider; model: string; effort: string }>,
+    inputs: Array<{
+      id: string;
+      provider: Provider;
+      model: string;
+      effort: string;
+      codeProvider: Provider;
+    }>,
   ): ReviewFlag[] {
     const reserve = this.db.transaction(() => {
       const update = this.db.query(`
         UPDATE review_flags
         SET counter_state = 'queued', counter_verdict = NULL, counter_text = NULL,
             counter_provider = ?, counter_model = ?, counter_effort = ?,
-            counter_subtask_id = NULL, counter_error = NULL
+            code_provider = ?, counter_subtask_id = NULL, counter_error = NULL
         WHERE id = ? AND counter_state NOT IN ('queued', 'running')
       `);
       for (const input of inputs) {
-        if (update.run(input.provider, input.model, input.effort, input.id).changes !== 1) {
+        if (update.run(
+          input.provider,
+          input.model,
+          input.effort,
+          input.codeProvider,
+          input.id,
+        ).changes !== 1) {
           throw new CounterAlreadyRunningError("un contre-avis est déjà en cours");
         }
       }
@@ -366,6 +408,29 @@ export class ReviewStore {
           JSON.stringify([flag.id]),
           decisionStatus([flag.status]),
         );
+      }
+    }
+  }
+
+  private reconcileAllDecisionStatuses(): void {
+    const decisions = this.db.query(
+      "SELECT id, flag_ids FROM review_decisions",
+    ).all() as Array<{ id: string; flag_ids: string }>;
+    const getStatus = this.db.query("SELECT status FROM review_flags WHERE id = ?");
+    const update = this.db.query("UPDATE review_decisions SET status = ? WHERE id = ?");
+    for (const decision of decisions) {
+      try {
+        const ids = JSON.parse(decision.flag_ids) as unknown;
+        if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) continue;
+        const statuses = ids.flatMap((id) => {
+          const row = getStatus.get(id) as { status: ReviewFlagStatus } | null;
+          return row ? [row.status] : [];
+        });
+        if (statuses.length === ids.length && statuses.length > 0) {
+          update.run(decisionStatus(statuses), decision.id);
+        }
+      } catch {
+        // Une ancienne décision corrompue reste inchangée et visible pour diagnostic.
       }
     }
   }

@@ -339,6 +339,7 @@ export function GuardianView({
                     <span>Auteur du code</span>
                     <select
                       value={flag.code_provider}
+                      disabled={flag.counter_state === 'queued' || flag.counter_state === 'running'}
                       onChange={(event) => void handleFlagCodeProvider(
                         flag,
                         event.target.value as 'claude' | 'codex',

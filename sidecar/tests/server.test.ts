@@ -393,6 +393,17 @@ test("le mode bloquant et l'acquittement ciblé sont exposés sans approbation g
   const blocked = await fetch(`${current.baseUrl}/api/projects/${project.id}/gardien-status`);
   expect(await blocked.json()).toEqual({ mode: "bloquant", blocked: true, openRedCount: 1 });
 
+  const invalidCombined = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
+    method: "PATCH",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ status: "acked", codeProvider: "invalide" }),
+  });
+  expect(invalidCombined.status).toBe(400);
+  expect(reviewStore.getFlag(flag.id)).toMatchObject({
+    status: "open",
+    code_provider: "codex",
+  });
+
   const acked = await fetch(`${current.baseUrl}/api/review-decisions/${decision.id}`, {
     method: "PATCH",
     headers: jsonHeaders(),
@@ -446,8 +457,10 @@ test("expose le contre-avis opposé, global ou ciblé, et l'option automatique r
   const cheap = await postJson(`/api/review-flags/${flag.id}/counter-opinion`, {
     model: "haiku",
     effort: "high",
+    codeProvider: "claude",
   });
   expect(cheap.status).toBe(400);
+  expect(reviewStore.getFlag(flag.id)?.code_provider).toBe("codex");
 
   const all = await postJson(`/api/reviews/${review.id}/counter-opinions`, {
     model: "opus",

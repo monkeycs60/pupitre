@@ -366,6 +366,8 @@ test("le contre-avis passe au provider opposé en lecture seule et persiste son 
   const flagId = store.get(review.id)!.flags[0]!.id;
   runner.startCounterOpinions([flagId]);
   expect(() => runner.startCounterOpinions([flagId])).toThrow(/déjà en cours/);
+  expect(() => runner.setFlagCodeProvider(flagId, "claude")).toThrow(/pendant un contre-avis/);
+  expect(store.getFlag(flagId)?.code_provider).toBe("codex");
   const countered = await runner.waitCounter(flagId);
 
   expect(inputs).toHaveLength(1);
@@ -383,6 +385,12 @@ test("le contre-avis passe au provider opposé en lecture seule et persiste son 
     counter_provider: "claude",
     counter_model: "opus",
     counter_text: "Le risque existe seulement si la valeur est sérialisée.",
+  });
+  expect(runner.setFlagCodeProvider(flagId, "claude")).toMatchObject({
+    code_provider: "claude",
+    status: "open",
+    counter_state: "idle",
+    counter_text: null,
   });
   projects.setGardienMode(project.id, "bloquant");
   expect(runner.gardienStatus(project.id)).toEqual({
@@ -518,7 +526,7 @@ test("synchronise les statuts flag-décision et préserve les acquis au backfill
   store.setFlagStatus(completed.flags[0]!.id, "open");
   expect(store.getDecision(completed.decisions[0]!.id)?.status).toBe("open");
   for (const flag of completed.flags) store.setFlagStatus(flag.id, "acked");
-  db.query("DELETE FROM review_decisions WHERE review_id = ?").run(review.id);
+  db.query("UPDATE review_decisions SET status = 'open' WHERE review_id = ?").run(review.id);
 
   const reopened = new ReviewStore(db).get(review.id)!;
   expect(reopened.decisions).toHaveLength(2);
