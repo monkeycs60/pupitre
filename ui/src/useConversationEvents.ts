@@ -1,53 +1,111 @@
 import { useEffect, useState } from 'react'
 import { getConversationEvents } from './api'
+import { reconnectDelayMs } from './backoff'
 import { mergeReplayAndBuffer } from './mergeEvents'
 import type { StoredEvent } from './types'
 
+export type ConnectionState = 'connecting' | 'open' | 'reconnecting'
+
+export interface ConversationEvents {
+  events: StoredEvent[]
+  connection: ConnectionState
+}
+
 // Ouvre le WebSocket AVANT de charger le replay : les événements reçus pendant
 // le fetch sont bufferisés puis fusionnés (dédup par id), sans fenêtre de perte.
+// Même séquence à chaque reconnexion : le replay est refetché en entier et
+// fusionné avec ce qui est déjà affiché — la fusion par id la rend idempotente.
 export function useConversationEvents(
   conversationId: string | null,
-): StoredEvent[] {
+): ConversationEvents {
   const [events, setEvents] = useState<StoredEvent[]>([])
+  const [connection, setConnection] = useState<ConnectionState>('connecting')
 
   useEffect(() => {
     setEvents([])
+    setConnection('connecting')
     if (conversationId === null) return
 
-    const abortController = new AbortController()
-    let buffer: StoredEvent[] | null = []
+    let disposed = false
+    let socket: WebSocket | null = null
+    let abortController: AbortController | null = null
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let failedAttempts = 0
 
-    const socket = new WebSocket(
-      `ws://${location.host}/ws?conversation=${encodeURIComponent(conversationId)}`,
-    )
-    socket.addEventListener('message', (message) => {
-      let event: StoredEvent
-      try {
-        event = JSON.parse(String(message.data)) as StoredEvent
-      } catch (error) {
-        console.error('Message WebSocket illisible', error)
-        return
+    function connect(id: string) {
+      let buffer: StoredEvent[] | null = []
+      const controller = new AbortController()
+      abortController = controller
+
+      const currentSocket = new WebSocket(
+        `ws://${location.host}/ws?conversation=${encodeURIComponent(id)}`,
+      )
+      socket = currentSocket
+
+      // Perte de connexion (close, error, ou replay injoignable) : on referme
+      // tout et on replanifie une connexion complète avec le backoff.
+      function dropAndRetry() {
+        if (disposed || socket !== currentSocket) return
+        socket = null
+        controller.abort()
+        currentSocket.close()
+        failedAttempts += 1
+        setConnection('reconnecting')
+        retryTimer = setTimeout(() => {
+          connect(id)
+        }, reconnectDelayMs(failedAttempts))
       }
-      if (buffer !== null) buffer.push(event)
-      else setEvents((current) => mergeReplayAndBuffer(current, [event]))
-    })
 
-    void getConversationEvents(conversationId, abortController.signal)
-      .then((replay) => {
-        if (abortController.signal.aborted) return
+      currentSocket.addEventListener('open', () => {
+        if (disposed || socket !== currentSocket) return
+        failedAttempts = 0
+        setConnection('open')
+      })
 
-        setEvents(mergeReplayAndBuffer(replay, buffer ?? []))
-        buffer = null
+      currentSocket.addEventListener('message', (message) => {
+        if (disposed || socket !== currentSocket) return
+
+        let event: StoredEvent
+        try {
+          event = JSON.parse(String(message.data)) as StoredEvent
+        } catch (error) {
+          console.error('Message WebSocket illisible', error)
+          return
+        }
+
+        if (buffer !== null) buffer.push(event)
+        else setEvents((current) => mergeReplayAndBuffer(current, [event]))
       })
-      .catch((error: unknown) => {
-        if (!abortController.signal.aborted) console.error(error)
-      })
+
+      currentSocket.addEventListener('close', dropAndRetry)
+      currentSocket.addEventListener('error', dropAndRetry)
+
+      void getConversationEvents(id, controller.signal)
+        .then((replay) => {
+          if (controller.signal.aborted || disposed) return
+
+          const pending = buffer ?? []
+          buffer = null
+          setEvents((current) =>
+            mergeReplayAndBuffer(replay, [...current, ...pending]),
+          )
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted || disposed) return
+          console.error(error)
+          dropAndRetry()
+        })
+    }
+
+    connect(conversationId)
 
     return () => {
-      abortController.abort()
-      socket.close()
+      disposed = true
+      clearTimeout(retryTimer)
+      abortController?.abort()
+      socket?.close()
     }
   }, [conversationId])
 
-  return events
+  return { events, connection }
 }

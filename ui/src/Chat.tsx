@@ -4,9 +4,11 @@ import type { EventBlock } from './EventView'
 import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
 import type { AppEvent, Conversation } from './types'
+import type { ConnectionState } from './useConversationEvents'
 
 interface ChatProps {
   events: AppEvent[]
+  connection: ConnectionState
   conversation: Conversation | null
   projectId: string
   onConversationCreated: (conversation: Conversation) => void
@@ -139,6 +141,7 @@ function lastStatusIsRunning(events: AppEvent[]): boolean {
 
 export function Chat({
   events,
+  connection,
   conversation,
   projectId,
   onConversationCreated,
@@ -177,6 +180,12 @@ export function Chat({
 
   return (
     <>
+      {connection === 'reconnecting' ? (
+        <p className="connection-banner" role="status">
+          Connexion perdue, reconnexion…
+        </p>
+      ) : null}
+
       <div className="events-view" ref={viewportRef} onScroll={handleScroll}>
         <div className="events-list" aria-live="polite">
           {blocks.length === 0 ? (

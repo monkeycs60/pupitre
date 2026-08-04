@@ -1,5 +1,6 @@
 // Teste la logique pure de raccord replay/WS du frontend (aucun DOM requis).
 import { expect, test } from "bun:test";
+import { reconnectDelayMs } from "../../ui/src/backoff";
 import { mergeReplayAndBuffer } from "../../ui/src/mergeEvents";
 import type { StoredEvent } from "../../ui/src/types";
 
@@ -51,4 +52,20 @@ test("le replay fait foi quand un même id existe des deux côtés", () => {
   const merged = mergeReplayAndBuffer([delta(1, "replay")], [delta(1, "buffer")]);
 
   expect(merged).toEqual([delta(1, "replay")]);
+});
+
+test("le refetch complet après reconnexion est idempotent", () => {
+  const affiche = [delta(1, "a"), delta(2, "b")];
+  const replay = [delta(1, "a"), delta(2, "b"), delta(3, "c")];
+
+  expect(mergeReplayAndBuffer(replay, affiche)).toEqual(replay);
+});
+
+test("le backoff de reconnexion suit 1s, 2s puis plafonne à 5s", () => {
+  expect([1, 2, 3, 4, 10].map(reconnectDelayMs)).toEqual([1000, 2000, 5000, 5000, 5000]);
+});
+
+test("une tentative hors bornes retombe sur le premier délai", () => {
+  expect(reconnectDelayMs(0)).toBe(1000);
+  expect(reconnectDelayMs(-3)).toBe(1000);
 });

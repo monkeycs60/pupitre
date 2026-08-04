@@ -312,6 +312,16 @@ button {
   font-size: 12px;
 }
 
+.connection-banner {
+  flex: none;
+  padding: 8px 24px;
+  color: #f0c987;
+  font-size: 12px;
+  text-align: center;
+  background: #2a2118;
+  border-bottom: 1px solid #4a3a24;
+}
+
 .events-view {
   flex: 1;
   min-height: 0;

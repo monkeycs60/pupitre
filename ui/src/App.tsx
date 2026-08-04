@@ -11,7 +11,9 @@ function App() {
     useState<Conversation | null>(null)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
   const [conversationListVersion, setConversationListVersion] = useState(0)
-  const events = useConversationEvents(selectedConversation?.id ?? null)
+  const { events, connection } = useConversationEvents(
+    selectedConversation?.id ?? null,
+  )
 
   function handleProjectSelect(project: Project) {
     if (project.id !== selectedProject?.id) {
@@ -72,6 +74,7 @@ function App() {
             <Chat
               key={selectedConversation?.id ?? `new-${selectedProject.id}`}
               events={selectedConversation === null ? [] : events}
+              connection={connection}
               conversation={selectedConversation}
               projectId={selectedProject.id}
               onConversationCreated={handleConversationCreated}
