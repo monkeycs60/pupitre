@@ -1,0 +1,300 @@
+/* ---------------------------------------------------------------------------
+   Modales : changement de modèle, review Gardien, contre-avis.
+   Panneau flottant --bg-overlay + --shadow-overlay ; hiérarchie par la
+   densité (titre / corps / pied), pas de filets internes.
+--------------------------------------------------------------------------- */
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  padding: var(--space-6);
+  background: var(--scrim);
+  place-items: center;
+}
+
+/* --- Panneau ------------------------------------------------------------- */
+
+.switch-modal,
+.review-dialog,
+.counter-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2 * var(--space-6));
+  overflow: hidden;
+  color: var(--text);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-overlay);
+}
+
+.switch-modal {
+  width: min(100%, 520px);
+}
+
+.review-dialog {
+  width: min(100%, 640px);
+}
+
+.counter-dialog {
+  width: min(100%, 590px);
+}
+
+/* --- En-tête -------------------------------------------------------------- */
+
+.switch-modal > header,
+.review-dialog .modal-header,
+.counter-dialog .modal-header {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-2);
+}
+
+.switch-modal h2,
+.review-dialog .modal-header h2,
+.counter-dialog .modal-header h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.review-dialog .modal-header p,
+.counter-dialog .modal-header p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.modal-close {
+  display: grid;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: -6px -8px 0 0;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  place-items: center;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.modal-close:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+/* --- Corps (formulaire) --------------------------------------------------- */
+
+.switch-modal form,
+.review-dialog-form,
+.counter-dialog-form {
+  min-height: 0;
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  overflow-y: auto;
+}
+
+.review-dialog-form,
+.counter-dialog-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* --- Champs ---------------------------------------------------------------- */
+
+.switch-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.review-dialog-grid {
+  display: grid;
+  grid-template-columns: 0.9fr 0.9fr 1.3fr 0.7fr;
+  gap: var(--space-3);
+}
+
+.review-dialog-grid.refs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.counter-dialog-grid {
+  display: grid;
+  grid-template-columns: 0.8fr 1.4fr 0.8fr;
+  gap: var(--space-3);
+}
+
+.switch-fields label,
+.review-dialog-form label,
+.counter-dialog-grid label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.switch-fields select,
+.review-dialog-form select,
+.review-dialog-form input:not([type="checkbox"]),
+.counter-dialog-grid select,
+.counter-dialog-grid input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px var(--space-2);
+  color: var(--text);
+  font-weight: 400;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.switch-fields select:focus-visible,
+.review-dialog-form select:focus-visible,
+.review-dialog-form input:not([type="checkbox"]):focus-visible,
+.counter-dialog-grid select:focus-visible,
+.counter-dialog-grid input:focus-visible {
+  border-color: var(--accent-border);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Identifiants de modèle et de provider : monospace. */
+.field-mono,
+select.field-mono,
+input.field-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+}
+
+.counter-dialog-grid input[readonly] {
+  color: var(--text-muted);
+  background: var(--bg-raised);
+}
+
+.review-dialog-form .review-remember {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-weight: 400;
+}
+
+.review-remember input {
+  accent-color: var(--accent);
+}
+
+/* --- Notes et alertes ------------------------------------------------------ */
+
+.switch-warning {
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-4) 0 0;
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  background: var(--warn-soft);
+  border-left: 2px solid var(--warn);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.switch-warning strong {
+  color: var(--text-strong);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.switch-warning code {
+  font-size: var(--text-code);
+}
+
+.review-dialog-note,
+.counter-dialog-note,
+.counter-dialog-scope {
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  background: var(--neutral-soft);
+  border-left: 2px solid var(--border-strong);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.counter-dialog-scope {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Point de review cité : liseré à la couleur de la sévérité, toujours
+   accompagné du texte du flag (jamais la couleur seule). */
+.counter-dialog-flag {
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  background: var(--neutral-soft);
+  border-left: 2px solid var(--border-strong);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.counter-dialog-flag.severity-orange {
+  background: var(--warn-soft);
+  border-left-color: var(--warn);
+}
+
+.counter-dialog-flag.severity-red {
+  background: var(--danger-soft);
+  border-left-color: var(--danger);
+}
+
+.counter-dialog-flag > span {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.counter-dialog-flag p {
+  margin: 2px 0 0;
+}
+
+.modal-error {
+  margin: var(--space-3) 0 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.review-dialog .modal-error,
+.counter-dialog .modal-error {
+  margin: 0;
+}
+
+/* --- Pied d'actions -------------------------------------------------------- */
+
+.switch-modal footer,
+.review-dialog .modal-actions,
+.counter-dialog .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.review-dialog .modal-actions,
+.counter-dialog .modal-actions {
+  margin-top: var(--space-2);
+}

@@ -1,0 +1,171 @@
+/* ---------------------------------------------------------------------------
+   Tokens du design system « cockpit dense » + base de l'application.
+   Source de vérité : docs/DESIGN-SYSTEM.md — aucune couleur, aucun rayon,
+   aucune taille de texte en dur dans les composants : tout passe par ici.
+--------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg-app: #0b0c0e;
+  --bg-panel: #101114;
+  --bg-raised: #16171b;
+  --bg-overlay: #1b1d22;
+  --bg-input: #141519;
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --bg-active: rgba(255, 255, 255, 0.07);
+  --scrim: rgba(6, 7, 9, 0.72);
+
+  /* Filets */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Texte */
+  --text: #e7e9ee;
+  --text-strong: #f6f7fa;
+  --text-muted: #9ba3b0;
+  --text-faint: #727b88;
+
+  /* Accent et sémantique */
+  --accent: #6e7bff;
+  --accent-hover: #8590ff;
+  --accent-soft: rgba(110, 123, 255, 0.14);
+  --accent-border: rgba(110, 123, 255, 0.42);
+  --on-accent: #0b0c0e;
+  --danger: #f2555a;
+  --danger-soft: rgba(242, 85, 90, 0.12);
+  --warn: #f0a852;
+  --warn-soft: rgba(240, 168, 82, 0.12);
+  --ok: #4ec9a5;
+  --ok-soft: rgba(78, 201, 165, 0.12);
+  --neutral-soft: rgba(255, 255, 255, 0.05);
+
+  /* Rayons */
+  --r-xs: 3px;
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-full: 999px;
+
+  /* Espacement */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  /* Ombres — réservées aux éléments réellement flottants */
+  --shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  /* Typographie */
+  --font-sans: ui-sans-serif, -apple-system, "Inter", "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-code: 12.5px;
+
+  /* Mouvement */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+}
+
+/* --- Reset léger -------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 720px;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  background: var(--bg-app);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+code,
+kbd,
+pre {
+  font-family: var(--font-mono);
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* --- Scrollbars fines --------------------------------------------------- */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  background-clip: content-box;
+  border: 2px solid transparent;
+  border-radius: var(--r-full);
+}
+
+/* --- Focus visible obligatoire ------------------------------------------ */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* --- Mouvement neutralisé sur demande ----------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

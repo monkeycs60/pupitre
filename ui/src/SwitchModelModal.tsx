@@ -79,6 +79,9 @@ export function SwitchModelModal({
       className="modal-backdrop"
       role="presentation"
       onMouseDown={() => { if (!isSubmitting) onClose() }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && !isSubmitting) onClose()
+      }}
     >
       <section
         className="switch-modal"
@@ -107,6 +110,7 @@ export function SwitchModelModal({
             <label>
               <span>Provider</span>
               <select
+                autoFocus
                 value={provider}
                 onChange={(event) => handleProviderChange(event.target.value as Provider)}
               >
@@ -116,7 +120,11 @@ export function SwitchModelModal({
             </label>
             <label>
               <span>Modèle</span>
-              <select value={model} onChange={(event) => setModel(event.target.value)}>
+              <select
+                className="field-mono"
+                value={model}
+                onChange={(event) => setModel(event.target.value)}
+              >
                 {PROVIDER_MODELS[provider].map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}
@@ -146,7 +154,7 @@ export function SwitchModelModal({
 
           {isHandoff ? (
             <p className="switch-warning">
-              Pupitre générera avec {conversation.model} un débrief versionné, l’épinglera
+              Pupitre générera avec <code>{conversation.model}</code> un débrief versionné, l’épinglera
               dans ce fil, puis initialisera une conversation {provider} avec ce contexte.
               Les deux fils resteront liés.
             </p>

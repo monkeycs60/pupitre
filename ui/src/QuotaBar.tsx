@@ -13,13 +13,21 @@ const PROVIDER_NAMES: Record<Provider, string> = {
   codex: 'Codex',
 }
 
+/* Seuil réellement critique : la couleur d'alerte n'apparaît qu'à partir
+   de 90 % d'usage, jamais avant. */
+const CRITICAL_PERCENT = 90
+
 function WindowGauge({ window, now }: { window: QuotaWindow; now: number }) {
   const remaining = msUntilReset(window, now)
   const countdown = remaining === null ? null : formatCountdown(remaining)
   const hasPercent = window.usedPercent !== null
+  const isCritical = (window.usedPercent ?? 0) >= CRITICAL_PERCENT
 
   return (
-    <div className="quota-window" title={describeWindow(window, now)}>
+    <div
+      className={`quota-window${isCritical ? ' is-critical' : ''}`}
+      title={describeWindow(window, now)}
+    >
       <span className="quota-window-label">{windowTitle(window)}</span>
       {hasPercent ? (
         // Jauge remplie : codex publie un pourcentage d'usage.
@@ -40,8 +48,11 @@ function WindowGauge({ window, now }: { window: QuotaWindow; now: number }) {
       <span className="quota-window-value">
         {hasPercent ? `${Math.round(window.usedPercent ?? 0)}%` : null}
         {hasPercent && countdown !== null ? ' · ' : null}
-        {/* Claude ne publie pas d'usage : seul le reset est affichable. */}
-        {countdown !== null ? `reset dans ${countdown}` : null}
+        {/* Claude ne publie pas d'usage : seul le reset est affichable.
+            « imminent » se suffit à lui-même : « reset dans imminent » ne veut rien dire. */}
+        {countdown !== null
+          ? countdown === 'imminent' ? 'reset imminent' : `reset dans ${countdown}`
+          : null}
         {!hasPercent && countdown === null ? 'inconnu' : null}
       </span>
     </div>

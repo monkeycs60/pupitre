@@ -1,0 +1,430 @@
+/* ---------------------------------------------------------------------------
+   Zone de saisie : composer, barre d'actions, sélecteurs de modèle et presets.
+   Le champ est la seule surface --bg-input de la zone ; tout le reste reste
+   discret pour que l'attention aille au texte.
+--------------------------------------------------------------------------- */
+
+.composer-area {
+  position: relative;
+  flex: none;
+  padding: var(--space-3) var(--space-6) var(--space-4);
+  background: var(--bg-app);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.composer {
+  display: grid;
+  width: min(100%, 840px);
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.composer:focus-within {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* --- Sélecteurs de modèle (nouvelle conversation) ------------------------- */
+
+.composer-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.composer-models label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.composer-models select {
+  min-width: 118px;
+  min-height: 28px;
+  padding: 3px var(--space-6) 3px var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.orchestrator-toggle {
+  cursor: pointer;
+}
+
+.orchestrator-toggle input {
+  accent-color: var(--accent);
+}
+
+/* --- Presets --------------------------------------------------------------- */
+
+.preset-controls {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.preset-controls label select {
+  min-width: 170px;
+}
+
+.preset-save {
+  display: flex;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.preset-save input {
+  width: 150px;
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.preset-save input:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.preset-save input::placeholder {
+  color: var(--text-faint);
+}
+
+.preset-secondary,
+.preset-danger {
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.preset-secondary {
+  color: var(--text-muted);
+}
+
+.preset-secondary:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.preset-danger {
+  color: var(--danger);
+}
+
+.preset-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.preset-secondary:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+/* --- Choix du modèle -------------------------------------------------------- */
+
+.model-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.model-picker-title {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.model-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.model-option:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.model-option.is-selected {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.quota-chip {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.quota-chip.is-unknown {
+  color: var(--text-faint);
+}
+
+/* Pulse discret : appel à consommer un quota qui va expirer. */
+.model-option.is-pulsing {
+  animation: quota-pulse 2.4s var(--ease) infinite;
+}
+
+@keyframes quota-pulse {
+  0%,
+  100% {
+    border-color: var(--border);
+  }
+
+  50% {
+    border-color: var(--accent-border);
+  }
+}
+
+/* --- Images jointes --------------------------------------------------------- */
+
+.composer-images {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
+  overflow-x: auto;
+}
+
+.composer-image {
+  position: relative;
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+}
+
+.composer-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.composer-image button {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: 1;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  cursor: pointer;
+  place-items: center;
+}
+
+.composer-image button:hover {
+  color: var(--text-strong);
+  background: var(--danger);
+  border-color: transparent;
+}
+
+.composer-uploading {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* --- Champ de saisie --------------------------------------------------------- */
+
+.composer textarea {
+  width: 100%;
+  min-height: 64px;
+  max-height: 200px;
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+  color: var(--text);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.composer textarea::placeholder {
+  color: var(--text-faint);
+}
+
+.composer textarea:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.composer textarea:disabled::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* --- Barre d'actions --------------------------------------------------------- */
+
+.composer-actions {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.composer-actions > span {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.composer-actions > div {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.send-button,
+.cancel-button,
+.debrief-button,
+.test-button {
+  min-height: 28px;
+  padding: 3px var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.send-button {
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid transparent;
+}
+
+.send-button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.debrief-button,
+.test-button {
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.debrief-button:hover:not(:disabled),
+.test-button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.cancel-button {
+  color: var(--danger);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.cancel-button:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.send-button:disabled,
+.cancel-button:disabled,
+.debrief-button:disabled,
+.test-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* --- Toast d'erreur ----------------------------------------------------------- */
+
+.composer-toast {
+  position: absolute;
+  z-index: 10;
+  right: var(--space-6);
+  bottom: calc(100% + var(--space-2));
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 360px;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  color: var(--danger);
+  font-size: var(--text-sm);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--danger);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-popover);
+}
+
+.composer-toast button {
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  color: inherit;
+  font-size: var(--text-lg);
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-option.is-pulsing {
+    animation: none;
+    border-color: var(--accent-border);
+  }
+}
+
+@media (max-width: 900px) {
+  .composer-area {
+    padding-right: var(--space-4);
+    padding-left: var(--space-4);
+  }
+}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import './App.css'
 import { Chat } from './Chat'
 import { Sidebar } from './Sidebar'
+import { Titlebar } from './Titlebar'
 import { SwitchModelModal } from './SwitchModelModal'
 import { GuardianView } from './GuardianView'
 import { ReviewDialog } from './ReviewDialog'
@@ -161,8 +161,15 @@ function App() {
     setReviewListVersion((current) => current + 1)
   }
 
+  const titlebarView = workspaceView === 'guardian'
+    ? 'Gardien'
+    : workspaceView === 'git'
+      ? 'Git'
+      : selectedConversation?.title ?? null
+
   return (
     <main className="app-shell">
+      <Titlebar crumbs={[selectedProject?.name, titlebarView]} />
       <Sidebar
         selectedProject={selectedProject}
         selectedConversation={selectedConversation}

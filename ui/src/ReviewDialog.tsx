@@ -108,7 +108,12 @@ export function ReviewDialog({
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+      onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}
+    >
       <section
         className="modal review-dialog"
         role="dialog"
@@ -121,13 +126,14 @@ export function ReviewDialog({
             <h2 id="review-dialog-title">Review Gardien</h2>
             <p>{conversation.title}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Fermer">×</button>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">×</button>
         </header>
 
         <form className="review-dialog-form" onSubmit={(event) => void handleSubmit(event)}>
           <label>
             <span>Preset</span>
             <select
+              autoFocus
               value={selectedPresetId}
               onChange={(event) => applyPreset(
                 presets.find((preset) => preset.id === event.target.value) ?? null,
@@ -170,7 +176,11 @@ export function ReviewDialog({
             </label>
             <label>
               <span>Modèle fort</span>
-              <select value={model} onChange={(event) => setModel(event.target.value)}>
+              <select
+                className="field-mono"
+                value={model}
+                onChange={(event) => setModel(event.target.value)}
+              >
                 {REVIEW_MODELS[provider].map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}

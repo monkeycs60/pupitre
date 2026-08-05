@@ -141,8 +141,12 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
             <div className="git-commit-list">
               {rows.map((row) => {
                 const width = maxLanes * 22
+                const isHead = row.commit.sha === snapshot.head
                 return (
-                  <article className="git-commit" key={row.commit.sha}>
+                  <article
+                    className={`git-commit${isHead ? ' is-head' : ''}`}
+                    key={row.commit.sha}
+                  >
                     <svg
                       className="git-lanes"
                       width={width}
@@ -185,7 +189,9 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
                             key={review.reviewId}
                             onClick={() => onGuardianSelect(review.reviewId)}
                           >
-                            Gardien · {review.red} rouge · {review.orange} orange
+                            Gardien
+                            <span className="git-sev is-danger">{review.red} rouge</span>
+                            <span className="git-sev is-warn">{review.orange} orange</span>
                           </button>
                         ))}
                       </div>

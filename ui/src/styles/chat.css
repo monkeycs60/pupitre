@@ -1,0 +1,420 @@
+/* ---------------------------------------------------------------------------
+   Fil de conversation : messages, cartes outil, images, statuts de tour,
+   lightbox. La hiérarchie vient du contraste et de l'alignement, pas des
+   boîtes : l'assistant écrit pleine largeur, l'utilisateur est calé à droite
+   sur une surface à peine relevée.
+--------------------------------------------------------------------------- */
+
+.events-view {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-app);
+}
+
+.events-list {
+  width: min(100%, 840px);
+  min-height: 100%;
+  padding: var(--space-6) var(--space-7) var(--space-8);
+  margin: 0 auto;
+}
+
+.events-empty {
+  padding: var(--space-7) 0;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  text-align: center;
+}
+
+/* --- Messages ------------------------------------------------------------ */
+
+.message-row {
+  display: flex;
+  margin: 0 0 var(--space-4);
+}
+
+.message-row-user {
+  justify-content: flex-end;
+}
+
+.message-row-assistant {
+  justify-content: flex-start;
+}
+
+.message-bubble {
+  min-width: 0;
+  font-size: var(--text-md);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.user-message {
+  max-width: min(76%, 560px);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-strong);
+  white-space: pre-wrap;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+
+.assistant-message {
+  width: 100%;
+  color: var(--text);
+}
+
+.assistant-message > :first-child {
+  margin-top: 0;
+}
+
+.assistant-message > :last-child {
+  margin-bottom: 0;
+}
+
+.assistant-message p,
+.assistant-message ul,
+.assistant-message ol,
+.assistant-message blockquote,
+.assistant-message pre {
+  margin: 0 0 var(--space-3);
+}
+
+.assistant-message ul,
+.assistant-message ol {
+  padding-left: var(--space-6);
+}
+
+.assistant-message h1,
+.assistant-message h2,
+.assistant-message h3,
+.assistant-message h4 {
+  margin: var(--space-5) 0 var(--space-2);
+  color: var(--text-strong);
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.assistant-message a {
+  color: var(--accent);
+  text-decoration-color: var(--accent-border);
+  text-underline-offset: 2px;
+}
+
+.assistant-message a:hover {
+  color: var(--accent-hover);
+}
+
+.assistant-message blockquote {
+  padding-left: var(--space-3);
+  color: var(--text-muted);
+  border-left: 2px solid var(--border-strong);
+}
+
+.assistant-message code {
+  display: inline;
+  padding: 1px var(--space-1);
+  color: var(--text);
+  font-size: var(--text-code);
+  background: var(--bg-input);
+  border-radius: var(--r-xs);
+}
+
+.assistant-message pre {
+  max-height: 360px;
+  padding: var(--space-3);
+  overflow: auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+
+.assistant-message pre code {
+  display: block;
+  padding: 0;
+  color: var(--text);
+  font-size: var(--text-code);
+  line-height: 1.6;
+  white-space: pre;
+  background: transparent;
+}
+
+.streaming-caret {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  margin-left: 3px;
+  vertical-align: -2px;
+  background: var(--accent);
+  animation: caret-blink 1s steps(2, start) infinite;
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0.15;
+  }
+}
+
+/* --- Cartes outil --------------------------------------------------------- */
+
+.tool-card {
+  margin: var(--space-1) 0 var(--space-4);
+  overflow: hidden;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+
+.tool-card summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.tool-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-card summary:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.tool-card-chevron {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--text-faint);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.tool-card[open] > summary .tool-card-chevron {
+  transform: rotate(90deg);
+}
+
+.tool-card-name {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-card-state {
+  flex: none;
+  margin-left: auto;
+  color: var(--accent);
+  font-size: var(--text-xs);
+}
+
+.tool-card-content {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0 var(--space-3) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tool-card[open] .tool-card-content,
+.subtask-prompt[open] p {
+  animation: detail-reveal var(--dur) var(--ease);
+}
+
+@keyframes detail-reveal {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.tool-section:first-child {
+  padding-top: var(--space-3);
+}
+
+.tool-section-label {
+  margin-bottom: var(--space-1);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tool-section pre {
+  max-height: 260px;
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+  overflow: auto;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+}
+
+.tool-running {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* --- Images du fil -------------------------------------------------------- */
+
+.event-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.event-image-button {
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  line-height: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: zoom-in;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.event-image-button:hover {
+  border-color: var(--border-strong);
+}
+
+.event-image-button img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+}
+
+/* --- Pied de tour : statut, usage, erreurs -------------------------------- */
+
+.turn-footer {
+  margin: calc(-1 * var(--space-1)) 0 var(--space-5);
+}
+
+.turn-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  min-height: 18px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.running-indicator {
+  color: var(--accent);
+}
+
+.running-indicator > span {
+  display: inline-block;
+  animation: status-pulse 1.2s var(--ease) infinite;
+}
+
+@keyframes status-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.done-indicator {
+  color: var(--ok);
+}
+
+.turn-error {
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  color: var(--danger);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  background: var(--danger-soft);
+  border: 1px solid var(--border-subtle);
+  border-left: 2px solid var(--danger);
+  border-radius: var(--r-sm);
+}
+
+.turn-error-label {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* --- Lightbox ------------------------------------------------------------- */
+
+.lightbox {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  padding: 54px var(--space-7) var(--space-7);
+  background: var(--scrim);
+  cursor: zoom-out;
+  place-items: center;
+}
+
+.lightbox img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  cursor: default;
+  box-shadow: var(--shadow-overlay);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  min-height: 28px;
+  padding: 3px var(--space-3);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.lightbox-close:hover {
+  background: var(--bg-raised);
+  border-color: var(--border-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streaming-caret,
+  .running-indicator > span {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .events-list {
+    padding-right: var(--space-5);
+    padding-left: var(--space-5);
+  }
+}

@@ -16,6 +16,7 @@ import type {
   Review,
   ReviewDecision,
   ReviewFlag,
+  ReviewSeverity,
 } from './types'
 
 interface GuardianViewProps {
@@ -42,6 +43,12 @@ const VERDICT_LABEL = {
   dismissed: 'Risque infirmé',
   nuanced: 'Risque nuancé',
 } as const
+
+const SEVERITY_LABEL: Record<ReviewSeverity, string> = {
+  red: 'rouge',
+  orange: 'orange',
+  grey: 'gris',
+}
 
 function shortRef(ref: string): string {
   return /^[0-9a-f]{40}$/i.test(ref) ? ref.slice(0, 8) : ref
@@ -248,7 +255,15 @@ export function GuardianView({
                 <span className="review-list-title">
                   {shortRef(review.git_ref_base)} → {shortRef(review.git_ref_head)}
                 </span>
-                <span className="review-list-meta">
+                <span
+                  className={`review-list-meta${
+                    review.status === 'running'
+                      ? ' is-running'
+                      : review.status === 'error'
+                        ? ' is-error'
+                        : ''
+                  }`}
+                >
                   {review.status === 'running'
                     ? 'scan en cours'
                     : review.status === 'error'
@@ -295,13 +310,13 @@ export function GuardianView({
             ) : null}
           </div>
           {selected?.decisions.length ? selected.decisions.map((decision) => (
-            <article className="review-decision" key={decision.id}>
+            <article className={`review-decision is-${decision.status}`} key={decision.id}>
               <p className="review-decision-question">{decision.question}</p>
               {selected.flags.filter((flag) => decision.flag_ids.includes(flag.id)).map((flag) => (
                 <div className={`decision-flag severity-${flag.severity}`} key={flag.id}>
                   <header>
-                    <span>{flag.file}:{flag.line_start}</span>
-                    <span>{flag.severity}</span>
+                    <span className="decision-flag-location">{flag.file}:{flag.line_start}</span>
+                    <span className="decision-flag-severity">{SEVERITY_LABEL[flag.severity]}</span>
                   </header>
                   <label className="decision-flag-author">
                     <span>Auteur du code</span>
@@ -319,7 +334,7 @@ export function GuardianView({
                   </label>
                   <p>{flag.message}</p>
                   {flag.counter_state === 'queued' || flag.counter_state === 'running' ? (
-                    <p className="counter-opinion-state">
+                    <p className={`counter-opinion-state is-${flag.counter_state}`}>
                       Contre-avis {flag.counter_state === 'queued' ? 'en attente' : 'en cours'} avec{' '}
                       {flag.counter_provider} · {flag.counter_model}
                     </p>
@@ -355,7 +370,9 @@ export function GuardianView({
                     </button>
                   </>
                 ) : (
-                  <span>{decision.status === 'acked' ? 'Acquittée' : 'Écartée'}</span>
+                  <span className="review-decision-status">
+                    {decision.status === 'acked' ? 'Acquittée' : 'Écartée'}
+                  </span>
                 )}
               </div>
             </article>

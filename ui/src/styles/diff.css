@@ -1,0 +1,155 @@
+/* DiffViewer : table de diff, numéros de ligne, zones thermiques. */
+
+.review-diff {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg-input);
+}
+
+.diff-table {
+  min-width: 730px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: 1.6;
+}
+
+/* En-tête de fichier collant dans le panneau de scroll. */
+.diff-file-header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  padding: var(--space-1) var(--space-3);
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Le liseré gauche (ajout / suppression) vit dans la bordure : la largeur
+   des colonnes reste stable, ligne colorée ou non. */
+.diff-line {
+  display: grid;
+  grid-template-columns: 46px 46px minmax(320px, 1fr) minmax(112px, 260px);
+  min-height: 20px;
+  border-left: 2px solid transparent;
+}
+
+.diff-line > code {
+  display: block;
+  min-width: 0;
+  padding: 2px var(--space-2);
+  overflow: hidden;
+  color: inherit;
+  font: inherit;
+  white-space: pre;
+}
+
+.diff-number {
+  padding: 2px var(--space-2) 2px var(--space-1);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  user-select: none;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.diff-line.is-addition {
+  background-color: var(--ok-soft);
+  border-left-color: var(--ok);
+}
+
+.diff-line.is-deletion {
+  background-color: var(--danger-soft);
+  border-left-color: var(--danger);
+}
+
+.diff-line.is-hunk {
+  color: var(--text-muted);
+  background-color: var(--bg-raised);
+}
+
+.diff-line.is-meta {
+  color: var(--text-faint);
+}
+
+/* Surbrillance des lignes signalées : une teinte se superpose au fond de la
+   ligne (gradient) et une bande interne marque la sévérité, sans déplacer le
+   liseré ajout/suppression. */
+.diff-line.risk-grey {
+  background-image: linear-gradient(var(--neutral-soft), var(--neutral-soft));
+  box-shadow: inset 3px 0 var(--border-strong);
+}
+
+.diff-line.risk-orange {
+  background-image: linear-gradient(var(--warn-soft), var(--warn-soft));
+  box-shadow: inset 3px 0 var(--warn);
+}
+
+.diff-line.risk-red {
+  background-image: linear-gradient(var(--danger-soft), var(--danger-soft));
+  box-shadow: inset 3px 0 var(--danger);
+}
+
+/* --- Colonne des flags ancrés --------------------------------------------- */
+
+.diff-flags {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 2px var(--space-1);
+  overflow: hidden;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.diff-flag-marker {
+  max-width: 100%;
+  padding: 1px 6px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--neutral-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.diff-flag-marker:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.diff-flag-marker[aria-expanded="true"] {
+  overflow: visible;
+  white-space: normal;
+}
+
+.diff-flag-marker.severity-red {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.diff-flag-marker.severity-red:hover {
+  color: var(--danger);
+}
+
+.diff-flag-marker.severity-orange {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.diff-flag-marker.severity-orange:hover {
+  color: var(--warn);
+}

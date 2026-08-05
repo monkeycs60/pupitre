@@ -55,7 +55,12 @@ export function CounterOpinionDialog({
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+      onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}
+    >
       <section
         className="modal counter-dialog"
         role="dialog"
@@ -74,7 +79,7 @@ export function CounterOpinionDialog({
                 : `Le code vient de ${codeProvider} : le jugement passe à ${provider}.`}
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Fermer">×</button>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">×</button>
         </header>
 
         <form className="counter-dialog-form" onSubmit={(event) => void handleSubmit(event)}>
@@ -95,6 +100,7 @@ export function CounterOpinionDialog({
               <label>
                 <span>Auteur de ce point</span>
                 <select
+                  autoFocus
                   value={codeProvider}
                   onChange={(event) => {
                     const author = event.target.value as Provider
@@ -111,13 +117,22 @@ export function CounterOpinionDialog({
             ) : null}
             <label>
               <span>{mixedProviders ? 'Providers opposés' : 'Provider opposé'}</span>
-              <input value={mixedProviders ? 'codex + claude' : provider ?? ''} readOnly />
+              <input
+                className="field-mono"
+                autoFocus={!flag}
+                value={mixedProviders ? 'codex + claude' : provider ?? ''}
+                readOnly
+              />
             </label>
             {provider ? (
               <>
                 <label>
                   <span>Modèle fort</span>
-                  <select value={model} onChange={(event) => setModel(event.target.value)}>
+                  <select
+                    className="field-mono"
+                    value={model}
+                    onChange={(event) => setModel(event.target.value)}
+                  >
                     {REVIEW_MODELS[provider].map((name) => (
                       <option key={name} value={name}>{name}</option>
                     ))}

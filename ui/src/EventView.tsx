@@ -86,7 +86,13 @@ export function EventView({ block, onImageOpen, onImageLoad }: EventViewProps) {
     case 'tool':
       return (
         <details className="tool-card">
-          <summary>🔧 {block.toolName}</summary>
+          <summary>
+            <span className="tool-card-chevron" aria-hidden="true" />
+            <span className="tool-card-name">{block.toolName}</span>
+            {block.output === undefined ? (
+              <span className="tool-card-state">en cours</span>
+            ) : null}
+          </summary>
           <div className="tool-card-content">
             <div className="tool-section">
               <div className="tool-section-label">Entrée</div>
@@ -112,12 +118,14 @@ export function EventView({ block, onImageOpen, onImageLoad }: EventViewProps) {
 
     case 'turn-footer': {
       const isRunning = block.status?.state === 'running'
+      const isDone = block.status?.state === 'done'
       const isError = block.status?.state === 'error'
 
       return (
         <footer className="turn-footer">
           {isError ? (
             <div className="turn-error" role="alert">
+              <span className="turn-error-label">Erreur</span>{' '}
               {block.status?.error ?? 'Une erreur est survenue.'}
             </div>
           ) : null}
@@ -125,6 +133,11 @@ export function EventView({ block, onImageOpen, onImageLoad }: EventViewProps) {
             {isRunning ? (
               <span className="running-indicator" role="status">
                 <span aria-hidden="true">●</span> en cours
+              </span>
+            ) : null}
+            {isDone ? (
+              <span className="done-indicator">
+                <span aria-hidden="true">●</span> terminé
               </span>
             ) : null}
             {block.usage ? (

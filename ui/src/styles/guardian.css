@@ -1,0 +1,500 @@
+/* Vue Gardien : reviews, flags, décisions, contre-avis. */
+
+.guardian-workspace {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  color: var(--text);
+  background: var(--bg-app);
+}
+
+/* --- En-tête de la vue ---------------------------------------------------- */
+
+.guardian-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 48px;
+  padding: var(--space-2) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.guardian-header h1 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.guardian-header p {
+  margin: 1px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.guardian-settings {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.guardian-auto-counter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 28px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.guardian-auto-counter input {
+  accent-color: var(--accent);
+}
+
+.guardian-mode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.guardian-mode select {
+  min-width: 112px;
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.guardian-mode select:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* --- Bandeaux d'état ------------------------------------------------------ */
+
+.guardian-blocking,
+.guardian-error {
+  flex: none;
+  padding: var(--space-1) var(--space-5);
+  color: var(--danger);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  background: var(--danger-soft);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* --- Trois colonnes : reviews / diff / décisions -------------------------- */
+
+.guardian-layout {
+  display: grid;
+  grid-template-columns: 232px minmax(420px, 1fr) 300px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.review-list,
+.review-decisions {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bg-panel);
+}
+
+.review-list {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.review-decisions {
+  border-left: 1px solid var(--border-subtle);
+}
+
+/* --- Liste des reviews ---------------------------------------------------- */
+
+.review-list-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+.review-list-item:hover {
+  background: var(--bg-hover);
+}
+
+.review-list-item.is-selected {
+  background: var(--bg-active);
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.review-list-title,
+.review-list-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-list-title {
+  margin-bottom: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.review-list-item.is-selected .review-list-title {
+  color: var(--text-strong);
+}
+
+.review-list-meta {
+  margin-top: 1px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+
+.review-list-meta.is-running {
+  color: var(--accent);
+}
+
+.review-list-meta.is-error {
+  color: var(--danger);
+}
+
+/* --- Colonne des décisions ------------------------------------------------ */
+
+.review-decisions-heading {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.review-decisions-heading h2 {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.review-decisions-heading button,
+.review-decision-actions button,
+.counter-opinion-action {
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.review-decisions-heading button:hover:not(:disabled),
+.review-decision-actions button:hover:not(:disabled),
+.counter-opinion-action:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.review-decisions-heading button:disabled,
+.review-decision-actions button:disabled,
+.counter-opinion-action:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.review-decision {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.review-decision p {
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.review-decision .review-decision-question {
+  margin: 0 0 var(--space-2);
+  color: var(--text-strong);
+  font-size: var(--text-base);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+/* Une décision traitée reste lisible mais passe au second plan. */
+.review-decision.is-acked .review-decision-question,
+.review-decision.is-dismissed .review-decision-question {
+  color: var(--text-muted);
+}
+
+.review-decision.is-acked .decision-flag,
+.review-decision.is-dismissed .decision-flag {
+  opacity: 0.72;
+}
+
+/* --- Flag rattaché à une décision ----------------------------------------- */
+
+.decision-flag {
+  padding: var(--space-2) 0 var(--space-2) var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+  border-left: 2px solid var(--border-strong);
+}
+
+.decision-flag.severity-orange {
+  border-left-color: var(--warn);
+}
+
+.decision-flag.severity-red {
+  border-left-color: var(--danger);
+}
+
+.decision-flag > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.decision-flag-location {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decision-flag-severity {
+  flex: none;
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--neutral-soft);
+  border-radius: var(--r-full);
+}
+
+.decision-flag.severity-orange .decision-flag-severity {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.decision-flag.severity-red .decision-flag-severity {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.decision-flag-author {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.decision-flag-author select {
+  min-height: 24px;
+  padding: 1px var(--space-1);
+  color: var(--text);
+  font-size: var(--text-xs);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+/* --- Contre-avis : en attente / en cours / rendu -------------------------- */
+
+.review-decision .counter-opinion-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  margin: var(--space-2) 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  background: var(--neutral-soft);
+  border-radius: var(--r-sm);
+}
+
+.counter-opinion-state::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--text-faint);
+  border-radius: var(--r-full);
+}
+
+.counter-opinion-state.is-running::before {
+  background: var(--accent);
+  animation: counter-state-pulse 1.2s var(--ease) infinite;
+}
+
+@keyframes counter-state-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.review-decision .counter-opinion-error {
+  padding: var(--space-1) var(--space-2);
+  margin: var(--space-2) 0;
+  color: var(--danger);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  background: var(--danger-soft);
+  border-radius: var(--r-sm);
+}
+
+.counter-opinion {
+  padding: var(--space-2);
+  margin: var(--space-2) 0;
+  background: var(--neutral-soft);
+  border-left: 2px solid var(--border-strong);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.counter-opinion.verdict-confirmed {
+  background: var(--danger-soft);
+  border-left-color: var(--danger);
+}
+
+.counter-opinion.verdict-dismissed {
+  background: var(--ok-soft);
+  border-left-color: var(--ok);
+}
+
+.counter-opinion.verdict-nuanced {
+  background: var(--warn-soft);
+  border-left-color: var(--warn);
+}
+
+.counter-opinion strong {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.counter-opinion.verdict-confirmed strong {
+  color: var(--danger);
+}
+
+.counter-opinion.verdict-dismissed strong {
+  color: var(--ok);
+}
+
+.counter-opinion.verdict-nuanced strong {
+  color: var(--warn);
+}
+
+.review-decision .counter-opinion p {
+  margin: var(--space-1) 0;
+  font-size: var(--text-sm);
+}
+
+.counter-opinion span {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* --- Actions d'une décision ----------------------------------------------- */
+
+.review-decision-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.review-decision-status {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* --- États vides ----------------------------------------------------------- */
+
+.guardian-empty {
+  padding: var(--space-4) var(--space-3);
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.guardian-empty p {
+  margin: 0 0 var(--space-1);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.guardian-empty span {
+  color: var(--text-muted);
+}
+
+.guardian-empty-main {
+  display: grid;
+  height: 100%;
+  min-height: 180px;
+  text-align: center;
+  place-items: center;
+}
+
+.guardian-empty-main.is-error {
+  color: var(--danger);
+}
+
+@media (max-width: 1100px) {
+  .guardian-layout {
+    grid-template-columns: 200px minmax(420px, 1fr) 264px;
+  }
+
+  .review-decision-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
