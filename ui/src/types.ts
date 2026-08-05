@@ -1,7 +1,20 @@
 export type Provider = 'claude' | 'codex'
 export type ConversationSpeed = 'standard' | 'fast'
 export type GardienMode = 'informatif' | 'bloquant'
-export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines'
+export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines' | 'fleet'
+
+export interface FleetItem {
+  id: string
+  kind: 'turn' | 'subtask' | 'routine'
+  projectId: string
+  projectName: string
+  conversationId: string
+  title: string
+  provider: Provider
+  model: string
+  startedAt: string
+  lastEvent: string
+}
 
 export type SkillProvenance =
   | 'claude-global'

@@ -15,6 +15,7 @@ import { guardianAckCount } from './groupEvents'
 import { SkillsLibrary } from './SkillsLibrary'
 import { RoutinesView } from './RoutinesView'
 import { useAppNotifications } from './useAppNotifications'
+import { FleetView } from './FleetView'
 import type { WorkspaceView } from './types'
 
 function App() {
@@ -157,6 +158,12 @@ function App() {
     setShowReviewDialog(false)
   }
 
+  function handleFleetSelect() {
+    setWorkspaceView('fleet')
+    setShowSwitchModel(false)
+    setShowReviewDialog(false)
+  }
+
   async function handleRoutineConversationSelect(projectId: string, conversationId: string) {
     const project = selectedProject?.id === projectId
       ? selectedProject
@@ -197,6 +204,8 @@ function App() {
         ? 'Bibliothèque'
         : workspaceView === 'routines'
           ? 'Routines'
+          : workspaceView === 'fleet'
+            ? 'Fleet'
       : selectedConversation?.title ?? null
 
   return (
@@ -217,15 +226,20 @@ function App() {
         onGitSelect={handleGitSelect}
         onLibrarySelect={handleLibrarySelect}
         onRoutinesSelect={handleRoutinesSelect}
+        onFleetSelect={handleFleetSelect}
         reviewListVersion={effectiveReviewListVersion}
       />
 
-      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : 'Conversation'}>
+      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : 'Conversation'}>
         {workspaceView === 'library' ? (
           <SkillsLibrary project={selectedProject} />
         ) : workspaceView === 'routines' ? (
           <RoutinesView
             initialProject={selectedProject}
+            onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
+          />
+        ) : workspaceView === 'fleet' ? (
+          <FleetView
             onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
           />
         ) : selectedProject === null ? (

@@ -1,0 +1,130 @@
+.fleet-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.fleet-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 58px;
+  padding: var(--space-2) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fleet-header h1 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.fleet-header p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.fleet-connection {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.fleet-connection i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--space-1);
+  background: var(--text-faint);
+  border-radius: var(--r-full);
+}
+
+.fleet-connection.is-live { color: var(--ok); }
+.fleet-connection.is-live i { background: var(--ok); }
+
+.fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  align-content: start;
+  gap: 1px;
+  flex: 1;
+  overflow: auto;
+  padding: 1px;
+  background: var(--border-subtle);
+}
+
+.fleet-cell {
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-panel);
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.fleet-cell.is-subtask { box-shadow: inset 2px 0 var(--warn); }
+.fleet-cell.is-routine { box-shadow: inset 2px 0 var(--ok); }
+
+.fleet-cell > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fleet-kind,
+.fleet-duration {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+}
+
+.fleet-duration {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.fleet-cell h2 {
+  margin: var(--space-2) 0 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: var(--text-base);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fleet-project {
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.fleet-cell dl { margin: 0 0 var(--space-3); }
+.fleet-cell dl div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: 3px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.fleet-cell dt { color: var(--text-faint); font-size: var(--text-xs); }
+.fleet-cell dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fleet-empty {
+  flex: 1;
+  padding: var(--space-7);
+  color: var(--text-muted);
+  background: var(--bg-panel);
+}
+.fleet-empty strong { color: var(--text-strong); }
+.fleet-empty p { max-width: 460px; margin: var(--space-1) 0 0; }

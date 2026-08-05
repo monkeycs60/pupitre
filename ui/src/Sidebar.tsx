@@ -38,6 +38,7 @@ interface SidebarProps {
   onGitSelect: () => void
   onLibrarySelect: () => void
   onRoutinesSelect: () => void
+  onFleetSelect: () => void
   reviewListVersion: number
 }
 
@@ -83,6 +84,7 @@ export function Sidebar({
   onGitSelect,
   onLibrarySelect,
   onRoutinesSelect,
+  onFleetSelect,
   reviewListVersion,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -453,6 +455,14 @@ export function Sidebar({
       </section>
 
       <nav className="sidebar-global-nav" aria-label="Vues globales">
+        <button
+          type="button"
+          className={workspaceView === 'fleet' ? 'is-selected' : ''}
+          onClick={onFleetSelect}
+          title="Voir tous les tours, sous-tâches et routines actuellement actifs."
+        >
+          <span>Fleet</span>
+        </button>
         <button
           type="button"
           className={workspaceView === 'routines' ? 'is-selected' : ''}

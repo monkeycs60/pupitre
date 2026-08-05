@@ -6,6 +6,7 @@ import type {
   GardienStatus,
   GitDiff,
   GitSnapshot,
+  FleetItem,
   Project,
   Preset,
   Provider,
@@ -188,6 +189,10 @@ function routeId(id: string): string {
 
 export function getHealth(): Promise<{ ok: true }> {
   return fetchJson('/api/health')
+}
+
+export function getFleet(signal?: AbortSignal): Promise<FleetItem[]> {
+  return fetchJson('/api/fleet', { signal })
 }
 
 export function listProjects(): Promise<Project[]> {
