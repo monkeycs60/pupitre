@@ -31,6 +31,8 @@ import { SkillInventory } from "../src/skills";
 import { SkillSuggestionService } from "../src/skill-suggestions";
 import { SkillComposer } from "../src/skill-composer";
 import { WorkflowStore } from "../src/stores/workflows";
+import { NotificationStore } from "../src/stores/notifications";
+import { RoutineScheduler, RoutineStore } from "../src/routines";
 import { DebriefStore } from "../src/stores/debriefs";
 
 const BRIDGE_ENV_KEYS = ["PUPITRE_CLAUDE_BIN", "PUPITRE_CODEX_BIN", "PUPITRE_CODEX_MODE"];
@@ -146,9 +148,15 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
     generator: async () => "{}",
   });
   const workflows = new WorkflowStore(db);
+  const notifications = new NotificationStore(db);
+  const routineStore = new RoutineStore(db);
+  const routines = new RoutineScheduler(
+    routineStore, workflows, presets, projects, conversations, runner, notifications,
+  );
   server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
     reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer, workflows,
+    notifications, routineStore, routines,
   });
   parentId = conversations.create({
     projectId: project.id, provider: "claude", model: "opus", firstMessage: "orchestre",

@@ -141,6 +141,38 @@ test("mesure l'attente du premier retour et la durée totale du tour", async () 
   );
 });
 
+test("notifie la fin d'une tâche longue hors routine", async () => {
+  const notifications: Array<{ kind: string; conversation_id: string | null }> = [];
+  const notifyingRunner = new ConversationRunner(
+    convs,
+    projects,
+    new MediaStore(dataDir),
+    () => {},
+    new QuotaTracker(db),
+    () => 4321,
+    undefined,
+    undefined,
+    (notification) => notifications.push(notification),
+    () => 0,
+  );
+  const conversation = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    orchestrator: false,
+    firstMessage: "travail long",
+  });
+
+  await notifyingRunner.runTurn(conversation.id, "travail long", []);
+
+  expect(notifications).toEqual([
+    expect.objectContaining({
+      kind: "long-task",
+      conversation_id: conversation.id,
+    }),
+  ]);
+});
+
 test("transmet l'effort de la conversation à l'adapter", async () => {
   const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-effort-")), "args");
   process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;

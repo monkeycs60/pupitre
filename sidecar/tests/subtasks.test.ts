@@ -25,6 +25,8 @@ import { SkillInventory } from "../src/skills";
 import { SkillSuggestionService } from "../src/skill-suggestions";
 import { SkillComposer } from "../src/skill-composer";
 import { WorkflowStore } from "../src/stores/workflows";
+import { NotificationStore } from "../src/stores/notifications";
+import { RoutineScheduler, RoutineStore } from "../src/routines";
 import { DebriefStore } from "../src/stores/debriefs";
 
 interface Harness {
@@ -140,9 +142,15 @@ cat "${fixture}"
     generator: async () => "{}",
   });
   const workflows = new WorkflowStore(db);
+  const notifications = new NotificationStore(db);
+  const routineStore = new RoutineStore(db);
+  const routines = new RoutineScheduler(
+    routineStore, workflows, presets, projects, conversations, runner, notifications,
+  );
   const server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
     reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer, workflows,
+    notifications, routineStore, routines,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

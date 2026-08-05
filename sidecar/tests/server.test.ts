@@ -25,6 +25,8 @@ import { SkillInventory } from "../src/skills";
 import { SkillSuggestionService } from "../src/skill-suggestions";
 import { SkillComposer } from "../src/skill-composer";
 import { WorkflowStore } from "../src/stores/workflows";
+import { NotificationStore } from "../src/stores/notifications";
+import { RoutineScheduler, RoutineStore } from "../src/routines";
 
 interface TestServer {
   baseUrl: string;
@@ -252,6 +254,11 @@ cat "${fixture}"
     }),
   });
   const workflows = new WorkflowStore(db);
+  const notifications = new NotificationStore(db);
+  const routineStore = new RoutineStore(db);
+  const routines = new RoutineScheduler(
+    routineStore, workflows, presets, projects, conversations, runner, notifications,
+  );
   const server = createServer({
     port: 0,
     projects,
@@ -271,6 +278,9 @@ cat "${fixture}"
     skillSuggestions,
     skillComposer,
     workflows,
+    notifications,
+    routineStore,
+    routines,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -742,10 +752,54 @@ test("persiste les seuils de quota dans settings", async () => {
     quotaThresholds: { lastHour: false, usedPercent: 91 },
   });
 
+  const longTask = await putJson("/api/settings", {
+    longTaskThresholdSeconds: 45,
+  });
+  expect(await longTask.json()).toEqual({
+    longTaskThresholdSeconds: 45,
+    quotaThresholds: { lastHour: false, usedPercent: 91 },
+  });
+
   const invalid = await putJson("/api/settings", {
     quotaThresholds: { lastHour: true, usedPercent: 101 },
   });
   expect(invalid.status).toBe(400);
+});
+
+test("CRUD et exécution immédiate d'une routine avec notification", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/routines", {
+    projectId: project.id,
+    name: "Routine API",
+    schedule: "* * * * *",
+    workflowId: null,
+    prompt: "Exécute la routine.",
+    presetId: null,
+    provider: "claude",
+    model: "haiku",
+    effort: "low",
+    speed: null,
+    orchestrator: false,
+    enabled: true,
+  });
+  expect(created.status).toBe(201);
+  const routine = await created.json() as { id: string };
+  const list = await fetch(`${current.baseUrl}/api/routines?projectId=${project.id}`);
+  expect(await list.json()).toEqual([
+    expect.objectContaining({ id: routine.id, next_run_at: expect.any(String) }),
+  ]);
+
+  const run = await postJson(`/api/routines/${routine.id}/run`, {});
+  expect(run.status).toBe(201);
+  const startedRun = await run.json() as { conversation_id: string; status: string };
+  expect(startedRun).toMatchObject({ status: "running", conversation_id: expect.any(String) });
+  await waitForRunnerIdle(startedRun.conversation_id);
+  await Bun.sleep(20);
+  const notifications = await fetch(`${current.baseUrl}/api/notifications?after=0`);
+  expect(await notifications.json()).toEqual([
+    expect.objectContaining({ kind: "routine", conversation_id: expect.any(String) }),
+  ]);
 });
 
 test("rejette les Origin distants et accepte localhost, Tauri ou l'absence d'Origin", async () => {

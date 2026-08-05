@@ -187,6 +187,47 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_workflows_project_name
       ON workflows(project_id, name COLLATE NOCASE);
+    CREATE TABLE IF NOT EXISTS routines (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      schedule TEXT NOT NULL,
+      workflow_id TEXT NULL REFERENCES workflows(id) ON DELETE SET NULL,
+      prompt TEXT NULL,
+      preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
+      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex')),
+      model TEXT NOT NULL,
+      effort TEXT NULL,
+      speed TEXT NULL,
+      orchestrator INTEGER NOT NULL DEFAULT 1,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      next_run_at TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_routines_project_name
+      ON routines(project_id, name COLLATE NOCASE);
+    CREATE INDEX IF NOT EXISTS idx_routines_due
+      ON routines(enabled, next_run_at);
+    CREATE TABLE IF NOT EXISTS routine_runs (
+      id TEXT PRIMARY KEY,
+      routine_id TEXT NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+      conversation_id TEXT NULL REFERENCES conversations(id) ON DELETE SET NULL,
+      status TEXT NOT NULL CHECK (status IN ('running', 'done', 'error')),
+      error TEXT NULL,
+      started_at TEXT NOT NULL,
+      completed_at TEXT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_routine_runs_routine
+      ON routine_runs(routine_id, started_at DESC);
+    CREATE TABLE IF NOT EXISTS app_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      conversation_id TEXT NULL,
+      created_at TEXT NOT NULL
+    );
   `);
   dropEventsForeignKey(db);
   addColumn(db, "conversations", "effort TEXT NULL");
@@ -196,6 +237,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "orchestrator INTEGER NOT NULL DEFAULT 1");
   addColumn(db, "conversations", "continued_from TEXT NULL");
   addColumn(db, "conversations", "handoff_pending INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "conversations", "routine_id TEXT NULL");
   addColumn(db, "projects", "default_preset_id TEXT NULL");
   addColumn(db, "projects", "gardien_mode TEXT NOT NULL DEFAULT 'informatif'");
   addColumn(db, "projects", "auto_counter_red INTEGER NOT NULL DEFAULT 0");

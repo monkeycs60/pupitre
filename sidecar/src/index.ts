@@ -21,6 +21,8 @@ import { SkillInventory } from "./skills";
 import { SkillSuggestionService } from "./skill-suggestions";
 import { SkillComposer } from "./skill-composer";
 import { WorkflowStore } from "./stores/workflows";
+import { NotificationStore } from "./stores/notifications";
+import { RoutineScheduler, RoutineStore } from "./routines";
 
 if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
@@ -41,6 +43,8 @@ if (process.argv.includes("--conductor-mcp")) {
   const skillSuggestions = new SkillSuggestionService(skills, projects, quotas);
   const skillComposer = new SkillComposer(skills, projects, quotas);
   const workflows = new WorkflowStore(db);
+  const notifications = new NotificationStore(db);
+  const routineStore = new RoutineStore(db);
   const git = new GitProjectService(db, projects);
   const configuredPort = process.env.PUPITRE_PORT;
   const port = configuredPort === undefined ? 4820 : Number(configuredPort);
@@ -59,6 +63,11 @@ if (process.argv.includes("--conductor-mcp")) {
     () => server.port ?? port,
     git,
     skills,
+    (notification) => { notifications.create(notification); },
+    () => {
+      const seconds = settings.get<number>("longTaskThresholdSeconds") ?? 120;
+      return Number.isFinite(seconds) && seconds >= 10 ? seconds * 1_000 : 120_000;
+    },
   );
   // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
   // tournent en parallèle du tour parent qui les a demandées.
@@ -92,6 +101,15 @@ if (process.argv.includes("--conductor-mcp")) {
     runner.activity,
     media,
   );
+  const routines = new RoutineScheduler(
+    routineStore,
+    workflows,
+    presets,
+    projects,
+    conversations,
+    runner,
+    notifications,
+  );
   server = createServer({
     port,
     projects,
@@ -111,7 +129,11 @@ if (process.argv.includes("--conductor-mcp")) {
     skillSuggestions,
     skillComposer,
     workflows,
+    routineStore,
+    routines,
+    notifications,
   });
+  routines.start();
 
   // Si l'app-server codex tourne déjà, on part avec un état de quota frais.
   void codexAppServer.readRateLimits()

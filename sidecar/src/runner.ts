@@ -9,6 +9,7 @@ import type { QuotaTracker } from "./quotas";
 import { ConversationActivity } from "./conversation-activity";
 import type { GitProjectService, GitTurnTracking } from "./git";
 import type { SkillInventory } from "./skills";
+import type { AppNotification } from "./stores/notifications";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -49,6 +50,8 @@ export class ConversationRunner {
     private port: () => number,
     private git?: GitProjectService,
     private skills?: SkillInventory,
+    private notify?: (notification: Omit<AppNotification, "id" | "created_at">) => void,
+    private longTaskThresholdMs: () => number = () => 120_000,
     readonly activity = new ConversationActivity(),
   ) {
     sweepOrphanedRuns(convs);
@@ -92,6 +95,7 @@ export class ConversationRunner {
       error: "le provider n'a pas publié de statut terminal",
     };
     const startedAt = new Date().toISOString();
+    const startedAtMs = Date.now();
     let firstResponseAt: string | undefined;
 
     const persist = (event: AppEvent) => {
@@ -183,6 +187,15 @@ export class ConversationRunner {
         // Le tour et son flux sont déjà persistés : une compaction opportuniste
         // ne doit jamais transformer un succès provider en échec utilisateur.
         console.error("Compaction des deltas impossible", error);
+      }
+      const elapsedMs = Date.now() - startedAtMs;
+      if (!conv.routine_id && elapsedMs >= this.longTaskThresholdMs()) {
+        this.notify?.({
+          kind: "long-task",
+          title: outcome.state === "done" ? "Tâche longue terminée" : "Tâche longue en échec",
+          body: `${conv.title} · ${Math.round(elapsedMs / 1_000)} s`,
+          conversation_id: conversationId,
+        });
       }
       const activeTurn = this.active.get(conversationId);
       this.active.delete(conversationId);

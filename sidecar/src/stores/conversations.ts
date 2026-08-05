@@ -7,6 +7,7 @@ export interface Conversation {
   cli_session_id: string | null; pinned: boolean;
   continued_from: string | null;
   handoff_pending: boolean;
+  routine_id: string | null;
   /** Reçoit le bridge MCP `conductor` (délégation de sous-tâches). */
   orchestrator: boolean;
   created_at: string; updated_at: string;
@@ -28,6 +29,7 @@ export class ConversationStore {
     continuedFrom?: string | null;
     /** Vrai jusqu'au statut terminal réussi du premier tour de continuation. */
     handoffPending?: boolean;
+    routineId?: string | null;
     firstMessage: string;
   }): Conversation {
     const id = crypto.randomUUID();
@@ -38,8 +40,8 @@ export class ConversationStore {
     this.db.query(
       `INSERT INTO conversations
          (id, project_id, title, provider, model, effort, speed, orchestrator,
-          continued_from, handoff_pending, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          continued_from, handoff_pending, routine_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -51,6 +53,7 @@ export class ConversationStore {
       input.orchestrator === false ? 0 : 1,
       input.continuedFrom ?? null,
       input.handoffPending ? 1 : 0,
+      input.routineId ?? null,
       now,
       now,
     );

@@ -27,6 +27,8 @@ import type { SkillInventory, SkillProvider } from "./skills";
 import type { SkillSuggestionService } from "./skill-suggestions";
 import { SkillAlreadyExistsError, type SkillComposer } from "./skill-composer";
 import type { WorkflowInput, WorkflowStore } from "./stores/workflows";
+import type { NotificationStore } from "./stores/notifications";
+import type { RoutineInput, RoutineScheduler, RoutineStore } from "./routines";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -62,6 +64,9 @@ export interface ServerDeps {
   skillSuggestions: SkillSuggestionService;
   skillComposer: SkillComposer;
   workflows: WorkflowStore;
+  routineStore: RoutineStore;
+  routines: RoutineScheduler;
+  notifications: NotificationStore;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -409,6 +414,64 @@ function workflowInput(
   };
 }
 
+function routineInput(
+  body: Record<string, unknown>,
+  projectId: string,
+  deps: ServerDeps,
+  enabledFallback: boolean,
+): RoutineInput {
+  const workflowIdValue = body.workflowId;
+  if (workflowIdValue !== null && workflowIdValue !== undefined && typeof workflowIdValue !== "string") {
+    throw new HttpError(400, "workflowId invalide");
+  }
+  const workflow = typeof workflowIdValue === "string" ? deps.workflows.get(workflowIdValue) : null;
+  if (typeof workflowIdValue === "string" && (!workflow || workflow.project_id !== projectId)) {
+    throw new HttpError(404, "workflow inconnu pour ce projet");
+  }
+  const promptValue = body.prompt;
+  const prompt = typeof promptValue === "string" && promptValue.trim() ? promptValue.trim() : null;
+  if (!workflow && !prompt) throw new HttpError(400, "workflow ou prompt requis");
+  const presetIdValue = body.presetId;
+  if (presetIdValue !== null && presetIdValue !== undefined && typeof presetIdValue !== "string") {
+    throw new HttpError(400, "presetId invalide");
+  }
+  const preset = typeof presetIdValue === "string" ? deps.presets.get(presetIdValue) : null;
+  if (typeof presetIdValue === "string" && !preset) throw new HttpError(404, "preset inconnu");
+  const config = preset ?? workflow;
+  let provider: Provider;
+  let model: string;
+  let effort: string | null;
+  let speed: "standard" | "fast" | null;
+  let orchestrator: boolean;
+  if (config) {
+    ({ provider, model, effort, speed, orchestrator } = config);
+  } else {
+    const providerValue = requiredString(body, "provider");
+    if (providerValue !== "claude" && providerValue !== "codex") {
+      throw new HttpError(400, "provider invalide");
+    }
+    provider = providerValue;
+    model = requiredString(body, "model");
+    effort = optionalEffort(body, provider);
+    speed = optionalSpeed(body, provider);
+    orchestrator = optionalBoolean(body, "orchestrator", true);
+  }
+  return {
+    projectId,
+    name: requiredString(body, "name"),
+    schedule: requiredString(body, "schedule"),
+    workflowId: workflow?.id ?? null,
+    prompt: workflow ? null : prompt,
+    presetId: preset?.id ?? null,
+    provider,
+    model,
+    effort,
+    speed,
+    orchestrator,
+    enabled: optionalBoolean(body, "enabled", enabledFallback),
+  };
+}
+
 export function createServer(deps: ServerDeps) {
   const sockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
@@ -454,6 +517,13 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "GET" && pathname === "/api/health") {
           return json({ ok: true });
+        }
+
+        if (request.method === "GET" && pathname === "/api/notifications") {
+          const afterRaw = url.searchParams.get("after") ?? "0";
+          const after = Number(afterRaw);
+          if (!Number.isSafeInteger(after) || after < 0) throw new HttpError(400, "curseur invalide");
+          return json(deps.notifications.listAfter(after));
         }
 
         if (request.method === "GET" && pathname === "/api/projects") {
@@ -720,7 +790,68 @@ export function createServer(deps: ServerDeps) {
         }
 
         if (request.method === "DELETE" && workflowId !== null) {
+          if (deps.routineStore.countByWorkflow(workflowId) > 0) {
+            throw new HttpError(409, "workflow utilisé par une routine");
+          }
           if (!deps.workflows.delete(workflowId)) throw new HttpError(404, "workflow inconnu");
+          return empty(204);
+        }
+
+        if (request.method === "GET" && pathname === "/api/routines") {
+          const projectId = url.searchParams.get("projectId") ?? undefined;
+          if (projectId && !deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+          return json(deps.routineStore.list(projectId));
+        }
+
+        if (request.method === "POST" && pathname === "/api/routines") {
+          const body = await readObject(request);
+          const projectId = requiredString(body, "projectId");
+          if (!deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+          try {
+            return json(deps.routineStore.save(routineInput(body, projectId, deps, true)), 201);
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            if (error instanceof Error && error.message.includes("cron")) {
+              throw new HttpError(400, error.message);
+            }
+            throw new HttpError(409, "nom de routine déjà utilisé");
+          }
+        }
+
+        const routineRunsId = routeId(pathname, /^\/api\/routines\/([^/]+)\/runs$/);
+        if (request.method === "GET" && routineRunsId !== null) {
+          if (!deps.routineStore.get(routineRunsId)) throw new HttpError(404, "routine inconnue");
+          return json(deps.routineStore.runs(routineRunsId));
+        }
+
+        const routineRunNowId = routeId(pathname, /^\/api\/routines\/([^/]+)\/run$/);
+        if (request.method === "POST" && routineRunNowId !== null) {
+          const run = deps.routines.runNow(routineRunNowId);
+          if (!run) throw new HttpError(404, "routine inconnue");
+          return json(run, 201);
+        }
+
+        const routineId = routeId(pathname, /^\/api\/routines\/([^/]+)$/);
+        if (request.method === "PUT" && routineId !== null) {
+          const routine = deps.routineStore.get(routineId);
+          if (!routine) throw new HttpError(404, "routine inconnue");
+          const body = await readObject(request);
+          try {
+            return json(deps.routineStore.save(
+              routineInput(body, routine.project_id, deps, routine.enabled),
+              routine.id,
+            ));
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            if (error instanceof Error && error.message.includes("cron")) {
+              throw new HttpError(400, error.message);
+            }
+            throw new HttpError(409, "nom de routine déjà utilisé");
+          }
+        }
+
+        if (request.method === "DELETE" && routineId !== null) {
+          if (!deps.routineStore.delete(routineId)) throw new HttpError(404, "routine inconnue");
           return empty(204);
         }
 
@@ -772,7 +903,24 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "PUT" && pathname === "/api/settings") {
           const body = await readObject(request);
-          deps.settings.set("quotaThresholds", quotaThresholds(body));
+          let updated = false;
+          if ("quotaThresholds" in body) {
+            deps.settings.set("quotaThresholds", quotaThresholds(body));
+            updated = true;
+          }
+          if ("longTaskThresholdSeconds" in body) {
+            const threshold = body.longTaskThresholdSeconds;
+            if (
+              typeof threshold !== "number"
+              || !Number.isFinite(threshold)
+              || !Number.isInteger(threshold)
+              || threshold < 10
+              || threshold > 86_400
+            ) throw new HttpError(400, "seuil de tâche longue invalide");
+            deps.settings.set("longTaskThresholdSeconds", threshold);
+            updated = true;
+          }
+          if (!updated) throw new HttpError(400, "aucun réglage reconnu");
           return json(deps.settings.all());
         }
 
