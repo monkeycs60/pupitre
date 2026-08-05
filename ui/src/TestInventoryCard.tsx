@@ -1,4 +1,8 @@
+import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import { runTestScope } from './api'
 import type { TestInventoryBlock } from './groupEvents'
+import type { TestScope } from './types'
 
 interface TestInventoryCardProps {
   block: TestInventoryBlock
@@ -10,7 +14,26 @@ const METHOD_LABEL = {
   manual: 'Guidé',
 } as const
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Impossible de lancer ce scope.'
+}
+
 export function TestInventoryCard({ block }: TestInventoryCardProps) {
+  const [startingId, setStartingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function start(scope: TestScope) {
+    setStartingId(scope.id)
+    setError(null)
+    try {
+      await runTestScope(scope.id)
+    } catch (startError: unknown) {
+      setError(errorMessage(startError))
+    } finally {
+      setStartingId(null)
+    }
+  }
+
   return (
     <section className="test-inventory-card" aria-label="Inventaire de test">
       <header>
@@ -21,9 +44,10 @@ export function TestInventoryCard({ block }: TestInventoryCardProps) {
         <span>{block.scopes.length} scope{block.scopes.length === 1 ? '' : 's'}</span>
       </header>
       <p className="test-inventory-intro">
-        Chaque périmètre décrit les vérifications disponibles et les points du Gardien
-        auxquels elles répondent.
+        Choisissez un périmètre : l’agent exécutera les vérifications et conservera
+        sorties, captures et verdict dans ce fil.
       </p>
+      {error ? <p className="test-card-error" role="alert">{error}</p> : null}
       {block.scopes.length === 0 ? (
         <p className="test-inventory-empty">
           Aucun élément testable n’a été identifié dans cette conversation.
@@ -32,6 +56,7 @@ export function TestInventoryCard({ block }: TestInventoryCardProps) {
       <div className="test-scope-list">
         {block.scopes.map((scope, index) => {
           const status = scope.status
+          const evidence = scope.evidenceMd ?? scope.evidence_md ?? null
           const flagIds = scope.guardianFlagIds ?? scope.guardian_flag_ids ?? []
           return (
             <article className={`test-scope is-${status}`} key={scope.id}>
@@ -65,7 +90,24 @@ export function TestInventoryCard({ block }: TestInventoryCardProps) {
                       Gardien · {flagIds.length} point{flagIds.length === 1 ? '' : 's'} lié{flagIds.length === 1 ? '' : 's'}
                     </span>
                   ) : <span />}
+                  <button
+                    type="button"
+                    onClick={() => void start(scope)}
+                    disabled={status === 'running' || startingId === scope.id}
+                    title="Exécuter ce périmètre et conserver les preuves dans le fil"
+                  >
+                    {startingId === scope.id ? 'Lancement…'
+                      : status === 'passed' || status === 'failed' ? 'Retester ce scope'
+                        : 'Tester ce scope'}
+                  </button>
                 </div>
+                {evidence ? (
+                  <details className="test-evidence" open={status === 'failed'}>
+                    <summary>Preuves et verdict</summary>
+                    <ReactMarkdown>{evidence}</ReactMarkdown>
+                  </details>
+                ) : null}
+                {scope.error ? <p className="test-card-error">{scope.error}</p> : null}
               </div>
             </article>
           )

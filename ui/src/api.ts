@@ -16,6 +16,7 @@ import type {
   StoredEvent,
   SubtaskResult,
   TestInventory,
+  TestScope,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -267,6 +268,10 @@ export function createTestInventory(conversationId: string): Promise<TestInvento
     `/api/conversations/${routeId(conversationId)}/test-inventory`,
     jsonPost({}),
   )
+}
+
+export function runTestScope(scopeId: string): Promise<TestScope> {
+  return fetchJson(`/api/test-scopes/${routeId(scopeId)}/run`, jsonPost({}))
 }
 
 export function listDebriefs(conversationId: string): Promise<Debrief[]> {

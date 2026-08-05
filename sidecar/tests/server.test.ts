@@ -1005,7 +1005,7 @@ test("POST debrief versionne le bilan, le diffuse et l'expose en lecture", async
   expect(duplicate.status).toBe(409);
 });
 
-test("Tester inventorie les scopes et les expose en lecture", async () => {
+test("Tester inventorie les scopes puis exécute le choix avec un résultat inline", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());
   const created = await postJson("/api/conversations", {
@@ -1032,7 +1032,18 @@ test("Tester inventorie les scopes et les expose en lecture", async () => {
 
   const fetched = await fetch(`${current.baseUrl}/api/test-inventories/${inventory.id}`);
   expect(fetched.status).toBe(200);
-  expect(await fetched.json()).toEqual(expect.objectContaining({ id: inventory.id }));
+  const started = await postJson(`/api/test-scopes/${inventory.scopes[0]!.id}/run`, {});
+  expect(started.status).toBe(202);
+  expect(await started.json()).toMatchObject({ status: "running" });
+
+  expect(await waitForPersistedEvent(
+    conversation.id,
+    (event) => event.type === "test-scope-result",
+  )).toMatchObject({
+    type: "test-scope-result",
+    status: "failed",
+    evidenceMd: expect.stringContaining("Preuves"),
+  });
 });
 
 test("un tour actif répond 409, puis cancel l'annule et déverrouille la conversation", async () => {

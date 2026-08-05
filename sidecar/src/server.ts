@@ -20,6 +20,7 @@ import {
 import { GitProjectError, type GitProjectService } from "./git";
 import {
   TesterBusyError,
+  TestScopeAlreadyRunningError,
   type TesterRunner,
 } from "./testing";
 
@@ -692,6 +693,25 @@ export function createServer(deps: ServerDeps) {
           const inventory = deps.testers.getInventory(testInventoryId);
           if (!inventory) throw new HttpError(404, "inventaire de test inconnu");
           return json(inventory);
+        }
+
+        const testScopeRunId = routeId(pathname, /^\/api\/test-scopes\/([^/]+)\/run$/);
+        if (request.method === "POST" && testScopeRunId !== null) {
+          const scope = deps.testers.getScope(testScopeRunId);
+          if (!scope) throw new HttpError(404, "scope de test inconnu");
+          const inventory = deps.testers.getInventory(scope.inventory_id)!;
+          if (deps.runner.activity.isBusy(inventory.conversation_id)) {
+            throw new HttpError(409, "une opération est déjà en cours sur cette conversation");
+          }
+          try {
+            return json(deps.testers.startScope(testScopeRunId), 202);
+          } catch (error) {
+            if (error instanceof TestScopeAlreadyRunningError || error instanceof TesterBusyError) {
+              throw new HttpError(409, error.message);
+            }
+            if (error instanceof SubtaskLimitError) throw new HttpError(429, error.message);
+            throw error;
+          }
         }
 
         const conversationDebriefsId = routeId(
