@@ -32,7 +32,7 @@ export function ResumeCommandButton({ conversation }: { conversation: Conversati
           .then(() => setState('copied'))
           .catch(() => setState('error'))
       }}
-      title={`Copier la commande pour reprendre cette session dans un terminal : ${command}`}
+      title={`Copier la commande pour reprendre cette session dans un terminal : ${command}. Voir Aide > Reprise terminal.`}
     >
       {state === 'copied' ? 'Commande copiée' : state === 'error' ? 'Copie impossible' : 'Reprendre au terminal'}
     </button>

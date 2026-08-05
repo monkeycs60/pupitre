@@ -36,7 +36,7 @@ export function HelpView({ initialSlug }: HelpViewProps) {
     const needle = normalized(query.trim())
     return needle ? PAGES.filter((page) => normalized(`${page.title}\n${page.content}`).includes(needle)) : PAGES
   }, [query])
-  const selected = PAGES.find((page) => page.slug === selectedSlug)
+  const selected = visible.find((page) => page.slug === selectedSlug)
     ?? visible[0]
     ?? null
 

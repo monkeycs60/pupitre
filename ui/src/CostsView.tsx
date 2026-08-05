@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getProjectCosts } from './api'
 import type { Project, ProjectCostReport } from './types'
+import { HelpLink } from './HelpLink'
 
 interface CostsViewProps {
   project: Project
@@ -35,7 +36,7 @@ export function CostsView({ project, onConversationSelect }: CostsViewProps) {
   return (
     <section className="costs-view" aria-labelledby="costs-title">
       <header className="costs-header">
-        <div><h1 id="costs-title">Coûts · {project.name}</h1><p>Usage réel en tokens, sans conversion monétaire.</p></div>
+        <div><h1 id="costs-title">Coûts · {project.name}</h1><p>Usage réel en tokens, sans conversion monétaire.</p><HelpLink slug="couts" /></div>
         <label><span>Mois</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>
       </header>
       {error ? <p className="costs-error" role="alert">{error}</p> : null}

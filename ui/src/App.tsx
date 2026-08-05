@@ -37,6 +37,7 @@ function App() {
   const [showReviewDialog, setShowReviewDialog] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
+  const [memoryDirty, setMemoryDirty] = useState(false)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
   const [reviewListVersion, setReviewListVersion] = useState(0)
@@ -65,6 +66,13 @@ function App() {
     window.addEventListener('hashchange', syncHelpHash)
     return () => window.removeEventListener('hashchange', syncHelpHash)
   }, [])
+
+  function confirmLeaveMemory(): boolean {
+    if (workspaceView !== 'memory' || !memoryDirty) return true
+    if (!window.confirm('Abandonner les modifications mémoire non enregistrées ?')) return false
+    setMemoryDirty(false)
+    return true
+  }
 
   useEffect(() => {
     if (!selectedProject?.id) return
@@ -102,6 +110,7 @@ function App() {
   }, [selectedProject?.id])
 
   function handleProjectSelect(project: Project) {
+    if (!confirmLeaveMemory()) return
     if (project.id !== selectedProject?.id) {
       setSelectedConversation(null)
       setNewConversationDraft('')
@@ -115,6 +124,7 @@ function App() {
   }
 
   function handleConversationSelect(conversation: Conversation) {
+    if (!confirmLeaveMemory()) return
     setSelectedConversation(conversation)
     setNewConversationDraft('')
     setIsCreatingConversation(false)
@@ -124,6 +134,7 @@ function App() {
   }
 
   function handleConversationCreate() {
+    if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setSelectedConversation(null)
     setNewConversationDraft('')
@@ -159,6 +170,7 @@ function App() {
   }
 
   function handleGuardianSelect() {
+    if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setWorkspaceView('guardian')
     setShowSwitchModel(false)
@@ -166,6 +178,7 @@ function App() {
   }
 
   function handleGitSelect() {
+    if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setWorkspaceView('git')
     setShowSwitchModel(false)
@@ -173,6 +186,7 @@ function App() {
   }
 
   function handleCostsSelect() {
+    if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setWorkspaceView('costs')
     setShowSwitchModel(false)
@@ -180,18 +194,21 @@ function App() {
   }
 
   function handleLibrarySelect() {
+    if (!confirmLeaveMemory()) return
     setWorkspaceView('library')
     setShowSwitchModel(false)
     setShowReviewDialog(false)
   }
 
   function handleRoutinesSelect() {
+    if (!confirmLeaveMemory()) return
     setWorkspaceView('routines')
     setShowSwitchModel(false)
     setShowReviewDialog(false)
   }
 
   function handleFleetSelect() {
+    if (!confirmLeaveMemory()) return
     setWorkspaceView('fleet')
     setShowSwitchModel(false)
     setShowReviewDialog(false)
@@ -204,6 +221,7 @@ function App() {
   }
 
   function handleHelpSelect(slug?: string) {
+    if (!confirmLeaveMemory()) return
     const nextSlug = slug ?? helpSlug ?? 'gardien'
     setHelpSlug(nextSlug)
     setWorkspaceView('help')
@@ -221,6 +239,7 @@ function App() {
   }
 
   function handlePaletteSkillLaunch(skill: SkillSummary) {
+    if (!confirmLeaveMemory()) return
     if (!selectedProject) return
     setSelectedConversation(null)
     setNewConversationDraft(`$${skill.invocation} `)
@@ -328,7 +347,7 @@ function App() {
             onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
           />
         ) : workspaceView === 'memory' ? (
-          <MemoryView />
+          <MemoryView onDirtyChange={setMemoryDirty} />
         ) : workspaceView === 'help' ? (
           <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         ) : selectedProject === null ? (

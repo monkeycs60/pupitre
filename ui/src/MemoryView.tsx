@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { deleteMemory, getMemory, listMemory, updateMemory } from './api'
 import type { MemoryDocument, MemoryFile } from './types'
+import { HelpLink } from './HelpLink'
 
 function compactSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`
   return `${(bytes / 1024).toFixed(bytes < 10_240 ? 1 : 0)} Ko`
 }
 
-export function MemoryView() {
+export function MemoryView({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const [files, setFiles] = useState<MemoryFile[]>([])
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [document, setDocument] = useState<MemoryDocument | null>(null)
@@ -16,6 +17,20 @@ export function MemoryView() {
   const [preview, setPreview] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const dirty = document !== null && content !== document.content
+
+  useEffect(() => {
+    onDirtyChange(dirty)
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!dirty) return
+      event.preventDefault()
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => {
+      window.removeEventListener('beforeunload', warn)
+      onDirtyChange(false)
+    }
+  }, [dirty, onDirtyChange])
 
   async function reload(preferredPath?: string | null) {
     const loaded = await listMemory()
@@ -83,17 +98,22 @@ export function MemoryView() {
     }
   }
 
+  function select(path: string) {
+    if (dirty && !window.confirm('Abandonner les modifications non enregistrées ?')) return
+    setSelectedPath(path)
+  }
+
   return (
     <section className="memory-view" aria-labelledby="memory-title">
       <header className="memory-header">
-        <div><h1 id="memory-title">Mémoire Claude</h1><p>Fichiers locaux de ~/.claude/memory, édités sans modèle intermédiaire.</p></div>
+        <div><h1 id="memory-title">Mémoire Claude</h1><p>Fichiers locaux de ~/.claude/memory, édités sans modèle intermédiaire.</p><HelpLink slug="memoire" /></div>
         {document ? <div><button type="button" className="text-button" onClick={() => setPreview((value) => !value)}>{preview ? 'Éditer' : 'Aperçu'}</button><button type="button" className="text-button danger-text" onClick={() => void remove()} disabled={busy}>Supprimer</button><button type="button" className="header-action" onClick={() => void save()} disabled={busy || content === document.content}>{busy ? 'Écriture…' : 'Enregistrer'}</button></div> : null}
       </header>
       {error ? <p className="memory-error" role="alert">{error}</p> : null}
       <div className="memory-body">
         <nav className="memory-list" aria-label="Fichiers mémoire">
           {files.length === 0 ? <div className="memory-empty"><strong>Aucun fichier mémoire</strong><p>Claude créera ses fichiers dans ~/.claude/memory lorsqu'une mémoire persistante sera disponible.</p></div> : files.map((file) => (
-            <button type="button" key={file.path} className={selectedPath === file.path ? 'is-selected' : ''} onClick={() => setSelectedPath(file.path)}><span>{file.path}</span><small>{compactSize(file.size)} · {new Date(file.modifiedAt).toLocaleDateString('fr-FR')}</small></button>
+            <button type="button" key={file.path} className={selectedPath === file.path ? 'is-selected' : ''} onClick={() => select(file.path)}><span>{file.path}</span><small>{compactSize(file.size)} · {new Date(file.modifiedAt).toLocaleDateString('fr-FR')}</small></button>
           ))}
         </nav>
         <section className="memory-editor">

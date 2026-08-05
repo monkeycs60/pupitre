@@ -15,6 +15,13 @@ Tu reprends le développement de Pupitre. À lire avant de commencer :
 
 ## État au 2026-08-05
 
+- **M4-N terminé et review milestone propre** : coûts mensuels par conversation
+  et modèle avec économie de délégation en tokens, explorateur sécurisé de
+  `~/.claude/memory`, commande de reprise terminal et aide Markdown recherchable
+  avec liens contextuels. Le spike d'import terminal est reporté avec preuves de
+  schémas Codex incompatibles. La review a figé le modèle parent au moment de la
+  délégation, aligné article et résultats d'aide, et protégé les brouillons
+  mémoire lors de toute navigation.
 - **M4-M terminé et review milestone propre** : Fleet HTTP+WebSocket pour les
   tours, sous-tâches et routines de tous les projets, index FTS5 local avec
   backfill des titres/messages/Débriefs, et palette Ctrl+K pour la navigation,

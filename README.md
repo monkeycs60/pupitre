@@ -88,6 +88,20 @@ la sidebar.
   skills, ouvre Fleet/Routines/Bibliothèque et déclenche Tester, Débrief ou
   Gardien sur le fil courant.
 
+## Coûts, mémoire et aide (M4-N)
+
+- **Coûts** présente l'usage mensuel en tokens par conversation et modèle. Les
+  tokens Luna délégués sont comptés comme budget du modèle parent préservé, sans
+  inventer de prix en euros.
+- **Mémoire** lit et édite `~/.claude/memory` avec écritures atomiques,
+  protection contre les chemins extérieurs et confirmation avant suppression ou
+  abandon d'un brouillon.
+- **Reprendre au terminal** copie `claude --resume` ou `codex resume` avec l'id
+  de session du fil. L'import inverse est reporté après constat de plusieurs
+  formats Codex incompatibles dans l'historique local.
+- **Aide** embarque les pages Markdown des concepts Pupitre, les recherche en
+  local et reçoit les liens contextuels des écrans et contrôles non évidents.
+
 ## Sous-tâches déléguées (M2-D1)
 
 Une conversation peut déléguer du travail à un autre modèle (le Conductor de la phase D). Le moteur vit dans `sidecar/src/subtasks.ts` :
@@ -174,7 +188,7 @@ lancer le sidecar avec `PUPITRE_CODEX_USER_MCPS=1`.
 ## Tests
 
 ```bash
-cd sidecar && bun test        # 291 tests (fixtures réelles des CLIs, fake bins)
+cd sidecar && bun test        # 294 tests (fixtures réelles des CLIs, fake bins)
 cd sidecar && bun run typecheck
 cd ui && bunx tsc --noEmit && bun run build
 ```
@@ -195,6 +209,5 @@ Protocole e2e : `e2e/basic-flow.md`.
 
 **M3 (fait)** : Gardien, contre-avis, Débrief et passation, bouton Tester avec preuves, vue Git et durcissement du sidecar.
 
-**M4 (en cours)** : bibliothèque de skills, workflows, routines, Fleet,
-recherche globale et palette terminés ; coûts, mémoire, handoff terminal et
-aide intégrée restent à construire.
+**M4 (clôture en cours)** : toutes les phases K à N sont implémentées et
+reviewées ; restent l'E2E consolidé, la passe design finale et le tag `m4`.

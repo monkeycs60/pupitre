@@ -43,7 +43,18 @@ export class CostStore {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("mois invalide");
     const rows = this.db.query(`
       SELECT conversations.id AS conversation_id, conversations.title,
-        conversations.model AS parent_model,
+        COALESCE(
+          (
+            SELECT json_extract(parent_session.payload, '$.model')
+            FROM events AS parent_session
+            WHERE parent_session.conversation_id = conversations.id
+              AND parent_session.id <= events.id
+              AND json_valid(parent_session.payload)
+              AND json_extract(parent_session.payload, '$.type') = 'session'
+            ORDER BY parent_session.id DESC LIMIT 1
+          ),
+          conversations.model
+        ) AS parent_model,
         CASE WHEN subtasks.id IS NULL THEN 'direct' ELSE 'subtask' END AS scope,
         COALESCE(
           (
