@@ -7,6 +7,7 @@ import { runCodexTurn } from "./adapters/codex";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 import type { QuotaTracker } from "./quotas";
 import { ConversationActivity } from "./conversation-activity";
+import type { GitProjectService } from "./git";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -45,6 +46,7 @@ export class ConversationRunner {
      * sans autre signal.
      */
     private port: () => number,
+    private git?: GitProjectService,
     readonly activity = new ConversationActivity(),
   ) {
     sweepOrphanedRuns(convs);
@@ -71,6 +73,12 @@ export class ConversationRunner {
     if (!conv) throw new Error("conversation inconnue");
     const releaseActivity = this.activity.acquire(conversationId, "turn");
     const project = this.projects.get(conv.project_id)!;
+    let headBefore: string | null = null;
+    try {
+      headBefore = this.git?.head(project.id) ?? null;
+    } catch {
+      // Un projet hors Git ne doit jamais empêcher le tour.
+    }
     const controller = new AbortController();
     let finish!: () => void;
     const done = new Promise<void>((resolve) => {
@@ -132,6 +140,19 @@ export class ConversationRunner {
       else if (process.env.PUPITRE_CODEX_MODE === "exec") await runCodexTurn(opts, emit);
       else await runCodexAppServerTurn(opts, emit);
     } finally {
+      try {
+        const headAfter = this.git?.head(project.id) ?? null;
+        if (this.git && headAfter && headAfter !== headBefore) {
+          const commits = headBefore
+            ? this.git.commitsBetween(project.id, headBefore, headAfter)
+            : [headAfter];
+          this.git.recordCommitLinks(project.id, conversationId, commits);
+        }
+      } catch (error) {
+        // J1 est volontairement best effort : une lecture Git cassée ne change
+        // ni le résultat provider ni le statut terminal du tour.
+        console.error("Traçage des commits impossible", error);
+      }
       try {
         this.convs.compactTextDeltas(conversationId);
       } catch (error) {

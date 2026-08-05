@@ -9,6 +9,8 @@ import type { Conversation, Project, Review } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import { ContextGauge } from './ContextGauge'
+import { GitView } from './GitView'
+import { listProjectConversations } from './api'
 
 function App() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
@@ -19,7 +21,7 @@ function App() {
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [showReviewDialog, setShowReviewDialog] = useState(false)
-  const [workspaceView, setWorkspaceView] = useState<'conversations' | 'guardian'>(
+  const [workspaceView, setWorkspaceView] = useState<'conversations' | 'git' | 'guardian'>(
     'conversations',
   )
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
@@ -92,6 +94,25 @@ function App() {
     setShowReviewDialog(false)
   }
 
+  function handleGitSelect() {
+    if (selectedProject === null) return
+    setWorkspaceView('git')
+    setShowSwitchModel(false)
+    setShowReviewDialog(false)
+  }
+
+  async function handleGitConversationSelect(conversationId: string) {
+    if (selectedProject === null) return
+    const conversations = await listProjectConversations(selectedProject.id)
+    const conversation = conversations.find((item) => item.id === conversationId)
+    if (conversation) handleConversationSelect(conversation)
+  }
+
+  function handleGitGuardianSelect(reviewId: string) {
+    setFocusedReviewId(reviewId)
+    setWorkspaceView('guardian')
+  }
+
   function handleReviewStarted(review: Review) {
     setShowReviewDialog(false)
     setFocusedReviewId(review.id)
@@ -113,10 +134,11 @@ function App() {
         runningSubtasks={runningSubtasks}
         workspaceView={workspaceView}
         onGuardianSelect={handleGuardianSelect}
+        onGitSelect={handleGitSelect}
         reviewListVersion={reviewListVersion}
       />
 
-      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : 'Conversation'}>
+      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : 'Conversation'}>
         {selectedProject === null ? (
           <div className="empty-state">
             <p>Sélectionnez un projet pour commencer.</p>
@@ -129,6 +151,12 @@ function App() {
             refreshToken={reviewListVersion}
             onProjectUpdated={handleProjectUpdated}
             onReviewsChanged={() => setReviewListVersion((current) => current + 1)}
+          />
+        ) : workspaceView === 'git' ? (
+          <GitView
+            project={selectedProject}
+            onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
+            onGuardianSelect={handleGitGuardianSelect}
           />
         ) : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">

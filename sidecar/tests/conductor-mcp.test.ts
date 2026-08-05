@@ -24,6 +24,7 @@ import { conductorMcpPath } from "../src/conductor";
 import { ReviewStore } from "../src/stores/reviews";
 import { ReviewRunner } from "../src/reviews";
 import { DebriefRunner } from "../src/debriefs";
+import { GitProjectService } from "../src/git";
 import { DebriefStore } from "../src/stores/debriefs";
 
 const BRIDGE_ENV_KEYS = ["PUPITRE_CLAUDE_BIN", "PUPITRE_CODEX_BIN", "PUPITRE_CODEX_MODE"];
@@ -121,13 +122,14 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
   subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
+  const git = new GitProjectService(db, projects);
   const reviews = new ReviewRunner(new ReviewStore(db), projects, conversations, quotas);
   const debriefs = new DebriefRunner(
     new DebriefStore(db), conversations, projects, quotas, events.broadcast,
   );
   server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
-    reviews, debriefs,
+    reviews, debriefs, git,
   });
   parentId = conversations.create({
     projectId: project.id, provider: "claude", model: "opus", firstMessage: "orchestre",

@@ -69,6 +69,15 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_debriefs_conv
       ON debriefs(conversation_id, created_at, id);
+    CREATE TABLE IF NOT EXISTS commit_links (
+      commit_sha TEXT NOT NULL,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (commit_sha, project_id, conversation_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_commit_links_project
+      ON commit_links(project_id, commit_sha, created_at);
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id),

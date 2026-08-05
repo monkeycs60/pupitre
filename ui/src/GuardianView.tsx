@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   getGardienStatus,
   listProjectReviews,
@@ -8,7 +8,7 @@ import {
   setReviewDecisionStatus,
 } from './api'
 import { CounterOpinionDialog } from './CounterOpinionDialog'
-import { parseUnifiedDiff } from './reviewDiff'
+import { DiffViewer } from './DiffViewer'
 import type {
   GardienMode,
   GardienStatus,
@@ -70,7 +70,6 @@ export function GuardianView({
     blocked: false,
     openRedCount: 0,
   })
-  const [expandedFlagId, setExpandedFlagId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [counterTarget, setCounterTarget] = useState<ReviewFlag | 'all' | null>(null)
@@ -121,10 +120,6 @@ export function GuardianView({
   }, [project.id, refreshToken])
 
   const selected = reviews.find((review) => review.id === selectedId) ?? null
-  const lines = useMemo(
-    () => parseUnifiedDiff(selected?.diff_text ?? '', selected?.flags ?? []),
-    [selected],
-  )
   const pendingCount = reviews.filter(pending).length
 
   async function handleModeChange(mode: GardienMode) {
@@ -246,7 +241,6 @@ export function GuardianView({
                 className={`review-list-item ${selectedId === review.id ? 'is-selected' : ''}`}
                 onClick={() => {
                   setSelectedId(review.id)
-                  setExpandedFlagId(null)
                 }}
               >
                 <span className="review-list-title">
@@ -285,35 +279,7 @@ export function GuardianView({
               Aucun changement entre ces deux références.
             </div>
           ) : (
-            <div className="diff-table" role="table" aria-label="Diff annoté">
-              {lines.map((line, index) => (
-                <div
-                  className={`diff-line is-${line.kind} ${line.severity ? `risk-${line.severity}` : ''}`}
-                  role="row"
-                  key={`${index}-${line.text}`}
-                >
-                  <span className="diff-number" role="cell">{line.oldLine ?? ''}</span>
-                  <span className="diff-number" role="cell">{line.newLine ?? ''}</span>
-                  <code role="cell">{line.text || ' '}</code>
-                  <span className="diff-flags" role="cell">
-                    {line.flags.map((flag) => (
-                      <button
-                        type="button"
-                        key={flag.id}
-                        className={`diff-flag-marker severity-${flag.severity}`}
-                        onClick={() => setExpandedFlagId(
-                          expandedFlagId === flag.id ? null : flag.id,
-                        )}
-                        title={`${flag.category} — ${flag.message}`}
-                        aria-expanded={expandedFlagId === flag.id}
-                      >
-                        {expandedFlagId === flag.id ? flag.message : flag.category}
-                      </button>
-                    ))}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <DiffViewer diff={selected.diff_text} flags={selected.flags} label="Diff annoté" />
           )}
         </section>
 

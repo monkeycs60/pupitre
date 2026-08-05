@@ -167,6 +167,54 @@ export interface GardienStatus {
   openRedCount: number
 }
 
+export interface GitGuardianSummary {
+  reviewIds: string[]
+  red: number
+  orange: number
+  grey: number
+}
+
+export interface GitCommit {
+  sha: string
+  parents: string[]
+  refs: string[]
+  author: string
+  authoredAt: string
+  subject: string
+  conversations: Array<{ id: string; title: string }>
+  guardian: GitGuardianSummary | null
+}
+
+export interface GitBranch {
+  name: string
+  fullName: string
+  sha: string
+  current: boolean
+  remote: boolean
+}
+
+export interface GitWorktree {
+  path: string
+  head: string | null
+  branch: string | null
+  detached: boolean
+  bare: boolean
+}
+
+export interface GitSnapshot {
+  head: string | null
+  currentBranch: string | null
+  commits: GitCommit[]
+  branches: GitBranch[]
+  worktrees: GitWorktree[]
+}
+
+export interface GitDiff {
+  base: string
+  head: string
+  diff: string
+}
+
 export type AppEvent =
   | { type: 'session'; provider: Provider; cliSessionId: string; model: string }
   | { type: 'user-message'; text: string; images: string[] }

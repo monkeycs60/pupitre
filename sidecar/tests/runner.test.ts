@@ -10,16 +10,21 @@ import { ConversationRunner, sweepOrphanedRuns } from "../src/runner";
 import { codexAppServer } from "../src/adapters/codex-app-server";
 import { QuotaTracker } from "../src/quotas";
 import type { AppEvent } from "../src/events";
+import { GitProjectService } from "../src/git";
+import type { Database } from "bun:sqlite";
 
 let runner: ConversationRunner;
 let convs: ConversationStore;
 let projects: ProjectStore;
 let projectId: string;
 let broadcast: AppEvent[];
+let db: Database;
+let dataDir: string;
 
 beforeEach(() => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-"));
-  const db = openDb(dir);
+  dataDir = dir;
+  db = openDb(dir);
   projects = new ProjectStore(db);
   projectId = projects.create({ name: "p", path: "/tmp" }).id;
   convs = new ConversationStore(db);
@@ -27,6 +32,65 @@ beforeEach(() => {
   process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude");
   runner = new ConversationRunner(convs, projects, new MediaStore(dir),
     (_convId, event) => broadcast.push(event), new QuotaTracker(db), () => 4321);
+});
+
+test("tague tous les commits créés pendant un tour avec la conversation", async () => {
+  const repo = mkdtempSync(join(tmpdir(), "pupitre-turn-git-"));
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: repo });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+    return result.stdout.toString().trim();
+  };
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "turn@example.test");
+  git("config", "user.name", "Turn Git");
+  writeFileSync(join(repo, "base.txt"), "base\n");
+  git("add", ".");
+  git("commit", "-qm", "base");
+  const project = projects.create({ name: "repo", path: repo });
+  const conversation = convs.create({
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "committe",
+  });
+  const fake = join(repo, "fake-claude-commit");
+  const fixture = join(import.meta.dir, "fixtures/claude-basic.jsonl");
+  writeFileSync(fake, `#!/usr/bin/env bash
+printf 'one\n' > "$FAKE_REPO/one.txt"
+git -C "$FAKE_REPO" add one.txt
+git -C "$FAKE_REPO" commit -qm one
+printf 'two\n' > "$FAKE_REPO/two.txt"
+git -C "$FAKE_REPO" add two.txt
+git -C "$FAKE_REPO" commit -qm two
+cat "${fixture}"
+`);
+  chmodSync(fake, 0o755);
+  process.env.PUPITRE_CLAUDE_BIN = fake;
+  process.env.FAKE_REPO = repo;
+  const gitView = new GitProjectService(db, projects);
+  const trackedRunner = new ConversationRunner(
+    convs,
+    projects,
+    new MediaStore(dataDir),
+    () => {},
+    new QuotaTracker(db),
+    () => 4321,
+    gitView,
+  );
+
+  try {
+    await trackedRunner.runTurn(conversation.id, "committe deux fois", []);
+    const linked = gitView.snapshot(project.id).commits.filter(
+      (commit) => commit.subject === "one" || commit.subject === "two",
+    );
+    expect(linked).toHaveLength(2);
+    expect(linked.every((commit) =>
+      commit.conversations.some((item) => item.id === conversation.id),
+    )).toBe(true);
+  } finally {
+    delete process.env.FAKE_REPO;
+  }
 });
 
 test("un tour persiste user-message + événements, capture le session id, diffuse en live", async () => {

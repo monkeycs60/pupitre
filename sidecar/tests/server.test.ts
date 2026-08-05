@@ -18,6 +18,7 @@ import { ReviewStore } from "../src/stores/reviews";
 import { ReviewRunner } from "../src/reviews";
 import { DebriefStore } from "../src/stores/debriefs";
 import { DebriefRunner } from "../src/debriefs";
+import { GitProjectService } from "../src/git";
 
 interface TestServer {
   baseUrl: string;
@@ -58,6 +59,12 @@ async function createProject(path: string): Promise<{ id: string }> {
   const response = await postJson("/api/projects", { name: "test", path });
   expect(response.status).toBe(201);
   return response.json();
+}
+
+function runGit(cwd: string, ...args: string[]): string {
+  const result = Bun.spawnSync(["git", ...args], { cwd });
+  if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+  return result.stdout.toString().trim();
 }
 
 async function waitForPersistedEvent(
@@ -186,6 +193,7 @@ cat "${fixture}"
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
+  const gitView = new GitProjectService(db, projects);
   const reviews = new ReviewRunner(
     new ReviewStore(db),
     projects,
@@ -227,6 +235,7 @@ cat "${fixture}"
     settings,
     reviews,
     debriefs,
+    git: gitView,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -268,6 +277,41 @@ test("health, création et liste des projets, avec 400 pour un path inexistant",
   expect(await list.json()).toEqual([
     expect.objectContaining({ id: project.id, name: "test", path: tmpdir() }),
   ]);
+});
+
+test("expose le graphe Git et un diff entre deux références", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const repo = mkdtempSync(join(tmpdir(), "pupitre-server-git-"));
+  runGit(repo, "init", "-q", "-b", "main");
+  runGit(repo, "config", "user.email", "api@example.test");
+  runGit(repo, "config", "user.name", "API Git");
+  writeFileSync(join(repo, "value.txt"), "one\n");
+  runGit(repo, "add", ".");
+  runGit(repo, "commit", "-qm", "base");
+  const base = runGit(repo, "rev-parse", "HEAD");
+  writeFileSync(join(repo, "value.txt"), "one\ntwo\n");
+  runGit(repo, "commit", "-qam", "head");
+  const head = runGit(repo, "rev-parse", "HEAD");
+  const project = await createProject(repo);
+
+  const graph = await fetch(`${current.baseUrl}/api/projects/${project.id}/git`);
+  expect(graph.status).toBe(200);
+  expect(await graph.json()).toMatchObject({
+    head,
+    currentBranch: "main",
+    commits: [expect.objectContaining({ sha: head }), expect.objectContaining({ sha: base })],
+  });
+
+  const diff = await fetch(
+    `${current.baseUrl}/api/projects/${project.id}/git/diff?base=${base}&head=${head}`,
+  );
+  expect(diff.status).toBe(200);
+  expect(await diff.json()).toMatchObject({ base, head, diff: expect.stringContaining("+two") });
+
+  const invalid = await fetch(
+    `${current.baseUrl}/api/projects/${project.id}/git/diff?base=absent&head=HEAD`,
+  );
+  expect(invalid.status).toBe(400);
 });
 
 test("CRUD des presets, intégrés immuables et défaut par projet", async () => {

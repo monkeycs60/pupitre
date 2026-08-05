@@ -14,6 +14,7 @@ import { ReviewStore } from "./stores/reviews";
 import { ReviewRunner } from "./reviews";
 import { DebriefStore } from "./stores/debriefs";
 import { DebriefRunner } from "./debriefs";
+import { GitProjectService } from "./git";
 
 if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
@@ -28,6 +29,7 @@ if (process.argv.includes("--conductor-mcp")) {
   const events = new ConversationEventBus();
   const quotas = new QuotaTracker(db);
   const reviewStore = new ReviewStore(db);
+  const git = new GitProjectService(db, projects);
   const configuredPort = process.env.PUPITRE_PORT;
   const port = configuredPort === undefined ? 4820 : Number(configuredPort);
   if (configuredPort?.trim() === "" || !Number.isInteger(port) || port < 0 || port > 65_535) {
@@ -43,6 +45,7 @@ if (process.argv.includes("--conductor-mcp")) {
     quotas,
     // Résolu à chaque tour : `server` n'existe qu'après la construction du runner.
     () => server.port ?? port,
+    git,
   );
   // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
   // tournent en parallèle du tour parent qui les a demandées.
@@ -77,6 +80,7 @@ if (process.argv.includes("--conductor-mcp")) {
     settings,
     reviews,
     debriefs,
+    git,
   });
 
   // Si l'app-server codex tourne déjà, on part avec un état de quota frais.

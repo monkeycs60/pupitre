@@ -17,6 +17,7 @@ import {
   NoNewDebriefEventsError,
   type DebriefRunner,
 } from "./debriefs";
+import { GitProjectError, type GitProjectService } from "./git";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -46,6 +47,7 @@ export interface ServerDeps {
   settings: SettingsStore;
   reviews: ReviewRunner;
   debriefs: DebriefRunner;
+  git: GitProjectService;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -403,6 +405,36 @@ export function createServer(deps: ServerDeps) {
             return json(deps.projects.create({ name, path }), 201);
           } catch {
             throw new HttpError(409, "projet déjà existant");
+          }
+        }
+
+        const projectGitDiffId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/git\/diff$/,
+        );
+        if (request.method === "GET" && projectGitDiffId !== null) {
+          if (!deps.projects.get(projectGitDiffId)) {
+            throw new HttpError(404, "projet inconnu");
+          }
+          const base = url.searchParams.get("base");
+          const head = url.searchParams.get("head");
+          if (!base || !head) throw new HttpError(400, "références Git manquantes");
+          try {
+            return json(deps.git.diff(projectGitDiffId, base, head));
+          } catch (error) {
+            if (error instanceof GitProjectError) throw new HttpError(400, error.message);
+            throw error;
+          }
+        }
+
+        const projectGitId = routeId(pathname, /^\/api\/projects\/([^/]+)\/git$/);
+        if (request.method === "GET" && projectGitId !== null) {
+          if (!deps.projects.get(projectGitId)) throw new HttpError(404, "projet inconnu");
+          try {
+            return json(deps.git.snapshot(projectGitId));
+          } catch (error) {
+            if (error instanceof GitProjectError) throw new HttpError(400, error.message);
+            throw error;
           }
         }
 

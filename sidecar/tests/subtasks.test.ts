@@ -18,6 +18,7 @@ import { codexAppServer } from "../src/adapters/codex-app-server";
 import { ReviewStore } from "../src/stores/reviews";
 import { ReviewRunner } from "../src/reviews";
 import { DebriefRunner } from "../src/debriefs";
+import { GitProjectService } from "../src/git";
 import { DebriefStore } from "../src/stores/debriefs";
 
 interface Harness {
@@ -115,13 +116,14 @@ cat "${fixture}"
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
+  const git = new GitProjectService(db, projects);
   const reviews = new ReviewRunner(new ReviewStore(db), projects, conversations, quotas);
   const debriefs = new DebriefRunner(
     new DebriefStore(db), conversations, projects, quotas, events.broadcast,
   );
   const server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
-    reviews, debriefs,
+    reviews, debriefs, git,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

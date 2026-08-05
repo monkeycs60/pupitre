@@ -30,8 +30,9 @@ interface SidebarProps {
   quotas: Quotas
   /** Sous-tâches en cours dans la conversation ouverte (cf. App). */
   runningSubtasks: number
-  workspaceView: 'conversations' | 'guardian'
+  workspaceView: 'conversations' | 'git' | 'guardian'
   onGuardianSelect: () => void
+  onGitSelect: () => void
   reviewListVersion: number
 }
 
@@ -74,6 +75,7 @@ export function Sidebar({
   runningSubtasks,
   workspaceView,
   onGuardianSelect,
+  onGitSelect,
   reviewListVersion,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -305,16 +307,27 @@ export function Sidebar({
           </button>
         </div>
 
-        <button
-          type="button"
-          className={`guardian-nav-button ${workspaceView === 'guardian' ? 'is-selected' : ''}`}
-          onClick={onGuardianSelect}
-          disabled={selectedProject === null}
-          title="Voir les reviews de risques du projet"
-        >
-          <span>Gardien</span>
-          {pendingReviews > 0 ? <strong>{pendingReviews}</strong> : null}
-        </button>
+        <div className="project-view-nav" aria-label="Vues du projet">
+          <button
+            type="button"
+            className={`guardian-nav-button ${workspaceView === 'git' ? 'is-selected' : ''}`}
+            onClick={onGitSelect}
+            disabled={selectedProject === null}
+            title="Voir les branches, commits et worktrees du projet"
+          >
+            <span>Git</span>
+          </button>
+          <button
+            type="button"
+            className={`guardian-nav-button ${workspaceView === 'guardian' ? 'is-selected' : ''}`}
+            onClick={onGuardianSelect}
+            disabled={selectedProject === null}
+            title="Voir les reviews de risques du projet"
+          >
+            <span>Gardien</span>
+            {pendingReviews > 0 ? <strong>{pendingReviews}</strong> : null}
+          </button>
+        </div>
 
         <div className="navigation-list">
           {selectedProject === null ? (

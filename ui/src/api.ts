@@ -4,6 +4,8 @@ import type {
   Debrief,
   GardienMode,
   GardienStatus,
+  GitDiff,
+  GitSnapshot,
   Project,
   Preset,
   Provider,
@@ -303,6 +305,26 @@ export function listProjectReviews(
   signal?: AbortSignal,
 ): Promise<Review[]> {
   return fetchJson(`/api/projects/${routeId(projectId)}/reviews`, { signal })
+}
+
+export function getProjectGit(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<GitSnapshot> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/git`, { signal })
+}
+
+export function getProjectGitDiff(
+  projectId: string,
+  base: string,
+  head: string,
+  signal?: AbortSignal,
+): Promise<GitDiff> {
+  const query = new URLSearchParams({ base, head })
+  return fetchJson(
+    `/api/projects/${routeId(projectId)}/git/diff?${query.toString()}`,
+    { signal },
+  )
 }
 
 export function getReview(reviewId: string, signal?: AbortSignal): Promise<Review> {
