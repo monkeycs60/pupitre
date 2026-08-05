@@ -30,6 +30,7 @@ import type { WorkflowInput, WorkflowStore } from "./stores/workflows";
 import type { NotificationStore } from "./stores/notifications";
 import type { RoutineInput, RoutineScheduler, RoutineStore } from "./routines";
 import { fleetSnapshot } from "./fleet";
+import type { SearchIndex } from "./search";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -68,6 +69,7 @@ export interface ServerDeps {
   routineStore: RoutineStore;
   routines: RoutineScheduler;
   notifications: NotificationStore;
+  search: SearchIndex;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -540,6 +542,13 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "GET" && pathname === "/api/fleet") {
           return json(currentFleet());
+        }
+
+        if (request.method === "GET" && pathname === "/api/search") {
+          const query = url.searchParams.get("q") ?? "";
+          const projectId = url.searchParams.get("projectId") ?? undefined;
+          if (projectId && !deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+          return json(deps.search.search(query, projectId));
         }
 
         if (request.method === "GET" && pathname === "/api/notifications") {

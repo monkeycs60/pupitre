@@ -28,6 +28,7 @@ import { WorkflowStore } from "../src/stores/workflows";
 import { NotificationStore } from "../src/stores/notifications";
 import { RoutineScheduler, RoutineStore } from "../src/routines";
 import { DebriefStore } from "../src/stores/debriefs";
+import { SearchIndex } from "../src/search";
 
 interface Harness {
   baseUrl: string;
@@ -150,7 +151,7 @@ cat "${fixture}"
   const server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
     reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer, workflows,
-    notifications, routineStore, routines,
+    notifications, routineStore, routines, search: new SearchIndex(db),
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

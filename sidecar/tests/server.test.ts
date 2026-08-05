@@ -27,6 +27,7 @@ import { SkillComposer } from "../src/skill-composer";
 import { WorkflowStore } from "../src/stores/workflows";
 import { NotificationStore } from "../src/stores/notifications";
 import { RoutineScheduler, RoutineStore } from "../src/routines";
+import { SearchIndex } from "../src/search";
 
 interface TestServer {
   baseUrl: string;
@@ -281,6 +282,7 @@ cat "${fixture}"
     notifications,
     routineStore,
     routines,
+    search: new SearchIndex(db),
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -837,6 +839,29 @@ test("Fleet expose et diffuse les runs actifs", async () => {
 
   expect(await current.runner.cancelTurn(conversation.id)).toBe(true);
   await run;
+});
+
+test("recherche les titres et messages par projet", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const conversations = new ConversationStore(current.db);
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "Diagnostic volcanique",
+  });
+  conversations.appendEvent(conversation.id, {
+    type: "text-final",
+    text: "Le basalte confirme l'hypothèse.",
+  });
+
+  const response = await fetch(
+    `${current.baseUrl}/api/search?q=basalte&projectId=${project.id}`,
+  );
+  expect(await response.json()).toEqual([
+    expect.objectContaining({ kind: "event", conversationId: conversation.id }),
+  ]);
 });
 
 test("rejette les Origin distants et accepte localhost, Tauri ou l'absence d'Origin", async () => {

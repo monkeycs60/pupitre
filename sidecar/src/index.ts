@@ -23,6 +23,7 @@ import { SkillComposer } from "./skill-composer";
 import { WorkflowStore } from "./stores/workflows";
 import { NotificationStore } from "./stores/notifications";
 import { RoutineScheduler, RoutineStore } from "./routines";
+import { SearchIndex } from "./search";
 
 if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
@@ -45,6 +46,7 @@ if (process.argv.includes("--conductor-mcp")) {
   const workflows = new WorkflowStore(db);
   const notifications = new NotificationStore(db);
   const routineStore = new RoutineStore(db);
+  const search = new SearchIndex(db);
   const git = new GitProjectService(db, projects);
   const configuredPort = process.env.PUPITRE_PORT;
   const port = configuredPort === undefined ? 4820 : Number(configuredPort);
@@ -132,6 +134,7 @@ if (process.argv.includes("--conductor-mcp")) {
     routineStore,
     routines,
     notifications,
+    search,
   });
   routines.start();
 
