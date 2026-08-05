@@ -19,6 +19,7 @@ import { FleetView } from './FleetView'
 import { CommandPalette } from './CommandPalette'
 import { createDebrief, createTestInventory } from './api'
 import type { SkillSummary } from './types'
+import { CostsView } from './CostsView'
 import type { WorkspaceView } from './types'
 
 function App() {
@@ -155,6 +156,13 @@ function App() {
     setShowReviewDialog(false)
   }
 
+  function handleCostsSelect() {
+    if (selectedProject === null) return
+    setWorkspaceView('costs')
+    setShowSwitchModel(false)
+    setShowReviewDialog(false)
+  }
+
   function handleLibrarySelect() {
     setWorkspaceView('library')
     setShowSwitchModel(false)
@@ -232,8 +240,10 @@ function App() {
 
   const titlebarView = workspaceView === 'guardian'
     ? 'Gardien'
-    : workspaceView === 'git'
-      ? 'Git'
+      : workspaceView === 'git'
+        ? 'Git'
+        : workspaceView === 'costs'
+          ? 'Coûts'
       : workspaceView === 'library'
         ? 'Bibliothèque'
         : workspaceView === 'routines'
@@ -258,6 +268,7 @@ function App() {
         workspaceView={workspaceView}
         onGuardianSelect={handleGuardianSelect}
         onGitSelect={handleGitSelect}
+        onCostsSelect={handleCostsSelect}
         onLibrarySelect={handleLibrarySelect}
         onRoutinesSelect={handleRoutinesSelect}
         onFleetSelect={handleFleetSelect}
@@ -265,7 +276,7 @@ function App() {
         reviewListVersion={effectiveReviewListVersion}
       />
 
-      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : 'Conversation'}>
+      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'costs' ? 'Coûts' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : 'Conversation'}>
         {workspaceView === 'library' ? (
           <SkillsLibrary project={selectedProject} />
         ) : workspaceView === 'routines' ? (
@@ -295,6 +306,11 @@ function App() {
             project={selectedProject}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
             onGuardianSelect={handleGitGuardianSelect}
+          />
+        ) : workspaceView === 'costs' ? (
+          <CostsView
+            project={selectedProject}
+            onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
           />
         ) : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">

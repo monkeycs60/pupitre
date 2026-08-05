@@ -36,6 +36,7 @@ interface SidebarProps {
   workspaceView: WorkspaceView
   onGuardianSelect: () => void
   onGitSelect: () => void
+  onCostsSelect: () => void
   onLibrarySelect: () => void
   onRoutinesSelect: () => void
   onFleetSelect: () => void
@@ -83,6 +84,7 @@ export function Sidebar({
   workspaceView,
   onGuardianSelect,
   onGitSelect,
+  onCostsSelect,
   onLibrarySelect,
   onRoutinesSelect,
   onFleetSelect,
@@ -367,6 +369,15 @@ export function Sidebar({
         </div>
 
         <div className="project-view-nav" aria-label="Vues du projet">
+          <button
+            type="button"
+            className={`guardian-nav-button ${workspaceView === 'costs' ? 'is-selected' : ''}`}
+            onClick={onCostsSelect}
+            disabled={selectedProject === null}
+            title="Comparer l'usage en tokens des conversations et délégations du projet"
+          >
+            <span>Coûts</span>
+          </button>
           <button
             type="button"
             className={`guardian-nav-button ${workspaceView === 'git' ? 'is-selected' : ''}`}

@@ -9,6 +9,7 @@ import type {
   FleetItem,
   SearchResult,
   Project,
+  ProjectCostReport,
   Preset,
   Provider,
   QuotaSnapshot,
@@ -385,6 +386,14 @@ export function listProjectConversations(
   projectId: string,
 ): Promise<Conversation[]> {
   return fetchJson(`/api/projects/${routeId(projectId)}/conversations`)
+}
+
+export function getProjectCosts(
+  projectId: string,
+  month: string,
+  signal?: AbortSignal,
+): Promise<ProjectCostReport> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/costs?month=${encodeURIComponent(month)}`, { signal })
 }
 
 export function createConversation(

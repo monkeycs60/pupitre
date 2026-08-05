@@ -1,7 +1,33 @@
 export type Provider = 'claude' | 'codex'
 export type ConversationSpeed = 'standard' | 'fast'
 export type GardienMode = 'informatif' | 'bloquant'
-export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines' | 'fleet'
+export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines' | 'fleet' | 'costs'
+
+export interface ModelCost {
+  model: string
+  tokens: number
+}
+
+export interface ConversationCost {
+  conversationId: string
+  title: string
+  parentModel: string
+  totalTokens: number
+  directTokens: number
+  subtaskTokens: number
+  delegationSavingsTokens: number
+  models: ModelCost[]
+}
+
+export interface ProjectCostReport {
+  projectId: string
+  month: string
+  totalTokens: number
+  directTokens: number
+  subtaskTokens: number
+  delegationSavingsTokens: number
+  conversations: ConversationCost[]
+}
 
 export interface FleetItem {
   id: string
