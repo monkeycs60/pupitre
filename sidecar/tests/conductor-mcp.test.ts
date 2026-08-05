@@ -27,6 +27,7 @@ import { DebriefRunner } from "../src/debriefs";
 import { GitProjectService } from "../src/git";
 import { TestingStore } from "../src/stores/testing";
 import { TesterRunner } from "../src/testing";
+import { SkillInventory } from "../src/skills";
 import { DebriefStore } from "../src/stores/debriefs";
 
 const BRIDGE_ENV_KEYS = ["PUPITRE_CLAUDE_BIN", "PUPITRE_CODEX_BIN", "PUPITRE_CODEX_MODE"];
@@ -134,9 +135,11 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
     new TestingStore(db), conversations, projects, reviewStore, quotas,
     events.broadcast, subtasks, async () => '{"items":[]}', runner.activity,
   );
+  const skills = new SkillInventory(db, projects, { homeDir: dir });
+  skills.refresh();
   server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
-    reviews, debriefs, git, testers,
+    reviews, debriefs, git, testers, skills,
   });
   parentId = conversations.create({
     projectId: project.id, provider: "claude", model: "opus", firstMessage: "orchestre",

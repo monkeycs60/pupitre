@@ -17,6 +17,7 @@ import { DebriefRunner } from "./debriefs";
 import { GitProjectService } from "./git";
 import { TestingStore } from "./stores/testing";
 import { TesterRunner } from "./testing";
+import { SkillInventory } from "./skills";
 
 if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
@@ -32,6 +33,8 @@ if (process.argv.includes("--conductor-mcp")) {
   const events = new ConversationEventBus();
   const quotas = new QuotaTracker(db);
   const reviewStore = new ReviewStore(db);
+  const skills = new SkillInventory(db, projects);
+  skills.start();
   const git = new GitProjectService(db, projects);
   const configuredPort = process.env.PUPITRE_PORT;
   const port = configuredPort === undefined ? 4820 : Number(configuredPort);
@@ -97,6 +100,7 @@ if (process.argv.includes("--conductor-mcp")) {
     debriefs,
     git,
     testers,
+    skills,
   });
 
   // Si l'app-server codex tourne déjà, on part avec un état de quota frais.

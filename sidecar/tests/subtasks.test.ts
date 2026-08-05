@@ -21,6 +21,7 @@ import { DebriefRunner } from "../src/debriefs";
 import { GitProjectService } from "../src/git";
 import { TestingStore } from "../src/stores/testing";
 import { TesterRunner } from "../src/testing";
+import { SkillInventory } from "../src/skills";
 import { DebriefStore } from "../src/stores/debriefs";
 
 interface Harness {
@@ -128,9 +129,11 @@ cat "${fixture}"
     new TestingStore(db), conversations, projects, reviewStore, quotas,
     events.broadcast, subtasks, async () => '{"items":[]}', runner.activity,
   );
+  const skills = new SkillInventory(db, projects, { homeDir: dir });
+  skills.refresh();
   const server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
-    reviews, debriefs, git, testers,
+    reviews, debriefs, git, testers, skills,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

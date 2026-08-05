@@ -147,6 +147,27 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_review_decisions_review
       ON review_decisions(review_id, id);
+    CREATE TABLE IF NOT EXISTS skills (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      triggers_json TEXT NOT NULL DEFAULT '[]',
+      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex')),
+      provenance TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      project_id TEXT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      content_md TEXT NOT NULL,
+      modified_at TEXT NOT NULL,
+      indexed_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_skills_provider_project
+      ON skills(provider, project_id, name COLLATE NOCASE);
+    CREATE TABLE IF NOT EXISTS skill_favorites (
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, skill_id)
+    );
   `);
   dropEventsForeignKey(db);
   addColumn(db, "conversations", "effort TEXT NULL");

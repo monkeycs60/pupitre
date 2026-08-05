@@ -23,6 +23,7 @@ import {
   TestScopeAlreadyRunningError,
   type TesterRunner,
 } from "./testing";
+import type { SkillInventory, SkillProvider } from "./skills";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -54,6 +55,7 @@ export interface ServerDeps {
   debriefs: DebriefRunner;
   git: GitProjectService;
   testers: TesterRunner;
+  skills: SkillInventory;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -407,11 +409,59 @@ export function createServer(deps: ServerDeps) {
           const name = requiredString(body, "name");
           const path = requiredString(body, "path");
           if (!existsSync(path)) throw new HttpError(400, "path inexistant");
+          let project: ReturnType<ProjectStore["create"]>;
           try {
-            return json(deps.projects.create({ name, path }), 201);
+            project = deps.projects.create({ name, path });
           } catch {
             throw new HttpError(409, "projet déjà existant");
           }
+          deps.skills.refresh();
+          return json(project, 201);
+        }
+
+        if (request.method === "GET" && pathname === "/api/skills") {
+          const provider = url.searchParams.get("provider");
+          if (provider !== null && provider !== "claude" && provider !== "codex") {
+            throw new HttpError(400, "provider de skill invalide");
+          }
+          return json(deps.skills.list({
+            query: url.searchParams.get("q") ?? undefined,
+            provider: (provider as SkillProvider | null) ?? undefined,
+            projectId: url.searchParams.get("projectId") ?? undefined,
+          }));
+        }
+
+        if (request.method === "POST" && pathname === "/api/skills/refresh") {
+          return json({ count: deps.skills.refresh() });
+        }
+
+        const skillId = routeId(pathname, /^\/api\/skills\/([^/]+)$/);
+        if (request.method === "GET" && skillId !== null) {
+          const skill = deps.skills.get(skillId, url.searchParams.get("projectId") ?? undefined);
+          if (!skill) throw new HttpError(404, "skill inconnu");
+          return json(skill);
+        }
+
+        const projectSkillFavorite = pathname.match(
+          /^\/api\/projects\/([^/]+)\/skills\/([^/]+)\/favorite$/,
+        );
+        if (request.method === "PUT" && projectSkillFavorite) {
+          let projectId: string;
+          let favoriteSkillId: string;
+          try {
+            projectId = decodeURIComponent(projectSkillFavorite[1] ?? "");
+            favoriteSkillId = decodeURIComponent(projectSkillFavorite[2] ?? "");
+          } catch {
+            throw new HttpError(400, "identifiant invalide");
+          }
+          const body = await readObject(request);
+          if (typeof body.favorite !== "boolean") {
+            throw new HttpError(400, "champ favorite invalide");
+          }
+          if (!deps.skills.setFavorite(projectId, favoriteSkillId, body.favorite)) {
+            throw new HttpError(404, "projet ou skill inconnu");
+          }
+          return empty(204);
         }
 
         const projectGitDiffId = routeId(

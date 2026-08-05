@@ -21,6 +21,7 @@ import { DebriefRunner } from "../src/debriefs";
 import { GitProjectService } from "../src/git";
 import { TestingStore } from "../src/stores/testing";
 import { TesterRunner } from "../src/testing";
+import { SkillInventory } from "../src/skills";
 
 interface TestServer {
   baseUrl: string;
@@ -236,6 +237,8 @@ cat "${fixture}"
     }] }),
     runner.activity,
   );
+  const skills = new SkillInventory(db, projects, { homeDir: dir });
+  skills.refresh();
   const server = createServer({
     port: 0,
     projects,
@@ -251,6 +254,7 @@ cat "${fixture}"
     debriefs,
     git: gitView,
     testers,
+    skills,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -292,6 +296,43 @@ test("health, création et liste des projets, avec 400 pour un path inexistant",
   expect(await list.json()).toEqual([
     expect.objectContaining({ id: project.id, name: "test", path: tmpdir() }),
   ]);
+});
+
+test("API skills : refresh, filtres, détail et favori par projet", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const projectPath = mkdtempSync(join(tmpdir(), "pupitre-server-skills-"));
+  writeFileSync(join(projectPath, "AGENTS.md"), "# Consignes API\n\nSkill indexé du projet.\n");
+  const project = await createProject(projectPath);
+
+  const refresh = await postJson("/api/skills/refresh", {});
+  expect(refresh.status).toBe(200);
+  expect(await refresh.json()).toEqual({ count: 1 });
+
+  const list = await fetch(
+    `${current.baseUrl}/api/skills?provider=codex&projectId=${project.id}&q=consignes`,
+  );
+  expect(list.status).toBe(200);
+  const skills = await list.json() as Array<{ id: string; favorite: boolean; content_md?: string }>;
+  expect(skills).toHaveLength(1);
+  expect(skills[0]?.favorite).toBe(false);
+  expect(skills[0]?.content_md).toBeUndefined();
+  const skillId = skills[0]?.id;
+  if (!skillId) throw new Error("skill API absent");
+
+  const favorite = await putJson(
+    `/api/projects/${project.id}/skills/${skillId}/favorite`,
+    { favorite: true },
+  );
+  expect(favorite.status).toBe(204);
+  const detail = await fetch(
+    `${current.baseUrl}/api/skills/${skillId}?projectId=${project.id}`,
+  );
+  expect(detail.status).toBe(200);
+  expect(await detail.json()).toMatchObject({
+    id: skillId,
+    favorite: true,
+    content_md: "# Consignes API\n\nSkill indexé du projet.\n",
+  });
 });
 
 test("expose le graphe Git et un diff entre deux références", async () => {
