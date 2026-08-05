@@ -21,6 +21,7 @@ import { createDebrief, createTestInventory } from './api'
 import type { SkillSummary } from './types'
 import { CostsView } from './CostsView'
 import { MemoryView } from './MemoryView'
+import { ResumeCommandButton } from './ResumeCommandButton'
 import type { WorkspaceView } from './types'
 
 function App() {
@@ -351,6 +352,7 @@ function App() {
               </div>
               {selectedConversation !== null ? (
                 <div className="header-actions">
+                  <ResumeCommandButton conversation={selectedConversation} />
                   <button
                     type="button"
                     className="header-action"
