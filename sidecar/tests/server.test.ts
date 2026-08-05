@@ -914,10 +914,12 @@ test("handoff cross-provider résume, crée et seed une conversation liée", asy
     id: string;
     continued_from: string;
     provider: string;
+    handoff_pending: boolean;
   };
   expect(continuation).toMatchObject({
     continued_from: source.id,
     provider: "codex",
+    handoff_pending: false,
   });
 
   const events = await fetch(

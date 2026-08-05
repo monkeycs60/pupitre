@@ -35,7 +35,11 @@ function git(...args: string[]): string {
 }
 
 beforeEach(() => {
-  for (const key of ["PUPITRE_CODEX_BIN", "PUPITRE_CODEX_MODE"]) {
+  for (const key of [
+    "PUPITRE_CODEX_BIN",
+    "PUPITRE_CODEX_MODE",
+    "PUPITRE_REVIEW_DIFF_MAX_BYTES",
+  ]) {
     previousEnv[key] = process.env[key];
   }
   dir = mkdtempSync(join(tmpdir(), "pupitre-reviews-"));
@@ -274,6 +278,95 @@ cat "${join(import.meta.dir, "fixtures/review-scan-codex.jsonl")}"
     openRedCount: 0,
     openFlagCount: 0,
     pendingReviewCount: 0,
+  });
+});
+
+test("la portée conversation couvre plusieurs commits et tout le worktree", async () => {
+  const project = projects.create({ name: "portée", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "implémente plusieurs étapes",
+  });
+  writeFileSync(join(repo, "src/one.ts"), "export const one = 1\n");
+  git("add", ".");
+  git("commit", "-qm", "première étape");
+  const first = git("rev-parse", "HEAD");
+  writeFileSync(join(repo, "src/two.ts"), "export const two = 2\n");
+  git("add", ".");
+  git("commit", "-qm", "deuxième étape");
+  const second = git("rev-parse", "HEAD");
+  const now = new Date().toISOString();
+  db.query(`
+    INSERT INTO commit_links (commit_sha, project_id, conversation_id, created_at)
+    VALUES (?, ?, ?, ?), (?, ?, ?, ?)
+  `).run(first, project.id, conversation.id, now, second, project.id, conversation.id, now);
+  writeFileSync(join(repo, "src/two.ts"), "export const two = 22\n");
+  writeFileSync(join(repo, "src/staged.ts"), "export const staged = true\n");
+  git("add", "src/staged.ts");
+  writeFileSync(join(repo, "src/untracked.ts"), "export const untracked = true\n");
+
+  const runner = new ReviewRunner(
+    store,
+    projects,
+    conversations,
+    quotas,
+    async () => '{"flags":[]}',
+  );
+  const review = runner.start({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "CONVERSATION",
+    gitRefHead: "WORKTREE",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+
+  const completed = await runner.wait(review.id);
+  expect(completed).toMatchObject({
+    status: "done",
+    git_ref_base: git("rev-parse", `${first}^`),
+    git_ref_head: "WORKTREE",
+  });
+  expect(completed!.diff_text).toContain("src/one.ts");
+  expect(completed!.diff_text).toContain("src/two.ts");
+  expect(completed!.diff_text).toContain("src/staged.ts");
+  expect(completed!.diff_text).toContain("src/untracked.ts");
+});
+
+test("interrompt le diff Gardien dès que la borne de lecture est dépassée", async () => {
+  const project = projects.create({ name: "diff borné", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "génère un gros fichier",
+  });
+  process.env.PUPITRE_REVIEW_DIFF_MAX_BYTES = "1024";
+  writeFileSync(join(repo, "src/large.ts"), `${"x".repeat(4_000)}\n`);
+
+  const runner = new ReviewRunner(
+    store,
+    projects,
+    conversations,
+    quotas,
+    async () => '{"flags":[]}',
+  );
+  const review = runner.start({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "CONVERSATION",
+    gitRefHead: "WORKTREE",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+
+  expect(await runner.wait(review.id)).toMatchObject({
+    status: "error",
+    error: expect.stringContaining("diff trop volumineux"),
   });
 });
 

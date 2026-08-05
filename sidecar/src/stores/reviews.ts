@@ -129,6 +129,16 @@ export class ReviewStore {
     return rows.map((row) => this.hydrate(row));
   }
 
+  linkedCommitShas(projectId: string, conversationId: string): string[] {
+    const rows = this.db.query(`
+      SELECT commit_sha
+      FROM commit_links
+      WHERE project_id = ? AND conversation_id = ?
+      ORDER BY created_at, rowid
+    `).all(projectId, conversationId) as Array<{ commit_sha: string }>;
+    return rows.map((row) => row.commit_sha);
+  }
+
   listTestingFlags(projectId: string): ReviewFlag[] {
     return this.listByProject(projectId).flatMap((review) => review.flags).filter((flag) => {
       if (flag.status !== "open" && flag.status !== "countered") return false;

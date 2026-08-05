@@ -244,7 +244,9 @@ function App() {
               ) : null}
             </header>
             <Chat
-              key={selectedConversation?.id ?? `new-${selectedProject.id}`}
+              key={selectedConversation === null
+                ? `chat-new-${selectedProject.id}`
+                : `chat-${selectedConversation.id}`}
               events={selectedConversation === null ? [] : events}
               connection={connection}
               retryAt={retryAt}
@@ -257,7 +259,7 @@ function App() {
             />
             {showSwitchModel && selectedConversation !== null ? (
               <SwitchModelModal
-                key={selectedConversation.id}
+                key={`switch-model-${selectedConversation.id}`}
                 conversation={selectedConversation}
                 events={events}
                 onClose={() => setShowSwitchModel(false)}
@@ -267,7 +269,7 @@ function App() {
             ) : null}
             {showReviewDialog && selectedConversation !== null ? (
               <ReviewDialog
-                key={selectedConversation.id}
+                key={`review-${selectedConversation.id}`}
                 conversation={selectedConversation}
                 project={selectedProject}
                 onClose={() => setShowReviewDialog(false)}

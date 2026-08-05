@@ -27,6 +27,7 @@ if (process.argv.includes("--conductor-mcp")) {
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
   const conversations = new ConversationStore(db);
+  conversations.sweepPendingHandoffs();
   const media = new MediaStore(dir);
   const events = new ConversationEventBus();
   const quotas = new QuotaTracker(db);

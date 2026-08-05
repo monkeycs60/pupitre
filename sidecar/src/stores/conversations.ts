@@ -6,6 +6,7 @@ export interface Conversation {
   model: string; effort: string | null; speed: "standard" | "fast" | null;
   cli_session_id: string | null; pinned: boolean;
   continued_from: string | null;
+  handoff_pending: boolean;
   /** Reçoit le bridge MCP `conductor` (délégation de sous-tâches). */
   orchestrator: boolean;
   created_at: string; updated_at: string;
@@ -25,6 +26,8 @@ export class ConversationStore {
     /** Défaut ON : toute nouvelle conversation peut déléguer. */
     orchestrator?: boolean;
     continuedFrom?: string | null;
+    /** Vrai jusqu'au statut terminal réussi du premier tour de continuation. */
+    handoffPending?: boolean;
     firstMessage: string;
   }): Conversation {
     const id = crypto.randomUUID();
@@ -35,8 +38,8 @@ export class ConversationStore {
     this.db.query(
       `INSERT INTO conversations
          (id, project_id, title, provider, model, effort, speed, orchestrator,
-          continued_from, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          continued_from, handoff_pending, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -47,6 +50,7 @@ export class ConversationStore {
       input.speed ?? null,
       input.orchestrator === false ? 0 : 1,
       input.continuedFrom ?? null,
+      input.handoffPending ? 1 : 0,
       now,
       now,
     );
@@ -55,14 +59,24 @@ export class ConversationStore {
 
   get(id: string): Conversation | null {
     const row = this.db.query("SELECT * FROM conversations WHERE id = ?").get(id) as any;
-    return row ? { ...row, pinned: !!row.pinned, orchestrator: !!row.orchestrator } : null;
+    return row ? {
+      ...row,
+      pinned: !!row.pinned,
+      orchestrator: !!row.orchestrator,
+      handoff_pending: !!row.handoff_pending,
+    } : null;
   }
 
   listByProject(projectId: string): Conversation[] {
     const rows = this.db.query(
       "SELECT * FROM conversations WHERE project_id = ? ORDER BY pinned DESC, updated_at DESC"
     ).all(projectId) as any[];
-    return rows.map((r) => ({ ...r, pinned: !!r.pinned, orchestrator: !!r.orchestrator }));
+    return rows.map((r) => ({
+      ...r,
+      pinned: !!r.pinned,
+      orchestrator: !!r.orchestrator,
+      handoff_pending: !!r.handoff_pending,
+    }));
   }
 
   setPinned(id: string, pinned: boolean): void {
@@ -73,9 +87,9 @@ export class ConversationStore {
   deleteFailedContinuation(id: string): boolean {
     const remove = this.db.transaction(() => {
       const row = this.db.query(
-        "SELECT continued_from FROM conversations WHERE id = ?",
-      ).get(id) as { continued_from: string | null } | null;
-      if (!row?.continued_from) return false;
+        "SELECT continued_from, handoff_pending FROM conversations WHERE id = ?",
+      ).get(id) as { continued_from: string | null; handoff_pending: number } | null;
+      if (!row?.continued_from || !row.handoff_pending) return false;
       const subtasks = this.db.query(
         "SELECT id FROM subtasks WHERE conversation_id = ?",
       ).all(id) as Array<{ id: string }>;
@@ -89,6 +103,26 @@ export class ConversationStore {
       return this.db.query("DELETE FROM conversations WHERE id = ?").run(id).changes === 1;
     });
     return remove();
+  }
+
+  completeHandoff(id: string): boolean {
+    return this.db.query(`
+      UPDATE conversations
+      SET handoff_pending = 0, updated_at = ?
+      WHERE id = ? AND handoff_pending = 1
+    `).run(new Date().toISOString(), id).changes === 1;
+  }
+
+  /** Nettoie au boot les continuations dont le premier tour n'a jamais abouti. */
+  sweepPendingHandoffs(): number {
+    const rows = this.db.query(`
+      SELECT id FROM conversations WHERE handoff_pending = 1
+    `).all() as Array<{ id: string }>;
+    let removed = 0;
+    for (const row of rows) {
+      if (this.deleteFailedContinuation(row.id)) removed += 1;
+    }
+    return removed;
   }
 
   setCliSessionId(id: string, cliSessionId: string): void {

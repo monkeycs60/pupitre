@@ -155,6 +155,7 @@ export function openDb(dir: string = dataDir()): Database {
   // Défaut ON — les conversations existantes en héritent aussi.
   addColumn(db, "conversations", "orchestrator INTEGER NOT NULL DEFAULT 1");
   addColumn(db, "conversations", "continued_from TEXT NULL");
+  addColumn(db, "conversations", "handoff_pending INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "projects", "default_preset_id TEXT NULL");
   addColumn(db, "projects", "gardien_mode TEXT NOT NULL DEFAULT 'informatif'");
   addColumn(db, "projects", "auto_counter_red INTEGER NOT NULL DEFAULT 0");

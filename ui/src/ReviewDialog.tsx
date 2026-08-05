@@ -32,8 +32,8 @@ export function ReviewDialog({
   const [model, setModel] = useState(initial.model)
   const [effort, setEffort] = useState(initial.effort)
   const [codeProvider, setCodeProvider] = useState<Provider>(conversation.provider)
-  const [gitRefBase, setGitRefBase] = useState('HEAD^')
-  const [gitRefHead, setGitRefHead] = useState('HEAD')
+  const [gitRefBase, setGitRefBase] = useState('CONVERSATION')
+  const [gitRefHead, setGitRefHead] = useState('WORKTREE')
   const [presets, setPresets] = useState<Preset[]>([])
   const [selectedPresetId, setSelectedPresetId] = useState(project.default_preset_id ?? '')
   const [remember, setRemember] = useState(false)
@@ -212,7 +212,9 @@ export function ReviewDialog({
             Le Gardien lit le diff en sandbox lecture seule. Le pré-découpage est
             déterministe ; seul le modèle fort juge les risques. Si un sub-agent a
             écrit le diff, indiquez son provider comme auteur pour garantir un
-            contre-avis réellement croisé.
+            contre-avis réellement croisé. Par défaut, « CONVERSATION → WORKTREE »
+            couvre tous les commits attribués à ce fil ainsi que les changements
+            indexés, non indexés et les nouveaux fichiers.
           </p>
           {error ? <p className="modal-error" role="alert">{error}</p> : null}
 

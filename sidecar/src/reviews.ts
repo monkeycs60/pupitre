@@ -20,6 +20,8 @@ import type { SubtaskResult, SubtaskRunner } from "./subtasks";
 
 const DEFAULT_ZONE_CHARS = 48_000;
 const DEFAULT_DIFF_MAX_BYTES = 2 * 1024 * 1024;
+const CONVERSATION_BASE_REF = "CONVERSATION";
+const WORKTREE_HEAD_REF = "WORKTREE";
 const SEVERITIES = new Set<ReviewSeverity>(["red", "orange", "grey"]);
 
 export interface ReviewScanInput {
@@ -198,22 +200,23 @@ export class ReviewRunner {
   }
 
   private async execute(id: string, cwd: string, input: StartReviewInput): Promise<void> {
-    const [base, head] = await Promise.all([
-      resolveGitRef(cwd, input.gitRefBase),
-      resolveGitRef(cwd, input.gitRefHead),
-    ]);
-    const diff = await git(cwd, [
-      "diff",
-      "--no-ext-diff",
-      "--unified=3",
-      "--find-renames",
-      `${base}...${head}`,
-      "--",
-    ]);
     const maxBytes = positiveEnv("PUPITRE_REVIEW_DIFF_MAX_BYTES", DEFAULT_DIFF_MAX_BYTES);
-    if (Buffer.byteLength(diff) > maxBytes) {
-      throw new Error(`diff trop volumineux pour le Gardien (${Buffer.byteLength(diff)} octets)`);
-    }
+    const base = input.gitRefBase === CONVERSATION_BASE_REF
+      ? await this.conversationBase(cwd, input.projectId, input.conversationId)
+      : await resolveGitRef(cwd, input.gitRefBase);
+    const head = input.gitRefHead === WORKTREE_HEAD_REF
+      ? WORKTREE_HEAD_REF
+      : await resolveGitRef(cwd, input.gitRefHead);
+    const diff = head === WORKTREE_HEAD_REF
+      ? await worktreeDiff(cwd, base, maxBytes)
+      : await gitLimited(cwd, [
+          "diff",
+          "--no-ext-diff",
+          "--unified=3",
+          "--find-renames",
+          `${base}...${head}`,
+          "--",
+        ], maxBytes);
     this.store.setDiff(id, base, head, diff);
     if (diff.trim() === "") {
       this.store.complete(id, []);
@@ -241,6 +244,32 @@ export class ReviewRunner {
         .filter((flag) => flag.severity === "red")
         .map((flag) => flag.id) ?? [];
       if (redIds.length > 0) this.startCounterOpinions(redIds);
+    }
+  }
+
+  private async conversationBase(
+    cwd: string,
+    projectId: string,
+    conversationId: string,
+  ): Promise<string> {
+    const head = await resolveGitRef(cwd, "HEAD");
+    const linked = this.store.linkedCommitShas(projectId, conversationId);
+    const reachable: string[] = [];
+    for (const sha of linked) {
+      if (await gitSucceeds(cwd, ["merge-base", "--is-ancestor", sha, head])) {
+        reachable.push(sha);
+      }
+    }
+    if (reachable.length === 0) return head;
+
+    const common = reachable.length === 1
+      ? reachable[0]!
+      : (await git(cwd, ["merge-base", "--octopus", ...reachable])).trim();
+    if (!reachable.includes(common)) return common;
+    try {
+      return await resolveGitRef(cwd, `${common}^`);
+    } catch {
+      return (await git(cwd, ["hash-object", "-t", "tree", "/dev/null"])).trim();
     }
   }
 
@@ -798,6 +827,100 @@ async function git(cwd: string, args: string[]): Promise<string> {
     throw new Error(`git ${args[0]} a échoué : ${stderr.trim() || `code ${exitCode}`}`);
   }
   return stdout;
+}
+
+async function gitSucceeds(cwd: string, args: string[]): Promise<boolean> {
+  const child = Bun.spawn(["git", ...args], {
+    cwd,
+    stdout: "ignore",
+    stderr: "ignore",
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+  });
+  return await child.exited === 0;
+}
+
+async function gitLimited(
+  cwd: string,
+  args: string[],
+  maxBytes: number,
+  acceptedExitCodes: readonly number[] = [0],
+): Promise<string> {
+  const child = Bun.spawn(["git", ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+  });
+  const stderrPromise = new Response(child.stderr).text();
+  const reader = child.stdout.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let exceeded = false;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        exceeded = true;
+        child.kill();
+        break;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const [exitCode, stderr] = await Promise.all([child.exited, stderrPromise]);
+  if (exceeded) throw new Error(`diff trop volumineux pour le Gardien (plus de ${maxBytes} octets)`);
+  if (!acceptedExitCodes.includes(exitCode)) {
+    throw new Error(`git ${args[0]} a échoué : ${stderr.trim() || `code ${exitCode}`}`);
+  }
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(output);
+}
+
+async function worktreeDiff(cwd: string, base: string, maxBytes: number): Promise<string> {
+  const tracked = await gitLimited(cwd, [
+    "diff",
+    "--no-ext-diff",
+    "--unified=3",
+    "--find-renames",
+    base,
+    "--",
+  ], maxBytes);
+  let used = Buffer.byteLength(tracked);
+  const untrackedOutput = await gitLimited(
+    cwd,
+    ["ls-files", "--others", "--exclude-standard", "-z"],
+    maxBytes,
+  );
+  const untracked = untrackedOutput.split("\0").filter(Boolean);
+  const parts = tracked ? [tracked] : [];
+  for (const path of untracked) {
+    const separator = parts.length > 0 ? "\n" : "";
+    const remaining = maxBytes - used - Buffer.byteLength(separator);
+    if (remaining <= 0) {
+      throw new Error(`diff trop volumineux pour le Gardien (plus de ${maxBytes} octets)`);
+    }
+    const patch = await gitLimited(cwd, [
+      "diff",
+      "--no-index",
+      "--no-ext-diff",
+      "--unified=3",
+      "--",
+      "/dev/null",
+      path,
+    ], remaining, [0, 1]);
+    parts.push(patch);
+    used += Buffer.byteLength(separator) + Buffer.byteLength(patch);
+  }
+  return parts.join("\n");
 }
 
 function positiveEnv(key: string, fallback: number): number {

@@ -109,6 +109,7 @@ test("supprime une continuation ratée avec ses sous-tâches et tous leurs évé
     provider: "codex",
     model: "gpt-5.6-sol",
     continuedFrom: source.id,
+    handoffPending: true,
     firstMessage: "Suite",
   });
   convs.appendEvent(continuation.id, { type: "status", state: "error" });
@@ -159,11 +160,48 @@ test("migre une base existante et la migration reste idempotente", () => {
     type: string;
     notnull: number;
   }>).find((column) => column.name === "continued_from");
+  const handoffPendingColumn = (reopened.query("PRAGMA table_info(conversations)").all() as Array<{
+    name: string;
+    type: string;
+    notnull: number;
+  }>).find((column) => column.name === "handoff_pending");
 
   expect(effortColumn).toMatchObject({ type: "TEXT", notnull: 0 });
   expect(speedColumn).toMatchObject({ type: "TEXT", notnull: 0 });
   expect(continuedFromColumn).toMatchObject({ type: "TEXT", notnull: 0 });
+  expect(handoffPendingColumn).toMatchObject({ type: "INTEGER", notnull: 1 });
   reopened.close();
+});
+
+test("nettoie au redémarrage uniquement les handoffs restés en attente", () => {
+  const source = convs.create({
+    projectId,
+    provider: "claude",
+    model: "sonnet",
+    firstMessage: "Source",
+  });
+  const interrupted = convs.create({
+    projectId,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    continuedFrom: source.id,
+    handoffPending: true,
+    firstMessage: "Suite interrompue",
+  });
+  const completed = convs.create({
+    projectId,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    continuedFrom: source.id,
+    handoffPending: true,
+    firstMessage: "Suite réussie",
+  });
+  expect(convs.completeHandoff(completed.id)).toBe(true);
+
+  expect(convs.sweepPendingHandoffs()).toBe(1);
+  expect(convs.get(interrupted.id)).toBeNull();
+  expect(convs.get(completed.id)).toMatchObject({ handoff_pending: false });
+  expect(convs.get(source.id)).not.toBeNull();
 });
 
 test("appendEvent + listEvents rejouent dans l'ordre", () => {

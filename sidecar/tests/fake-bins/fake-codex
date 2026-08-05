@@ -1,4 +1,30 @@
 #!/usr/bin/env bash
-# Rejoue la fixture ; enregistre les args reçus pour les assertions.
+# Rejoue la fixture de base ou une réponse structurée déterministe pour les
+# parcours M3 ; enregistre les args reçus pour les assertions.
 echo "$@" > "${FAKE_CODEX_ARGS_FILE:-/dev/null}"
-cat "$(dirname "$0")/../fixtures/codex-basic.jsonl"
+prompt="${!#}"
+
+structured_turn() {
+  printf '%s\n' '{"type":"thread.started","thread_id":"fake-m3-thread"}'
+  printf '%s\n' '{"type":"turn.started"}'
+  printf '{"type":"item.completed","item":{"id":"fake-answer","type":"agent_message","text":%s}}\n' "$1"
+  printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":120,"output_tokens":40}}'
+}
+
+case "$prompt" in
+  *"Tu es le Gardien de Pupitre"*)
+    structured_turn '"{\"flags\":[]}"'
+    ;;
+  *"produis un inventaire concret"*)
+    structured_turn '"{\"items\":[{\"title\":\"Smoke UI M3\",\"description\":\"Vérifier le parcours principal dans le navigateur.\",\"methods\":[{\"kind\":\"browser\",\"label\":\"Parcours Pupitre\",\"instructions\":\"Ouvrir les vues Conversation, Git, Gardien et Tester.\"}],\"guardian_flag_ids\":[]}] }"'
+    ;;
+  *"Tu exécutes un scope de validation"*)
+    structured_turn '"Parcours navigateur déterministe terminé.\n<test-result>{\"verdict\":\"passed\",\"summary\":\"Les vues M3 demandées sont accessibles.\"}</test-result>"'
+    ;;
+  *"Tu produis un débrief opérationnel"*|*"Fusionne les débriefs suivants"*)
+    structured_turn '"## Ce qui a été construit\nParcours M3 vérifié [événement #1].\n## Décisions et pourquoi\nValidation sans quota provider [événement #1].\n## Alternatives écartées\nAucune.\n## Implications\nLe smoke reste reproductible.\n## Points ouverts\nAucun."'
+    ;;
+  *)
+    cat "$(dirname "$0")/../fixtures/codex-basic.jsonl"
+    ;;
+esac

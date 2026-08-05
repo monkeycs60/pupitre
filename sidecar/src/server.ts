@@ -764,6 +764,7 @@ export function createServer(deps: ServerDeps) {
                 speed,
                 orchestrator,
                 continuedFrom: source.id,
+                handoffPending: true,
                 firstMessage: `Suite — ${source.title}`,
               });
               const seed = [
@@ -778,6 +779,9 @@ export function createServer(deps: ServerDeps) {
                 const outcome = await deps.runner.runTurn(continuation.id, seed, []);
                 if (outcome.state === "error") {
                   throw new Error(outcome.error ?? "échec du provider cible");
+                }
+                if (!deps.conversations.completeHandoff(continuation.id)) {
+                  throw new Error("état de passation introuvable après le premier tour");
                 }
                 return json(deps.conversations.get(continuation.id), 201);
               } catch (error) {
@@ -903,10 +907,10 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(400, "codeProvider invalide");
           }
           const gitRefBase = body.gitRefBase === undefined
-            ? "HEAD^"
+            ? "CONVERSATION"
             : requiredString(body, "gitRefBase");
           const gitRefHead = body.gitRefHead === undefined
-            ? "HEAD"
+            ? "WORKTREE"
             : requiredString(body, "gitRefHead");
           try {
             return json(deps.reviews.start({
