@@ -80,6 +80,7 @@ test("le scheduler lance une conversation normale taguée et notifie la fin", as
   const run = routines.runs(routine.id)[0];
   expect(run).toMatchObject({ status: "done", error: null });
   expect(run?.tokens).toBeGreaterThan(0);
+  const completedTokens = run!.tokens;
   expect(run?.conversation_id).toBeString();
   expect(conversations.get(run!.conversation_id!)).toMatchObject({
     routine_id: routine.id,
@@ -89,6 +90,12 @@ test("le scheduler lance une conversation normale taguée et notifie la fin", as
     title: "Routine terminée · Bilan minute",
     conversation_id: run?.conversation_id,
   });
+  conversations.appendEvent(run!.conversation_id!, {
+    type: "usage",
+    inputTokens: 10_000,
+    outputTokens: 5_000,
+  });
+  expect(routines.runs(routine.id)[0]?.tokens).toBe(completedTokens);
 });
 
 test("un redémarrage clôt les passages restés en cours", () => {

@@ -123,7 +123,17 @@ export class RoutineStore {
   constructor(private readonly db: Database) {
     this.db.query(`
       UPDATE routine_runs
-      SET status = 'error', error = 'interrompu (sidecar redémarré)', completed_at = ?
+      SET status = 'error', error = 'interrompu (sidecar redémarré)', completed_at = ?,
+        tokens = COALESCE((
+          SELECT SUM(
+            COALESCE(json_extract(events.payload, '$.inputTokens'), 0)
+            + COALESCE(json_extract(events.payload, '$.outputTokens'), 0)
+          )
+          FROM events
+          WHERE events.conversation_id = routine_runs.conversation_id
+            AND json_valid(events.payload)
+            AND json_extract(events.payload, '$.type') = 'usage'
+        ), 0)
       WHERE status = 'running'
     `).run(new Date().toISOString());
   }
@@ -148,18 +158,7 @@ export class RoutineStore {
 
   runs(routineId: string): RoutineRun[] {
     return this.db.query(`
-      SELECT routine_runs.*,
-        COALESCE((
-          SELECT SUM(
-            COALESCE(json_extract(events.payload, '$.inputTokens'), 0)
-            + COALESCE(json_extract(events.payload, '$.outputTokens'), 0)
-          )
-          FROM events
-          WHERE events.conversation_id = routine_runs.conversation_id
-            AND json_valid(events.payload)
-            AND json_extract(events.payload, '$.type') = 'usage'
-        ), 0) AS tokens
-      FROM routine_runs
+      SELECT * FROM routine_runs
       WHERE routine_id = ?
       ORDER BY started_at DESC LIMIT 50
     `)
@@ -227,7 +226,19 @@ export class RoutineStore {
 
   complete(runId: string, status: "done" | "error", error?: string): void {
     this.db.query(`
-      UPDATE routine_runs SET status = ?, error = ?, completed_at = ? WHERE id = ?
+      UPDATE routine_runs
+      SET status = ?, error = ?, completed_at = ?,
+        tokens = COALESCE((
+          SELECT SUM(
+            COALESCE(json_extract(events.payload, '$.inputTokens'), 0)
+            + COALESCE(json_extract(events.payload, '$.outputTokens'), 0)
+          )
+          FROM events
+          WHERE events.conversation_id = routine_runs.conversation_id
+            AND json_valid(events.payload)
+            AND json_extract(events.payload, '$.type') = 'usage'
+        ), 0)
+      WHERE id = ?
     `).run(status, error ?? null, new Date().toISOString(), runId);
   }
 }

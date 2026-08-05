@@ -278,6 +278,26 @@ export function openDb(dir: string = dataDir()): Database {
     `);
   }
   addColumn(db, "test_scopes", "images_json TEXT NOT NULL DEFAULT '[]'");
+  const addedRoutineTokens = addColumn(
+    db,
+    "routine_runs",
+    "tokens INTEGER NOT NULL DEFAULT 0",
+  );
+  if (addedRoutineTokens) {
+    db.exec(`
+      UPDATE routine_runs
+      SET tokens = COALESCE((
+        SELECT SUM(
+          COALESCE(json_extract(events.payload, '$.inputTokens'), 0)
+          + COALESCE(json_extract(events.payload, '$.outputTokens'), 0)
+        )
+        FROM events
+        WHERE events.conversation_id = routine_runs.conversation_id
+          AND json_valid(events.payload)
+          AND json_extract(events.payload, '$.type') = 'usage'
+      ), 0)
+    `);
+  }
   const addedReviewProvider = addColumn(
     db,
     "presets",
