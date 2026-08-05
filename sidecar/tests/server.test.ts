@@ -28,6 +28,7 @@ import { WorkflowStore } from "../src/stores/workflows";
 import { NotificationStore } from "../src/stores/notifications";
 import { RoutineScheduler, RoutineStore } from "../src/routines";
 import { SearchIndex } from "../src/search";
+import { CostStore } from "../src/costs";
 
 interface TestServer {
   baseUrl: string;
@@ -283,6 +284,7 @@ cat "${fixture}"
     routineStore,
     routines,
     search: new SearchIndex(db),
+    costs: new CostStore(db),
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

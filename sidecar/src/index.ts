@@ -24,6 +24,7 @@ import { WorkflowStore } from "./stores/workflows";
 import { NotificationStore } from "./stores/notifications";
 import { RoutineScheduler, RoutineStore } from "./routines";
 import { SearchIndex } from "./search";
+import { CostStore } from "./costs";
 
 if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
@@ -47,6 +48,7 @@ if (process.argv.includes("--conductor-mcp")) {
   const notifications = new NotificationStore(db);
   const routineStore = new RoutineStore(db);
   const search = new SearchIndex(db);
+  const costs = new CostStore(db);
   const git = new GitProjectService(db, projects);
   const configuredPort = process.env.PUPITRE_PORT;
   const port = configuredPort === undefined ? 4820 : Number(configuredPort);
@@ -135,6 +137,7 @@ if (process.argv.includes("--conductor-mcp")) {
     routines,
     notifications,
     search,
+    costs,
   });
   routines.start();
 

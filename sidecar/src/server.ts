@@ -31,6 +31,7 @@ import type { NotificationStore } from "./stores/notifications";
 import type { RoutineInput, RoutineScheduler, RoutineStore } from "./routines";
 import { fleetSnapshot } from "./fleet";
 import type { SearchIndex } from "./search";
+import type { CostStore } from "./costs";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -70,6 +71,7 @@ export interface ServerDeps {
   routines: RoutineScheduler;
   notifications: NotificationStore;
   search: SearchIndex;
+  costs: CostStore;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -762,6 +764,17 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(404, "projet inconnu");
           }
           return json(deps.conversations.listByProject(projectConversationsId));
+        }
+
+        const projectCostsId = routeId(pathname, /^\/api\/projects\/([^/]+)\/costs$/);
+        if (request.method === "GET" && projectCostsId !== null) {
+          if (!deps.projects.get(projectCostsId)) throw new HttpError(404, "projet inconnu");
+          const month = url.searchParams.get("month") ?? new Date().toISOString().slice(0, 7);
+          try {
+            return json(deps.costs.projectMonth(projectCostsId, month));
+          } catch {
+            throw new HttpError(400, "mois invalide");
+          }
         }
 
         const projectWorkflowsId = routeId(
