@@ -15,6 +15,12 @@ Tu reprends le développement de Pupitre. À lire avant de commencer :
 
 ## État au 2026-08-05
 
+- **M4-L terminé et review milestone propre** : workflows épinglés par projet,
+  scheduler cron interne, conversations taguées routine, historique avec tokens,
+  activation et lancement manuel, notifications natives de fin de routine et de
+  tâche longue avec seuil réglable. La review ciblée a rendu le lancement manuel
+  non bloquant, préservé le planning des routines en pause, clôturé les runs
+  orphelins au redémarrage et empêché le replay d'anciennes notifications.
 - **M4-K terminé et review milestone propre** : inventaire unifié avec watcher,
   bibliothèque filtrable et favoris projet, invocation `$skill` cross-provider,
   suggestions lexicales (Luna fast uniquement pour une ambiguïté avec panneau

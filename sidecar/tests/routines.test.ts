@@ -90,3 +90,29 @@ test("le scheduler lance une conversation normale taguée et notifie la fin", as
     conversation_id: run?.conversation_id,
   });
 });
+
+test("un redémarrage clôt les passages restés en cours", () => {
+  const routine = routines.save({
+    projectId,
+    name: "Interrompue",
+    schedule: "* * * * *",
+    workflowId: null,
+    prompt: "Continue.",
+    presetId: null,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "low",
+    speed: "fast",
+    orchestrator: false,
+    enabled: true,
+  });
+  routines.reserve(routine, new Date());
+
+  const reopened = new RoutineStore(db);
+
+  expect(reopened.runs(routine.id)[0]).toMatchObject({
+    status: "error",
+    error: "interrompu (sidecar redémarré)",
+    completed_at: expect.any(String),
+  });
+});

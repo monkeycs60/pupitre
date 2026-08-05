@@ -160,7 +160,7 @@ lancer le sidecar avec `PUPITRE_CODEX_USER_MCPS=1`.
 ## Tests
 
 ```bash
-cd sidecar && bun test        # 280 tests (fixtures réelles des CLIs, fake bins)
+cd sidecar && bun test        # 287 tests (fixtures réelles des CLIs, fake bins)
 cd sidecar && bun run typecheck
 cd ui && bunx tsc --noEmit && bun run build
 ```

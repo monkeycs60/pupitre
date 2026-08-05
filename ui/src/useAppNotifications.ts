@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { listNotifications } from './api'
+import { getNotificationCursor, listNotifications } from './api'
 import type { AppNotification } from './types'
 
 const CURSOR_KEY = 'pupitre.notification-cursor'
@@ -40,16 +40,16 @@ export function useAppNotifications(): void {
 
     async function poll() {
       try {
-        const items = await listNotifications(cursor ?? 0)
+        if (cursor === null) {
+          cursor = (await getNotificationCursor()).cursor
+          if (!disposed) persistCursor(cursor)
+          return
+        }
+        const items = await listNotifications(cursor)
         if (disposed) return
         const latest = items.at(-1)?.id
-        if (cursor === null) {
-          // Premier démarrage : les anciennes alertes servent de baseline.
-          cursor = latest ?? 0
-        } else {
-          for (const item of items) await showNotification(item)
-          if (latest !== undefined) cursor = latest
-        }
+        for (const item of items) await showNotification(item)
+        if (latest !== undefined) cursor = latest
         persistCursor(cursor)
       } catch (error) {
         if (!disposed) console.error('Notifications Pupitre indisponibles', error)

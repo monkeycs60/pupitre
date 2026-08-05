@@ -305,6 +305,10 @@ export function listNotifications(after = 0): Promise<AppNotification[]> {
   return fetchJson(`/api/notifications?after=${after}`)
 }
 
+export function getNotificationCursor(): Promise<{ cursor: number }> {
+  return fetchJson('/api/notifications/cursor')
+}
+
 export function createProject(input: CreateProjectInput): Promise<Project> {
   return fetchJson('/api/projects', jsonPost(input))
 }

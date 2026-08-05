@@ -526,6 +526,10 @@ export function createServer(deps: ServerDeps) {
           return json(deps.notifications.listAfter(after));
         }
 
+        if (request.method === "GET" && pathname === "/api/notifications/cursor") {
+          return json({ cursor: deps.notifications.latestId() });
+        }
+
         if (request.method === "GET" && pathname === "/api/projects") {
           return json(deps.projects.list());
         }

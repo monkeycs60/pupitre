@@ -800,6 +800,8 @@ test("CRUD et exécution immédiate d'une routine avec notification", async () =
   expect(await notifications.json()).toEqual([
     expect.objectContaining({ kind: "routine", conversation_id: expect.any(String) }),
   ]);
+  const cursor = await fetch(`${current.baseUrl}/api/notifications/cursor`);
+  expect(await cursor.json()).toEqual({ cursor: 1 });
 });
 
 test("rejette les Origin distants et accepte localhost, Tauri ou l'absence d'Origin", async () => {

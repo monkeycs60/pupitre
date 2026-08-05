@@ -27,4 +27,10 @@ export class NotificationStore {
       SELECT * FROM app_notifications WHERE id > ? ORDER BY id LIMIT 100
     `).all(id) as AppNotification[];
   }
+
+  latestId(): number {
+    const row = this.db.query("SELECT COALESCE(MAX(id), 0) AS id FROM app_notifications")
+      .get() as { id: number };
+    return row.id;
+  }
 }

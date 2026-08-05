@@ -120,7 +120,13 @@ function hydrate(row: Record<string, unknown>): Routine {
 }
 
 export class RoutineStore {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database) {
+    this.db.query(`
+      UPDATE routine_runs
+      SET status = 'error', error = 'interrompu (sidecar redémarré)', completed_at = ?
+      WHERE status = 'running'
+    `).run(new Date().toISOString());
+  }
 
   get(id: string): Routine | null {
     const row = this.db.query("SELECT * FROM routines WHERE id = ?").get(id) as Record<string, unknown> | null;
