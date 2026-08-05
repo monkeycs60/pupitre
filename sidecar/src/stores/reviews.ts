@@ -301,16 +301,36 @@ export class ReviewStore {
     mode: "informatif" | "bloquant";
     blocked: boolean;
     openRedCount: number;
+    openFlagCount: number;
+    pendingReviewCount: number;
   } {
     const row = this.db.query(`
-      SELECT COUNT(*) AS count
-      FROM review_flags f
-      JOIN reviews r ON r.id = f.review_id
-      WHERE r.project_id = ? AND f.severity = 'red'
-        AND f.status IN ('open', 'countered')
-    `).get(projectId) as { count: number | bigint };
-    const openRedCount = Number(row.count);
-    return { mode, blocked: mode === "bloquant" && openRedCount > 0, openRedCount };
+      SELECT
+        (SELECT COUNT(*) FROM review_flags f JOIN reviews r ON r.id = f.review_id
+         WHERE r.project_id = ? AND f.status IN ('open', 'countered')) AS open_flags,
+        (SELECT COUNT(*) FROM review_flags f JOIN reviews r ON r.id = f.review_id
+         WHERE r.project_id = ? AND f.severity = 'red'
+           AND f.status IN ('open', 'countered')) AS open_reds,
+        (SELECT COUNT(*) FROM reviews r
+         WHERE r.project_id = ? AND (
+           r.status = 'running' OR EXISTS (
+             SELECT 1 FROM review_flags f WHERE f.review_id = r.id
+               AND f.status IN ('open', 'countered')
+           )
+         )) AS pending_reviews
+    `).get(projectId, projectId, projectId) as {
+      open_flags: number | bigint;
+      open_reds: number | bigint;
+      pending_reviews: number | bigint;
+    };
+    const openRedCount = Number(row.open_reds);
+    return {
+      mode,
+      blocked: mode === "bloquant" && openRedCount > 0,
+      openRedCount,
+      openFlagCount: Number(row.open_flags),
+      pendingReviewCount: Number(row.pending_reviews),
+    };
   }
 
   setDiff(id: string, base: string, head: string, diff: string): void {

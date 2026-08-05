@@ -263,6 +263,8 @@ cat "${join(import.meta.dir, "fixtures/review-scan-codex.jsonl")}"
     mode: "bloquant",
     blocked: true,
     openRedCount: 1,
+    openFlagCount: 1,
+    pendingReviewCount: 1,
   });
   expect(runner.setFlagStatus(completed!.flags[0]!.id, "acked"))
     .toMatchObject({ status: "acked" });
@@ -270,6 +272,8 @@ cat "${join(import.meta.dir, "fixtures/review-scan-codex.jsonl")}"
     mode: "bloquant",
     blocked: false,
     openRedCount: 0,
+    openFlagCount: 0,
+    pendingReviewCount: 0,
   });
 });
 
@@ -454,6 +458,8 @@ test("le contre-avis passe au provider opposé en lecture seule et persiste son 
     mode: "bloquant",
     blocked: true,
     openRedCount: 1,
+    openFlagCount: 1,
+    pendingReviewCount: 1,
   });
   const decisionId = store.get(review.id)!.decisions[0]!.id;
   runner.setDecisionStatus(decisionId, "acked");

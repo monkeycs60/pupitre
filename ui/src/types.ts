@@ -166,6 +166,8 @@ export interface GardienStatus {
   mode: GardienMode
   blocked: boolean
   openRedCount: number
+  openFlagCount: number
+  pendingReviewCount: number
 }
 
 export interface GitGuardianReview {

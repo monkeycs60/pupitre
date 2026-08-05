@@ -481,7 +481,13 @@ test("le mode bloquant et l'acquittement ciblé sont exposés sans approbation g
   expect(mode.status).toBe(200);
   expect(await mode.json()).toEqual(expect.objectContaining({ gardien_mode: "bloquant" }));
   const blocked = await fetch(`${current.baseUrl}/api/projects/${project.id}/gardien-status`);
-  expect(await blocked.json()).toEqual({ mode: "bloquant", blocked: true, openRedCount: 1 });
+  expect(await blocked.json()).toEqual({
+    mode: "bloquant",
+    blocked: true,
+    openRedCount: 1,
+    openFlagCount: 1,
+    pendingReviewCount: 1,
+  });
 
   const invalidCombined = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
     method: "PATCH",
@@ -506,7 +512,13 @@ test("le mode bloquant et l'acquittement ciblé sont exposés sans approbation g
     flag_ids: [flag.id],
   }));
   const unblocked = await fetch(`${current.baseUrl}/api/projects/${project.id}/gardien-status`);
-  expect(await unblocked.json()).toEqual({ mode: "bloquant", blocked: false, openRedCount: 0 });
+  expect(await unblocked.json()).toEqual({
+    mode: "bloquant",
+    blocked: false,
+    openRedCount: 0,
+    openFlagCount: 0,
+    pendingReviewCount: 0,
+  });
 });
 
 test("expose le contre-avis opposé, global ou ciblé, et l'option automatique rouge", async () => {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 import { Chat } from './Chat'
 import { Sidebar } from './Sidebar'
@@ -10,7 +10,7 @@ import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import { ContextGauge } from './ContextGauge'
 import { GitView } from './GitView'
-import { listProjectConversations } from './api'
+import { getGardienStatus, listProjectConversations } from './api'
 import { guardianAckCount } from './groupEvents'
 
 function App() {
@@ -27,6 +27,7 @@ function App() {
   )
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
   const [reviewListVersion, setReviewListVersion] = useState(0)
+  const [gardienPollVersion, setGardienPollVersion] = useState(0)
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
   // conversation ouverte — la sidebar n'en affiche l'indicateur que pour elle.
   const [runningSubtasks, setRunningSubtasks] = useState(0)
@@ -35,7 +36,44 @@ function App() {
   )
   const quotas = useQuotas()
   const guardianAckEventCount = guardianAckCount(events)
-  const effectiveReviewListVersion = reviewListVersion + guardianAckEventCount
+  const effectiveReviewListVersion = reviewListVersion
+    + guardianAckEventCount
+    + gardienPollVersion
+
+  useEffect(() => {
+    if (!selectedProject?.id) return
+    const projectId: string = selectedProject.id
+    let disposed = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let previousSignature: string | null = null
+
+    async function pollGardien() {
+      try {
+        const status = await getGardienStatus(projectId)
+        if (disposed) return
+        const signature = [
+          status.mode,
+          status.openFlagCount,
+          status.openRedCount,
+          status.pendingReviewCount,
+        ].join(':')
+        if (previousSignature !== null && signature !== previousSignature) {
+          setGardienPollVersion((current) => current + 1)
+        }
+        previousSignature = signature
+      } catch {
+        // Les vues Gardien et Sidebar conservent leur propre affichage d'erreur.
+      } finally {
+        if (!disposed) timer = setTimeout(() => void pollGardien(), 1_500)
+      }
+    }
+
+    void pollGardien()
+    return () => {
+      disposed = true
+      clearTimeout(timer)
+    }
+  }, [selectedProject?.id])
 
   function handleProjectSelect(project: Project) {
     if (project.id !== selectedProject?.id) {

@@ -177,8 +177,14 @@ test("exécute le scope en subtask, persiste les preuves et acquitte le flag tes
   subtasks.beforeResult = (id) => {
     conversations.appendEvent(id, {
       type: "tool-end",
-      toolId: "bun-test",
-      output: "249 pass\n0 fail\npreuve issue de la sortie outil",
+      toolId: "bun-test-a",
+      output: `DÉBUT A\n${"a".repeat(45_000)}\nFIN DÉCISIVE A`,
+      images: [],
+    });
+    conversations.appendEvent(id, {
+      type: "tool-end",
+      toolId: "bun-test-b",
+      output: `DÉBUT B\n${"b".repeat(45_000)}\nFIN DÉCISIVE B`,
       images: [],
     });
   };
@@ -215,7 +221,8 @@ test("exécute le scope en subtask, persiste les preuves et acquitte le flag tes
     evidence_md: expect.stringContaining("12 tests passent"),
     images: [expect.stringMatching(/\.png$/)],
   });
-  expect(store.getScope(started.id)?.evidence_md).toContain("preuve issue de la sortie outil");
+  expect(store.getScope(started.id)?.evidence_md).toContain("FIN DÉCISIVE A");
+  expect(store.getScope(started.id)?.evidence_md).toContain("FIN DÉCISIVE B");
   expect(existsSync(media.absolutePath(store.getScope(started.id)!.images[0]!))).toBe(true);
   expect(reviews.getFlag(flagId)?.status).toBe("acked");
   expect(broadcasts.some((event) => event.type === "test-scope-result")).toBe(true);

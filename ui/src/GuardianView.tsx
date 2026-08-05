@@ -69,6 +69,8 @@ export function GuardianView({
     mode: project.gardien_mode,
     blocked: false,
     openRedCount: 0,
+    openFlagCount: 0,
+    pendingReviewCount: 0,
   })
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)

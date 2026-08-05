@@ -391,10 +391,7 @@ function evidenceMarkdown(
     ...toolOutputs,
     ...(artifactError ? [`Capture : ${artifactError}`] : []),
   ];
-  const raw = evidenceParts.join("\n\n");
-  const clipped = raw.length > MAX_EVIDENCE_CHARS
-    ? clipEvidence(raw, MAX_EVIDENCE_CHARS)
-    : raw;
+  const clipped = boundedEvidenceParts(evidenceParts, MAX_EVIDENCE_CHARS);
   return [
     `## Verdict · ${passed ? "réussi" : "échec"}`,
     summary ?? result?.error ?? "Le scope ne fournit pas de verdict structuré exploitable.",
@@ -404,8 +401,41 @@ function evidenceMarkdown(
   ].join("\n");
 }
 
+function boundedEvidenceParts(parts: string[], limit: number): string {
+  const separator = "\n\n";
+  const joined = parts.join(separator);
+  if (joined.length <= limit) return joined;
+
+  const separatorLength = separator.length * Math.max(0, parts.length - 1);
+  let remaining = Math.max(0, limit - separatorLength);
+  const budgets = Array.from({ length: parts.length }, () => 0);
+  let pending = parts.map((_, index) => index);
+
+  while (pending.length > 0) {
+    const share = Math.floor(remaining / pending.length);
+    const completed = pending.filter((index) => parts[index]!.length <= share);
+    if (completed.length === 0) {
+      for (const [offset, index] of pending.entries()) {
+        budgets[index] = share + (offset < remaining % pending.length ? 1 : 0);
+      }
+      break;
+    }
+    for (const index of completed) {
+      budgets[index] = parts[index]!.length;
+      remaining -= budgets[index]!;
+    }
+    const completedSet = new Set(completed);
+    pending = pending.filter((index) => !completedSet.has(index));
+  }
+
+  return parts.map((part, index) => clipEvidence(part, budgets[index]!)).join(separator);
+}
+
 function clipEvidence(value: string, limit: number): string {
   const marker = "\n\n[… preuves intermédiaires tronquées …]\n\n";
+  if (value.length <= limit) return value;
+  if (limit <= 0) return "";
+  if (limit <= marker.length) return value.slice(-limit);
   const available = Math.max(0, limit - marker.length);
   const headLength = Math.ceil(available / 2);
   const tailLength = Math.floor(available / 2);
