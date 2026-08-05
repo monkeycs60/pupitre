@@ -96,25 +96,100 @@ test("ancre les flags Gardien sur le commit visé par la review", () => {
     category: "secret",
     message: "Ne pas exposer ce secret.",
   }]);
-
-  expect(gitView.snapshot(projectId).commits[0]?.guardian).toEqual({
-    reviewIds: [review.id],
-    red: 1,
-    orange: 0,
-    grey: 0,
+  const cleanReview = store.create({
+    projectId,
+    conversationId,
+    gitRefBase: "HEAD^",
+    gitRefHead: head,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
   });
+  store.complete(cleanReview.id, []);
+
+  expect(gitView.snapshot(projectId).commits[0]?.guardian).toEqual(expect.arrayContaining([
+    { reviewId: review.id, red: 1, orange: 0, grey: 0 },
+    { reviewId: cleanReview.id, red: 0, orange: 0, grey: 0 },
+  ]));
 });
 
-test("produit un diff entre refs validées et refuse une référence invalide", () => {
+test("produit un diff entre refs validées et refuse une référence invalide", async () => {
   const base = git("rev-parse", "HEAD");
   const head = commit("README.md", "base\nnext\n", "suite");
 
-  const result = gitView.diff(projectId, base, head);
+  const result = await gitView.diff(projectId, base, head);
 
   expect(result).toMatchObject({ base, head });
   expect(result.diff).toContain("+next");
-  expect(() => gitView.diff(projectId, "--output=/tmp/pwn", "HEAD"))
-    .toThrow("référence Git invalide");
+  await expect(gitView.diff(projectId, "--output=/tmp/pwn", "HEAD"))
+    .rejects.toThrow("référence Git invalide");
+});
+
+test("un dépôt neuf sans commit reste consultable", () => {
+  const empty = join(repo, "..", "empty");
+  mkdirSync(empty);
+  const result = Bun.spawnSync(["git", "init", "-q", "-b", "main"], { cwd: empty });
+  expect(result.exitCode).toBe(0);
+  const project = projects.create({ name: "empty", path: empty });
+
+  expect(gitView.snapshot(project.id)).toMatchObject({
+    head: null,
+    currentBranch: "main",
+    commits: [],
+  });
+});
+
+test("attribue tous les commits initiaux créés depuis un dépôt vide", () => {
+  const empty = join(repo, "..", "initial");
+  mkdirSync(empty);
+  const run = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: empty });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+    return result.stdout.toString().trim();
+  };
+  run("init", "-q", "-b", "main");
+  run("config", "user.email", "empty@example.test");
+  run("config", "user.name", "Empty Fixture");
+  const project = projects.create({ name: "initial", path: empty });
+  writeFileSync(join(empty, "one"), "1");
+  run("add", "."); run("commit", "-qm", "one");
+  const one = run("rev-parse", "HEAD");
+  writeFileSync(join(empty, "two"), "2");
+  run("add", "."); run("commit", "-qm", "two");
+  const two = run("rev-parse", "HEAD");
+
+  expect(gitView.commitsBetween(project.id, null, two)).toEqual([one, two]);
+});
+
+test("ne prétend pas attribuer des commits pendant deux tours concurrents", () => {
+  const first = gitView.beginTurn(projectId);
+  const second = gitView.beginTurn(projectId);
+  const sha = commit("concurrent.ts", "true\n", "concurrent");
+
+  gitView.finishTurn(first, conversationId);
+  gitView.finishTurn(second, conversationId);
+
+  expect(gitView.snapshot(projectId).commits.find((item) => item.sha === sha)?.conversations)
+    .toEqual([]);
+});
+
+test("un sujet contenant les anciens séparateurs de parsing reste intact", () => {
+  writeFileSync(join(repo, "separator.txt"), "ok\n");
+  git("add", ".");
+  git("commit", "-qm", "avant\u001eentre\u001faprès");
+
+  expect(gitView.snapshot(projectId).commits[0]?.subject)
+    .toBe("avant\u001eentre\u001faprès");
+});
+
+test("interrompt un diff avant de tamponner plus de deux mégaoctets", async () => {
+  const base = git("rev-parse", "HEAD");
+  writeFileSync(join(repo, "large.txt"), `${"x".repeat(2_200_000)}\n`);
+  git("add", ".");
+  git("commit", "-qm", "large");
+
+  await expect(gitView.diff(projectId, base, "HEAD"))
+    .rejects.toThrow("sortie Git trop volumineuse");
 });
 
 test("détecte seulement les nouveaux commits quand HEAD avance", () => {

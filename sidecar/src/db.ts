@@ -78,6 +78,12 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_commit_links_project
       ON commit_links(project_id, commit_sha, created_at);
+    DELETE FROM commit_links
+    WHERE rowid NOT IN (
+      SELECT MIN(rowid) FROM commit_links GROUP BY project_id, commit_sha
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_commit_links_origin
+      ON commit_links(project_id, commit_sha);
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id),

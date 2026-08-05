@@ -420,7 +420,7 @@ export function createServer(deps: ServerDeps) {
           const head = url.searchParams.get("head");
           if (!base || !head) throw new HttpError(400, "références Git manquantes");
           try {
-            return json(deps.git.diff(projectGitDiffId, base, head));
+            return json(await deps.git.diff(projectGitDiffId, base, head));
           } catch (error) {
             if (error instanceof GitProjectError) throw new HttpError(400, error.message);
             throw error;

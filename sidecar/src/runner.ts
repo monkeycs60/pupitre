@@ -7,7 +7,7 @@ import { runCodexTurn } from "./adapters/codex";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 import type { QuotaTracker } from "./quotas";
 import { ConversationActivity } from "./conversation-activity";
-import type { GitProjectService } from "./git";
+import type { GitProjectService, GitTurnTracking } from "./git";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -73,9 +73,9 @@ export class ConversationRunner {
     if (!conv) throw new Error("conversation inconnue");
     const releaseActivity = this.activity.acquire(conversationId, "turn");
     const project = this.projects.get(conv.project_id)!;
-    let headBefore: string | null = null;
+    let gitTracking: GitTurnTracking | null = null;
     try {
-      headBefore = this.git?.head(project.id) ?? null;
+      gitTracking = this.git?.beginTurn(project.id) ?? null;
     } catch {
       // Un projet hors Git ne doit jamais empêcher le tour.
     }
@@ -141,13 +141,7 @@ export class ConversationRunner {
       else await runCodexAppServerTurn(opts, emit);
     } finally {
       try {
-        const headAfter = this.git?.head(project.id) ?? null;
-        if (this.git && headAfter && headAfter !== headBefore) {
-          const commits = headBefore
-            ? this.git.commitsBetween(project.id, headBefore, headAfter)
-            : [headAfter];
-          this.git.recordCommitLinks(project.id, conversationId, commits);
-        }
+        if (this.git && gitTracking) this.git.finishTurn(gitTracking, conversationId);
       } catch (error) {
         // J1 est volontairement best effort : une lecture Git cassée ne change
         // ni le résultat provider ni le statut terminal du tour.

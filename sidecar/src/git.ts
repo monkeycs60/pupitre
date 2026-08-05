@@ -6,8 +6,8 @@ const MAX_COMMITS = 200;
 
 export class GitProjectError extends Error {}
 
-export interface GitGuardianSummary {
-  reviewIds: string[];
+export interface GitGuardianReview {
+  reviewId: string;
   red: number;
   orange: number;
   grey: number;
@@ -21,7 +21,7 @@ export interface GitCommit {
   authoredAt: string;
   subject: string;
   conversations: Array<{ id: string; title: string }>;
-  guardian: GitGuardianSummary | null;
+  guardian: GitGuardianReview[];
 }
 
 export interface GitBranch {
@@ -54,7 +54,16 @@ export interface GitDiff {
   diff: string;
 }
 
+export interface GitTurnTracking {
+  id: string;
+  projectId: string;
+  before: string | null;
+  ambiguous: boolean;
+}
+
 export class GitProjectService {
+  private activeTurns = new Map<string, Set<GitTurnTracking>>();
+
   constructor(
     private db: Database,
     private projects: ProjectStore,
@@ -68,22 +77,20 @@ export class GitProjectService {
   snapshot(projectId: string): GitSnapshot {
     const cwd = this.projectPath(projectId);
     const head = this.tryResolve(cwd, "HEAD");
-    if (!head) throw new GitProjectError("le projet n'est pas un dépôt Git avec commits");
     const currentBranch = this.optionalGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"])
       ?.trim() || null;
     const links = this.commitLinks(projectId);
     const guardian = this.guardianByCommit(projectId, cwd);
-    const commits = this.parseCommits(this.runGit(cwd, [
-      "log",
-      "--all",
+    const commits = head ? this.parseCommits(this.runGit(cwd, [
+      "log", "-z", "--all", "--topo-order",
       `--max-count=${MAX_COMMITS}`,
       "--date=iso-strict",
-      "--pretty=format:%H%x1f%P%x1f%D%x1f%an%x1f%aI%x1f%s%x1e",
+      "--format=%H%x00%P%x00%D%x00%an%x00%aI%x00%s",
     ])).map((commit) => ({
       ...commit,
       conversations: links.get(commit.sha) ?? [],
-      guardian: guardian.get(commit.sha) ?? null,
-    }));
+      guardian: guardian.get(commit.sha) ?? [],
+    })) : [];
     return {
       head,
       currentBranch,
@@ -93,11 +100,11 @@ export class GitProjectService {
     };
   }
 
-  diff(projectId: string, baseRef: string, headRef: string): GitDiff {
+  async diff(projectId: string, baseRef: string, headRef: string): Promise<GitDiff> {
     const cwd = this.projectPath(projectId);
     const base = this.resolve(cwd, baseRef);
     const head = this.resolve(cwd, headRef);
-    const diff = this.runGit(cwd, [
+    const diff = await this.runGitLimited(cwd, [
       "diff",
       "--no-ext-diff",
       "--unified=3",
@@ -108,11 +115,16 @@ export class GitProjectService {
     return { base, head, diff };
   }
 
-  commitsBetween(projectId: string, before: string, after: string): string[] {
+  commitsBetween(projectId: string, before: string | null, after: string): string[] {
     if (before === after) return [];
     const cwd = this.projectPath(projectId);
-    const base = this.resolve(cwd, before);
     const head = this.resolve(cwd, after);
+    if (before === null) {
+      return this.runGit(cwd, [
+        "rev-list", "--reverse", "--topo-order", `--max-count=${MAX_COMMITS}`, head,
+      ]).split("\n").map((sha) => sha.trim()).filter(Boolean);
+    }
+    const base = this.resolve(cwd, before);
     const isForward = Bun.spawnSync(
       ["git", "merge-base", "--is-ancestor", base, head],
       { cwd, stdout: "pipe", stderr: "pipe" },
@@ -125,6 +137,40 @@ export class GitProjectService {
       head,
       `^${base}`,
     ]).split("\n").map((sha) => sha.trim()).filter(Boolean);
+  }
+
+  beginTurn(projectId: string): GitTurnTracking {
+    const tracking: GitTurnTracking = {
+      id: crypto.randomUUID(),
+      projectId,
+      before: this.head(projectId),
+      ambiguous: false,
+    };
+    let active = this.activeTurns.get(projectId);
+    if (!active) {
+      active = new Set();
+      this.activeTurns.set(projectId, active);
+    }
+    if (active.size > 0) {
+      tracking.ambiguous = true;
+      for (const concurrent of active) concurrent.ambiguous = true;
+    }
+    active.add(tracking);
+    return tracking;
+  }
+
+  finishTurn(tracking: GitTurnTracking, conversationId: string): void {
+    const active = this.activeTurns.get(tracking.projectId);
+    active?.delete(tracking);
+    if (active?.size === 0) this.activeTurns.delete(tracking.projectId);
+    if (tracking.ambiguous) return;
+    const after = this.head(tracking.projectId);
+    if (!after || after === tracking.before) return;
+    this.recordCommitLinks(
+      tracking.projectId,
+      conversationId,
+      this.commitsBetween(tracking.projectId, tracking.before, after),
+    );
   }
 
   recordCommitLinks(projectId: string, conversationId: string, shas: string[]): void {
@@ -183,6 +229,47 @@ export class GitProjectService {
     return result.stdout.toString();
   }
 
+  private async runGitLimited(cwd: string, args: string[]): Promise<string> {
+    const child = Bun.spawn(["git", ...args], {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+    });
+    const stderrPromise = new Response(child.stderr).text();
+    const reader = child.stdout.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    let exceeded = false;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > MAX_GIT_OUTPUT_BYTES) {
+          exceeded = true;
+          child.kill();
+          break;
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const [exitCode, stderr] = await Promise.all([child.exited, stderrPromise]);
+    if (exceeded) throw new GitProjectError("sortie Git trop volumineuse");
+    if (exitCode !== 0) {
+      throw new GitProjectError(stderr.trim() || "commande Git impossible");
+    }
+    const output = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      output.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return new TextDecoder().decode(output);
+  }
+
   private optionalGit(cwd: string, args: string[]): string | null {
     try {
       return this.runGit(cwd, args);
@@ -192,18 +279,28 @@ export class GitProjectService {
   }
 
   private parseCommits(output: string): Omit<GitCommit, "conversations" | "guardian">[] {
-    return output.split("\x1e").map((record) => record.trim()).filter(Boolean).map((record) => {
+    const fields = output.split("\0");
+    if (fields.at(-1) === "") fields.pop();
+    if (fields.length % 6 !== 0) throw new GitProjectError("sortie git log invalide");
+    const commits: Omit<GitCommit, "conversations" | "guardian">[] = [];
+    for (let index = 0; index < fields.length; index += 6) {
       const [sha = "", rawParents = "", rawRefs = "", author = "", authoredAt = "", subject = ""] =
-        record.split("\x1f");
-      return {
+        fields.slice(index, index + 6);
+      if (!/^[0-9a-f]{40,64}$/i.test(sha)
+        || rawParents.split(" ").filter(Boolean).some((parent) => !/^[0-9a-f]{40,64}$/i.test(parent))
+        || Number.isNaN(Date.parse(authoredAt))) {
+        throw new GitProjectError("métadonnées de commit invalides");
+      }
+      commits.push({
         sha,
         parents: rawParents.split(" ").filter(Boolean),
         refs: rawRefs.split(",").map((ref) => ref.trim()).filter(Boolean),
         author,
         authoredAt,
         subject,
-      };
-    });
+      });
+    }
+    return commits;
   }
 
   private branches(cwd: string): GitBranch[] {
@@ -260,30 +357,32 @@ export class GitProjectService {
     return links;
   }
 
-  private guardianByCommit(projectId: string, cwd: string): Map<string, GitGuardianSummary> {
+  private guardianByCommit(projectId: string, cwd: string): Map<string, GitGuardianReview[]> {
     const rows = this.db.query(`
-      SELECT r.id AS review_id, r.git_ref_head, f.severity, COUNT(*) AS count
+      SELECT r.id AS review_id, r.git_ref_head, f.severity, COUNT(f.id) AS count
       FROM reviews r
-      JOIN review_flags f ON f.review_id = r.id
+      LEFT JOIN review_flags f ON f.review_id = r.id
       WHERE r.project_id = ? AND r.status = 'done'
       GROUP BY r.id, r.git_ref_head, f.severity
       ORDER BY r.created_at
     `).all(projectId) as Array<{
       review_id: string;
       git_ref_head: string;
-      severity: "red" | "orange" | "grey";
+      severity: "red" | "orange" | "grey" | null;
       count: number | bigint;
     }>;
-    const summaries = new Map<string, GitGuardianSummary>();
+    const summaries = new Map<string, GitGuardianReview[]>();
     for (const row of rows) {
       const sha = this.tryResolve(cwd, row.git_ref_head);
       if (!sha) continue;
-      const summary = summaries.get(sha) ?? {
-        reviewIds: [], red: 0, orange: 0, grey: 0,
-      };
-      if (!summary.reviewIds.includes(row.review_id)) summary.reviewIds.push(row.review_id);
-      summary[row.severity] += Number(row.count);
-      summaries.set(sha, summary);
+      const commitReviews = summaries.get(sha) ?? [];
+      let summary = commitReviews.find((review) => review.reviewId === row.review_id);
+      if (!summary) {
+        summary = { reviewId: row.review_id, red: 0, orange: 0, grey: 0 };
+        commitReviews.push(summary);
+      }
+      if (row.severity) summary[row.severity] += Number(row.count);
+      summaries.set(sha, commitReviews);
     }
     return summaries;
   }

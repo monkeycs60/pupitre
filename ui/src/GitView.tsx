@@ -41,9 +41,9 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
       .then((loaded) => {
         if (controller.signal.aborted) return
         setSnapshot(loaded)
-        const first = loaded.commits[0]
+        const currentHead = loaded.commits.find((commit) => commit.sha === loaded.head)
         setHeadRef(loaded.head ?? '')
-        setBaseRef(first?.parents[0] ?? loaded.commits[1]?.sha ?? '')
+        setBaseRef(currentHead?.parents[0] ?? '')
         setError(null)
         setIsLoading(false)
       })
@@ -184,15 +184,16 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
                             Conversation · {conversation.title}
                           </button>
                         ))}
-                        {row.commit.guardian ? (
+                        {row.commit.guardian.map((review) => (
                           <button
                             type="button"
                             className="git-guardian-link"
-                            onClick={() => onGuardianSelect(row.commit.guardian!.reviewIds[0]!)}
+                            key={review.reviewId}
+                            onClick={() => onGuardianSelect(review.reviewId)}
                           >
-                            Gardien · {row.commit.guardian.red} rouge · {row.commit.guardian.orange} orange
+                            Gardien · {review.red} rouge · {review.orange} orange
                           </button>
-                        ) : null}
+                        ))}
                       </div>
                     </div>
                   </article>

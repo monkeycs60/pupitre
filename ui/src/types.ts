@@ -167,8 +167,8 @@ export interface GardienStatus {
   openRedCount: number
 }
 
-export interface GitGuardianSummary {
-  reviewIds: string[]
+export interface GitGuardianReview {
+  reviewId: string
   red: number
   orange: number
   grey: number
@@ -182,7 +182,7 @@ export interface GitCommit {
   authoredAt: string
   subject: string
   conversations: Array<{ id: string; title: string }>
-  guardian: GitGuardianSummary | null
+  guardian: GitGuardianReview[]
 }
 
 export interface GitBranch {

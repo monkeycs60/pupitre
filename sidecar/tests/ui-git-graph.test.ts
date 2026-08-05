@@ -11,7 +11,7 @@ function commit(sha: string, parents: string[]): GitCommit {
     authoredAt: '2026-08-04T12:00:00Z',
     subject: sha,
     conversations: [],
-    guardian: null,
+    guardian: [],
   }
 }
 
