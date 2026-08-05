@@ -29,6 +29,7 @@ import { SkillAlreadyExistsError, type SkillComposer } from "./skill-composer";
 import type { WorkflowInput, WorkflowStore } from "./stores/workflows";
 import type { NotificationStore } from "./stores/notifications";
 import type { RoutineInput, RoutineScheduler, RoutineStore } from "./routines";
+import { fleetSnapshot } from "./fleet";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -73,7 +74,8 @@ export interface ServerDeps {
 // canal global `quotas`.
 type WebSocketData =
   | { channel: "conversation"; conversationId: string }
-  | { channel: "quotas" };
+  | { channel: "quotas" }
+  | { channel: "fleet" };
 
 const EFFORTS_BY_PROVIDER = {
   claude: ["low", "medium", "high", "xhigh", "max"],
@@ -475,6 +477,23 @@ function routineInput(
 export function createServer(deps: ServerDeps) {
   const sockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
+  const fleetSockets = new Set<ServerWebSocket<WebSocketData>>();
+  let fleetTimer: ReturnType<typeof setInterval> | null = null;
+  const currentFleet = () => fleetSnapshot(deps);
+  const broadcastFleet = () => {
+    const message = JSON.stringify(currentFleet());
+    for (const socket of fleetSockets) {
+      try {
+        socket.send(message);
+      } catch {
+        fleetSockets.delete(socket);
+      }
+    }
+    if (fleetSockets.size === 0 && fleetTimer) {
+      clearInterval(fleetTimer);
+      fleetTimer = null;
+    }
+  };
   deps.events.subscribe((conversationId, event) => {
     const message = JSON.stringify(event);
     for (const socket of sockets.get(conversationId) ?? []) {
@@ -517,6 +536,10 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "GET" && pathname === "/api/health") {
           return json({ ok: true });
+        }
+
+        if (request.method === "GET" && pathname === "/api/fleet") {
+          return json(currentFleet());
         }
 
         if (request.method === "GET" && pathname === "/api/notifications") {
@@ -1561,6 +1584,10 @@ export function createServer(deps: ServerDeps) {
             if (server.upgrade(request, { data: { channel: "quotas" } })) return;
             throw new HttpError(400, "upgrade WebSocket refusé");
           }
+          if (channel === "fleet") {
+            if (server.upgrade(request, { data: { channel: "fleet" } })) return;
+            throw new HttpError(400, "upgrade WebSocket refusé");
+          }
           if (channel !== null && channel !== "conversation") {
             throw new HttpError(400, "canal inconnu");
           }
@@ -1599,6 +1626,12 @@ export function createServer(deps: ServerDeps) {
           }
           return;
         }
+        if (socket.data.channel === "fleet") {
+          fleetSockets.add(socket);
+          socket.send(JSON.stringify(currentFleet()));
+          fleetTimer ??= setInterval(broadcastFleet, 1_000);
+          return;
+        }
         const { conversationId } = socket.data;
         let subscribers = sockets.get(conversationId);
         if (!subscribers) {
@@ -1610,6 +1643,14 @@ export function createServer(deps: ServerDeps) {
       close(socket) {
         if (socket.data.channel === "quotas") {
           quotaSockets.delete(socket);
+          return;
+        }
+        if (socket.data.channel === "fleet") {
+          fleetSockets.delete(socket);
+          if (fleetSockets.size === 0 && fleetTimer) {
+            clearInterval(fleetTimer);
+            fleetTimer = null;
+          }
           return;
         }
         const { conversationId } = socket.data;

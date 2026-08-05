@@ -157,6 +157,14 @@ export class SubtaskRunner {
     return this.active.get(conversationId)?.size ?? 0;
   }
 
+  activeSubtasks(): Subtask[] {
+    return [...this.controllers.keys()]
+      .flatMap((id) => {
+        const subtask = this.store.get(id);
+        return subtask ? [subtask] : [];
+      });
+  }
+
   /**
    * Crée la subtask, appende le `subtask-ref` au parent, puis lance le tour en
    * arrière-plan. Retourne dès que la ligne existe : l'appelant récupère l'id

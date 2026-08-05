@@ -804,6 +804,41 @@ test("CRUD et exécution immédiate d'une routine avec notification", async () =
   expect(await cursor.json()).toEqual({ cursor: 1 });
 });
 
+test("Fleet expose et diffuse les runs actifs", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const conversations = new ConversationStore(current.db);
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "BLOQUE Fleet",
+  });
+  const run = current.runner.runTurn(conversation.id, "BLOQUE Fleet", []);
+
+  const response = await fetch(`${current.baseUrl}/api/fleet`);
+  expect(await response.json()).toEqual([
+    expect.objectContaining({ kind: "turn", conversationId: conversation.id }),
+  ]);
+
+  const snapshot = await new Promise<Array<{ conversationId: string }>>((resolve, reject) => {
+    const socket = new WebSocket(`${current!.baseUrl.replace("http", "ws")}/ws?channel=fleet`);
+    const timeout = setTimeout(() => reject(new Error("timeout Fleet WS")), 2_000);
+    socket.addEventListener("message", (message) => {
+      clearTimeout(timeout);
+      socket.close();
+      resolve(JSON.parse(String(message.data)));
+    });
+    socket.addEventListener("error", reject);
+  });
+  expect(snapshot).toEqual([
+    expect.objectContaining({ conversationId: conversation.id, lastEvent: expect.any(String) }),
+  ]);
+
+  expect(await current.runner.cancelTurn(conversation.id)).toBe(true);
+  await run;
+});
+
 test("rejette les Origin distants et accepte localhost, Tauri ou l'absence d'Origin", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const evil = await fetch(`${current.baseUrl}/api/health`, {

@@ -17,6 +17,12 @@ interface ActiveTurn {
   controller: AbortController;
   done: Promise<void>;
   finish: () => void;
+  startedAt: string;
+}
+
+export interface ActiveTurnSnapshot {
+  conversationId: string;
+  startedAt: string;
 }
 
 export interface TurnOutcome {
@@ -61,6 +67,13 @@ export class ConversationRunner {
     return this.active.has(conversationId);
   }
 
+  activeTurns(): ActiveTurnSnapshot[] {
+    return [...this.active.entries()].map(([conversationId, turn]) => ({
+      conversationId,
+      startedAt: turn.startedAt,
+    }));
+  }
+
   async cancelTurn(conversationId: string): Promise<boolean> {
     const turn = this.active.get(conversationId);
     if (!turn) return false;
@@ -85,16 +98,16 @@ export class ConversationRunner {
       // Un projet hors Git ne doit jamais empêcher le tour.
     }
     const controller = new AbortController();
+    const startedAt = new Date().toISOString();
     let finish!: () => void;
     const done = new Promise<void>((resolve) => {
       finish = resolve;
     });
-    this.active.set(conversationId, { controller, done, finish });
+    this.active.set(conversationId, { controller, done, finish, startedAt });
     let outcome: TurnOutcome = {
       state: "error",
       error: "le provider n'a pas publié de statut terminal",
     };
-    const startedAt = new Date().toISOString();
     const startedAtMs = Date.now();
     let firstResponseAt: string | undefined;
 
