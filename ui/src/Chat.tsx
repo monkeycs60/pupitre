@@ -16,12 +16,15 @@ import type {
   Conversation,
   Project,
   QuotaSnapshot,
+  SkillSuggestion,
   SubtaskStatus,
 } from './types'
 import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
 import { appendDebriefQuestionPrompt } from './debriefQuestion'
 import type { DebriefBlock } from './groupEvents'
+import { SkillsSuggestionsPanel } from './SkillsSuggestionsPanel'
+import { latestUserText, withSkillInvocation } from './skillSuggestionDraft'
 
 interface ChatProps {
   events: AppEvent[]
@@ -39,6 +42,16 @@ interface ChatProps {
 interface LightboxImage {
   src: string
   alt: string
+}
+
+const SKILLS_PANEL_KEY = 'pupitre:skills-panel-open'
+
+function initialSkillsPanelOpen(): boolean {
+  try {
+    return localStorage.getItem(SKILLS_PANEL_KEY) !== 'false'
+  } catch {
+    return true
+  }
 }
 
 function lastStatusIsRunning(events: AppEvent[]): boolean {
@@ -72,12 +85,14 @@ export function Chat({
   onRunningSubtasksChange,
 }: ChatProps) {
   const blocks = useMemo(() => groupEvents(events), [events])
+  const previousUserText = useMemo(() => latestUserText(events), [events])
   const isRunning = lastStatusIsRunning(events)
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
   const [message, setMessage] = useState('')
   const [focusRequest, setFocusRequest] = useState(0)
+  const [skillsPanelOpen, setSkillsPanelOpen] = useState(initialSkillsPanelOpen)
   const [subtaskStatuses, setSubtaskStatuses] = useState<
     Record<string, SubtaskStatus>
   >({})
@@ -139,43 +154,73 @@ export function Chat({
     setFocusRequest((current) => current + 1)
   }
 
+  function handleSkillsPanelToggle() {
+    setSkillsPanelOpen((current) => {
+      const next = !current
+      try {
+        localStorage.setItem(SKILLS_PANEL_KEY, String(next))
+      } catch {
+        // La préférence reste en mémoire si le stockage web est indisponible.
+      }
+      return next
+    })
+  }
+
+  function handleSkillLaunch(skill: SkillSuggestion) {
+    setMessage((current) => withSkillInvocation(current, skill.invocation))
+    setFocusRequest((current) => current + 1)
+  }
+
+  const suggestionText = message.trim() || previousUserText
+
   return (
     <>
-      {connection === 'reconnecting' ? (
-        <ReconnectBanner retryAt={retryAt} />
-      ) : null}
+      <div className={`chat-layout ${skillsPanelOpen ? 'has-suggestions' : ''}`}>
+        <div className="chat-main">
+          {connection === 'reconnecting' ? (
+            <ReconnectBanner retryAt={retryAt} />
+          ) : null}
 
-      <div className="events-view" ref={viewportRef} onScroll={handleScroll}>
-        <div className="events-list" aria-live="polite">
-          {blocks.length === 0 ? (
-            <p className="events-empty">
-              {conversation === null
-                ? 'Écrivez un premier message pour créer la conversation.'
-                : 'Aucun événement dans cette conversation.'}
-            </p>
-          ) : (
-            <EventStream
-              blocks={blocks}
-              onImageOpen={handleImageOpen}
-              onImageLoad={scrollToBottomIfFollowing}
-              onSubtaskStatusChange={handleSubtaskStatusChange}
-              onDebriefQuestion={handleDebriefQuestion}
-            />
-          )}
+          <div className="events-view" ref={viewportRef} onScroll={handleScroll}>
+            <div className="events-list" aria-live="polite">
+              {blocks.length === 0 ? (
+                <p className="events-empty">
+                  {conversation === null
+                    ? 'Écrivez un premier message pour créer la conversation.'
+                    : 'Aucun événement dans cette conversation.'}
+                </p>
+              ) : (
+                <EventStream
+                  blocks={blocks}
+                  onImageOpen={handleImageOpen}
+                  onImageLoad={scrollToBottomIfFollowing}
+                  onSubtaskStatusChange={handleSubtaskStatusChange}
+                  onDebriefQuestion={handleDebriefQuestion}
+                />
+              )}
+            </div>
+          </div>
+
+          <Composer
+            conversationId={conversation?.id ?? null}
+            project={project}
+            quotas={quotas}
+            isRunning={isRunning}
+            onConversationCreated={onConversationCreated}
+            onProjectUpdated={onProjectUpdated}
+            message={message}
+            onMessageChange={setMessage}
+            focusRequest={focusRequest}
+          />
         </div>
+        <SkillsSuggestionsPanel
+          projectId={project.id}
+          text={suggestionText}
+          open={skillsPanelOpen}
+          onToggle={handleSkillsPanelToggle}
+          onLaunch={handleSkillLaunch}
+        />
       </div>
-
-      <Composer
-        conversationId={conversation?.id ?? null}
-        project={project}
-        quotas={quotas}
-        isRunning={isRunning}
-        onConversationCreated={onConversationCreated}
-        onProjectUpdated={onProjectUpdated}
-        message={message}
-        onMessageChange={setMessage}
-        focusRequest={focusRequest}
-      />
 
       {lightboxImage !== null ? (
         <Lightbox

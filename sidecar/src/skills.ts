@@ -23,6 +23,7 @@ export type SkillProvenance =
 export interface SkillSummary {
   id: string;
   name: string;
+  invocation: string;
   description: string;
   triggers: string[];
   provider: SkillProvider;
@@ -90,6 +91,19 @@ function parseFrontmatter(content: string): Record<string, string> {
 
 function unique(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+export function skillInvocation(name: string): string {
+  return normalizedName(name)
+    .replace(/[^a-z0-9:_-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "skill";
+}
+
+function normalizedName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase();
 }
 
 function parseTriggers(frontmatter: Record<string, string>, description: string, name: string): string[] {
@@ -212,6 +226,7 @@ function rowToSummary(row: SkillRow): SkillSummary {
   return {
     id: row.id,
     name: row.name,
+    invocation: skillInvocation(row.name),
     description: row.description,
     triggers,
     provider: row.provider,
@@ -378,7 +393,7 @@ export class SkillInventory {
     const available = this.list({ projectId });
     const resolved = requestedNames.flatMap((requestedName) => {
       const matching = available.filter(
-        (skill) => skill.name.toLocaleLowerCase() === requestedName.toLocaleLowerCase(),
+        (skill) => skill.invocation === skillInvocation(requestedName),
       );
       const selected = matching.find((skill) => skill.project_id === projectId)
         ?? matching.find((skill) => skill.favorite)

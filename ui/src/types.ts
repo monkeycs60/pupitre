@@ -14,6 +14,7 @@ export type SkillProvenance =
 export interface SkillSummary {
   id: string
   name: string
+  invocation: string
   description: string
   triggers: string[]
   provider: Provider
@@ -27,6 +28,17 @@ export interface SkillSummary {
 
 export interface SkillDetail extends SkillSummary {
   content_md: string
+}
+
+export interface SkillSuggestion extends SkillSummary {
+  score: number
+  reason: string
+}
+
+export interface SkillSuggestionResult {
+  suggestions: SkillSuggestion[]
+  ambiguous: boolean
+  resolvedByModel: boolean
 }
 
 export interface Project {

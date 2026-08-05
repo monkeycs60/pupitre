@@ -22,6 +22,7 @@ import { GitProjectService } from "../src/git";
 import { TestingStore } from "../src/stores/testing";
 import { TesterRunner } from "../src/testing";
 import { SkillInventory } from "../src/skills";
+import { SkillSuggestionService } from "../src/skill-suggestions";
 
 interface TestServer {
   baseUrl: string;
@@ -239,6 +240,7 @@ cat "${fixture}"
   );
   const skills = new SkillInventory(db, projects, { homeDir: dir });
   skills.refresh();
+  const skillSuggestions = new SkillSuggestionService(skills, projects, quotas, async () => []);
   const server = createServer({
     port: 0,
     projects,
@@ -255,6 +257,7 @@ cat "${fixture}"
     git: gitView,
     testers,
     skills,
+    skillSuggestions,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -339,6 +342,16 @@ test("API skills : refresh, filtres, détail et favori par projet", async () => 
     id: skillId,
     favorite: true,
     content_md: "# Consignes API\n\nSkill indexé du projet.\n",
+  });
+  const suggestions = await postJson("/api/skills/suggestions", {
+    projectId: project.id,
+    text: "applique les consignes du projet",
+    resolveAmbiguous: true,
+  });
+  expect(suggestions.status).toBe(200);
+  expect(await suggestions.json()).toMatchObject({
+    suggestions: [expect.objectContaining({ id: skillId })],
+    resolvedByModel: false,
   });
 });
 

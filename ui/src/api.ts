@@ -15,6 +15,7 @@ import type {
   ReviewFlag,
   SkillDetail,
   SkillSummary,
+  SkillSuggestionResult,
   StoredEvent,
   SubtaskResult,
   TestInventory,
@@ -200,6 +201,18 @@ export function setSkillFavorite(
     `/api/projects/${routeId(projectId)}/skills/${routeId(skillId)}/favorite`,
     jsonPut({ favorite }),
   )
+}
+
+export function suggestSkills(
+  projectId: string,
+  text: string,
+  resolveAmbiguous: boolean,
+  signal?: AbortSignal,
+): Promise<SkillSuggestionResult> {
+  return fetchJson('/api/skills/suggestions', {
+    ...jsonPost({ projectId, text, resolveAmbiguous }),
+    signal,
+  })
 }
 
 export function createProject(input: CreateProjectInput): Promise<Project> {
