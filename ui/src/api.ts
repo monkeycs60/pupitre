@@ -13,6 +13,8 @@ import type {
   Review,
   ReviewDecision,
   ReviewFlag,
+  SkillDetail,
+  SkillSummary,
   StoredEvent,
   SubtaskResult,
   TestInventory,
@@ -156,6 +158,48 @@ export function getHealth(): Promise<{ ok: true }> {
 
 export function listProjects(): Promise<Project[]> {
   return fetchJson('/api/projects')
+}
+
+export function listSkills(filters: {
+  query?: string
+  provider?: Provider
+  projectId?: string
+  favoriteProjectId?: string
+  signal?: AbortSignal
+} = {}): Promise<SkillSummary[]> {
+  const query = new URLSearchParams()
+  if (filters.query?.trim()) query.set('q', filters.query.trim())
+  if (filters.provider) query.set('provider', filters.provider)
+  if (filters.projectId) query.set('projectId', filters.projectId)
+  if (filters.favoriteProjectId) query.set('favoriteProjectId', filters.favoriteProjectId)
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  return fetchJson(`/api/skills${suffix}`, { signal: filters.signal })
+}
+
+export function getSkill(
+  skillId: string,
+  projectId?: string,
+  signal?: AbortSignal,
+): Promise<SkillDetail> {
+  const query = new URLSearchParams()
+  if (projectId) query.set('projectId', projectId)
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  return fetchJson(`/api/skills/${routeId(skillId)}${suffix}`, { signal })
+}
+
+export function refreshSkills(): Promise<{ count: number }> {
+  return fetchJson('/api/skills/refresh', jsonPost({}))
+}
+
+export function setSkillFavorite(
+  projectId: string,
+  skillId: string,
+  favorite: boolean,
+): Promise<void> {
+  return fetchVoid(
+    `/api/projects/${routeId(projectId)}/skills/${routeId(skillId)}/favorite`,
+    jsonPut({ favorite }),
+  )
 }
 
 export function createProject(input: CreateProjectInput): Promise<Project> {

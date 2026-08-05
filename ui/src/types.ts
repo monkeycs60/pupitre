@@ -1,6 +1,33 @@
 export type Provider = 'claude' | 'codex'
 export type ConversationSpeed = 'standard' | 'fast'
 export type GardienMode = 'informatif' | 'bloquant'
+export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library'
+
+export type SkillProvenance =
+  | 'claude-global'
+  | 'claude-plugin'
+  | 'claude-project'
+  | 'codex-prompt'
+  | 'agents-global'
+  | 'agents-project'
+
+export interface SkillSummary {
+  id: string
+  name: string
+  description: string
+  triggers: string[]
+  provider: Provider
+  provenance: SkillProvenance
+  path: string
+  project_id: string | null
+  modified_at: string
+  indexed_at: string
+  favorite: boolean
+}
+
+export interface SkillDetail extends SkillSummary {
+  content_md: string
+}
 
 export interface Project {
   id: string

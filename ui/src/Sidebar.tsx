@@ -10,7 +10,7 @@ import {
   setProjectPinned,
 } from './api'
 import { QuotaBar } from './QuotaBar'
-import type { Conversation, Project, Review } from './types'
+import type { Conversation, Project, Review, WorkspaceView } from './types'
 import type { Quotas } from './useQuotas'
 
 declare global {
@@ -30,9 +30,10 @@ interface SidebarProps {
   quotas: Quotas
   /** Sous-tâches en cours dans la conversation ouverte (cf. App). */
   runningSubtasks: number
-  workspaceView: 'conversations' | 'git' | 'guardian'
+  workspaceView: WorkspaceView
   onGuardianSelect: () => void
   onGitSelect: () => void
+  onLibrarySelect: () => void
   reviewListVersion: number
 }
 
@@ -76,6 +77,7 @@ export function Sidebar({
   workspaceView,
   onGuardianSelect,
   onGitSelect,
+  onLibrarySelect,
   reviewListVersion,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -396,6 +398,17 @@ export function Sidebar({
           )}
         </div>
       </section>
+
+      <nav className="sidebar-global-nav" aria-label="Vues globales">
+        <button
+          type="button"
+          className={workspaceView === 'library' ? 'is-selected' : ''}
+          onClick={onLibrarySelect}
+          title="Explorer les skills Claude, prompts Codex et consignes disponibles."
+        >
+          <span>Bibliothèque</span>
+        </button>
+      </nav>
 
       {error && (
         <p className="sidebar-error" role="alert">

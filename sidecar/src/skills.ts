@@ -297,7 +297,12 @@ export class SkillInventory {
     this.watchers = [];
   }
 
-  list(filters: { query?: string; provider?: SkillProvider; projectId?: string } = {}): SkillSummary[] {
+  list(filters: {
+    query?: string;
+    provider?: SkillProvider;
+    projectId?: string;
+    favoriteProjectId?: string;
+  } = {}): SkillSummary[] {
     const clauses: string[] = [];
     const parameters: Array<string> = [];
     if (filters.provider) {
@@ -313,7 +318,7 @@ export class SkillInventory {
       clauses.push("(lower(s.name) LIKE ? OR lower(s.description) LIKE ? OR lower(s.triggers_json) LIKE ?)");
       parameters.push(query, query, query);
     }
-    const favoriteProject = filters.projectId ?? "";
+    const favoriteProject = filters.favoriteProjectId ?? filters.projectId ?? "";
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
     const rows = this.db.query(`
       SELECT s.id, s.name, s.description, s.triggers_json, s.provider,

@@ -287,6 +287,39 @@
   border-radius: var(--r-full);
 }
 
+/* --- Navigation globale -------------------------------------------------- */
+
+.sidebar-global-nav {
+  flex: none;
+  padding: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sidebar-global-nav button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px var(--space-2);
+  color: var(--text-muted);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.sidebar-global-nav button:hover,
+.sidebar-global-nav button.is-selected {
+  color: var(--text-strong);
+  background: var(--bg-active);
+}
+
+.sidebar-global-nav button.is-selected {
+  box-shadow: inset 2px 0 var(--accent);
+}
+
 /* --- Quotas --------------------------------------------------------------- */
 
 .quota-bar {

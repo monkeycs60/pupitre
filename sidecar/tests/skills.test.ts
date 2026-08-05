@@ -111,6 +111,7 @@ Contenu complet.
   expect("content_md" in skill).toBe(false);
   expect(inventory.setFavorite(project.id, skill.id, true)).toBe(true);
   expect(inventory.list({ projectId: project.id })[0]?.favorite).toBe(true);
+  expect(inventory.list({ favoriteProjectId: project.id })[0]?.favorite).toBe(true);
   expect(inventory.get(skill.id, project.id)?.content_md).toContain("Contenu complet");
   expect(inventory.setFavorite(project.id, skill.id, false)).toBe(true);
   expect(inventory.list({ projectId: project.id })[0]?.favorite).toBe(false);

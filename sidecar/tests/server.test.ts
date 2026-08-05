@@ -324,6 +324,13 @@ test("API skills : refresh, filtres, détail et favori par projet", async () => 
     { favorite: true },
   );
   expect(favorite.status).toBe(204);
+  const favoriteList = await fetch(
+    `${current.baseUrl}/api/skills?favoriteProjectId=${project.id}`,
+  );
+  expect(favoriteList.status).toBe(200);
+  expect(await favoriteList.json()).toEqual([
+    expect.objectContaining({ id: skillId, favorite: true }),
+  ]);
   const detail = await fetch(
     `${current.baseUrl}/api/skills/${skillId}?projectId=${project.id}`,
   );

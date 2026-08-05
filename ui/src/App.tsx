@@ -12,6 +12,8 @@ import { ContextGauge } from './ContextGauge'
 import { GitView } from './GitView'
 import { getGardienStatus, listProjectConversations } from './api'
 import { guardianAckCount } from './groupEvents'
+import { SkillsLibrary } from './SkillsLibrary'
+import type { WorkspaceView } from './types'
 
 function App() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
@@ -22,9 +24,7 @@ function App() {
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [showReviewDialog, setShowReviewDialog] = useState(false)
-  const [workspaceView, setWorkspaceView] = useState<'conversations' | 'git' | 'guardian'>(
-    'conversations',
-  )
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
   const [reviewListVersion, setReviewListVersion] = useState(0)
   const [gardienPollVersion, setGardienPollVersion] = useState(0)
@@ -142,6 +142,12 @@ function App() {
     setShowReviewDialog(false)
   }
 
+  function handleLibrarySelect() {
+    setWorkspaceView('library')
+    setShowSwitchModel(false)
+    setShowReviewDialog(false)
+  }
+
   async function handleGitConversationSelect(conversationId: string) {
     if (selectedProject === null) return
     const conversations = await listProjectConversations(selectedProject.id)
@@ -165,6 +171,8 @@ function App() {
     ? 'Gardien'
     : workspaceView === 'git'
       ? 'Git'
+      : workspaceView === 'library'
+        ? 'Bibliothèque'
       : selectedConversation?.title ?? null
 
   return (
@@ -183,11 +191,14 @@ function App() {
         workspaceView={workspaceView}
         onGuardianSelect={handleGuardianSelect}
         onGitSelect={handleGitSelect}
+        onLibrarySelect={handleLibrarySelect}
         reviewListVersion={effectiveReviewListVersion}
       />
 
-      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : 'Conversation'}>
-        {selectedProject === null ? (
+      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'library' ? 'Bibliothèque' : 'Conversation'}>
+        {workspaceView === 'library' ? (
+          <SkillsLibrary project={selectedProject} />
+        ) : selectedProject === null ? (
           <div className="empty-state">
             <p>Sélectionnez un projet pour commencer.</p>
           </div>

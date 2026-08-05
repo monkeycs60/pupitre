@@ -428,6 +428,7 @@ export function createServer(deps: ServerDeps) {
             query: url.searchParams.get("q") ?? undefined,
             provider: (provider as SkillProvider | null) ?? undefined,
             projectId: url.searchParams.get("projectId") ?? undefined,
+            favoriteProjectId: url.searchParams.get("favoriteProjectId") ?? undefined,
           }));
         }
 
