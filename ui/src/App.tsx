@@ -10,9 +10,11 @@ import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import { ContextGauge } from './ContextGauge'
 import { GitView } from './GitView'
-import { getGardienStatus, listProjectConversations } from './api'
+import { getGardienStatus, listProjectConversations, listProjects } from './api'
 import { guardianAckCount } from './groupEvents'
 import { SkillsLibrary } from './SkillsLibrary'
+import { RoutinesView } from './RoutinesView'
+import { useAppNotifications } from './useAppNotifications'
 import type { WorkspaceView } from './types'
 
 function App() {
@@ -35,6 +37,7 @@ function App() {
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
   const quotas = useQuotas()
+  useAppNotifications()
   const guardianAckEventCount = guardianAckCount(events)
   const effectiveReviewListVersion = reviewListVersion
     + guardianAckEventCount
@@ -148,6 +151,25 @@ function App() {
     setShowReviewDialog(false)
   }
 
+  function handleRoutinesSelect() {
+    setWorkspaceView('routines')
+    setShowSwitchModel(false)
+    setShowReviewDialog(false)
+  }
+
+  async function handleRoutineConversationSelect(projectId: string, conversationId: string) {
+    const project = selectedProject?.id === projectId
+      ? selectedProject
+      : listProjects().then((items) => items.find((item) => item.id === projectId) ?? null)
+    const resolvedProject = await project
+    if (!resolvedProject) return
+    const conversations = await listProjectConversations(projectId)
+    const conversation = conversations.find((item) => item.id === conversationId)
+    if (!conversation) return
+    setSelectedProject(resolvedProject)
+    handleConversationSelect(conversation)
+  }
+
   async function handleGitConversationSelect(conversationId: string) {
     if (selectedProject === null) return
     const conversations = await listProjectConversations(selectedProject.id)
@@ -173,6 +195,8 @@ function App() {
       ? 'Git'
       : workspaceView === 'library'
         ? 'Bibliothèque'
+        : workspaceView === 'routines'
+          ? 'Routines'
       : selectedConversation?.title ?? null
 
   return (
@@ -192,12 +216,18 @@ function App() {
         onGuardianSelect={handleGuardianSelect}
         onGitSelect={handleGitSelect}
         onLibrarySelect={handleLibrarySelect}
+        onRoutinesSelect={handleRoutinesSelect}
         reviewListVersion={effectiveReviewListVersion}
       />
 
-      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'library' ? 'Bibliothèque' : 'Conversation'}>
+      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : 'Conversation'}>
         {workspaceView === 'library' ? (
           <SkillsLibrary project={selectedProject} />
+        ) : workspaceView === 'routines' ? (
+          <RoutinesView
+            initialProject={selectedProject}
+            onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
+          />
         ) : selectedProject === null ? (
           <div className="empty-state">
             <p>Sélectionnez un projet pour commencer.</p>

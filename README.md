@@ -60,6 +60,20 @@ la sidebar.
   rédige le fichier avec le `skill-creator` indexé s'il existe ; l'installation
   refuse d'écraser un `SKILL.md` existant et rafraîchit immédiatement l'index.
 
+## Workflows et routines (M4-L)
+
+- Un workflow épinglé associe un skill, un prompt et un preset ou modèle. Il
+  apparaît sous son projet dans la sidebar et démarre une nouvelle conversation
+  en un clic ; son CRUD reste accessible par **+ Workflow**.
+- La vue globale **Routines** planifie un workflow ou un prompt libre avec une
+  expression cron cinq champs, calculée par le sidecar sans dépendance au cron
+  système. Chaque passage devient une conversation normale marquée routine.
+- L'historique affiche état, durée, tokens et accès à la sortie. Une exécution
+  manuelle démarre en arrière-plan sans décaler le prochain passage planifié.
+- Une notification native signale la fin des routines et des tâches
+  interactives longues. Leur seuil est réglable dans la vue Routines (120 s par
+  défaut), et la permission n'est demandée qu'au premier événement réel.
+
 ## Sous-tâches déléguées (M2-D1)
 
 Une conversation peut déléguer du travail à un autre modèle (le Conductor de la phase D). Le moteur vit dans `sidecar/src/subtasks.ts` :
@@ -167,6 +181,6 @@ Protocole e2e : `e2e/basic-flow.md`.
 
 **M3 (fait)** : Gardien, contre-avis, Débrief et passation, bouton Tester avec preuves, vue Git et durcissement du sidecar.
 
-**M4 (en cours)** : bibliothèque de skills, pont cross-provider, suggestions et
-composer terminés ; workflows épinglés, routines, fleet view, recherche globale
-et aide intégrée restent à construire.
+**M4 (en cours)** : bibliothèque de skills, pont cross-provider, suggestions,
+composer, workflows épinglés et routines terminés ; fleet view, recherche
+globale, palette, coûts, mémoire et aide intégrée restent à construire.

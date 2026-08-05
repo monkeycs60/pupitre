@@ -1,7 +1,7 @@
 export type Provider = 'claude' | 'codex'
 export type ConversationSpeed = 'standard' | 'fast'
 export type GardienMode = 'informatif' | 'bloquant'
-export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library'
+export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines'
 
 export type SkillProvenance =
   | 'claude-global'
@@ -59,6 +59,45 @@ export interface Workflow {
   updated_at: string
 }
 
+export interface Routine {
+  id: string
+  project_id: string
+  name: string
+  schedule: string
+  workflow_id: string | null
+  prompt: string | null
+  preset_id: string | null
+  provider: Provider
+  model: string
+  effort: string | null
+  speed: ConversationSpeed | null
+  orchestrator: boolean
+  enabled: boolean
+  next_run_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RoutineRun {
+  id: string
+  routine_id: string
+  conversation_id: string | null
+  status: 'running' | 'done' | 'error'
+  error: string | null
+  started_at: string
+  completed_at: string | null
+  tokens: number
+}
+
+export interface AppNotification {
+  id: number
+  kind: 'routine' | 'long-task'
+  title: string
+  body: string
+  conversation_id: string | null
+  created_at: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -97,6 +136,7 @@ export interface Conversation {
   speed: ConversationSpeed | null
   orchestrator: boolean
   continued_from: string | null
+  routine_id: string | null
   cli_session_id: string | null
   pinned: boolean
   created_at: string

@@ -37,6 +37,7 @@ interface SidebarProps {
   onGuardianSelect: () => void
   onGitSelect: () => void
   onLibrarySelect: () => void
+  onRoutinesSelect: () => void
   reviewListVersion: number
 }
 
@@ -81,6 +82,7 @@ export function Sidebar({
   onGuardianSelect,
   onGitSelect,
   onLibrarySelect,
+  onRoutinesSelect,
   reviewListVersion,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -451,6 +453,14 @@ export function Sidebar({
       </section>
 
       <nav className="sidebar-global-nav" aria-label="Vues globales">
+        <button
+          type="button"
+          className={workspaceView === 'routines' ? 'is-selected' : ''}
+          onClick={onRoutinesSelect}
+          title="Planifier des workflows ou prompts et consulter leurs exécutions."
+        >
+          <span>Routines</span>
+        </button>
         <button
           type="button"
           className={workspaceView === 'library' ? 'is-selected' : ''}

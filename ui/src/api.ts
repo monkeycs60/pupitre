@@ -13,6 +13,9 @@ import type {
   Review,
   ReviewDecision,
   ReviewFlag,
+  Routine,
+  RoutineRun,
+  AppNotification,
   SkillDetail,
   SkillSummary,
   SkillSuggestionResult,
@@ -83,6 +86,21 @@ export interface WorkflowInput {
   orchestrator?: boolean
 }
 
+export interface RoutineInput {
+  projectId: string
+  name: string
+  schedule: string
+  workflowId: string | null
+  prompt: string | null
+  presetId: string | null
+  provider: Provider
+  model: string
+  effort: string | null
+  speed: ConversationSpeed | null
+  orchestrator: boolean
+  enabled: boolean
+}
+
 export interface StartReviewInput {
   conversationId: string
   gitRefBase?: string
@@ -96,6 +114,7 @@ export interface StartReviewInput {
 
 export interface Settings {
   quotaThresholds?: QuotaThresholds
+  longTaskThresholdSeconds?: number
 }
 
 export class ApiError extends Error {
@@ -255,6 +274,35 @@ export function deleteWorkflow(id: string): Promise<void> {
 
 export function runWorkflow(id: string): Promise<Conversation> {
   return fetchJson(`/api/workflows/${routeId(id)}/run`, jsonPost({}))
+}
+
+export function listRoutines(projectId?: string): Promise<Routine[]> {
+  const suffix = projectId ? `?projectId=${routeId(projectId)}` : ''
+  return fetchJson(`/api/routines${suffix}`)
+}
+
+export function createRoutine(input: RoutineInput): Promise<Routine> {
+  return fetchJson('/api/routines', jsonPost(input))
+}
+
+export function updateRoutine(id: string, input: RoutineInput): Promise<Routine> {
+  return fetchJson(`/api/routines/${routeId(id)}`, jsonPut(input))
+}
+
+export function deleteRoutine(id: string): Promise<void> {
+  return fetchVoid(`/api/routines/${routeId(id)}`, { method: 'DELETE' })
+}
+
+export function listRoutineRuns(id: string): Promise<RoutineRun[]> {
+  return fetchJson(`/api/routines/${routeId(id)}/runs`)
+}
+
+export function runRoutine(id: string): Promise<RoutineRun> {
+  return fetchJson(`/api/routines/${routeId(id)}/run`, jsonPost({}))
+}
+
+export function listNotifications(after = 0): Promise<AppNotification[]> {
+  return fetchJson(`/api/notifications?after=${after}`)
 }
 
 export function createProject(input: CreateProjectInput): Promise<Project> {
