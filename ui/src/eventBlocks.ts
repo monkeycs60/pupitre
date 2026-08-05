@@ -32,6 +32,11 @@ interface TurnFooterBlock {
     outputTokens: number
   }
   status?: Extract<AppEvent, { type: 'status' }>
+  timing?: {
+    startedAt: string
+    firstResponseAt?: string
+    completedAt?: string
+  }
 }
 
 export type EventBlock =

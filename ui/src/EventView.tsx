@@ -1,6 +1,7 @@
 import ReactMarkdown from 'react-markdown'
 import type { EventBlock } from './eventBlocks'
 import { mediaUrl } from './transport'
+import { useNow } from './useNow'
 
 interface EventViewProps {
   block: EventBlock
@@ -51,6 +52,82 @@ export function ImageGallery({
         )
       })}
     </div>
+  )
+}
+
+function formatDuration(ms: number): string {
+  const safeMs = Math.max(0, ms)
+  if (safeMs < 10_000) {
+    return `${(safeMs / 1000).toLocaleString('fr-FR', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })} s`
+  }
+  const seconds = Math.round(safeMs / 1000)
+  if (seconds < 60) return `${seconds} s`
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes} min ${String(seconds % 60).padStart(2, '0')} s`
+}
+
+function parsedTime(value: string | undefined): number | null {
+  if (value === undefined) return null
+  const timestamp = Date.parse(value)
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
+function TurnFooter({ block }: { block: Extract<EventBlock, { kind: 'turn-footer' }> }) {
+  const isRunning = block.status?.state === 'running'
+  const isDone = block.status?.state === 'done'
+  const isError = block.status?.state === 'error'
+  // Synchronisation avec l'horloge système : seul effet nécessaire au compteur.
+  const now = useNow(isRunning ? 1_000 : 30_000)
+  const startedAt = parsedTime(block.timing?.startedAt)
+  const firstResponseAt = parsedTime(block.timing?.firstResponseAt)
+  const completedAt = parsedTime(block.timing?.completedAt)
+  const endAt = completedAt ?? (isRunning ? now : null)
+  const firstResponseMs = startedAt !== null && firstResponseAt !== null
+    ? firstResponseAt - startedAt
+    : null
+  const totalMs = startedAt !== null && endAt !== null ? endAt - startedAt : null
+
+  return (
+    <footer className="turn-footer">
+      {isError ? (
+        <div className="turn-error" role="alert">
+          <span className="turn-error-label">Erreur</span>{' '}
+          {block.status?.error ?? 'Une erreur est survenue.'}
+        </div>
+      ) : null}
+      <div className="turn-meta">
+        {isRunning ? (
+          <span className="running-indicator" role="status">
+            <span aria-hidden="true">●</span> en cours
+          </span>
+        ) : null}
+        {isDone ? (
+          <span className="done-indicator">
+            <span aria-hidden="true">●</span> terminé
+          </span>
+        ) : null}
+        {totalMs !== null ? (
+          <span className="turn-timing">
+            {firstResponseMs === null
+              ? isRunning
+                ? `attente ${formatDuration(totalMs)}`
+                : `aucun retour · total ${formatDuration(totalMs)}`
+              : `1er retour ${formatDuration(firstResponseMs)} · ${
+                  isRunning ? 'durée' : 'total'
+                } ${formatDuration(totalMs)}`}
+          </span>
+        ) : null}
+        {block.usage ? (
+          <span className="usage">
+            {block.usage.inputTokens.toLocaleString('fr-FR')} →{' '}
+            {block.usage.outputTokens.toLocaleString('fr-FR')} tokens
+          </span>
+        ) : null}
+      </div>
+    </footer>
   )
 }
 
@@ -117,38 +194,7 @@ export function EventView({ block, onImageOpen, onImageLoad }: EventViewProps) {
       )
 
     case 'turn-footer': {
-      const isRunning = block.status?.state === 'running'
-      const isDone = block.status?.state === 'done'
-      const isError = block.status?.state === 'error'
-
-      return (
-        <footer className="turn-footer">
-          {isError ? (
-            <div className="turn-error" role="alert">
-              <span className="turn-error-label">Erreur</span>{' '}
-              {block.status?.error ?? 'Une erreur est survenue.'}
-            </div>
-          ) : null}
-          <div className="turn-meta">
-            {isRunning ? (
-              <span className="running-indicator" role="status">
-                <span aria-hidden="true">●</span> en cours
-              </span>
-            ) : null}
-            {isDone ? (
-              <span className="done-indicator">
-                <span aria-hidden="true">●</span> terminé
-              </span>
-            ) : null}
-            {block.usage ? (
-              <span className="usage">
-                {block.usage.inputTokens.toLocaleString('fr-FR')} →{' '}
-                {block.usage.outputTokens.toLocaleString('fr-FR')} tokens
-              </span>
-            ) : null}
-          </div>
-        </footer>
-      )
+      return <TurnFooter block={block} />
     }
   }
 }

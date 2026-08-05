@@ -262,6 +262,13 @@ export type AppEvent =
   | { type: 'tool-start'; toolId: string; toolName: string; input: unknown }
   | { type: 'tool-end'; toolId: string; output: string; images: string[] }
   | {
+      type: 'turn-timing'
+      phase: 'started' | 'first-response' | 'completed'
+      startedAt: string
+      firstResponseAt?: string
+      completedAt?: string
+    }
+  | {
       type: 'usage'
       inputTokens: number
       outputTokens: number

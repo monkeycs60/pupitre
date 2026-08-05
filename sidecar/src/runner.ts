@@ -89,14 +89,10 @@ export class ConversationRunner {
       state: "error",
       error: "le provider n'a pas publié de statut terminal",
     };
+    const startedAt = new Date().toISOString();
+    let firstResponseAt: string | undefined;
 
-    const emit = (event: AppEvent) => {
-      if (event.type === "status" && event.state !== "running") {
-        outcome = { state: event.state, ...(event.error ? { error: event.error } : {}) };
-      }
-      if (event.type === "session") {
-        this.convs.setCliSessionId(conversationId, event.cliSessionId);
-      }
+    const persist = (event: AppEvent) => {
       // Les events de quota restent des events de conversation (replay intact)
       // ET alimentent le tracker global au passage.
       this.quotas.ingest(event);
@@ -104,8 +100,40 @@ export class ConversationRunner {
       this.broadcast(conversationId, { ...event, id });
     };
 
+    const emit = (event: AppEvent) => {
+      if (
+        firstResponseAt === undefined
+        && (event.type === "text-delta"
+          || event.type === "text-final"
+          || event.type === "tool-start")
+      ) {
+        firstResponseAt = new Date().toISOString();
+        persist({
+          type: "turn-timing",
+          phase: "first-response",
+          startedAt,
+          firstResponseAt,
+        });
+      }
+      if (event.type === "status" && event.state !== "running") {
+        outcome = { state: event.state, ...(event.error ? { error: event.error } : {}) };
+        persist({
+          type: "turn-timing",
+          phase: "completed",
+          startedAt,
+          ...(firstResponseAt ? { firstResponseAt } : {}),
+          completedAt: new Date().toISOString(),
+        });
+      }
+      if (event.type === "session") {
+        this.convs.setCliSessionId(conversationId, event.cliSessionId);
+      }
+      persist(event);
+    };
+
     try {
       emit({ type: "user-message", text: prompt, images: imageNames });
+      emit({ type: "turn-timing", phase: "started", startedAt });
       // Câblage du bridge MCP `conductor`, par tour : seule une conversation
       // orchestratrice peut déléguer. Les tours de sous-tâches passent par
       // SubtaskRunner, qui ne construit JAMAIS ce champ (garde de profondeur).

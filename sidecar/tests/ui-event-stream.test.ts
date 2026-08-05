@@ -18,6 +18,41 @@ test("cumule les mises à jour d'usage incrémentales d'un même tour", () => {
   });
 });
 
+test("conserve les jalons de temps du tour dans son pied", () => {
+  const events: AppEvent[] = [
+    { type: "user-message", text: "bonjour", images: [] },
+    {
+      type: "turn-timing",
+      phase: "started",
+      startedAt: "2026-08-05T12:00:00.000Z",
+    },
+    { type: "status", state: "running" },
+    {
+      type: "turn-timing",
+      phase: "first-response",
+      startedAt: "2026-08-05T12:00:00.000Z",
+      firstResponseAt: "2026-08-05T12:00:01.250Z",
+    },
+    {
+      type: "turn-timing",
+      phase: "completed",
+      startedAt: "2026-08-05T12:00:00.000Z",
+      firstResponseAt: "2026-08-05T12:00:01.250Z",
+      completedAt: "2026-08-05T12:00:03.500Z",
+    },
+    { type: "status", state: "done" },
+  ];
+
+  expect(groupEvents(events).find((block) => block.kind === "turn-footer"))
+    .toMatchObject({
+      timing: {
+        startedAt: "2026-08-05T12:00:00.000Z",
+        firstResponseAt: "2026-08-05T12:00:01.250Z",
+        completedAt: "2026-08-05T12:00:03.500Z",
+      },
+    });
+});
+
 test("les clés restent uniques quand un outil réutilise son id sur plusieurs tours", () => {
   const events: StoredEvent[] = [
     { id: 1, type: "user-message", text: "un", images: [] },

@@ -190,6 +190,19 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
         }
         break
       }
+      case 'turn-timing': {
+        const footer = ensureTurnFooter()
+        footer.timing = {
+          startedAt: event.startedAt,
+          ...(event.firstResponseAt === undefined
+            ? {}
+            : { firstResponseAt: event.firstResponseAt }),
+          ...(event.completedAt === undefined
+            ? {}
+            : { completedAt: event.completedAt }),
+        }
+        break
+      }
       case 'status':
         ensureTurnFooter().status = event
         if (event.state !== 'running') assistant = null

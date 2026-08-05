@@ -108,6 +108,38 @@ test("un tour persiste user-message + événements, capture le session id, diffu
     .toBe(streamedDeltas.map((event) => event.text).join(""));
 });
 
+test("mesure l'attente du premier retour et la durée totale du tour", async () => {
+  const c = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "chronomètre",
+  });
+
+  await runner.runTurn(c.id, "chronomètre", []);
+
+  const timings = convs.listEvents(c.id)
+    .filter((event) => event.type === "turn-timing");
+  expect(timings).toHaveLength(3);
+  expect(timings[0]).toMatchObject({
+    type: "turn-timing",
+    phase: "started",
+  });
+  expect(timings[1]).toMatchObject({
+    type: "turn-timing",
+    phase: "first-response",
+  });
+  expect(timings[2]).toMatchObject({
+    type: "turn-timing",
+    phase: "completed",
+  });
+  if (timings[2]?.type !== "turn-timing") throw new Error("timing terminal absent");
+  expect(timings[2].firstResponseAt).toBeString();
+  expect(Date.parse(timings[2].completedAt ?? "")).toBeGreaterThanOrEqual(
+    Date.parse(timings[2].firstResponseAt ?? ""),
+  );
+});
+
 test("transmet l'effort de la conversation à l'adapter", async () => {
   const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-effort-")), "args");
   process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
