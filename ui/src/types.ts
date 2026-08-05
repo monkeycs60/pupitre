@@ -121,6 +121,7 @@ export interface ReviewFlag {
   severity: ReviewSeverity
   category: string
   message: string
+  test_gap?: boolean
   decision?: string
   status: ReviewFlagStatus
   code_provider: Provider
@@ -237,6 +238,8 @@ export interface TestScope {
   subtaskId?: string | null
   evidence_md?: string | null
   evidenceMd?: string | null
+  images: string[]
+  guardianFlagIdsAcked?: string[]
   error: string | null
 }
 
@@ -299,6 +302,7 @@ export type AppEvent =
       scopeId: string
       status: 'passed' | 'failed'
       evidenceMd: string
+      images: string[]
       guardianFlagIdsAcked: string[]
       completedAt: string
       error?: string

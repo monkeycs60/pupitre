@@ -50,6 +50,7 @@ export type AppEvent =
       scopeId: string;
       status: "passed" | "failed";
       evidenceMd: string;
+      images: string[];
       guardianFlagIdsAcked: string[];
       completedAt: string;
       error?: string;
@@ -69,6 +70,7 @@ export interface TestScopeEvent {
   status: "pending" | "running" | "passed" | "failed";
   subtaskId: string | null;
   evidenceMd: string | null;
+  images: string[];
   error: string | null;
 }
 

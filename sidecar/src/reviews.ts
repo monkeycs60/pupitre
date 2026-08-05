@@ -550,6 +550,9 @@ function validateFlag(
   }
   const category = nonEmptyString(flag.category, `flag ${index + 1}.category`);
   const message = nonEmptyString(flag.message, `flag ${index + 1}.message`);
+  if (flag.test_gap !== undefined && typeof flag.test_gap !== "boolean") {
+    throw new ReviewOutputError(`flag ${index + 1}.test_gap invalide`);
+  }
   const decision = typeof flag.decision === "string" && flag.decision.trim() !== ""
     ? flag.decision.trim()
     : `OK pour accepter ce point : ${message}`;
@@ -567,6 +570,7 @@ function validateFlag(
     category,
     message,
     decision,
+    ...(typeof flag.test_gap === "boolean" ? { test_gap: flag.test_gap } : {}),
   };
 }
 
@@ -642,11 +646,12 @@ function reviewPrompt(diff: string, index: number, total: number): string {
     "silencieusement ; gestion d'erreur supprimée ; secret ou credential ; absence",
     "de test sur code critique.",
     "Chaque flag doit être concret, actionnable et ancré à des lignes modifiées.",
+    "Marque test_gap=true uniquement quand le risque est une couverture de test absente ou insuffisante.",
     "Sévérité : red = prod/données, orange = side effect probable, grey = cosmétique.",
     "Réponds UNIQUEMENT par ce JSON, sans markdown ni commentaire :",
     '{"flags":[{"file":"src/fichier.ts","line_start":12,"line_end":14,',
     '"severity":"red|orange|grey","category":"catégorie",',
-    '"message":"Une phrase concrète et actionnable.",',
+    '"message":"Une phrase concrète et actionnable.","test_gap":true|false,',
     '"decision":"Question explicite commençant par OK pour… ?"}]}',
     "S'il n'y a aucun risque réel, réponds exactement {\"flags\":[]}.",
     "",

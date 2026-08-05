@@ -19,7 +19,7 @@ function formatPreValue(value: unknown): string {
   }
 }
 
-function ImageGallery({
+export function ImageGallery({
   images,
   label,
   onImageOpen,

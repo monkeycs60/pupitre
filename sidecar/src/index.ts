@@ -79,6 +79,7 @@ if (process.argv.includes("--conductor-mcp")) {
     subtasks,
     undefined,
     runner.activity,
+    media,
   );
   server = createServer({
     port,

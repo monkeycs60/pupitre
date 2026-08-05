@@ -16,6 +16,7 @@ export interface ReviewFlagInput {
   category: string;
   message: string;
   decision?: string;
+  test_gap?: boolean;
 }
 
 export interface ReviewDecision {
@@ -44,6 +45,7 @@ export interface ReviewFlag extends ReviewFlagInput {
   counter_effort: string | null;
   counter_subtask_id: string | null;
   counter_error: string | null;
+  test_gap: boolean;
 }
 
 export interface Review {
@@ -130,8 +132,7 @@ export class ReviewStore {
   listTestingFlags(projectId: string): ReviewFlag[] {
     return this.listByProject(projectId).flatMap((review) => review.flags).filter((flag) => {
       if (flag.status !== "open" && flag.status !== "countered") return false;
-      return /(?:absence|manque|sans|non)[^\n]{0,32}test|test[^\n]{0,32}(?:absent|manquant|critique)/i
-        .test(`${flag.category} ${flag.message}`);
+      return flag.test_gap;
     });
   }
 
@@ -222,8 +223,8 @@ export class ReviewStore {
       JOIN reviews r ON r.id = f.review_id
       JOIN conversations c ON c.id = r.conversation_id
       WHERE f.id = ?
-    `).get(id) as ReviewFlag | null;
-    return row;
+    `).get(id) as any;
+    return row ? hydrateFlag(row) : null;
   }
 
   queueCounters(
@@ -331,8 +332,8 @@ export class ReviewStore {
       const insert = this.db.query(`
         INSERT INTO review_flags
           (id, review_id, file, line_start, line_end, severity, category, message,
-           decision, code_provider, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
+           decision, code_provider, is_test_gap, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
       `);
       const stored: Array<ReviewFlagInput & { id: string }> = [];
       for (const flag of flags) {
@@ -348,6 +349,7 @@ export class ReviewStore {
           flag.message,
           flag.decision ?? decisionQuestion(flag.message),
           defaultCodeProvider,
+          (flag.test_gap ?? inferTestGap(flag.category, flag.message)) ? 1 : 0,
         );
         stored.push({ ...flag, id: flagId });
       }
@@ -366,7 +368,7 @@ export class ReviewStore {
   }
 
   private hydrate(row: any): Review {
-    const flags = this.db.query(`
+    const flags = (this.db.query(`
       SELECT f.*, COALESCE(f.code_provider, ?, c.provider) AS code_provider
       FROM review_flags f
       JOIN reviews r ON r.id = f.review_id
@@ -374,7 +376,7 @@ export class ReviewStore {
       WHERE f.review_id = ?
       ORDER BY CASE severity WHEN 'red' THEN 0 WHEN 'orange' THEN 1 ELSE 2 END,
                file ASC, line_start ASC
-    `).all(row.code_provider, row.id) as ReviewFlag[];
+    `).all(row.code_provider, row.id) as any[]).map(hydrateFlag);
     const decisions = this.db.query(
       "SELECT * FROM review_decisions WHERE review_id = ? ORDER BY rowid",
     ).all(row.id).map((decision) => this.hydrateDecision(decision));
@@ -495,6 +497,16 @@ export class ReviewStore {
       update.run(decisionStatus(statuses), decision.id);
     }
   }
+}
+
+function hydrateFlag(row: any): ReviewFlag {
+  return { ...row, test_gap: row.is_test_gap === 1 } as ReviewFlag;
+}
+
+function inferTestGap(category: string, message: string): boolean {
+  const value = `${category} ${message}`;
+  return /(?:absence|manque|sans|non)[^\n]{0,48}test|test[^\n]{0,48}(?:absent|manquant|critique)|test coverage|coverage[^\n]{0,32}test|couverture[^\n]{0,32}(?:test|régression)/i
+    .test(value);
 }
 
 function validateDecisionPlans(plans: ReviewDecisionInput[], flagCount: number): void {

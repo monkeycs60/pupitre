@@ -39,7 +39,12 @@ export function EventStream({
         ) : block.kind === 'debrief' ? (
           <DebriefCard key={block.id} block={block} onQuestion={onDebriefQuestion} />
         ) : block.kind === 'test-inventory' ? (
-          <TestInventoryCard key={block.id} block={block} />
+          <TestInventoryCard
+            key={block.id}
+            block={block}
+            onImageOpen={onImageOpen}
+            onImageLoad={onImageLoad}
+          />
         ) : (
           <EventView
             key={block.id}

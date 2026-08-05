@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 import type { AppEvent } from "../events";
 import type { EmitFn, TurnOptions } from "./types";
 import { codexMcpConfig } from "../conductor";
+import { boundedToolOutput } from "./output";
 
 // Client du protocole `codex app-server` (JSON-RPC newline-delimited sur stdio).
 // Un SEUL process partagé par tout le sidecar : démarrage paresseux au premier
@@ -13,7 +14,6 @@ import { codexMcpConfig } from "../conductor";
 // `codex app-server generate-ts` (v2/) et de la fixture réelle
 // tests/fixtures/codex-app-server-basic.jsonl.
 
-const OUTPUT_LIMIT = 10_000;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_IDLE_MS = 5 * 60_000;
 
@@ -488,7 +488,7 @@ export class CodexAppServerClient {
         ctx.emit({
           type: "tool-end",
           toolId: item.id,
-          output: String(item.aggregatedOutput ?? "").slice(0, OUTPUT_LIMIT),
+          output: boundedToolOutput(item.aggregatedOutput),
           images: [],
         });
       }

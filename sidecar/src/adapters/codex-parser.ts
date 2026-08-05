@@ -1,4 +1,5 @@
 import { parseJsonlLine, type AppEvent } from "../events";
+import { boundedToolOutput } from "./output";
 
 // Une ligne JSONL de `codex exec --json` peut produire 0..n AppEvents.
 export function parseCodexLine(line: string): AppEvent[] {
@@ -38,7 +39,7 @@ export function parseCodexLine(line: string): AppEvent[] {
         return [{
           type: "tool-end",
           toolId: item.id,
-          output: String(item.aggregated_output ?? "").slice(0, 10_000),
+          output: boundedToolOutput(item.aggregated_output),
           images: [],
         }];
       }

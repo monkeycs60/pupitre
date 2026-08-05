@@ -20,6 +20,7 @@ export interface TestScope {
   status: TestScopeStatus;
   subtask_id: string | null;
   evidence_md: string | null;
+  images: string[];
   error: string | null;
   created_at: string;
   updated_at: string;
@@ -117,7 +118,7 @@ export class TestingStore {
       this.db.query(`
         UPDATE test_scopes
         SET status = 'running', subtask_id = NULL, evidence_md = NULL,
-            error = NULL, updated_at = ?
+            images_json = '[]', error = NULL, updated_at = ?
         WHERE id = ?
       `).run(new Date().toISOString(), id);
       return this.getScope(id);
@@ -151,6 +152,7 @@ export class TestingStore {
     id: string;
     status: "passed" | "failed";
     evidenceMd: string;
+    images?: string[];
     error?: string | null;
     guardianFlagIdsAcked: string[];
   }, ackFlags?: () => string[]): { scope: TestScope; event: StoredEvent } {
@@ -158,9 +160,16 @@ export class TestingStore {
       const now = new Date().toISOString();
       this.db.query(`
         UPDATE test_scopes
-        SET status = ?, evidence_md = ?, error = ?, updated_at = ?
+        SET status = ?, evidence_md = ?, images_json = ?, error = ?, updated_at = ?
         WHERE id = ?
-      `).run(input.status, input.evidenceMd, input.error ?? null, now, input.id);
+      `).run(
+        input.status,
+        input.evidenceMd,
+        JSON.stringify(input.images ?? []),
+        input.error ?? null,
+        now,
+        input.id,
+      );
       const scope = this.getScope(input.id);
       if (!scope) throw new Error("scope de test inconnu");
       const guardianFlagIdsAcked = input.status === "passed" && ackFlags
@@ -173,6 +182,7 @@ export class TestingStore {
         scopeId: scope.id,
         status: input.status,
         evidenceMd: input.evidenceMd,
+        images: input.images ?? [],
         guardianFlagIdsAcked,
         completedAt: now,
         ...(input.error ? { error: input.error } : {}),
@@ -226,6 +236,7 @@ export class TestingStore {
           scopeId: scope.id,
           status: "failed",
           evidenceMd: evidence,
+          images: [],
           guardianFlagIdsAcked: [],
           completedAt: now,
           error: "interrompu (sidecar redémarré)",
@@ -241,6 +252,7 @@ function hydrateScope(row: any): TestScope {
     ...row,
     methods: parseArray<TestMethod>(row.methods_json),
     guardian_flag_ids: parseArray<string>(row.guardian_flag_ids),
+    images: parseArray<string>(row.images_json),
   } as TestScope;
 }
 
@@ -263,6 +275,7 @@ function scopeEvent(scope: TestScope): TestScopeEvent {
     status: scope.status,
     subtaskId: scope.subtask_id,
     evidenceMd: scope.evidence_md,
+    images: scope.images,
     error: scope.error,
   };
 }

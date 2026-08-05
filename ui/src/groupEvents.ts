@@ -30,6 +30,15 @@ export interface TestInventoryBlock {
 
 export type StreamBlock = EventBlock | SubtaskBlock | DebriefBlock | TestInventoryBlock
 
+export function guardianAckCount(events: ReadonlyArray<AppEvent>): number {
+  return events.reduce(
+    (count, event) => event.type === 'test-scope-result'
+      ? count + (event.guardianFlagIdsAcked?.length ?? 0)
+      : count,
+    0,
+  )
+}
+
 /** Regroupe les événements bruts d'une conversation en blocs affichables. */
 export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): StreamBlock[] {
   const blocks: StreamBlock[] = []
@@ -140,7 +149,10 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
           kind: 'test-inventory',
           id: `test-inventory-${eventKey}-${event.inventoryId}`,
           inventoryId: event.inventoryId,
-          scopes: event.scopes.map((scope) => ({ ...scope })),
+          scopes: event.scopes.map((scope) => ({
+            ...scope,
+            images: scope.images ?? [],
+          })),
           createdAt: event.createdAt,
         }
         testInventories.set(event.inventoryId, inventory)
@@ -164,6 +176,8 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
         if (scope) {
           scope.status = event.status
           scope.evidenceMd = event.evidenceMd
+          scope.images = event.images ?? []
+          scope.guardianFlagIdsAcked = event.guardianFlagIdsAcked ?? []
           scope.error = event.error ?? null
         }
         break

@@ -52,3 +52,19 @@ test("mappe turn.failed vers un status error", () => {
     { type: "status", state: "error", error: "échec Codex" },
   ]);
 });
+
+test("borne une longue sortie d'outil en conservant sa fin", () => {
+  const events = parseCodexLine(JSON.stringify({
+    type: "item.completed",
+    item: {
+      id: "long-output",
+      type: "command_execution",
+      aggregated_output: `${"début\n".repeat(12_000)}RÉSUMÉ FINAL: 1 test échoue`,
+    },
+  }));
+  const output = events.find((event) => event.type === "tool-end")?.output ?? "";
+
+  expect(output.length).toBeLessThanOrEqual(60_000);
+  expect(output).toContain("sortie intermédiaire tronquée");
+  expect(output).toEndWith("RÉSUMÉ FINAL: 1 test échoue");
+});

@@ -1,4 +1,5 @@
 import { parseJsonlLine, type AppEvent } from "../events";
+import { boundedToolOutput } from "./output";
 
 // Une ligne stream-json Claude peut produire 0..n AppEvents.
 export function parseClaudeLine(line: string): AppEvent[] {
@@ -49,7 +50,9 @@ export function parseClaudeLine(line: string): AppEvent[] {
         if (block.type === "tool_result") {
           out.push({
             type: "tool-end", toolId: block.tool_use_id,
-            output: typeof block.content === "string" ? block.content : JSON.stringify(block.content),
+            output: boundedToolOutput(
+              typeof block.content === "string" ? block.content : JSON.stringify(block.content),
+            ),
             images: [],
           });
         }

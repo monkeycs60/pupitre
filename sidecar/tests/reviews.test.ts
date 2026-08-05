@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { Database } from "bun:sqlite";
+import { Database } from "bun:sqlite";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -131,6 +131,63 @@ test("une ligne supprimée reste ancrable sur son ancien chemin", () => {
       + '"message":"Rétablis le refus supprimé."}]}',
     diff,
   )).toHaveLength(1);
+});
+
+test("un test_gap structuré ne dépend pas du vocabulaire de la catégorie", () => {
+  const diff = [
+    "diff --git a/src/api.ts b/src/api.ts",
+    "--- a/src/api.ts",
+    "+++ b/src/api.ts",
+    "@@ -1 +1 @@",
+    "-return oldValue",
+    "+return newValue",
+  ].join("\n");
+
+  expect(parseReviewOutput(JSON.stringify({ flags: [{
+    file: "src/api.ts",
+    line_start: 1,
+    line_end: 1,
+    severity: "orange",
+    category: "test coverage",
+    message: "Add an automated regression for the new response.",
+    test_gap: true,
+  }] }), diff)[0]?.test_gap).toBe(true);
+});
+
+test("migre les anciennes alertes de tests vers le marqueur structuré", () => {
+  const legacyDir = mkdtempSync(join(tmpdir(), "pupitre-review-gap-migration-"));
+  const legacyDb = new Database(join(legacyDir, "pupitre.db"));
+  legacyDb.exec(`
+    CREATE TABLE review_flags (
+      id TEXT PRIMARY KEY,
+      review_id TEXT NOT NULL,
+      file TEXT NOT NULL,
+      line_start INTEGER NOT NULL,
+      line_end INTEGER NOT NULL,
+      severity TEXT NOT NULL,
+      category TEXT NOT NULL,
+      message TEXT NOT NULL,
+      code_provider TEXT NULL,
+      status TEXT NOT NULL DEFAULT 'open'
+    );
+    INSERT INTO review_flags
+      (id, review_id, file, line_start, line_end, severity, category, message, status)
+    VALUES
+      ('legacy-gap', 'review', 'src/api.ts', 1, 1, 'orange',
+       'absence de test', 'Ajoute une régression automatisée.', 'open'),
+      ('legacy-other', 'review', 'src/api.ts', 2, 2, 'grey',
+       'lisibilité', 'Renomme cette variable.', 'open');
+  `);
+  legacyDb.close();
+
+  const migrated = openDb(legacyDir);
+  expect(migrated.query(
+    "SELECT id, is_test_gap FROM review_flags ORDER BY id",
+  ).all()).toEqual([
+    { id: "legacy-gap", is_test_gap: 1 },
+    { id: "legacy-other", is_test_gap: 0 },
+  ]);
+  migrated.close();
 });
 
 test("valide un regroupement sémantique de 2 à 4 décisions sans perdre de flag", () => {

@@ -104,6 +104,7 @@ export function openDb(dir: string = dataDir()): Database {
         CHECK (status IN ('pending', 'running', 'passed', 'failed')),
       subtask_id TEXT NULL,
       evidence_md TEXT NULL,
+      images_json TEXT NOT NULL DEFAULT '[]',
       error TEXT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -131,6 +132,7 @@ export function openDb(dir: string = dataDir()): Database {
       severity TEXT NOT NULL CHECK (severity IN ('red', 'orange', 'grey')),
       category TEXT NOT NULL, message TEXT NOT NULL,
       code_provider TEXT NULL,
+      is_test_gap INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'open'
         CHECK (status IN ('open', 'acked', 'dismissed', 'countered'))
     );
@@ -167,6 +169,32 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "review_flags", "counter_error TEXT NULL");
   addColumn(db, "review_flags", "decision TEXT NULL");
   addColumn(db, "review_flags", "code_provider TEXT NULL");
+  const addedTestGap = addColumn(
+    db,
+    "review_flags",
+    "is_test_gap INTEGER NOT NULL DEFAULT 0",
+  );
+  if (addedTestGap) {
+    // Les flags créés avant M3-I n'avaient pas de champ structuré. Cette
+    // reprise unique conserve les alertes de tests déjà visibles dans Tester.
+    db.exec(`
+      UPDATE review_flags
+      SET is_test_gap = 1
+      WHERE lower(category || ' ' || message) LIKE '%test%'
+        AND (
+          lower(category || ' ' || message) LIKE '%absence%'
+          OR lower(category || ' ' || message) LIKE '%manque%'
+          OR lower(category || ' ' || message) LIKE '%sans%'
+          OR lower(category || ' ' || message) LIKE '%non %'
+          OR lower(category || ' ' || message) LIKE '%absent%'
+          OR lower(category || ' ' || message) LIKE '%manquant%'
+          OR lower(category || ' ' || message) LIKE '%critique%'
+          OR lower(category || ' ' || message) LIKE '%couverture%'
+          OR lower(category || ' ' || message) LIKE '%coverage%'
+        )
+    `);
+  }
+  addColumn(db, "test_scopes", "images_json TEXT NOT NULL DEFAULT '[]'");
   const addedReviewProvider = addColumn(
     db,
     "presets",

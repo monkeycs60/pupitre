@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -13,6 +13,7 @@ import { TestingStore } from "../src/stores/testing";
 import type { AppEvent, StoredEvent } from "../src/events";
 import type { Subtask, SubtaskInput, SubtaskResult } from "../src/subtasks";
 import { ConversationActivity } from "../src/conversation-activity";
+import { MediaStore } from "../src/media";
 
 let db: Database;
 let projects: ProjectStore;
@@ -26,6 +27,8 @@ class FakeSubtasks {
   resultText = '<test-result>{"verdict":"passed","summary":"12 tests passent."}</test-result>';
   lastInput: SubtaskInput | null = null;
   rejectsWait = false;
+  writesScreenshot = false;
+  beforeResult?: (id: string) => void;
 
   start(input: SubtaskInput): Subtask {
     this.lastInput = input;
@@ -47,6 +50,14 @@ class FakeSubtasks {
 
   async waitResult(id: string): Promise<SubtaskResult> {
     if (this.rejectsWait) throw new Error("lecture subtask impossible");
+    this.beforeResult?.(id);
+    if (this.writesScreenshot) {
+      const directory = this.lastInput?.prompt.match(
+        /Enregistre chaque screenshot dans ce dossier[^:]*: (.+)$/m,
+      )?.[1];
+      if (!directory) throw new Error("dossier de captures absent du prompt");
+      writeFileSync(join(directory, "parcours.png"), "fake-png");
+    }
     const now = new Date().toISOString();
     return {
       status: "done",
@@ -162,6 +173,16 @@ test("génère l'inventaire depuis la conversation et y injecte les alertes Gard
 test("exécute le scope en subtask, persiste les preuves et acquitte le flag testé", async () => {
   const flagId = createTestingFlag();
   const subtasks = new FakeSubtasks();
+  subtasks.writesScreenshot = true;
+  subtasks.beforeResult = (id) => {
+    conversations.appendEvent(id, {
+      type: "tool-end",
+      toolId: "bun-test",
+      output: "249 pass\n0 fail\npreuve issue de la sortie outil",
+      images: [],
+    });
+  };
+  const media = new MediaStore(mkdtempSync(join(tmpdir(), "pupitre-testing-media-")));
   const store = new TestingStore(db);
   const runner = new TesterRunner(
     store,
@@ -177,6 +198,8 @@ test("exécute le scope en subtask, persiste les preuves et acquitte le flag tes
       methods: [{ kind: "unit", label: "bun test", instructions: "bun test" }],
       guardian_flag_ids: [flagId],
     }] }),
+    new ConversationActivity(),
+    media,
   );
   const inventory = await runner.inventory(conversationId);
 
@@ -190,7 +213,10 @@ test("exécute le scope en subtask, persiste les preuves et acquitte le flag tes
   expect(store.getScope(started.id)).toMatchObject({
     status: "passed",
     evidence_md: expect.stringContaining("12 tests passent"),
+    images: [expect.stringMatching(/\.png$/)],
   });
+  expect(store.getScope(started.id)?.evidence_md).toContain("preuve issue de la sortie outil");
+  expect(existsSync(media.absolutePath(store.getScope(started.id)!.images[0]!))).toBe(true);
   expect(reviews.getFlag(flagId)?.status).toBe("acked");
   expect(broadcasts.some((event) => event.type === "test-scope-result")).toBe(true);
 });

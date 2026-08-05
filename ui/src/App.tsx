@@ -11,6 +11,7 @@ import { useQuotas } from './useQuotas'
 import { ContextGauge } from './ContextGauge'
 import { GitView } from './GitView'
 import { listProjectConversations } from './api'
+import { guardianAckCount } from './groupEvents'
 
 function App() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
@@ -33,6 +34,8 @@ function App() {
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
   const quotas = useQuotas()
+  const guardianAckEventCount = guardianAckCount(events)
+  const effectiveReviewListVersion = reviewListVersion + guardianAckEventCount
 
   function handleProjectSelect(project: Project) {
     if (project.id !== selectedProject?.id) {
@@ -135,7 +138,7 @@ function App() {
         workspaceView={workspaceView}
         onGuardianSelect={handleGuardianSelect}
         onGitSelect={handleGitSelect}
-        reviewListVersion={reviewListVersion}
+        reviewListVersion={effectiveReviewListVersion}
       />
 
       <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : 'Conversation'}>
@@ -148,7 +151,7 @@ function App() {
             key={`${selectedProject.id}-${focusedReviewId ?? 'latest'}`}
             project={selectedProject}
             initialReviewId={focusedReviewId}
-            refreshToken={reviewListVersion}
+            refreshToken={effectiveReviewListVersion}
             onProjectUpdated={handleProjectUpdated}
             onReviewsChanged={() => setReviewListVersion((current) => current + 1)}
           />

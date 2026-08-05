@@ -19,9 +19,17 @@ import {
   type TestingStore,
 } from "./stores/testing";
 import type { Subtask, SubtaskInput, SubtaskResult } from "./subtasks";
+import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
+import { extname, join } from "node:path";
+import { tmpdir } from "node:os";
+import type { MediaStore } from "./media";
 
 const MAX_INVENTORY_SOURCE_CHARS = 160_000;
 const MAX_EVIDENCE_CHARS = 60_000;
+const MAX_SCREENSHOTS = 12;
+const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
+const MAX_SCREENSHOTS_TOTAL_BYTES = 25 * 1024 * 1024;
+const SCREENSHOT_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -60,6 +68,7 @@ export class TesterRunner {
     private subtasks: TestSubtasks,
     generator?: TestInventoryGenerator,
     private activity = new ConversationActivity(),
+    private media?: MediaStore,
   ) {
     this.generator = generator ?? ((input) => generateWithAdapters(input, this.quotas));
   }
@@ -127,6 +136,7 @@ export class TesterRunner {
       throw error;
     }
     let subtask: Subtask;
+    const artifactDir = this.media ? createArtifactDirectory() : null;
     try {
       subtask = this.subtasks.start({
         conversationId: conversation.id,
@@ -134,10 +144,11 @@ export class TesterRunner {
         model: conversation.model,
         effort: conversation.effort,
         speed: conversation.speed,
-        prompt: executionPrompt(reserved),
+        prompt: executionPrompt(reserved, artifactDir),
         label: `Test · ${reserved.title}`,
       });
     } catch (error) {
+      cleanupArtifactDirectory(artifactDir);
       const completed = this.store.completeScope({
         id: reserved.id,
         status: "failed",
@@ -154,6 +165,7 @@ export class TesterRunner {
       attached = this.store.attachSubtask(reserved.id, subtask.id);
     } catch (error) {
       void this.subtasks.cancel?.(subtask.id);
+      cleanupArtifactDirectory(artifactDir);
       const completed = this.store.completeScope({
         id: reserved.id,
         status: "failed",
@@ -166,7 +178,7 @@ export class TesterRunner {
       throw error;
     }
     this.broadcast(conversation.id, attached.event);
-    const run = this.finishScope(attached.scope, conversation.id, subtask.id)
+    const run = this.finishScope(attached.scope, conversation.id, subtask.id, artifactDir)
       .catch((error) => console.error("Finalisation du scope de test impossible", error))
       .finally(() => {
         this.runs.delete(scopeId);
@@ -185,6 +197,7 @@ export class TesterRunner {
     scope: TestScope,
     conversationId: string,
     subtaskId: string,
+    artifactDir: string | null,
   ): Promise<void> {
     let result: SubtaskResult | null = null;
     let waitError: string | null = null;
@@ -195,11 +208,20 @@ export class TesterRunner {
     }
     const parsed = result?.status === "done" ? parseTestResult(result.resultText) : null;
     const passed = result?.status === "done" && parsed?.verdict === "passed";
-    const evidence = evidenceMarkdown(result, parsed?.summary ?? null, passed);
+    const artifacts = importTestArtifacts(artifactDir, this.media);
+    const subtaskEvents = this.conversations.listEvents(subtaskId);
+    const evidence = evidenceMarkdown(
+      result,
+      parsed?.summary ?? null,
+      passed,
+      subtaskEvents,
+      artifacts.error,
+    );
     const completed = this.store.completeScope({
       id: scope.id,
       status: passed ? "passed" : "failed",
       evidenceMd: evidence,
+      images: artifacts.images,
       error: waitError ?? result?.error ?? (parsed ? null : "verdict structuré absent"),
       guardianFlagIdsAcked: [],
     }, passed ? () => this.reviews.ackFlags(scope.guardian_flag_ids) : undefined);
@@ -317,11 +339,14 @@ function inventoryPrompt(source: string, flags: ReviewFlag[]): string {
   ].join("\n");
 }
 
-function executionPrompt(scope: TestScope): string {
+function executionPrompt(scope: TestScope, artifactDir: string | null): string {
   return [
     "Tu exécutes un scope de validation choisi explicitement par l'utilisateur.",
     "Ne modifie pas le code produit sauf si une étape de test l'exige strictement; ne committe rien.",
     "Collecte des preuves: sorties de commandes complètes, étapes reproduites et screenshots pour tout parcours navigateur.",
+    artifactDir
+      ? `Enregistre chaque screenshot dans ce dossier, au format PNG/JPEG/WebP/GIF : ${artifactDir}`
+      : "Si le parcours est visuel, décris précisément les observations (capture indisponible dans ce harness).",
     "À la fin, rends un bref compte-rendu puis termine exactement par :",
     '<test-result>{"verdict":"passed|failed","summary":"résumé factuel des preuves"}</test-result>',
     "Un verdict passed exige que les vérifications prévues aient réellement été exécutées et réussies.",
@@ -353,10 +378,22 @@ function evidenceMarkdown(
   result: SubtaskResult | null,
   summary: string | null,
   passed: boolean,
+  events: StoredEvent[],
+  artifactError: string | null,
 ): string {
-  const raw = result?.resultText.trim() || result?.error || "Aucune preuve produite.";
+  const toolOutputs = events.flatMap((event) =>
+    event.type === "tool-end" && event.output.trim()
+      ? [`### Sortie outil ${event.toolId}\n\n\`\`\`text\n${event.output}\n\`\`\``]
+      : [],
+  );
+  const evidenceParts = [
+    result?.resultText.trim() || result?.error || "Aucun compte-rendu produit.",
+    ...toolOutputs,
+    ...(artifactError ? [`Capture : ${artifactError}`] : []),
+  ];
+  const raw = evidenceParts.join("\n\n");
   const clipped = raw.length > MAX_EVIDENCE_CHARS
-    ? `${raw.slice(0, MAX_EVIDENCE_CHARS)}\n\n[… preuves tronquées …]`
+    ? clipEvidence(raw, MAX_EVIDENCE_CHARS)
     : raw;
   return [
     `## Verdict · ${passed ? "réussi" : "échec"}`,
@@ -365,6 +402,76 @@ function evidenceMarkdown(
     "## Preuves",
     clipped,
   ].join("\n");
+}
+
+function clipEvidence(value: string, limit: number): string {
+  const marker = "\n\n[… preuves intermédiaires tronquées …]\n\n";
+  const available = Math.max(0, limit - marker.length);
+  const headLength = Math.ceil(available / 2);
+  const tailLength = Math.floor(available / 2);
+  return `${value.slice(0, headLength)}${marker}${value.slice(-tailLength)}`;
+}
+
+function createArtifactDirectory(): string | null {
+  try {
+    return mkdtempSync(join(tmpdir(), "pupitre-test-artifacts-"));
+  } catch {
+    return null;
+  }
+}
+
+function importTestArtifacts(
+  artifactDir: string | null,
+  media: MediaStore | undefined,
+): { images: string[]; error: string | null } {
+  if (!artifactDir || !media) return { images: [], error: null };
+  try {
+    const files = imageFiles(artifactDir).slice(0, MAX_SCREENSHOTS);
+    const images: string[] = [];
+    let totalBytes = 0;
+    for (const file of files) {
+      const bytes = statSync(file).size;
+      if (bytes > MAX_SCREENSHOT_BYTES || totalBytes + bytes > MAX_SCREENSHOTS_TOTAL_BYTES) {
+        return { images, error: "une ou plusieurs captures dépassent la limite autorisée" };
+      }
+      totalBytes += bytes;
+      images.push(media.importFile(file));
+    }
+    return {
+      images,
+      error: imageFiles(artifactDir).length > MAX_SCREENSHOTS
+        ? `seules les ${MAX_SCREENSHOTS} premières captures ont été conservées`
+        : null,
+    };
+  } catch (error) {
+    return {
+      images: [],
+      error: error instanceof Error ? error.message : "import des captures impossible",
+    };
+  } finally {
+    cleanupArtifactDirectory(artifactDir);
+  }
+}
+
+function imageFiles(directory: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...imageFiles(path));
+    else if (entry.isFile() && SCREENSHOT_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+      files.push(path);
+    }
+  }
+  return files.sort();
+}
+
+function cleanupArtifactDirectory(artifactDir: string | null): void {
+  if (!artifactDir) return;
+  try {
+    rmSync(artifactDir, { recursive: true, force: true });
+  } catch {
+    // Le dossier temporaire sera nettoyé par le système si un agent le verrouille.
+  }
 }
 
 async function generateWithAdapters(

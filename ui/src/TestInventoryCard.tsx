@@ -3,9 +3,12 @@ import ReactMarkdown from 'react-markdown'
 import { runTestScope } from './api'
 import type { TestInventoryBlock } from './groupEvents'
 import type { TestScope } from './types'
+import { ImageGallery } from './EventView'
 
 interface TestInventoryCardProps {
   block: TestInventoryBlock
+  onImageOpen: (src: string, alt: string) => void
+  onImageLoad: () => void
 }
 
 const METHOD_LABEL = {
@@ -18,7 +21,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible de lancer ce scope.'
 }
 
-export function TestInventoryCard({ block }: TestInventoryCardProps) {
+export function TestInventoryCard({ block, onImageOpen, onImageLoad }: TestInventoryCardProps) {
   const [startingId, setStartingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,6 +61,7 @@ export function TestInventoryCard({ block }: TestInventoryCardProps) {
           const status = scope.status
           const evidence = scope.evidenceMd ?? scope.evidence_md ?? null
           const flagIds = scope.guardianFlagIds ?? scope.guardian_flag_ids ?? []
+          const ackedFlagIds = scope.guardianFlagIdsAcked ?? []
           return (
             <article className={`test-scope is-${status}`} key={scope.id}>
               <div className="test-scope-number">{String(index + 1).padStart(2, '0')}</div>
@@ -106,6 +110,17 @@ export function TestInventoryCard({ block }: TestInventoryCardProps) {
                     <summary>Preuves et verdict</summary>
                     <ReactMarkdown>{evidence}</ReactMarkdown>
                   </details>
+                ) : null}
+                <ImageGallery
+                  images={scope.images ?? []}
+                  label={`Capture du test ${scope.title}`}
+                  onImageOpen={onImageOpen}
+                  onImageLoad={onImageLoad}
+                />
+                {ackedFlagIds.length > 0 ? (
+                  <p className="test-guardian-acked">
+                    Gardien · {ackedFlagIds.length} point{ackedFlagIds.length === 1 ? '' : 's'} acquitté{ackedFlagIds.length === 1 ? '' : 's'}
+                  </p>
                 ) : null}
                 {scope.error ? <p className="test-card-error">{scope.error}</p> : null}
               </div>
