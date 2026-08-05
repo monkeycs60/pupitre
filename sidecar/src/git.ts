@@ -383,12 +383,22 @@ export class GitProjectService {
       count: number | bigint;
     }>;
     const summaries = new Map<string, GitGuardianReview[]>();
+    // `setDiff` fige un SHA complet : la quasi-totalité des lignes n'a plus
+    // besoin d'un `rev-parse`. Les rares références héritées sont résolues une
+    // seule fois — sans cela, la vue Git enchaîne jusqu'à quatre spawns
+    // synchrones par review et fige le sidecar sur un projet chargé.
+    const resolved = new Map<string, string | null>();
+    const resolveHead = (ref: string): string | null => {
+      if (/^[0-9a-f]{40}$/.test(ref)) return ref;
+      if (!resolved.has(ref)) resolved.set(ref, this.tryResolve(cwd, ref));
+      return resolved.get(ref) ?? null;
+    };
     for (const row of rows) {
       // Les reviews WORKTREE récentes sont figées sur le SHA observé au scan.
       // Ne jamais résoudre un ancien marqueur WORKTREE sur le HEAD courant :
       // cela afficherait la review sur un commit qui n'a pas été analysé.
       if (row.git_ref_head === "WORKTREE") continue;
-      const sha = this.tryResolve(cwd, row.git_ref_head);
+      const sha = resolveHead(row.git_ref_head);
       if (!sha) continue;
       const commitReviews = summaries.get(sha) ?? [];
       let summary = commitReviews.find((review) => review.reviewId === row.review_id);
