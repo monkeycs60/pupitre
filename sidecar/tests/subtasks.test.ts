@@ -23,6 +23,7 @@ import { TestingStore } from "../src/stores/testing";
 import { TesterRunner } from "../src/testing";
 import { SkillInventory } from "../src/skills";
 import { SkillSuggestionService } from "../src/skill-suggestions";
+import { SkillComposer } from "../src/skill-composer";
 import { DebriefStore } from "../src/stores/debriefs";
 
 interface Harness {
@@ -133,9 +134,13 @@ cat "${fixture}"
   const skills = new SkillInventory(db, projects, { homeDir: dir });
   skills.refresh();
   const skillSuggestions = new SkillSuggestionService(skills, projects, quotas, async () => []);
+  const skillComposer = new SkillComposer(skills, projects, quotas, {
+    homeDir: dir,
+    generator: async () => "{}",
+  });
   const server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
-    reviews, debriefs, git, testers, skills, skillSuggestions,
+    reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

@@ -363,6 +363,15 @@ export class SkillInventory {
     return row ? { ...rowToSummary(row), content_md: row.content_md } : null;
   }
 
+  findByInvocation(invocation: string, projectId: string): SkillDetail | null {
+    const matching = this.list({ projectId, favoriteProjectId: projectId })
+      .filter((skill) => skill.invocation === skillInvocation(invocation));
+    const selected = matching.find((skill) => skill.project_id === projectId)
+      ?? matching.find((skill) => skill.favorite)
+      ?? matching[0];
+    return selected ? this.get(selected.id, projectId) : null;
+  }
+
   setFavorite(projectId: string, skillId: string, favorite: boolean): boolean {
     if (!this.projects.get(projectId) || !this.get(skillId)) return false;
     if (favorite) {
@@ -390,16 +399,8 @@ export class SkillInventory {
     ).slice(0, MAX_INJECTED_SKILLS);
     if (requestedNames.length === 0) return prompt;
 
-    const available = this.list({ projectId });
     const resolved = requestedNames.flatMap((requestedName) => {
-      const matching = available.filter(
-        (skill) => skill.invocation === skillInvocation(requestedName),
-      );
-      const selected = matching.find((skill) => skill.project_id === projectId)
-        ?? matching.find((skill) => skill.favorite)
-        ?? matching[0];
-      if (!selected) return [];
-      const detail = this.get(selected.id, projectId);
+      const detail = this.findByInvocation(requestedName, projectId);
       return detail ? [detail] : [];
     });
     if (resolved.length === 0) return prompt;

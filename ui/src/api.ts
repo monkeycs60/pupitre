@@ -215,6 +215,14 @@ export function suggestSkills(
   })
 }
 
+export function composeSkill(input: {
+  projectId: string
+  description: string
+  scope: 'project' | 'global'
+}): Promise<SkillDetail> {
+  return fetchJson('/api/skills/generate', jsonPost(input))
+}
+
 export function createProject(input: CreateProjectInput): Promise<Project> {
   return fetchJson('/api/projects', jsonPost(input))
 }

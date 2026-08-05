@@ -37,6 +37,13 @@
   font-size: var(--text-sm);
 }
 
+.library-header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .library-filters {
   display: flex;
   flex: none;
@@ -366,6 +373,29 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.skill-composer-dialog {
+  width: min(100%, 600px);
+}
+
+.skill-composer-form textarea {
+  width: 100%;
+  min-height: 138px;
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+  color: var(--text);
+  font-weight: 400;
+  line-height: 1.55;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.skill-composer-form textarea:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 @media (max-width: 960px) {

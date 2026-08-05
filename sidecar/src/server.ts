@@ -25,6 +25,7 @@ import {
 } from "./testing";
 import type { SkillInventory, SkillProvider } from "./skills";
 import type { SkillSuggestionService } from "./skill-suggestions";
+import { SkillAlreadyExistsError, type SkillComposer } from "./skill-composer";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -58,6 +59,7 @@ export interface ServerDeps {
   testers: TesterRunner;
   skills: SkillInventory;
   skillSuggestions: SkillSuggestionService;
+  skillComposer: SkillComposer;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -445,6 +447,28 @@ export function createServer(deps: ServerDeps) {
           const text = requiredString(body, "text");
           const resolveAmbiguous = optionalBoolean(body, "resolveAmbiguous", false);
           return json(await deps.skillSuggestions.suggest(projectId, text, resolveAmbiguous));
+        }
+
+        if (request.method === "POST" && pathname === "/api/skills/generate") {
+          const body = await readObject(request);
+          const projectId = requiredString(body, "projectId");
+          if (!deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+          const description = requiredString(body, "description");
+          if (body.scope !== "project" && body.scope !== "global") {
+            throw new HttpError(400, "portée de skill invalide");
+          }
+          try {
+            return json(await deps.skillComposer.compose({
+              projectId,
+              description,
+              scope: body.scope,
+            }), 201);
+          } catch (error) {
+            if (error instanceof SkillAlreadyExistsError) {
+              throw new HttpError(409, error.message);
+            }
+            throw error;
+          }
         }
 
         const skillId = routeId(pathname, /^\/api\/skills\/([^/]+)$/);

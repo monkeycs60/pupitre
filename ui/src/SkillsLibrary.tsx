@@ -13,6 +13,7 @@ import type {
   SkillProvenance,
   SkillSummary,
 } from './types'
+import { SkillComposerDialog } from './SkillComposerDialog'
 
 interface SkillsLibraryProps {
   project: Project | null
@@ -43,6 +44,7 @@ export function SkillsLibrary({ project }: SkillsLibraryProps) {
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [savingFavorite, setSavingFavorite] = useState(false)
+  const [showComposer, setShowComposer] = useState(false)
 
   const scopedProjectId = projectOnly ? project?.id : undefined
   const activeSkill = skills.find((skill) => skill.id === selectedId) ?? skills[0] ?? null
@@ -122,15 +124,28 @@ export function SkillsLibrary({ project }: SkillsLibraryProps) {
           <h1 id="skills-library-title">Bibliothèque</h1>
           <p>Skills Claude, prompts Codex et consignes AGENTS indexés localement.</p>
         </div>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => void handleRefresh()}
-          disabled={refreshing}
-          title="Relire immédiatement les sources locales ; le watcher garde ensuite l’index à jour."
-        >
-          {refreshing ? 'Actualisation…' : 'Actualiser'}
-        </button>
+        <div className="library-header-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+            title="Relire immédiatement les sources locales ; le watcher garde ensuite l’index à jour."
+          >
+            {refreshing ? 'Actualisation…' : 'Actualiser'}
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => setShowComposer(true)}
+            disabled={!project}
+            title={project
+              ? 'Faire rédiger et installer un nouveau SKILL.md avec Codex Sol.'
+              : 'Sélectionnez un projet pour donner son contexte au composer.'}
+          >
+            Nouveau skill
+          </button>
+        </div>
       </header>
 
       <div className="library-filters" aria-label="Filtres de la bibliothèque">
@@ -253,6 +268,17 @@ export function SkillsLibrary({ project }: SkillsLibraryProps) {
           )}
         </article>
       </div>
+      {showComposer && project ? (
+        <SkillComposerDialog
+          project={project}
+          onClose={() => setShowComposer(false)}
+          onCreated={(skill) => {
+            setShowComposer(false)
+            setSelectedId(skill.id)
+            setRefreshVersion((current) => current + 1)
+          }}
+        />
+      ) : null}
     </section>
   )
 }

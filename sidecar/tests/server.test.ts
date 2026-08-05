@@ -23,6 +23,7 @@ import { TestingStore } from "../src/stores/testing";
 import { TesterRunner } from "../src/testing";
 import { SkillInventory } from "../src/skills";
 import { SkillSuggestionService } from "../src/skill-suggestions";
+import { SkillComposer } from "../src/skill-composer";
 
 interface TestServer {
   baseUrl: string;
@@ -241,6 +242,14 @@ cat "${fixture}"
   const skills = new SkillInventory(db, projects, { homeDir: dir });
   skills.refresh();
   const skillSuggestions = new SkillSuggestionService(skills, projects, quotas, async () => []);
+  const skillComposer = new SkillComposer(skills, projects, quotas, {
+    homeDir: dir,
+    generator: async () => JSON.stringify({
+      name: "skill-api",
+      description: "Use quand l'API doit être vérifiée.",
+      content: "# Skill API\n\nVérifie le contrat HTTP.",
+    }),
+  });
   const server = createServer({
     port: 0,
     projects,
@@ -258,6 +267,7 @@ cat "${fixture}"
     testers,
     skills,
     skillSuggestions,
+    skillComposer,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -352,6 +362,17 @@ test("API skills : refresh, filtres, détail et favori par projet", async () => 
   expect(await suggestions.json()).toMatchObject({
     suggestions: [expect.objectContaining({ id: skillId })],
     resolvedByModel: false,
+  });
+  const generated = await postJson("/api/skills/generate", {
+    projectId: project.id,
+    description: "Vérifier les contrats API",
+    scope: "global",
+  });
+  expect(generated.status).toBe(201);
+  expect(await generated.json()).toMatchObject({
+    name: "skill-api",
+    provenance: "claude-global",
+    project_id: null,
   });
 });
 
