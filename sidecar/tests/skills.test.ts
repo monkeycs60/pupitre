@@ -184,3 +184,26 @@ Applique les conventions du dépôt.
   expect(inventory.augmentPrompt("$inconnu reste intact", project.id))
     .toBe("$inconnu reste intact");
 });
+
+test("lit les descriptions et triggers YAML multilignes", () => {
+  const { db, home, projects } = fixture();
+  write(join(home, ".claude/skills/multiligne/SKILL.md"), [
+    "---\r",
+    "name: multiligne\r",
+    "description: >\r",
+    "  Use when a demande\r",
+    "  spans several lines.\r",
+    "triggers:\r",
+    "  - demande longue\r",
+    "  - plusieurs lignes\r",
+    "---\r",
+    "# Multiligne\r",
+  ].join("\n"));
+  const inventory = new SkillInventory(db, projects, { homeDir: home });
+  inventory.refresh();
+
+  expect(inventory.list()[0]).toMatchObject({
+    description: "Use when a demande spans several lines.",
+    triggers: expect.arrayContaining(["demande longue", "plusieurs lignes"]),
+  });
+});

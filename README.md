@@ -2,7 +2,7 @@
 
 Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Codex CLI** sur tes abonnements (jamais d'API payante), avec discussions par projet, orchestration, contrôle des changements, tests guidés et historique Git. Le pupitre du chef d'orchestre : l'app dirige les CLIs sans jouer une note elle-même.
 
-## Architecture (M3)
+## Architecture (M4 en cours)
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -11,12 +11,12 @@ Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Code
 ├─────────────────────────────────────────────┤
 │  Sidecar Bun/TypeScript (le cerveau)        │
 │  stores SQLite · adapters claude/codex      │
-│  conversations · subtasks · reviews · tests│
-│  serveur HTTP+WS · Git · media              │
+│  conversations · subtasks · reviews · skills│
+│  serveur HTTP+WS · Git · tests · media       │
 ├─────────────────────────────────────────────┤
 │  Frontend React + Vite (webview)            │
-│  chat streaming · Gardien · Débrief · Git   │
-│  Tester · tool cards · lightbox             │
+│  chat · Gardien · Débrief · Git · Tester    │
+│  bibliothèque · suggestions · lightbox       │
 └─────────────────────────────────────────────┘
 ```
 
@@ -41,6 +41,24 @@ Les opérations longues d'une conversation partagent un verrou explicite. Au
 redémarrage, les reviews, sous-tâches et scopes interrompus sont clôturés, et une
 continuation de passation restée incomplète est retirée plutôt que laissée dans
 la sidebar.
+
+## Bibliothèque de skills (M4-K)
+
+- La vue **Bibliothèque** indexe et surveille les skills Claude globaux et de
+  plugins, les skills `.claude/skills` des projets, les prompts Codex et les
+  fichiers `AGENTS.md`. La recherche porte sur le nom, la description et les
+  déclencheurs ; les favoris sont propres à chaque projet.
+- Une invocation `$nom-du-skill` fonctionne dans les deux providers. Pupitre
+  injecte le `SKILL.md` demandé dans le tour tout en conservant le message
+  original dans l'historique. Le pont v1 ne transporte volontairement ni les
+  scripts, ni les références, ni les assets du skill.
+- Le seul panneau latéral de l'app propose jusqu'à trois skills par matching
+  lexical sur le brouillon ou le dernier message. Il est fermé par défaut et
+  mémorise le choix de l'utilisateur. Luna fast n'intervient que pour départager
+  des scores proches lorsque le panneau est ouvert.
+- **Nouveau skill** demande un besoin et une portée projet/globale. Codex Sol
+  rédige le fichier avec le `skill-creator` indexé s'il existe ; l'installation
+  refuse d'écraser un `SKILL.md` existant et rafraîchit immédiatement l'index.
 
 ## Sous-tâches déléguées (M2-D1)
 
@@ -119,10 +137,16 @@ bun run --cwd ui dev         # UI sur :5173, proxy vers le sidecar
 
 Données dans `~/.local/share/pupitre` (override : `PUPITRE_DATA_DIR`). Binaires CLI overridables pour tester sans quota : `PUPITRE_CLAUDE_BIN` / `PUPITRE_CODEX_BIN` (voir `sidecar/tests/fake-bins/`).
 
+Par défaut, l'app-server Codex lancé par Pupitre désactive les plugins et MCP
+utilisateur : leur initialisation différée ajoutait environ deux minutes avant
+le premier retour, y compris avec Luna fast. Le bridge `conductor` de Pupitre
+reste activé par thread. Pour réactiver volontairement tous les MCP utilisateur,
+lancer le sidecar avec `PUPITRE_CODEX_USER_MCPS=1`.
+
 ## Tests
 
 ```bash
-cd sidecar && bun test        # 263 tests (fixtures réelles des CLIs, fake bins)
+cd sidecar && bun test        # 280 tests (fixtures réelles des CLIs, fake bins)
 cd sidecar && bun run typecheck
 cd ui && bunx tsc --noEmit && bun run build
 ```
@@ -143,4 +167,6 @@ Protocole e2e : `e2e/basic-flow.md`.
 
 **M3 (fait)** : Gardien, contre-avis, Débrief et passation, bouton Tester avec preuves, vue Git et durcissement du sidecar.
 
-**Suite — M4** : bibliothèque de skills, workflows épinglés, routines, fleet view, recherche globale et aide intégrée.
+**M4 (en cours)** : bibliothèque de skills, pont cross-provider, suggestions et
+composer terminés ; workflows épinglés, routines, fleet view, recherche globale
+et aide intégrée restent à construire.

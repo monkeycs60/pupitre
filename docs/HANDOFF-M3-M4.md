@@ -15,6 +15,25 @@ Tu reprends le développement de Pupitre. À lire avant de commencer :
 
 ## État au 2026-08-05
 
+- **M4-K terminé et review milestone propre** : inventaire unifié avec watcher,
+  bibliothèque filtrable et favoris projet, invocation `$skill` cross-provider,
+  suggestions lexicales (Luna fast uniquement pour une ambiguïté avec panneau
+  ouvert) et composer Sol avec installation projet/globale sans écrasement.
+  La review ciblée a corrigé les frontmatters YAML multilignes et fermé le
+  panneau de suggestions par défaut afin qu'aucun appel Luna ne parte en
+  arrière-plan au chargement d'une conversation.
+- **Latence Codex diagnostiquée avant M4-K** : six tours Luna récents prenaient
+  124–126 s avant le premier retour ; trois probes isolés (fast avec/sans
+  orchestration, puis standard) reproduisaient ~122 s. Le mode fast et le
+  conductor n'étaient donc pas la cause. Pupitre désactive désormais plugins et
+  MCP utilisateur dans son app-server, tout en réactivant explicitement son MCP
+  `conductor` par thread. La configuration finale a été vérifiée avec zéro MCP
+  utilisateur actif ; aucun nouveau tour réel n'a été consommé après cette
+  vérification. `PUPITRE_CODEX_USER_MCPS=1` constitue l'opt-in de compatibilité.
+- **Mesures de tour ajoutées à l'UI** : attente avant premier retour, durée en
+  cours et total final sont persistés dans les événements et affichés sous
+  chaque tour.
+
 - **M3-T0 terminé** : watchdog app-server, écritures atomiques, compaction des
   deltas, sweep SQL, limites média et sidecar Tauri de production.
 - **M3-G terminé** : moteur et UI Gardien, décisions ciblées, blocage projet et

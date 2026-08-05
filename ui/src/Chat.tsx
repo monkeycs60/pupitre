@@ -48,9 +48,9 @@ const SKILLS_PANEL_KEY = 'pupitre:skills-panel-open'
 
 function initialSkillsPanelOpen(): boolean {
   try {
-    return localStorage.getItem(SKILLS_PANEL_KEY) !== 'false'
+    return localStorage.getItem(SKILLS_PANEL_KEY) === 'true'
   } catch {
-    return true
+    return false
   }
 }
 

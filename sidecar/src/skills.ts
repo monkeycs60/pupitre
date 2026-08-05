@@ -79,12 +79,23 @@ function parseFrontmatter(content: string): Record<string, string> {
   const end = content.indexOf("\n---", 4);
   if (end === -1) return {};
   const fields: Record<string, string> = {};
+  let activeKey: string | null = null;
   for (const line of content.slice(4, end).split("\n")) {
     const separator = line.indexOf(":");
-    if (separator <= 0 || /^\s/.test(line)) continue;
-    const key = line.slice(0, separator).trim().toLowerCase();
-    const value = line.slice(separator + 1).trim();
-    if (value) fields[key] = value.replace(/^['"]|['"]$/g, "");
+    if (separator > 0 && !/^\s/.test(line)) {
+      const key = line.slice(0, separator).trim().toLowerCase();
+      const value = line.slice(separator + 1).trim();
+      activeKey = key;
+      fields[key] = value === "|" || value === ">"
+        ? ""
+        : value.replace(/^['"]|['"]$/g, "");
+      continue;
+    }
+    if (!activeKey || !/^\s+/.test(line)) continue;
+    const continuation = line.trim().replace(/^-\s+/, "");
+    if (!continuation) continue;
+    const separatorText = line.trim().startsWith("-") ? ", " : " ";
+    fields[activeKey] = `${fields[activeKey]}${fields[activeKey] ? separatorText : ""}${continuation}`;
   }
   return fields;
 }
@@ -192,7 +203,7 @@ function readSkill(
   try {
     const stat = statSync(path);
     if (!stat.isFile() || stat.size > MAX_FILE_BYTES) return null;
-    const content = readFileSync(path, "utf8");
+    const content = readFileSync(path, "utf8").replace(/\r\n/g, "\n");
     const frontmatter = parseFrontmatter(content);
     const fallbackName = basename(path, ".md") === "SKILL" ? basename(dirname(path)) : basename(path, ".md");
     const name = frontmatter.name || (provenance === "codex-prompt"
