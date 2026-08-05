@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { layoutGitGraph } from '../../ui/src/gitGraph'
-import type { GitCommit } from '../../ui/src/types'
+import { gitRefOptions, layoutGitGraph } from '../../ui/src/gitGraph'
+import type { GitCommit, GitSnapshot } from '../../ui/src/types'
 
 function commit(sha: string, parents: string[]): GitCommit {
   return {
@@ -40,4 +40,21 @@ test('ouvre deux voies et une diagonale pour un commit de merge', () => {
     { from: 0, to: 1, kind: 'parent' },
   ]))
   expect(rows[2]?.lane).toBe(1)
+})
+
+test('expose le parent de HEAD même hors de la fenêtre des commits', () => {
+  const head = commit('head-sha', ['parent-outside-window'])
+  const snapshot: GitSnapshot = {
+    head: head.sha,
+    headParents: head.parents,
+    currentBranch: 'main',
+    commits: [head],
+    branches: [{ name: 'main', fullName: 'refs/heads/main', sha: head.sha, current: true, remote: false }],
+    worktrees: [],
+  }
+
+  expect(gitRefOptions(snapshot)).toContainEqual([
+    'parent-outside-window',
+    'parent-o · Parent de HEAD',
+  ])
 })

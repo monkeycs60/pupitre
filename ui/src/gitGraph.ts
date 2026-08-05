@@ -1,4 +1,4 @@
-import type { GitCommit } from './types'
+import type { GitCommit, GitSnapshot } from './types'
 
 export interface GitGraphSegment {
   from: number
@@ -11,6 +11,21 @@ export interface GitGraphRow {
   lane: number
   laneCount: number
   segments: GitGraphSegment[]
+}
+
+export function gitRefOptions(snapshot: GitSnapshot): Array<[string, string]> {
+  const values = new Map<string, string>()
+  snapshot.branches.forEach((branch) => values.set(branch.sha, branch.name))
+  snapshot.commits.forEach((commit) => {
+    if (!values.has(commit.sha)) values.set(commit.sha, `${commit.sha.slice(0, 8)} · ${commit.subject}`)
+  })
+  snapshot.headParents.forEach((sha, index) => {
+    if (!values.has(sha)) {
+      const parentLabel = snapshot.headParents.length === 1 ? 'Parent de HEAD' : `Parent ${index + 1} de HEAD`
+      values.set(sha, `${sha.slice(0, 8)} · ${parentLabel}`)
+    }
+  })
+  return [...values.entries()]
 }
 
 export function layoutGitGraph(commits: GitCommit[]): GitGraphRow[] {

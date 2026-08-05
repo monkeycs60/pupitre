@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getProjectGit, getProjectGitDiff } from './api'
 import { DiffViewer } from './DiffViewer'
-import { layoutGitGraph } from './gitGraph'
+import { gitRefOptions, layoutGitGraph } from './gitGraph'
 import type { GitSnapshot, Project } from './types'
 
 interface GitViewProps {
@@ -62,12 +62,7 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
   const maxLanes = Math.max(1, ...rows.map((row) => row.laneCount))
   const refOptions = useMemo(() => {
     if (!snapshot) return []
-    const values = new Map<string, string>()
-    snapshot.branches.forEach((branch) => values.set(branch.sha, branch.name))
-    snapshot.commits.forEach((commit) => {
-      if (!values.has(commit.sha)) values.set(commit.sha, `${shortSha(commit.sha)} · ${commit.subject}`)
-    })
-    return [...values.entries()]
+    return gitRefOptions(snapshot)
   }, [snapshot])
 
   async function compare() {
