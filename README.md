@@ -74,6 +74,20 @@ la sidebar.
   interactives longues. Leur seuil est réglable dans la vue Routines (120 s par
   défaut), et la permission n'est demandée qu'au premier événement réel.
 
+## Fleet, recherche et palette (M4-M)
+
+- **Fleet** agrège en temps réel les tours, sous-tâches et routines actifs sur
+  tous les projets. Chaque cellule expose durée, modèle et dernier événement,
+  avec un accès direct à la conversation concernée.
+- La recherche globale repose sur un index SQLite FTS5 local : titres de fils,
+  messages utilisateur, réponses finales et Débriefs sont indexés au fil de
+  l'eau, avec reconstruction de l'historique au démarrage. Aucune donnée ne
+  quitte la machine pour rechercher.
+- **Ctrl+K** ouvre la palette depuis n'importe quel écran. Elle navigue vers les
+  projets et conversations, interroge la recherche globale, lance workflows et
+  skills, ouvre Fleet/Routines/Bibliothèque et déclenche Tester, Débrief ou
+  Gardien sur le fil courant.
+
 ## Sous-tâches déléguées (M2-D1)
 
 Une conversation peut déléguer du travail à un autre modèle (le Conductor de la phase D). Le moteur vit dans `sidecar/src/subtasks.ts` :
@@ -160,7 +174,7 @@ lancer le sidecar avec `PUPITRE_CODEX_USER_MCPS=1`.
 ## Tests
 
 ```bash
-cd sidecar && bun test        # 287 tests (fixtures réelles des CLIs, fake bins)
+cd sidecar && bun test        # 291 tests (fixtures réelles des CLIs, fake bins)
 cd sidecar && bun run typecheck
 cd ui && bunx tsc --noEmit && bun run build
 ```
@@ -181,6 +195,6 @@ Protocole e2e : `e2e/basic-flow.md`.
 
 **M3 (fait)** : Gardien, contre-avis, Débrief et passation, bouton Tester avec preuves, vue Git et durcissement du sidecar.
 
-**M4 (en cours)** : bibliothèque de skills, pont cross-provider, suggestions,
-composer, workflows épinglés et routines terminés ; fleet view, recherche
-globale, palette, coûts, mémoire et aide intégrée restent à construire.
+**M4 (en cours)** : bibliothèque de skills, workflows, routines, Fleet,
+recherche globale et palette terminés ; coûts, mémoire, handoff terminal et
+aide intégrée restent à construire.

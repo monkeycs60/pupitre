@@ -15,6 +15,12 @@ Tu reprends le développement de Pupitre. À lire avant de commencer :
 
 ## État au 2026-08-05
 
+- **M4-M terminé et review milestone propre** : Fleet HTTP+WebSocket pour les
+  tours, sous-tâches et routines de tous les projets, index FTS5 local avec
+  backfill des titres/messages/Débriefs, et palette Ctrl+K pour la navigation,
+  les workflows, les skills et les actions de contrôle. La review ciblée a
+  rendu la palette visible dans la navigation et isolé l'environnement du test
+  Fleet afin d'éviter une fuite de faux binaire vers les suites suivantes.
 - **M4-L terminé et review milestone propre** : workflows épinglés par projet,
   scheduler cron interne, conversations taguées routine, historique avec tokens,
   activation et lancement manuel, notifications natives de fin de routine et de

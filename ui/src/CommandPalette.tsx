@@ -20,6 +20,8 @@ import type {
 type PaletteAction = 'test' | 'debrief' | 'review'
 
 interface CommandPaletteProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   currentProject: Project | null
   currentConversation: Conversation | null
   onProjectSelect: (project: Project) => void
@@ -52,6 +54,8 @@ function resultDetail(result: SearchResult): string {
 }
 
 export function CommandPalette({
+  open,
+  onOpenChange,
   currentProject,
   currentConversation,
   onProjectSelect,
@@ -60,7 +64,6 @@ export function CommandPalette({
   onViewSelect,
   onAction,
 }: CommandPaletteProps) {
-  const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -76,14 +79,14 @@ export function CommandPalette({
     const handleKey = (event: globalThis.KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
-        setOpen((current) => !current)
+        onOpenChange(!open)
       } else if (event.key === 'Escape') {
-        setOpen(false)
+        onOpenChange(false)
       }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [])
+  }, [onOpenChange, open])
 
   useEffect(() => {
     if (!open) return
@@ -210,7 +213,7 @@ export function CommandPalette({
     setError(null)
     try {
       await item.run()
-      setOpen(false)
+      onOpenChange(false)
       setQuery('')
       setSelectedIndex(0)
     } catch (runError) {
@@ -236,7 +239,7 @@ export function CommandPalette({
   if (!open) return null
   let previousGroup = ''
   return (
-    <div className="palette-scrim" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false) }}>
+    <div className="palette-scrim" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onOpenChange(false) }}>
       <section className="command-palette" role="dialog" aria-modal="true" aria-labelledby="palette-title">
         <h2 id="palette-title">Palette de commandes <kbd>Ctrl K</kbd></h2>
         <input

@@ -347,6 +347,7 @@
 .sidebar-global-nav button {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   width: 100%;
   min-height: 30px;
   padding: 4px var(--space-2);
@@ -357,6 +358,12 @@
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.sidebar-global-nav kbd {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 .sidebar-global-nav button:hover,

@@ -31,6 +31,7 @@ function App() {
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [showReviewDialog, setShowReviewDialog] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
   const [reviewListVersion, setReviewListVersion] = useState(0)
@@ -260,6 +261,7 @@ function App() {
         onLibrarySelect={handleLibrarySelect}
         onRoutinesSelect={handleRoutinesSelect}
         onFleetSelect={handleFleetSelect}
+        onPaletteSelect={() => setPaletteOpen(true)}
         reviewListVersion={effectiveReviewListVersion}
       />
 
@@ -376,6 +378,8 @@ function App() {
         )}
       </section>
       <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
         currentProject={selectedProject}
         currentConversation={selectedConversation}
         onProjectSelect={handleProjectSelect}

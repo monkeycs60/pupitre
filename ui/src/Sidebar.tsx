@@ -39,6 +39,7 @@ interface SidebarProps {
   onLibrarySelect: () => void
   onRoutinesSelect: () => void
   onFleetSelect: () => void
+  onPaletteSelect: () => void
   reviewListVersion: number
 }
 
@@ -85,6 +86,7 @@ export function Sidebar({
   onLibrarySelect,
   onRoutinesSelect,
   onFleetSelect,
+  onPaletteSelect,
   reviewListVersion,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -455,6 +457,14 @@ export function Sidebar({
       </section>
 
       <nav className="sidebar-global-nav" aria-label="Vues globales">
+        <button
+          type="button"
+          onClick={onPaletteSelect}
+          title="Rechercher partout et lancer une commande au clavier."
+        >
+          <span>Rechercher</span>
+          <kbd>Ctrl K</kbd>
+        </button>
         <button
           type="button"
           className={workspaceView === 'fleet' ? 'is-selected' : ''}

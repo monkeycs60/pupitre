@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,8 +20,10 @@ let runner: ConversationRunner;
 let subtasks: SubtaskRunner;
 let routines: RoutineStore;
 let projectId: string;
+let previousClaudeBin: string | undefined;
 
 beforeEach(() => {
+  previousClaudeBin = process.env.PUPITRE_CLAUDE_BIN;
   const dir = mkdtempSync(join(tmpdir(), "pupitre-fleet-"));
   const projectPath = join(dir, "project");
   mkdirSync(projectPath);
@@ -40,7 +42,13 @@ beforeEach(() => {
   );
   subtasks = new SubtaskRunner(db, conversations, projects, () => {}, quotas);
   routines = new RoutineStore(db);
-  process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude-slow");
+  process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude");
+});
+
+afterEach(() => {
+  db.close();
+  if (previousClaudeBin === undefined) delete process.env.PUPITRE_CLAUDE_BIN;
+  else process.env.PUPITRE_CLAUDE_BIN = previousClaudeBin;
 });
 
 test("agrège les tours et sous-tâches actifs de tous les projets", async () => {
