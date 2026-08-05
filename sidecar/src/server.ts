@@ -809,8 +809,14 @@ export function createServer(deps: ServerDeps) {
           /^\/api\/conversations\/([^/]+)\/messages$/,
         );
         if (request.method === "POST" && messageConversationId !== null) {
-          if (!deps.conversations.get(messageConversationId)) {
+          const target = deps.conversations.get(messageConversationId);
+          if (!target) {
             throw new HttpError(404, "conversation inconnue");
+          }
+          // Une continuation dont la passation n'est pas finalisée peut encore
+          // être supprimée par le nettoyage : y écrire perdrait le tour.
+          if (target.handoff_pending) {
+            throw new HttpError(409, "passation en cours sur cette conversation");
           }
           const body = await readObject(request);
           const message = requiredString(body, "message");

@@ -978,6 +978,44 @@ test("un handoff dont le provider cible échoue ne conserve pas de continuation"
   ]);
 });
 
+test("une continuation en cours de nettoyage refuse un nouveau message", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "source stable",
+  });
+  const source = await created.json() as { id: string };
+  await waitForRunnerIdle(source.id);
+  process.env.PUPITRE_CODEX_MODE = "exec";
+  process.env.PUPITRE_CODEX_BIN = join(tmpdir(), `codex-absent-${crypto.randomUUID()}`);
+  // Le nettoyage d'une continuation ratée relâche le verrou d'activité avant de
+  // supprimer la ligne : on tire dans cette fenêtre exacte.
+  let concurrentStatus = 0;
+  const cancelByConversation = current.subtasks.cancelByConversation.bind(current.subtasks);
+  current.subtasks.cancelByConversation = async (conversationId) => {
+    const concurrent = await postJson(`/api/conversations/${conversationId}/messages`, {
+      message: "message envoyé pendant le nettoyage",
+    });
+    concurrentStatus = concurrent.status;
+    return cancelByConversation(conversationId);
+  };
+
+  const response = await postJson(`/api/conversations/${source.id}/handoff`, {
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "low",
+  });
+
+  expect(response.status).toBe(502);
+  expect(concurrentStatus).toBe(409);
+  expect(new ConversationStore(current.db).listByProject(project.id)).toEqual([
+    expect.objectContaining({ id: source.id }),
+  ]);
+});
+
 test("POST debrief versionne le bilan, le diffuse et l'expose en lecture", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());

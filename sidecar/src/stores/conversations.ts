@@ -224,6 +224,9 @@ export class ConversationStore {
    * Clôt en une seule requête les tours que le redémarrage du sidecar a
    * forcément interrompus. La jointure sur conversations exclut les subtasks,
    * dont le statut métier doit aussi être synchronisé par SubtaskRunner.
+   * On vise le dernier event de type `status` et non le dernier event tout
+   * court : les adapters émettent `running` en premier, donc un tour coupé en
+   * plein streaming laisse presque toujours un delta en dernière position.
    */
   sweepOrphanedRuns(): number {
     const result = this.db.query(`
@@ -231,6 +234,8 @@ export class ConversationStore {
         SELECT MAX(events.id) AS id
         FROM events
         INNER JOIN conversations ON conversations.id = events.conversation_id
+        WHERE json_valid(events.payload)
+          AND json_extract(events.payload, '$.type') = 'status'
         GROUP BY events.conversation_id
       )
       UPDATE events

@@ -341,6 +341,25 @@ test("le sweep SQL clôt seulement le dernier status running des conversations",
     .toMatchObject({ state: "running" });
 });
 
+test("le sweep clôt un tour interrompu même si des deltas suivent le status", () => {
+  const conversation = convs.create({
+    projectId,
+    provider: "claude",
+    model: "opus",
+    firstMessage: "tour coupé en plein streaming",
+  });
+  const statusId = convs.appendEvent(conversation.id, { type: "status", state: "running" });
+  convs.appendEvent(conversation.id, { type: "text-delta", text: "réponse partielle" });
+
+  expect(convs.sweepOrphanedRuns()).toBe(1);
+  expect(convs.listEvents(conversation.id).filter((event) => event.type === "status")).toEqual([{
+    id: statusId,
+    type: "status",
+    state: "error",
+    error: "interrompu (sidecar redémarré)",
+  }]);
+});
+
 test("setCliSessionId persiste pour la reprise", () => {
   const c = convs.create({ projectId, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x" });
   convs.setCliSessionId(c.id, "abc-123");
