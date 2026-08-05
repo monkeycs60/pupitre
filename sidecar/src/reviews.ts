@@ -22,6 +22,10 @@ const DEFAULT_ZONE_CHARS = 48_000;
 const DEFAULT_DIFF_MAX_BYTES = 2 * 1024 * 1024;
 const CONVERSATION_BASE_REF = "CONVERSATION";
 const WORKTREE_HEAD_REF = "WORKTREE";
+const WORKTREE_CAPTURE_ATTEMPTS = 3;
+// `core.quotePath` est actif par défaut : sans lui, Git rend `données.ts` sous
+// forme échappée en octal et plus aucun flag du modèle ne s'y ancre.
+const GIT_GLOBAL_ARGS = ["-c", "core.quotePath=false"];
 const SEVERITIES = new Set<ReviewSeverity>(["red", "orange", "grey"]);
 
 export interface ReviewScanInput {
@@ -58,6 +62,12 @@ export interface CounterOpinionDefaults {
 }
 
 type CounterSubtasks = Pick<SubtaskRunner, "start" | "waitResult">;
+
+interface CapturedDiff {
+  base: string;
+  head: string;
+  diff: string;
+}
 
 class ReviewOutputError extends Error {}
 
@@ -201,23 +211,9 @@ export class ReviewRunner {
 
   private async execute(id: string, cwd: string, input: StartReviewInput): Promise<void> {
     const maxBytes = positiveEnv("PUPITRE_REVIEW_DIFF_MAX_BYTES", DEFAULT_DIFF_MAX_BYTES);
-    const base = input.gitRefBase === CONVERSATION_BASE_REF
-      ? await this.conversationBase(cwd, input.projectId, input.conversationId)
-      : await resolveGitRef(cwd, input.gitRefBase);
-    const worktreeHead = input.gitRefHead === WORKTREE_HEAD_REF;
-    const head = worktreeHead
-      ? await resolveGitRef(cwd, "HEAD")
-      : await resolveGitRef(cwd, input.gitRefHead);
-    const diff = worktreeHead
-      ? await worktreeDiff(cwd, base, maxBytes)
-      : await gitLimited(cwd, [
-          "diff",
-          "--no-ext-diff",
-          "--unified=3",
-          "--find-renames",
-          `${base}...${head}`,
-          "--",
-        ], maxBytes);
+    const { base, head, diff } = input.gitRefHead === WORKTREE_HEAD_REF
+      ? await this.captureWorktree(cwd, input, maxBytes)
+      : await this.captureRange(cwd, input, maxBytes);
     this.store.setDiff(id, base, head, diff);
     if (diff.trim() === "") {
       this.store.complete(id, []);
@@ -248,12 +244,59 @@ export class ReviewRunner {
     }
   }
 
+  // Le diff worktree est pris sur un dépôt vivant : HEAD peut bouger entre sa
+  // lecture et la capture. On ne garde qu'un couple (SHA, diff) cohérent, sinon
+  // la review serait archivée sous un commit qu'elle n'a jamais lu.
+  private async captureWorktree(
+    cwd: string,
+    input: StartReviewInput,
+    maxBytes: number,
+  ): Promise<CapturedDiff> {
+    for (let attempt = 0; attempt < WORKTREE_CAPTURE_ATTEMPTS; attempt += 1) {
+      const head = await resolveGitRef(cwd, "HEAD");
+      const base = await this.resolveBase(cwd, input, head);
+      const diff = await worktreeDiff(cwd, base, maxBytes);
+      if (await resolveGitRef(cwd, "HEAD") === head) return { base, head, diff };
+    }
+    throw new Error(
+      "HEAD a changé pendant la capture du diff Gardien : relance la review une fois le dépôt stable",
+    );
+  }
+
+  private async captureRange(
+    cwd: string,
+    input: StartReviewInput,
+    maxBytes: number,
+  ): Promise<CapturedDiff> {
+    const head = await resolveGitRef(cwd, input.gitRefHead);
+    const base = await this.resolveBase(cwd, input, head);
+    const diff = await gitLimited(cwd, [
+      "diff",
+      "--no-ext-diff",
+      "--unified=3",
+      "--find-renames",
+      `${base}...${head}`,
+      "--",
+    ], maxBytes);
+    return { base, head, diff };
+  }
+
+  private async resolveBase(
+    cwd: string,
+    input: StartReviewInput,
+    head: string,
+  ): Promise<string> {
+    return input.gitRefBase === CONVERSATION_BASE_REF
+      ? await this.conversationBase(cwd, input.projectId, input.conversationId, head)
+      : await resolveGitRef(cwd, input.gitRefBase);
+  }
+
   private async conversationBase(
     cwd: string,
     projectId: string,
     conversationId: string,
+    head: string,
   ): Promise<string> {
-    const head = await resolveGitRef(cwd, "HEAD");
     const linked = this.store.linkedCommitShas(projectId, conversationId);
     const reachable: string[] = [];
     for (const sha of linked) {
@@ -604,40 +647,71 @@ function validateFlag(
   };
 }
 
-function changedLines(diff: string): Map<string, Set<number>> {
-  const result = new Map<string, Set<number>>();
+interface DiffChange {
+  /** Index de la ligne dans `diff.split("\n")`. */
+  index: number;
+  file: string;
+  /** Ligne NEW pour un ajout, ligne OLD pour une suppression. */
+  line: number;
+}
+
+/**
+ * Parcourt un patch unifié en distinguant en-tête et contenu par leur position
+ * et non par leur préfixe : à l'intérieur d'un hunk, `--- x` et `+++ x` sont du
+ * contenu (commentaire SQL, front-matter Markdown, patch versionné) et non des
+ * en-têtes de fichier. Les traiter comme des en-têtes décalait les curseurs de
+ * lignes, voire faisait échouer toute la review sur un chemin fantaisiste.
+ */
+function walkDiffChanges(diff: string, visit: (change: DiffChange) => void): void {
   let oldFile: string | null = null;
   let file: string | null = null;
   let oldLine = 0;
   let newLine = 0;
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("--- ")) {
-      const path = line.slice(4).trim();
-      oldFile = path === "/dev/null" ? null : normalizedPath(path);
-      continue;
-    }
-    if (line.startsWith("+++ ")) {
-      const path = line.slice(4).trim();
-      file = path === "/dev/null" ? oldFile : normalizedPath(path);
-      if (file && !result.has(file)) result.set(file, new Set());
+  let inHunk = false;
+  for (const [index, line] of diff.split("\n").entries()) {
+    if (line.startsWith("diff --git ")) {
+      oldFile = null;
+      file = null;
+      inHunk = false;
       continue;
     }
     const hunk = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
     if (hunk) {
       oldLine = Number(hunk[1]);
       newLine = Number(hunk[2]);
+      inHunk = true;
       continue;
     }
-    if (!file || line.startsWith("diff --git")) continue;
-    if (line.startsWith("+") && !line.startsWith("+++")) {
-      result.get(file)!.add(newLine++);
-    } else if (line.startsWith("-") && !line.startsWith("---")) {
-      result.get(file)!.add(oldLine++);
+    if (!inHunk) {
+      if (line.startsWith("--- ")) {
+        const path = line.slice(4).trim();
+        oldFile = path === "/dev/null" ? null : normalizedPath(path);
+      } else if (line.startsWith("+++ ")) {
+        const path = line.slice(4).trim();
+        file = path === "/dev/null" ? oldFile : normalizedPath(path);
+      }
+      continue;
+    }
+    if (line.startsWith("+")) {
+      const changed = newLine++;
+      if (file) visit({ index, file, line: changed });
+    } else if (line.startsWith("-")) {
+      const changed = oldLine++;
+      if (file) visit({ index, file, line: changed });
     } else if (!line.startsWith("\\")) {
       oldLine += 1;
       newLine += 1;
     }
   }
+}
+
+function changedLines(diff: string): Map<string, Set<number>> {
+  const result = new Map<string, Set<number>>();
+  walkDiffChanges(diff, ({ file, line }) => {
+    const lines = result.get(file) ?? new Set<number>();
+    lines.add(line);
+    result.set(file, lines);
+  });
   return result;
 }
 
@@ -770,28 +844,11 @@ function counterContext(diff: string, flag: ReviewFlag): string {
   if (!patch || patch.length <= DEFAULT_ZONE_CHARS) return patch ?? diff.slice(0, DEFAULT_ZONE_CHARS);
 
   const lines = patch.split("\n");
-  let oldLine = 0;
-  let newLine = 0;
   let anchor = -1;
-  for (const [index, line] of lines.entries()) {
-    const hunk = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-    if (hunk) {
-      oldLine = Number(hunk[1]);
-      newLine = Number(hunk[2]);
-      continue;
-    }
-    let changedLine: number | null = null;
-    if (line.startsWith("+") && !line.startsWith("+++")) changedLine = newLine++;
-    else if (line.startsWith("-") && !line.startsWith("---")) changedLine = oldLine++;
-    else if (line.startsWith(" ")) {
-      oldLine += 1;
-      newLine += 1;
-    }
-    if (changedLine !== null && changedLine >= flag.line_start && changedLine <= flag.line_end) {
-      anchor = index;
-      break;
-    }
-  }
+  walkDiffChanges(patch, ({ index, line }) => {
+    if (anchor >= 0) return;
+    if (line >= flag.line_start && line <= flag.line_end) anchor = index;
+  });
   if (anchor < 0) return patch.slice(0, DEFAULT_ZONE_CHARS);
   const start = Math.max(0, anchor - 30);
   const end = Math.min(lines.length, anchor + 31);
@@ -813,7 +870,7 @@ async function resolveGitRef(cwd: string, ref: string): Promise<string> {
 }
 
 async function git(cwd: string, args: string[]): Promise<string> {
-  const child = Bun.spawn(["git", ...args], {
+  const child = Bun.spawn(["git", ...GIT_GLOBAL_ARGS, ...args], {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
@@ -831,7 +888,7 @@ async function git(cwd: string, args: string[]): Promise<string> {
 }
 
 async function gitSucceeds(cwd: string, args: string[]): Promise<boolean> {
-  const child = Bun.spawn(["git", ...args], {
+  const child = Bun.spawn(["git", ...GIT_GLOBAL_ARGS, ...args], {
     cwd,
     stdout: "ignore",
     stderr: "ignore",
@@ -846,7 +903,7 @@ async function gitLimited(
   maxBytes: number,
   acceptedExitCodes: readonly number[] = [0],
 ): Promise<string> {
-  const child = Bun.spawn(["git", ...args], {
+  const child = Bun.spawn(["git", ...GIT_GLOBAL_ARGS, ...args], {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
@@ -887,6 +944,17 @@ async function gitLimited(
 }
 
 async function worktreeDiff(cwd: string, base: string, maxBytes: number): Promise<string> {
+  // Les fichiers non suivis sont listés AVANT le diff des fichiers suivis. Un
+  // `git add` concurrent — geste banal d'un agent en fin de tour — ferait
+  // autrement disparaître le fichier des deux sorties : `git diff <base>` ne
+  // l'a pas encore vu et `ls-files --others` ne le voit déjà plus. Dans cet
+  // ordre, il apparaît au pire deux fois, ce qui est sans danger pour l'ancrage.
+  const untrackedOutput = await gitLimited(
+    cwd,
+    ["ls-files", "--others", "--exclude-standard", "-z"],
+    maxBytes,
+  );
+  const untracked = untrackedOutput.split("\0").filter(Boolean);
   const tracked = await gitLimited(cwd, [
     "diff",
     "--no-ext-diff",
@@ -896,12 +964,6 @@ async function worktreeDiff(cwd: string, base: string, maxBytes: number): Promis
     "--",
   ], maxBytes);
   let used = Buffer.byteLength(tracked);
-  const untrackedOutput = await gitLimited(
-    cwd,
-    ["ls-files", "--others", "--exclude-standard", "-z"],
-    maxBytes,
-  );
-  const untracked = untrackedOutput.split("\0").filter(Boolean);
   const parts = tracked ? [tracked] : [];
   for (const path of untracked) {
     const separator = parts.length > 0 ? "\n" : "";

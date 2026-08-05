@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -39,6 +39,7 @@ beforeEach(() => {
     "PUPITRE_CODEX_BIN",
     "PUPITRE_CODEX_MODE",
     "PUPITRE_REVIEW_DIFF_MAX_BYTES",
+    "PATH",
   ]) {
     previousEnv[key] = process.env[key];
   }
@@ -118,6 +119,48 @@ test("parse une sortie JSON fenced et refuse un flag hors des lignes modifiées"
       + '"severity":"red","category":"secret","message":"hors diff"}]}',
     diff,
   )).toThrow(/non ancré/);
+});
+
+test("le contenu qui ressemble à un en-tête de patch ne décale pas l'ancrage", () => {
+  // Suppression d'un front-matter Markdown : les lignes `---` supprimées
+  // arrivent dans le patch sous la forme `----`.
+  const diff = [
+    "diff --git a/docs/note.md b/docs/note.md",
+    "--- a/docs/note.md",
+    "+++ b/docs/note.md",
+    "@@ -1,4 +1 @@",
+    "----",
+    "-titre: ancien",
+    "----",
+    "-contenu",
+    "+contenu réécrit",
+  ].join("\n");
+
+  expect(parseReviewOutput(
+    '{"flags":[{"file":"docs/note.md","line_start":1,"line_end":1,'
+      + '"severity":"orange","category":"contrat",'
+      + '"message":"Le front-matter supprimé casse le rendu."}]}',
+    diff,
+  )).toHaveLength(1);
+});
+
+test("un commentaire supprimé en `-- chemin` ne fait pas échouer la review", () => {
+  const diff = [
+    "diff --git a/db/migration.sql b/db/migration.sql",
+    "--- a/db/migration.sql",
+    "+++ b/db/migration.sql",
+    "@@ -1,2 +1,2 @@",
+    "--- /usr/local/share/ancienne-migration.sql",
+    "+-- migration/nouvelle.sql",
+    " SELECT 1;",
+  ].join("\n");
+
+  expect(parseReviewOutput(
+    '{"flags":[{"file":"db/migration.sql","line_start":1,"line_end":1,'
+      + '"severity":"grey","category":"lisibilité",'
+      + '"message":"Documente la migration référencée."}]}',
+    diff,
+  )).toHaveLength(1);
 });
 
 test("une ligne supprimée reste ancrable sur son ancien chemin", () => {
@@ -334,6 +377,271 @@ test("la portée conversation couvre plusieurs commits et tout le worktree", asy
   expect(completed!.diff_text).toContain("src/two.ts");
   expect(completed!.diff_text).toContain("src/staged.ts");
   expect(completed!.diff_text).toContain("src/untracked.ts");
+});
+
+// Place devant `git` un script qui commite dans le dépôt juste avant de déléguer
+// un `git diff` au vrai binaire : la fenêtre entre la lecture de HEAD et la
+// capture du diff worktree devient reproductible.
+function installCommitDuringDiff(options: { everyDiff: boolean }): void {
+  const realGit = Bun.which("git");
+  if (!realGit) throw new Error("git introuvable dans le PATH de test");
+  const binDir = join(dir, "race-bin");
+  mkdirSync(binDir, { recursive: true });
+  const marker = join(dir, "race-marker");
+  const guard = options.everyDiff ? "" : ` && [ ! -e "${marker}" ]`;
+  writeFileSync(join(binDir, "git"), [
+    "#!/bin/sh",
+    // La sous-commande n'est pas forcément en position 1 : le sidecar préfixe
+    // ses appels par des options `-c`.
+    "sous_commande=''",
+    "for argument in \"$@\"; do",
+    "  case \"$argument\" in",
+    "    -c|-C) continue;;",
+    "    -*|*=*) continue;;",
+    "    *) sous_commande=\"$argument\"; break;;",
+    "  esac",
+    "done",
+    `if [ "$sous_commande" = "diff" ]${guard}; then`,
+    `  : > "${marker}"`,
+    `  "${realGit}" -C "${repo}" commit -q --allow-empty -m "commit concurrent" >/dev/null 2>&1`,
+    "fi",
+    `exec "${realGit}" "$@"`,
+  ].join("\n"));
+  chmodSync(join(binDir, "git"), 0o755);
+  process.env.PATH = `${binDir}:${process.env.PATH}`;
+}
+
+test("rejoue la capture Gardien quand HEAD bouge pendant le diff worktree", async () => {
+  const project = projects.create({ name: "course capture", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "modifie la configuration",
+  });
+  writeFileSync(join(repo, "src/config.ts"), "console.log('modifié pendant la review')\n");
+  installCommitDuringDiff({ everyDiff: false });
+
+  const runner = new ReviewRunner(
+    store,
+    projects,
+    conversations,
+    quotas,
+    async () => '{"flags":[]}',
+  );
+  const review = runner.start({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "CONVERSATION",
+    gitRefHead: "WORKTREE",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+
+  const completed = await runner.wait(review.id);
+  expect(completed).toMatchObject({
+    status: "done",
+    git_ref_head: git("rev-parse", "HEAD"),
+  });
+  expect(completed!.diff_text).toContain("src/config.ts");
+});
+
+test("échoue explicitement si HEAD ne se stabilise pas pendant la capture", async () => {
+  const project = projects.create({ name: "course permanente", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "modifie la configuration",
+  });
+  writeFileSync(join(repo, "src/config.ts"), "console.log('modifié pendant la review')\n");
+  installCommitDuringDiff({ everyDiff: true });
+
+  const runner = new ReviewRunner(
+    store,
+    projects,
+    conversations,
+    quotas,
+    async () => '{"flags":[]}',
+  );
+  const review = runner.start({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "CONVERSATION",
+    gitRefHead: "WORKTREE",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+
+  expect(await runner.wait(review.id)).toMatchObject({
+    status: "error",
+    error: expect.stringContaining("HEAD a changé"),
+  });
+});
+
+// Variante du harnais précédent : le fichier est indexé juste après le diff des
+// fichiers suivis, c'est-à-dire dans la fenêtre où `ls-files --others` cesse de
+// le voir.
+function installStageAfterDiff(path: string): void {
+  const realGit = Bun.which("git");
+  if (!realGit) throw new Error("git introuvable dans le PATH de test");
+  const binDir = join(dir, "stage-bin");
+  mkdirSync(binDir, { recursive: true });
+  const marker = join(dir, "stage-marker");
+  writeFileSync(join(binDir, "git"), [
+    "#!/bin/sh",
+    "sous_commande=''",
+    "for argument in \"$@\"; do",
+    "  case \"$argument\" in",
+    "    -c|-C) continue;;",
+    "    -*|*=*) continue;;",
+    "    *) sous_commande=\"$argument\"; break;;",
+    "  esac",
+    "done",
+    `if [ "$sous_commande" = "diff" ] && [ ! -e "${marker}" ]; then`,
+    `  : > "${marker}"`,
+    `  "${realGit}" "$@"`,
+    "  code=$?",
+    `  "${realGit}" -C "${repo}" add "${path}" >/dev/null 2>&1`,
+    "  exit $code",
+    "fi",
+    `exec "${realGit}" "$@"`,
+  ].join("\n"));
+  chmodSync(join(binDir, "git"), 0o755);
+  process.env.PATH = `${binDir}:${process.env.PATH}`;
+}
+
+test("un fichier indexé pendant la capture reste dans le diff Gardien", async () => {
+  const project = projects.create({ name: "indexation concurrente", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "ajoute un module",
+  });
+  writeFileSync(join(repo, "src/nouveau.ts"), "export const nouveau = true\n");
+  installStageAfterDiff("src/nouveau.ts");
+
+  const runner = new ReviewRunner(
+    store,
+    projects,
+    conversations,
+    quotas,
+    async () => '{"flags":[]}',
+  );
+  const review = runner.start({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "CONVERSATION",
+    gitRefHead: "WORKTREE",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+
+  const completed = await runner.wait(review.id);
+  expect(completed).toMatchObject({ status: "done" });
+  expect(completed!.diff_text).toContain("src/nouveau.ts");
+});
+
+test("un fichier non suivi disparu pendant la capture ne casse pas la review", async () => {
+  const project = projects.create({ name: "fichier volatil", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "génère un artefact temporaire",
+  });
+  writeFileSync(join(repo, "src/config.ts"), "console.log('config modifiée')\n");
+  writeFileSync(join(repo, "src/temporaire.ts"), "export const temporaire = true\n");
+  const realGit = Bun.which("git");
+  if (!realGit) throw new Error("git introuvable dans le PATH de test");
+  const binDir = join(dir, "volatile-bin");
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(join(binDir, "git"), [
+    "#!/bin/sh",
+    "sous_commande=''",
+    "for argument in \"$@\"; do",
+    "  case \"$argument\" in",
+    "    -c|-C) continue;;",
+    "    -*|*=*) continue;;",
+    "    *) sous_commande=\"$argument\"; break;;",
+    "  esac",
+    "done",
+    `"${realGit}" "$@"`,
+    "code=$?",
+    `if [ "$sous_commande" = "ls-files" ]; then rm -f "${join(repo, "src/temporaire.ts")}"; fi`,
+    "exit $code",
+  ].join("\n"));
+  chmodSync(join(binDir, "git"), 0o755);
+  process.env.PATH = `${binDir}:${process.env.PATH}`;
+
+  const runner = new ReviewRunner(
+    store,
+    projects,
+    conversations,
+    quotas,
+    async () => '{"flags":[]}',
+  );
+  const review = runner.start({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "CONVERSATION",
+    gitRefHead: "WORKTREE",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+
+  const completed = await runner.wait(review.id);
+  expect(completed).toMatchObject({ status: "done" });
+  expect(completed!.diff_text).toContain("src/config.ts");
+});
+
+test("un fichier au nom accentué reste signalable par le Gardien", async () => {
+  // `core.quotePath` est actif par défaut : sans neutralisation, Git rend le
+  // chemin échappé en octal et plus aucun flag ne s'y ancre.
+  git("config", "core.quotePath", "true");
+  writeFileSync(join(repo, "src/données.ts"), "console.log(process.env.SECRET)\n");
+  git("add", ".");
+  git("commit", "-qm", "ajoute un fichier accentué");
+  const project = projects.create({ name: "accents", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "ajoute la configuration",
+  });
+
+  const runner = new ReviewRunner(
+    store,
+    projects,
+    conversations,
+    quotas,
+    async () => JSON.stringify({ flags: [{
+      file: "src/données.ts",
+      line_start: 1,
+      line_end: 1,
+      severity: "red",
+      category: "secret/credential",
+      message: "Ne journalise pas process.env.SECRET.",
+    }] }),
+  );
+  const review = runner.start({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "HEAD^",
+    gitRefHead: "HEAD",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+
+  const completed = await runner.wait(review.id);
+  expect(completed).toMatchObject({ status: "done" });
+  expect(completed!.flags.map((flag) => flag.file)).toEqual(["src/données.ts"]);
 });
 
 test("interrompt le diff Gardien dès que la borne de lecture est dépassée", async () => {
