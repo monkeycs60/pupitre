@@ -117,3 +117,55 @@ Contrôles : navigation et fil lisibles, presets/modèles accessibles, compteur 
 reconnexion visible puis retiré après resync, fraîcheur des quotas affichée, et
 aucune erreur console après reprise. La capture de reconnexion a été obtenue en
 coupant uniquement le sidecar temporaire puis en le relançant sur la même base.
+
+## E2E M3 — Gardien, Débrief, Git et Tester
+
+Exécuté le 2026-08-05 sans consommer de quota provider. Un smoke a été piloté
+dans le vrai frontend avec `agent-browser`; les cas d'erreur, de concurrence et
+de données structurées sont complétés par les tests d'intégration Bun. Les fake
+bins M3 répondent aux prompts Gardien, Débrief et Tester de façon déterministe.
+
+| # | Scénario | Validation | Résultat |
+|---|---|---|---|
+| 18 | Création projet + conversation Codex | Navigateur | ✅ formulaire, conversation, streaming fake et cartes outils rendus sans appel provider réel |
+| 19 | Vue Git | Navigateur + intégration | ✅ branches, commits et comparaison visibles ; worktrees, provenance, borne 2 Mio et parent HEAD couverts en intégration |
+| 20 | Review Gardien du travail courant | Navigateur + intégration | ✅ défaut `CONVERSATION → WORKTREE`, diff thermique affiché et review propre ; portée multi-commits, staged/unstaged/nouveaux fichiers, ancrage et lecture bornée couverts en intégration |
+| 21 | Acquittement et contre-avis | Intégration | ✅ décisions ciblées, mode bloquant, provider opposé et option automatique rouge ; ce sous-parcours n'a pas été cliqué dans le smoke faute de flag volontaire |
+| 22 | Bouton Tester | Navigateur + intégration | ✅ inventaire, choix et exécution du scope jusqu'au statut `RÉUSSI` dans le fil ; preuves tête/fin, captures et acquittement atomique couverts en intégration |
+| 23 | Débrief et handoff | Navigateur + intégration | ✅ Débrief généré et rendu dans le fil ; seed cross-provider, rollback et nettoyage au redémarrage d'une continuation incomplète couverts en intégration |
+| 24 | Reprise après interruption | Intégration | ✅ reviews et scopes `running` orphelins sont clôturés ; un Débrief incomplet ne crée aucune ligne persistée ; les continuations de handoff en attente sont supprimées au boot |
+
+Capture du smoke : [`pupitre-m3-gardien.png`](./pupitre-m3-gardien.png).
+
+Validation rejouée avant chaque commit M3 :
+
+```bash
+cd sidecar && bun test && bunx tsc --noEmit
+cd ui && bunx tsc --noEmit && bun run build
+```
+
+Résultat de clôture : **263 tests sidecar passent**, typechecks sidecar/UI verts et
+build Vite réussi. Aucun test Claude réel n'a été relancé : la session Claude de
+l'utilisateur était à court de crédits ; les fixtures et fake bins font foi pour
+ce jalon.
+
+### Rejouer les parcours M3 sans quota
+
+Utiliser l'environnement fake M2 ci-dessus, puis :
+
+1. Créer un projet pointant vers un dépôt Git avec au moins un commit, modifier
+   un fichier et ouvrir une conversation rattachée au projet.
+2. Lancer « Review Gardien », ouvrir le diff thermique, acquitter un point puis
+   demander un contre-avis. Vérifier qu'aucune validation globale n'est proposée.
+3. Lancer « Reprendre le contrôle », questionner le débrief puis effectuer une
+   passation vers l'autre provider ; la nouvelle conversation doit citer le bilan.
+4. Ouvrir l'onglet Git, sélectionner deux références et afficher leur diff ; les
+   commits liés à la conversation et les alertes Gardien restent visibles.
+5. Cliquer « Tester », choisir un scope et l'exécuter ; le statut, les sorties,
+   les captures et le verdict doivent mettre à jour la même carte dans le fil.
+   Quitter ensuite la conversation pendant une exécution : à son terme, le badge
+   et la vue Gardien doivent refléter l'acquittement sans rouvrir le fil source.
+
+Les équivalents déterministes se trouvent dans `tests/reviews.test.ts`,
+`tests/debriefs.test.ts`, `tests/git.test.ts`, `tests/testing.test.ts` et
+`tests/server.test.ts`.

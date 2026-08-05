@@ -13,6 +13,63 @@ Tu reprends le développement de Pupitre. À lire avant de commencer :
 - Port 4820 : toujours `fuser -k 4820/tcp` avant de relancer un sidecar de test (un vieux process a déjà faussé un test M2).
 - Tag git `m3` puis `m4` à la fin de chaque milestone, après review finale.
 
+## État au 2026-08-05
+
+- **M3-T0 terminé** : watchdog app-server, écritures atomiques, compaction des
+  deltas, sweep SQL, limites média et sidecar Tauri de production.
+- **M3-G terminé** : moteur et UI Gardien, décisions ciblées, blocage projet et
+  contre-avis cross-provider.
+- **M3-H terminé** : Débrief versionné, handoff via Débrief, jauge de contexte et
+  questionnement depuis le fil.
+- **M3-J terminé** : graphe Git, provenance des commits, diffs bornés, worktrees
+  et alertes Gardien par commit.
+- **M3-I terminé et review milestone propre** : inventaire structuré, exécution
+  des scopes avec sorties et captures inline, acquittement atomique des flags
+  liés et rafraîchissement Gardien au niveau projet.
+- Vérifications locales : 263 tests sidecar, typechecks sidecar/UI, build Vite et
+  `cargo check` verts. Les validations Claude réelles n'ont pas été rejouées faute
+  de crédits ; les fake bins et fixtures ont été utilisés conformément au plan.
+
+### Verdict de la review finale (2026-08-05)
+
+Trois passes de review ont été menées sur `m2..39d4d00` (les deux premières sont
+détaillées dans `docs/HANDOFF-REVIEW-M3.md`). La dernière passe a couvert le
+moteur Gardien, le stockage des conversations et la supervision Tauri, et a
+remonté **six constats Critical/Important, tous corrigés et couverts par un test
+qui échouait avant correction** :
+
+1. `stores/conversations.ts` — le sweep de redémarrage ne visait que le dernier
+   event et non le dernier `status` : un tour coupé en plein streaming laissait
+   la conversation `running` à vie, saisie et boutons désactivés, `Annuler` en
+   409. **Critical.**
+2. `reviews.ts` — le parsing du diff distinguait en-tête et contenu par préfixe :
+   un front-matter Markdown ou un commentaire SQL `-- …` décalait l'ancrage, et
+   un `-- /chemin/absolu` supprimé faisait échouer la review entière.
+   **Critical.**
+3. `reviews.ts` — `HEAD` était résolu séparément du diff worktree : la review
+   pouvait être archivée sous un commit qu'elle n'avait jamais lu. La capture est
+   rejouée tant que `HEAD` bouge, puis échoue explicitement. **Important.**
+4. `reviews.ts` — les fichiers non suivis étaient listés *après* le diff des
+   fichiers suivis : un `git add` concurrent faisait disparaître un fichier des
+   deux sorties, donc du diff soumis au Gardien (faux négatif silencieux).
+   L'ordre est inversé. **Important.**
+5. `reviews.ts` — `core.quotePath` rendait tout fichier accentué non signalable
+   et faisait échouer la review dès qu'un flag le visait. **Important.**
+6. `server.ts` — une continuation de passation en cours de nettoyage acceptait
+   encore un message, perdu ensuite avec la conversation supprimée.
+   `handoff_pending` refuse désormais l'écriture. **Important.**
+7. `src-tauri/src/lib.rs` — l'arrêt de l'application pouvait tomber pendant un
+   spawn en vol et laisser un sidecar orphelin sur le port 4820 ; le spawn a
+   désormais lieu sous le mutex. **Important.**
+
+Dette explicitement reportée à M4 (constats Minor, aucun impact sur la
+correction du jalon) : pas de backoff ni de remontée UI quand le spawn du
+sidecar échoue en boucle ; sorties stdout/stderr du sidecar jetées, donc panne
+peu diagnosticable ; backfills de `db.ts` hors de la transaction de leur
+`ALTER TABLE` ; un flag mal ancré fait encore perdre toute la review au lieu de
+la seule zone concernée ; `executeCounter` boucle sans plafond sur la limite de
+sous-tâches ; `git.ts` ne neutralise pas `core.quotePath` pour la vue Git.
+
 ---
 
 # M3 — Contrôle (Gardien, Débrief, Tester, vue Git)

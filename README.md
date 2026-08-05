@@ -1,8 +1,8 @@
 # Pupitre
 
-Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Codex CLI** sur tes abonnements (jamais d'API payante), avec discussions par projet, streaming, reprise de session, épinglage et images inline. Le pupitre du chef d'orchestre : l'app dirige les CLIs sans jouer une note elle-même.
+Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Codex CLI** sur tes abonnements (jamais d'API payante), avec discussions par projet, orchestration, contrôle des changements, tests guidés et historique Git. Le pupitre du chef d'orchestre : l'app dirige les CLIs sans jouer une note elle-même.
 
-## Architecture (M1)
+## Architecture (M3)
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -11,16 +11,36 @@ Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Code
 ├─────────────────────────────────────────────┤
 │  Sidecar Bun/TypeScript (le cerveau)        │
 │  stores SQLite · adapters claude/codex      │
-│  runner (1 tour = 1 process CLI, resume)    │
-│  serveur HTTP+WS · media                    │
+│  conversations · subtasks · reviews · tests│
+│  serveur HTTP+WS · Git · media              │
 ├─────────────────────────────────────────────┤
 │  Frontend React + Vite (webview)            │
-│  sidebar projets · chat streaming ·         │
-│  tool cards · lightbox · composer           │
+│  chat streaming · Gardien · Débrief · Git   │
+│  Tester · tool cards · lightbox             │
 └─────────────────────────────────────────────┘
 ```
 
 Les deux CLIs sont normalisés en un schéma d'événements unifié (`sidecar/src/events.ts`) ; le frontend ne connaît jamais Claude ou Codex directement. Les sessions sont celles des vrais CLIs (`claude -r`, `codex exec resume`) : reprise gratuite, et tes skills/CLAUDE.md/AGENTS.md marchent tels quels.
+
+## Contrôle des changements (M3)
+
+- **Gardien** analyse le diff Git avec un modèle fort, ancre ses alertes sur les
+  lignes concernées et demande d'acquitter les décisions une par une. Les points
+  rouges peuvent recevoir automatiquement un contre-avis du provider opposé.
+- **Débrief** produit un bilan versionné depuis le dernier bilan : réalisations,
+  décisions, implications et questions ouvertes. Une passation cross-provider
+  transmet ce débrief à la conversation suivante.
+- **Git** affiche branches, commits, HEAD et worktrees, relie les commits à leur
+  conversation d'origine et conserve les alertes Gardien sur les commits visés.
+- **Tester** relit le fil, propose des scopes et méthodes concrètes, puis exécute
+  le choix en sous-tâche. Sorties bornées tête/fin, captures navigateur, preuves
+  et verdict restent inline ; un succès acquitte atomiquement les alertes
+  « absence de test » liées et rafraîchit Gardien dans tout le projet.
+
+Les opérations longues d'une conversation partagent un verrou explicite. Au
+redémarrage, les reviews, sous-tâches et scopes interrompus sont clôturés, et une
+continuation de passation restée incomplète est retirée plutôt que laissée dans
+la sidebar.
 
 ## Sous-tâches déléguées (M2-D1)
 
@@ -76,7 +96,7 @@ Les réglages transverses vivent dans la table key/value `settings` (`GET/PUT /a
 Depuis un fil ouvert, la modale « Changer de modèle » distingue deux opérations :
 
 - même provider : `PUT /api/conversations/:id/model` met à jour modèle, effort et vitesse sans casser la session CLI ; l'UI prévient que le cache sera perdu et estime la ré-ingestion en additionnant les événements `usage` du fil ;
-- autre provider : `POST /api/conversations/:id/handoff` demande au modèle sortant un résumé fixe sans outils, crée une conversation cible reliée par `continued_from`, puis lui transmet ce résumé pour initialiser sa propre session. La sidebar matérialise le lien dans les deux sens.
+- autre provider : `POST /api/conversations/:id/handoff` génère un Débrief sans outils, l'épingle dans le fil source, crée une conversation cible reliée par `continued_from`, puis lui transmet ce bilan pour initialiser sa propre session. La sidebar matérialise le lien dans les deux sens.
 
 ## Prérequis
 
@@ -102,7 +122,7 @@ Données dans `~/.local/share/pupitre` (override : `PUPITRE_DATA_DIR`). Binaires
 ## Tests
 
 ```bash
-cd sidecar && bun test        # 49 tests (fixtures réelles des CLIs, fake bins)
+cd sidecar && bun test        # 263 tests (fixtures réelles des CLIs, fake bins)
 cd sidecar && bun run typecheck
 cd ui && bunx tsc --noEmit && bun run build
 ```
@@ -119,4 +139,8 @@ Protocole e2e : `e2e/basic-flow.md`.
 
 **M1 (fait)** : socle — projets, conversations streamées sur les deux providers, reprise, épinglage, images inline, annulation de tour, coquille Tauri.
 
-**Suite** : M2 orchestration cross-provider (Conductor) + quotas des deux abonnements · M3 Gardien (review à risques) + Débrief + bouton Tester + vue Git · M4 bibliothèque de skills, workflows épinglés, routines, fleet view.
+**M2 (fait)** : orchestration cross-provider (Conductor), sous-tâches, quotas des deux abonnements, presets et changement de modèle.
+
+**M3 (fait)** : Gardien, contre-avis, Débrief et passation, bouton Tester avec preuves, vue Git et durcissement du sidecar.
+
+**Suite — M4** : bibliothèque de skills, workflows épinglés, routines, fleet view, recherche globale et aide intégrée.
