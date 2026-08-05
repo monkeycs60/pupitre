@@ -488,7 +488,6 @@ export class SkillInventory {
     const indexedPaths = this.db.query("SELECT path FROM skills").all() as Array<{ path: string }>;
     for (const skill of indexedPaths) {
       roots.add(dirname(skill.path));
-      roots.add(dirname(dirname(skill.path)));
     }
     for (const project of this.projects.list()) {
       addRootAndChildren(project.path, 0);
@@ -496,7 +495,9 @@ export class SkillInventory {
     }
     for (const root of roots) {
       try {
-        this.watchers.push(watch(root, this.scheduleRefresh));
+        const watcher = watch(root, this.scheduleRefresh);
+        watcher.on("error", () => watcher.close());
+        this.watchers.push(watcher);
       } catch {
         // Un dossier optionnel peut disparaître entre existsSync et fs.watch.
       }

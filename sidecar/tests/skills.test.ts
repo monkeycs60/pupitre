@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -145,6 +146,22 @@ description: Après modification.
     await Bun.sleep(20);
   }
   expect(inventory.list()[0]?.description).toBe("Après modification.");
+});
+
+test("le watcher ignore les liens cassés à la racine du dossier personnel", async () => {
+  const { db, home, projects } = fixture();
+  symlinkSync(join(home, "cible-absente"), join(home, ".lien-casse"));
+  const inventory = new SkillInventory(db, projects, {
+    homeDir: home,
+    watchDebounceMs: 20,
+  });
+  cleanups.push(() => inventory.stop());
+
+  inventory.start();
+  write(join(home, "fichier-sans-rapport.txt"), "déclencheur");
+  await Bun.sleep(50);
+
+  expect(inventory.list()).toEqual([]);
 });
 
 test("le pont résout la même invocation pour un skill Claude et un prompt Codex", () => {
