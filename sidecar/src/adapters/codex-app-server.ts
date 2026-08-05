@@ -371,9 +371,19 @@ export class CodexAppServerClient {
     // tout le sidecar : chaque thread démarre ses propres serveurs MCP.
     // L'effort passe par `turn/start` (champ `effort` des types v2) ; on le
     // duplique en config pour les versions qui ne l'honorent qu'au niveau thread.
+    const conductorConfig = opts.conductor ? codexMcpConfig(opts.conductor) : {};
+    const conductorServers = (
+      conductorConfig.mcp_servers as Record<string, Record<string, unknown>> | undefined
+    ) ?? {};
+    // Ajouter `mcp_servers` dans la config du thread fait repasser cette branche
+    // après les overrides CLI du process. Sans recopier la politique utilisateur,
+    // le conductor restaurait donc notamment le timeout Sentry de 120 secondes.
+    const threadMcpServers = opts.conductor
+      ? { ...this.threadMcpPolicyOverrides(), ...conductorServers }
+      : {};
     const overrides = {
       ...(opts.effort ? { model_reasoning_effort: opts.effort } : {}),
-      ...(opts.conductor ? codexMcpConfig(opts.conductor) : {}),
+      ...(opts.conductor ? { mcp_servers: threadMcpServers } : {}),
     };
     const config = Object.keys(overrides).length ? { config: overrides } : {};
     const result = opts.cliSessionId
@@ -386,6 +396,23 @@ export class CodexAppServerClient {
     const threadId = (result?.thread as { id?: string } | undefined)?.id;
     if (typeof threadId !== "string") throw new Error("thread sans id");
     return threadId;
+  }
+
+  /** Réapplique au thread orchestrateur la politique déjà passée au process. */
+  private threadMcpPolicyOverrides(): Record<string, Record<string, unknown>> {
+    const policy = mcpPolicy();
+    if (policy === "full") return {};
+    if (this.discoveredMcpNames === null) {
+      const bin = process.env.PUPITRE_CODEX_BIN ?? "codex";
+      this.discoveredMcpNames = this.mcpNames(bin);
+    }
+    const startupTimeout = mcpStartupTimeoutSec();
+    return Object.fromEntries(this.discoveredMcpNames.map((name) => [
+      name,
+      policy === "bounded"
+        ? { startup_timeout_sec: startupTimeout }
+        : { enabled: false },
+    ]));
   }
 
   // --- Transport JSON-RPC --------------------------------------------------

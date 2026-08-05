@@ -53,10 +53,16 @@ Tu reprends le développement de Pupitre. À lire avant de commencer :
   réels ont isolé le MCP classique Sentry : configuration complète 122,7 s,
   Sentry seul désactivé 6,8 s, puis tous les MCP/plugins conservés avec son
   handshake borné à 5 s 8,6 s. Pupitre conserve donc désormais toutes les
-  capacités par défaut et borne à 5 s le démarrage de chaque MCP classique ; le
-  `conductor` reste ajouté par thread. `PUPITRE_CODEX_MCP_POLICY=full|off` permet
-  respectivement la configuration intacte ou l'isolation complète. Détails dans
-  `docs/spikes/codex-mcp-latency.md`.
+  capacités par défaut et borne à 5 s le démarrage de chaque MCP classique. Une
+  seconde reproduction a montré que l'ajout de `conductor` par thread remplaçait
+  ces bornes (123,4 s) : la politique est donc aussi recopiée dans la config du
+  thread orchestrateur (11,5 s après correction). `PUPITRE_CODEX_MCP_POLICY=full|off`
+  permet respectivement la configuration intacte ou l'isolation complète. Détails
+  dans `docs/spikes/codex-mcp-latency.md`.
+- **WebSocket Tauri dev** : la WebView servie en HTTP par Vite détecte désormais
+  le runtime Tauri et joint directement le sidecar pour ses WebSockets. Le proxy
+  Vite n'écrit plus dans des sockets fermées au montage (`write EPIPE`). Le
+  navigateur web de développement continue, lui, d'utiliser le proxy.
 - **Mesures de tour ajoutées à l'UI** : attente avant premier retour, durée en
   cours et total final sont persistés dans les événements et affichés sous
   chaque tour.

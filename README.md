@@ -182,7 +182,9 @@ Données dans `~/.local/share/pupitre` (override : `PUPITRE_DATA_DIR`). Binaires
 Par défaut, l'app-server Codex lancé par Pupitre conserve les plugins et MCP
 utilisateur, mais borne à 5 secondes le handshake de chaque MCP classique : un
 serveur indisponible ne peut donc plus retarder le premier retour de deux minutes.
-Le bridge `conductor` de Pupitre reste activé par thread. Réglages disponibles :
+La borne est appliquée au process puis répétée dans la configuration des threads
+orchestrateurs afin que l'ajout du bridge `conductor` ne la remplace pas. Le
+bridge reste activé par thread. Réglages disponibles :
 
 - `PUPITRE_CODEX_MCP_POLICY=bounded` (défaut) : capacités conservées, démarrage borné ;
 - `PUPITRE_CODEX_MCP_POLICY=full` : configuration Codex intacte, sans borne ajoutée ;
@@ -196,7 +198,7 @@ sont détaillées dans `docs/spikes/codex-mcp-latency.md`.
 ## Tests
 
 ```bash
-cd sidecar && bun test        # 299 tests (fixtures réelles des CLIs, fake bins)
+cd sidecar && bun test        # 302 tests (fixtures réelles des CLIs, fake bins)
 cd sidecar && bun run typecheck
 cd ui && bunx tsc --noEmit && bun run build
 ```

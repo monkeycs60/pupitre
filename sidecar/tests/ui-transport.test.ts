@@ -20,3 +20,10 @@ test("le développement web conserve les routes relatives et le proxy Vite", () 
     host: "localhost:5173",
   })).toBe("ws://localhost:5173/ws?conversation=abc");
 });
+
+test("la WebView Tauri en développement contourne le proxy WebSocket Vite", () => {
+  expect(webSocketUrl("/ws?channel=fleet", {
+    protocol: "http:",
+    host: "localhost:5173",
+  }, true)).toBe("ws://127.0.0.1:4820/ws?channel=fleet");
+});

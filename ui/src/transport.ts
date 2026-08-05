@@ -6,6 +6,11 @@ interface LocationLike {
   host: string
 }
 
+function hasTauriRuntime(): boolean {
+  return typeof window !== 'undefined'
+    && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
+}
+
 export function httpUrl(path: string, protocol = location.protocol): string {
   return protocol === 'tauri:' ? `${SIDECAR_HTTP_ORIGIN}${path}` : path
 }
@@ -17,8 +22,11 @@ export function mediaUrl(name: string, protocol = location.protocol): string {
 export function webSocketUrl(
   path: string,
   current: LocationLike = location,
+  tauriRuntime = hasTauriRuntime(),
 ): string {
-  if (current.protocol === 'tauri:') return `${SIDECAR_WS_ORIGIN}${path}`
+  // En dev, la WebView Tauri est servie par Vite en http: mais peut joindre le
+  // sidecar directement. Éviter le proxy WS supprime ses EPIPE au montage HMR.
+  if (current.protocol === 'tauri:' || tauriRuntime) return `${SIDECAR_WS_ORIGIN}${path}`
   const scheme = current.protocol === 'https:' ? 'wss' : 'ws'
   return `${scheme}://${current.host}${path}`
 }

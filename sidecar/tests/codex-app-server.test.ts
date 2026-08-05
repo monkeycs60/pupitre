@@ -131,6 +131,41 @@ test("le timeout de démarrage MCP est configurable", async () => {
   ]);
 });
 
+test("un thread orchestrateur conserve les bornes MCP en ajoutant conductor", async () => {
+  const files = useFake();
+  await collect(newClient(), {
+    conductor: { port: 4820, conversationId: "conversation-parent" },
+  });
+
+  const start = sentRequests(files.log).find((request) => request.method === "thread/start")!;
+  expect(start.params.config.mcp_servers).toMatchObject({
+    sentry: { startup_timeout_sec: 5 },
+    node_repl: { startup_timeout_sec: 5 },
+    conductor: {
+      enabled: true,
+      env: {
+        PUPITRE_PORT: "4820",
+        PUPITRE_CONVERSATION_ID: "conversation-parent",
+      },
+    },
+  });
+});
+
+test("le mode off reste appliqué dans un thread orchestrateur", async () => {
+  const files = useFake();
+  process.env.PUPITRE_CODEX_MCP_POLICY = "off";
+  await collect(newClient(), {
+    conductor: { port: 4820, conversationId: "conversation-parent" },
+  });
+
+  const start = sentRequests(files.log).find((request) => request.method === "thread/start")!;
+  expect(start.params.config.mcp_servers).toMatchObject({
+    sentry: { enabled: false },
+    node_repl: { enabled: false },
+    conductor: { enabled: true },
+  });
+});
+
 test("une politique MCP invalide termine le tour en erreur", async () => {
   useFake();
   process.env.PUPITRE_CODEX_MCP_POLICY = "lent";
