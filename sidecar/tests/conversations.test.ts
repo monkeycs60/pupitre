@@ -197,10 +197,25 @@ test("nettoie au redémarrage uniquement les handoffs restés en attente", () =>
     firstMessage: "Suite réussie",
   });
   expect(convs.completeHandoff(completed.id)).toBe(true);
+  const persistedDone = convs.create({
+    projectId,
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    continuedFrom: source.id,
+    handoffPending: true,
+    firstMessage: "Suite persistée avant crash",
+  });
+  convs.appendEvent(persistedDone.id, { type: "status", state: "running" });
+  convs.appendEvent(persistedDone.id, { type: "status", state: "done" });
 
   expect(convs.sweepPendingHandoffs()).toBe(1);
   expect(convs.get(interrupted.id)).toBeNull();
   expect(convs.get(completed.id)).toMatchObject({ handoff_pending: false });
+  expect(convs.get(persistedDone.id)).toMatchObject({ handoff_pending: false });
+  expect(convs.listEvents(persistedDone.id).at(-1)).toMatchObject({
+    type: "status",
+    state: "done",
+  });
   expect(convs.get(source.id)).not.toBeNull();
 });
 

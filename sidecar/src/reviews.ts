@@ -204,10 +204,11 @@ export class ReviewRunner {
     const base = input.gitRefBase === CONVERSATION_BASE_REF
       ? await this.conversationBase(cwd, input.projectId, input.conversationId)
       : await resolveGitRef(cwd, input.gitRefBase);
-    const head = input.gitRefHead === WORKTREE_HEAD_REF
-      ? WORKTREE_HEAD_REF
+    const worktreeHead = input.gitRefHead === WORKTREE_HEAD_REF;
+    const head = worktreeHead
+      ? await resolveGitRef(cwd, "HEAD")
       : await resolveGitRef(cwd, input.gitRefHead);
-    const diff = head === WORKTREE_HEAD_REF
+    const diff = worktreeHead
       ? await worktreeDiff(cwd, base, maxBytes)
       : await gitLimited(cwd, [
           "diff",

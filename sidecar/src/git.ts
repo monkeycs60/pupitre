@@ -384,7 +384,11 @@ export class GitProjectService {
     }>;
     const summaries = new Map<string, GitGuardianReview[]>();
     for (const row of rows) {
-      const sha = this.tryResolve(cwd, row.git_ref_head === "WORKTREE" ? "HEAD" : row.git_ref_head);
+      // Les reviews WORKTREE récentes sont figées sur le SHA observé au scan.
+      // Ne jamais résoudre un ancien marqueur WORKTREE sur le HEAD courant :
+      // cela afficherait la review sur un commit qui n'a pas été analysé.
+      if (row.git_ref_head === "WORKTREE") continue;
+      const sha = this.tryResolve(cwd, row.git_ref_head);
       if (!sha) continue;
       const commitReviews = summaries.get(sha) ?? [];
       let summary = commitReviews.find((review) => review.reviewId === row.review_id);

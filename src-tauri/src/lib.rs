@@ -76,8 +76,26 @@ fn supervise_sidecar(app: tauri::AppHandle) {
                 continue;
             }
         };
-        if let Ok(mut child_slot) = state.child.lock() {
-            *child_slot = Some(child);
+        let registered = match state.child.lock() {
+            Ok(mut child_slot) => {
+                // stop_sidecar publie `stopping` avant de prendre ce mutex.
+                // Revalider sous le mutex ferme la fenêtre spawn/enregistrement :
+                // soit stop_sidecar récupère le child, soit on le tue ici.
+                if state.stopping.load(Ordering::Acquire) {
+                    let _ = child.kill();
+                    false
+                } else {
+                    *child_slot = Some(child);
+                    true
+                }
+            }
+            Err(_) => {
+                let _ = child.kill();
+                false
+            }
+        };
+        if !registered {
+            break;
         }
 
         let mut terminal_error = false;

@@ -328,7 +328,7 @@ test("la portée conversation couvre plusieurs commits et tout le worktree", asy
   expect(completed).toMatchObject({
     status: "done",
     git_ref_base: git("rev-parse", `${first}^`),
-    git_ref_head: "WORKTREE",
+    git_ref_head: git("rev-parse", "HEAD"),
   });
   expect(completed!.diff_text).toContain("src/one.ts");
   expect(completed!.diff_text).toContain("src/two.ts");

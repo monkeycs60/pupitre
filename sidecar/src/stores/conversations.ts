@@ -113,13 +113,20 @@ export class ConversationStore {
     `).run(new Date().toISOString(), id).changes === 1;
   }
 
-  /** Nettoie au boot les continuations dont le premier tour n'a jamais abouti. */
+  /** Finalise les tours réussis, puis nettoie les continuations interrompues. */
   sweepPendingHandoffs(): number {
     const rows = this.db.query(`
       SELECT id FROM conversations WHERE handoff_pending = 1
     `).all() as Array<{ id: string }>;
     let removed = 0;
     for (const row of rows) {
+      const lastStatus = this.listEvents(row.id)
+        .filter((event) => event.type === "status")
+        .at(-1);
+      if (lastStatus?.type === "status" && lastStatus.state === "done") {
+        this.completeHandoff(row.id);
+        continue;
+      }
       if (this.deleteFailedContinuation(row.id)) removed += 1;
     }
     return removed;

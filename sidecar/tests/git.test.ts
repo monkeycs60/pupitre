@@ -114,6 +114,26 @@ test("ancre les flags Gardien sur le commit visé par la review", () => {
   ]));
 });
 
+test("ne rattache jamais une ancienne review WORKTREE au nouveau HEAD", () => {
+  const reviewedHead = commit("reviewed.ts", "export const reviewed = true\n", "reviewed");
+  const store = new ReviewStore(db);
+  const review = store.create({
+    projectId,
+    conversationId,
+    gitRefBase: "HEAD^",
+    gitRefHead: "WORKTREE",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+  store.complete(review.id, []);
+  const newerHead = commit("newer.ts", "export const newer = true\n", "newer");
+
+  const snapshot = gitView.snapshot(projectId);
+  expect(snapshot.commits.find((item) => item.sha === reviewedHead)?.guardian).toEqual([]);
+  expect(snapshot.commits.find((item) => item.sha === newerHead)?.guardian).toEqual([]);
+});
+
 test("produit un diff entre refs validées et refuse une référence invalide", async () => {
   const base = git("rev-parse", "HEAD");
   const head = commit("README.md", "base\nnext\n", "suite");
