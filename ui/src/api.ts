@@ -7,6 +7,7 @@ import type {
   GitDiff,
   GitSnapshot,
   FleetItem,
+  SearchResult,
   Project,
   Preset,
   Provider,
@@ -193,6 +194,16 @@ export function getHealth(): Promise<{ ok: true }> {
 
 export function getFleet(signal?: AbortSignal): Promise<FleetItem[]> {
   return fetchJson('/api/fleet', { signal })
+}
+
+export function searchGlobal(
+  query: string,
+  projectId?: string,
+  signal?: AbortSignal,
+): Promise<SearchResult[]> {
+  const params = new URLSearchParams({ q: query })
+  if (projectId) params.set('projectId', projectId)
+  return fetchJson(`/api/search?${params.toString()}`, { signal })
 }
 
 export function listProjects(): Promise<Project[]> {

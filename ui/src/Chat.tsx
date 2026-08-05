@@ -37,6 +37,7 @@ interface ChatProps {
   onProjectUpdated: (project: Project) => void
   /** Nombre de sous-tâches en cours dans ce fil (indicateur sidebar). */
   onRunningSubtasksChange?: (count: number) => void
+  initialMessage?: string
 }
 
 interface LightboxImage {
@@ -83,6 +84,7 @@ export function Chat({
   onConversationCreated,
   onProjectUpdated,
   onRunningSubtasksChange,
+  initialMessage = '',
 }: ChatProps) {
   const blocks = useMemo(() => groupEvents(events), [events])
   const previousUserText = useMemo(() => latestUserText(events), [events])
@@ -90,7 +92,7 @@ export function Chat({
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(initialMessage)
   const [focusRequest, setFocusRequest] = useState(0)
   const [skillsPanelOpen, setSkillsPanelOpen] = useState(initialSkillsPanelOpen)
   const [subtaskStatuses, setSubtaskStatuses] = useState<

@@ -16,6 +16,16 @@ export interface FleetItem {
   lastEvent: string
 }
 
+export interface SearchResult {
+  kind: 'conversation' | 'event' | 'debrief'
+  sourceId: string
+  conversationId: string
+  projectId: string
+  title: string
+  excerpt: string
+  rank: number
+}
+
 export type SkillProvenance =
   | 'claude-global'
   | 'claude-plugin'

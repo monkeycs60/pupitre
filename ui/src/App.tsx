@@ -16,6 +16,9 @@ import { SkillsLibrary } from './SkillsLibrary'
 import { RoutinesView } from './RoutinesView'
 import { useAppNotifications } from './useAppNotifications'
 import { FleetView } from './FleetView'
+import { CommandPalette } from './CommandPalette'
+import { createDebrief, createTestInventory } from './api'
+import type { SkillSummary } from './types'
 import type { WorkspaceView } from './types'
 
 function App() {
@@ -23,6 +26,7 @@ function App() {
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
+  const [newConversationDraft, setNewConversationDraft] = useState('')
   const [conversationListVersion, setConversationListVersion] = useState(0)
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
@@ -82,6 +86,7 @@ function App() {
   function handleProjectSelect(project: Project) {
     if (project.id !== selectedProject?.id) {
       setSelectedConversation(null)
+      setNewConversationDraft('')
       setIsCreatingConversation(false)
       setShowSwitchModel(false)
       setShowReviewDialog(false)
@@ -93,6 +98,7 @@ function App() {
 
   function handleConversationSelect(conversation: Conversation) {
     setSelectedConversation(conversation)
+    setNewConversationDraft('')
     setIsCreatingConversation(false)
     setShowSwitchModel(false)
     setShowReviewDialog(false)
@@ -102,6 +108,7 @@ function App() {
   function handleConversationCreate() {
     if (selectedProject === null) return
     setSelectedConversation(null)
+    setNewConversationDraft('')
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
     setShowReviewDialog(false)
@@ -110,6 +117,7 @@ function App() {
 
   function handleConversationCreated(conversation: Conversation) {
     setSelectedConversation(conversation)
+    setNewConversationDraft('')
     setIsCreatingConversation(false)
     setConversationListVersion((current) => current + 1)
   }
@@ -162,6 +170,31 @@ function App() {
     setWorkspaceView('fleet')
     setShowSwitchModel(false)
     setShowReviewDialog(false)
+  }
+
+  function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'library') {
+    if (view === 'fleet') handleFleetSelect()
+    else if (view === 'routines') handleRoutinesSelect()
+    else handleLibrarySelect()
+  }
+
+  function handlePaletteSkillLaunch(skill: SkillSummary) {
+    if (!selectedProject) return
+    setSelectedConversation(null)
+    setNewConversationDraft(`$${skill.invocation} `)
+    setIsCreatingConversation(true)
+    setWorkspaceView('conversations')
+  }
+
+  async function handlePaletteAction(action: 'test' | 'debrief' | 'review') {
+    if (!selectedConversation) return
+    setWorkspaceView('conversations')
+    if (action === 'review') {
+      setShowReviewDialog(true)
+      return
+    }
+    if (action === 'test') await createTestInventory(selectedConversation.id)
+    else await createDebrief(selectedConversation.id)
   }
 
   async function handleRoutineConversationSelect(projectId: string, conversationId: string) {
@@ -307,7 +340,7 @@ function App() {
             </header>
             <Chat
               key={selectedConversation === null
-                ? `chat-new-${selectedProject.id}`
+                ? `chat-new-${selectedProject.id}-${newConversationDraft}`
                 : `chat-${selectedConversation.id}`}
               events={selectedConversation === null ? [] : events}
               connection={connection}
@@ -318,6 +351,7 @@ function App() {
               onConversationCreated={handleConversationCreated}
               onProjectUpdated={handleProjectUpdated}
               onRunningSubtasksChange={setRunningSubtasks}
+              initialMessage={newConversationDraft}
             />
             {showSwitchModel && selectedConversation !== null ? (
               <SwitchModelModal
@@ -341,6 +375,15 @@ function App() {
           </>
         )}
       </section>
+      <CommandPalette
+        currentProject={selectedProject}
+        currentConversation={selectedConversation}
+        onProjectSelect={handleProjectSelect}
+        onConversationSelect={(projectId, conversationId) => handleRoutineConversationSelect(projectId, conversationId)}
+        onSkillLaunch={handlePaletteSkillLaunch}
+        onViewSelect={handlePaletteViewSelect}
+        onAction={handlePaletteAction}
+      />
     </main>
   )
 }
