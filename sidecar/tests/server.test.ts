@@ -25,6 +25,7 @@ interface TestServer {
   runner: ConversationRunner;
   server: ReturnType<typeof createServer>;
   reviews: ReviewRunner;
+  subtasks: SubtaskRunner;
 }
 
 let current: TestServer | undefined;
@@ -233,6 +234,7 @@ cat "${fixture}"
     runner,
     server,
     reviews,
+    subtasks,
   };
 });
 
@@ -882,6 +884,12 @@ test("un handoff dont le provider cible échoue ne conserve pas de continuation"
   await waitForRunnerIdle(source.id);
   process.env.PUPITRE_CODEX_MODE = "exec";
   process.env.PUPITRE_CODEX_BIN = join(tmpdir(), `codex-absent-${crypto.randomUUID()}`);
+  let cancelledContinuationId: string | null = null;
+  const cancelByConversation = current.subtasks.cancelByConversation.bind(current.subtasks);
+  current.subtasks.cancelByConversation = async (conversationId) => {
+    cancelledContinuationId = conversationId;
+    return cancelByConversation(conversationId);
+  };
 
   const response = await postJson(`/api/conversations/${source.id}/handoff`, {
     provider: "codex",
@@ -890,6 +898,8 @@ test("un handoff dont le provider cible échoue ne conserve pas de continuation"
   });
 
   expect(response.status).toBe(502);
+  expect(cancelledContinuationId).not.toBeNull();
+  expect(cancelledContinuationId).not.toBe(source.id);
   expect(new ConversationStore(current.db).listByProject(project.id)).toEqual([
     expect.objectContaining({ id: source.id }),
   ]);

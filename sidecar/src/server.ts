@@ -698,6 +698,10 @@ export function createServer(deps: ServerDeps) {
                 }
                 return json(deps.conversations.get(continuation.id), 201);
               } catch (error) {
+                // Le provider cible peut avoir délégué avant d'échouer. Attendre
+                // l'arrêt de ses sous-tâches empêche qu'elles réécrivent des
+                // events sous leurs ids après la transaction de nettoyage.
+                await deps.subtasks.cancelByConversation(continuation.id);
                 deps.conversations.deleteFailedContinuation(continuation.id);
                 throw error;
               }
