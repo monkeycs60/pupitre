@@ -1,4 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import type { AppEvent } from "../events";
 import type { EmitFn, TurnOptions } from "./types";
@@ -17,16 +20,30 @@ import { boundedToolOutput } from "./output";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_IDLE_MS = 5 * 60_000;
 
-function appServerArgs(): string[] {
-  // Les MCP de ~/.codex sont utiles dans le terminal, mais leur handshake est
-  // sur le chemin critique de CHAQUE thread app-server. Un serveur OAuth expiré
-  // ou un stdio absent ajoutait ici son timeout complet (120 s observées).
-  // Pupitre isole donc son process et réinjecte seulement `conductor` par thread.
-  // Opt-in de compatibilité pour les utilisateurs qui veulent explicitement
-  // retrouver tous leurs MCP dans Pupitre, au prix de leur latence de démarrage.
-  return process.env.PUPITRE_CODEX_USER_MCPS === "1"
-    ? ["app-server"]
-    : ["app-server", "-c", "mcp_servers={}"];
+type McpNameProvider = (bin: string) => string[];
+
+function discoverEnabledMcpNames(bin: string): string[] {
+  void bin;
+  try {
+    const codexHome = process.env.CODEX_HOME ?? join(homedir(), ".codex");
+    const config = readFileSync(join(codexHome, "config.toml"), "utf8");
+    const names = config.split("\n").flatMap((line) => {
+      const bare = line.match(/^\s*\[mcp_servers\.([A-Za-z0-9_-]+)\]\s*$/);
+      if (bare) return [bare[1]!];
+      const quoted = line.match(/^\s*\[mcp_servers\.("(?:\\.|[^"])+")\]\s*$/);
+      if (!quoted) return [];
+      try {
+        const name = JSON.parse(quoted[1]!) as unknown;
+        return typeof name === "string" && /^[A-Za-z0-9_-]+$/.test(name) ? [name] : [];
+      } catch {
+        return [];
+      }
+    });
+    return [...new Set(names)];
+  } catch {
+    // Une installation sans config utilisateur n'a simplement rien à isoler.
+    return [];
+  }
 }
 
 /** Délai au-delà duquel une requête JSON-RPC sans réponse est rejetée. */
@@ -87,6 +104,9 @@ export class CodexAppServerClient {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   /** Tue le process courant ET fait son cleanup (cf. shutdown). */
   private killCurrent: (() => void) | null = null;
+  private disabledMcpArgs: string[] | null = null;
+
+  constructor(private readonly mcpNames: McpNameProvider = discoverEnabledMcpNames) {}
 
   /** Même signature que runCodexTurn : un tour complet, streamé via emit. */
   async runTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
@@ -242,7 +262,22 @@ export class CodexAppServerClient {
   private ensureProcess(): Promise<void> {
     if (this.ready) return this.ready;
     const bin = process.env.PUPITRE_CODEX_BIN ?? "codex";
-    const child = spawn(bin, appServerArgs(), { stdio: ["pipe", "pipe", "pipe"] });
+    let args = ["app-server"];
+    if (process.env.PUPITRE_CODEX_USER_MCPS !== "1") {
+      // Les MCP de ~/.codex sont utiles dans le terminal, mais leur handshake
+      // est sur le chemin critique du premier turn/start. Les MCP classiques
+      // sont désactivés par nom. Les MCP apportés par les plugins n'ont pas de
+      // transport dans config.toml : ils exigent de désactiver la couche plugin.
+      // Le bridge `conductor` est ensuite réactivé explicitement par thread.
+      if (this.disabledMcpArgs === null) {
+        this.disabledMcpArgs = this.mcpNames(bin).flatMap((name) => [
+          "-c",
+          `mcp_servers.${name}.enabled=false`,
+        ]);
+      }
+      args = ["app-server", "--disable", "plugins", ...this.disabledMcpArgs];
+    }
+    const child = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
     this.proc = child;
 
     const lines = createInterface({ input: child.stdout! });

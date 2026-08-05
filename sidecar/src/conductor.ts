@@ -57,7 +57,11 @@ export function claudeMcpConfigArg(target: ConductorTarget): string {
  * app-server partagé par tout le sidecar.
  */
 export function codexMcpConfig(target: ConductorTarget): Record<string, unknown> {
-  return { mcp_servers: { conductor: conductorServerConfig(target) } };
+  return {
+    mcp_servers: {
+      conductor: { ...conductorServerConfig(target), enabled: true },
+    },
+  };
 }
 
 /** Équivalent pour `codex exec` (chemin historique) : des overrides `-c` TOML. */

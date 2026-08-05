@@ -11,7 +11,7 @@ const FAKE = join(import.meta.dir, "fake-bins/fake-codex-app-server");
 const clients: CodexAppServerClient[] = [];
 
 function newClient(): CodexAppServerClient {
-  const client = new CodexAppServerClient();
+  const client = new CodexAppServerClient(() => ["sentry", "node_repl"]);
   clients.push(client);
   return client;
 }
@@ -76,8 +76,12 @@ test("isole par défaut l'app-server des MCP utilisateur lents", async () => {
 
   expect(JSON.parse(readFileSync(files.args, "utf8"))).toEqual([
     "app-server",
+    "--disable",
+    "plugins",
     "-c",
-    "mcp_servers={}",
+    "mcp_servers.sentry.enabled=false",
+    "-c",
+    "mcp_servers.node_repl.enabled=false",
   ]);
 });
 

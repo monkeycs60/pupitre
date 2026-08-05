@@ -28,7 +28,7 @@ const previousEnv: Record<string, string | undefined> = {};
 
 const ENV_KEYS = [
   "PUPITRE_CLAUDE_BIN", "PUPITRE_CODEX_BIN", "PUPITRE_CODEX_MODE",
-  "FAKE_CLAUDE_ARGS_FILE", "FAKE_APP_SERVER_LOG",
+  "PUPITRE_CODEX_USER_MCPS", "FAKE_CLAUDE_ARGS_FILE", "FAKE_APP_SERVER_LOG",
 ];
 
 beforeEach(() => {
@@ -48,6 +48,7 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
 
   process.env.PUPITRE_CLAUDE_BIN = fakeClaude;
   process.env.PUPITRE_CODEX_BIN = join(import.meta.dir, "fake-bins/fake-codex-app-server");
+  process.env.PUPITRE_CODEX_USER_MCPS = "1";
   process.env.FAKE_APP_SERVER_LOG = appServerLog;
   delete process.env.PUPITRE_CODEX_MODE;
 
@@ -142,6 +143,7 @@ test("conversation orchestratrice codex : mcp_servers dans la config du thread",
   expect(start).toBeDefined();
   // La config est PAR THREAD : c'est ce qui permet de donner à chaque tour son
   // propre PUPITRE_CONVERSATION_ID malgré le process app-server partagé.
+  expect(start!.params.config.mcp_servers.conductor.enabled).toBe(true);
   expect(start!.params.config.mcp_servers.conductor.args).toEqual([conductorMcpPath()]);
   expect(start!.params.config.mcp_servers.conductor.env).toEqual({
     PUPITRE_PORT: "4321",
