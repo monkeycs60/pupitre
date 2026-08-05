@@ -70,6 +70,7 @@ export interface SkillInventoryOptions {
 }
 
 const MAX_FILE_BYTES = 1_000_000;
+const MAX_INJECTED_SKILLS = 3;
 const SKIPPED_DIRECTORIES = new Set([".git", "node_modules", "references", "reference", "scripts", "assets", "rules"]);
 
 function parseFrontmatter(content: string): Record<string, string> {
@@ -180,7 +181,9 @@ function readSkill(
     const content = readFileSync(path, "utf8");
     const frontmatter = parseFrontmatter(content);
     const fallbackName = basename(path, ".md") === "SKILL" ? basename(dirname(path)) : basename(path, ".md");
-    const name = frontmatter.name || titleFromContent(content, fallbackName);
+    const name = frontmatter.name || (provenance === "codex-prompt"
+      ? fallbackName
+      : titleFromContent(content, fallbackName));
     const description = (frontmatter.description || descriptionFromContent(content)).slice(0, 1_000);
     return {
       name,
@@ -358,6 +361,47 @@ export class SkillInventory {
         .run(projectId, skillId);
     }
     return true;
+  }
+
+  /**
+   * Résout la syntaxe Pupitre `$nom-du-skill` dans les sources disponibles pour
+   * le projet. Seul le fichier indexé est injecté : références, scripts et
+   * assets restent volontairement hors du pont cross-provider v1.
+   */
+  augmentPrompt(prompt: string, projectId: string): string {
+    const requestedNames = unique(
+      [...prompt.matchAll(/\$([\p{L}\p{N}][\p{L}\p{N}:_-]{1,80})/gu)]
+        .map((match) => match[1] ?? ""),
+    ).slice(0, MAX_INJECTED_SKILLS);
+    if (requestedNames.length === 0) return prompt;
+
+    const available = this.list({ projectId });
+    const resolved = requestedNames.flatMap((requestedName) => {
+      const matching = available.filter(
+        (skill) => skill.name.toLocaleLowerCase() === requestedName.toLocaleLowerCase(),
+      );
+      const selected = matching.find((skill) => skill.project_id === projectId)
+        ?? matching.find((skill) => skill.favorite)
+        ?? matching[0];
+      if (!selected) return [];
+      const detail = this.get(selected.id, projectId);
+      return detail ? [detail] : [];
+    });
+    if (resolved.length === 0) return prompt;
+
+    const contexts = resolved.map((skill) => [
+      `--- SKILL ${skill.name} (${skill.provenance}) ---`,
+      skill.content_md,
+      `--- FIN SKILL ${skill.name} ---`,
+    ].join("\n"));
+    return [
+      "[Skills demandés explicitement via Pupitre]",
+      "Applique les instructions des SKILL.md ci-dessous à la demande utilisateur.",
+      "Le pont v1 ne joint volontairement ni scripts, ni références, ni assets.",
+      ...contexts,
+      "[Demande utilisateur]",
+      prompt,
+    ].join("\n\n");
   }
 
   private scan(): ScannedSkill[] {

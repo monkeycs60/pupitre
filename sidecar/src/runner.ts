@@ -8,6 +8,7 @@ import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 import type { QuotaTracker } from "./quotas";
 import { ConversationActivity } from "./conversation-activity";
 import type { GitProjectService, GitTurnTracking } from "./git";
+import type { SkillInventory } from "./skills";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -47,6 +48,7 @@ export class ConversationRunner {
      */
     private port: () => number,
     private git?: GitProjectService,
+    private skills?: SkillInventory,
     readonly activity = new ConversationActivity(),
   ) {
     sweepOrphanedRuns(convs);
@@ -155,7 +157,7 @@ export class ConversationRunner {
         model: conv.model,
         effort: conv.effort ?? undefined,
         speed: conv.speed ?? undefined,
-        prompt,
+        prompt: this.skills?.augmentPrompt(prompt, project.id) ?? prompt,
         cliSessionId: conv.cli_session_id,
         permissionMode: project.permission_mode,
         images: imageNames.map((name) => this.media.absolutePath(name)),

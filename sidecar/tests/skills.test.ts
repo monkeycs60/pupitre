@@ -146,3 +146,41 @@ description: Après modification.
   }
   expect(inventory.list()[0]?.description).toBe("Après modification.");
 });
+
+test("le pont résout la même invocation pour un skill Claude et un prompt Codex", () => {
+  const { db, home, projectPath, projects } = fixture();
+  write(join(home, ".claude/skills/audit/SKILL.md"), `---
+name: audit-local
+description: Audite le code.
+---
+# Audit Claude
+
+Vérifie les invariants métier.
+`);
+  write(join(home, ".codex/prompts/review.md"), `# Review Codex
+
+Relis chaque changement avant de conclure.
+`);
+  write(join(projectPath, ".claude/skills/audit/SKILL.md"), `---
+name: audit-local
+description: Audite ce projet.
+---
+# Audit projet
+
+Applique les conventions du dépôt.
+`);
+  const inventory = new SkillInventory(db, projects, { homeDir: home });
+  inventory.refresh();
+  const project = projects.list()[0];
+  if (!project) throw new Error("projet fixture absent");
+
+  const forCodex = inventory.augmentPrompt("$audit-local inspecte ce diff", project.id);
+  expect(forCodex).toContain("# Audit projet");
+  expect(forCodex).not.toContain("Vérifie les invariants métier");
+  expect(forCodex).toContain("$audit-local inspecte ce diff");
+
+  const forClaude = inventory.augmentPrompt("Lance $review", project.id);
+  expect(forClaude).toContain("Relis chaque changement avant de conclure.");
+  expect(inventory.augmentPrompt("$inconnu reste intact", project.id))
+    .toBe("$inconnu reste intact");
+});

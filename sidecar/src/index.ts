@@ -52,6 +52,7 @@ if (process.argv.includes("--conductor-mcp")) {
     // Résolu à chaque tour : `server` n'existe qu'après la construction du runner.
     () => server.port ?? port,
     git,
+    skills,
   );
   // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
   // tournent en parallèle du tour parent qui les a demandées.

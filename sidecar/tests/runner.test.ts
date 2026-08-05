@@ -1,5 +1,5 @@
 import { test, expect, beforeEach } from "bun:test";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -12,6 +12,7 @@ import { QuotaTracker } from "../src/quotas";
 import type { AppEvent } from "../src/events";
 import { GitProjectService } from "../src/git";
 import type { Database } from "bun:sqlite";
+import { SkillInventory } from "../src/skills";
 
 let runner: ConversationRunner;
 let convs: ConversationStore;
@@ -154,6 +155,44 @@ test("transmet l'effort de la conversation à l'adapter", async () => {
   try {
     await runner.runTurn(c.id, "analyse", []);
     expect(readFileSync(argsFile, "utf8")).toContain("--effort xhigh");
+  } finally {
+    delete process.env.FAKE_CLAUDE_ARGS_FILE;
+  }
+});
+
+test("injecte un prompt Codex invoqué dans un tour Claude sans altérer le message persisté", async () => {
+  const home = join(dataDir, "home");
+  const promptPath = join(home, ".codex/prompts/review.md");
+  mkdirSync(join(home, ".codex/prompts"), { recursive: true });
+  writeFileSync(promptPath, "# Review croisée\n\nInspecte les régressions.");
+  const skills = new SkillInventory(db, projects, { homeDir: home });
+  skills.refresh();
+  const bridgedRunner = new ConversationRunner(
+    convs,
+    projects,
+    new MediaStore(dataDir),
+    (_conversationId, event) => broadcast.push(event),
+    new QuotaTracker(db),
+    () => 4321,
+    undefined,
+    skills,
+  );
+  const argsFile = join(dataDir, "bridge-args");
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  const conversation = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "$review vérifie",
+  });
+
+  try {
+    await bridgedRunner.runTurn(conversation.id, "$review vérifie", []);
+    expect(readFileSync(argsFile, "utf8")).toContain("Inspecte les régressions.");
+    expect(convs.listEvents(conversation.id)[0]).toMatchObject({
+      type: "user-message",
+      text: "$review vérifie",
+    });
   } finally {
     delete process.env.FAKE_CLAUDE_ARGS_FILE;
   }
