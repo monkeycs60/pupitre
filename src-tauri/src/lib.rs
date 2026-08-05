@@ -68,35 +68,34 @@ fn supervise_sidecar(app: tauri::AppHandle) {
             break;
         }
 
-        let (mut events, child) = match spawn_sidecar(&app) {
-            Ok(spawned) => spawned,
-            Err(error) => {
-                log::error!("Impossible de lancer le sidecar Pupitre : {error}");
-                std::thread::sleep(Duration::from_secs(1));
-                continue;
-            }
-        };
-        let registered = match state.child.lock() {
+        // Le spawn a lieu sous le mutex, sans jamais rendre la main entre la
+        // création du processus et son enregistrement : un arrêt concurrent
+        // attend le verrou puis récupère forcément le child. Le tuer ici après
+        // coup ne suffirait pas, car l'arrêt de l'application peut terminer le
+        // processus avant que ce thread ne soit réordonnancé, laissant un
+        // sidecar orphelin sur le port.
+        let spawned = match state.child.lock() {
             Ok(mut child_slot) => {
-                // stop_sidecar publie `stopping` avant de prendre ce mutex.
-                // Revalider sous le mutex ferme la fenêtre spawn/enregistrement :
-                // soit stop_sidecar récupère le child, soit on le tue ici.
                 if state.stopping.load(Ordering::Acquire) {
-                    let _ = child.kill();
-                    false
-                } else {
-                    *child_slot = Some(child);
-                    true
+                    break;
+                }
+                match spawn_sidecar(&app) {
+                    Ok((events, child)) => {
+                        *child_slot = Some(child);
+                        Some(events)
+                    }
+                    Err(error) => {
+                        log::error!("Impossible de lancer le sidecar Pupitre : {error}");
+                        None
+                    }
                 }
             }
-            Err(_) => {
-                let _ = child.kill();
-                false
-            }
+            Err(_) => break,
         };
-        if !registered {
-            break;
-        }
+        let Some(mut events) = spawned else {
+            std::thread::sleep(Duration::from_secs(1));
+            continue;
+        };
 
         let mut terminal_error = false;
         while let Some(event) = tauri::async_runtime::block_on(events.recv()) {
