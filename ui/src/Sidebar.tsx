@@ -41,6 +41,7 @@ interface SidebarProps {
   onRoutinesSelect: () => void
   onFleetSelect: () => void
   onPaletteSelect: () => void
+  onMemorySelect: () => void
   reviewListVersion: number
 }
 
@@ -89,6 +90,7 @@ export function Sidebar({
   onRoutinesSelect,
   onFleetSelect,
   onPaletteSelect,
+  onMemorySelect,
   reviewListVersion,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -483,6 +485,14 @@ export function Sidebar({
           title="Voir tous les tours, sous-tâches et routines actuellement actifs."
         >
           <span>Fleet</span>
+        </button>
+        <button
+          type="button"
+          className={workspaceView === 'memory' ? 'is-selected' : ''}
+          onClick={onMemorySelect}
+          title="Lire et éditer les fichiers de mémoire persistante de Claude."
+        >
+          <span>Mémoire</span>
         </button>
         <button
           type="button"

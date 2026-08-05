@@ -10,6 +10,8 @@ import type {
   SearchResult,
   Project,
   ProjectCostReport,
+  MemoryDocument,
+  MemoryFile,
   Preset,
   Provider,
   QuotaSnapshot,
@@ -205,6 +207,22 @@ export function searchGlobal(
   const params = new URLSearchParams({ q: query })
   if (projectId) params.set('projectId', projectId)
   return fetchJson(`/api/search?${params.toString()}`, { signal })
+}
+
+export function listMemory(): Promise<MemoryFile[]> {
+  return fetchJson('/api/memory')
+}
+
+export function getMemory(path: string, signal?: AbortSignal): Promise<MemoryDocument> {
+  return fetchJson(`/api/memory/${routeId(path)}`, { signal })
+}
+
+export function updateMemory(path: string, content: string): Promise<MemoryDocument> {
+  return fetchJson(`/api/memory/${routeId(path)}`, jsonPut({ content }))
+}
+
+export function deleteMemory(path: string): Promise<void> {
+  return fetchVoid(`/api/memory/${routeId(path)}`, { method: 'DELETE' })
 }
 
 export function listProjects(): Promise<Project[]> {

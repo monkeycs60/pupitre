@@ -1,7 +1,17 @@
 export type Provider = 'claude' | 'codex'
 export type ConversationSpeed = 'standard' | 'fast'
 export type GardienMode = 'informatif' | 'bloquant'
-export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines' | 'fleet' | 'costs'
+export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory'
+
+export interface MemoryFile {
+  path: string
+  size: number
+  modifiedAt: string
+}
+
+export interface MemoryDocument extends MemoryFile {
+  content: string
+}
 
 export interface ModelCost {
   model: string
