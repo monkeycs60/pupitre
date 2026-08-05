@@ -18,6 +18,7 @@ import type {
   ReviewFlag,
   ReviewSeverity,
 } from './types'
+import { HelpLink } from './HelpLink'
 
 interface GuardianViewProps {
   project: Project
@@ -195,6 +196,7 @@ export function GuardianView({
         <div>
           <h1>Gardien · {project.name}</h1>
           <p>{pendingCount} review{pendingCount === 1 ? '' : 's'} à traiter</p>
+          <HelpLink slug="gardien" />
         </div>
         <div className="guardian-settings">
           <label className="guardian-auto-counter">

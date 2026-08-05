@@ -42,6 +42,7 @@ interface SidebarProps {
   onFleetSelect: () => void
   onPaletteSelect: () => void
   onMemorySelect: () => void
+  onHelpSelect: () => void
   reviewListVersion: number
 }
 
@@ -91,6 +92,7 @@ export function Sidebar({
   onFleetSelect,
   onPaletteSelect,
   onMemorySelect,
+  onHelpSelect,
   reviewListVersion,
 }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -493,6 +495,14 @@ export function Sidebar({
           title="Lire et éditer les fichiers de mémoire persistante de Claude."
         >
           <span>Mémoire</span>
+        </button>
+        <button
+          type="button"
+          className={workspaceView === 'help' ? 'is-selected' : ''}
+          onClick={onHelpSelect}
+          title="Comprendre les concepts et commandes propres à Pupitre."
+        >
+          <span>Aide</span>
         </button>
         <button
           type="button"

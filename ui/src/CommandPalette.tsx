@@ -27,7 +27,7 @@ interface CommandPaletteProps {
   onProjectSelect: (project: Project) => void
   onConversationSelect: (projectId: string, conversationId: string) => void | Promise<void>
   onSkillLaunch: (skill: SkillSummary) => void
-  onViewSelect: (view: Extract<WorkspaceView, 'fleet' | 'routines' | 'library' | 'memory'>) => void
+  onViewSelect: (view: Extract<WorkspaceView, 'fleet' | 'routines' | 'library' | 'memory' | 'help'>) => void
   onAction: (action: PaletteAction) => void | Promise<void>
 }
 
@@ -140,6 +140,7 @@ export function CommandPalette({
       ['routines', 'Routines', 'Planifications et historique'],
       ['library', 'Bibliothèque', 'Skills et prompts disponibles'],
       ['memory', 'Mémoire', 'Fichiers de mémoire persistante Claude'],
+      ['help', 'Aide', 'Comprendre les concepts de Pupitre'],
     ] as const
     for (const [view, label, detail] of views) {
       if (matches(query, label, detail)) add({ id: `view-${view}`, group: 'Aller à', label, detail, run: () => onViewSelect(view) })

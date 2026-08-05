@@ -15,6 +15,7 @@ import {
   type RoutineInput,
 } from './api'
 import type { Preset, Project, Routine, RoutineRun, Workflow } from './types'
+import { HelpLink } from './HelpLink'
 
 interface RoutinesViewProps {
   initialProject: Project | null
@@ -294,6 +295,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
         <div>
           <h1 id="routines-title">Routines</h1>
           <p>Exécutions planifiées dans des conversations normales, sans cron système.</p>
+          <HelpLink slug="routines" />
         </div>
         <div className="routines-header-actions">
           <label>

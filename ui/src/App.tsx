@@ -22,6 +22,7 @@ import type { SkillSummary } from './types'
 import { CostsView } from './CostsView'
 import { MemoryView } from './MemoryView'
 import { ResumeCommandButton } from './ResumeCommandButton'
+import { HelpView } from './HelpView'
 import type { WorkspaceView } from './types'
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [showReviewDialog, setShowReviewDialog] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [helpSlug, setHelpSlug] = useState<string | null>(null)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
   const [reviewListVersion, setReviewListVersion] = useState(0)
@@ -51,6 +53,18 @@ function App() {
   const effectiveReviewListVersion = reviewListVersion
     + guardianAckEventCount
     + gardienPollVersion
+
+  useEffect(() => {
+    function syncHelpHash() {
+      const match = window.location.hash.match(/^#help\/([a-z0-9-]+)$/)
+      if (!match) return
+      setHelpSlug(match[1]!)
+      setWorkspaceView('help')
+    }
+    syncHelpHash()
+    window.addEventListener('hashchange', syncHelpHash)
+    return () => window.removeEventListener('hashchange', syncHelpHash)
+  }, [])
 
   useEffect(() => {
     if (!selectedProject?.id) return
@@ -189,11 +203,21 @@ function App() {
     setShowReviewDialog(false)
   }
 
-  function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'library' | 'memory') {
+  function handleHelpSelect(slug?: string) {
+    const nextSlug = slug ?? helpSlug ?? 'gardien'
+    setHelpSlug(nextSlug)
+    setWorkspaceView('help')
+    window.location.hash = `help/${nextSlug}`
+    setShowSwitchModel(false)
+    setShowReviewDialog(false)
+  }
+
+  function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'library' | 'memory' | 'help') {
     if (view === 'fleet') handleFleetSelect()
     else if (view === 'routines') handleRoutinesSelect()
     else if (view === 'library') handleLibrarySelect()
-    else handleMemorySelect()
+    else if (view === 'memory') handleMemorySelect()
+    else handleHelpSelect()
   }
 
   function handlePaletteSkillLaunch(skill: SkillSummary) {
@@ -261,6 +285,8 @@ function App() {
             ? 'Fleet'
             : workspaceView === 'memory'
               ? 'Mémoire'
+              : workspaceView === 'help'
+                ? 'Aide'
       : selectedConversation?.title ?? null
 
   return (
@@ -285,10 +311,11 @@ function App() {
         onFleetSelect={handleFleetSelect}
         onPaletteSelect={() => setPaletteOpen(true)}
         onMemorySelect={handleMemorySelect}
+        onHelpSelect={() => handleHelpSelect()}
         reviewListVersion={effectiveReviewListVersion}
       />
 
-      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'costs' ? 'Coûts' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : workspaceView === 'memory' ? 'Mémoire' : 'Conversation'}>
+      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'costs' ? 'Coûts' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : workspaceView === 'memory' ? 'Mémoire' : workspaceView === 'help' ? 'Aide' : 'Conversation'}>
         {workspaceView === 'library' ? (
           <SkillsLibrary project={selectedProject} />
         ) : workspaceView === 'routines' ? (
@@ -302,6 +329,8 @@ function App() {
           />
         ) : workspaceView === 'memory' ? (
           <MemoryView />
+        ) : workspaceView === 'help' ? (
+          <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         ) : selectedProject === null ? (
           <div className="empty-state">
             <p>Sélectionnez un projet pour commencer.</p>

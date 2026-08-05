@@ -7,6 +7,7 @@ import {
 } from './quotaSignals'
 import type { Provider, QuotaSnapshot, QuotaState, QuotaWindow } from './types'
 import { useNow } from './useNow'
+import { HelpLink } from './HelpLink'
 
 const PROVIDER_NAMES: Record<Provider, string> = {
   claude: 'Claude',
@@ -103,6 +104,7 @@ export function QuotaBar({ snapshot, isUnknown }: {
         </>
       )}
       {freshness !== null ? <span className="quota-freshness">{freshness}</span> : null}
+      <HelpLink slug="quotas" label="Comprendre les quotas" />
     </section>
   )
 }

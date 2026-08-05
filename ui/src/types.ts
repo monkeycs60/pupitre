@@ -1,7 +1,7 @@
 export type Provider = 'claude' | 'codex'
 export type ConversationSpeed = 'standard' | 'fast'
 export type GardienMode = 'informatif' | 'bloquant'
-export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory'
+export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help'
 
 export interface MemoryFile {
   path: string

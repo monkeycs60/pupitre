@@ -31,6 +31,7 @@ import type {
 import { useNow } from './useNow'
 import { PROVIDER_EFFORTS, PROVIDER_MODELS } from './modelOptions'
 import { mediaUrl } from './transport'
+import { HelpLink } from './HelpLink'
 
 interface ComposerProps {
   conversationId: string | null
@@ -327,6 +328,7 @@ export function Composer({
         {isNewConversation ? (
           <div className="composer-models">
             <div className="preset-controls">
+              <HelpLink slug="presets" />
               <label>
                 <span>Preset</span>
                 <select value={selectedPresetId} onChange={handlePresetChange}>
@@ -462,6 +464,7 @@ export function Composer({
               />
               <span>Autoriser la délégation à des sub-agents</span>
             </label>
+            <HelpLink slug="orchestration" />
           </div>
         ) : null}
 
@@ -504,7 +507,7 @@ export function Composer({
         />
 
         <div className="composer-actions">
-          <span>Entrée pour envoyer · Shift+Entrée pour une nouvelle ligne</span>
+          <span>Entrée pour envoyer · Shift+Entrée pour une nouvelle ligne · <HelpLink slug="tester" label="Tester ?" /> · <HelpLink slug="debrief" label="Débrief ?" /></span>
           <div>
             {!isNewConversation ? (
               <button
@@ -523,6 +526,7 @@ export function Composer({
                 className="debrief-button"
                 onClick={() => void handleDebrief()}
                 disabled={isRunning || isCreatingDebrief || isSubmitting}
+                title="Créer un bilan versionné des décisions récentes pour reprendre le contrôle ou préparer une passation"
               >
                 {isCreatingDebrief ? 'Débrief en cours…' : 'Reprendre le contrôle'}
               </button>

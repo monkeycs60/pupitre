@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { HelpLink } from './HelpLink'
 import {
   getSkill,
   listSkills,
@@ -123,6 +124,7 @@ export function SkillsLibrary({ project }: SkillsLibraryProps) {
         <div>
           <h1 id="skills-library-title">Bibliothèque</h1>
           <p>Skills Claude, prompts Codex et consignes AGENTS indexés localement.</p>
+          <HelpLink slug="skills" />
         </div>
         <div className="library-header-actions">
           <button
