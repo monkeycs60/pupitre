@@ -19,6 +19,8 @@ import { ReviewStore } from "../src/stores/reviews";
 import { ReviewRunner } from "../src/reviews";
 import { DebriefRunner } from "../src/debriefs";
 import { GitProjectService } from "../src/git";
+import { TestingStore } from "../src/stores/testing";
+import { TesterRunner } from "../src/testing";
 import { DebriefStore } from "../src/stores/debriefs";
 
 interface Harness {
@@ -117,13 +119,18 @@ cat "${fixture}"
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
   const git = new GitProjectService(db, projects);
-  const reviews = new ReviewRunner(new ReviewStore(db), projects, conversations, quotas);
+  const reviewStore = new ReviewStore(db);
+  const reviews = new ReviewRunner(reviewStore, projects, conversations, quotas);
   const debriefs = new DebriefRunner(
     new DebriefStore(db), conversations, projects, quotas, events.broadcast,
   );
+  const testers = new TesterRunner(
+    new TestingStore(db), conversations, projects, reviewStore, quotas,
+    events.broadcast, subtasks, async () => '{"items":[]}', runner.activity,
+  );
   const server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
-    reviews, debriefs, git,
+    reviews, debriefs, git, testers,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

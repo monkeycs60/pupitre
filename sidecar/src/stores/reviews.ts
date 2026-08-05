@@ -127,6 +127,31 @@ export class ReviewStore {
     return rows.map((row) => this.hydrate(row));
   }
 
+  listTestingFlags(projectId: string): ReviewFlag[] {
+    return this.listByProject(projectId).flatMap((review) => review.flags).filter((flag) => {
+      if (flag.status !== "open" && flag.status !== "countered") return false;
+      return /(?:absence|manque|sans|non)[^\n]{0,32}test|test[^\n]{0,32}(?:absent|manquant|critique)/i
+        .test(`${flag.category} ${flag.message}`);
+    });
+  }
+
+  ackFlags(ids: string[]): string[] {
+    const ack = this.db.transaction(() => {
+      const acked: string[] = [];
+      const update = this.db.query(`
+        UPDATE review_flags SET status = 'acked'
+        WHERE id = ? AND status IN ('open', 'countered')
+      `);
+      for (const id of [...new Set(ids)]) {
+        if (update.run(id).changes !== 1) continue;
+        acked.push(id);
+        this.syncDecisionStatuses(id);
+      }
+      return acked;
+    });
+    return ack();
+  }
+
   setFlagStatus(id: string, status: Exclude<ReviewFlagStatus, "countered">): ReviewFlag | null {
     return this.updateFlag(id, { status });
   }

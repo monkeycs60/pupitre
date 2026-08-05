@@ -216,6 +216,39 @@ export interface GitDiff {
   diff: string
 }
 
+export type TestScopeStatus = 'pending' | 'running' | 'passed' | 'failed'
+
+export interface TestMethod {
+  kind: 'unit' | 'browser' | 'manual'
+  label: string
+  instructions: string
+}
+
+export interface TestScope {
+  id: string
+  inventory_id?: string
+  title: string
+  description: string
+  methods: TestMethod[]
+  guardian_flag_ids?: string[]
+  guardianFlagIds?: string[]
+  status: TestScopeStatus
+  subtask_id?: string | null
+  subtaskId?: string | null
+  evidence_md?: string | null
+  evidenceMd?: string | null
+  error: string | null
+}
+
+export interface TestInventory {
+  id: string
+  conversation_id: string
+  event_id_from: number
+  event_id_to: number
+  created_at: string
+  scopes: TestScope[]
+}
+
 export type AppEvent =
   | { type: 'session'; provider: Provider; cliSessionId: string; model: string }
   | { type: 'user-message'; text: string; images: string[] }
@@ -246,6 +279,29 @@ export type AppEvent =
       eventIdTo: number
       contentMd: string
       createdAt: string
+    }
+  | {
+      type: 'test-inventory-ref'
+      inventoryId: string
+      scopes: TestScope[]
+      createdAt: string
+    }
+  | {
+      type: 'test-scope-started'
+      inventoryId: string
+      scopeId: string
+      subtaskId: string
+      startedAt: string
+    }
+  | {
+      type: 'test-scope-result'
+      inventoryId: string
+      scopeId: string
+      status: 'passed' | 'failed'
+      evidenceMd: string
+      guardianFlagIdsAcked: string[]
+      completedAt: string
+      error?: string
     }
   // Introspection de quota native du provider (payload brut, interprété côté
   // sidecar par le QuotaTracker — cf. sidecar/src/events.ts).

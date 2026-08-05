@@ -19,6 +19,8 @@ import { ReviewRunner } from "../src/reviews";
 import { DebriefStore } from "../src/stores/debriefs";
 import { DebriefRunner } from "../src/debriefs";
 import { GitProjectService } from "../src/git";
+import { TestingStore } from "../src/stores/testing";
+import { TesterRunner } from "../src/testing";
 
 interface TestServer {
   baseUrl: string;
@@ -194,8 +196,9 @@ cat "${fixture}"
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
   const gitView = new GitProjectService(db, projects);
+  const reviewStore = new ReviewStore(db);
   const reviews = new ReviewRunner(
-    new ReviewStore(db),
+    reviewStore,
     projects,
     conversations,
     quotas,
@@ -222,6 +225,17 @@ cat "${fixture}"
     ].join("\n\n"),
     runner.activity,
   );
+  const testers = new TesterRunner(
+    new TestingStore(db), conversations, projects, reviewStore, quotas,
+    events.broadcast, subtasks,
+    async () => JSON.stringify({ items: [{
+      title: "Endpoint API",
+      description: "Vérifier le contrat et les erreurs.",
+      methods: [{ kind: "unit", label: "Tests unitaires", instructions: "bun test" }],
+      guardian_flag_ids: [],
+    }] }),
+    runner.activity,
+  );
   const server = createServer({
     port: 0,
     projects,
@@ -236,6 +250,7 @@ cat "${fixture}"
     reviews,
     debriefs,
     git: gitView,
+    testers,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -988,6 +1003,36 @@ test("POST debrief versionne le bilan, le diffuse et l'expose en lecture", async
 
   const duplicate = await postJson(`/api/conversations/${conversation.id}/debrief`, {});
   expect(duplicate.status).toBe(409);
+});
+
+test("Tester inventorie les scopes et les expose en lecture", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "implémente un endpoint",
+  });
+  const conversation = await created.json() as { id: string };
+  await waitForRunnerIdle(conversation.id);
+
+  const inventoryResponse = await postJson(
+    `/api/conversations/${conversation.id}/test-inventory`,
+    {},
+  );
+  expect(inventoryResponse.status).toBe(201);
+  const inventory = await inventoryResponse.json() as {
+    id: string;
+    scopes: Array<{ id: string; status: string }>;
+  };
+  expect(inventory.scopes).toEqual([
+    expect.objectContaining({ status: "pending" }),
+  ]);
+
+  const fetched = await fetch(`${current.baseUrl}/api/test-inventories/${inventory.id}`);
+  expect(fetched.status).toBe(200);
+  expect(await fetched.json()).toEqual(expect.objectContaining({ id: inventory.id }));
 });
 
 test("un tour actif répond 409, puis cancel l'annule et déverrouille la conversation", async () => {

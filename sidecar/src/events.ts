@@ -31,7 +31,46 @@ export type AppEvent =
       contentMd: string;
       createdAt: string;
     }
+  | {
+      type: "test-inventory-ref";
+      inventoryId: string;
+      scopes: TestScopeEvent[];
+      createdAt: string;
+    }
+  | {
+      type: "test-scope-started";
+      inventoryId: string;
+      scopeId: string;
+      subtaskId: string;
+      startedAt: string;
+    }
+  | {
+      type: "test-scope-result";
+      inventoryId: string;
+      scopeId: string;
+      status: "passed" | "failed";
+      evidenceMd: string;
+      guardianFlagIdsAcked: string[];
+      completedAt: string;
+      error?: string;
+    }
   | { type: "status"; state: "running" | "done" | "error"; error?: string };
+
+export interface TestScopeEvent {
+  id: string;
+  title: string;
+  description: string;
+  methods: Array<{
+    kind: "unit" | "browser" | "manual";
+    label: string;
+    instructions: string;
+  }>;
+  guardianFlagIds: string[];
+  status: "pending" | "running" | "passed" | "failed";
+  subtaskId: string | null;
+  evidenceMd: string | null;
+  error: string | null;
+}
 
 // Un événement persisté porte l'id (rowid) de sa ligne : c'est la clé de dédup
 // entre le replay HTTP et le flux WS côté UI.

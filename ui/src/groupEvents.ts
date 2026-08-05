@@ -1,5 +1,5 @@
 import type { EventBlock } from './eventBlocks'
-import type { AppEvent, Provider } from './types'
+import type { AppEvent, Provider, TestScope } from './types'
 
 export interface SubtaskBlock {
   kind: 'subtask'
@@ -20,12 +20,21 @@ export interface DebriefBlock {
   createdAt: string
 }
 
-export type StreamBlock = EventBlock | SubtaskBlock | DebriefBlock
+export interface TestInventoryBlock {
+  kind: 'test-inventory'
+  id: string
+  inventoryId: string
+  scopes: TestScope[]
+  createdAt: string
+}
+
+export type StreamBlock = EventBlock | SubtaskBlock | DebriefBlock | TestInventoryBlock
 
 /** Regroupe les événements bruts d'une conversation en blocs affichables. */
 export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): StreamBlock[] {
   const blocks: StreamBlock[] = []
   const tools = new Map<string, Extract<EventBlock, { kind: 'tool' }>>()
+  const testInventories = new Map<string, TestInventoryBlock>()
   let assistant: Extract<EventBlock, { kind: 'assistant' }> | null = null
   let turnNumber = 0
   let turnFooter: Extract<EventBlock, { kind: 'turn-footer' }> | null = null
@@ -125,6 +134,40 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
           createdAt: event.createdAt,
         })
         break
+      case 'test-inventory-ref': {
+        assistant = null
+        const inventory: TestInventoryBlock = {
+          kind: 'test-inventory',
+          id: `test-inventory-${eventKey}-${event.inventoryId}`,
+          inventoryId: event.inventoryId,
+          scopes: event.scopes.map((scope) => ({ ...scope })),
+          createdAt: event.createdAt,
+        }
+        testInventories.set(event.inventoryId, inventory)
+        blocks.push(inventory)
+        break
+      }
+      case 'test-scope-started': {
+        const inventory = testInventories.get(event.inventoryId)
+        const scope = inventory?.scopes.find((item) => item.id === event.scopeId)
+        if (scope) {
+          scope.status = 'running'
+          scope.subtaskId = event.subtaskId
+          scope.evidenceMd = null
+          scope.error = null
+        }
+        break
+      }
+      case 'test-scope-result': {
+        const inventory = testInventories.get(event.inventoryId)
+        const scope = inventory?.scopes.find((item) => item.id === event.scopeId)
+        if (scope) {
+          scope.status = event.status
+          scope.evidenceMd = event.evidenceMd
+          scope.error = event.error ?? null
+        }
+        break
+      }
       case 'usage': {
         const footer = ensureTurnFooter()
         footer.usage = {

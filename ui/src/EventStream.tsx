@@ -3,6 +3,7 @@ import { SubtaskCard } from './SubtaskCard'
 import { DebriefCard } from './DebriefCard'
 import type { DebriefBlock, StreamBlock } from './groupEvents'
 import type { SubtaskStatus } from './types'
+import { TestInventoryCard } from './TestInventoryCard'
 
 interface EventStreamProps {
   blocks: StreamBlock[]
@@ -37,6 +38,8 @@ export function EventStream({
           />
         ) : block.kind === 'debrief' ? (
           <DebriefCard key={block.id} block={block} onQuestion={onDebriefQuestion} />
+        ) : block.kind === 'test-inventory' ? (
+          <TestInventoryCard key={block.id} block={block} />
         ) : (
           <EventView
             key={block.id}

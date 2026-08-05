@@ -9,6 +9,7 @@ import {
   ApiError,
   cancelConversation,
   createDebrief,
+  createTestInventory,
   createConversation,
   createPreset,
   deletePreset,
@@ -77,6 +78,7 @@ export function Composer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [isCreatingDebrief, setIsCreatingDebrief] = useState(false)
+  const [isCreatingTestInventory, setIsCreatingTestInventory] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const now = useNow()
   const providerQuota = quotas[provider]
@@ -292,6 +294,20 @@ export function Composer({
     }
   }
 
+  async function handleTestInventory() {
+    if (conversationId === null || isCreatingTestInventory || isRunning) return
+    setIsCreatingTestInventory(true)
+    setToast(null)
+    try {
+      await createTestInventory(conversationId)
+      setToast('Inventaire de test ajouté au fil.')
+    } catch (error: unknown) {
+      setToast(errorMessage(error))
+    } finally {
+      setIsCreatingTestInventory(false)
+    }
+  }
+
   return (
     <div className="composer-area">
       {toast !== null ? (
@@ -490,6 +506,17 @@ export function Composer({
         <div className="composer-actions">
           <span>Entrée pour envoyer · Shift+Entrée pour une nouvelle ligne</span>
           <div>
+            {!isNewConversation ? (
+              <button
+                type="button"
+                className="test-button"
+                onClick={() => void handleTestInventory()}
+                disabled={isRunning || isCreatingTestInventory || isSubmitting}
+                title="Relire le travail, choisir un périmètre puis exécuter des tests avec preuves"
+              >
+                {isCreatingTestInventory ? 'Inventaire…' : 'Tester'}
+              </button>
+            ) : null}
             {!isNewConversation ? (
               <button
                 type="button"

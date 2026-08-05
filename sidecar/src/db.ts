@@ -84,6 +84,32 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_commit_links_origin
       ON commit_links(project_id, commit_sha);
+    CREATE TABLE IF NOT EXISTS test_inventories (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      event_id_from INTEGER NOT NULL,
+      event_id_to INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_test_inventories_conversation
+      ON test_inventories(conversation_id, created_at, id);
+    CREATE TABLE IF NOT EXISTS test_scopes (
+      id TEXT PRIMARY KEY,
+      inventory_id TEXT NOT NULL REFERENCES test_inventories(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      methods_json TEXT NOT NULL,
+      guardian_flag_ids TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'running', 'passed', 'failed')),
+      subtask_id TEXT NULL,
+      evidence_md TEXT NULL,
+      error TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_test_scopes_inventory
+      ON test_scopes(inventory_id, created_at, id);
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id),

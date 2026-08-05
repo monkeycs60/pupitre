@@ -18,6 +18,10 @@ import {
   type DebriefRunner,
 } from "./debriefs";
 import { GitProjectError, type GitProjectService } from "./git";
+import {
+  TesterBusyError,
+  type TesterRunner,
+} from "./testing";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -48,6 +52,7 @@ export interface ServerDeps {
   reviews: ReviewRunner;
   debriefs: DebriefRunner;
   git: GitProjectService;
+  testers: TesterRunner;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -661,6 +666,32 @@ export function createServer(deps: ServerDeps) {
               error instanceof Error ? error.message : "échec du débrief",
             );
           }
+        }
+
+        const conversationTestInventoryId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/test-inventory$/,
+        );
+        if (request.method === "POST" && conversationTestInventoryId !== null) {
+          if (!deps.conversations.get(conversationTestInventoryId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          try {
+            return json(await deps.testers.inventory(conversationTestInventoryId), 201);
+          } catch (error) {
+            if (error instanceof TesterBusyError) throw new HttpError(409, error.message);
+            throw new HttpError(
+              502,
+              error instanceof Error ? error.message : "échec de l'inventaire de test",
+            );
+          }
+        }
+
+        const testInventoryId = routeId(pathname, /^\/api\/test-inventories\/([^/]+)$/);
+        if (request.method === "GET" && testInventoryId !== null) {
+          const inventory = deps.testers.getInventory(testInventoryId);
+          if (!inventory) throw new HttpError(404, "inventaire de test inconnu");
+          return json(inventory);
         }
 
         const conversationDebriefsId = routeId(

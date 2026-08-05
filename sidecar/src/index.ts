@@ -15,6 +15,8 @@ import { ReviewRunner } from "./reviews";
 import { DebriefStore } from "./stores/debriefs";
 import { DebriefRunner } from "./debriefs";
 import { GitProjectService } from "./git";
+import { TestingStore } from "./stores/testing";
+import { TesterRunner } from "./testing";
 
 if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
@@ -67,6 +69,17 @@ if (process.argv.includes("--conductor-mcp")) {
     undefined,
     runner.activity,
   );
+  const testers = new TesterRunner(
+    new TestingStore(db),
+    conversations,
+    projects,
+    reviewStore,
+    quotas,
+    events.broadcast,
+    subtasks,
+    undefined,
+    runner.activity,
+  );
   server = createServer({
     port,
     projects,
@@ -81,6 +94,7 @@ if (process.argv.includes("--conductor-mcp")) {
     reviews,
     debriefs,
     git,
+    testers,
   });
 
   // Si l'app-server codex tourne déjà, on part avec un état de quota frais.

@@ -590,7 +590,8 @@ button {
 
 .send-button,
 .cancel-button,
-.debrief-button {
+.debrief-button,
+.test-button {
   padding: 7px 11px;
   font-size: 12px;
   border-radius: 7px;
@@ -616,15 +617,23 @@ button {
   border: 1px solid #675e51;
 }
 
+.test-button {
+  color: #d8c7ae;
+  background: transparent;
+  border: 1px solid #675e51;
+}
+
 .send-button:hover:not(:disabled),
 .cancel-button:hover:not(:disabled),
-.debrief-button:hover:not(:disabled) {
+.debrief-button:hover:not(:disabled),
+.test-button:hover:not(:disabled) {
   filter: brightness(1.08);
 }
 
 .send-button:disabled,
 .cancel-button:disabled,
-.debrief-button:disabled {
+.debrief-button:disabled,
+.test-button:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -1884,7 +1893,8 @@ body,
 
 .cancel-button,
 .secondary-button,
-.debrief-button {
+.debrief-button,
+.test-button {
   color: #6b3a2c;
   background: transparent;
   border-color: #cba495;
@@ -1894,6 +1904,11 @@ body,
 .debrief-button {
   color: #695746;
   border-color: #c7b7a2;
+}
+
+.test-button {
+  color: #496052;
+  border-color: #9fb4a6;
 }
 
 .composer-models {
@@ -2965,6 +2980,248 @@ textarea:focus-visible {
 }
 
 /* --- J1 : histoire Git du projet ------------------------------------- */
+
+/* --- I1/I2 : inventaire et preuves de test ---------------------------- */
+
+.test-inventory-card {
+  margin: 18px 0;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-top: 3px solid #718577;
+  box-shadow: 0 5px 18px rgb(65 52 37 / 7%);
+}
+
+.test-inventory-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 15px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.test-kicker {
+  display: block;
+  margin-bottom: 3px;
+  color: #708177;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.test-inventory-card h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.test-inventory-card > header > span {
+  color: var(--muted);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 9px;
+}
+
+.test-inventory-intro {
+  padding: 10px 15px;
+  margin: 0;
+  color: #746d63;
+  font-size: 10px;
+  line-height: 1.5;
+  background: #f1eee7;
+  border-bottom: 1px solid var(--line);
+}
+
+.test-card-error {
+  padding: 7px 10px;
+  margin: 0;
+  color: #82392f;
+  font-size: 9px;
+  background: #f7e5e1;
+}
+
+.test-inventory-empty {
+  padding: 18px 15px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.test-scope {
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  border-bottom: 1px solid var(--line);
+}
+
+.test-scope:last-child {
+  border-bottom: 0;
+}
+
+.test-scope-number {
+  padding-top: 14px;
+  color: #9c958a;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 10px;
+  text-align: center;
+  background: #f2eee7;
+  border-right: 1px solid var(--line);
+}
+
+.test-scope.is-passed .test-scope-number {
+  color: #526c5c;
+  background: #e9f0e9;
+}
+
+.test-scope.is-failed .test-scope-number {
+  color: #8a4337;
+  background: #f6e9e5;
+}
+
+.test-scope-main {
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.test-scope-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.test-scope-heading h3 {
+  margin: 0;
+  font-size: 11px;
+}
+
+.test-scope-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.test-status {
+  flex: none;
+  padding: 2px 5px;
+  color: #7e776c;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: #eee9e0;
+  border-radius: 3px;
+}
+
+.test-status.is-running {
+  color: #6c512c;
+  background: #f2e4ca;
+}
+
+.test-status.is-passed {
+  color: #45604f;
+  background: #deeadf;
+}
+
+.test-status.is-failed {
+  color: #813c32;
+  background: #f2dcd7;
+}
+
+.test-methods {
+  display: grid;
+  gap: 4px;
+  margin-top: 9px;
+}
+
+.test-methods details {
+  padding: 5px 7px;
+  color: #625c53;
+  font-size: 9px;
+  background: #f4f0e9;
+  border-left: 2px solid #b6c2b9;
+}
+
+.test-methods summary {
+  cursor: pointer;
+}
+
+.test-methods summary span {
+  display: inline-block;
+  min-width: 62px;
+  color: #688073;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.test-methods p {
+  margin: 5px 0 0 62px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.test-scope-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 9px;
+}
+
+.test-scope-actions > span {
+  color: #8b655d;
+  font-size: 8px;
+}
+
+.test-scope-actions button {
+  padding: 5px 8px;
+  color: #f8fbf8;
+  font-size: 9px;
+  font-weight: 650;
+  background: #63786a;
+  border: 1px solid #63786a;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.test-scope-actions button:disabled {
+  opacity: 0.52;
+  cursor: default;
+}
+
+.test-evidence {
+  padding: 7px 9px;
+  margin-top: 9px;
+  color: #504b44;
+  font-size: 9px;
+  line-height: 1.5;
+  background: #eef1ec;
+  border: 1px solid #d1d9d2;
+}
+
+.test-evidence summary {
+  color: #52685a;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.test-evidence h2 {
+  margin: 10px 0 4px;
+  font-size: 10px;
+}
+
+.test-evidence p,
+.test-evidence pre {
+  margin: 5px 0;
+}
+
+.test-evidence pre {
+  max-height: 280px;
+  padding: 7px;
+  overflow: auto;
+  color: #ebe7df;
+  background: #2b2a28;
+}
 
 .git-workspace {
   width: 100%;

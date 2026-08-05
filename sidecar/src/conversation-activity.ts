@@ -1,4 +1,10 @@
-export type ConversationActivityKind = "turn" | "debrief" | "handoff" | "model-change";
+export type ConversationActivityKind =
+  | "turn"
+  | "debrief"
+  | "handoff"
+  | "model-change"
+  | "test-inventory"
+  | "test-scope";
 
 export class ConversationBusyError extends Error {
   constructor(readonly kind: ConversationActivityKind) {

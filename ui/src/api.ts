@@ -15,6 +15,7 @@ import type {
   ReviewFlag,
   StoredEvent,
   SubtaskResult,
+  TestInventory,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -257,6 +258,13 @@ export function handoffConversation(
 export function createDebrief(conversationId: string): Promise<Debrief> {
   return fetchJson(
     `/api/conversations/${routeId(conversationId)}/debrief`,
+    jsonPost({}),
+  )
+}
+
+export function createTestInventory(conversationId: string): Promise<TestInventory> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/test-inventory`,
     jsonPost({}),
   )
 }
