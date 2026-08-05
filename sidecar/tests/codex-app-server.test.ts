@@ -68,10 +68,42 @@ afterEach(() => {
   delete process.env.PUPITRE_APPSERVER_TIMEOUT_MS;
   delete process.env.PUPITRE_APPSERVER_IDLE_MS;
   delete process.env.PUPITRE_CODEX_USER_MCPS;
+  delete process.env.PUPITRE_CODEX_MCP_POLICY;
+  delete process.env.PUPITRE_CODEX_MCP_STARTUP_TIMEOUT_SEC;
 });
 
-test("isole par défaut l'app-server des MCP utilisateur lents", async () => {
+test("borne par défaut les MCP utilisateur sans désactiver les plugins", async () => {
   const files = useFake();
+  await collect(newClient());
+
+  expect(JSON.parse(readFileSync(files.args, "utf8"))).toEqual([
+    "app-server",
+    "-c",
+    "mcp_servers.sentry.startup_timeout_sec=5",
+    "-c",
+    "mcp_servers.node_repl.startup_timeout_sec=5",
+  ]);
+});
+
+test("l'ancien opt-in conserve la configuration utilisateur sans borne", async () => {
+  const files = useFake();
+  process.env.PUPITRE_CODEX_USER_MCPS = "1";
+  await collect(newClient());
+
+  expect(JSON.parse(readFileSync(files.args, "utf8"))).toEqual(["app-server"]);
+});
+
+test("le mode full conserve la configuration utilisateur sans borne", async () => {
+  const files = useFake();
+  process.env.PUPITRE_CODEX_MCP_POLICY = "full";
+  await collect(newClient());
+
+  expect(JSON.parse(readFileSync(files.args, "utf8"))).toEqual(["app-server"]);
+});
+
+test("le mode off désactive explicitement plugins et MCP utilisateur", async () => {
+  const files = useFake();
+  process.env.PUPITRE_CODEX_MCP_POLICY = "off";
   await collect(newClient());
 
   expect(JSON.parse(readFileSync(files.args, "utf8"))).toEqual([
@@ -85,12 +117,30 @@ test("isole par défaut l'app-server des MCP utilisateur lents", async () => {
   ]);
 });
 
-test("permet de réactiver explicitement les MCP utilisateur", async () => {
+test("le timeout de démarrage MCP est configurable", async () => {
   const files = useFake();
-  process.env.PUPITRE_CODEX_USER_MCPS = "1";
+  process.env.PUPITRE_CODEX_MCP_STARTUP_TIMEOUT_SEC = "9";
   await collect(newClient());
 
-  expect(JSON.parse(readFileSync(files.args, "utf8"))).toEqual(["app-server"]);
+  expect(JSON.parse(readFileSync(files.args, "utf8"))).toEqual([
+    "app-server",
+    "-c",
+    "mcp_servers.sentry.startup_timeout_sec=9",
+    "-c",
+    "mcp_servers.node_repl.startup_timeout_sec=9",
+  ]);
+});
+
+test("une politique MCP invalide termine le tour en erreur", async () => {
+  useFake();
+  process.env.PUPITRE_CODEX_MCP_POLICY = "lent";
+  const events = await collect(newClient());
+
+  expect(events.at(-1)).toMatchObject({
+    type: "status",
+    state: "error",
+    error: expect.stringContaining("PUPITRE_CODEX_MCP_POLICY invalide"),
+  });
 });
 
 test("premier tour : session avec le threadId, deltas dans l'ordre, tool + usage, done", async () => {

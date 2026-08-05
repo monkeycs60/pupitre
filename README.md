@@ -179,16 +179,24 @@ bun run --cwd ui dev         # UI sur :5173, proxy vers le sidecar
 
 Données dans `~/.local/share/pupitre` (override : `PUPITRE_DATA_DIR`). Binaires CLI overridables pour tester sans quota : `PUPITRE_CLAUDE_BIN` / `PUPITRE_CODEX_BIN` (voir `sidecar/tests/fake-bins/`).
 
-Par défaut, l'app-server Codex lancé par Pupitre désactive les plugins et MCP
-utilisateur : leur initialisation différée ajoutait environ deux minutes avant
-le premier retour, y compris avec Luna fast. Le bridge `conductor` de Pupitre
-reste activé par thread. Pour réactiver volontairement tous les MCP utilisateur,
-lancer le sidecar avec `PUPITRE_CODEX_USER_MCPS=1`.
+Par défaut, l'app-server Codex lancé par Pupitre conserve les plugins et MCP
+utilisateur, mais borne à 5 secondes le handshake de chaque MCP classique : un
+serveur indisponible ne peut donc plus retarder le premier retour de deux minutes.
+Le bridge `conductor` de Pupitre reste activé par thread. Réglages disponibles :
+
+- `PUPITRE_CODEX_MCP_POLICY=bounded` (défaut) : capacités conservées, démarrage borné ;
+- `PUPITRE_CODEX_MCP_POLICY=full` : configuration Codex intacte, sans borne ajoutée ;
+- `PUPITRE_CODEX_MCP_POLICY=off` : désactive plugins et MCP utilisateur pour isoler une panne ;
+- `PUPITRE_CODEX_MCP_STARTUP_TIMEOUT_SEC=5` : change la borne du mode `bounded`.
+
+L'ancien `PUPITRE_CODEX_USER_MCPS=1` reste compatible et équivaut à `full` si
+la nouvelle politique n'est pas renseignée. Les mesures et la commande de probe
+sont détaillées dans `docs/spikes/codex-mcp-latency.md`.
 
 ## Tests
 
 ```bash
-cd sidecar && bun test        # 295 tests (fixtures réelles des CLIs, fake bins)
+cd sidecar && bun test        # 299 tests (fixtures réelles des CLIs, fake bins)
 cd sidecar && bun run typecheck
 cd ui && bunx tsc --noEmit && bun run build
 ```

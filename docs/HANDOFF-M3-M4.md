@@ -48,14 +48,15 @@ Tu reprends le développement de Pupitre. À lire avant de commencer :
   La review ciblée a corrigé les frontmatters YAML multilignes et fermé le
   panneau de suggestions par défaut afin qu'aucun appel Luna ne parte en
   arrière-plan au chargement d'une conversation.
-- **Latence Codex diagnostiquée avant M4-K** : six tours Luna récents prenaient
-  124–126 s avant le premier retour ; trois probes isolés (fast avec/sans
-  orchestration, puis standard) reproduisaient ~122 s. Le mode fast et le
-  conductor n'étaient donc pas la cause. Pupitre désactive désormais plugins et
-  MCP utilisateur dans son app-server, tout en réactivant explicitement son MCP
-  `conductor` par thread. La configuration finale a été vérifiée avec zéro MCP
-  utilisateur actif ; aucun nouveau tour réel n'a été consommé après cette
-  vérification. `PUPITRE_CODEX_USER_MCPS=1` constitue l'opt-in de compatibilité.
+- **Latence Codex diagnostiquée avant M4-K, stratégie corrigée après M4** : six
+  tours Luna récents prenaient 124–126 s avant le premier retour. Des probes
+  réels ont isolé le MCP classique Sentry : configuration complète 122,7 s,
+  Sentry seul désactivé 6,8 s, puis tous les MCP/plugins conservés avec son
+  handshake borné à 5 s 8,6 s. Pupitre conserve donc désormais toutes les
+  capacités par défaut et borne à 5 s le démarrage de chaque MCP classique ; le
+  `conductor` reste ajouté par thread. `PUPITRE_CODEX_MCP_POLICY=full|off` permet
+  respectivement la configuration intacte ou l'isolation complète. Détails dans
+  `docs/spikes/codex-mcp-latency.md`.
 - **Mesures de tour ajoutées à l'UI** : attente avant premier retour, durée en
   cours et total final sont persistés dans les événements et affichés sous
   chaque tour.

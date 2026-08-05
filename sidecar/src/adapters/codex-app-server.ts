@@ -19,6 +19,9 @@ import { boundedToolOutput } from "./output";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_IDLE_MS = 5 * 60_000;
+const DEFAULT_MCP_STARTUP_TIMEOUT_SEC = 5;
+
+type McpPolicy = "bounded" | "full" | "off";
 
 type McpNameProvider = (bin: string) => string[];
 
@@ -56,6 +59,27 @@ function requestTimeoutMs(): number {
 function appServerIdleMs(): number {
   const raw = Number(process.env.PUPITRE_APPSERVER_IDLE_MS);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_IDLE_MS;
+}
+
+/** Politique appliquée aux MCP/plugins utilisateur du process app-server. */
+function mcpPolicy(): McpPolicy {
+  const configured = process.env.PUPITRE_CODEX_MCP_POLICY;
+  if (configured === undefined) {
+    // Compatibilité avec l'opt-in introduit avant la politique bornée.
+    return process.env.PUPITRE_CODEX_USER_MCPS === "1" ? "full" : "bounded";
+  }
+  if (configured === "bounded" || configured === "full" || configured === "off") {
+    return configured;
+  }
+  throw new Error(
+    `PUPITRE_CODEX_MCP_POLICY invalide : ${configured} (attendu : bounded, full ou off)`,
+  );
+}
+
+/** Temps maximal laissé à chaque MCP classique pour terminer son handshake. */
+function mcpStartupTimeoutSec(): number {
+  const raw = Number(process.env.PUPITRE_CODEX_MCP_STARTUP_TIMEOUT_SEC);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MCP_STARTUP_TIMEOUT_SEC;
 }
 
 interface JsonRpcMessage {
@@ -104,7 +128,7 @@ export class CodexAppServerClient {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   /** Tue le process courant ET fait son cleanup (cf. shutdown). */
   private killCurrent: (() => void) | null = null;
-  private disabledMcpArgs: string[] | null = null;
+  private discoveredMcpNames: string[] | null = null;
 
   constructor(private readonly mcpNames: McpNameProvider = discoverEnabledMcpNames) {}
 
@@ -262,20 +286,23 @@ export class CodexAppServerClient {
   private ensureProcess(): Promise<void> {
     if (this.ready) return this.ready;
     const bin = process.env.PUPITRE_CODEX_BIN ?? "codex";
+    const policy = mcpPolicy();
+    // Le handshake des MCP est sur le chemin critique de thread/start. Le mode
+    // par défaut leur laisse une fenêtre courte sans supprimer les capacités ;
+    // `off` reste disponible pour isoler une panne et `full` respecte la config.
     let args = ["app-server"];
-    if (process.env.PUPITRE_CODEX_USER_MCPS !== "1") {
-      // Les MCP de ~/.codex sont utiles dans le terminal, mais leur handshake
-      // est sur le chemin critique du premier turn/start. Les MCP classiques
-      // sont désactivés par nom. Les MCP apportés par les plugins n'ont pas de
-      // transport dans config.toml : ils exigent de désactiver la couche plugin.
-      // Le bridge `conductor` est ensuite réactivé explicitement par thread.
-      if (this.disabledMcpArgs === null) {
-        this.disabledMcpArgs = this.mcpNames(bin).flatMap((name) => [
-          "-c",
-          `mcp_servers.${name}.enabled=false`,
-        ]);
-      }
-      args = ["app-server", "--disable", "plugins", ...this.disabledMcpArgs];
+    if (policy !== "full") {
+      if (this.discoveredMcpNames === null) this.discoveredMcpNames = this.mcpNames(bin);
+      const startupTimeout = mcpStartupTimeoutSec();
+      const mcpArgs = this.discoveredMcpNames.flatMap((name) => [
+        "-c",
+        policy === "bounded"
+          ? `mcp_servers.${name}.startup_timeout_sec=${startupTimeout}`
+          : `mcp_servers.${name}.enabled=false`,
+      ]);
+      args = policy === "off"
+        ? ["app-server", "--disable", "plugins", ...mcpArgs]
+        : ["app-server", ...mcpArgs];
     }
     const child = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
     this.proc = child;
