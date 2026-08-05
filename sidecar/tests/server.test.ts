@@ -29,6 +29,7 @@ import { NotificationStore } from "../src/stores/notifications";
 import { RoutineScheduler, RoutineStore } from "../src/routines";
 import { SearchIndex } from "../src/search";
 import { CostStore } from "../src/costs";
+import { MemoryStore } from "../src/memory";
 
 interface TestServer {
   baseUrl: string;
@@ -285,6 +286,7 @@ cat "${fixture}"
     routines,
     search: new SearchIndex(db),
     costs: new CostStore(db),
+    memory: new MemoryStore(join(dir, "memory")),
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

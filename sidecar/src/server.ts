@@ -32,6 +32,7 @@ import type { RoutineInput, RoutineScheduler, RoutineStore } from "./routines";
 import { fleetSnapshot } from "./fleet";
 import type { SearchIndex } from "./search";
 import type { CostStore } from "./costs";
+import type { MemoryStore } from "./memory";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -72,6 +73,7 @@ export interface ServerDeps {
   notifications: NotificationStore;
   search: SearchIndex;
   costs: CostStore;
+  memory: MemoryStore;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -551,6 +553,37 @@ export function createServer(deps: ServerDeps) {
           const projectId = url.searchParams.get("projectId") ?? undefined;
           if (projectId && !deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
           return json(deps.search.search(query, projectId));
+        }
+
+        if (request.method === "GET" && pathname === "/api/memory") {
+          return json(deps.memory.list());
+        }
+
+        const memoryPath = routeId(pathname, /^\/api\/memory\/([^/]+)$/);
+        if (request.method === "GET" && memoryPath !== null) {
+          try {
+            return json(deps.memory.read(memoryPath));
+          } catch {
+            throw new HttpError(404, "fichier mémoire inconnu");
+          }
+        }
+        if (request.method === "PUT" && memoryPath !== null) {
+          const body = await readObject(request);
+          if (typeof body.content !== "string") throw new HttpError(400, "contenu mémoire invalide");
+          try {
+            return json(deps.memory.write(memoryPath, body.content));
+          } catch (error) {
+            if (error instanceof Error && error.message.includes("volumineux")) throw new HttpError(413, error.message);
+            throw new HttpError(404, "fichier mémoire inconnu");
+          }
+        }
+        if (request.method === "DELETE" && memoryPath !== null) {
+          try {
+            deps.memory.delete(memoryPath);
+            return empty(204);
+          } catch {
+            throw new HttpError(404, "fichier mémoire inconnu");
+          }
         }
 
         if (request.method === "GET" && pathname === "/api/notifications") {

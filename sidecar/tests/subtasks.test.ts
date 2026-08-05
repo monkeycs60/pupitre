@@ -30,6 +30,7 @@ import { RoutineScheduler, RoutineStore } from "../src/routines";
 import { DebriefStore } from "../src/stores/debriefs";
 import { SearchIndex } from "../src/search";
 import { CostStore } from "../src/costs";
+import { MemoryStore } from "../src/memory";
 
 interface Harness {
   baseUrl: string;
@@ -153,6 +154,7 @@ cat "${fixture}"
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
     reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer, workflows,
     notifications, routineStore, routines, search: new SearchIndex(db), costs: new CostStore(db),
+    memory: new MemoryStore(join(dir, "memory")),
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

@@ -36,6 +36,7 @@ import { RoutineScheduler, RoutineStore } from "../src/routines";
 import { DebriefStore } from "../src/stores/debriefs";
 import { SearchIndex } from "../src/search";
 import { CostStore } from "../src/costs";
+import { MemoryStore } from "../src/memory";
 
 const BRIDGE_ENV_KEYS = ["PUPITRE_CLAUDE_BIN", "PUPITRE_CODEX_BIN", "PUPITRE_CODEX_MODE"];
 
@@ -159,6 +160,7 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
     reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer, workflows,
     notifications, routineStore, routines, search: new SearchIndex(db), costs: new CostStore(db),
+    memory: new MemoryStore(join(dir, "memory")),
   });
   parentId = conversations.create({
     projectId: project.id, provider: "claude", model: "opus", firstMessage: "orchestre",
