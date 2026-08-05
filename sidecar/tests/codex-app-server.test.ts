@@ -16,12 +16,13 @@ function newClient(): CodexAppServerClient {
   return client;
 }
 
-function useFake(): { log: string; pid: string } {
+function useFake(): { log: string; pid: string; args: string } {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-appserver-"));
   process.env.PUPITRE_CODEX_BIN = FAKE;
   process.env.FAKE_APP_SERVER_LOG = join(dir, "log");
   process.env.FAKE_APP_SERVER_PID = join(dir, "pid");
-  return { log: join(dir, "log"), pid: join(dir, "pid") };
+  process.env.FAKE_APP_SERVER_ARGS = join(dir, "args");
+  return { log: join(dir, "log"), pid: join(dir, "pid"), args: join(dir, "args") };
 }
 
 function turnOptions(overrides: Partial<TurnOptions> = {}): TurnOptions {
@@ -58,6 +59,7 @@ afterEach(() => {
   delete process.env.PUPITRE_CODEX_BIN;
   delete process.env.FAKE_APP_SERVER_LOG;
   delete process.env.FAKE_APP_SERVER_PID;
+  delete process.env.FAKE_APP_SERVER_ARGS;
   delete process.env.FAKE_APP_SERVER_HANG;
   delete process.env.FAKE_APP_SERVER_SILENT;
   delete process.env.FAKE_APP_SERVER_SLOW_MS;
@@ -65,6 +67,26 @@ afterEach(() => {
   delete process.env.FAKE_APP_SERVER_INIT_ERROR;
   delete process.env.PUPITRE_APPSERVER_TIMEOUT_MS;
   delete process.env.PUPITRE_APPSERVER_IDLE_MS;
+  delete process.env.PUPITRE_CODEX_USER_MCPS;
+});
+
+test("isole par défaut l'app-server des MCP utilisateur lents", async () => {
+  const files = useFake();
+  await collect(newClient());
+
+  expect(JSON.parse(readFileSync(files.args, "utf8"))).toEqual([
+    "app-server",
+    "-c",
+    "mcp_servers={}",
+  ]);
+});
+
+test("permet de réactiver explicitement les MCP utilisateur", async () => {
+  const files = useFake();
+  process.env.PUPITRE_CODEX_USER_MCPS = "1";
+  await collect(newClient());
+
+  expect(JSON.parse(readFileSync(files.args, "utf8"))).toEqual(["app-server"]);
 });
 
 test("premier tour : session avec le threadId, deltas dans l'ordre, tool + usage, done", async () => {

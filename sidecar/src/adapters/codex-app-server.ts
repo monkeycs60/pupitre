@@ -17,6 +17,18 @@ import { boundedToolOutput } from "./output";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_IDLE_MS = 5 * 60_000;
 
+function appServerArgs(): string[] {
+  // Les MCP de ~/.codex sont utiles dans le terminal, mais leur handshake est
+  // sur le chemin critique de CHAQUE thread app-server. Un serveur OAuth expiré
+  // ou un stdio absent ajoutait ici son timeout complet (120 s observées).
+  // Pupitre isole donc son process et réinjecte seulement `conductor` par thread.
+  // Opt-in de compatibilité pour les utilisateurs qui veulent explicitement
+  // retrouver tous leurs MCP dans Pupitre, au prix de leur latence de démarrage.
+  return process.env.PUPITRE_CODEX_USER_MCPS === "1"
+    ? ["app-server"]
+    : ["app-server", "-c", "mcp_servers={}"];
+}
+
 /** Délai au-delà duquel une requête JSON-RPC sans réponse est rejetée. */
 function requestTimeoutMs(): number {
   const raw = Number(process.env.PUPITRE_APPSERVER_TIMEOUT_MS);
@@ -230,7 +242,7 @@ export class CodexAppServerClient {
   private ensureProcess(): Promise<void> {
     if (this.ready) return this.ready;
     const bin = process.env.PUPITRE_CODEX_BIN ?? "codex";
-    const child = spawn(bin, ["app-server"], { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(bin, appServerArgs(), { stdio: ["pipe", "pipe", "pipe"] });
     this.proc = child;
 
     const lines = createInterface({ input: child.stdout! });

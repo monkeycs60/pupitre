@@ -4,6 +4,7 @@
 // Variables d'environnement (toutes optionnelles) :
 // - FAKE_APP_SERVER_LOG        : fichier où logger chaque message reçu (une ligne JSON)
 // - FAKE_APP_SERVER_PID        : fichier où écrire le pid (test de restart)
+// - FAKE_APP_SERVER_ARGS       : fichier où écrire les arguments du process
 // - FAKE_APP_SERVER_HANG=1     : le tour ne se termine jamais tout seul (test d'annulation)
 // - FAKE_APP_SERVER_SILENT=m,m : méthodes auxquelles ne jamais répondre (test de timeout)
 // - FAKE_APP_SERVER_SLOW_MS=n  : délai avant la réponse à thread/start (test d'annulation au setup)
@@ -21,6 +22,9 @@ if (process.argv[2] !== "app-server") {
 }
 if (process.env.FAKE_APP_SERVER_PID) {
   writeFileSync(process.env.FAKE_APP_SERVER_PID, String(process.pid));
+}
+if (process.env.FAKE_APP_SERVER_ARGS) {
+  writeFileSync(process.env.FAKE_APP_SERVER_ARGS, JSON.stringify(process.argv.slice(2)));
 }
 
 const silent = new Set((process.env.FAKE_APP_SERVER_SILENT ?? "").split(",").filter(Boolean));
