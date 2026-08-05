@@ -2,7 +2,7 @@
 
 Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Codex CLI** sur tes abonnements (jamais d'API payante), avec discussions par projet, orchestration, contrôle des changements, tests guidés et historique Git. Le pupitre du chef d'orchestre : l'app dirige les CLIs sans jouer une note elle-même.
 
-## Architecture (M4 en cours)
+## Architecture (M4)
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -188,7 +188,7 @@ lancer le sidecar avec `PUPITRE_CODEX_USER_MCPS=1`.
 ## Tests
 
 ```bash
-cd sidecar && bun test        # 294 tests (fixtures réelles des CLIs, fake bins)
+cd sidecar && bun test        # 295 tests (fixtures réelles des CLIs, fake bins)
 cd sidecar && bun run typecheck
 cd ui && bunx tsc --noEmit && bun run build
 ```
@@ -209,5 +209,6 @@ Protocole e2e : `e2e/basic-flow.md`.
 
 **M3 (fait)** : Gardien, contre-avis, Débrief et passation, bouton Tester avec preuves, vue Git et durcissement du sidecar.
 
-**M4 (clôture en cours)** : toutes les phases K à N sont implémentées et
-reviewées ; restent l'E2E consolidé, la passe design finale et le tag `m4`.
+**M4 (fait)** : bibliothèque de skills, suggestions et workflows, routines,
+Fleet, recherche globale et palette, coûts en tokens, mémoire, reprise terminal
+et aide intégrée. E2E consolidé et passe design finale réalisés sans quota réel.

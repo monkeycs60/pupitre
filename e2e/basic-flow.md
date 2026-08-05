@@ -169,3 +169,49 @@ Utiliser l'environnement fake M2 ci-dessus, puis :
 Les équivalents déterministes se trouvent dans `tests/reviews.test.ts`,
 `tests/debriefs.test.ts`, `tests/git.test.ts`, `tests/testing.test.ts` et
 `tests/server.test.ts`.
+
+## E2E M4 — skills, routines, Fleet, recherche et aide
+
+Exécuté le 2026-08-05 dans le vrai frontend, au viewport 1440 × 900, avec une
+base temporaire et les fake bins. Aucun tour Claude ou Codex réel n'a été lancé.
+Le port isolé évite d'interférer avec une instance desktop déjà ouverte :
+
+```bash
+PUPITRE_PORT=4821 \
+PUPITRE_DATA_DIR=/tmp/pupitre-m4-e2e \
+PUPITRE_CLAUDE_BIN=$PWD/sidecar/tests/fake-bins/fake-claude \
+PUPITRE_CODEX_BIN=$PWD/sidecar/tests/fake-bins/fake-codex-app-server \
+bun run --cwd sidecar dev
+
+PUPITRE_PORT=4821 bun run --cwd ui dev -- --host 127.0.0.1 --port 5174
+```
+
+| # | Scénario | Validation | Résultat |
+|---|---|---|---|
+| 25 | Bibliothèque, favori et aperçu de `no-useeffect` | Navigateur | ✅ index multi-source, filtre, détail et favori projet ; le watcher ne remonte plus jusqu'au home et tolère les liens symboliques cassés |
+| 26 | Suggestion puis lancement d'un skill | Navigateur | ✅ le brouillon contenant `useEffect` propose trois skills ; « Lancer » préfixe `$no-useeffect` et le workflow produit une conversation fake complète |
+| 27 | Workflow épinglé | Navigateur | ✅ création depuis le favori, raccourci sous le projet et lancement one-click avec skill, prompt et preset figés |
+| 28 | Routine exécutée | Navigateur + intégration | ✅ lancement manuel non bloquant, conversation taguée, notification, état, durée, sortie et 34 708 tokens dans l'historique ; le compteur reste figé si la conversation est poursuivie |
+| 29 | Fleet pendant un run | Navigateur | ✅ tour fake volontairement ralenti, durée et dernier événement live, modèle/projet et bouton de retour visibles ; disparition automatique à la fin |
+| 30 | Recherche globale et `Ctrl K` | Navigateur | ✅ le raccourci ouvre la palette, `effets` trouve le workflow et la navigation clavier est annoncée ; l'entrée Rechercher ouvre la même surface |
+| 31 | Aide intégrée | Navigateur | ✅ recherche `routine`, page Markdown filtrée et liens contextuels sans quitter l'app |
+| 32 | Mesures de tour | Navigateur | ✅ sous le tour : `1er retour 0,1 s · total 0,1 s`, avec tokens d'entrée/sortie |
+
+Le premier smoke a révélé deux défauts corrigés avant clôture : le sidecar
+s'arrêtait sur `~/.steampath` (lien cassé observé par un watcher trop large), et
+les tokens d'un ancien passage de routine augmentaient lors des tours suivants
+de sa conversation. Les deux régressions sont couvertes par tests. Après
+redémarrage stable, le parcours final remonte **0 erreur console**.
+
+### Captures de la passe design finale
+
+- Avant M4 : [`pupitre-m3-gardien.png`](./pupitre-m3-gardien.png)
+- Skills suggérés et temps du tour : [`m4-skills-suggestions.png`](./m4-skills-suggestions.png)
+- Routine et historique : [`m4-routine-history.png`](./m4-routine-history.png)
+- Fleet pendant un run : [`m4-fleet-active.png`](./m4-fleet-active.png)
+- Palette `Ctrl K` : [`m4-command-palette.png`](./m4-command-palette.png)
+- Aide recherchable : [`m4-help-search.png`](./m4-help-search.png)
+
+Validation de clôture : **295 tests sidecar**, typechecks sidecar/UI et build
+Vite verts. La passe visuelle confirme la cohérence des espacements, bordures,
+contrastes, états actifs et accents avec la refonte F2.

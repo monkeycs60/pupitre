@@ -15,6 +15,13 @@ Tu reprends le développement de Pupitre. À lire avant de commencer :
 
 ## État au 2026-08-05
 
+- **M4 clôturé** : E2E UI complet sur fake bins, passe design au viewport
+  1440×900 et review finale ciblée terminés. Le smoke a détecté puis fait
+  corriger un crash du watcher de skills sur lien symbolique cassé et un coût
+  de routine qui continuait à évoluer après le passage. 295 tests sidecar,
+  typechecks sidecar/UI, build Vite et `cargo check` sont verts. Les captures et
+  le protocole sont consignés dans `e2e/basic-flow.md` ; aucun quota provider
+  réel n'a été consommé.
 - **M4-N terminé et review milestone propre** : coûts mensuels par conversation
   et modèle avec économie de délégation en tokens, explorateur sécurisé de
   `~/.claude/memory`, commande de reprise terminal et aide Markdown recherchable
