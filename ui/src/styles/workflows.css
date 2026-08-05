@@ -1,0 +1,134 @@
+/* ---------------------------------------------------------------------------
+   Gestion des workflows épinglés d'un projet.
+--------------------------------------------------------------------------- */
+
+.workflow-dialog {
+  width: min(100%, 760px);
+}
+
+.workflow-dialog-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workflow-existing {
+  min-height: 0;
+  padding: var(--space-3);
+  overflow-y: auto;
+  background: var(--bg-raised);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.workflow-existing > p {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.workflow-existing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.workflow-existing-row > button:first-child {
+  display: grid;
+  min-width: 0;
+  padding: var(--space-2);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.workflow-existing-row > button:first-child:hover {
+  background: var(--bg-hover);
+}
+
+.workflow-existing-row strong,
+.workflow-existing-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-existing-row strong {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.workflow-existing-row span {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.workflow-delete {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.workflow-delete:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.workflow-form {
+  gap: var(--space-3);
+}
+
+.workflow-form textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: var(--space-2);
+  resize: vertical;
+  color: var(--text);
+  font-weight: 400;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.workflow-form textarea:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.workflow-model-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.workflow-model-grid .workflow-orchestrator {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.workflow-orchestrator input {
+  accent-color: var(--accent);
+}
+
+@media (max-width: 820px) {
+  .workflow-dialog-body {
+    grid-template-columns: 170px minmax(0, 1fr);
+  }
+
+  .workflow-model-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -20,6 +20,7 @@ import { TesterRunner } from "./testing";
 import { SkillInventory } from "./skills";
 import { SkillSuggestionService } from "./skill-suggestions";
 import { SkillComposer } from "./skill-composer";
+import { WorkflowStore } from "./stores/workflows";
 
 if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
@@ -39,6 +40,7 @@ if (process.argv.includes("--conductor-mcp")) {
   skills.start();
   const skillSuggestions = new SkillSuggestionService(skills, projects, quotas);
   const skillComposer = new SkillComposer(skills, projects, quotas);
+  const workflows = new WorkflowStore(db);
   const git = new GitProjectService(db, projects);
   const configuredPort = process.env.PUPITRE_PORT;
   const port = configuredPort === undefined ? 4820 : Number(configuredPort);
@@ -108,6 +110,7 @@ if (process.argv.includes("--conductor-mcp")) {
     skills,
     skillSuggestions,
     skillComposer,
+    workflows,
   });
 
   // Si l'app-server codex tourne déjà, on part avec un état de quota frais.

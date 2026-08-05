@@ -26,6 +26,7 @@ import {
 import type { SkillInventory, SkillProvider } from "./skills";
 import type { SkillSuggestionService } from "./skill-suggestions";
 import { SkillAlreadyExistsError, type SkillComposer } from "./skill-composer";
+import type { WorkflowInput, WorkflowStore } from "./stores/workflows";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -60,6 +61,7 @@ export interface ServerDeps {
   skills: SkillInventory;
   skillSuggestions: SkillSuggestionService;
   skillComposer: SkillComposer;
+  workflows: WorkflowStore;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -357,6 +359,56 @@ function routeId(pathname: string, pattern: RegExp): string | null {
   }
 }
 
+function workflowInput(
+  body: Record<string, unknown>,
+  projectId: string,
+  deps: ServerDeps,
+): WorkflowInput {
+  const skillId = requiredString(body, "skillId");
+  const skill = deps.skills.get(skillId, projectId);
+  if (!skill || (skill.project_id !== null && skill.project_id !== projectId)) {
+    throw new HttpError(404, "skill indisponible pour ce projet");
+  }
+  const presetIdValue = body.presetId;
+  if (presetIdValue !== null && presetIdValue !== undefined && typeof presetIdValue !== "string") {
+    throw new HttpError(400, "presetId invalide");
+  }
+  const preset = typeof presetIdValue === "string" ? deps.presets.get(presetIdValue) : null;
+  if (typeof presetIdValue === "string" && !preset) throw new HttpError(404, "preset inconnu");
+  let provider: Provider;
+  let model: string;
+  let effort: string | null;
+  let speed: "standard" | "fast" | null;
+  let orchestrator: boolean;
+  if (preset) {
+    ({ provider, model, effort, speed, orchestrator } = preset);
+  } else {
+    const providerValue = requiredString(body, "provider");
+    if (providerValue !== "claude" && providerValue !== "codex") {
+      throw new HttpError(400, "provider invalide");
+    }
+    provider = providerValue;
+    model = requiredString(body, "model");
+    effort = optionalEffort(body, provider);
+    speed = optionalSpeed(body, provider);
+    orchestrator = optionalBoolean(body, "orchestrator", true);
+  }
+  return {
+    projectId,
+    name: requiredString(body, "name"),
+    skillId: skill.id,
+    skillName: skill.name,
+    skillInvocation: skill.invocation,
+    prompt: requiredString(body, "prompt"),
+    presetId: preset?.id ?? null,
+    provider,
+    model,
+    effort,
+    speed,
+    orchestrator,
+  };
+}
+
 export function createServer(deps: ServerDeps) {
   const sockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
@@ -604,6 +656,72 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(404, "projet inconnu");
           }
           return json(deps.conversations.listByProject(projectConversationsId));
+        }
+
+        const projectWorkflowsId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/workflows$/,
+        );
+        if (request.method === "GET" && projectWorkflowsId !== null) {
+          if (!deps.projects.get(projectWorkflowsId)) throw new HttpError(404, "projet inconnu");
+          return json(deps.workflows.listByProject(projectWorkflowsId));
+        }
+
+        if (request.method === "POST" && pathname === "/api/workflows") {
+          const body = await readObject(request);
+          const projectId = requiredString(body, "projectId");
+          if (!deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+          try {
+            return json(deps.workflows.create(workflowInput(body, projectId, deps)), 201);
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            throw new HttpError(409, "nom de workflow déjà utilisé");
+          }
+        }
+
+        const workflowRunId = routeId(pathname, /^\/api\/workflows\/([^/]+)\/run$/);
+        if (request.method === "POST" && workflowRunId !== null) {
+          const workflow = deps.workflows.get(workflowRunId);
+          if (!workflow) throw new HttpError(404, "workflow inconnu");
+          const preset = workflow.preset_id ? deps.presets.get(workflow.preset_id) : null;
+          const config = preset ?? workflow;
+          const invocation = `$${workflow.skill_invocation}`;
+          const message = workflow.prompt.includes(invocation)
+            ? workflow.prompt
+            : `${invocation}\n\n${workflow.prompt}`;
+          const conversation = deps.conversations.create({
+            projectId: workflow.project_id,
+            provider: config.provider,
+            model: config.model,
+            effort: config.effort,
+            speed: config.speed,
+            orchestrator: config.orchestrator,
+            firstMessage: message,
+          });
+          void deps.runner.runTurn(conversation.id, message, [])
+            .catch((error) => console.error("Échec du workflow", error));
+          return json(conversation, 201);
+        }
+
+        const workflowId = routeId(pathname, /^\/api\/workflows\/([^/]+)$/);
+        if (request.method === "PUT" && workflowId !== null) {
+          const workflow = deps.workflows.get(workflowId);
+          if (!workflow) throw new HttpError(404, "workflow inconnu");
+          const body = await readObject(request);
+          try {
+            return json(deps.workflows.update(
+              workflowId,
+              workflowInput(body, workflow.project_id, deps),
+            ));
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            throw new HttpError(409, "nom de workflow déjà utilisé");
+          }
+        }
+
+        if (request.method === "DELETE" && workflowId !== null) {
+          if (!deps.workflows.delete(workflowId)) throw new HttpError(404, "workflow inconnu");
+          return empty(204);
         }
 
         if (request.method === "GET" && pathname === "/api/presets") {

@@ -30,6 +30,7 @@ import { TesterRunner } from "../src/testing";
 import { SkillInventory } from "../src/skills";
 import { SkillSuggestionService } from "../src/skill-suggestions";
 import { SkillComposer } from "../src/skill-composer";
+import { WorkflowStore } from "../src/stores/workflows";
 import { DebriefStore } from "../src/stores/debriefs";
 
 const BRIDGE_ENV_KEYS = ["PUPITRE_CLAUDE_BIN", "PUPITRE_CODEX_BIN", "PUPITRE_CODEX_MODE"];
@@ -144,9 +145,10 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
     homeDir: dir,
     generator: async () => "{}",
   });
+  const workflows = new WorkflowStore(db);
   server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
-    reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer,
+    reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer, workflows,
   });
   parentId = conversations.create({
     projectId: project.id, provider: "claude", model: "opus", firstMessage: "orchestre",

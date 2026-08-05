@@ -168,6 +168,25 @@ export function openDb(dir: string = dataDir()): Database {
       created_at TEXT NOT NULL,
       PRIMARY KEY (project_id, skill_id)
     );
+    CREATE TABLE IF NOT EXISTS workflows (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      skill_id TEXT NULL REFERENCES skills(id) ON DELETE SET NULL,
+      skill_name TEXT NOT NULL,
+      skill_invocation TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
+      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex')),
+      model TEXT NOT NULL,
+      effort TEXT NULL,
+      speed TEXT NULL,
+      orchestrator INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_workflows_project_name
+      ON workflows(project_id, name COLLATE NOCASE);
   `);
   dropEventsForeignKey(db);
   addColumn(db, "conversations", "effort TEXT NULL");

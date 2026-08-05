@@ -24,6 +24,7 @@ import { TesterRunner } from "../src/testing";
 import { SkillInventory } from "../src/skills";
 import { SkillSuggestionService } from "../src/skill-suggestions";
 import { SkillComposer } from "../src/skill-composer";
+import { WorkflowStore } from "../src/stores/workflows";
 
 interface TestServer {
   baseUrl: string;
@@ -250,6 +251,7 @@ cat "${fixture}"
       content: "# Skill API\n\nVérifie le contrat HTTP.",
     }),
   });
+  const workflows = new WorkflowStore(db);
   const server = createServer({
     port: 0,
     projects,
@@ -268,6 +270,7 @@ cat "${fixture}"
     skills,
     skillSuggestions,
     skillComposer,
+    workflows,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -369,10 +372,37 @@ test("API skills : refresh, filtres, détail et favori par projet", async () => 
     scope: "global",
   });
   expect(generated.status).toBe(201);
-  expect(await generated.json()).toMatchObject({
+  const generatedSkill = await generated.json() as { id: string; name: string };
+  expect(generatedSkill).toMatchObject({
     name: "skill-api",
     provenance: "claude-global",
     project_id: null,
+  });
+
+  const workflowResponse = await postJson("/api/workflows", {
+    projectId: project.id,
+    name: "Vérification API",
+    skillId: generatedSkill.id,
+    prompt: "Vérifie les routes critiques.",
+    presetId: "builtin-quality",
+  });
+  expect(workflowResponse.status).toBe(201);
+  const workflow = await workflowResponse.json() as { id: string };
+  const workflowList = await fetch(`${current.baseUrl}/api/projects/${project.id}/workflows`);
+  expect(await workflowList.json()).toEqual([
+    expect.objectContaining({ id: workflow.id, skill_invocation: "skill-api" }),
+  ]);
+
+  const run = await postJson(`/api/workflows/${workflow.id}/run`, {});
+  expect(run.status).toBe(201);
+  const workflowConversation = await run.json() as { id: string };
+  await waitForRunnerIdle(workflowConversation.id);
+  const events = await fetch(
+    `${current.baseUrl}/api/conversations/${workflowConversation.id}/events`,
+  ).then((response) => response.json()) as AppEvent[];
+  expect(events[0]).toMatchObject({
+    type: "user-message",
+    text: "$skill-api\n\nVérifie les routes critiques.",
   });
 });
 

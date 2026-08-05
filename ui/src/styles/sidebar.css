@@ -54,6 +54,12 @@
   text-transform: uppercase;
 }
 
+.section-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
 .text-button {
   min-height: 28px;
   padding: 2px 7px;
@@ -122,6 +128,49 @@
 .navigation-list {
   display: grid;
   gap: 1px;
+}
+
+.project-navigation-block {
+  min-width: 0;
+}
+
+.workflow-shortcuts {
+  display: grid;
+  gap: 1px;
+  padding: 2px 0 var(--space-1) var(--space-3);
+}
+
+.workflow-shortcuts button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: 25px;
+  padding: 2px var(--space-2);
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.workflow-shortcuts button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.workflow-shortcuts button:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.workflow-shortcuts button span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .navigation-row {

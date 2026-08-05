@@ -41,6 +41,24 @@ export interface SkillSuggestionResult {
   resolvedByModel: boolean
 }
 
+export interface Workflow {
+  id: string
+  project_id: string
+  name: string
+  skill_id: string | null
+  skill_name: string
+  skill_invocation: string
+  prompt: string
+  preset_id: string | null
+  provider: Provider
+  model: string
+  effort: string | null
+  speed: ConversationSpeed | null
+  orchestrator: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface Project {
   id: string
   name: string

@@ -20,6 +20,7 @@ import type {
   SubtaskResult,
   TestInventory,
   TestScope,
+  Workflow,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -67,6 +68,19 @@ export interface PresetInput {
   review_provider?: Provider
   review_model?: string
   review_effort?: string
+}
+
+export interface WorkflowInput {
+  projectId: string
+  name: string
+  skillId: string
+  prompt: string
+  presetId: string | null
+  provider?: Provider
+  model?: string
+  effort?: string | null
+  speed?: ConversationSpeed | null
+  orchestrator?: boolean
 }
 
 export interface StartReviewInput {
@@ -221,6 +235,26 @@ export function composeSkill(input: {
   scope: 'project' | 'global'
 }): Promise<SkillDetail> {
   return fetchJson('/api/skills/generate', jsonPost(input))
+}
+
+export function listProjectWorkflows(projectId: string): Promise<Workflow[]> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/workflows`)
+}
+
+export function createWorkflow(input: WorkflowInput): Promise<Workflow> {
+  return fetchJson('/api/workflows', jsonPost(input))
+}
+
+export function updateWorkflow(id: string, input: WorkflowInput): Promise<Workflow> {
+  return fetchJson(`/api/workflows/${routeId(id)}`, jsonPut(input))
+}
+
+export function deleteWorkflow(id: string): Promise<void> {
+  return fetchVoid(`/api/workflows/${routeId(id)}`, { method: 'DELETE' })
+}
+
+export function runWorkflow(id: string): Promise<Conversation> {
+  return fetchJson(`/api/workflows/${routeId(id)}/run`, jsonPost({}))
 }
 
 export function createProject(input: CreateProjectInput): Promise<Project> {

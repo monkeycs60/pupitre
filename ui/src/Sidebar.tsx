@@ -5,13 +5,16 @@ import {
   createProject,
   listProjectConversations,
   listProjectReviews,
+  listProjectWorkflows,
   listProjects,
+  runWorkflow,
   setConversationPinned,
   setProjectPinned,
 } from './api'
 import { QuotaBar } from './QuotaBar'
-import type { Conversation, Project, Review, WorkspaceView } from './types'
+import type { Conversation, Project, Review, Workflow, WorkspaceView } from './types'
 import type { Quotas } from './useQuotas'
+import { WorkflowDialog } from './WorkflowDialog'
 
 declare global {
   interface Window {
@@ -83,11 +86,14 @@ export function Sidebar({
   const [projects, setProjects] = useState<Project[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [projectName, setProjectName] = useState('')
   const [projectPath, setProjectPath] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showWorkflowDialog, setShowWorkflowDialog] = useState(false)
+  const [runningWorkflowId, setRunningWorkflowId] = useState<string | null>(null)
 
   useEffect(() => {
     let ignore = false
@@ -109,17 +115,20 @@ export function Sidebar({
     let ignore = false
     setConversations([])
     setReviews([])
+    setWorkflows([])
 
     if (selectedProject === null) return
 
     void Promise.all([
       listProjectConversations(selectedProject.id),
       listProjectReviews(selectedProject.id),
+      listProjectWorkflows(selectedProject.id),
     ])
-      .then(([items, loadedReviews]) => {
+      .then(([items, loadedReviews, loadedWorkflows]) => {
         if (!ignore) {
           setConversations(pinnedFirst(items))
           setReviews(loadedReviews)
+          setWorkflows(loadedWorkflows)
         }
       })
       .catch((loadError: unknown) => {
@@ -212,6 +221,21 @@ export function Sidebar({
     }
   }
 
+  async function handleWorkflowRun(workflow: Workflow) {
+    if (runningWorkflowId) return
+    setRunningWorkflowId(workflow.id)
+    setError(null)
+    try {
+      const conversation = await runWorkflow(workflow.id)
+      setConversations((current) => pinnedFirst([conversation, ...current]))
+      onConversationSelect(conversation)
+    } catch (runError: unknown) {
+      setError(errorMessage(runError))
+    } finally {
+      setRunningWorkflowId(null)
+    }
+  }
+
   return (
     <aside className="sidebar">
       <div className="app-name">Pupitre</div>
@@ -267,29 +291,46 @@ export function Sidebar({
             <p className="list-empty">Aucun projet</p>
           ) : (
             projects.map((project) => (
-              <div
-                className={`navigation-row ${selectedProject?.id === project.id ? 'is-selected' : ''}`}
-                key={project.id}
-              >
-                <button
-                  type="button"
-                  className="navigation-main"
-                  onClick={() => onProjectSelect(project)}
-                  title={project.path}
+              <div className="project-navigation-block" key={project.id}>
+                <div
+                  className={`navigation-row ${selectedProject?.id === project.id ? 'is-selected' : ''}`}
                 >
-                  <span>{project.name}</span>
-                  <span className="navigation-detail">{project.path}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`pin-button ${project.pinned ? 'is-pinned' : ''}`}
-                  onClick={() => void handleProjectPin(project)}
-                  aria-label={project.pinned ? `Désépingler ${project.name}` : `Épingler ${project.name}`}
-                  aria-pressed={project.pinned}
-                  title={project.pinned ? 'Désépingler' : 'Épingler'}
-                >
-                  <span aria-hidden="true">{project.pinned ? '◆' : '◇'}</span>
-                </button>
+                  <button
+                    type="button"
+                    className="navigation-main"
+                    onClick={() => onProjectSelect(project)}
+                    title={project.path}
+                  >
+                    <span>{project.name}</span>
+                    <span className="navigation-detail">{project.path}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`pin-button ${project.pinned ? 'is-pinned' : ''}`}
+                    onClick={() => void handleProjectPin(project)}
+                    aria-label={project.pinned ? `Désépingler ${project.name}` : `Épingler ${project.name}`}
+                    aria-pressed={project.pinned}
+                    title={project.pinned ? 'Désépingler' : 'Épingler'}
+                  >
+                    <span aria-hidden="true">{project.pinned ? '◆' : '◇'}</span>
+                  </button>
+                </div>
+                {selectedProject?.id === project.id && workflows.length > 0 ? (
+                  <div className="workflow-shortcuts" aria-label={`Workflows de ${project.name}`}>
+                    {workflows.map((workflow) => (
+                      <button
+                        type="button"
+                        key={workflow.id}
+                        onClick={() => void handleWorkflowRun(workflow)}
+                        disabled={runningWorkflowId !== null}
+                        title={`Lancer $${workflow.skill_invocation} dans une nouvelle conversation`}
+                      >
+                        <span aria-hidden="true">↳</span>
+                        <span>{runningWorkflowId === workflow.id ? 'Lancement…' : workflow.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ))
           )}
@@ -299,14 +340,24 @@ export function Sidebar({
       <section className="sidebar-section conversations" aria-labelledby="conversations-title">
         <div className="section-heading">
           <h2 id="conversations-title">Conversations</h2>
-          <button
-            type="button"
-            className="text-button"
-            onClick={onConversationCreate}
-            disabled={selectedProject === null || isSubmitting}
-          >
-            + Conversation
-          </button>
+          <span className="section-heading-actions">
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setShowWorkflowDialog(true)}
+              disabled={selectedProject === null || isSubmitting}
+            >
+              + Workflow
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={onConversationCreate}
+              disabled={selectedProject === null || isSubmitting}
+            >
+              + Conversation
+            </button>
+          </span>
         </div>
 
         <div className="project-view-nav" aria-label="Vues du projet">
@@ -415,6 +466,16 @@ export function Sidebar({
           {error}
         </p>
       )}
+
+      {showWorkflowDialog && selectedProject ? (
+        <WorkflowDialog
+          key={selectedProject.id}
+          project={selectedProject}
+          workflows={workflows}
+          onClose={() => setShowWorkflowDialog(false)}
+          onChanged={setWorkflows}
+        />
+      ) : null}
 
       <QuotaBar snapshot={quotas.snapshot} isUnknown={quotas.isUnknown} />
     </aside>

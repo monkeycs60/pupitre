@@ -24,6 +24,7 @@ import { TesterRunner } from "../src/testing";
 import { SkillInventory } from "../src/skills";
 import { SkillSuggestionService } from "../src/skill-suggestions";
 import { SkillComposer } from "../src/skill-composer";
+import { WorkflowStore } from "../src/stores/workflows";
 import { DebriefStore } from "../src/stores/debriefs";
 
 interface Harness {
@@ -138,9 +139,10 @@ cat "${fixture}"
     homeDir: dir,
     generator: async () => "{}",
   });
+  const workflows = new WorkflowStore(db);
   const server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas, subtasks, presets, settings,
-    reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer,
+    reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer, workflows,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
