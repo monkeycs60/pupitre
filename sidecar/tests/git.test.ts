@@ -63,6 +63,7 @@ test("retourne commits, branches, HEAD, worktrees et conversations d'origine", (
   const snapshot = gitView.snapshot(projectId);
 
   expect(snapshot.head).toBe(linked);
+  expect(snapshot.headParents).toHaveLength(1);
   expect(snapshot.currentBranch).toBe("main");
   expect(snapshot.commits[0]).toMatchObject({
     sha: linked,
@@ -134,6 +135,7 @@ test("un dépôt neuf sans commit reste consultable", () => {
 
   expect(gitView.snapshot(project.id)).toMatchObject({
     head: null,
+    headParents: [],
     currentBranch: "main",
     commits: [],
   });
@@ -159,6 +161,34 @@ test("attribue tous les commits initiaux créés depuis un dépôt vide", () => 
   const two = run("rev-parse", "HEAD");
 
   expect(gitView.commitsBetween(project.id, null, two)).toEqual([one, two]);
+});
+
+test("ne tronque pas la provenance d'un tour initial dépassant 200 commits", () => {
+  const empty = join(repo, "..", "initial-long");
+  mkdirSync(empty);
+  const run = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: empty });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+    return result.stdout.toString().trim();
+  };
+  run("init", "-q", "-b", "main");
+  run("config", "user.email", "long@example.test");
+  run("config", "user.name", "Long Fixture");
+  const project = projects.create({ name: "initial-long", path: empty });
+  for (let index = 0; index < 205; index += 1) {
+    run("commit", "--allow-empty", "-qm", `commit ${index}`);
+  }
+
+  const noisyHead = run("rev-parse", "HEAD");
+  expect(gitView.commitsBetween(project.id, null, noisyHead)).toHaveLength(205);
+
+  run("branch", "noisy", noisyHead);
+  run("checkout", "-q", "noisy");
+  run("branch", "-f", "main", `${noisyHead}~203`);
+  run("checkout", "-q", "main");
+  const snapshot = gitView.snapshot(project.id);
+  expect(snapshot.commits.some((item) => item.sha === snapshot.head)).toBe(true);
+  expect(snapshot.headParents).toEqual([run("rev-parse", "HEAD^")]);
 });
 
 test("ne prétend pas attribuer des commits pendant deux tours concurrents", () => {

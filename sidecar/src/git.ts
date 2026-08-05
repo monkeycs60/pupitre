@@ -42,6 +42,7 @@ export interface GitWorktree {
 
 export interface GitSnapshot {
   head: string | null;
+  headParents: string[];
   currentBranch: string | null;
   commits: GitCommit[];
   branches: GitBranch[];
@@ -81,20 +82,30 @@ export class GitProjectService {
       ?.trim() || null;
     const links = this.commitLinks(projectId);
     const guardian = this.guardianByCommit(projectId, cwd);
-    const commits = head ? this.parseCommits(this.runGit(cwd, [
+    let commits = head ? this.parseCommits(this.runGit(cwd, [
       "log", "-z", "--all", "--topo-order",
       `--max-count=${MAX_COMMITS}`,
       "--date=iso-strict",
       "--format=%H%x00%P%x00%D%x00%an%x00%aI%x00%s",
-    ])).map((commit) => ({
+    ])) : [];
+    if (head && !commits.some((commit) => commit.sha === head)) {
+      const headCommit = this.parseCommits(this.runGit(cwd, [
+        "log", "-z", "-1", "--date=iso-strict",
+        "--format=%H%x00%P%x00%D%x00%an%x00%aI%x00%s", head,
+      ]))[0];
+      if (headCommit) commits = [headCommit, ...commits.slice(0, MAX_COMMITS - 1)];
+    }
+    const headParents = commits.find((commit) => commit.sha === head)?.parents ?? [];
+    const hydrated = commits.map((commit) => ({
       ...commit,
       conversations: links.get(commit.sha) ?? [],
       guardian: guardian.get(commit.sha) ?? [],
-    })) : [];
+    }));
     return {
       head,
+      headParents,
       currentBranch,
-      commits,
+      commits: hydrated,
       branches: this.branches(cwd),
       worktrees: this.worktrees(cwd),
     };
@@ -121,7 +132,7 @@ export class GitProjectService {
     const head = this.resolve(cwd, after);
     if (before === null) {
       return this.runGit(cwd, [
-        "rev-list", "--reverse", "--topo-order", `--max-count=${MAX_COMMITS}`, head,
+        "rev-list", "--reverse", "--topo-order", head,
       ]).split("\n").map((sha) => sha.trim()).filter(Boolean);
     }
     const base = this.resolve(cwd, before);
@@ -133,7 +144,7 @@ export class GitProjectService {
     return this.runGit(cwd, [
       "rev-list",
       "--reverse",
-      `--max-count=${MAX_COMMITS}`,
+      "--topo-order",
       head,
       `^${base}`,
     ]).split("\n").map((sha) => sha.trim()).filter(Boolean);

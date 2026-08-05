@@ -41,9 +41,8 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
       .then((loaded) => {
         if (controller.signal.aborted) return
         setSnapshot(loaded)
-        const currentHead = loaded.commits.find((commit) => commit.sha === loaded.head)
         setHeadRef(loaded.head ?? '')
-        setBaseRef(currentHead?.parents[0] ?? '')
+        setBaseRef(loaded.headParents[0] ?? '')
         setError(null)
         setIsLoading(false)
       })

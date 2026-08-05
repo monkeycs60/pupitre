@@ -203,6 +203,7 @@ export interface GitWorktree {
 
 export interface GitSnapshot {
   head: string | null
+  headParents: string[]
   currentBranch: string | null
   commits: GitCommit[]
   branches: GitBranch[]
