@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import {
@@ -11,7 +11,7 @@ import {
   setConversationPinned,
   setProjectPinned,
 } from './api'
-import { QuotaBar } from './QuotaBar'
+import { QuotaBar, QuotaStatus } from './QuotaBar'
 import type { Conversation, Project, Review, Workflow, WorkspaceView } from './types'
 import type { Quotas } from './useQuotas'
 import { WorkflowDialog } from './WorkflowDialog'
@@ -73,6 +73,41 @@ function conversationRelation(
   return continuation ? `→ passation vers ${continuation.title}` : null
 }
 
+type UtilityIconName =
+  | 'search'
+  | 'guardian'
+  | 'git'
+  | 'costs'
+  | 'fleet'
+  | 'memory'
+  | 'routines'
+  | 'library'
+  | 'help'
+  | 'tools'
+
+function UtilityIcon({ name }: { name: UtilityIconName }) {
+  const paths: Record<UtilityIconName, React.ReactNode> = {
+    search: <><circle cx="7" cy="7" r="4" /><path d="m10 10 3 3" /></>,
+    guardian: <path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" />,
+    git: <><circle cx="5" cy="4" r="1.5" /><circle cx="11" cy="12" r="1.5" /><circle cx="5" cy="12" r="1.5" /><path d="M5 5.5v5M6.5 4H8a3 3 0 0 1 3 3v3.5" /></>,
+    costs: <><path d="M3 13V8M8 13V3M13 13V6" /><path d="M2 13.5h12" /></>,
+    fleet: <><path d="M2 8h3l1.5-4L9 12l1.5-4H14" /><path d="M3 3.5A6 6 0 1 1 2.5 11" /></>,
+    memory: <><path d="M4 2.5h6l2 2V14H4Z" /><path d="M10 2.5V5h2M6 8h4M6 10.5h4" /></>,
+    routines: <><circle cx="8" cy="8" r="5.5" /><path d="M8 5v3l2 1.5" /></>,
+    library: <><path d="M3 3v10M6 3v10M10 3.5l2 9.5M2 13h12" /></>,
+    help: <><circle cx="8" cy="8" r="5.5" /><path d="M6.5 6.2A1.7 1.7 0 0 1 8.2 5c1 0 1.8.6 1.8 1.5 0 1.7-2 1.5-2 3M8 11.8v.2" /></>,
+    tools: <><path d="M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z" /></>,
+  }
+
+  return (
+    <svg className="utility-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.25">
+        {paths[name]}
+      </g>
+    </svg>
+  )
+}
+
 export function Sidebar({
   selectedProject,
   selectedConversation,
@@ -106,6 +141,29 @@ export function Sidebar({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showWorkflowDialog, setShowWorkflowDialog] = useState(false)
   const [runningWorkflowId, setRunningWorkflowId] = useState<string | null>(null)
+  const [utilitiesOpen, setUtilitiesOpen] = useState(false)
+  const utilitiesRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!utilitiesOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!utilitiesRef.current?.contains(event.target as Node)) {
+        setUtilitiesOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setUtilitiesOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [utilitiesOpen])
 
   useEffect(() => {
     let ignore = false
@@ -248,6 +306,22 @@ export function Sidebar({
     }
   }
 
+  function selectUtility(action: () => void) {
+    setUtilitiesOpen(false)
+    action()
+  }
+
+  const activeUtilityLabel: Partial<Record<WorkspaceView, string>> = {
+    guardian: 'Gardien',
+    git: 'Git',
+    costs: 'Coûts',
+    fleet: 'Fleet',
+    memory: 'Mémoire',
+    routines: 'Routines',
+    library: 'Bibliothèque',
+    help: 'Aide',
+  }
+
   return (
     <aside className="sidebar">
       <div className="app-name">Pupitre</div>
@@ -352,54 +426,30 @@ export function Sidebar({
       <section className="sidebar-section conversations" aria-labelledby="conversations-title">
         <div className="section-heading">
           <h2 id="conversations-title">Conversations</h2>
-          <span className="section-heading-actions">
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => setShowWorkflowDialog(true)}
-              disabled={selectedProject === null || isSubmitting}
-            >
-              + Workflow
-            </button>
-            <button
-              type="button"
-              className="text-button"
-              onClick={onConversationCreate}
-              disabled={selectedProject === null || isSubmitting}
-            >
-              + Conversation
-            </button>
-          </span>
         </div>
 
-        <div className="project-view-nav" aria-label="Vues du projet">
+        {/* Deux libellés entiers ne tiennent pas à côté du titre dans la largeur
+            de la sidebar : ils se tronquaient. Ils ont leur propre rangée. */}
+        <div className="section-actions">
           <button
             type="button"
-            className={`guardian-nav-button ${workspaceView === 'costs' ? 'is-selected' : ''}`}
-            onClick={onCostsSelect}
-            disabled={selectedProject === null}
-            title="Comparer l'usage en tokens des conversations et délégations du projet"
+            className="section-action"
+            onClick={() => setShowWorkflowDialog(true)}
+            disabled={selectedProject === null || isSubmitting}
+            title="Créer un workflow réutilisable pour ce projet"
           >
-            <span>Coûts</span>
+            <span aria-hidden="true">+</span>
+            <span>Workflow</span>
           </button>
           <button
             type="button"
-            className={`guardian-nav-button ${workspaceView === 'git' ? 'is-selected' : ''}`}
-            onClick={onGitSelect}
-            disabled={selectedProject === null}
-            title="Voir les branches, commits et worktrees du projet"
+            className="section-action"
+            onClick={onConversationCreate}
+            disabled={selectedProject === null || isSubmitting}
+            title="Démarrer une nouvelle conversation dans ce projet"
           >
-            <span>Git</span>
-          </button>
-          <button
-            type="button"
-            className={`guardian-nav-button ${workspaceView === 'guardian' ? 'is-selected' : ''}`}
-            onClick={onGuardianSelect}
-            disabled={selectedProject === null}
-            title="Voir les reviews de risques du projet"
-          >
-            <span>Gardien</span>
-            {pendingReviews > 0 ? <strong>{pendingReviews}</strong> : null}
+            <span aria-hidden="true">+</span>
+            <span>Conversation</span>
           </button>
         </div>
 
@@ -471,57 +521,6 @@ export function Sidebar({
         </div>
       </section>
 
-      <nav className="sidebar-global-nav" aria-label="Vues globales">
-        <button
-          type="button"
-          onClick={onPaletteSelect}
-          title="Rechercher partout et lancer une commande au clavier."
-        >
-          <span>Rechercher</span>
-          <kbd>Ctrl K</kbd>
-        </button>
-        <button
-          type="button"
-          className={workspaceView === 'fleet' ? 'is-selected' : ''}
-          onClick={onFleetSelect}
-          title="Voir tous les tours, sous-tâches et routines actuellement actifs."
-        >
-          <span>Fleet</span>
-        </button>
-        <button
-          type="button"
-          className={workspaceView === 'memory' ? 'is-selected' : ''}
-          onClick={onMemorySelect}
-          title="Lire et éditer les fichiers de mémoire persistante de Claude."
-        >
-          <span>Mémoire</span>
-        </button>
-        <button
-          type="button"
-          className={workspaceView === 'help' ? 'is-selected' : ''}
-          onClick={onHelpSelect}
-          title="Comprendre les concepts et commandes propres à Pupitre."
-        >
-          <span>Aide</span>
-        </button>
-        <button
-          type="button"
-          className={workspaceView === 'routines' ? 'is-selected' : ''}
-          onClick={onRoutinesSelect}
-          title="Planifier des workflows ou prompts et consulter leurs exécutions."
-        >
-          <span>Routines</span>
-        </button>
-        <button
-          type="button"
-          className={workspaceView === 'library' ? 'is-selected' : ''}
-          onClick={onLibrarySelect}
-          title="Explorer les skills Claude, prompts Codex et consignes disponibles."
-        >
-          <span>Bibliothèque</span>
-        </button>
-      </nav>
-
       {error && (
         <p className="sidebar-error" role="alert">
           {error}
@@ -538,7 +537,98 @@ export function Sidebar({
         />
       ) : null}
 
-      <QuotaBar snapshot={quotas.snapshot} isUnknown={quotas.isUnknown} />
+      <div className="utility-dock" ref={utilitiesRef}>
+        <QuotaStatus snapshot={quotas.snapshot} />
+
+        {utilitiesOpen ? (
+          <div className="utility-popover" role="dialog" aria-label="Outils et vues secondaires">
+            <button
+              type="button"
+              className="utility-search"
+              onClick={() => selectUtility(onPaletteSelect)}
+            >
+              <UtilityIcon name="search" />
+              <span>Rechercher partout</span>
+              <kbd>Ctrl K</kbd>
+            </button>
+
+            <section className="utility-group" aria-labelledby="project-tools-title">
+              <h3 id="project-tools-title">Projet</h3>
+              <div className="utility-grid">
+                <button
+                  type="button"
+                  className={workspaceView === 'guardian' ? 'is-selected' : ''}
+                  onClick={() => selectUtility(onGuardianSelect)}
+                  disabled={selectedProject === null}
+                >
+                  <UtilityIcon name="guardian" />
+                  <span>Gardien</span>
+                  {pendingReviews > 0 ? <strong>{pendingReviews}</strong> : null}
+                </button>
+                <button
+                  type="button"
+                  className={workspaceView === 'git' ? 'is-selected' : ''}
+                  onClick={() => selectUtility(onGitSelect)}
+                  disabled={selectedProject === null}
+                >
+                  <UtilityIcon name="git" />
+                  <span>Git</span>
+                </button>
+                <button
+                  type="button"
+                  className={workspaceView === 'costs' ? 'is-selected' : ''}
+                  onClick={() => selectUtility(onCostsSelect)}
+                  disabled={selectedProject === null}
+                >
+                  <UtilityIcon name="costs" />
+                  <span>Coûts</span>
+                </button>
+              </div>
+            </section>
+
+            <section className="utility-group" aria-labelledby="workspace-tools-title">
+              <h3 id="workspace-tools-title">Espace de travail</h3>
+              <div className="utility-grid">
+                <button type="button" className={workspaceView === 'fleet' ? 'is-selected' : ''} onClick={() => selectUtility(onFleetSelect)}>
+                  <UtilityIcon name="fleet" /><span>Fleet</span>
+                </button>
+                <button type="button" className={workspaceView === 'memory' ? 'is-selected' : ''} onClick={() => selectUtility(onMemorySelect)}>
+                  <UtilityIcon name="memory" /><span>Mémoire</span>
+                </button>
+                <button type="button" className={workspaceView === 'routines' ? 'is-selected' : ''} onClick={() => selectUtility(onRoutinesSelect)}>
+                  <UtilityIcon name="routines" /><span>Routines</span>
+                </button>
+                <button type="button" className={workspaceView === 'library' ? 'is-selected' : ''} onClick={() => selectUtility(onLibrarySelect)}>
+                  <UtilityIcon name="library" /><span>Bibliothèque</span>
+                </button>
+                <button type="button" className={workspaceView === 'help' ? 'is-selected' : ''} onClick={() => selectUtility(onHelpSelect)}>
+                  <UtilityIcon name="help" /><span>Aide</span>
+                </button>
+              </div>
+            </section>
+
+            <details className="utility-quotas">
+              <summary>Quotas et limites</summary>
+              <QuotaBar snapshot={quotas.snapshot} />
+            </details>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          className={`utility-trigger ${workspaceView !== 'conversations' ? 'is-active' : ''}`}
+          onClick={() => setUtilitiesOpen((open) => !open)}
+          aria-expanded={utilitiesOpen}
+          aria-haspopup="dialog"
+        >
+          <UtilityIcon name="tools" />
+          <span>Outils</span>
+          {activeUtilityLabel[workspaceView] ? (
+            <span className="utility-current">{activeUtilityLabel[workspaceView]}</span>
+          ) : null}
+          <span className="utility-chevron" aria-hidden="true">⌃</span>
+        </button>
+      </div>
     </aside>
   )
 }

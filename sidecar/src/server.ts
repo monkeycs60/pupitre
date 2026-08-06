@@ -9,6 +9,7 @@ import type { PresetInput, PresetStore } from "./stores/presets";
 import { defaultReviewConfig } from "./stores/presets";
 import type { SettingsStore } from "./stores/settings";
 import type { QuotaTracker } from "./quotas";
+import type { QuotaRefresher } from "./quota-refresh";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
 import type { ReviewRunner } from "./reviews";
 import { CounterAlreadyRunningError } from "./stores/reviews";
@@ -57,6 +58,7 @@ export interface ServerDeps {
   runner: ConversationRunner;
   events: ConversationEventBus;
   quotas: QuotaTracker;
+  quotaRefresher: QuotaRefresher;
   subtasks: SubtaskRunner;
   presets: PresetStore;
   settings: SettingsStore;
@@ -74,6 +76,11 @@ export interface ServerDeps {
   search: SearchIndex;
   costs: CostStore;
   memory: MemoryStore;
+  /**
+   * Arrêt propre du sidecar, déclenché par `POST /api/shutdown` : c'est ce qui
+   * permet à un sidecar plus récent de reprendre le port (cf. claimServer).
+   */
+  shutdown?: () => void;
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -544,6 +551,13 @@ export function createServer(deps: ServerDeps) {
           return json({ ok: true });
         }
 
+        if (request.method === "POST" && pathname === "/api/shutdown") {
+          if (!deps.shutdown) throw new HttpError(501, "arrêt non câblé");
+          // Différé pour que la réponse parte avant l'arrêt du process.
+          setTimeout(deps.shutdown, 25);
+          return json({ ok: true });
+        }
+
         if (request.method === "GET" && pathname === "/api/fleet") {
           return json(currentFleet());
         }
@@ -960,7 +974,19 @@ export function createServer(deps: ServerDeps) {
             return json(preset);
           } catch (error) {
             if (error instanceof HttpError) throw error;
-            if (error instanceof Error && error.message === "preset intégré immuable") {
+            throw new HttpError(409, "nom de preset déjà utilisé");
+          }
+        }
+
+        const restoredPresetId = routeId(pathname, /^\/api\/presets\/([^/]+)\/restore$/);
+        if (request.method === "POST" && restoredPresetId !== null) {
+          try {
+            const preset = deps.presets.restore(restoredPresetId);
+            if (!preset) throw new HttpError(404, "preset inconnu");
+            return json(preset);
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            if (error instanceof Error && error.message === "preset sans valeurs d'origine") {
               throw new HttpError(409, error.message);
             }
             throw new HttpError(409, "nom de preset déjà utilisé");
@@ -975,7 +1001,7 @@ export function createServer(deps: ServerDeps) {
             return empty(204);
           } catch (error) {
             if (error instanceof HttpError) throw error;
-            throw new HttpError(409, "preset intégré immuable");
+            throw new HttpError(409, "preset intégré non supprimable");
           }
         }
 
@@ -1633,6 +1659,11 @@ export function createServer(deps: ServerDeps) {
           return json(deps.quotas.snapshot());
         }
 
+        // Relève immédiate des deux providers, sans attendre le tour de poll.
+        if (request.method === "POST" && pathname === "/api/quotas/refresh") {
+          return json(await deps.quotaRefresher.refresh());
+        }
+
         if (request.method === "GET" && pathname === "/ws") {
           const channel = url.searchParams.get("channel");
           if (channel === "quotas") {
@@ -1716,4 +1747,58 @@ export function createServer(deps: ServerDeps) {
       message() {},
     },
   });
+}
+
+/**
+ * Démarre le serveur HTTP en réclamant le port au besoin.
+ *
+ * Scénario visé : un sidecar d'une session précédente (app fermée sans arrêt
+ * propre, instance de dev restée ouverte…) tient encore le port. Sans éviction,
+ * le nouveau sidecar crashe en boucle pendant que l'UI parle à l'ancien code —
+ * les correctifs semblent alors ne jamais s'appliquer. Le nouveau sidecar
+ * demande donc à l'ancien de s'arrêter (`POST /api/shutdown`) puis réessaie.
+ */
+export async function claimServer(
+  start: () => ReturnType<typeof createServer>,
+  port: number,
+): Promise<ReturnType<typeof createServer>> {
+  try {
+    return start();
+  } catch (error) {
+    if ((error as { code?: string }).code !== "EADDRINUSE") throw error;
+  }
+  const evicted = await requestSidecarShutdown(`http://127.0.0.1:${port}`);
+  if (!evicted) {
+    throw new Error(
+      `port ${port} occupé par un process qui n'est pas un sidecar Pupitre : `
+      + "libérez-le ou changez PUPITRE_PORT",
+    );
+  }
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    await Bun.sleep(200);
+    try {
+      return start();
+    } catch (error) {
+      if ((error as { code?: string }).code !== "EADDRINUSE") throw error;
+    }
+  }
+  throw new Error(`port ${port} toujours occupé après l'éviction du sidecar précédent`);
+}
+
+/** Vrai si un sidecar Pupitre a répondu au health check ET accepté de s'arrêter. */
+async function requestSidecarShutdown(baseUrl: string): Promise<boolean> {
+  try {
+    const health = await fetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(1_000) });
+    if (!health.ok) return false;
+    const body = (await health.json().catch(() => null)) as { ok?: boolean } | null;
+    if (body?.ok !== true) return false;
+    const shutdown = await fetch(`${baseUrl}/api/shutdown`, {
+      method: "POST",
+      signal: AbortSignal.timeout(1_000),
+    });
+    return shutdown.ok;
+  } catch {
+    return false;
+  }
 }

@@ -304,8 +304,30 @@ export class CodexAppServerClient {
         ? ["app-server", "--disable", "plugins", ...mcpArgs]
         : ["app-server", ...mcpArgs];
     }
-    const child = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
+    // `detached` isole l'app-server dans son propre groupe de process : c'est ce
+    // qui permet de tuer d'un coup ses serveurs MCP (npx, plugins…), sinon
+    // orphelins à chaque arrêt — le « bloat » observé en dizaines de process.
+    const child = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"], detached: true });
     this.proc = child;
+    const killTree = () => {
+      const pid = child.pid;
+      if (pid === undefined) return;
+      try {
+        process.kill(-pid, "SIGTERM");
+      } catch {
+        child.kill();
+      }
+      // Filet : un app-server sourd à SIGTERM (ou un MCP qui l'ignore) est
+      // achevé sans bloquer l'arrêt du sidecar.
+      const forceKill = setTimeout(() => {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          // Groupe déjà terminé : rien à achever.
+        }
+      }, 1_500);
+      forceKill.unref?.();
+    };
 
     const lines = createInterface({ input: child.stdout! });
     lines.on("line", (line) => this.handleLine(line));
@@ -317,6 +339,9 @@ export class CodexAppServerClient {
     });
     const onDead = (reason: string) => {
       if (this.proc !== child) return;
+      // Même un app-server mort de lui-même laisse ses serveurs MCP derrière :
+      // le groupe de process est balayé quelle que soit la cause de l'arrêt.
+      killTree();
       this.proc = null;
       this.ready = null;
       this.killCurrent = null;
@@ -332,7 +357,7 @@ export class CodexAppServerClient {
     child.on("error", (error) => onDead(String(error)));
     child.on("close", (code) => onDead(`codex app-server arrêté (exit ${code})`));
     this.killCurrent = () => {
-      child.kill();
+      killTree();
       onDead("codex app-server arrêté (shutdown)");
     };
 
@@ -346,7 +371,7 @@ export class CodexAppServerClient {
     // un process orphelin quand l'échec est une erreur JSON-RPC (process vivant).
     this.ready.catch(() => {
       if (this.proc === child) {
-        child.kill();
+        killTree();
         this.proc = null;
         this.ready = null;
         this.killCurrent = null;

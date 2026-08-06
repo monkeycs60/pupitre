@@ -18,17 +18,24 @@ export interface Preset extends Omit<PresetInput, "review_provider" | "review_mo
   review_provider: Provider;
   review_model: string;
   review_effort: string;
+  /**
+   * Un preset livré avec Pupitre. Le drapeau n'interdit plus l'édition : il dit
+   * seulement que le preset a des valeurs d'origine restaurables (`restore`) et
+   * qu'il ne peut pas être supprimé — la liste garde toujours ses trois repères.
+   */
   built_in: boolean;
   created_at: string;
   updated_at: string;
 }
 
-const BUILT_INS: ReadonlyArray<PresetInput & {
+type BuiltInPreset = PresetInput & {
   id: string;
   review_provider: Provider;
   review_model: string;
   review_effort: string;
-}> = [
+};
+
+const BUILT_INS: ReadonlyArray<BuiltInPreset> = [
   {
     id: "builtin-eco",
     name: "Éco",
@@ -91,18 +98,10 @@ export class PresetStore {
         now,
         now,
       );
-      // Les presets intégrés peuvent déjà exister dans une base M2 : leur
-      // configuration Gardien doit tout de même recevoir les valeurs tranchées M3.
-      this.db.query(`
-        UPDATE presets
-        SET review_provider = ?, review_model = ?, review_effort = ?
-        WHERE id = ?
-      `).run(
-        preset.review_provider,
-        preset.review_model,
-        preset.review_effort,
-        preset.id,
-      );
+      // Pas de réécriture au démarrage : les presets intégrés sont éditables,
+      // un UPDATE inconditionnel écraserait le réglage de l'utilisateur à chaque
+      // lancement. La bascule M2 → M3 de la config Gardien est déjà faite une
+      // fois pour toutes par la migration de colonne (cf. db.ts).
     }
   }
 
@@ -155,7 +154,6 @@ export class PresetStore {
   update(id: string, input: PresetInput): Preset | null {
     const preset = this.get(id);
     if (!preset) return null;
-    if (preset.built_in) throw new Error("preset intégré immuable");
     const review = reviewConfig(input, {
       provider: preset.review_provider,
       model: preset.review_model,
@@ -183,10 +181,42 @@ export class PresetStore {
     return this.get(id);
   }
 
+  /**
+   * Remet un preset intégré à sa configuration d'origine. Le seul filet après
+   * édition : sans lui, écraser « Éco » perdrait définitivement le repère.
+   */
+  restore(id: string): Preset | null {
+    const original = BUILT_INS.find((preset) => preset.id === id);
+    if (!original) {
+      if (!this.get(id)) return null;
+      throw new Error("preset sans valeurs d'origine");
+    }
+    this.db.query(`
+      UPDATE presets
+      SET name = ?, provider = ?, model = ?, effort = ?, speed = ?,
+          orchestrator = ?, review_provider = ?, review_model = ?,
+          review_effort = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      original.name,
+      original.provider,
+      original.model,
+      original.effort,
+      original.speed,
+      original.orchestrator ? 1 : 0,
+      original.review_provider,
+      original.review_model,
+      original.review_effort,
+      new Date().toISOString(),
+      id,
+    );
+    return this.get(id);
+  }
+
   delete(id: string): boolean {
     const preset = this.get(id);
     if (!preset) return false;
-    if (preset.built_in) throw new Error("preset intégré immuable");
+    if (preset.built_in) throw new Error("preset intégré non supprimable");
     const transaction = this.db.transaction(() => {
       this.db.query("UPDATE projects SET default_preset_id = NULL WHERE default_preset_id = ?").run(id);
       this.db.query("DELETE FROM presets WHERE id = ?").run(id);

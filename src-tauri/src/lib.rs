@@ -28,6 +28,16 @@ fn stop_sidecar(app: &tauri::AppHandle) {
     sidecar.stopping.store(true, Ordering::Release);
     if let Ok(mut child_slot) = sidecar.child.lock() {
         if let Some(child) = child_slot.take() {
+            // SIGTERM d'abord : le sidecar arrête proprement l'app-server codex
+            // et son groupe de serveurs MCP, sinon laissés orphelins à chaque
+            // fermeture de l'app. Le kill ne reste qu'un filet de sécurité.
+            #[cfg(unix)]
+            {
+                let _ = std::process::Command::new("kill")
+                    .args(["-TERM", &child.pid().to_string()])
+                    .status();
+                std::thread::sleep(Duration::from_millis(300));
+            }
             let _ = child.kill();
         }
     };
@@ -98,10 +108,20 @@ fn supervise_sidecar(app: tauri::AppHandle) {
         };
 
         let mut terminal_error = false;
+        let mut intentional_exit = false;
         while let Some(event) = tauri::async_runtime::block_on(events.recv()) {
             match event {
                 CommandEvent::Terminated(payload) => {
-                    log::warn!("Sidecar Pupitre arrêté ({:?}), relance planifiée", payload.code);
+                    // Un exit 0 est volontaire : sidecar évincé par une instance
+                    // plus récente (POST /api/shutdown) ou arrêté proprement. Le
+                    // relancer déclencherait une guerre d'éviction entre
+                    // instances ; on le laisse mort.
+                    if payload.code == Some(0) {
+                        log::info!("Sidecar Pupitre arrêté volontairement, pas de relance");
+                        intentional_exit = true;
+                    } else {
+                        log::warn!("Sidecar Pupitre arrêté ({:?}), relance planifiée", payload.code);
+                    }
                     break;
                 }
                 CommandEvent::Error(error) => {
@@ -124,7 +144,7 @@ fn supervise_sidecar(app: tauri::AppHandle) {
                 }
             }
         }
-        if state.stopping.load(Ordering::Acquire) {
+        if state.stopping.load(Ordering::Acquire) || intentional_exit {
             break;
         }
         std::thread::sleep(Duration::from_secs(1));

@@ -10,7 +10,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--bg-app);
+  background: var(--bg-workspace);
 }
 
 .events-list {

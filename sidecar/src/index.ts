@@ -1,12 +1,13 @@
 import { dataDir, openDb } from "./db";
 import { MediaStore } from "./media";
 import { ConversationRunner } from "./runner";
-import { ConversationEventBus, createServer } from "./server";
+import { claimServer, ConversationEventBus, createServer } from "./server";
 import { ConversationStore } from "./stores/conversations";
 import { ProjectStore } from "./stores/projects";
 import { PresetStore } from "./stores/presets";
 import { SettingsStore } from "./stores/settings";
 import { QuotaTracker } from "./quotas";
+import { QuotaRefresher } from "./quota-refresh";
 import { SubtaskRunner } from "./subtasks";
 import { codexAppServer } from "./adapters/codex-app-server";
 import { runConductorMcp } from "./conductor-mcp";
@@ -40,6 +41,7 @@ if (process.argv.includes("--conductor-mcp")) {
   const media = new MediaStore(dir);
   const events = new ConversationEventBus();
   const quotas = new QuotaTracker(db);
+  const quotaRefresher = new QuotaRefresher(quotas);
   const reviewStore = new ReviewStore(db);
   const skills = new SkillInventory(db, projects);
   skills.start();
@@ -116,14 +118,35 @@ if (process.argv.includes("--conductor-mcp")) {
     runner,
     notifications,
   );
-  server = createServer({
+  // Arrêt propre partagé : éviction par un sidecar plus récent (POST
+  // /api/shutdown), SIGTERM de Tauri à la fermeture de l'app, Ctrl-C en dev.
+  // Sans lui, l'app-server codex et sa flotte de serveurs MCP survivent en
+  // orphelins — et un vieux sidecar qui garde le port fait tourner l'UI sur du
+  // code périmé.
+  let stopping = false;
+  const shutdownGracefully = () => {
+    if (stopping) return;
+    stopping = true;
+    try {
+      quotaRefresher.stop();
+      codexAppServer.shutdown();
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.on("SIGTERM", shutdownGracefully);
+  process.on("SIGINT", shutdownGracefully);
+
+  server = await claimServer(() => createServer({
     port,
+    shutdown: shutdownGracefully,
     projects,
     conversations,
     media,
     runner,
     events,
     quotas,
+    quotaRefresher,
     subtasks,
     presets,
     settings,
@@ -141,15 +164,12 @@ if (process.argv.includes("--conductor-mcp")) {
     search,
     costs,
     memory,
-  });
+  }), port);
   routines.start();
 
-  // Si l'app-server codex tourne déjà, on part avec un état de quota frais.
-  void codexAppServer.readRateLimits()
-    .then((rateLimits) => {
-      if (rateLimits) quotas.ingestPayload("codex", rateLimits);
-    })
-    .catch(() => {});
+  // Les deux relevés de quota sont des lectures gratuites : on part d'un état
+  // frais et on le tient à jour en fond (cf. QuotaRefresher).
+  quotaRefresher.start();
 
   console.log(`pupitre sidecar prêt sur http://localhost:${server.port}`);
 }

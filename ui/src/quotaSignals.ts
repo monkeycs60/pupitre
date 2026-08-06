@@ -37,7 +37,61 @@ export interface QuotaAlert {
 }
 
 const HOUR_MS = 60 * 60 * 1000
+const TWO_DAYS_MS = 2 * 24 * HOUR_MS
 const WEEKDAYS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
+
+export interface QuotaWindowSignals {
+  /** Dernière heure de la fenêtre Claude de 5 h. */
+  lastHour: boolean
+  /** Deux derniers jours d'une fenêtre hebdomadaire Claude ou Codex. */
+  weeklyEnding: boolean
+}
+
+function isFiveHourWindow(window: QuotaWindow): boolean {
+  return window.label === 'five_hour' || window.windowDurationMins === 300
+}
+
+function isWeeklyWindow(window: QuotaWindow): boolean {
+  return window.label === 'seven_day'
+    || window.label === 'weekly'
+    || window.label === 'opus_weekly'
+    || window.label.startsWith('seven_day_')
+    || window.windowDurationMins === 10_080
+}
+
+/** Signaux temporels visuels d'une fenêtre, indépendants et donc cumulables. */
+export function quotaWindowSignals(
+  provider: Provider,
+  window: QuotaWindow,
+  now: number = Date.now(),
+): QuotaWindowSignals {
+  const remaining = msUntilReset(window, now)
+  if (remaining === null || remaining <= 0) {
+    return { lastHour: false, weeklyEnding: false }
+  }
+  return {
+    lastHour: provider === 'claude'
+      && isFiveHourWindow(window)
+      && remaining <= HOUR_MS,
+    weeklyEnding: isWeeklyWindow(window) && remaining <= TWO_DAYS_MS,
+  }
+}
+
+/** Agrège les signaux sans en écraser un par l'autre. */
+export function quotaStateSignals(
+  provider: Provider,
+  state: QuotaState | null,
+  now: number = Date.now(),
+): QuotaWindowSignals {
+  if (state === null) return { lastHour: false, weeklyEnding: false }
+  return state.windows.reduce<QuotaWindowSignals>((combined, window) => {
+    const signals = quotaWindowSignals(provider, window, now)
+    return {
+      lastHour: combined.lastHour || signals.lastHour,
+      weeklyEnding: combined.weeklyEnding || signals.weeklyEnding,
+    }
+  }, { lastHour: false, weeklyEnding: false })
+}
 
 /** Libellés lisibles des fenêtres, sinon la durée, sinon le label brut. */
 export function windowTitle(window: QuotaWindow): string {
@@ -48,7 +102,6 @@ export function windowTitle(window: QuotaWindow): string {
     case 'weekly':
       return 'hebdo'
     case 'opus_weekly':
-    case 'seven_day_opus':
       return 'hebdo opus'
     case 'primary':
     case 'secondary':
@@ -59,6 +112,11 @@ export function windowTitle(window: QuotaWindow): string {
       break
     default:
       break
+  }
+  // Fenêtre hebdomadaire scopée à un modèle : `seven_day_fable` → « hebdo fable ».
+  // C'est ce que publie /api/oauth/usage pour les limites `weekly_scoped`.
+  if (window.label.startsWith('seven_day_')) {
+    return `hebdo ${window.label.slice('seven_day_'.length).replace(/-/g, ' ')}`
   }
   if (window.windowDurationMins === null) return window.label
   return window.windowDurationMins >= 1440
@@ -145,21 +203,57 @@ export function tightestWindow(
   })
 }
 
+export interface QuotaSummary {
+  /** Pourcentage consommé, ou null quand le provider n'en publie pas. */
+  usedPercent: number | null
+  /** Ligne principale : « 62 % utilisé », « reset dans 4 h », « jamais relevé ». */
+  headline: string
+  /** Pourquoi il manque une information, ou la précision utile. */
+  note: string | null
+}
+
 /**
- * Chip du sélecteur de modèle : « 62% · reset lun. 14h30 », ou juste le reset
- * quand le provider ne publie pas de pourcentage. null = quota inconnu.
+ * Ce que l'on sait vraiment du quota d'un provider, en une ligne lisible.
+ *
+ * Une donnée manquante est nommée, jamais devinée ni masquée derrière un
+ * « inconnu » qui se lirait comme une panne. Côté claude, un relevé sans
+ * pourcentage signifie qu'on tient la source de repli (le `rate_limit_event`
+ * d'un tour) et pas le relevé d'usage complet.
  */
-export function quotaChipLabel(
+export function quotaSummary(
+  provider: Provider,
   state: QuotaState | null,
   now: number = Date.now(),
-): string | null {
+): QuotaSummary {
   const window = tightestWindow(state, now)
-  if (window === null) return null
-  const parts: string[] = []
-  if (window.usedPercent !== null) parts.push(`${Math.round(window.usedPercent)}%`)
-  const clock = formatResetClock(window.resetsAt)
-  if (clock !== null) parts.push(`reset ${clock}`)
-  return parts.length === 0 ? null : parts.join(' · ')
+  if (window === null) {
+    return {
+      usedPercent: null,
+      headline: 'jamais relevé',
+      note: provider === 'claude'
+        ? 'Usage illisible : session Claude Code absente ou expirée. Relancez `claude` puis actualisez.'
+        : 'Aucun relevé reçu de l’app-server codex.',
+    }
+  }
+
+  const remaining = msUntilReset(window, now)
+  const countdown = remaining === null ? null : formatCountdown(remaining)
+  const reset = countdown === null
+    ? null
+    : countdown === 'imminent' ? 'reset imminent' : `reset dans ${countdown}`
+
+  if (window.usedPercent === null) {
+    return {
+      usedPercent: null,
+      headline: reset ?? 'fenêtre en cours',
+      note: 'Relevé partiel, issu du flux d’un tour. Actualisez pour lire l’usage complet.',
+    }
+  }
+  return {
+    usedPercent: window.usedPercent,
+    headline: `${Math.round(window.usedPercent)} % utilisé`,
+    note: reset === null ? null : `${windowTitle(window)} · ${reset}`,
+  }
 }
 
 /**

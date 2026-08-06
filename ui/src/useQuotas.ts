@@ -37,8 +37,6 @@ function persistNotifiedKeys(keys: string[]): void {
 
 export interface Quotas {
   snapshot: QuotaSnapshot
-  /** Aucun état reçu pour aucun provider : « quotas inconnus ». */
-  isUnknown: boolean
 }
 
 /**
@@ -152,10 +150,9 @@ export function useQuotas(): Quotas {
     }
   }, [])
 
-  return {
-    snapshot,
-    isUnknown: snapshot.claude === null && snapshot.codex === null,
-  }
+  // L'absence de relevé n'est plus un état global : chaque provider explique
+  // lui-même ce qui lui manque (cf. QuotaBar).
+  return { snapshot }
 }
 
 /**

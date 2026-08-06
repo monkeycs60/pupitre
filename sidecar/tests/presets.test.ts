@@ -63,17 +63,79 @@ test("CRUD d'un preset personnalisé", () => {
   expect(presets.get(created.id)).toBeNull();
 });
 
-test("refuse la modification et la suppression des presets intégrés", () => {
-  const builtIn = presets.list()[0]!;
-  expect(() => presets.update(builtIn.id, {
-    name: "Éco modifié",
+test("les presets intégrés s'éditent et se restaurent, mais ne se suppriment pas", () => {
+  const updated = presets.update("builtin-eco", {
+    name: "Éco maison",
+    provider: "claude",
+    model: "haiku",
+    effort: "medium",
+    speed: null,
+    orchestrator: false,
+    review_provider: "claude",
+    review_model: "sonnet",
+    review_effort: "high",
+  });
+  expect(updated).toMatchObject({
+    name: "Éco maison",
+    provider: "claude",
+    model: "haiku",
+    orchestrator: false,
+    review_model: "sonnet",
+    // Le drapeau survit à l'édition : c'est lui qui rend la restauration possible.
+    built_in: true,
+  });
+
+  const restored = presets.restore("builtin-eco");
+  expect(restored).toMatchObject({
+    name: "Éco",
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "low",
+    speed: "standard",
+    orchestrator: true,
+    review_provider: "codex",
+    review_model: "gpt-5.6-sol",
+    review_effort: "high",
+  });
+
+  expect(() => presets.delete("builtin-eco")).toThrow("preset intégré non supprimable");
+});
+
+test("une édition d'un preset intégré survit au redémarrage", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-restart-"));
+  const first = new PresetStore(openDb(dir));
+  first.update("builtin-quality", {
+    name: "Qualité max",
+    provider: "claude",
+    model: "sonnet",
+    effort: "high",
+    speed: null,
+    orchestrator: true,
+    review_provider: "claude",
+    review_model: "fable-5",
+    review_effort: "high",
+  });
+
+  // Le seed au démarrage doit être un INSERT OR IGNORE pur : le moindre UPDATE
+  // inconditionnel rejouerait les valeurs d'usine à chaque lancement.
+  const second = new PresetStore(openDb(dir));
+  expect(second.get("builtin-quality")).toMatchObject({
+    model: "sonnet",
+    review_model: "fable-5",
+  });
+});
+
+test("un preset personnalisé n'a pas de valeurs d'origine à restaurer", () => {
+  const custom = presets.create({
+    name: "Perso",
     provider: "codex",
     model: "gpt-5.6-sol",
     effort: "high",
-    speed: "fast",
-    orchestrator: false,
-  })).toThrow("preset intégré immuable");
-  expect(() => presets.delete(builtIn.id)).toThrow("preset intégré immuable");
+    speed: "standard",
+    orchestrator: true,
+  });
+  expect(() => presets.restore(custom.id)).toThrow("preset sans valeurs d'origine");
+  expect(presets.restore("inconnu")).toBeNull();
 });
 
 test("un projet mémorise son preset par défaut et le perd si le preset est supprimé", () => {

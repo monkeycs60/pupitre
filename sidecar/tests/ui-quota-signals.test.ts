@@ -5,7 +5,9 @@ import {
   formatCountdown,
   formatResetClock,
   quotaAlerts,
-  quotaChipLabel,
+  quotaStateSignals,
+  quotaSummary,
+  quotaWindowSignals,
   quotaFreshness,
   nextQuotaReevaluationDelay,
   shouldPulse,
@@ -87,26 +89,41 @@ test("sans pourcentage publié, la fenêtre retenue est celle qui reset le plus 
   expect(tightestWindow(claude, NOW)?.label).toBe("five_hour");
 });
 
-test("la chip affiche le pourcentage et le reset, ou le seul reset connu", () => {
-  const resetsAt = new Date(2026, 7, 3, 14, 30, 0).toISOString();
-  const codex = state("codex", [window({ usedPercent: 10, resetsAt })]);
-  const claude = state("claude", [
-    window({ label: "five_hour", usedPercent: null, resetsAt }),
-  ]);
-
-  expect(quotaChipLabel(codex, NOW)).toBe("10% · reset lun. 14h30");
-  expect(quotaChipLabel(claude, NOW)).toBe("reset lun. 14h30");
+test("résumé codex : pourcentage utilisé et fenêtre de reset, sans réserve", () => {
+  const summary = quotaSummary(
+    "codex",
+    state("codex", [window({ usedPercent: 62, resetsAt: isoIn(150) })]),
+    NOW,
+  );
+  expect(summary).toEqual({
+    usedPercent: 62,
+    headline: "62 % utilisé",
+    note: "5 h · reset dans 2 h 30",
+  });
 });
 
-test("quota inconnu : pas de chip", () => {
-  expect(quotaChipLabel(null, NOW)).toBeNull();
-  expect(quotaChipLabel(state("codex", []), NOW)).toBeNull();
-  expect(
-    quotaChipLabel(
-      state("codex", [window({ usedPercent: null, resetsAt: null })]),
-      NOW,
-    ),
-  ).toBeNull();
+test("résumé claude : le reset seul, et la raison de l'absence de pourcentage", () => {
+  const summary = quotaSummary(
+    "claude",
+    state("claude", [
+      window({ label: "five_hour", usedPercent: null, resetsAt: isoIn(75) }),
+    ]),
+    NOW,
+  );
+  expect(summary.usedPercent).toBeNull();
+  expect(summary.headline).toBe("reset dans 1 h 15");
+  // La donnée manquante est nommée : sans ça, l'UI se lit comme une panne.
+  expect(summary.note).toContain("Relevé partiel");
+});
+
+test("résumé sans relevé : la cause dépend du provider", () => {
+  expect(quotaSummary("claude", null, NOW)).toEqual({
+    usedPercent: null,
+    headline: "jamais relevé",
+    note: expect.stringContaining("session Claude Code absente"),
+  });
+  expect(quotaSummary("codex", state("codex", []), NOW).note)
+    .toContain("app-server codex");
 });
 
 test("la fraîcheur retient le relevé provider le plus récent", () => {
@@ -204,6 +221,50 @@ test("les deux seuils peuvent se déclencher sur la même fenêtre", () => {
     `codex:primary:${isoIn(20)}:last-hour`,
     `codex:primary:${isoIn(20)}:used-80`,
   ]);
+});
+
+test("signaux visuels : seule la fenêtre Claude de 5 h pulse dans sa dernière heure", () => {
+  const claudeFiveHour = window({ label: "five_hour", resetsAt: isoIn(45) });
+  const codexFiveHour = window({ label: "primary", resetsAt: isoIn(45) });
+
+  expect(quotaWindowSignals("claude", claudeFiveHour, NOW)).toEqual({
+    lastHour: true,
+    weeklyEnding: false,
+  });
+  expect(quotaWindowSignals("codex", codexFiveHour, NOW).lastHour).toBe(false);
+  expect(quotaWindowSignals("claude", window({ resetsAt: isoIn(75) }), NOW).lastHour)
+    .toBe(false);
+});
+
+test("signaux visuels : les fenêtres hebdo Claude, Fable et Codex changent à J-2", () => {
+  const inThirtySixHours = isoIn(36 * 60);
+  const weeklyWindows = [
+    ["claude", window({ label: "seven_day", windowDurationMins: 10_080, resetsAt: inThirtySixHours })],
+    ["claude", window({ label: "seven_day_fable", windowDurationMins: 10_080, resetsAt: inThirtySixHours })],
+    ["codex", window({ label: "primary", windowDurationMins: 10_080, resetsAt: inThirtySixHours })],
+  ] as const;
+
+  for (const [provider, quotaWindow] of weeklyWindows) {
+    expect(quotaWindowSignals(provider, quotaWindow, NOW).weeklyEnding).toBe(true);
+  }
+  expect(quotaWindowSignals("codex", window({
+    label: "weekly",
+    windowDurationMins: 10_080,
+    resetsAt: isoIn(49 * 60),
+  }), NOW).weeklyEnding).toBe(false);
+});
+
+test("signaux visuels : dernière heure et fin hebdo Claude se cumulent", () => {
+  const claude = state("claude", [
+    window({ label: "five_hour", resetsAt: isoIn(30) }),
+    window({ label: "seven_day", windowDurationMins: 10_080, resetsAt: isoIn(24 * 60) }),
+    window({ label: "seven_day_fable", windowDurationMins: 10_080, resetsAt: isoIn(30 * 60) }),
+  ]);
+
+  expect(quotaStateSignals("claude", claude, NOW)).toEqual({
+    lastHour: true,
+    weeklyEnding: true,
+  });
 });
 
 test("la clé d'alerte change de fenêtre en fenêtre : une nouvelle fenêtre re-notifie", () => {

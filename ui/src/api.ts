@@ -392,6 +392,19 @@ export function deletePreset(id: string): Promise<void> {
   return fetchVoid(`/api/presets/${routeId(id)}`, { method: 'DELETE' })
 }
 
+/** Remet un preset intégré à sa configuration d'usine. */
+export function restorePreset(id: string): Promise<Preset> {
+  return fetchJson(`/api/presets/${routeId(id)}/restore`, { method: 'POST' })
+}
+
+/**
+ * Relève forcée des quotas. Côté codex c'est une lecture, côté claude un tour
+ * minimal : c'est pour ça que l'appel est explicite et jamais périodique.
+ */
+export function refreshQuotas(): Promise<QuotaSnapshot> {
+  return fetchJson('/api/quotas/refresh', { method: 'POST' })
+}
+
 export function getSettings(signal?: AbortSignal): Promise<Settings> {
   return fetchJson('/api/settings', { signal })
 }

@@ -32,11 +32,16 @@ Déclarés une seule fois dans `ui/src/styles/tokens.css`, sur `:root`.
 
 | Token | Valeur | Usage |
 | --- | --- | --- |
-| `--bg-app` | `#0b0c0e` | fond de l'application, zone derrière tout |
-| `--bg-panel` | `#101114` | sidebar, panneaux latéraux, titlebar |
-| `--bg-raised` | `#16171b` | cartes, en-têtes collants, lignes sélectionnées |
-| `--bg-overlay` | `#1b1d22` | dialogs, menus, popovers |
-| `--bg-input` | `#141519` | champs de saisie, zones de code |
+| `--bg-app` | `#18191d` | fond racine de l'application |
+| `--bg-workspace` | `#1d1f24` | canevas des conversations et vues principales |
+| `--bg-panel` | `#22252c` | panneaux internes et listes secondaires |
+| `--bg-sidebar` | `#292c34` | navigation projets et conversations |
+| `--bg-sidebar-header` | `#2d3039` | marque et statut permanent de la sidebar |
+| `--bg-titlebar` | `#202228` | chrome de la fenêtre |
+| `--bg-toolbar` | `#252830` | en-têtes et zone du composer |
+| `--bg-raised` | `#2b2f38` | cartes, en-têtes collants, lignes sélectionnées |
+| `--bg-overlay` | `#323640` | dialogs, menus, popovers |
+| `--bg-input` | `#282c34` | champs de saisie, zones de code |
 | `--bg-hover` | `rgba(255,255,255,0.04)` | survol d'une ligne ou d'un bouton discret |
 | `--bg-active` | `rgba(255,255,255,0.07)` | ligne sélectionnée, onglet actif |
 | `--scrim` | `rgba(6,7,9,0.72)` | voile derrière un dialog |

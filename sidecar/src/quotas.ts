@@ -6,7 +6,10 @@ import type { AppEvent, Provider } from "./events";
 // notifie ses abonnés (WS `/ws?channel=quotas`).
 //
 // Payloads de référence (cf. tests/fixtures/README.md) :
-// - claude : `rate_limit_event.rate_limit_info`
+// - claude, source riche : `GET /api/oauth/usage` (cf. adapters/claude-usage.ts)
+//   {five_hour:{utilization, resets_at}, limits:[{kind, percent, resets_at,
+//    scope}], …} — avec de vrais pourcentages, dont une fenêtre hebdo par modèle.
+// - claude, source de repli : `rate_limit_event.rate_limit_info`
 //   {status, resetsAt: <epoch s>, rateLimitType: "five_hour", …} — pas de %.
 // - codex  : `account/rateLimits/updated` → params.rateLimits
 //   {primary:{usedPercent, windowDurationMins, resetsAt}, secondary:…|null, …}.
@@ -83,7 +86,11 @@ export class QuotaTracker {
     return this.update(event.provider, event.payload, false);
   }
 
-  /** Ingestion directe du snapshot complet `account/rateLimits/read`. */
+  /**
+   * Ingestion d'un relevé complet : `account/rateLimits/read` côté codex,
+   * `GET /api/oauth/usage` côté claude. Un snapshot fait autorité et peut donc
+   * retirer une fenêtre disparue, contrairement aux updates du flux.
+   */
   ingestPayload(provider: Provider, payload: unknown): QuotaState | null {
     return this.update(provider, payload, true);
   }
@@ -91,29 +98,25 @@ export class QuotaTracker {
   private update(
     provider: Provider,
     payload: unknown,
-    replaceCodexSnapshot: boolean,
+    isFullSnapshot: boolean,
   ): QuotaState | null {
-    const windows = provider === "claude"
-      ? claudeWindows(payload)
-      : codexWindows(payload);
-    if (
-      windows.length === 0
-      && (
-        provider === "claude"
-        || !replaceCodexSnapshot
-        || !isCodexSnapshot(payload)
-      )
-    ) return null;
+    const parsed = provider === "claude"
+      ? claudeQuota(payload)
+      : codexQuota(payload);
+    // Un payload clairsemé reste clairsemé même si l'appelant croit tenir un
+    // snapshot : la forme du payload a le dernier mot sur son exhaustivité.
+    const replace = isFullSnapshot && parsed.isComplete;
+    if (parsed.windows.length === 0 && !replace) return null;
 
-    // Claude et les notifications Codex sont clairsemés : merge. Seul le poll
-    // Codex explicite est un snapshot complet et peut retirer une fenêtre.
     const merged = new Map<string, QuotaWindow>();
-    if (provider === "claude" || !replaceCodexSnapshot) {
+    if (!replace) {
       for (const window of this.get(provider)?.windows ?? []) {
         merged.set(window.label, window);
       }
     }
-    for (const window of windows) merged.set(window.label, window);
+    for (const window of parsed.windows) {
+      merged.set(window.label, mergeWindow(merged.get(window.label), window));
+    }
 
     const state: QuotaState = {
       provider,
@@ -140,8 +143,15 @@ function optionalNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-/** Les deux providers datent en secondes epoch ; on tolère les millisecondes. */
+/**
+ * Les flux datent en secondes epoch (millisecondes tolérées) ; l'endpoint OAuth
+ * date en ISO 8601. On accepte les deux.
+ */
 function toIsoDate(value: unknown): string | null {
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
   const seconds = optionalNumber(value);
   if (seconds === null) return null;
   const ms = seconds > 1e12 ? seconds : seconds * 1000;
@@ -149,27 +159,117 @@ function toIsoDate(value: unknown): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function claudeWindows(payload: unknown): QuotaWindow[] {
-  // Tolérant : payload = rate_limit_info, ou l'event entier qui le contient.
-  const root = asRecord(payload);
-  const info = asRecord(root?.rate_limit_info) ?? root;
-  if (!info) return [];
-  const label = typeof info.rateLimitType === "string" ? info.rateLimitType : null;
-  if (!label) return [];
-  return [{
-    label,
-    // Claude ne publie pas de pourcentage aujourd'hui : on le lit s'il apparaît.
-    usedPercent: optionalNumber(info.usedPercent) ?? optionalNumber(info.used_percent),
-    resetsAt: toIsoDate(info.resetsAt ?? info.resets_at),
-    windowDurationMins: CLAUDE_WINDOW_MINS[label] ?? null,
-  }];
+/**
+ * Deux relevés décrivent-ils la même fenêtre ? Les sources ne datent pas avec
+ * la même précision — l'endpoint OAuth va à la milliseconde, le flux d'un tour
+ * arrondit à la seconde. Une comparaison stricte verrait une fenêtre neuve à
+ * chaque tour et perdrait le pourcentage à chaque fois.
+ */
+function sameWindow(left: QuotaWindow, right: QuotaWindow): boolean {
+  if (left.resetsAt === null || right.resetsAt === null) {
+    return left.resetsAt === right.resetsAt;
+  }
+  const from = Date.parse(left.resetsAt);
+  const to = Date.parse(right.resetsAt);
+  if (Number.isNaN(from) || Number.isNaN(to)) return left.resetsAt === right.resetsAt;
+  return Math.abs(from - to) < 1_000;
 }
 
-function codexWindows(payload: unknown): QuotaWindow[] {
+/**
+ * Un update clairsemé ne doit jamais dégrader ce qu'on sait déjà. Le
+ * `rate_limit_event` du flux ne porte pas de pourcentage : reçu après un relevé
+ * OAuth, il effacerait l'usage de la même fenêtre s'il l'écrasait tel quel. En
+ * revanche, un `resetsAt` qui a bougé annonce la fenêtre SUIVANTE : là, l'usage
+ * précédent ne la décrit plus et doit disparaître.
+ */
+function mergeWindow(
+  existing: QuotaWindow | undefined,
+  incoming: QuotaWindow,
+): QuotaWindow {
+  if (!existing || !sameWindow(existing, incoming)) return incoming;
+  return {
+    ...incoming,
+    usedPercent: incoming.usedPercent ?? existing.usedPercent,
+    windowDurationMins: incoming.windowDurationMins ?? existing.windowDurationMins,
+  };
+}
+
+/** Nom de fenêtre stable pour une limite scopée : `seven_day_fable`. */
+function scopedLabel(base: string, scope: unknown): string {
+  const model = asRecord(asRecord(scope)?.model);
+  const name = typeof model?.display_name === "string" ? model.display_name : null;
+  if (name === null) return base;
+  return `${base}_${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
+/** Les `limits[]` de `/api/oauth/usage` : la source riche, avec pourcentages. */
+function oauthUsageWindows(limits: unknown[]): QuotaWindow[] {
+  const windows: QuotaWindow[] = [];
+  for (const entry of limits) {
+    const limit = asRecord(entry);
+    if (!limit) continue;
+    const kind = typeof limit.kind === "string" ? limit.kind : null;
+    if (kind === null) continue;
+    const label = kind === "session"
+      ? "five_hour"
+      : kind === "weekly_all"
+        ? "seven_day"
+        : kind === "weekly_scoped"
+          ? scopedLabel("seven_day", limit.scope)
+          : kind;
+    windows.push({
+      label,
+      usedPercent: optionalNumber(limit.percent),
+      resetsAt: toIsoDate(limit.resets_at),
+      windowDurationMins: CLAUDE_WINDOW_MINS[label]
+        ?? (label.startsWith("seven_day") ? 10_080 : null),
+    });
+  }
+  return windows;
+}
+
+interface ParsedQuota {
+  windows: QuotaWindow[];
+  /**
+   * Le payload décrit-il TOUTES les fenêtres du provider ? Un relevé complet
+   * fait autorité et peut donc en retirer une ; un update clairsemé ne peut que
+   * compléter. Un relevé complet mais vide reste complet : il dit « plus aucune
+   * fenêtre », et c'est différent d'un payload illisible.
+   */
+  isComplete: boolean;
+}
+
+function claudeQuota(payload: unknown): ParsedQuota {
+  const root = asRecord(payload);
+  if (!root) return { windows: [], isComplete: false };
+
+  // Source riche : la réponse de `/api/oauth/usage`, exhaustive par construction.
+  if (Array.isArray(root.limits)) {
+    return { windows: oauthUsageWindows(root.limits), isComplete: true };
+  }
+
+  // Repli : `rate_limit_event`, qui ne décrit qu'une fenêtre à la fois.
+  // Tolérant — payload = rate_limit_info, ou l'event entier qui le contient.
+  const info = asRecord(root.rate_limit_info) ?? root;
+  const label = typeof info.rateLimitType === "string" ? info.rateLimitType : null;
+  if (!label) return { windows: [], isComplete: false };
+  return {
+    isComplete: false,
+    windows: [{
+      label,
+      // Le flux ne publie pas de pourcentage : on le lit s'il apparaît un jour.
+      usedPercent: optionalNumber(info.usedPercent) ?? optionalNumber(info.used_percent),
+      resetsAt: toIsoDate(info.resetsAt ?? info.resets_at),
+      windowDurationMins: CLAUDE_WINDOW_MINS[label] ?? null,
+    }],
+  };
+}
+
+function codexQuota(payload: unknown): ParsedQuota {
   const root = asRecord(payload);
   // Le résultat de `account/rateLimits/read` enveloppe l'objet dans `rateLimits`.
   const limits = asRecord(root?.rateLimits) ?? root;
-  if (!limits) return [];
+  if (!limits) return { windows: [], isComplete: false };
   const windows: QuotaWindow[] = [];
   for (const label of ["primary", "secondary"]) {
     const window = asRecord(limits[label]);
@@ -182,12 +282,11 @@ function codexWindows(payload: unknown): QuotaWindow[] {
     }
     windows.push({ label, usedPercent, resetsAt, windowDurationMins });
   }
-  return windows;
-}
-
-/** Un snapshot Codex avec primary/secondary à null reste un snapshot valide. */
-function isCodexSnapshot(payload: unknown): boolean {
-  const root = asRecord(payload);
-  const limits = asRecord(root?.rateLimits) ?? root;
-  return limits !== null && ("primary" in limits || "secondary" in limits);
+  // `read` et `updated` partagent la même forme : seul l'appelant sait laquelle
+  // il tient. On lui laisse donc le choix, en exigeant un payload reconnaissable
+  // pour qu'un `null` de réseau ne puisse pas passer pour un relevé vide.
+  return {
+    windows,
+    isComplete: "primary" in limits || "secondary" in limits,
+  };
 }

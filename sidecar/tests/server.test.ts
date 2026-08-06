@@ -7,12 +7,13 @@ import { openDb } from "../src/db";
 import type { AppEvent, StoredEvent } from "../src/events";
 import { MediaStore } from "../src/media";
 import { ConversationRunner } from "../src/runner";
-import { ConversationEventBus, createServer } from "../src/server";
+import { claimServer, ConversationEventBus, createServer, type ServerDeps } from "../src/server";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
 import { PresetStore } from "../src/stores/presets";
 import { SettingsStore } from "../src/stores/settings";
 import { QuotaTracker } from "../src/quotas";
+import { QuotaRefresher } from "../src/quota-refresh";
 import { SubtaskRunner } from "../src/subtasks";
 import { ReviewStore } from "../src/stores/reviews";
 import { ReviewRunner } from "../src/reviews";
@@ -38,11 +39,17 @@ interface TestServer {
   server: ReturnType<typeof createServer>;
   reviews: ReviewRunner;
   subtasks: SubtaskRunner;
+  deps: ServerDeps;
+  shutdownCalls: () => number;
 }
 
 let current: TestServer | undefined;
 let previousClaudeBin: string | undefined;
 let previousCodexBin: string | undefined;
+/** Relevés que les lectures scriptées du QuotaRefresher rendront (cf. beforeEach). */
+let claudeUsageProbe: unknown = null;
+let codexRateLimitsProbe: unknown = null;
+let claudeProbeCount = 0;
 
 function jsonHeaders(): HeadersInit {
   return { "content-type": "application/json" };
@@ -182,6 +189,9 @@ if [ -n "$FAKE_CLAUDE_ARGS_FILE" ]; then printf '%s\n' "$*" >> "$FAKE_CLAUDE_ARG
 cat "${fixture}"
 `);
   chmodSync(fakeClaude, 0o755);
+  claudeUsageProbe = null;
+  codexRateLimitsProbe = null;
+  claudeProbeCount = 0;
   previousClaudeBin = process.env.PUPITRE_CLAUDE_BIN;
   previousCodexBin = process.env.PUPITRE_CODEX_BIN;
   process.env.PUPITRE_CLAUDE_BIN = fakeClaude;
@@ -262,7 +272,8 @@ cat "${fixture}"
   const routines = new RoutineScheduler(
     routineStore, workflows, presets, projects, conversations, runner, notifications,
   );
-  const server = createServer({
+  let shutdownCount = 0;
+  const deps: ServerDeps = {
     port: 0,
     projects,
     conversations,
@@ -270,6 +281,15 @@ cat "${fixture}"
     runner,
     events,
     quotas,
+    // Les deux relevés sont scriptés : la vraie lecture claude taperait l'API
+    // Anthropic, et la lecture codex parlerait à l'app-server.
+    quotaRefresher: new QuotaRefresher(quotas, {
+      readCodexRateLimits: async () => codexRateLimitsProbe,
+      readClaudeUsage: async () => {
+        claudeProbeCount += 1;
+        return claudeUsageProbe;
+      },
+    }),
     subtasks,
     presets,
     settings,
@@ -287,7 +307,11 @@ cat "${fixture}"
     search: new SearchIndex(db),
     costs: new CostStore(db),
     memory: new MemoryStore(join(dir, "memory")),
-  });
+    shutdown: () => {
+      shutdownCount += 1;
+    },
+  };
+  const server = createServer(deps);
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
     db,
@@ -295,6 +319,8 @@ cat "${fixture}"
     server,
     reviews,
     subtasks,
+    deps,
+    shutdownCalls: () => shutdownCount,
   };
 });
 
@@ -309,6 +335,74 @@ afterEach(() => {
   delete process.env.FAKE_CLAUDE_ARGS_FILE;
   delete process.env.PUPITRE_CODEX_MODE;
 });
+
+test("POST /api/shutdown répond puis déclenche l'arrêt câblé", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const response = await fetch(`${current.baseUrl}/api/shutdown`, { method: "POST" });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  // L'arrêt est différé pour laisser partir la réponse HTTP.
+  expect(await waitFor(() => current!.shutdownCalls() === 1)).toBe(true);
+});
+
+test("claimServer évince un sidecar périmé qui tient le port", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  // Simule un VIEUX sidecar : il tient un port, répond au health check et
+  // s'arrête quand on le lui demande — comme le fera tout sidecar à jour.
+  let oldSidecar: ReturnType<typeof Bun.serve> | null = null;
+  oldSidecar = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(request) {
+      const { pathname } = new URL(request.url);
+      if (pathname === "/api/health") return Response.json({ ok: true });
+      if (pathname === "/api/shutdown" && request.method === "POST") {
+        setTimeout(() => oldSidecar?.stop(true), 10);
+        return Response.json({ ok: true });
+      }
+      return new Response(null, { status: 404 });
+    },
+  });
+  const contestedPort = oldSidecar.port!;
+
+  const server = await claimServer(
+    () => createServer({ ...current!.deps, port: contestedPort }),
+    contestedPort,
+  );
+  try {
+    expect(server.port).toBe(contestedPort);
+    const health = await fetch(`http://127.0.0.1:${contestedPort}/api/health`);
+    expect(await health.json()).toEqual({ ok: true });
+  } finally {
+    server.stop(true);
+  }
+});
+
+test("claimServer échoue lisiblement si le port est tenu par un inconnu", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  // Un process quelconque (pas un sidecar Pupitre : pas de /api/health).
+  const stranger = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: () => new Response(null, { status: 404 }),
+  });
+  try {
+    await expect(
+      claimServer(() => createServer({ ...current!.deps, port: stranger.port! }), stranger.port!),
+    ).rejects.toThrow(/occupé/);
+  } finally {
+    stranger.stop(true);
+  }
+});
+
+async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await Bun.sleep(20);
+  }
+  return predicate();
+}
 
 test("health, création et liste des projets, avec 400 pour un path inexistant", async () => {
   if (!current) throw new Error("serveur de test non démarré");
@@ -457,7 +551,51 @@ test("expose le graphe Git et un diff entre deux références", async () => {
   expect(invalid.status).toBe(400);
 });
 
-test("CRUD des presets, intégrés immuables et défaut par projet", async () => {
+test("POST /api/quotas/refresh relève les deux providers et rend le snapshot", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const vide = await fetch(`${current.baseUrl}/api/quotas`);
+  expect(await vide.json()).toEqual({ claude: null, codex: null });
+
+  const resetsAt = Math.floor(Date.now() / 1000) + 3_600;
+  const resetsAtIso = new Date(resetsAt * 1000).toISOString();
+  claudeUsageProbe = {
+    limits: [
+      { kind: "session", percent: 13, resets_at: resetsAtIso, scope: null },
+      {
+        kind: "weekly_scoped",
+        percent: 6,
+        resets_at: resetsAtIso,
+        scope: { model: { display_name: "Fable" } },
+      },
+    ],
+  };
+  codexRateLimitsProbe = {
+    primary: { usedPercent: 42, windowDurationMins: 300, resetsAt },
+    secondary: null,
+  };
+
+  const refreshed = await fetch(`${current.baseUrl}/api/quotas/refresh`, { method: "POST" });
+  expect(refreshed.status).toBe(200);
+  const snapshot = await refreshed.json() as {
+    claude: { windows: { label: string; usedPercent: number | null }[] } | null;
+    codex: { windows: { usedPercent: number | null }[] } | null;
+  };
+  // Le relevé OAuth porte de vrais pourcentages, dont une fenêtre par modèle.
+  expect(snapshot.claude?.windows).toEqual([
+    expect.objectContaining({ label: "five_hour", usedPercent: 13 }),
+    expect.objectContaining({ label: "seven_day_fable", usedPercent: 6 }),
+  ]);
+  expect(snapshot.codex?.windows[0]).toEqual(
+    expect.objectContaining({ usedPercent: 42 }),
+  );
+  expect(claudeProbeCount).toBe(1);
+
+  // La lecture est gratuite : un rafraîchissement explicite relève sans condition.
+  await fetch(`${current.baseUrl}/api/quotas/refresh`, { method: "POST" });
+  expect(claudeProbeCount).toBe(2);
+});
+
+test("CRUD des presets, intégrés éditables et restaurables, défaut par projet", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const initial = await fetch(`${current.baseUrl}/api/presets`);
   expect(initial.status).toBe(200);
@@ -501,10 +639,35 @@ test("CRUD des presets, intégrés immuables et défaut par projet", async () =>
   expect(selected.status).toBe(200);
   expect(await selected.json()).toEqual(expect.objectContaining({ default_preset_id: preset.id }));
 
-  const immutable = await fetch(`${current.baseUrl}/api/presets/${builtIns[0]!.id}`, {
+  const editedBuiltIn = await putJson(`/api/presets/${builtIns[0]!.id}`, {
+    name: "Éco maison",
+    provider: "claude",
+    model: "haiku",
+    effort: "low",
+    speed: null,
+    orchestrator: false,
+  });
+  expect(editedBuiltIn.status).toBe(200);
+  expect(await editedBuiltIn.json()).toEqual(expect.objectContaining({
+    name: "Éco maison",
+    model: "haiku",
+    built_in: true,
+  }));
+
+  const restored = await fetch(
+    `${current.baseUrl}/api/presets/${builtIns[0]!.id}/restore`,
+    { method: "POST" },
+  );
+  expect(restored.status).toBe(200);
+  expect(await restored.json()).toEqual(expect.objectContaining({
+    name: "Éco",
+    model: "gpt-5.6-luna",
+  }));
+
+  const undeletable = await fetch(`${current.baseUrl}/api/presets/${builtIns[0]!.id}`, {
     method: "DELETE",
   });
-  expect(immutable.status).toBe(409);
+  expect(undeletable.status).toBe(409);
 
   const deleted = await fetch(`${current.baseUrl}/api/presets/${preset.id}`, {
     method: "DELETE",

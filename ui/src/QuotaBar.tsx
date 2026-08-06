@@ -1,8 +1,14 @@
+import { useState } from 'react'
+import { refreshQuotas } from './api'
 import {
   describeWindow,
   formatCountdown,
+  formatResetClock,
   msUntilReset,
   quotaFreshness,
+  quotaStateSignals,
+  quotaSummary,
+  quotaWindowSignals,
   windowTitle,
 } from './quotaSignals'
 import type { Provider, QuotaSnapshot, QuotaState, QuotaWindow } from './types'
@@ -65,45 +71,186 @@ function ProviderQuota({ provider, state, now }: {
   state: QuotaState | null
   now: number
 }) {
+  const summary = quotaSummary(provider, state, now)
+  const hasWindows = state !== null && state.windows.length > 0
+
   return (
     <div className="quota-provider">
-      <span className="quota-provider-name">{PROVIDER_NAMES[provider]}</span>
-      {state === null || state.windows.length === 0 ? (
-        <span className="quota-unknown">inconnu</span>
-      ) : (
+      <span className="quota-provider-name">
+        {PROVIDER_NAMES[provider]}
+        {/* Ce que le provider ne publie pas se dit, plutôt que de se deviner. */}
+        {summary.note !== null ? (
+          <span className="quota-caveat" title={summary.note} aria-label={summary.note}>
+            ?
+          </span>
+        ) : null}
+      </span>
+      {hasWindows ? (
         state.windows.map((window) => (
           <WindowGauge key={window.label} window={window} now={now} />
         ))
+      ) : (
+        <span className="quota-unknown">{summary.headline}</span>
       )}
     </div>
   )
 }
 
-/**
- * Barre de statut permanente en bas de la sidebar. Tant qu'aucun tour n'a été
- * joué, les deux providers affichent « inconnu » (les quotas ne sont connus
- * qu'après un premier événement rate-limit).
- */
-export function QuotaBar({ snapshot, isUnknown }: {
-  snapshot: QuotaSnapshot
-  isUnknown: boolean
+function CompactProviderQuota({ provider, state, now }: {
+  provider: Provider
+  state: QuotaState | null
+  now: number
 }) {
+  const summary = quotaSummary(provider, state, now)
+  const usedPercent = summary.usedPercent === null
+    ? null
+    : Math.min(100, Math.max(0, summary.usedPercent))
+  const detail = [summary.headline, summary.note].filter(Boolean).join(' · ')
+  const signals = quotaStateSignals(provider, state, now)
+  const tooltipId = `quota-status-${provider}`
+  const gaugeClassName = [
+    'quota-status-gauge',
+    usedPercent === null ? 'is-unknown' : '',
+    signals.weeklyEnding ? 'is-weekly-ending' : '',
+    signals.lastHour ? 'is-last-hour' : '',
+  ].filter(Boolean).join(' ')
+
+  function resetLabel(window: QuotaWindow): string {
+    const remaining = msUntilReset(window, now)
+    const clock = formatResetClock(window.resetsAt)
+    if (remaining === null) return 'reset non publié'
+    const countdown = remaining <= 0 ? 'imminent' : `dans ${formatCountdown(remaining)}`
+    return clock === null ? countdown : `${countdown} · ${clock}`
+  }
+
+  return (
+    <div
+      className="quota-status-row"
+      tabIndex={0}
+      aria-describedby={tooltipId}
+      aria-label={`${PROVIDER_NAMES[provider]} — ${detail}`}
+    >
+      <span className="quota-status-provider">{PROVIDER_NAMES[provider]}</span>
+      {usedPercent !== null ? (
+        <span
+          className={`${gaugeClassName}${usedPercent >= CRITICAL_PERCENT ? ' is-critical' : ''}`}
+          role="meter"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(usedPercent)}
+          aria-label={`${PROVIDER_NAMES[provider]} — ${Math.round(usedPercent)} % utilisé`}
+        >
+          <span style={{ width: `${usedPercent}%` }} />
+        </span>
+      ) : (
+        <span className={gaugeClassName} aria-hidden="true" />
+      )}
+      <span className="quota-status-value">{summary.headline}</span>
+
+      <div className="quota-status-tooltip" id={tooltipId} role="tooltip">
+        <div className="quota-status-tooltip-header">
+          <strong>{PROVIDER_NAMES[provider]}</strong>
+          <span>Usage et réinitialisation</span>
+        </div>
+        {state === null || state.windows.length === 0 ? (
+          <p>{summary.headline}</p>
+        ) : (
+          <div className="quota-status-tooltip-list">
+            {state.windows.map((window) => {
+              const windowSignals = quotaWindowSignals(provider, window, now)
+              const windowClassName = [
+                'quota-status-tooltip-row',
+                windowSignals.weeklyEnding ? 'is-weekly-ending' : '',
+                windowSignals.lastHour ? 'is-last-hour' : '',
+              ].filter(Boolean).join(' ')
+              return (
+                <div className={windowClassName} key={window.label}>
+                  <span>{windowTitle(window)}</span>
+                  <strong>
+                    {window.usedPercent === null
+                      ? 'usage non publié'
+                      : `${Math.round(window.usedPercent)} % utilisé`}
+                  </strong>
+                  <span>{resetLabel(window)}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {signals.lastHour || signals.weeklyEnding ? (
+          <div className="quota-status-tooltip-alerts">
+            {signals.lastHour ? <span className="is-last-hour">5 h · dernière heure</span> : null}
+            {signals.weeklyEnding ? <span className="is-weekly-ending">Hebdo · moins de 2 jours</span> : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/** Résumé permanent et compact affiché sous la liste des conversations. */
+export function QuotaStatus({ snapshot }: { snapshot: QuotaSnapshot }) {
   const now = useNow()
+
+  return (
+    <section className="quota-status" aria-label="Usage des quotas">
+      <span className="quota-status-title">Usage</span>
+      <CompactProviderQuota provider="claude" state={snapshot.claude} now={now} />
+      <CompactProviderQuota provider="codex" state={snapshot.codex} now={now} />
+    </section>
+  )
+}
+
+/**
+ * Détail des quotas, affiché à la demande dans le menu des outils.
+ *
+ * Les deux providers répondent à une lecture d'état gratuite, relevée au
+ * démarrage puis périodiquement. Quand une donnée manque quand même (session
+ * expirée, app-server éteint), la barre nomme la cause au lieu d'afficher
+ * « inconnu » — qui se lirait comme une panne de Pupitre.
+ */
+export function QuotaBar({ snapshot }: { snapshot: QuotaSnapshot }) {
+  const now = useNow()
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const freshness = quotaFreshness(snapshot, now)
+
+  async function handleRefresh() {
+    if (isRefreshing) return
+    setIsRefreshing(true)
+    setError(null)
+    try {
+      // Le WS `channel=quotas` diffuse le nouvel état : rien à replacer ici.
+      await refreshQuotas()
+    } catch (refreshError: unknown) {
+      setError(
+        refreshError instanceof Error ? refreshError.message : 'Relève impossible.',
+      )
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   return (
     <section className="quota-bar" aria-label="Quotas">
-      {isUnknown ? (
-        <p className="quota-empty">
-          Quotas inconnus — lancez un tour pour les découvrir.
-        </p>
-      ) : (
-        <>
-          <ProviderQuota provider="claude" state={snapshot.claude} now={now} />
-          <ProviderQuota provider="codex" state={snapshot.codex} now={now} />
-        </>
-      )}
-      {freshness !== null ? <span className="quota-freshness">{freshness}</span> : null}
+      <ProviderQuota provider="claude" state={snapshot.claude} now={now} />
+      <ProviderQuota provider="codex" state={snapshot.codex} now={now} />
+
+      <div className="quota-bar-footer">
+        {freshness !== null ? <span className="quota-freshness">{freshness}</span> : null}
+        <button
+          type="button"
+          className="quota-refresh"
+          onClick={() => void handleRefresh()}
+          disabled={isRefreshing}
+          title="Relever les quotas des deux providers maintenant. Deux lectures gratuites : aucun quota consommé."
+        >
+          {isRefreshing ? 'Relève…' : 'Actualiser'}
+        </button>
+      </div>
+      {error !== null ? (
+        <p className="quota-error" role="alert">{error}</p>
+      ) : null}
       <HelpLink slug="quotas" label="Comprendre les quotas" />
     </section>
   )

@@ -8,7 +8,7 @@
   position: relative;
   flex: none;
   padding: var(--space-3) var(--space-6) var(--space-4);
-  background: var(--bg-app);
+  background: var(--bg-toolbar);
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -28,29 +28,43 @@
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-/* --- Sélecteurs de modèle (nouvelle conversation) ------------------------- */
+/* --- Carte de configuration (nouvelle conversation) ----------------------- */
 
-.composer-models {
-  display: flex;
-  flex-wrap: wrap;
+.config-panel {
+  display: grid;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.composer-models label {
+.config-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.config-header h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.config-preset {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  font-weight: 500;
 }
 
-.composer-models select {
-  min-width: 118px;
+.config-preset select {
+  min-width: 150px;
   min-height: 28px;
-  padding: 3px var(--space-6) 3px var(--space-2);
+  padding: 3px var(--space-5) 3px var(--space-2);
   color: var(--text);
   font-size: var(--text-sm);
   background: var(--bg-raised);
@@ -58,120 +72,236 @@
   border-radius: var(--r-sm);
 }
 
-.orchestrator-toggle {
+.config-badge {
+  padding: 1px 6px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  background: var(--neutral-soft);
+  border-radius: var(--r-full);
+}
+
+/* « modifié » : les réglages ne sont plus ceux du preset sélectionné. */
+.config-badge.is-dirty {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+/* --- Menu d'actions du preset ---------------------------------------------- */
+
+.config-menu-anchor {
+  position: relative;
+}
+
+.config-menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  line-height: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.config-menu-button:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.config-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 250px;
+  padding: var(--space-1);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-popover);
+}
+
+.config-menu button {
+  padding: 5px var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-align: left;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
   cursor: pointer;
 }
 
-.orchestrator-toggle input {
-  accent-color: var(--accent);
+.config-menu button:hover:not(:disabled) {
+  background: var(--bg-hover);
 }
 
-/* --- Presets --------------------------------------------------------------- */
+.config-menu button:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
 
-.preset-controls {
+.config-menu button.is-danger {
+  color: var(--danger);
+}
+
+.config-menu button.is-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+/* --- Formulaire inline (renommer / enregistrer sous) ----------------------- */
+
+.config-inline-form {
   display: flex;
-  flex: 1 0 100%;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-2);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
 }
 
-.preset-controls label select {
-  min-width: 170px;
+.config-inline-form label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 
-.preset-save {
-  display: flex;
-  gap: var(--space-1);
-  margin-left: auto;
-}
-
-.preset-save input {
-  width: 150px;
+.config-inline-form input {
+  flex: 1;
+  min-width: 140px;
   min-height: 28px;
   padding: 3px var(--space-2);
   color: var(--text);
   font-size: var(--text-sm);
-  background: var(--bg-raised);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   outline: none;
 }
 
-.preset-save input:focus {
+.config-inline-form input:focus {
   border-color: var(--accent-border);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-.preset-save input::placeholder {
-  color: var(--text-faint);
-}
-
-.preset-secondary,
-.preset-danger {
+.config-primary,
+.config-ghost {
   min-height: 28px;
-  padding: 3px var(--space-2);
+  padding: 3px var(--space-3);
   font-size: var(--text-sm);
   font-weight: 500;
-  background: transparent;
-  border: 1px solid var(--border);
   border-radius: var(--r-sm);
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
-    background-color var(--dur-fast) var(--ease);
 }
 
-.preset-secondary {
-  color: var(--text-muted);
+.config-primary {
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid var(--accent);
 }
 
-.preset-secondary:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--bg-hover);
-  border-color: var(--border-strong);
+.config-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
-.preset-danger {
-  color: var(--danger);
-}
-
-.preset-danger:hover:not(:disabled) {
-  background: var(--danger-soft);
-}
-
-.preset-secondary:disabled {
+.config-primary:disabled {
   color: var(--text-faint);
+  background: var(--neutral-soft);
+  border-color: var(--border);
   cursor: default;
 }
 
-/* --- Choix du modèle -------------------------------------------------------- */
+.config-ghost {
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+}
 
-.model-picker {
+.config-ghost:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+/* --- Une ligne de réglage --------------------------------------------------- */
+
+.config-field {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
-.model-picker-title {
+.config-label {
+  flex: none;
+  width: 84px;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* --- Segmented control (provider, effort, vitesse) -------------------------- */
+
+.segmented {
+  display: flex;
+  padding: 2px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.segmented button {
+  min-height: 24px;
+  padding: 2px var(--space-3);
   color: var(--text-muted);
   font-size: var(--text-sm);
   font-weight: 500;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
 
-.model-option {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  min-height: 28px;
-  padding: 3px var(--space-2);
+.segmented button:hover:not(.is-selected) {
   color: var(--text);
-  font-size: var(--text-sm);
+  background: var(--bg-hover);
+}
+
+.segmented button.is-selected {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+
+/* --- Cartes de modèle -------------------------------------------------------- */
+
+.model-grid {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.model-card {
+  display: grid;
+  gap: 1px;
+  min-width: 118px;
+  padding: var(--space-2) var(--space-3);
   text-align: left;
-  background: transparent;
+  background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   cursor: pointer;
@@ -179,30 +309,34 @@
     background-color var(--dur-fast) var(--ease);
 }
 
-.model-option:hover {
-  background: var(--bg-hover);
+.model-card:hover:not(.is-selected) {
+  background: var(--bg-overlay);
   border-color: var(--border-strong);
 }
 
-.model-option.is-selected {
-  color: var(--text-strong);
+.model-card.is-selected {
   background: var(--accent-soft);
   border-color: var(--accent-border);
 }
 
-.quota-chip {
-  color: var(--text-muted);
+.model-card-name {
+  color: var(--text);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  font-weight: 500;
 }
 
-.quota-chip.is-unknown {
+.model-card.is-selected .model-card-name {
+  color: var(--text-strong);
+}
+
+.model-card-hint {
   color: var(--text-faint);
+  font-size: var(--text-xs);
 }
 
-/* Pulse discret : appel à consommer un quota qui va expirer. */
-.model-option.is-pulsing {
+/* Pulse discret : appel à consommer un quota cher qui va expirer. */
+.model-card.is-pulsing {
   animation: quota-pulse 2.4s var(--ease) infinite;
 }
 
@@ -214,6 +348,185 @@
 
   50% {
     border-color: var(--accent-border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-card.is-pulsing {
+    animation: none;
+    border-color: var(--accent-border);
+  }
+}
+
+/* --- Jauge de quota du provider ---------------------------------------------- */
+
+/* Le quota est publié par provider, pas par modèle : la jauge vit à côté du
+   choix du provider et n'est jamais répétée sur les cartes de modèles. */
+.quota-meter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.quota-meter-gauge {
+  width: 64px;
+  height: 4px;
+  overflow: hidden;
+  background: var(--neutral-soft);
+  border-radius: var(--r-full);
+}
+
+.quota-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--r-full);
+  transition: width var(--dur) var(--ease);
+}
+
+.quota-meter.is-critical .quota-meter-fill {
+  background: var(--danger);
+}
+
+.quota-meter.is-critical .quota-meter-text {
+  color: var(--danger);
+}
+
+/* Sans pourcentage publié, le texte porte seul l'information. */
+.quota-meter.is-flat .quota-meter-text {
+  color: var(--text-faint);
+}
+
+.quota-meter-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  cursor: help;
+}
+
+/* --- Interrupteur sub-agents --------------------------------------------------- */
+
+.config-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.config-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.config-switch-track {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 17px;
+  background: var(--neutral-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  transition: background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+.config-switch-track::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  background: var(--text-faint);
+  border-radius: var(--r-full);
+  transition: transform var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+  content: "";
+}
+
+.config-switch input:checked + .config-switch-track {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.config-switch input:checked + .config-switch-track::after {
+  background: var(--accent);
+  transform: translateX(13px);
+}
+
+.config-switch input:focus-visible + .config-switch-track {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* --- Pool de délégation (affiché quand les sub-agents sont autorisés) ---------- */
+
+.delegation-pool {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  /* Décalé sous la ligne SUB-AGENTS : c'est sa conséquence, pas un réglage. */
+  margin-left: calc(84px + var(--space-2));
+  background: var(--bg-raised);
+  border-left: 2px solid var(--accent-border);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.delegation-lead,
+.delegation-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.delegation-note strong {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.delegation-providers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}
+
+.delegation-provider {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.delegation-provider-name {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.delegation-models {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 900px) {
+  .delegation-pool {
+    margin-left: 0;
   }
 }
 
@@ -413,13 +726,6 @@
   background: transparent;
   border: 0;
   cursor: pointer;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .model-option.is-pulsing {
-    animation: none;
-    border-color: var(--accent-border);
-  }
 }
 
 @media (max-width: 900px) {

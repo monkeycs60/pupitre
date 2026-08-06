@@ -147,9 +147,22 @@ Le port du sidecar est fourni au `ConversationRunner` par une fonction **obligat
 
 ## Presets et réglages (M2-E1)
 
-Les configurations de nouveau tour sont persistées dans `presets` (`provider`, modèle, effort, vitesse et orchestration). Trois presets intégrés immuables sont créés idempotemment — **Éco**, **Qualité max**, **Vitesse** — et les presets personnels disposent d'un CRUD HTTP (`/api/presets`). Chaque projet peut mémoriser son choix avec `PUT /api/projects/:id/default-preset`; supprimer un preset personnel efface aussi les défauts projet qui le référencent.
+Les configurations de nouveau tour sont persistées dans `presets` (`provider`, modèle, effort, vitesse et orchestration). Trois presets intégrés sont créés idempotemment — **Éco**, **Qualité max**, **Vitesse**. **Tous les presets sont éditables** via le CRUD HTTP (`/api/presets`) ; `built_in` ne signifie plus « immuable » mais « restaurable et non supprimable » : `POST /api/presets/:id/restore` remet un intégré à ses valeurs d'usine, et le seed au démarrage est un `INSERT OR IGNORE` pur pour ne jamais réécrire une édition. Chaque projet peut mémoriser son choix avec `PUT /api/projects/:id/default-preset`; supprimer un preset personnel efface aussi les défauts projet qui le référencent.
 
 Les réglages transverses vivent dans la table key/value `settings` (`GET/PUT /api/settings`). Au premier démarrage E1, l'UI importe les anciens seuils de notification de quota depuis `localStorage`, les enregistre côté sidecar puis retire la clé historique. Les clés de déduplication des notifications restent locales à la webview.
+
+## Relève des quotas
+
+Les deux providers n'exposent pas leur état de la même façon, et le `QuotaRefresher` (`sidecar/src/quota-refresh.ts`) cache l'asymétrie derrière un seul appel :
+
+| | Lecture d'état | Pourcentage d'usage | Coût d'une relève |
+| --- | --- | --- | --- |
+| codex | `account/rateLimits/read` sur l'app-server | oui (`usedPercent`) | gratuit |
+| claude | aucune — le `rate_limit_event` n'existe que dans le flux d'un tour, et n'est écrit ni dans les transcripts ni dans un cache | **non**, seulement `resetsAt` | un tour minimal |
+
+La sonde claude (`sidecar/src/adapters/claude-quota.ts`) est donc réduite au strict nécessaire : modèle haiku, prompt système d'une ligne, aucun MCP, aucun hook, répertoire temporaire vide pour ne découvrir aucun `CLAUDE.md`. Au démarrage, elle ne tourne que si le relevé stocké ne couvre plus la fenêtre en cours (`claudeQuotaIsStale`) ; `POST /api/quotas/refresh` la force. Deux relèves simultanées ne paient qu'un seul tour.
+
+L'UI ne comble jamais un trou par une supposition : sans pourcentage publié, elle affiche la date de reset et nomme la donnée manquante.
 
 ## Changement de modèle et passation (M2-E2)
 
@@ -194,6 +207,14 @@ bridge reste activé par thread. Réglages disponibles :
 L'ancien `PUPITRE_CODEX_USER_MCPS=1` reste compatible et équivaut à `full` si
 la nouvelle politique n'est pas renseignée. Les mesures et la commande de probe
 sont détaillées dans `docs/spikes/codex-mcp-latency.md`.
+
+Au démarrage, le sidecar réclame son port : si un sidecar d'une session
+précédente le tient encore, il lui demande de s'arrêter (`POST /api/shutdown`)
+puis prend sa place — l'UI ne peut donc plus tourner sur du code périmé. Un
+sidecar arrêté volontairement (exit 0) n'est pas relancé par l'app. À l'arrêt
+(SIGTERM, éviction, fermeture de la fenêtre), le sidecar tue le groupe de
+process complet de l'app-server Codex : ses serveurs MCP ne survivent plus en
+orphelins.
 
 ## Tests
 

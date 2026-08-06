@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react'
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react'
 import { Chat } from './Chat'
 import { Sidebar } from './Sidebar'
 import { Titlebar } from './Titlebar'
@@ -25,6 +30,23 @@ import { ResumeCommandButton } from './ResumeCommandButton'
 import { HelpView } from './HelpView'
 import type { WorkspaceView } from './types'
 
+const DEFAULT_SIDEBAR_WIDTH = 296
+const MIN_SIDEBAR_WIDTH = 240
+const MAX_SIDEBAR_WIDTH = 420
+const SIDEBAR_WIDTH_STORAGE_KEY = 'pupitre.sidebar-width'
+
+function clampSidebarWidth(width: number): number {
+  return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width))
+}
+
+function storedSidebarWidth(): number {
+  const stored = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)
+  const parsed = stored === null ? Number.NaN : Number.parseInt(stored, 10)
+  return Number.isFinite(parsed)
+    ? clampSidebarWidth(parsed)
+    : DEFAULT_SIDEBAR_WIDTH
+}
+
 function App() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [selectedConversation, setSelectedConversation] =
@@ -42,6 +64,7 @@ function App() {
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
   const [reviewListVersion, setReviewListVersion] = useState(0)
   const [gardienPollVersion, setGardienPollVersion] = useState(0)
+  const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
   // conversation ouverte — la sidebar n'en affiche l'indicateur que pour elle.
   const [runningSubtasks, setRunningSubtasks] = useState(0)
@@ -54,6 +77,49 @@ function App() {
   const effectiveReviewListVersion = reviewListVersion
     + guardianAckEventCount
     + gardienPollVersion
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
+  }, [sidebarWidth])
+
+  function handleSidebarResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return
+    event.preventDefault()
+
+    const startX = event.clientX
+    const startWidth = sidebarWidth
+    document.body.classList.add('is-resizing-sidebar')
+
+    function handlePointerMove(moveEvent: PointerEvent) {
+      setSidebarWidth(clampSidebarWidth(startWidth + moveEvent.clientX - startX))
+    }
+
+    function handlePointerUp() {
+      document.body.classList.remove('is-resizing-sidebar')
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+  }
+
+  function handleSidebarResizeKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? 32 : 12
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      setSidebarWidth((current) => clampSidebarWidth(current - step))
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      setSidebarWidth((current) => clampSidebarWidth(current + step))
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      setSidebarWidth(MIN_SIDEBAR_WIDTH)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      setSidebarWidth(MAX_SIDEBAR_WIDTH)
+    }
+  }
 
   useEffect(() => {
     function syncHelpHash() {
@@ -309,7 +375,10 @@ function App() {
       : selectedConversation?.title ?? null
 
   return (
-    <main className="app-shell">
+    <main
+      className="app-shell"
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
+    >
       <Titlebar crumbs={[selectedProject?.name, titlebarView]} />
       <Sidebar
         selectedProject={selectedProject}
@@ -333,6 +402,22 @@ function App() {
         onHelpSelect={() => handleHelpSelect()}
         reviewListVersion={effectiveReviewListVersion}
       />
+      <div
+        className="sidebar-resize-handle"
+        role="separator"
+        aria-label="Redimensionner la barre latérale"
+        aria-orientation="vertical"
+        aria-valuemin={MIN_SIDEBAR_WIDTH}
+        aria-valuemax={MAX_SIDEBAR_WIDTH}
+        aria-valuenow={sidebarWidth}
+        tabIndex={0}
+        title="Glisser pour redimensionner · double-cliquer pour réinitialiser"
+        onPointerDown={handleSidebarResizeStart}
+        onKeyDown={handleSidebarResizeKeyDown}
+        onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
+      >
+        <span aria-hidden="true" />
+      </div>
 
       <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'costs' ? 'Coûts' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : workspaceView === 'memory' ? 'Mémoire' : workspaceView === 'help' ? 'Aide' : 'Conversation'}>
         {workspaceView === 'library' ? (

@@ -1,5 +1,5 @@
 import { test, expect, afterEach } from "bun:test";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { CodexAppServerClient } from "../src/adapters/codex-app-server";
@@ -65,6 +65,7 @@ afterEach(() => {
   delete process.env.FAKE_APP_SERVER_SLOW_MS;
   delete process.env.FAKE_APP_SERVER_SLOW_TURN_MS;
   delete process.env.FAKE_APP_SERVER_INIT_ERROR;
+  delete process.env.FAKE_APP_SERVER_CHILD_PID;
   delete process.env.PUPITRE_APPSERVER_TIMEOUT_MS;
   delete process.env.PUPITRE_APPSERVER_IDLE_MS;
   delete process.env.PUPITRE_CODEX_USER_MCPS;
@@ -498,6 +499,37 @@ test("deux tours sur le même thread : le second termine en erreur explicite", a
 
   controller.abort();
   await firstTurn;
+});
+
+test("shutdown tue aussi les serveurs MCP enfants de l'app-server", async () => {
+  const files = useFake();
+  const childPidFile = join(dirname(files.pid), "child-pid");
+  process.env.FAKE_APP_SERVER_CHILD_PID = childPidFile;
+  const client = newClient();
+
+  await collect(client);
+  const childPid = Number(readFileSync(childPidFile, "utf8"));
+  expect(() => process.kill(childPid, 0)).not.toThrow(); // l'enfant MCP tourne
+
+  client.shutdown();
+  await Bun.sleep(200);
+  // Sans kill du groupe de process, l'enfant survivrait orphelin (le bloat
+  // observé : des dizaines de serveurs MCP npx accumulés au fil des sessions).
+  expect(() => process.kill(childPid, 0)).toThrow();
+});
+
+test("le watchdog d'inactivité tue aussi les serveurs MCP enfants", async () => {
+  const files = useFake();
+  const childPidFile = join(dirname(files.pid), "child-pid");
+  process.env.FAKE_APP_SERVER_CHILD_PID = childPidFile;
+  process.env.PUPITRE_APPSERVER_IDLE_MS = "50";
+  const client = newClient();
+
+  await collect(client);
+  const childPid = Number(readFileSync(childPidFile, "utf8"));
+
+  await Bun.sleep(200);
+  expect(() => process.kill(childPid, 0)).toThrow();
 });
 
 test("handshake initialize en erreur : status error et pas de process orphelin", async () => {

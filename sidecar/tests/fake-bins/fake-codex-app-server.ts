@@ -10,6 +10,9 @@
 // - FAKE_APP_SERVER_SLOW_MS=n  : délai avant la réponse à thread/start (test d'annulation au setup)
 // - FAKE_APP_SERVER_SLOW_TURN_MS=n : délai avant la réponse à turn/start
 // - FAKE_APP_SERVER_INIT_ERROR=1 : `initialize` répond une erreur JSON-RPC, process vivant
+// - FAKE_APP_SERVER_CHILD_PID   : fichier où écrire le pid d'un enfant longue durée
+//   (simule un serveur MCP npx : il doit mourir avec l'app-server)
+import { spawn } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { dirname, join } from "node:path";
@@ -25,6 +28,12 @@ if (process.env.FAKE_APP_SERVER_PID) {
 }
 if (process.env.FAKE_APP_SERVER_ARGS) {
   writeFileSync(process.env.FAKE_APP_SERVER_ARGS, JSON.stringify(process.argv.slice(2)));
+}
+if (process.env.FAKE_APP_SERVER_CHILD_PID) {
+  // Comme un vrai serveur MCP stdio : il hérite du groupe de process et ne se
+  // termine pas de lui-même.
+  const child = spawn("sleep", ["600"], { stdio: "ignore" });
+  writeFileSync(process.env.FAKE_APP_SERVER_CHILD_PID, String(child.pid));
 }
 
 const silent = new Set((process.env.FAKE_APP_SERVER_SILENT ?? "").split(",").filter(Boolean));

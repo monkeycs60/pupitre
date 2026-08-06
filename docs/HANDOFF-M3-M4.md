@@ -59,6 +59,18 @@ Tu reprends le développement de Pupitre. À lire avant de commencer :
   thread orchestrateur (11,5 s après correction). `PUPITRE_CODEX_MCP_POLICY=full|off`
   permet respectivement la configuration intacte ou l'isolation complète. Détails
   dans `docs/spikes/codex-mcp-latency.md`.
+- **Sidecar périmé et fuite de process corrigés après ce diagnostic** : le tour
+  de validation de 18:34 (123,9 s malgré le correctif) tournait en réalité sur
+  un ancien sidecar encore accroché au port 4820, pendant que le nouveau
+  crashait en boucle sur `EADDRINUSE` — le superviseur Tauri le relançait chaque
+  seconde. Trois correctifs : au boot, `claimServer` évince l'ancien sidecar via
+  le nouveau `POST /api/shutdown` puis reprend le port ; un sidecar sorti en
+  exit 0 (éviction, arrêt volontaire) n'est plus relancé ; et l'app-server Codex
+  est spawné dans son propre groupe de process, tué en bloc (SIGTERM puis
+  SIGKILL) à l'arrêt, au watchdog d'inactivité et à la mort du process — ses
+  serveurs MCP npx ne s'accumulent plus en orphelins. Tauri envoie désormais
+  SIGTERM avant kill pour laisser ce nettoyage s'exécuter. Mesure après
+  correctif : premier retour orchestrateur en 9,4 s, aucun process MCP résiduel.
 - **WebSocket Tauri dev** : la WebView servie en HTTP par Vite détecte désormais
   le runtime Tauri et joint directement le sidecar pour ses WebSockets. Le proxy
   Vite n'écrit plus dans des sockets fermées au montage (`write EPIPE`). Le
