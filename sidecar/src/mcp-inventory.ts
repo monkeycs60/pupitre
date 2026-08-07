@@ -30,6 +30,64 @@ function names(value: unknown): string[] {
   return value && typeof value === "object" ? Object.keys(value as object) : [];
 }
 
+/** Valeur TOML scalaire ou tableau de chaînes, suffisant pour nos champs. */
+function tomlValue(raw: string): string | string[] | null {
+  const value = raw.trim();
+  if (value.startsWith("[")) {
+    return [...value.matchAll(/"((?:[^"\\]|\\.)*)"/gu)].map((match) => match[1] ?? "");
+  }
+  const quoted = value.match(/^"((?:[^"\\]|\\.)*)"$/u);
+  return quoted ? quoted[1] ?? "" : null;
+}
+
+/**
+ * Définitions Codex, extraites de config.toml. Réservé au sidecar : les blocs
+ * `env` contiennent des clés d'API. Parseur volontairement minimal — on ne lit
+ * que `command`, `args` et `env`, seuls champs nécessaires pour lancer le
+ * serveur et le peser.
+ */
+export function codexServerDefinitions(home = homedir()): Record<string, unknown> {
+  let content: string;
+  try {
+    content = readFileSync(join(home, ".codex", "config.toml"), "utf8");
+  } catch {
+    return {};
+  }
+  const servers: Record<string, any> = {};
+  let current: string | null = null;
+  let inEnv = false;
+  for (const line of content.split("\n")) {
+    const section = line.match(/^\s*\[mcp_servers\.([^.\]]+)(\.[^\]]+)?\]/u);
+    if (section) {
+      const name = section[1]!;
+      const sub = section[2];
+      // Une sous-table autre que `.env` (par ex. `.tools.xxx`) est ignorée.
+      inEnv = sub === ".env";
+      current = sub === undefined || inEnv ? name : null;
+      if (current && !servers[current]) servers[current] = { command: "", args: [], env: {} };
+      continue;
+    }
+    if (/^\s*\[/u.test(line)) {
+      current = null;
+      inEnv = false;
+      continue;
+    }
+    if (!current) continue;
+    const pair = line.match(/^\s*([A-Za-z0-9_-]+)\s*=\s*(.+?)\s*$/u);
+    if (!pair) continue;
+    const [, key, rawValue] = pair;
+    const value = tomlValue(rawValue!);
+    if (value === null) continue;
+    if (inEnv) servers[current].env[key!] = String(value);
+    else if (key === "command" && typeof value === "string") servers[current].command = value;
+    else if (key === "args" && Array.isArray(value)) servers[current].args = value;
+  }
+  // Un serveur sans commande n'est pas lançable : le peser n'a pas de sens.
+  return Object.fromEntries(
+    Object.entries(servers).filter(([, server]) => server.command),
+  );
+}
+
 /** Sections `[mcp_servers.NOM]` d'un config.toml, sous-tables exclues. */
 function tomlServerNames(path: string): string[] {
   let content: string;
@@ -63,6 +121,20 @@ export function claudeServerDefinitions(
     // Le scope projet gagne sur le global : c'est l'ordre de résolution du CLI.
     ...(claudeConfig?.projects?.[projectPath]?.mcpServers ?? {}),
   };
+}
+
+/**
+ * Serveurs MCP réellement appelés dans un projet, d'après les noms d'outils des
+ * événements `tool-start`. Les deux CLI préfixent les outils MCP de la même
+ * façon : `mcp__<serveur>__<outil>`.
+ */
+export function usedMcpServers(toolNames: string[]): string[] {
+  const used = new Set<string>();
+  for (const toolName of toolNames) {
+    const match = toolName.match(/^mcp__([^_]+(?:_[^_]+)*?)__/u);
+    if (match?.[1]) used.add(match[1]);
+  }
+  return [...used];
 }
 
 export function listMcpServers(projectPath: string, home = homedir()): McpServerRef[] {

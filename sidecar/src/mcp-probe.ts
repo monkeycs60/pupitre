@@ -89,19 +89,7 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
         child.stdin.write(request(2, "tools/list", {}));
         return;
       }
-      if (message.id === 2) {
-        const tools = message.result?.tools;
-        if (!Array.isArray(tools)) {
-          finish({ name, tokens: null, toolCount: 0, error: "réponse tools/list invalide" });
-          return;
-        }
-        const size = JSON.stringify(tools).length;
-        finish({
-          name,
-          tokens: Math.round(size / CHARS_PER_TOKEN) + tools.length * TOOL_STRUCTURE_TOKENS,
-          toolCount: tools.length,
-        });
-      }
+      if (message.id === 2) finish(weigh(name, message.result?.tools));
     });
 
     child.stdin.on("error", () => {
@@ -115,6 +103,69 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
   });
 }
 
+function weigh(name: string, tools: unknown): McpServerWeight {
+  if (!Array.isArray(tools)) {
+    return { name, tokens: null, toolCount: 0, error: "réponse tools/list invalide" };
+  }
+  return {
+    name,
+    tokens: Math.round(JSON.stringify(tools).length / CHARS_PER_TOKEN)
+      + tools.length * TOOL_STRUCTURE_TOKENS,
+    toolCount: tools.length,
+  };
+}
+
+/**
+ * Serveur MCP distant (HTTP streamable). Le protocole est le même qu'en stdio,
+ * seul le transport change : deux POST JSON-RPC suffisent pour obtenir la liste
+ * d'outils. La réponse peut arriver en JSON simple ou en flux SSE.
+ */
+async function probeHttp(name: string, url: string): Promise<McpServerWeight> {
+  const post = async (body: unknown, sessionId?: string) => {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        ...(sessionId ? { "mcp-session-id": sessionId } : {}),
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(HANDSHAKE_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    // Un flux SSE préfixe chaque événement par `data: ` ; on ne garde que la
+    // dernière charge utile JSON, qui porte la réponse.
+    const payload = text.includes("data:")
+      ? text.split("\n").filter((line) => line.startsWith("data:")).at(-1)?.slice(5) ?? ""
+      : text;
+    return {
+      sessionId: response.headers.get("mcp-session-id") ?? sessionId,
+      message: JSON.parse(payload.trim()),
+    };
+  };
+
+  try {
+    const initialized = await post({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "pupitre", version: "1.0.0" },
+      },
+    });
+    const listed = await post(
+      { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+      initialized.sessionId ?? undefined,
+    );
+    return weigh(name, listed.message?.result?.tools);
+  } catch (error) {
+    return { name, tokens: null, toolCount: 0, error: String(error) };
+  }
+}
+
 /**
  * Pèse plusieurs serveurs en parallèle. Un serveur qui échoue n'empêche pas les
  * autres : la mesure est un confort de diagnostic, pas un chemin critique.
@@ -122,9 +173,13 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
 export async function measureMcpServers(
   definitions: Record<string, unknown>,
 ): Promise<McpServerWeight[]> {
-  const entries = Object.entries(definitions);
   const weights = await Promise.all(
-    entries.map(([name, definition]) => probeStdio(name, definition as ServerDefinition)),
+    Object.entries(definitions).map(([name, raw]) => {
+      const definition = raw as ServerDefinition;
+      return definition.url
+        ? probeHttp(name, definition.url)
+        : probeStdio(name, definition);
+    }),
   );
   return weights.sort((left, right) => (right.tokens ?? -1) - (left.tokens ?? -1));
 }

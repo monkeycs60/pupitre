@@ -146,6 +146,20 @@ export class ConversationStore {
     return this.get(id);
   }
 
+  /**
+   * Noms d'outils distincts appelés dans un projet. Sert à déduire quels
+   * serveurs MCP ont réellement servi, sous-tâches comprises.
+   */
+  toolNamesByProject(projectId: string): string[] {
+    const rows = this.db.query(
+      `SELECT DISTINCT json_extract(payload, '$.toolName') AS name
+       FROM events
+       WHERE json_extract(payload, '$.type') = 'tool-start'
+         AND conversation_id IN (SELECT id FROM conversations WHERE project_id = ?)`
+    ).all(projectId) as Array<{ name: string | null }>;
+    return rows.flatMap((row) => (row.name ? [row.name] : []));
+  }
+
   /** Nombre de messages utilisateur : sert de compteur de tours pour le digest. */
   turnCount(id: string): number {
     const row = this.db.query(

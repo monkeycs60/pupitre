@@ -153,6 +153,17 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
                   >
                     {measuring ? 'Mesure en cours…' : 'Mesurer le coût'}
                   </button>
+                  {mcp.used.length > 0 ? (
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={saving}
+                      title="Ne garder que les serveurs déjà appelés dans ce projet"
+                      onClick={() => setMcp({ ...mcp, enabled: mcp.used })}
+                    >
+                      Garder les {mcp.used.length} utilisés
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="text-button"
@@ -178,11 +189,27 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
                         disabled={saving}
                         onChange={() => toggleServer(server.name)}
                       />
-                      <span className="project-mcp-name">{server.name}</span>
-                      <span className="project-mcp-cost">
-                        {typeof mcp.weights[server.name]?.tokens === 'number'
-                          ? `${formatCompact(mcp.weights[server.name]!.tokens!)} · ${mcp.weights[server.name]!.toolCount} outils`
-                          : server.provider === 'codex' ? 'codex' : '—'}
+                      <span className={`project-mcp-badge is-${server.provider}`}>
+                        {server.provider === 'claude' ? 'CL' : 'CX'}
+                      </span>
+                      <span className="project-mcp-name">
+                        {server.name}
+                        {mcp.used.includes(server.name) ? (
+                          <span className="project-mcp-used" title="Déjà appelé dans ce projet"> ✓</span>
+                        ) : null}
+                      </span>
+                      <span
+                        className="project-mcp-cost"
+                        title={mcp.weights[server.name]?.error ?? undefined}
+                      >
+                        {typeof mcp.weights[server.name]?.tokens === 'number' ? (
+                          <>
+                            <strong>{formatCompact(mcp.weights[server.name]!.tokens!)}</strong>
+                            {' '}· {mcp.weights[server.name]!.toolCount} outils
+                          </>
+                        ) : mcp.weights[server.name]?.error ? (
+                          <span className="project-mcp-failed">non mesurable</span>
+                        ) : '—'}
                       </span>
                     </label>
                   </li>

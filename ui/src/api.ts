@@ -478,6 +478,8 @@ export interface ProjectMcpConfig {
   enabled: string[] | null
   /** Dernière mesure connue, par nom de serveur. */
   weights: Record<string, McpServerWeight>
+  /** Serveurs réellement appelés dans l'historique du projet. */
+  used: string[]
 }
 
 /** Relance la mesure : lance chaque serveur et pèse ses définitions d'outils. */

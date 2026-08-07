@@ -52,7 +52,12 @@ import type { GamificationService } from "./gamification";
 import { FILESYSTEM_SCOPES, type FilesystemScope } from "./access";
 import { actionFormat } from "./response-format";
 import { conductorToolTokens } from "./conductor-mcp";
-import { claudeServerDefinitions, listMcpServers } from "./mcp-inventory";
+import {
+  claudeServerDefinitions,
+  codexServerDefinitions,
+  listMcpServers,
+  usedMcpServers,
+} from "./mcp-inventory";
 import { measureMcpServers } from "./mcp-probe";
 import type { McpServerWeight } from "./mcp-probe";
 
@@ -1186,7 +1191,12 @@ export function createServer(deps: ServerDeps) {
           if (!project) throw new HttpError(404, "projet inconnu");
           // Lancer une dizaine de process est lent : le résultat est mis en
           // cache et ne se rejoue que sur demande explicite de l'utilisateur.
-          const weights = await measureMcpServers(claudeServerDefinitions(project.path));
+          // Les deux providers : un serveur Codex pèse dans la fenêtre autant
+          // qu'un serveur Claude, et le nom suffit à les distinguer.
+          const weights = await measureMcpServers({
+            ...codexServerDefinitions(),
+            ...claudeServerDefinitions(project.path),
+          });
           const cache = (deps.settings.get<Record<string, unknown>>("mcpWeights")) ?? {};
           for (const weight of weights) {
             if (weight.tokens !== null) cache[weight.name] = weight;
@@ -1205,6 +1215,7 @@ export function createServer(deps: ServerDeps) {
               servers: listMcpServers(project.path),
               enabled: project.mcp_servers,
               weights: deps.settings.get<Record<string, McpServerWeight>>("mcpWeights") ?? {},
+              used: usedMcpServers(deps.conversations.toolNamesByProject(projectMcpId)),
             });
           }
           if (request.method === "PUT") {
@@ -1223,6 +1234,7 @@ export function createServer(deps: ServerDeps) {
               servers: listMcpServers(project.path),
               enabled: deps.projects.get(projectMcpId)?.mcp_servers ?? null,
               weights: deps.settings.get<Record<string, McpServerWeight>>("mcpWeights") ?? {},
+              used: usedMcpServers(deps.conversations.toolNamesByProject(projectMcpId)),
             });
           }
         }

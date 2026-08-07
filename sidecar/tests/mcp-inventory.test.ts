@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listMcpServers } from "../src/mcp-inventory";
+import { codexServerDefinitions, listMcpServers, usedMcpServers } from "../src/mcp-inventory";
 
 function fixture(): { home: string; project: string } {
   const home = mkdtempSync(join(tmpdir(), "pupitre-mcp-home-"));
@@ -67,4 +67,39 @@ test("un JSON corrompu n'interrompt pas l'inventaire", () => {
   const { home, project } = fixture();
   writeFileSync(join(project, ".mcp.json"), "{ pas du json");
   expect(listMcpServers(project, home).length).toBeGreaterThan(0);
+});
+
+test("lit les définitions Codex : commande, arguments et env", () => {
+  const { home } = fixture();
+  const definitions = codexServerDefinitions(home) as Record<string, any>;
+  expect(definitions["brave-search"]).toEqual({
+    command: "npx",
+    args: [],
+    env: { BRAVE_API_KEY: "secret" },
+  });
+  expect(definitions.mongodb.command).toBe("npx");
+});
+
+test("un serveur Codex sans commande n'est pas retenu", () => {
+  const home = mkdtempSync(join(tmpdir(), "pupitre-mcpnocmd-"));
+  mkdirSync(join(home, ".codex"), { recursive: true });
+  writeFileSync(join(home, ".codex", "config.toml"), [
+    "[mcp_servers.fantome]",
+    'description = "pas de commande"',
+  ].join("\n"));
+  expect(Object.keys(codexServerDefinitions(home))).toEqual([]);
+});
+
+test("déduit les serveurs appelés depuis les noms d'outils", () => {
+  expect(usedMcpServers([
+    "mcp__tavily__tavily_search",
+    "mcp__reddit-mcp-buddy__browse_subreddit",
+    "mcp__tavily__tavily_extract",
+    "Read",
+    "Bash",
+  ]).sort()).toEqual(["reddit-mcp-buddy", "tavily"]);
+});
+
+test("un historique sans outil MCP ne suggère rien", () => {
+  expect(usedMcpServers(["Read", "Write", "Bash"])).toEqual([]);
 });

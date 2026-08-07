@@ -363,7 +363,7 @@ input.field-mono {
 
 .project-mcp-list {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 2px var(--space-3);
   max-height: 260px;
   margin: 0;
@@ -430,4 +430,30 @@ input.field-mono {
 
 .project-mcp-total strong {
   color: var(--accent);
+}
+
+.project-mcp-badge {
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  border-radius: var(--r-xs);
+}
+
+.project-mcp-badge.is-claude {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.project-mcp-badge.is-codex {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.project-mcp-failed {
+  color: var(--warn);
+}
+
+.project-mcp-used {
+  color: var(--ok);
 }
