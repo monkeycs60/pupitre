@@ -411,12 +411,24 @@ export class CodexAppServerClient {
     // Ajouter `mcp_servers` dans la config du thread fait repasser cette branche
     // après les overrides CLI du process. Sans recopier la politique utilisateur,
     // le conductor restaurait donc notamment le timeout Sentry de 120 secondes.
-    const threadMcpServers = opts.conductor
-      ? { ...this.threadMcpPolicyOverrides(), ...conductorServers }
+    // Sélection du projet : tout serveur non retenu est désactivé pour CE
+    // thread. Codex n'accepte pas de définitions inline comme Claude, mais
+    // `enabled = false` par serveur donne le même résultat.
+    const projectFilter = opts.mcpAllowed
+      ? Object.fromEntries(
+        this.knownMcpNames()
+          .filter((name) => !opts.mcpAllowed!.includes(name))
+          .map((name) => [name, { enabled: false }]),
+      )
       : {};
+    const threadMcpServers = {
+      ...(opts.conductor ? this.threadMcpPolicyOverrides() : {}),
+      ...projectFilter,
+      ...(opts.conductor ? conductorServers : {}),
+    };
     const overrides = {
       ...(opts.effort ? { model_reasoning_effort: opts.effort } : {}),
-      ...(opts.conductor ? { mcp_servers: threadMcpServers } : {}),
+      ...(Object.keys(threadMcpServers).length ? { mcp_servers: threadMcpServers } : {}),
     };
     const config = Object.keys(overrides).length ? { config: overrides } : {};
     const result = opts.cliSessionId
@@ -429,6 +441,15 @@ export class CodexAppServerClient {
     const threadId = (result?.thread as { id?: string } | undefined)?.id;
     if (typeof threadId !== "string") throw new Error("thread sans id");
     return threadId;
+  }
+
+  /** Noms des serveurs MCP déclarés dans la config Codex, découverts une fois. */
+  private knownMcpNames(): string[] {
+    if (this.discoveredMcpNames === null) {
+      const bin = process.env.PUPITRE_CODEX_BIN ?? "codex";
+      this.discoveredMcpNames = this.mcpNames(bin);
+    }
+    return this.discoveredMcpNames;
   }
 
   /** Réapplique au thread orchestrateur la politique déjà passée au process. */

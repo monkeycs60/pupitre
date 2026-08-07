@@ -1,9 +1,10 @@
 import type { Database } from "bun:sqlite";
 import type { AppEvent, Provider, StoredEvent } from "./events";
 import type { ConversationStore } from "./stores/conversations";
-import type { ProjectStore } from "./stores/projects";
+import type { Project, ProjectStore } from "./stores/projects";
 import type { QuotaTracker } from "./quotas";
 import { runClaudeTurn } from "./adapters/claude";
+import { claudeServerDefinitions } from "./mcp-inventory";
 import { runCodexTurn } from "./adapters/codex";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 import type { FilesystemScope } from "./access";
@@ -210,7 +211,7 @@ export class SubtaskRunner {
     const readOnly = input.readOnly === true;
     const run = this.run(
       subtask,
-      project.path,
+      project,
       project.filesystem_scope,
       readOnly ? "plan" : (conversation.permission_mode ?? project.permission_mode),
       controller.signal,
@@ -276,7 +277,7 @@ export class SubtaskRunner {
 
   private async run(
     subtask: Subtask,
-    cwd: string,
+    project: Project,
     filesystemScope: FilesystemScope,
     permissionMode: string,
     signal: AbortSignal,
@@ -298,8 +299,16 @@ export class SubtaskRunner {
 
     try {
       emit({ type: "user-message", text: subtask.prompt, images: [] });
+      // Un sub-agent hérite de la sélection MCP du projet : sans ça, il
+      // chargeait TOUS les serveurs alors que son parent en filtrait une partie.
+      const mcpServers = project.mcp_servers === null
+        ? null
+        : Object.fromEntries(
+          Object.entries(claudeServerDefinitions(project.path))
+            .filter(([name]) => project.mcp_servers!.includes(name)),
+        );
       const opts = {
-        cwd,
+        cwd: project.path,
         model: subtask.model,
         effort: subtask.effort ?? undefined,
         speed: subtask.speed ?? undefined,
@@ -310,6 +319,7 @@ export class SubtaskRunner {
         images: [],
         signal,
         ...(readOnly ? { sandboxMode: "read-only" as const } : {}),
+        ...(mcpServers === null ? {} : { mcpServers }),
         // GARDE DE PROFONDEUR : pas de `conductor` ici, et il n'y a aucun
         // chemin pour en ajouter un. Un sub-agent ne voit donc pas les outils
         // de délégation et ne peut pas créer de sous-sous-tâche — la

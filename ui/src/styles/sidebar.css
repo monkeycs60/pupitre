@@ -1436,3 +1436,16 @@
   border: 0;
   cursor: pointer;
 }
+
+/* Charge fixe élevée : la jauge le signale sans attendre le survol. */
+.context-gauge.is-heavy-fixed .context-gauge-track span {
+  background: var(--warn);
+}
+
+.context-gauge-badge {
+  margin-left: var(--space-2);
+  padding: 0 5px;
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-radius: var(--r-full);
+}

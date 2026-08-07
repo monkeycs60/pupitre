@@ -464,10 +464,25 @@ export interface McpServerRef {
   scope: 'global' | 'projet'
 }
 
+export interface McpServerWeight {
+  name: string
+  /** Tokens des définitions d'outils, `null` si la mesure a échoué. */
+  tokens: number | null
+  toolCount: number
+  error?: string
+}
+
 export interface ProjectMcpConfig {
   servers: McpServerRef[]
   /** `null` = aucun filtre, tous les serveurs configurés sont chargés. */
   enabled: string[] | null
+  /** Dernière mesure connue, par nom de serveur. */
+  weights: Record<string, McpServerWeight>
+}
+
+/** Relance la mesure : lance chaque serveur et pèse ses définitions d'outils. */
+export function measureProjectMcpServers(projectId: string): Promise<McpServerWeight[]> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/mcp-servers/measure`, { method: 'POST' })
 }
 
 /** Serveurs MCP configurés par l'utilisateur — noms seulement, jamais les clés. */

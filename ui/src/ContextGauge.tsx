@@ -47,7 +47,14 @@ export function ContextGauge({
   const persistentAlert = persistent >= PERSISTENT_ALERT_RATIO
 
   return (
-    <div className={`context-gauge ${estimate.nearSaturation ? 'is-near-limit' : ''}`}>
+    <div
+      className={[
+        'context-gauge',
+        estimate.nearSaturation ? 'is-near-limit' : '',
+        // Signal passif : la jauge se colore sans exiger le survol.
+        persistentAlert ? 'is-heavy-fixed' : '',
+      ].join(' ').trim()}
+    >
       <div className="context-gauge-hover">
         <div
           className="context-gauge-track"
@@ -60,7 +67,14 @@ export function ContextGauge({
         >
           <span style={{ width: `${estimate.percent}%` }} />
         </div>
-        <span className="context-gauge-value">Contexte ≈ {estimate.percent}%</span>
+        <span className="context-gauge-value">
+          Contexte ≈ {estimate.percent}%
+          {persistentAlert ? (
+            <span className="context-gauge-badge" title="Charge fixe élevée : voir le détail">
+              ▨ {Math.round(persistent * 100)} %
+            </span>
+          ) : null}
+        </span>
 
         <div className="context-gauge-detail" id="context-gauge-detail" role="tooltip">
           <div className="context-gauge-detail-header">

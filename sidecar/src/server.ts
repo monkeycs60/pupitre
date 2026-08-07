@@ -52,7 +52,9 @@ import type { GamificationService } from "./gamification";
 import { FILESYSTEM_SCOPES, type FilesystemScope } from "./access";
 import { actionFormat } from "./response-format";
 import { conductorToolTokens } from "./conductor-mcp";
-import { listMcpServers } from "./mcp-inventory";
+import { claudeServerDefinitions, listMcpServers } from "./mcp-inventory";
+import { measureMcpServers } from "./mcp-probe";
+import type { McpServerWeight } from "./mcp-probe";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -1175,6 +1177,24 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        const projectMcpMeasureId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/mcp-servers\/measure$/,
+        );
+        if (request.method === "POST" && projectMcpMeasureId !== null) {
+          const project = deps.projects.get(projectMcpMeasureId);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          // Lancer une dizaine de process est lent : le résultat est mis en
+          // cache et ne se rejoue que sur demande explicite de l'utilisateur.
+          const weights = await measureMcpServers(claudeServerDefinitions(project.path));
+          const cache = (deps.settings.get<Record<string, unknown>>("mcpWeights")) ?? {};
+          for (const weight of weights) {
+            if (weight.tokens !== null) cache[weight.name] = weight;
+          }
+          deps.settings.set("mcpWeights", cache);
+          return json(weights);
+        }
+
         const projectMcpId = routeId(pathname, /^\/api\/projects\/([^/]+)\/mcp-servers$/);
         if (projectMcpId !== null) {
           const project = deps.projects.get(projectMcpId);
@@ -1184,6 +1204,7 @@ export function createServer(deps: ServerDeps) {
             return json({
               servers: listMcpServers(project.path),
               enabled: project.mcp_servers,
+              weights: deps.settings.get<Record<string, McpServerWeight>>("mcpWeights") ?? {},
             });
           }
           if (request.method === "PUT") {
@@ -1201,6 +1222,7 @@ export function createServer(deps: ServerDeps) {
             return json({
               servers: listMcpServers(project.path),
               enabled: deps.projects.get(projectMcpId)?.mcp_servers ?? null,
+              weights: deps.settings.get<Record<string, McpServerWeight>>("mcpWeights") ?? {},
             });
           }
         }

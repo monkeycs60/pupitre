@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
-import { listProjectMcpServers, setProjectFilesystemScope, updateProjectMcpServers } from './api'
+import {
+  listProjectMcpServers,
+  measureProjectMcpServers,
+  setProjectFilesystemScope,
+  updateProjectMcpServers,
+} from './api'
 import type { ProjectMcpConfig } from './api'
+import { formatCompact } from './formatCompact'
 import type { FilesystemScope, Project } from './types'
 
 interface ProjectSettingsDialogProps {
@@ -18,6 +24,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mcp, setMcp] = useState<ProjectMcpConfig | null>(null)
+  const [measuring, setMeasuring] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -32,6 +39,42 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
   /** `null` = aucun filtre : tous les serveurs configurés sont chargés. */
   const enabled = mcp?.enabled ?? null
   const isEnabled = (name: string) => enabled === null || enabled.includes(name)
+
+  /** Coût de la sélection courante, limité aux serveurs déjà mesurés. */
+  function selectionTokens(): { total: number; measured: number; unknown: number } {
+    if (mcp === null) return { total: 0, measured: 0, unknown: 0 }
+    let total = 0
+    let measured = 0
+    let unknown = 0
+    for (const server of mcp.servers) {
+      if (!isEnabled(server.name)) continue
+      const tokens = mcp.weights[server.name]?.tokens
+      if (typeof tokens === 'number') {
+        total += tokens
+        measured += 1
+      } else {
+        unknown += 1
+      }
+    }
+    return { total, measured, unknown }
+  }
+
+  async function handleMeasure() {
+    if (mcp === null) return
+    setMeasuring(true)
+    setError(null)
+    try {
+      const weights = await measureProjectMcpServers(project.id)
+      setMcp({
+        ...mcp,
+        weights: Object.fromEntries(weights.map((weight) => [weight.name, weight])),
+      })
+    } catch (measureError: unknown) {
+      setError(errorMessage(measureError))
+    } finally {
+      setMeasuring(false)
+    }
+  }
 
   function toggleServer(name: string) {
     if (mcp === null) return
@@ -101,14 +144,24 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
             <div className="project-mcp">
               <div className="project-mcp-heading">
                 <strong>Serveurs MCP chargés</strong>
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={saving}
-                  onClick={() => setMcp({ ...mcp, enabled: enabled === null ? [] : null })}
-                >
-                  {enabled === null ? 'Tout décocher' : 'Tout charger'}
-                </button>
+                <span className="project-mcp-actions">
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={saving || measuring}
+                    onClick={() => void handleMeasure()}
+                  >
+                    {measuring ? 'Mesure en cours…' : 'Mesurer le coût'}
+                  </button>
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={saving}
+                    onClick={() => setMcp({ ...mcp, enabled: enabled === null ? [] : null })}
+                  >
+                    {enabled === null ? 'Tout décocher' : 'Tout charger'}
+                  </button>
+                </span>
               </div>
               <p>
                 Chaque serveur coché occupe du contexte dans <em>toutes</em> les
@@ -122,18 +175,34 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
                       <input
                         type="checkbox"
                         checked={isEnabled(server.name)}
-                        disabled={saving || server.provider === 'codex'}
+                        disabled={saving}
                         onChange={() => toggleServer(server.name)}
                       />
                       <span className="project-mcp-name">{server.name}</span>
-                      <span className="project-mcp-scope">
-                        {server.provider} · {server.scope}
-                        {server.provider === 'codex' ? ' · non filtrable' : ''}
+                      <span className="project-mcp-cost">
+                        {typeof mcp.weights[server.name]?.tokens === 'number'
+                          ? `${formatCompact(mcp.weights[server.name]!.tokens!)} · ${mcp.weights[server.name]!.toolCount} outils`
+                          : server.provider === 'codex' ? 'codex' : '—'}
                       </span>
                     </label>
                   </li>
                 ))}
               </ul>
+              <p className="project-mcp-total">
+                {selectionTokens().measured === 0 ? (
+                  <>Coût inconnu : lancez « Mesurer le coût » pour peser chaque serveur.</>
+                ) : (
+                  <>
+                    Cette sélection coûte{' '}
+                    <strong>{formatCompact(selectionTokens().total)} tokens</strong> par
+                    conversation
+                    {selectionTokens().unknown > 0
+                      ? `, plus ${selectionTokens().unknown} serveur(s) non mesuré(s)`
+                      : ''}
+                    .
+                  </>
+                )}
+              </p>
             </div>
           ) : null}
           {error ? <p className="modal-error" role="alert">{error}</p> : null}

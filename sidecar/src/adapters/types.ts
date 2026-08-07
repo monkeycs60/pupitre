@@ -30,6 +30,12 @@ export interface TurnOptions {
    * ces serveurs sont chargés, bridge conductor compris.
    */
   mcpServers?: Record<string, unknown>;
+  /**
+   * Noms des serveurs MCP retenus, tous providers confondus. Codex ne prend pas
+   * de définitions inline : on lui passe `enabled = false` sur tout ce qui n'est
+   * pas dans cette liste. Absent = aucun filtre.
+   */
+  mcpAllowed?: string[];
 }
 
 export type EmitFn = (event: AppEvent) => void;

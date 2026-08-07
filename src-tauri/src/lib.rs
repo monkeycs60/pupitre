@@ -45,10 +45,8 @@ fn stop_sidecar(app: &tauri::AppHandle) {
 
 fn spawn_sidecar(
     app: &tauri::AppHandle,
-) -> Result<(
-    tauri::async_runtime::Receiver<CommandEvent>,
-    CommandChild,
-), tauri_plugin_shell::Error> {
+) -> Result<(tauri::async_runtime::Receiver<CommandEvent>, CommandChild), tauri_plugin_shell::Error>
+{
     #[cfg(debug_assertions)]
     {
         let repository_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -120,7 +118,10 @@ fn supervise_sidecar(app: tauri::AppHandle) {
                         log::info!("Sidecar Pupitre arrêté volontairement, pas de relance");
                         intentional_exit = true;
                     } else {
-                        log::warn!("Sidecar Pupitre arrêté ({:?}), relance planifiée", payload.code);
+                        log::warn!(
+                            "Sidecar Pupitre arrêté ({:?}), relance planifiée",
+                            payload.code
+                        );
                     }
                     break;
                 }
@@ -129,9 +130,21 @@ fn supervise_sidecar(app: tauri::AppHandle) {
                     terminal_error = true;
                     break;
                 }
-                CommandEvent::Stdout(_) | CommandEvent::Stderr(_) => {
+                CommandEvent::Stdout(output) => {
                     // Le canal doit être drainé en continu : sinon les pipes du
                     // processus finissent par bloquer quand leur buffer est plein.
+                    log::info!(
+                        "Sidecar Pupitre stdout: {}",
+                        String::from_utf8_lossy(&output).trim_end(),
+                    );
+                }
+                CommandEvent::Stderr(error) => {
+                    // Les erreurs du sidecar étaient auparavant avalées, ce qui
+                    // rendait une relance en boucle impossible à diagnostiquer.
+                    log::error!(
+                        "Sidecar Pupitre stderr: {}",
+                        String::from_utf8_lossy(&error).trim_end(),
+                    );
                 }
                 _ => {}
             }

@@ -59,7 +59,7 @@ export function sweepOrphanedRuns(
  */
 function selectedMcpServers(
   project: Project,
-): { mcpServers: Record<string, unknown> } | null {
+): { mcpServers: Record<string, unknown>; mcpAllowed: string[] } | null {
   if (project.mcp_servers === null) return null;
   const available = claudeServerDefinitions(project.path);
   const kept = Object.fromEntries(
@@ -67,7 +67,9 @@ function selectedMcpServers(
       .filter((name) => name in available)
       .map((name) => [name, available[name]]),
   );
-  return { mcpServers: kept };
+  // `mcpAllowed` porte TOUS les noms retenus, y compris ceux de Codex qui n'ont
+  // pas de définition côté Claude.
+  return { mcpServers: kept, mcpAllowed: project.mcp_servers };
 }
 
 export class ConversationRunner {

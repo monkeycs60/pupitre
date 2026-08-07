@@ -53,3 +53,22 @@ test("sans conducteur, la config ne porte que les serveurs du projet", () => {
   const config = JSON.parse(claudeMcpConfigArg(null, { figma: { command: "npx" } }));
   expect(Object.keys(config.mcpServers)).toEqual(["figma"]);
 });
+
+test("la sélection porte les noms des deux providers", () => {
+  const project = projects.create({ name: "p", path: "/tmp/p" });
+  projects.setMcpServers(project.id, ["figma", "brave-search"]);
+  // `figma` a une définition Claude, `brave-search` n'en a pas : elle sert
+  // uniquement à laisser Codex actif pour ce nom.
+  expect(projects.get(project.id)?.mcp_servers).toEqual(["figma", "brave-search"]);
+});
+
+test("un nom sélectionné mais introuvable est ignoré, sans casser la config", () => {
+  const home = mkdtempSync(join(tmpdir(), "pupitre-mcphome2-"));
+  const project = mkdtempSync(join(tmpdir(), "pupitre-mcpproj2-"));
+  writeFileSync(join(home, ".claude.json"), JSON.stringify({
+    mcpServers: { figma: { command: "npx" } },
+  }));
+  const available = claudeServerDefinitions(project, home);
+  const kept = ["figma", "disparu"].filter((name) => name in available);
+  expect(kept).toEqual(["figma"]);
+});
