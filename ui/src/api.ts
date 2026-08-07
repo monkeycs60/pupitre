@@ -464,12 +464,25 @@ export interface McpServerRef {
   scope: 'global' | 'projet'
 }
 
+export interface ProjectMcpConfig {
+  servers: McpServerRef[]
+  /** `null` = aucun filtre, tous les serveurs configurés sont chargés. */
+  enabled: string[] | null
+}
+
 /** Serveurs MCP configurés par l'utilisateur — noms seulement, jamais les clés. */
 export function listProjectMcpServers(
   projectId: string,
   signal?: AbortSignal,
-): Promise<McpServerRef[]> {
+): Promise<ProjectMcpConfig> {
   return fetchJson(`/api/projects/${routeId(projectId)}/mcp-servers`, { signal })
+}
+
+export function updateProjectMcpServers(
+  projectId: string,
+  enabled: string[] | null,
+): Promise<ProjectMcpConfig> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/mcp-servers`, jsonPut({ enabled }))
 }
 
 export function getSettings(signal?: AbortSignal): Promise<Settings> {

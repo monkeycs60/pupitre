@@ -191,7 +191,7 @@ function App() {
     }
     const controller = new AbortController()
     void listProjectMcpServers(projectId, controller.signal)
-      .then(setMcpServers)
+      .then((config) => setMcpServers(config.servers))
       // L'inventaire MCP n'est qu'un confort d'affichage dans l'alerte.
       .catch(() => {})
     return () => controller.abort()

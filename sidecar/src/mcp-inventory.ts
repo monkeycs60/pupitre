@@ -46,6 +46,25 @@ function tomlServerNames(path: string): string[] {
   return [...found];
 }
 
+/**
+ * Définitions COMPLÈTES des serveurs Claude (commande, arguments, variables
+ * d'environnement). Réservé au sidecar : ces objets contiennent des clés d'API
+ * en clair et ne doivent jamais transiter par l'API HTTP. Sert uniquement à
+ * réinjecter les serveurs retenus quand un projet filtre sa liste.
+ */
+export function claudeServerDefinitions(
+  projectPath: string,
+  home = homedir(),
+): Record<string, unknown> {
+  const claudeConfig = readJson(join(home, ".claude.json"));
+  return {
+    ...(claudeConfig?.mcpServers ?? {}),
+    ...(readJson(join(projectPath, ".mcp.json"))?.mcpServers ?? {}),
+    // Le scope projet gagne sur le global : c'est l'ordre de résolution du CLI.
+    ...(claudeConfig?.projects?.[projectPath]?.mcpServers ?? {}),
+  };
+}
+
 export function listMcpServers(projectPath: string, home = homedir()): McpServerRef[] {
   const servers: McpServerRef[] = [];
   const claudeConfig = readJson(join(home, ".claude.json"));

@@ -1,5 +1,5 @@
 import type { ConversationStore } from "./stores/conversations";
-import type { ProjectStore } from "./stores/projects";
+import type { Project, ProjectStore } from "./stores/projects";
 import type { MediaStore } from "./media";
 import type { AppEvent, MediaAttachment, StoredEvent } from "./events";
 import { runClaudeTurn } from "./adapters/claude";
@@ -12,6 +12,7 @@ import type { SkillInventory } from "./skills";
 import type { AppNotification } from "./stores/notifications";
 import { generateDigest, shouldRefreshDigest } from "./conversation-digest";
 import { DEFAULT_ACTION_FORMAT, withActionFormat } from "./response-format";
+import { claudeServerDefinitions } from "./mcp-inventory";
 import type { ActionFormat } from "./response-format";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
@@ -50,6 +51,23 @@ export function sweepOrphanedRuns(
   convs: ConversationStore,
 ): void {
   convs.sweepOrphanedRuns();
+}
+
+/**
+ * Traduit la sélection MCP d'un projet en option de tour. `null` quand le
+ * projet ne filtre pas : le CLI garde alors son comportement natif.
+ */
+function selectedMcpServers(
+  project: Project,
+): { mcpServers: Record<string, unknown> } | null {
+  if (project.mcp_servers === null) return null;
+  const available = claudeServerDefinitions(project.path);
+  const kept = Object.fromEntries(
+    project.mcp_servers
+      .filter((name) => name in available)
+      .map((name) => [name, available[name]]),
+  );
+  return { mcpServers: kept };
 }
 
 export class ConversationRunner {
@@ -214,6 +232,7 @@ export class ConversationRunner {
         attachments,
         signal: controller.signal,
         ...(conductor ? { conductor } : {}),
+        ...(selectedMcpServers(project) ?? {}),
       };
       if (conv.provider === "claude") await runClaudeTurn(opts, emit);
       // Codex passe par l'app-server (vrais deltas, quotas natifs) ; le chemin

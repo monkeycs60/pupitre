@@ -44,9 +44,24 @@ export function conductorServerConfig(
   };
 }
 
-/** Valeur de `claude --mcp-config` : un JSON inline `{mcpServers:{…}}`. */
-export function claudeMcpConfigArg(target: ConductorTarget): string {
-  return JSON.stringify({ mcpServers: { conductor: conductorServerConfig(target) } });
+/**
+ * Valeur de `claude --mcp-config` : un JSON inline `{mcpServers:{…}}`.
+ *
+ * `extraServers` n'est fourni que si le projet filtre ses serveurs MCP. Dans ce
+ * cas l'appelant ajoute `--strict-mcp-config`, ce qui coupe la découverte
+ * automatique : les serveurs retenus doivent donc être réinjectés ici avec leur
+ * définition complète.
+ */
+export function claudeMcpConfigArg(
+  target: ConductorTarget | null,
+  extraServers: Record<string, unknown> = {},
+): string {
+  return JSON.stringify({
+    mcpServers: {
+      ...(target ? { conductor: conductorServerConfig(target) } : {}),
+      ...extraServers,
+    },
+  });
 }
 
 /**

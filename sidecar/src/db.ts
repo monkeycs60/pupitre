@@ -270,6 +270,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "handoff_pending INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "routine_id TEXT NULL");
   // Un renommage manuel fige le titre : la régénération automatique le respecte.
+  addColumn(db, "projects", "mcp_servers TEXT NULL");
   addColumn(db, "conversations", "title_locked INTEGER NOT NULL DEFAULT 0");
   // Nombre de tours au moment du dernier digest (0 = jamais généré).
   addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");

@@ -24,6 +24,12 @@ export interface TurnOptions {
    * pas — cf. SubtaskRunner).
    */
   conductor?: ConductorTarget;
+  /**
+   * Définitions des serveurs MCP retenus par le projet. Absent = aucun filtre,
+   * le CLI charge ce que l'utilisateur a configuré. Présent (même vide) = seuls
+   * ces serveurs sont chargés, bridge conductor compris.
+   */
+  mcpServers?: Record<string, unknown>;
 }
 
 export type EmitFn = (event: AppEvent) => void;

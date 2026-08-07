@@ -1176,11 +1176,33 @@ export function createServer(deps: ServerDeps) {
         }
 
         const projectMcpId = routeId(pathname, /^\/api\/projects\/([^/]+)\/mcp-servers$/);
-        if (request.method === "GET" && projectMcpId !== null) {
+        if (projectMcpId !== null) {
           const project = deps.projects.get(projectMcpId);
           if (!project) throw new HttpError(404, "projet inconnu");
-          // Noms seulement : les fichiers de config contiennent des clés d'API.
-          return json(listMcpServers(project.path));
+          if (request.method === "GET") {
+            // Noms seulement : les fichiers de config contiennent des clés d'API.
+            return json({
+              servers: listMcpServers(project.path),
+              enabled: project.mcp_servers,
+            });
+          }
+          if (request.method === "PUT") {
+            const body = await readObject(request);
+            const enabled = body.enabled;
+            if (enabled !== null && !Array.isArray(enabled)) {
+              throw new HttpError(400, "sélection MCP invalide");
+            }
+            deps.projects.setMcpServers(
+              projectMcpId,
+              enabled === null
+                ? null
+                : enabled.filter((name): name is string => typeof name === "string"),
+            );
+            return json({
+              servers: listMcpServers(project.path),
+              enabled: deps.projects.get(projectMcpId)?.mcp_servers ?? null,
+            });
+          }
         }
 
         const projectWorkflowsId = routeId(

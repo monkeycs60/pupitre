@@ -8,6 +8,23 @@ export interface Project {
   filesystem_scope: FilesystemScope;
   gardien_mode: "informatif" | "bloquant";
   auto_counter_red: boolean;
+  /**
+   * Serveurs MCP autorisés pour ce projet, par nom. `null` = aucun filtre, on
+   * garde le comportement natif du CLI (tous les serveurs configurés). Une
+   * liste, même vide, active le filtrage strict.
+   */
+  mcp_servers: string[] | null;
+}
+
+/** Colonne stockée en JSON : une valeur illisible vaut « aucun filtre ». */
+function parseMcpServers(value: unknown): string[] | null {
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((n) => typeof n === "string") : null;
+  } catch {
+    return null;
+  }
 }
 
 export class ProjectStore {
@@ -29,6 +46,7 @@ export class ProjectStore {
         pinned: !!row.pinned,
         auto_counter_red: !!row.auto_counter_red,
         filesystem_scope: normalizeFilesystemScope(row.filesystem_scope),
+        mcp_servers: parseMcpServers(row.mcp_servers),
       }
       : null;
   }
@@ -42,6 +60,7 @@ export class ProjectStore {
       pinned: !!r.pinned,
       auto_counter_red: !!r.auto_counter_red,
       filesystem_scope: normalizeFilesystemScope(r.filesystem_scope),
+      mcp_servers: parseMcpServers(r.mcp_servers),
     }));
   }
 
@@ -65,6 +84,12 @@ export class ProjectStore {
 
   setGardienMode(id: string, mode: "informatif" | "bloquant"): void {
     this.db.query("UPDATE projects SET gardien_mode = ? WHERE id = ?").run(mode, id);
+  }
+
+  /** `null` restaure le comportement natif : tous les serveurs configurés. */
+  setMcpServers(id: string, servers: string[] | null): void {
+    this.db.query("UPDATE projects SET mcp_servers = ? WHERE id = ?")
+      .run(servers === null ? null : JSON.stringify(servers), id);
   }
 
   setAutoCounterRed(id: string, enabled: boolean): void {
