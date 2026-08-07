@@ -86,6 +86,12 @@ export function contextParts(
   windowTokens = 0,
   /** Coût du bridge conductor, mesuré par le sidecar ; 0 si non orchestrée. */
   conductorTokens = 0,
+  /**
+   * Contexte d'un tour à vide, mesuré par le sidecar : prompt système du CLI,
+   * instructions globales et mémoire. 0 tant qu'aucune mesure n'a été lancée —
+   * le reliquat reste alors entièrement non attribué.
+   */
+  baselineTokens = 0,
 ): ContextPart[] {
   let user = 0
   let assistant = 0
@@ -110,15 +116,19 @@ export function contextParts(
   // Ce que Pupitre injecte lui-même est isolé : c'est la seule part de la
   // charge fixe sur laquelle l'application a la main.
   const fixedPupitre = pupitre + conductorTokens
-  const fixedInferred = usedTokens > measured ? usedTokens - measured : 0
+  const remainder = usedTokens > measured ? usedTokens - measured : 0
+  // La charge fixe est bornée par une MESURE, jamais déduite : sans ce garde-fou
+  // elle absorbait tout l'écart d'estimation et affichait des centaines de
+  // milliers de tokens pour un prompt système qui en pèse trente mille.
+  const baseline = Math.min(baselineTokens, remainder)
+  const unattributed = remainder - baseline
   const parts: ContextPart[] = [
     {
-      label: 'Système, MCP, mémoire',
-      tokens: fixedInferred,
+      label: 'Prompt système et mémoire',
+      tokens: baseline,
       group: 'fixe',
-      detail: 'prompt système du CLI, serveurs MCP, CLAUDE.md, mémoire projet',
+      detail: 'prompt système du CLI, serveurs MCP, CLAUDE.md, mémoire — mesuré à vide',
       persistent: true,
-      inferred: true,
     },
     {
       label: 'Consignes Pupitre',
@@ -126,6 +136,13 @@ export function contextParts(
       group: 'fixe',
       detail: 'format de réponse, et bridge de délégation si la conversation orchestre',
       persistent: true,
+    },
+    {
+      label: 'Non attribué',
+      tokens: unattributed,
+      group: 'conversation',
+      detail: 'raisonnement du modèle, images, contenu que les événements ne tracent pas',
+      inferred: true,
     },
     { label: 'Vos messages', tokens: user, group: 'conversation' },
     { label: 'Réponses de l’agent', tokens: assistant, group: 'conversation' },

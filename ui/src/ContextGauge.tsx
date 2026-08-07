@@ -23,13 +23,22 @@ export function ContextGauge({
   conversation,
   events,
   conductorTokens = 0,
+  contextBaseline = 0,
   mcpServers = [],
+  mcpWeights = {},
+  onOpenProjectSettings,
   onHandoffSuggested,
 }: {
   conversation: Conversation
   events: AppEvent[]
   /** Coût mesuré du bridge conductor, exposé par le sidecar. */
   conductorTokens?: number
+  /** Contexte d'un tour à vide, mesuré : borne la charge fixe affichée. */
+  contextBaseline?: number
+  /** Dernier poids mesuré par serveur, affiché en regard de chaque nom. */
+  mcpWeights?: Record<string, { tokens: number | null }>
+  /** Ouvre la configuration du projet, pour agir depuis le diagnostic. */
+  onOpenProjectSettings?: () => void
   /** Serveurs MCP de l'utilisateur : nommés dans l'alerte de charge fixe. */
   mcpServers?: McpServerRef[]
   onHandoffSuggested: () => void
@@ -44,6 +53,7 @@ export function ContextGauge({
     estimate.usedTokens,
     estimate.windowTokens,
     conversation.orchestrator ? conductorTokens : 0,
+    contextBaseline,
   )
   const slices: DonutSlice[] = parts.map((part) => ({
     label: part.label,
@@ -111,16 +121,33 @@ export function ContextGauge({
           ) : null}
           {mcpServers.length > 0 ? (
             <details className="context-gauge-servers-list">
-              <summary>{mcpServers.length} serveurs MCP chargés</summary>
+              <summary>
+                {mcpServers.length} serveurs MCP chargés
+                {onOpenProjectSettings ? (
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={onOpenProjectSettings}
+                  >
+                    Configurer
+                  </button>
+                ) : null}
+              </summary>
               <ul>
-                {mcpServers.map((server) => (
-                  <li key={`${server.provider}:${server.name}`}>
-                    <span className={`project-mcp-badge is-${server.provider}`}>
-                      {server.provider === 'claude' ? 'CL' : 'CX'}
-                    </span>
-                    {server.name}
-                  </li>
-                ))}
+                {mcpServers.map((server) => {
+                  const tokens = mcpWeights[server.name]?.tokens
+                  return (
+                    <li key={`${server.provider}:${server.name}`}>
+                      <span className={`project-mcp-badge is-${server.provider}`}>
+                        {server.provider === 'claude' ? 'CL' : 'CX'}
+                      </span>
+                      <span className="context-gauge-server-name">{server.name}</span>
+                      <span className="context-gauge-server-cost">
+                        {typeof tokens === 'number' ? formatCompact(tokens) : '—'}
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
             </details>
           ) : null}

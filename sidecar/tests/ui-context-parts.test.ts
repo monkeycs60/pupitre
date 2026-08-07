@@ -15,8 +15,8 @@ const events = [
 test("regroupe le contexte en charge fixe, conversation et outils", () => {
   const parts = contextParts(events, 10_000);
   expect(parts.map((part) => [part.label, part.group])).toEqual([
-    ["Système, MCP, mémoire", "fixe"],
     ["Consignes Pupitre", "fixe"],
+    ["Non attribué", "conversation"],
     ["Vos messages", "conversation"],
     ["Réponses de l’agent", "conversation"],
     ["Fichiers lus et commandes", "outils"],
@@ -26,11 +26,9 @@ test("regroupe le contexte en charge fixe, conversation et outils", () => {
 test("la charge fixe absorbe le reliquat du total provider", () => {
   const parts = contextParts(events, 10_000);
   expect(parts.reduce((sum, part) => sum + part.tokens, 0)).toBe(10_000);
-  // Ce que le CLI ne publie pas, une fois retirées les parts mesurées.
-  expect(parts[0]).toMatchObject({
-    label: "Système, MCP, mémoire",
-    tokens: 10_000 - (100 + 200 + 300 + 95),
-  });
+  // Sans mesure de référence, tout le reliquat est déclaré non attribué.
+  expect(parts.find((part) => part.label === "Non attribué")?.tokens)
+    .toBe(10_000 - (100 + 200 + 300 + 95));
 });
 
 test("sans total provider crédible, seule la part Pupitre subsiste", () => {
@@ -54,11 +52,20 @@ test("une fenêtre déjà pleine n'ajoute pas de part disponible", () => {
   expect(contextParts(events, 10_000, 10_000).some((part) => part.free)).toBe(false);
 });
 
-test("la charge fixe distingue ce que Pupitre injecte du reste", () => {
-  const persistent = contextParts(events, 10_000, 1_000_000)
-    .filter((part) => part.persistent)
-    .map((part) => part.label);
-  expect(persistent).toEqual(["Système, MCP, mémoire", "Consignes Pupitre"]);
+test("la charge fixe reste bornée par la mesure de référence", () => {
+  // Sans mesure : seules les consignes Pupitre sont déclarées incompressibles.
+  expect(
+    contextParts(events, 10_000, 1_000_000).filter((part) => part.persistent)
+      .map((part) => part.label),
+  ).toEqual(["Consignes Pupitre"]);
+
+  // Avec une mesure de 30 000, la charge fixe vaut exactement ça — jamais le
+  // reliquat entier, qui absorbe aussi l'erreur d'estimation.
+  const measured = contextParts(events, 500_000, 1_000_000, 0, 30_000);
+  expect(measured.find((part) => part.label === "Prompt système et mémoire")?.tokens)
+    .toBe(30_000);
+  expect(measured.find((part) => part.label === "Non attribué")?.tokens)
+    .toBeGreaterThan(400_000);
 });
 
 test("les grands nombres s'abrègent en millions", () => {
@@ -74,15 +81,14 @@ test("le bridge conductor bascule du déduit vers les consignes Pupitre", () => 
   const part = (parts: typeof withBridge, label: string) =>
     parts.find((item) => item.label === label)!.tokens;
   expect(part(withBridge, "Consignes Pupitre") - part(without, "Consignes Pupitre")).toBe(1_200);
-  expect(part(without, "Système, MCP, mémoire") - part(withBridge, "Système, MCP, mémoire"))
-    .toBe(1_200);
+  expect(part(without, "Non attribué") - part(withBridge, "Non attribué")).toBe(1_200);
   expect(withBridge.reduce((sum, item) => sum + item.tokens, 0)).toBe(1_000_000);
 });
 
 test("le ratio incompressible se rapporte à la fenêtre entière", () => {
-  const parts = contextParts(events, 10_000, 20_000);
-  // Déduit (9 305) + consignes Pupitre (95) = 9 400, sur une fenêtre de 20 000.
-  expect(persistentRatio(parts, 20_000)).toBeCloseTo(0.47, 2);
+  // Charge fixe mesurée à 9 000 sur une fenêtre de 20 000.
+  const parts = contextParts(events, 10_000, 20_000, 0, 9_000);
+  expect(persistentRatio(parts, 20_000)).toBeCloseTo(0.45, 2);
   expect(persistentRatio(parts, 0)).toBe(0);
 });
 

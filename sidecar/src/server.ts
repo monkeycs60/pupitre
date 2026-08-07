@@ -1223,7 +1223,11 @@ export function createServer(deps: ServerDeps) {
                 .filter((name) => name in available)
                 .map((name) => [name, available[name]]),
             );
-          return json(await verifyMcpContextCost(project.path, selected));
+          const probe = await verifyMcpContextCost(project.path, selected);
+          // `without` est le contexte d'un tour à vide : c'est la charge fixe
+          // réelle, que la jauge affichera au lieu de la déduire.
+          if (!probe.error) deps.settings.set("contextBaseline", probe.without);
+          return json(probe);
         }
 
         const projectMcpId = routeId(pathname, /^\/api\/projects\/([^/]+)\/mcp-servers$/);

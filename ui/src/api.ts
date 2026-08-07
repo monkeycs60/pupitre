@@ -137,6 +137,8 @@ export interface Settings {
   actionFormat?: ActionFormat
   /** Lecture seule : calculé par le sidecar, ignoré en écriture. */
   conductorToolTokens?: number
+  /** Contexte d'un tour à vide, mesuré par « Vérifier en réel ». */
+  contextBaseline?: number
 }
 
 export class ApiError extends Error {

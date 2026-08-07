@@ -36,6 +36,7 @@ import type { AppEvent, WorkspaceView } from './types'
 import { useGamification } from './useGamification'
 import { ProgressView } from './ProgressView'
 import { AppSettingsView } from './AppSettingsView'
+import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 
 const DEFAULT_SIDEBAR_WIDTH = 296
 const MIN_SIDEBAR_WIDTH = 240
@@ -91,8 +92,14 @@ function App() {
   const [actionFormat, setActionFormat] = useState<ActionFormat>(DEFAULT_ACTION_FORMAT)
   /** Coût mesuré du bridge MCP `conductor`, calculé par le sidecar. */
   const [conductorTokens, setConductorTokens] = useState(0)
+  /** Charge fixe mesurée : contexte d'un tour à vide. */
+  const [contextBaseline, setContextBaseline] = useState(0)
   /** Serveurs MCP configurés par l'utilisateur pour le projet ouvert. */
   const [mcpServers, setMcpServers] = useState<McpServerRef[]>([])
+  /** Dernier poids mesuré par serveur, affiché dans le diagnostic de contexte. */
+  const [mcpWeights, setMcpWeights] = useState<Record<string, { tokens: number | null }>>({})
+  /** Configuration du projet ouverte depuis le diagnostic de contexte. */
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false)
   const { events, connection, retryAt } = useConversationEvents(
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
@@ -135,6 +142,7 @@ function App() {
           setActionFormat({ ...DEFAULT_ACTION_FORMAT, ...settings.actionFormat })
         }
         setConductorTokens(settings.conductorToolTokens ?? 0)
+        setContextBaseline(settings.contextBaseline ?? 0)
       })
       // Les intitulés par défaut suffisent : un réglage illisible ne doit pas
       // priver le chat de ses cases à cocher.
@@ -191,7 +199,10 @@ function App() {
     }
     const controller = new AbortController()
     void listProjectMcpServers(projectId, controller.signal)
-      .then((config) => setMcpServers(config.servers))
+      .then((config) => {
+        setMcpServers(config.servers)
+        setMcpWeights(config.weights)
+      })
       // L'inventaire MCP n'est qu'un confort d'affichage dans l'alerte.
       .catch(() => {})
     return () => controller.abort()
@@ -591,7 +602,10 @@ function App() {
                     conversation={selectedConversation}
                     events={events}
                     conductorTokens={conductorTokens}
+                    contextBaseline={contextBaseline}
                     mcpServers={mcpServers}
+                    mcpWeights={mcpWeights}
+                    onOpenProjectSettings={() => setProjectSettingsOpen(true)}
                     onHandoffSuggested={() => setShowSwitchModel(true)}
                   />
                 ) : null}
@@ -672,6 +686,13 @@ function App() {
         onViewSelect={handlePaletteViewSelect}
         onAction={handlePaletteAction}
       />
+      {projectSettingsOpen && selectedProject ? (
+        <ProjectSettingsDialog
+          project={selectedProject}
+          onClose={() => setProjectSettingsOpen(false)}
+          onUpdated={handleProjectUpdated}
+        />
+      ) : null}
     </main>
     </ActionFormatContext.Provider>
   )
