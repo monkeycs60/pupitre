@@ -15,7 +15,8 @@ import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import { ContextGauge } from './ContextGauge'
 import { GitView } from './GitView'
-import { getGardienStatus, getSettings, listProjectConversations, listProjects } from './api'
+import { getGardienStatus, getSettings, listProjectConversations, listProjectMcpServers, listProjects } from './api'
+import type { McpServerRef } from './api'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import { modelLabel } from './modelOptions'
 import type { ActionFormat } from './actionHeadings'
@@ -90,6 +91,8 @@ function App() {
   const [actionFormat, setActionFormat] = useState<ActionFormat>(DEFAULT_ACTION_FORMAT)
   /** Coût mesuré du bridge MCP `conductor`, calculé par le sidecar. */
   const [conductorTokens, setConductorTokens] = useState(0)
+  /** Serveurs MCP configurés par l'utilisateur pour le projet ouvert. */
+  const [mcpServers, setMcpServers] = useState<McpServerRef[]>([])
   const { events, connection, retryAt } = useConversationEvents(
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
@@ -179,6 +182,20 @@ function App() {
       setSidebarWidth(MAX_SIDEBAR_WIDTH)
     }
   }
+
+  useEffect(() => {
+    const projectId = selectedProject?.id
+    if (projectId === undefined) {
+      setMcpServers([])
+      return
+    }
+    const controller = new AbortController()
+    void listProjectMcpServers(projectId, controller.signal)
+      .then(setMcpServers)
+      // L'inventaire MCP n'est qu'un confort d'affichage dans l'alerte.
+      .catch(() => {})
+    return () => controller.abort()
+  }, [selectedProject?.id])
 
   useEffect(() => {
     function syncHelpHash() {
@@ -574,6 +591,7 @@ function App() {
                     conversation={selectedConversation}
                     events={events}
                     conductorTokens={conductorTokens}
+                    mcpServers={mcpServers}
                     onHandoffSuggested={() => setShowSwitchModel(true)}
                   />
                 ) : null}

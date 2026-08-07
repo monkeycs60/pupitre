@@ -458,6 +458,20 @@ export function refreshQuotas(): Promise<QuotaSnapshot> {
   return fetchJson('/api/quotas/refresh', { method: 'POST' })
 }
 
+export interface McpServerRef {
+  name: string
+  provider: Provider
+  scope: 'global' | 'projet'
+}
+
+/** Serveurs MCP configurés par l'utilisateur — noms seulement, jamais les clés. */
+export function listProjectMcpServers(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<McpServerRef[]> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/mcp-servers`, { signal })
+}
+
 export function getSettings(signal?: AbortSignal): Promise<Settings> {
   return fetchJson('/api/settings', { signal })
 }

@@ -1286,6 +1286,11 @@
   color: var(--warn);
 }
 
+.context-gauge-servers {
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+}
+
 /* --- Anneau de répartition (contexte, coûts) ------------------------------ */
 
 .donut-chart {

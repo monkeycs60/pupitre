@@ -52,6 +52,7 @@ import type { GamificationService } from "./gamification";
 import { FILESYSTEM_SCOPES, type FilesystemScope } from "./access";
 import { actionFormat } from "./response-format";
 import { conductorToolTokens } from "./conductor-mcp";
+import { listMcpServers } from "./mcp-inventory";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -1172,6 +1173,14 @@ export function createServer(deps: ServerDeps) {
           } catch {
             throw new HttpError(400, "mois invalide");
           }
+        }
+
+        const projectMcpId = routeId(pathname, /^\/api\/projects\/([^/]+)\/mcp-servers$/);
+        if (request.method === "GET" && projectMcpId !== null) {
+          const project = deps.projects.get(projectMcpId);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          // Noms seulement : les fichiers de config contiennent des clés d'API.
+          return json(listMcpServers(project.path));
         }
 
         const projectWorkflowsId = routeId(

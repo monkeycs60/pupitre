@@ -1,0 +1,70 @@
+import { expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { listMcpServers } from "../src/mcp-inventory";
+
+function fixture(): { home: string; project: string } {
+  const home = mkdtempSync(join(tmpdir(), "pupitre-mcp-home-"));
+  const project = mkdtempSync(join(tmpdir(), "pupitre-mcp-project-"));
+  writeFileSync(join(home, ".claude.json"), JSON.stringify({
+    mcpServers: {
+      tavily: { command: "npx", env: { TAVILY_API_KEY: "secret" } },
+      figma: { command: "npx" },
+    },
+    projects: { [project]: { mcpServers: { "projet-only": { command: "node" } } } },
+  }));
+  mkdirSync(join(home, ".codex"), { recursive: true });
+  writeFileSync(join(home, ".codex", "config.toml"), [
+    "[mcp_servers.brave-search]",
+    'command = "npx"',
+    "[mcp_servers.brave-search.env]",
+    'BRAVE_API_KEY = "secret"',
+    "[mcp_servers.mongodb]",
+    'command = "npx"',
+  ].join("\n"));
+  return { home, project };
+}
+
+test("liste les serveurs des deux providers, global et projet", () => {
+  const { home, project } = fixture();
+  expect(listMcpServers(project, home)).toEqual([
+    { name: "tavily", provider: "claude", scope: "global" },
+    { name: "figma", provider: "claude", scope: "global" },
+    { name: "projet-only", provider: "claude", scope: "projet" },
+    { name: "brave-search", provider: "codex", scope: "global" },
+    { name: "mongodb", provider: "codex", scope: "global" },
+  ]);
+});
+
+test("les sous-tables TOML ne créent pas de faux serveurs", () => {
+  const { home, project } = fixture();
+  const codex = listMcpServers(project, home).filter((server) => server.provider === "codex");
+  expect(codex.map((server) => server.name)).toEqual(["brave-search", "mongodb"]);
+});
+
+test("aucune clé d'API ne sort de l'inventaire", () => {
+  const { home, project } = fixture();
+  expect(JSON.stringify(listMcpServers(project, home))).not.toContain("secret");
+});
+
+test("un serveur déclaré deux fois n'est compté qu'une fois", () => {
+  const { home, project } = fixture();
+  writeFileSync(join(project, ".mcp.json"), JSON.stringify({
+    mcpServers: { tavily: { command: "npx" }, local: { command: "node" } },
+  }));
+  const names = listMcpServers(project, home).map((server) => server.name);
+  expect(names.filter((name) => name === "tavily")).toHaveLength(1);
+  expect(names).toContain("local");
+});
+
+test("une configuration absente rend une liste vide, sans erreur", () => {
+  const empty = mkdtempSync(join(tmpdir(), "pupitre-mcp-empty-"));
+  expect(listMcpServers(empty, empty)).toEqual([]);
+});
+
+test("un JSON corrompu n'interrompt pas l'inventaire", () => {
+  const { home, project } = fixture();
+  writeFileSync(join(project, ".mcp.json"), "{ pas du json");
+  expect(listMcpServers(project, home).length).toBeGreaterThan(0);
+});

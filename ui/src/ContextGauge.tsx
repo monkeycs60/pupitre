@@ -7,18 +7,22 @@ import {
 import { DonutChart } from './DonutChart'
 import type { DonutSlice } from './DonutChart'
 import { formatCompact } from './formatCompact'
+import type { McpServerRef } from './api'
 import type { AppEvent, Conversation } from './types'
 
 export function ContextGauge({
   conversation,
   events,
   conductorTokens = 0,
+  mcpServers = [],
   onHandoffSuggested,
 }: {
   conversation: Conversation
   events: AppEvent[]
   /** Coût mesuré du bridge conductor, exposé par le sidecar. */
   conductorTokens?: number
+  /** Serveurs MCP de l'utilisateur : nommés dans l'alerte de charge fixe. */
+  mcpServers?: McpServerRef[]
   onHandoffSuggested: () => void
 }) {
   const estimate = contextEstimate(
@@ -76,8 +80,18 @@ export function ContextGauge({
           {persistentAlert ? (
             <p className="context-gauge-alert" role="status">
               <strong>{Math.round(persistent * 100)} % de la fenêtre part en charge fixe.</strong>{' '}
-              Un serveur MCP inutilisé coûte ce prix dans <em>toutes</em> vos
-              conversations : en désactiver un libère autant de contexte partout.
+              Cette charge est payée dans <em>toutes</em> vos conversations.
+              {mcpServers.length > 0 ? (
+                <>
+                  {' '}Vos {mcpServers.length} serveurs MCP y contribuent :{' '}
+                  <span className="context-gauge-servers">
+                    {mcpServers.map((server) => server.name).join(', ')}
+                  </span>
+                  . En désactiver un que vous n’utilisez pas libère du contexte partout.
+                </>
+              ) : (
+                ' Réduire les serveurs MCP chargés libère du contexte partout.'
+              )}
             </p>
           ) : null}
           <p>
