@@ -1,7 +1,13 @@
 // Schéma unifié : la SEULE surface que le frontend et le stockage connaissent.
 export type AppEvent =
   | { type: "session"; provider: Provider; cliSessionId: string; model: string }
-  | { type: "user-message"; text: string; images: string[] } // images = chemins media relatifs
+  | {
+      type: "user-message";
+      text: string;
+      images: string[];
+      /** Fichiers joints non-image (et images pour les anciens clients). */
+      attachments?: MediaAttachment[];
+    }
   | { type: "text-delta"; text: string }
   | { type: "text-final"; text: string }
   | { type: "tool-start"; toolId: string; toolName: string; input: unknown }
@@ -62,6 +68,8 @@ export type AppEvent =
       completedAt: string;
       error?: string;
     }
+  /** Titre et résumé régénérés après un tour : la sidebar se met à jour. */
+  | { type: "conversation-digest"; title: string; summary: string }
   | { type: "status"; state: "running" | "done" | "error"; error?: string };
 
 export interface TestScopeEvent {
@@ -86,6 +94,13 @@ export interface TestScopeEvent {
 export type StoredEvent = AppEvent & { id: number };
 
 export type Provider = "claude" | "codex";
+
+export interface MediaAttachment {
+  name: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+}
 
 export function parseJsonlLine(line: string): Record<string, unknown> | null {
   const trimmed = line.trim();

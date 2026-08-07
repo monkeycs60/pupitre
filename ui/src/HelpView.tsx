@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
+import Markdown from './Markdown'
 
 const RAW_PAGES = import.meta.glob('../../docs/help/*.md', {
   eager: true,
@@ -52,7 +52,7 @@ export function HelpView({ initialSlug }: HelpViewProps) {
         <nav className="help-list" aria-label="Pages d'aide">
           {visible.length === 0 ? <div className="help-empty">Aucune page ne correspond à cette recherche.</div> : visible.map((page) => <button type="button" key={page.slug} className={selected?.slug === page.slug ? 'is-selected' : ''} onClick={() => select(page.slug)}>{page.title}</button>)}
         </nav>
-        <article className="help-article">{selected ? <ReactMarkdown>{selected.content}</ReactMarkdown> : <div className="help-empty">Aucune page d'aide disponible.</div>}</article>
+        <article className="help-article">{selected ? <Markdown>{selected.content}</Markdown> : <div className="help-empty">Aucune page d'aide disponible.</div>}</article>
       </div>
     </section>
   )

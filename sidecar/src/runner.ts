@@ -1,7 +1,7 @@
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
 import type { MediaStore } from "./media";
-import type { AppEvent, StoredEvent } from "./events";
+import type { AppEvent, MediaAttachment, StoredEvent } from "./events";
 import { runClaudeTurn } from "./adapters/claude";
 import { runCodexTurn } from "./adapters/codex";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
@@ -10,6 +10,9 @@ import { ConversationActivity } from "./conversation-activity";
 import type { GitProjectService, GitTurnTracking } from "./git";
 import type { SkillInventory } from "./skills";
 import type { AppNotification } from "./stores/notifications";
+import { generateDigest, shouldRefreshDigest } from "./conversation-digest";
+import { DEFAULT_ACTION_FORMAT, withActionFormat } from "./response-format";
+import type { ActionFormat } from "./response-format";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -18,6 +21,19 @@ interface ActiveTurn {
   done: Promise<void>;
   finish: () => void;
   startedAt: string;
+}
+
+function attachmentPrompt(
+  attachments: MediaAttachment[],
+  media: MediaStore,
+): string {
+  if (attachments.length === 0) return "";
+  const lines = attachments.map((attachment) => {
+    const path = media.absolutePath(attachment.name);
+    return `- ${attachment.originalName} (${attachment.mimeType}, ${attachment.size} octets) : ${path}`;
+  });
+  return "\n\n[Pièces jointes disponibles]\n" + lines.join("\n")
+    + "\nConsulte les fichiers joints avec les outils disponibles si nécessaire.";
 }
 
 export interface ActiveTurnSnapshot {
@@ -59,6 +75,8 @@ export class ConversationRunner {
     private notify?: (notification: Omit<AppNotification, "id" | "created_at">) => void,
     private longTaskThresholdMs: () => number = () => 120_000,
     readonly activity = new ConversationActivity(),
+    /** Lu à chaque tour : le réglage peut changer sans redémarrer le sidecar. */
+    private actionFormat: () => ActionFormat = () => DEFAULT_ACTION_FORMAT,
   ) {
     sweepOrphanedRuns(convs);
   }
@@ -86,6 +104,7 @@ export class ConversationRunner {
     conversationId: string,
     prompt: string,
     imageNames: string[],
+    attachments: MediaAttachment[] = [],
   ): Promise<TurnOutcome> {
     const conv = this.convs.get(conversationId);
     if (!conv) throw new Error("conversation inconnue");
@@ -151,7 +170,12 @@ export class ConversationRunner {
     };
 
     try {
-      emit({ type: "user-message", text: prompt, images: imageNames });
+      emit({
+        type: "user-message",
+        text: prompt,
+        images: imageNames,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      });
       emit({ type: "turn-timing", phase: "started", startedAt });
       // Câblage du bridge MCP `conductor`, par tour : seule une conversation
       // orchestratrice peut déléguer. Les tours de sous-tâches passent par
@@ -169,15 +193,25 @@ export class ConversationRunner {
         }
         conductor = { port, conversationId };
       }
+      const permissionMode = conv.permission_mode ?? project.permission_mode;
       const opts = {
         cwd: project.path,
         model: conv.model,
         effort: conv.effort ?? undefined,
         speed: conv.speed ?? undefined,
-        prompt: this.skills?.augmentPrompt(prompt, project.id) ?? prompt,
+        prompt: withActionFormat(
+          (this.skills?.augmentPrompt(prompt, project.id) ?? prompt)
+            + attachmentPrompt(attachments, this.media),
+          this.actionFormat(),
+        ),
         cliSessionId: conv.cli_session_id,
-        permissionMode: project.permission_mode,
+        permissionMode,
+        filesystemScope: project.filesystem_scope,
+        ...(conv.provider === "codex" && permissionMode === "plan"
+          ? { sandboxMode: "read-only" as const }
+          : {}),
         images: imageNames.map((name) => this.media.absolutePath(name)),
+        attachments,
         signal: controller.signal,
         ...(conductor ? { conductor } : {}),
       };
@@ -214,7 +248,31 @@ export class ConversationRunner {
       this.active.delete(conversationId);
       activeTurn?.finish();
       releaseActivity();
+      // Best effort et hors chemin critique : le tour est déjà rendu, le digest
+      // arrive quand il arrive. Un échec ne laisse que l'ancien titre.
+      if (outcome.state === "done") void this.refreshDigest(conversationId, project.path, persist);
     }
     return outcome;
+  }
+
+  /** Régénère titre + résumé si le palier est atteint et le titre non figé. */
+  private async refreshDigest(
+    conversationId: string,
+    cwd: string,
+    persist: (event: AppEvent) => void,
+  ): Promise<void> {
+    try {
+      const conv = this.convs.get(conversationId);
+      if (!conv || conv.title_locked) return;
+      const turn = this.convs.turnCount(conversationId);
+      if (!shouldRefreshDigest(turn, conv.digest_turn)) return;
+      const digest = await generateDigest(this.convs.digestSource(conversationId), cwd);
+      if (!digest) return;
+      const updated = this.convs.updateDigest(conversationId, digest, turn);
+      if (!updated) return;
+      persist({ type: "conversation-digest", title: updated.title, summary: updated.summary });
+    } catch (error) {
+      console.error("Rafraîchissement du digest impossible", error);
+    }
   }
 }

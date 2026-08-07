@@ -2,6 +2,7 @@ import { parseClaudeLine } from "./claude-parser";
 import { spawnJsonl } from "./spawn-jsonl";
 import type { TurnOptions, EmitFn } from "./types";
 import { claudeMcpConfigArg } from "../conductor";
+import { aiRoots } from "../access";
 
 export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   const bin = process.env.PUPITRE_CLAUDE_BIN ?? "claude";
@@ -10,10 +11,29 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   const prompt = opts.images.length
     ? `${opts.prompt}\n\n[Images jointes: ${opts.images.join(", ")}]`
     : opts.prompt;
+  const permissionMode = opts.permissionMode === "default" ? "auto" : opts.permissionMode;
+  const accessDirs = opts.filesystemScope === "full-system" ? ["/"] : aiRoots();
+  // `--add-dir` élargit la racine visible, mais ne suffit pas pour les fichiers
+  // d'instructions globaux : Claude les traite comme des fichiers sensibles.
+  // Ces règles restent bornées aux deux racines IA et ne donnent pas le bypass
+  // général réservé au preset YOLO.
+  const allowedTools = [
+    "Edit(~/.claude/**)",
+    "Edit(~/.codex/**)",
+    "Write(~/.claude/**)",
+    "Write(~/.codex/**)",
+    "Bash(npm run build:*)",
+    "Bash(bun test:*)",
+  ];
   const args = [
     "-p", "--output-format", "stream-json", "--include-partial-messages",
-    "--verbose", "--model", opts.model, "--permission-mode", opts.permissionMode,
+    "--verbose", "--model", opts.model, "--permission-mode", permissionMode,
+    // Le cwd reste le projet, mais les instructions globales et la mémoire
+    // sont aussi des surfaces de travail légitimes pour Pupitre.
+    "--add-dir", ...accessDirs,
   ];
+  args.push("--allowedTools", ...allowedTools);
+  if (permissionMode === "bypassPermissions") args.push("--dangerously-skip-permissions");
   if (opts.effort) args.push("--effort", opts.effort);
   // `--mcp-config` accepte un chemin de fichier OU un JSON inline (cf.
   // `claude --help`) ; pas de `--strict-mcp-config` : les serveurs MCP que

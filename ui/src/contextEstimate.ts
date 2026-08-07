@@ -12,6 +12,7 @@ const MODEL_CONTEXT_WINDOWS: Partial<Record<Provider, Record<string, number>>> =
   codex: {
     'gpt-5.6-sol': 400_000,
     'gpt-5.6-luna': 400_000,
+    'gpt-5.6-terra': 400_000,
   },
 }
 
@@ -29,6 +30,104 @@ export interface ContextEstimate {
 
 export function contextWindowTokens(provider: Provider, model: string): number {
   return MODEL_CONTEXT_WINDOWS[provider]?.[model] ?? FALLBACK_CONTEXT_WINDOWS[provider]
+}
+
+/** Approximation usuelle : 4 caractères par token, toutes langues confondues. */
+const CHARS_PER_TOKEN = 4
+
+/** Taille de la consigne de format injectée par Pupitre à chaque tour. */
+const PUPITRE_PREAMBLE_TOKENS = 95
+
+export interface ContextPart {
+  label: string
+  tokens: number
+  /** Déduit par soustraction plutôt que mesuré. */
+  inferred?: boolean
+  /**
+   * Rechargé à chaque session indépendamment de la conversation : prompt
+   * système, définitions d'outils MCP, mémoire projet, consigne Pupitre. On ne
+   * peut pas le réduire en résumant ou en repartant d'un fil neuf.
+   */
+  persistent?: boolean
+  /** La place encore libre dans la fenêtre, pas une consommation. */
+  free?: boolean
+}
+
+function approximateTokens(text: string): number {
+  return Math.round(text.length / CHARS_PER_TOKEN)
+}
+
+/**
+ * Décompose le contexte occupé. Seul le total vient du provider : le détail est
+ * reconstitué depuis les événements stockés, et le reliquat regroupe ce que le
+ * CLI ne publie pas (prompt système, définitions d'outils MCP, mémoire projet).
+ */
+/** Au-delà, l'incompressible pèse assez pour valoir un arbitrage MCP. */
+export const PERSISTENT_ALERT_RATIO = 0.3
+
+/** Part du contexte rechargée à chaque session, rapportée à la fenêtre. */
+export function persistentRatio(parts: ContextPart[], windowTokens: number): number {
+  if (windowTokens <= 0) return 0
+  const persistent = parts
+    .filter((part) => part.persistent)
+    .reduce((sum, part) => sum + part.tokens, 0)
+  return persistent / windowTokens
+}
+
+export function contextParts(
+  events: AppEvent[],
+  usedTokens: number,
+  windowTokens = 0,
+  /** Coût du bridge conductor, mesuré par le sidecar ; 0 si non orchestrée. */
+  conductorTokens = 0,
+): ContextPart[] {
+  let user = 0
+  let assistant = 0
+  let tools = 0
+  let turns = 0
+
+  for (const event of events) {
+    if (event.type === 'user-message') {
+      user += approximateTokens(event.text)
+      turns += 1
+    } else if (event.type === 'text-final' || event.type === 'text-delta') {
+      assistant += approximateTokens(event.text)
+    } else if (event.type === 'tool-end') {
+      tools += approximateTokens(event.output)
+    } else if (event.type === 'tool-start') {
+      tools += approximateTokens(JSON.stringify(event.input ?? ''))
+    }
+  }
+
+  const pupitre = turns * PUPITRE_PREAMBLE_TOKENS
+  const measured = user + assistant + tools + pupitre + conductorTokens
+  const parts: ContextPart[] = [
+    { label: 'Vos messages', tokens: user },
+    { label: 'Réponses de l’agent', tokens: assistant },
+    { label: 'Appels et sorties d’outils', tokens: tools },
+    { label: 'Consigne de format Pupitre', tokens: pupitre, persistent: true },
+    { label: 'Bridge conductor (Pupitre)', tokens: conductorTokens, persistent: true },
+  ]
+  // Le reliquat n'a de sens que si le provider a publié un total crédible.
+  if (usedTokens > measured) {
+    parts.push({
+      // Le bridge conductor en est sorti : ne reste ici que ce que le CLI ne
+      // publie pas — prompt système, serveurs MCP de l'utilisateur, mémoire.
+      label: 'Système, MCP tiers, mémoire',
+      tokens: usedTokens - measured,
+      inferred: true,
+      persistent: true,
+    })
+  }
+  const used = parts
+    .filter((part) => part.tokens > 0)
+    .sort((left, right) => right.tokens - left.tokens)
+  // La place libre ferme l'anneau : la répartition se lit sur la fenêtre
+  // entière, pas sur le seul contexte déjà consommé.
+  if (windowTokens > usedTokens) {
+    used.push({ label: 'Disponible', tokens: windowTokens - usedTokens, free: true })
+  }
+  return used
 }
 
 export function contextEstimate(

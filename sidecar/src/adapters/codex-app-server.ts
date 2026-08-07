@@ -7,6 +7,7 @@ import type { AppEvent } from "../events";
 import type { EmitFn, TurnOptions } from "./types";
 import { codexMcpConfig } from "../conductor";
 import { boundedToolOutput } from "./output";
+import { aiRoots, DEFAULT_FILESYSTEM_SCOPE } from "../access";
 
 // Client du protocole `codex app-server` (JSON-RPC newline-delimited sur stdio).
 // Un SEUL process partagé par tout le sidecar : démarrage paresseux au premier
@@ -381,11 +382,18 @@ export class CodexAppServerClient {
   }
 
   private async openThread(opts: TurnOptions): Promise<string> {
+    const scope = opts.filesystemScope ?? DEFAULT_FILESYSTEM_SCOPE;
+    const readOnly = opts.sandboxMode === "read-only";
+    const fullSystem = scope === "full-system" && !readOnly;
     const settings = {
       model: opts.model,
       cwd: opts.cwd,
       approvalPolicy: "never",
-      sandbox: opts.sandboxMode ?? "workspace-write",
+      // Les tours normaux peuvent modifier les instructions et la mémoire
+      // globales demandées par l'utilisateur. Les appels de review/debrief
+      // passent explicitement `read-only` et ne suivent donc pas ce défaut.
+      sandbox: opts.sandboxMode ?? (fullSystem ? "danger-full-access" : "workspace-write"),
+      ...(!fullSystem ? { runtimeWorkspaceRoots: [opts.cwd, ...aiRoots()] } : {}),
       // null est volontaire : un thread repris conserve sinon son tier `fast`.
       serviceTier: opts.speed === "fast" ? "fast" : null,
     };

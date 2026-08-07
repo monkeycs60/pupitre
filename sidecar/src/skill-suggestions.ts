@@ -28,9 +28,21 @@ export type AmbiguousSuggestionResolver = (
 const STOP_WORDS = new Set([
   "avec", "dans", "des", "elle", "faire", "pour", "plus", "que", "qui",
   "sur", "une", "utilise", "using", "user", "when", "this", "the", "and",
-  "from", "skill", "code", "projet", "project",
+  "from", "skill", "projet", "project",
+  // Ces termes décrivent souvent le contexte de développement, pas le skill.
+  // Ils ne doivent pas suffire à faire apparaître une suggestion.
+  "app", "application", "build", "bug", "bugs", "code", "commit", "commits",
+  "component", "components", "debug", "development", "dev", "feature", "features",
+  "file", "files", "fix", "git", "implement", "implementation", "merge", "pull",
+  "push", "refactor", "refactoring", "repo", "repository", "review", "reviews",
+  "test", "tests", "testing",
 ]);
 const CACHE_LIMIT = 100;
+const MIN_LEXICAL_SCORE = 2;
+
+function rawWords(value: string): string[] {
+  return [...new Set(normalized(value).match(/[a-z0-9]{3,}/g) ?? [])];
+}
 
 function normalized(value: string): string {
   return value
@@ -40,8 +52,17 @@ function normalized(value: string): string {
 }
 
 function words(value: string): string[] {
-  return [...new Set(normalized(value).match(/[a-z0-9]{3,}/g) ?? [])]
+  return rawWords(value)
     .filter((word) => !STOP_WORDS.has(word));
+}
+
+function containsWordPhrase(text: string, phrase: string): boolean {
+  const textWords = rawWords(text);
+  const phraseWords = rawWords(phrase);
+  if (phraseWords.length === 0 || phraseWords.length > textWords.length) return false;
+  return textWords.some((_, index) => phraseWords.every(
+    (word, offset) => textWords[index + offset] === word,
+  ));
 }
 
 function overlapScore(inputWords: string[], candidateWords: string[], weight: number): number {
@@ -54,24 +75,28 @@ function overlapScore(inputWords: string[], candidateWords: string[], weight: nu
 
 function lexicalSuggestion(text: string, skill: SkillSummary): SkillSuggestion | null {
   const inputWords = words(text);
-  if (inputWords.length === 0) return null;
-  const normalizedText = normalized(text);
+  if (rawWords(text).length === 0) return null;
   const nameWords = words(skill.name.replace(/[-_:]/g, " "));
   const triggerWords = words(skill.triggers.join(" "));
   const descriptionWords = words(skill.description);
   const matchingTriggers = skill.triggers.filter((trigger) => {
-    const candidate = normalized(trigger);
-    return candidate.length >= 3 && normalizedText.includes(candidate);
+    const candidateWords = rawWords(trigger);
+    // Un déclencheur générique seul (ex. « push ») est trop peu discriminant.
+    // Une expression explicite de plusieurs mots reste un signal utile, même
+    // si elle contient des termes de développement génériques.
+    const hasSpecificWord = candidateWords.some((word) => !STOP_WORDS.has(word));
+    return (hasSpecificWord || candidateWords.length >= 2)
+      && containsWordPhrase(text, trigger);
   });
   const matchedWords = inputWords.filter((word) => (
     nameWords.includes(word) || triggerWords.includes(word) || descriptionWords.includes(word)
   ));
-  const score = overlapScore(inputWords, nameWords, 5)
+  const lexicalScore = overlapScore(inputWords, nameWords, 5)
     + overlapScore(inputWords, triggerWords, 3)
     + overlapScore(inputWords, descriptionWords, 1)
-    + matchingTriggers.length * 7
-    + (skill.favorite ? 1 : 0);
-  if (score <= 0) return null;
+    + matchingTriggers.length * 7;
+  if (lexicalScore < MIN_LEXICAL_SCORE) return null;
+  const score = lexicalScore + (skill.favorite ? 1 : 0);
   const reason = matchingTriggers[0]
     ? `déclencheur « ${matchingTriggers[0]} »`
     : matchedWords.length > 0

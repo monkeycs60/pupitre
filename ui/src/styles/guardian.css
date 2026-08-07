@@ -466,6 +466,10 @@
   line-height: 1.5;
 }
 
+.guardian-empty-action {
+  margin-top: var(--space-3);
+}
+
 .guardian-empty p {
   margin: 0 0 var(--space-1);
   color: var(--text);

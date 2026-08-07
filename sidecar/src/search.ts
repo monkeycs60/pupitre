@@ -61,7 +61,7 @@ export class SearchIndex {
       this.db.exec("DELETE FROM search_index");
       this.db.exec(`
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
-        SELECT 'conversation', id, id, project_id, title, title FROM conversations;
+          SELECT 'conversation', id, id, project_id, title, title FROM conversations;
 
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
         SELECT 'event', CAST(events.id AS TEXT),

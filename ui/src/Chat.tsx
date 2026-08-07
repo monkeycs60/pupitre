@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import type { FormEvent } from 'react'
 import { EventStream } from './EventStream'
 import { groupEvents } from './groupEvents'
 import { retryCountdownSeconds } from './backoff'
@@ -25,6 +26,15 @@ import { appendDebriefQuestionPrompt } from './debriefQuestion'
 import type { DebriefBlock } from './groupEvents'
 import { SkillsSuggestionsPanel } from './SkillsSuggestionsPanel'
 import { latestUserText, withSkillInvocation } from './skillSuggestionDraft'
+import { TaskToggleContext } from './taskToggle'
+import type { TaskAction } from './taskToggle'
+import { toggleAction, withTaskActions } from './taskDraft'
+
+declare global {
+  interface Window {
+    find?: (text: string, caseSensitive?: boolean, backwards?: boolean, wrapAround?: boolean) => boolean
+  }
+}
 
 interface ChatProps {
   events: AppEvent[]
@@ -52,6 +62,14 @@ function initialSkillsPanelOpen(): boolean {
     return localStorage.getItem(SKILLS_PANEL_KEY) === 'true'
   } catch {
     return false
+  }
+}
+
+function readDraft(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
   }
 }
 
@@ -86,18 +104,43 @@ export function Chat({
   onRunningSubtasksChange,
   initialMessage = '',
 }: ChatProps) {
+  const draftStorageKey = `pupitre:draft:${conversation?.id ?? `new:${project.id}`}`
   const blocks = useMemo(() => groupEvents(events), [events])
   const previousUserText = useMemo(() => latestUserText(events), [events])
   const isRunning = lastStatusIsRunning(events)
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
-  const [message, setMessage] = useState(initialMessage)
+  const [message, setMessage] = useState(() => readDraft(draftStorageKey) ?? initialMessage)
+  const [findQuery, setFindQuery] = useState('')
   const [focusRequest, setFocusRequest] = useState(0)
   const [skillsPanelOpen, setSkillsPanelOpen] = useState(initialSkillsPanelOpen)
+  /** Actions *DO THIS* cochées dans le fil, source de la consigne composée. */
+  const [selectedActions, setSelectedActions] = useState<TaskAction[]>([])
+  // Le premier rendu ne doit rien recomposer : il effacerait le bloc d'un
+  // brouillon restauré depuis le stockage local.
+  const actionsSynced = useRef(false)
   const [subtaskStatuses, setSubtaskStatuses] = useState<
     Record<string, SubtaskStatus>
   >({})
+
+  useEffect(() => {
+    try {
+      if (message.trim().length === 0) localStorage.removeItem(draftStorageKey)
+      else localStorage.setItem(draftStorageKey, message)
+    } catch {
+      // Le brouillon reste disponible en mémoire si le stockage local est bloqué.
+    }
+  }, [draftStorageKey, message])
+
+  function handleConversationCreated(created: Conversation) {
+    try {
+      localStorage.removeItem(draftStorageKey)
+    } catch {
+      // Rien à faire si le stockage local est indisponible.
+    }
+    onConversationCreated(created)
+  }
 
   // Les cartes remontent leur statut (null = démontée) : le fil est la seule
   // source de vérité sur les sous-tâches en vol, y compris pour la sidebar.
@@ -142,6 +185,15 @@ export function Chat({
     setLightboxImage(null)
   }, [])
 
+  useEffect(() => {
+    if (!actionsSynced.current) {
+      actionsSynced.current = true
+      return
+    }
+    setMessage((draft) => withTaskActions(draft, selectedActions))
+    setFocusRequest((current) => current + 1)
+  }, [selectedActions])
+
   function handleScroll() {
     const viewport = viewportRef.current
     if (viewport === null) return
@@ -151,10 +203,12 @@ export function Chat({
     followsBottomRef.current = distanceFromBottom <= 64
   }
 
-  function handleDebriefQuestion(block: DebriefBlock) {
+  // useCallback obligatoire : une identité instable ici casserait la
+  // mémoïsation d'EventStream et annulerait tout le gain.
+  const handleDebriefQuestion = useCallback((block: DebriefBlock) => {
     setMessage((current) => appendDebriefQuestionPrompt(current, block))
     setFocusRequest((current) => current + 1)
-  }
+  }, [])
 
   function handleSkillsPanelToggle() {
     setSkillsPanelOpen((current) => {
@@ -168,10 +222,30 @@ export function Chat({
     })
   }
 
+  function handleFind(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const query = findQuery.trim()
+    if (!query) return
+    if (typeof window.find === 'function') window.find(query, false, false, true)
+  }
+
+  function jumpToBottom() {
+    followsBottomRef.current = true
+    scrollToBottomIfFollowing()
+  }
+
   function handleSkillLaunch(skill: SkillSuggestion) {
     setMessage((current) => withSkillInvocation(current, skill.invocation))
     setFocusRequest((current) => current + 1)
   }
+
+  /**
+   * Case cochée dans un bloc *DO THIS* : la sélection est recomposée en entier
+   * pour que l'en-tête du message reste juste (« actions 2 et 4 »).
+   */
+  const handleTaskToggle = useCallback((action: TaskAction, checked: boolean) => {
+    setSelectedActions((current) => toggleAction(current, action, checked))
+  }, [])
 
   const suggestionText = message.trim() || previousUserText
 
@@ -183,6 +257,22 @@ export function Chat({
             <ReconnectBanner retryAt={retryAt} />
           ) : null}
 
+          <div className="conversation-toolbar" aria-label="Navigation dans la conversation">
+            <form className="conversation-search" onSubmit={handleFind}>
+              <label className="sr-only" htmlFor="conversation-find">Rechercher dans le fil</label>
+              <input
+                id="conversation-find"
+                value={findQuery}
+                onChange={(event) => setFindQuery(event.target.value)}
+                placeholder="Rechercher dans le fil"
+              />
+              <button type="submit" aria-label="Rechercher" title="Rechercher dans le fil">⌕</button>
+            </form>
+            <button type="button" className="conversation-jump" onClick={jumpToBottom} title="Aller au dernier message">
+              Dernier message
+            </button>
+          </div>
+
           <div className="events-view" ref={viewportRef} onScroll={handleScroll}>
             <div className="events-list" aria-live="polite">
               {blocks.length === 0 ? (
@@ -192,13 +282,15 @@ export function Chat({
                     : 'Aucun événement dans cette conversation.'}
                 </p>
               ) : (
-                <EventStream
-                  blocks={blocks}
-                  onImageOpen={handleImageOpen}
-                  onImageLoad={scrollToBottomIfFollowing}
-                  onSubtaskStatusChange={handleSubtaskStatusChange}
-                  onDebriefQuestion={handleDebriefQuestion}
-                />
+                <TaskToggleContext.Provider value={handleTaskToggle}>
+                  <EventStream
+                    blocks={blocks}
+                    onImageOpen={handleImageOpen}
+                    onImageLoad={scrollToBottomIfFollowing}
+                    onSubtaskStatusChange={handleSubtaskStatusChange}
+                    onDebriefQuestion={handleDebriefQuestion}
+                  />
+                </TaskToggleContext.Provider>
               )}
             </div>
           </div>
@@ -208,7 +300,7 @@ export function Chat({
             project={project}
             quotas={quotas}
             isRunning={isRunning}
-            onConversationCreated={onConversationCreated}
+            onConversationCreated={handleConversationCreated}
             onProjectUpdated={onProjectUpdated}
             message={message}
             onMessageChange={setMessage}

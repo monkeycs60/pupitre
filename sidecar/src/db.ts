@@ -19,6 +19,7 @@ export function openDb(dir: string = dataDir()): Database {
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL UNIQUE,
       permission_mode TEXT NOT NULL DEFAULT 'acceptEdits',
+      filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots',
       pinned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS presets (
@@ -26,6 +27,8 @@ export function openDb(dir: string = dataDir()): Database {
       provider TEXT NOT NULL, model TEXT NOT NULL,
       effort TEXT NULL, speed TEXT NULL,
       orchestrator INTEGER NOT NULL DEFAULT 1,
+      subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
+      subagent_effort TEXT NULL,
       built_in INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
@@ -34,7 +37,11 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
-      title TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL,
+      title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '',
+      provider TEXT NOT NULL, model TEXT NOT NULL,
+      permission_mode TEXT NULL,
+      subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
+      subagent_effort TEXT NULL,
       cli_session_id TEXT, pinned INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
@@ -228,17 +235,46 @@ export function openDb(dir: string = dataDir()): Database {
       conversation_id TEXT NULL,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS gamification_activity (
+      day TEXT PRIMARY KEY,
+      active_ms INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS gamification_awards (
+      source_key TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      project_id TEXT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      conversation_id TEXT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      base_xp INTEGER NOT NULL,
+      multiplier REAL NOT NULL,
+      xp INTEGER NOT NULL,
+      day TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_gamification_awards_day
+      ON gamification_awards(day, created_at);
   `);
   dropEventsForeignKey(db);
   addColumn(db, "conversations", "effort TEXT NULL");
   addColumn(db, "conversations", "speed TEXT NULL");
+  addColumn(db, "conversations", "permission_mode TEXT NULL");
+  addColumn(db, "conversations", "summary TEXT NOT NULL DEFAULT ''");
+  addColumn(db, "conversations", "archived INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "conversations", "deleted_at TEXT NULL");
   // M2-D2 : une conversation orchestratrice reçoit le bridge MCP `conductor`.
   // Défaut ON — les conversations existantes en héritent aussi.
   addColumn(db, "conversations", "orchestrator INTEGER NOT NULL DEFAULT 1");
+  addColumn(db, "conversations", "subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL");
+  addColumn(db, "conversations", "subagent_effort TEXT NULL");
   addColumn(db, "conversations", "continued_from TEXT NULL");
   addColumn(db, "conversations", "handoff_pending INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "routine_id TEXT NULL");
+  // Un renommage manuel fige le titre : la régénération automatique le respecte.
+  addColumn(db, "conversations", "title_locked INTEGER NOT NULL DEFAULT 0");
+  // Nombre de tours au moment du dernier digest (0 = jamais généré).
+  addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "projects", "default_preset_id TEXT NULL");
+  addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
   addColumn(db, "projects", "gardien_mode TEXT NOT NULL DEFAULT 'informatif'");
   addColumn(db, "projects", "auto_counter_red INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "reviews", "code_provider TEXT NULL");
@@ -305,6 +341,8 @@ export function openDb(dir: string = dataDir()): Database {
   );
   addColumn(db, "presets", "review_model TEXT NOT NULL DEFAULT 'gpt-5.6-sol'");
   addColumn(db, "presets", "review_effort TEXT NOT NULL DEFAULT 'high'");
+  addColumn(db, "presets", "subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL");
+  addColumn(db, "presets", "subagent_effort TEXT NULL");
   if (addedReviewProvider) {
     // Lors du passage M2 → M3, un preset Claude hérite du reviewer fort Claude.
     // Cette correction ne tourne qu'à l'ajout de colonne et ne peut donc pas

@@ -18,7 +18,8 @@
 
 .switch-modal,
 .review-dialog,
-.counter-dialog {
+.counter-dialog,
+.project-settings-dialog {
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 2 * var(--space-6));
@@ -42,11 +43,16 @@
   width: min(100%, 590px);
 }
 
+.project-settings-dialog {
+  width: min(100%, 520px);
+}
+
 /* --- En-tête -------------------------------------------------------------- */
 
 .switch-modal > header,
 .review-dialog .modal-header,
-.counter-dialog .modal-header {
+.counter-dialog .modal-header,
+.project-settings-dialog .modal-header {
   display: flex;
   flex: none;
   align-items: flex-start;
@@ -57,7 +63,8 @@
 
 .switch-modal h2,
 .review-dialog .modal-header h2,
-.counter-dialog .modal-header h2 {
+.counter-dialog .modal-header h2,
+.project-settings-dialog .modal-header h2 {
   margin: 0;
   color: var(--text-strong);
   font-size: var(--text-md);
@@ -67,7 +74,8 @@
 }
 
 .review-dialog .modal-header p,
-.counter-dialog .modal-header p {
+.counter-dialog .modal-header p,
+.project-settings-dialog .modal-header p {
   margin: 2px 0 0;
   color: var(--text-muted);
   font-size: var(--text-sm);
@@ -287,7 +295,8 @@ input.field-mono {
 
 .switch-modal footer,
 .review-dialog .modal-actions,
-.counter-dialog .modal-actions {
+.counter-dialog .modal-actions,
+.project-settings-dialog .modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
@@ -295,6 +304,36 @@ input.field-mono {
 }
 
 .review-dialog .modal-actions,
-.counter-dialog .modal-actions {
+.counter-dialog .modal-actions,
+.project-settings-dialog .modal-actions {
   margin-top: var(--space-2);
+}
+
+.project-settings-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.project-settings-body label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text);
+}
+
+.project-settings-body select,
+.settings-select-label select {
+  min-height: 32px;
+  padding: 4px 8px;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.project-settings-body p {
+  margin: 0;
 }

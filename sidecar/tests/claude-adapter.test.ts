@@ -24,6 +24,10 @@ test("premier tour : pas de -r, événements émis, status done", async () => {
   expect(args).not.toContain("fast_mode");
   expect(args).not.toContain("service_tier");
   expect(args).toContain("--output-format stream-json");
+  expect(args).toContain("Edit(~/.claude/**)");
+  expect(args).toContain("Write(~/.codex/**)");
+  expect(args).toContain("Bash(npm run build:*)");
+  expect(args).toContain("Bash(bun test:*)");
   expect(args.trimEnd().endsWith("-- salut")).toBe(true);
   expect(events.some((e) => e.type === "session")).toBe(true);
   expect((events.at(-1) as any).state).toBe("done");
@@ -44,6 +48,28 @@ test("ajoute --effort quand un effort est fourni", async () => {
   });
 
   expect(readFileSync(argsFile, "utf8")).toContain("--effort xhigh");
+});
+
+test("YOLO transmet le bypass dangereux à Claude", async () => {
+  const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
+  process.env.PUPITRE_CLAUDE_BIN = FAKE;
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  await collect({
+    cwd: "/tmp",
+    model: "opus",
+    prompt: "yolo",
+    cliSessionId: null,
+    permissionMode: "bypassPermissions",
+    images: [],
+  });
+  const args = readFileSync(argsFile, "utf8");
+  expect(args).toContain("--permission-mode bypassPermissions");
+  expect(args).toContain("--dangerously-skip-permissions");
+  expect(args).toContain("--add-dir /home/clement/.claude /home/clement/.codex");
+  expect(args).toContain("Edit(~/.claude/**)");
+  expect(args).toContain("Write(~/.codex/**)");
+  expect(args).toContain("Bash(npm run build:*)");
+  expect(args).toContain("Bash(bun test:*)");
 });
 
 test("tour suivant : ajoute -r <sessionId>", async () => {

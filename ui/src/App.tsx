@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -15,7 +15,10 @@ import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import { ContextGauge } from './ContextGauge'
 import { GitView } from './GitView'
-import { getGardienStatus, listProjectConversations, listProjects } from './api'
+import { getGardienStatus, getSettings, listProjectConversations, listProjects } from './api'
+import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
+import { modelLabel } from './modelOptions'
+import type { ActionFormat } from './actionHeadings'
 import { guardianAckCount } from './groupEvents'
 import { SkillsLibrary } from './SkillsLibrary'
 import { RoutinesView } from './RoutinesView'
@@ -28,7 +31,10 @@ import { CostsView } from './CostsView'
 import { MemoryView } from './MemoryView'
 import { ResumeCommandButton } from './ResumeCommandButton'
 import { HelpView } from './HelpView'
-import type { WorkspaceView } from './types'
+import type { AppEvent, WorkspaceView } from './types'
+import { useGamification } from './useGamification'
+import { ProgressView } from './ProgressView'
+import { AppSettingsView } from './AppSettingsView'
 
 const DEFAULT_SIDEBAR_WIDTH = 296
 const MIN_SIDEBAR_WIDTH = 240
@@ -45,6 +51,17 @@ function storedSidebarWidth(): number {
   return Number.isFinite(parsed)
     ? clampSidebarWidth(parsed)
     : DEFAULT_SIDEBAR_WIDTH
+}
+
+/** Dernier digest reçu dans le flux, ou null si la conversation n'en a pas encore. */
+function lastDigest(events: AppEvent[]): { title: string; summary: string } | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event.type === 'conversation-digest') {
+      return { title: event.title, summary: event.summary }
+    }
+  }
+  return null
 }
 
 function App() {
@@ -68,19 +85,61 @@ function App() {
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
   // conversation ouverte — la sidebar n'en affiche l'indicateur que pour elle.
   const [runningSubtasks, setRunningSubtasks] = useState(0)
+  // Intitulés reconnus pour les blocs d'actions : chargés une fois, diffusés à
+  // tout le rendu Markdown.
+  const [actionFormat, setActionFormat] = useState<ActionFormat>(DEFAULT_ACTION_FORMAT)
+  /** Coût mesuré du bridge MCP `conductor`, calculé par le sidecar. */
+  const [conductorTokens, setConductorTokens] = useState(0)
   const { events, connection, retryAt } = useConversationEvents(
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
   const quotas = useQuotas()
+  const gamification = useGamification()
   useAppNotifications()
   const guardianAckEventCount = guardianAckCount(events)
+  // Le digest est régénéré côté sidecar après un tour : on rafraîchit le titre
+  // affiché sans recharger la conversation.
+  const digest = lastDigest(events)
+  const digestTitle = digest?.title
+  const digestSummary = digest?.summary
+  useEffect(() => {
+    if (digestTitle === undefined || digestSummary === undefined) return
+    setSelectedConversation((current) =>
+      current === null
+      || (current.title === digestTitle && current.summary === digestSummary)
+        ? current
+        : { ...current, title: digestTitle, summary: digestSummary },
+    )
+    setConversationListVersion((current) => current + 1)
+  }, [digestTitle, digestSummary])
   const effectiveReviewListVersion = reviewListVersion
     + guardianAckEventCount
     + gardienPollVersion
+  const handleReviewsChanged = useCallback(() => {
+    setReviewListVersion((current) => current + 1)
+  }, [])
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
   }, [sidebarWidth])
+
+  useEffect(() => {
+    let ignore = false
+    void getSettings()
+      .then((settings) => {
+        if (ignore) return
+        if (settings.actionFormat) {
+          setActionFormat({ ...DEFAULT_ACTION_FORMAT, ...settings.actionFormat })
+        }
+        setConductorTokens(settings.conductorToolTokens ?? 0)
+      })
+      // Les intitulés par défaut suffisent : un réglage illisible ne doit pas
+      // priver le chat de ses cases à cocher.
+      .catch(() => {})
+    return () => {
+      ignore = true
+    }
+  }, [])
 
   function handleSidebarResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return
@@ -210,6 +269,12 @@ function App() {
     setWorkspaceView('conversations')
   }
 
+  function handleConversationClosed() {
+    setSelectedConversation(null)
+    setIsCreatingConversation(false)
+    setConversationListVersion((current) => current + 1)
+  }
+
   function handleConversationCreated(conversation: Conversation) {
     setSelectedConversation(conversation)
     setNewConversationDraft('')
@@ -296,6 +361,20 @@ function App() {
     setShowReviewDialog(false)
   }
 
+  function handleProgressSelect() {
+    if (!confirmLeaveMemory()) return
+    setWorkspaceView('progress')
+    setShowSwitchModel(false)
+    setShowReviewDialog(false)
+  }
+
+  function handleSettingsSelect() {
+    if (!confirmLeaveMemory()) return
+    setWorkspaceView('settings')
+    setShowSwitchModel(false)
+    setShowReviewDialog(false)
+  }
+
   function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'library' | 'memory' | 'help') {
     if (view === 'fleet') handleFleetSelect()
     else if (view === 'routines') handleRoutinesSelect()
@@ -372,9 +451,14 @@ function App() {
               ? 'Mémoire'
               : workspaceView === 'help'
                 ? 'Aide'
+                : workspaceView === 'progress'
+                  ? 'Progression'
+                  : workspaceView === 'settings'
+                    ? 'Paramètres'
       : selectedConversation?.title ?? null
 
   return (
+    <ActionFormatContext.Provider value={actionFormat}>
     <main
       className="app-shell"
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
@@ -386,6 +470,7 @@ function App() {
         onProjectSelect={handleProjectSelect}
         onConversationSelect={handleConversationSelect}
         onConversationCreate={handleConversationCreate}
+        onConversationClosed={handleConversationClosed}
         conversationListVersion={conversationListVersion}
         projectListVersion={projectListVersion}
         quotas={quotas}
@@ -400,6 +485,10 @@ function App() {
         onPaletteSelect={() => setPaletteOpen(true)}
         onMemorySelect={handleMemorySelect}
         onHelpSelect={() => handleHelpSelect()}
+        onProgressSelect={handleProgressSelect}
+        onSettingsSelect={handleSettingsSelect}
+        gamification={gamification.snapshot}
+        xpPulse={gamification.xpPulse}
         reviewListVersion={effectiveReviewListVersion}
       />
       <div
@@ -419,7 +508,7 @@ function App() {
         <span aria-hidden="true" />
       </div>
 
-      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'costs' ? 'Coûts' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : workspaceView === 'memory' ? 'Mémoire' : workspaceView === 'help' ? 'Aide' : 'Conversation'}>
+      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'costs' ? 'Coûts' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : workspaceView === 'memory' ? 'Mémoire' : workspaceView === 'help' ? 'Aide' : workspaceView === 'progress' ? 'Progression' : workspaceView === 'settings' ? 'Paramètres' : 'Conversation'}>
         {workspaceView === 'library' ? (
           <SkillsLibrary project={selectedProject} />
         ) : workspaceView === 'routines' ? (
@@ -435,6 +524,10 @@ function App() {
           <MemoryView onDirtyChange={setMemoryDirty} />
         ) : workspaceView === 'help' ? (
           <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
+        ) : workspaceView === 'progress' ? (
+          <ProgressView snapshot={gamification.snapshot} />
+        ) : workspaceView === 'settings' ? (
+          <AppSettingsView />
         ) : selectedProject === null ? (
           <div className="empty-state">
             <p>Sélectionnez un projet pour commencer.</p>
@@ -446,7 +539,8 @@ function App() {
             initialReviewId={focusedReviewId}
             refreshToken={effectiveReviewListVersion}
             onProjectUpdated={handleProjectUpdated}
-            onReviewsChanged={() => setReviewListVersion((current) => current + 1)}
+            onReviewsChanged={handleReviewsChanged}
+            onStartReview={selectedConversation ? () => setShowReviewDialog(true) : undefined}
           />
         ) : workspaceView === 'git' ? (
           <GitView
@@ -470,7 +564,7 @@ function App() {
                 <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
                 {selectedConversation !== null ? (
                   <p>
-                    {selectedConversation.provider} · {selectedConversation.model} ·{' '}
+                    {selectedConversation.provider} · {modelLabel(selectedConversation.model)} ·{' '}
                     {selectedConversation.effort ?? 'default'}
                     {selectedConversation.speed === 'fast' ? ' · rapide' : ''}
                   </p>
@@ -479,6 +573,7 @@ function App() {
                   <ContextGauge
                     conversation={selectedConversation}
                     events={events}
+                    conductorTokens={conductorTokens}
                     onHandoffSuggested={() => setShowSwitchModel(true)}
                   />
                 ) : null}
@@ -494,13 +589,20 @@ function App() {
                   >
                     Review Gardien
                   </button>
-                  <button
-                    type="button"
-                    className="header-action"
-                    onClick={() => setShowSwitchModel(true)}
-                  >
-                    Changer de modèle
-                  </button>
+                  <details className="header-action-menu">
+                    <summary className="header-action header-action-icon" title="Actions de la conversation">
+                      <span aria-hidden="true">⋯</span>
+                      <span className="sr-only">Actions de la conversation</span>
+                    </summary>
+                    <div role="menu">
+                      <button type="button" role="menuitem" onClick={() => setShowSwitchModel(true)}>
+                        Changer de modèle
+                      </button>
+                      <button type="button" role="menuitem" onClick={() => setShowReviewDialog(true)}>
+                        Ouvrir Gardien
+                      </button>
+                    </div>
+                  </details>
                 </div>
               ) : null}
             </header>
@@ -553,6 +655,7 @@ function App() {
         onAction={handlePaletteAction}
       />
     </main>
+    </ActionFormatContext.Provider>
   )
 }
 

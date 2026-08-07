@@ -294,6 +294,62 @@ body.is-resizing-sidebar {
   border-color: var(--border-strong);
 }
 
+.header-action-menu {
+  position: relative;
+}
+
+.header-action-menu > summary {
+  list-style: none;
+}
+
+.header-action-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.header-action-icon {
+  display: grid;
+  width: 32px;
+  padding: 0;
+  margin: 0;
+  place-items: center;
+  font-size: var(--text-md);
+}
+
+.header-action-menu[open] > summary {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.header-action-menu > div {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 30;
+  display: grid;
+  min-width: 180px;
+  padding: var(--space-1);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-popover);
+}
+
+.header-action-menu > div button {
+  padding: 6px var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+
+.header-action-menu > div button:hover {
+  background: var(--bg-hover);
+}
+
 .connection-banner {
   flex: none;
   padding: var(--space-1) var(--space-5);

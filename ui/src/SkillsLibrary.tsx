@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
+import Markdown from './Markdown'
 import { HelpLink } from './HelpLink'
 import {
   getSkill,
@@ -48,7 +48,7 @@ export function SkillsLibrary({ project }: SkillsLibraryProps) {
   const [showComposer, setShowComposer] = useState(false)
 
   const scopedProjectId = projectOnly ? project?.id : undefined
-  const activeSkill = skills.find((skill) => skill.id === selectedId) ?? skills[0] ?? null
+  const activeSkill = skills.find((skill) => skill.id === selectedId) ?? null
   const activeSkillId = activeSkill?.id ?? null
 
   useEffect(() => {
@@ -264,7 +264,7 @@ export function SkillsLibrary({ project }: SkillsLibraryProps) {
               ) : null}
               <code className="skill-path" title={selectedDetail.path}>{selectedDetail.path}</code>
               <div className="skill-markdown">
-                <ReactMarkdown>{selectedDetail.content_md}</ReactMarkdown>
+                <Markdown>{selectedDetail.content_md}</Markdown>
               </div>
             </>
           )}

@@ -304,6 +304,8 @@ export class RoutineScheduler {
         effort: config.effort,
         speed: config.speed,
         orchestrator: config.orchestrator,
+        subagentPresetId: "subagent_preset_id" in config ? config.subagent_preset_id : null,
+        subagentEffort: "subagent_effort" in config ? config.subagent_effort : null,
         routineId: routine.id,
         firstMessage: prompt,
       });

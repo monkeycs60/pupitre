@@ -6,6 +6,7 @@ import type { QuotaTracker } from "./quotas";
 import { runClaudeTurn } from "./adapters/claude";
 import { runCodexTurn } from "./adapters/codex";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
+import type { FilesystemScope } from "./access";
 
 /**
  * Nombre maximum de sous-tâches simultanées PAR conversation parente.
@@ -210,7 +211,8 @@ export class SubtaskRunner {
     const run = this.run(
       subtask,
       project.path,
-      readOnly ? "plan" : project.permission_mode,
+      project.filesystem_scope,
+      readOnly ? "plan" : (conversation.permission_mode ?? project.permission_mode),
       controller.signal,
       readOnly,
     )
@@ -275,6 +277,7 @@ export class SubtaskRunner {
   private async run(
     subtask: Subtask,
     cwd: string,
+    filesystemScope: FilesystemScope,
     permissionMode: string,
     signal: AbortSignal,
     readOnly = false,
@@ -303,6 +306,7 @@ export class SubtaskRunner {
         prompt: subtask.prompt,
         cliSessionId: null, // une subtask est un one-shot : jamais de reprise
         permissionMode,
+        filesystemScope,
         images: [],
         signal,
         ...(readOnly ? { sandboxMode: "read-only" as const } : {}),

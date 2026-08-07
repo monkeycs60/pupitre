@@ -28,6 +28,11 @@
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
+.composer.is-drag-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
 /* --- Carte de configuration (nouvelle conversation) ----------------------- */
 
 .config-panel {
@@ -35,6 +40,14 @@
   gap: var(--space-3);
   padding: var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.config-panel.is-loading {
+  opacity: 0.72;
+}
+
+.config-panel.is-loading .config-advanced {
+  pointer-events: none;
 }
 
 .config-header {
@@ -193,6 +206,60 @@
 .config-inline-form input:focus {
   border-color: var(--accent-border);
   box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.config-advanced {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.config-advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+  padding: 3px 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  list-style: none;
+  cursor: pointer;
+}
+
+.config-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.config-advanced > summary::before {
+  color: var(--text-faint);
+  content: '›';
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.config-advanced[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.config-advanced > summary:hover {
+  color: var(--text);
+}
+
+.config-advanced-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-advanced-action {
+  flex: none;
+  margin-left: auto;
+  color: var(--accent-hover);
+  font-size: var(--text-xs);
+}
+
+.config-advanced-content {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-2) 0 var(--space-1);
 }
 
 .config-primary,
@@ -524,15 +591,46 @@
   font-size: var(--text-xs);
 }
 
+.delegation-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.delegation-controls label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.delegation-controls label > span {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.delegation-controls select {
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
 @media (max-width: 900px) {
   .delegation-pool {
     margin-left: 0;
+  }
+
+  .delegation-controls {
+    grid-template-columns: 1fr;
   }
 }
 
 /* --- Images jointes --------------------------------------------------------- */
 
-.composer-images {
+.composer-attachments {
   display: flex;
   min-height: 62px;
   align-items: center;
@@ -587,6 +685,64 @@
   font-size: var(--text-sm);
 }
 
+.composer-file {
+  display: flex;
+  max-width: 220px;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.composer-file-kind {
+  flex: none;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.composer-file-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-file button {
+  display: grid;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  place-items: center;
+}
+
+.composer-file button:hover {
+  color: var(--danger);
+}
+
+.composer-drop-hint {
+  margin: 0 var(--space-3) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  text-align: center;
+  background: var(--accent-soft);
+  border: 1px dashed var(--accent-border);
+  border-radius: var(--r-sm);
+}
+
 /* --- Champ de saisie --------------------------------------------------------- */
 
 .composer textarea {
@@ -639,10 +795,19 @@
   gap: var(--space-1);
 }
 
+.composer-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
 .send-button,
 .cancel-button,
 .debrief-button,
-.test-button {
+.test-button,
+.attach-button {
   min-height: 28px;
   padding: 3px var(--space-3);
   font-size: var(--text-sm);
@@ -664,14 +829,16 @@
 }
 
 .debrief-button,
-.test-button {
+.test-button,
+.attach-button {
   color: var(--text-muted);
   background: transparent;
   border: 1px solid var(--border);
 }
 
 .debrief-button:hover:not(:disabled),
-.test-button:hover:not(:disabled) {
+.test-button:hover:not(:disabled),
+.attach-button:hover:not(:disabled) {
   color: var(--text);
   background: var(--bg-hover);
   border-color: var(--border-strong);
@@ -690,7 +857,8 @@
 .send-button:disabled,
 .cancel-button:disabled,
 .debrief-button:disabled,
-.test-button:disabled {
+.test-button:disabled,
+.attach-button:disabled {
   opacity: 0.55;
   cursor: default;
 }

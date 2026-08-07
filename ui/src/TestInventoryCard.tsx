@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import ReactMarkdown from 'react-markdown'
+import Markdown from './Markdown'
 import { runTestScope } from './api'
 import type { TestInventoryBlock } from './groupEvents'
 import type { TestScope } from './types'
@@ -108,7 +108,7 @@ export function TestInventoryCard({ block, onImageOpen, onImageLoad }: TestInven
                 {evidence ? (
                   <details className="test-evidence" open={status === 'failed'}>
                     <summary>Preuves et verdict</summary>
-                    <ReactMarkdown>{evidence}</ReactMarkdown>
+                    <Markdown>{evidence}</Markdown>
                   </details>
                 ) : null}
                 <ImageGallery

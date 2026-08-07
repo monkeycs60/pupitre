@@ -1,7 +1,17 @@
 export type Provider = 'claude' | 'codex'
 export type ConversationSpeed = 'standard' | 'fast'
+export type PresetPermissionMode =
+  'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'bypassPermissions'
+export type FilesystemScope = 'project-and-ai-roots' | 'full-system'
 export type GardienMode = 'informatif' | 'bloquant'
-export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help'
+export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'settings'
+
+export interface Attachment {
+  name: string
+  originalName: string
+  mimeType: string
+  size: number
+}
 
 export interface MemoryFile {
   path: string
@@ -162,6 +172,7 @@ export interface Project {
   name: string
   path: string
   permission_mode: string
+  filesystem_scope: FilesystemScope
   pinned: boolean
   created_at: string
   default_preset_id: string | null
@@ -177,6 +188,9 @@ export interface Preset {
   effort: string | null
   speed: ConversationSpeed | null
   orchestrator: boolean
+  subagent_preset_id?: string | null
+  subagent_effort?: string | null
+  permission_mode: PresetPermissionMode | null
   review_provider: Provider
   review_model: string
   review_effort: string
@@ -189,17 +203,67 @@ export interface Conversation {
   id: string
   project_id: string
   title: string
+  summary: string
   provider: Provider
   model: string
   effort: string | null
   speed: ConversationSpeed | null
+  permission_mode?: PresetPermissionMode | null
   orchestrator: boolean
+  subagent_preset_id?: string | null
+  subagent_effort?: string | null
   continued_from: string | null
   routine_id: string | null
   cli_session_id: string | null
   pinned: boolean
+  /** Renommée à la main : le digest automatique ne l'écrase plus. */
+  title_locked: boolean
+  digest_turn: number
+  archived: boolean
+  deleted_at: string | null
   created_at: string
   updated_at: string
+  gamification?: GamificationConversation
+}
+
+export interface GamificationConversation {
+  conversationId: string
+  complexity: number
+  multiplier: number
+  inputTokens: number
+  outputTokens: number
+  commits: number
+  pushes: number
+  additions: number
+  deletions: number
+  xp: number
+}
+
+export interface GamificationPeriod {
+  activeMs: number
+  inputTokens: number
+  outputTokens: number
+  conversations: number
+  projects: number
+  commits: number
+  pushes: number
+  additions: number
+  deletions: number
+  xp: number
+  complexity: Record<string, number>
+}
+
+export interface GamificationSnapshot {
+  xp: number
+  level: number
+  levelXp: number
+  nextLevelXp: number
+  progress: number
+  activeMsToday: number
+  focusMultiplier: number
+  today: GamificationPeriod
+  week: GamificationPeriod
+  conversations: Record<string, GamificationConversation>
 }
 
 export interface Debrief {
@@ -412,7 +476,10 @@ export interface TestInventory {
 
 export type AppEvent =
   | { type: 'session'; provider: Provider; cliSessionId: string; model: string }
-  | { type: 'user-message'; text: string; images: string[] }
+  // Titre et résumé régénérés après un tour : met la sidebar à jour, ne s'affiche
+  // pas dans le fil.
+  | { type: 'conversation-digest'; title: string; summary: string }
+  | { type: 'user-message'; text: string; images: string[]; attachments?: Attachment[] }
   | { type: 'text-delta'; text: string }
   | { type: 'text-final'; text: string }
   | { type: 'tool-start'; toolId: string; toolName: string; input: unknown }

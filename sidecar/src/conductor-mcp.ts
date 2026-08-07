@@ -213,7 +213,7 @@ function text(value: string, isError = false) {
 const MODELS_DOC =
   "Modèles disponibles — provider 'claude' : fable-5 (le plus capable), opus, "
   + "sonnet, haiku (le plus rapide/économe) ; provider 'codex' : gpt-5.6-sol "
-  + "(raisonnement profond), gpt-5.6-luna (rapide et économe).";
+  + "(raisonnement profond), gpt-5.6-luna (rapide et économe), gpt-5.6-terra (polyvalent).";
 const EFFORT_DOC =
   "effort : low | medium | high | xhigh (claude accepte aussi 'max'). "
   + "Plus l'effort est élevé, plus le sub-agent réfléchit — et consomme.";
@@ -262,26 +262,77 @@ interface DelegateInput {
 
 // --- Serveur -----------------------------------------------------------------
 
+const SERVER_INSTRUCTIONS =
+  "Pupitre Conductor : délègue du travail à un autre modèle (l'autre "
+  + "abonnement compris) et récupère son résultat. " + RECO_DOC;
+
+const DELEGATE_DESCRIPTION =
+  "Confie UNE sous-tâche à un sub-agent (un CLI complet, avec ses outils, "
+  + "dans le working directory du projet), attend qu'il termine et te rend "
+  + "son résultat texte. Bloquant : n'appelle cet outil que si tu veux "
+  + "vraiment attendre. Pour plusieurs sous-tâches indépendantes, préfère "
+  + "delegate_parallel. Le sub-agent est un ONE-SHOT sans mémoire entre "
+  + "appels et ne peut pas déléguer lui-même.\n"
+  + `${MODELS_DOC}\n${EFFORT_DOC}\n${SPEED_DOC}\n${RECO_DOC}`;
+
+const DELEGATE_PARALLEL_DESCRIPTION =
+  "Lance jusqu'à 4 sous-tâches INDÉPENDANTES en même temps, puis attend "
+  + "qu'elles soient toutes terminées et rend leurs résultats dans l'ordre "
+  + "des tâches fournies. Les tâches peuvent viser des providers et des "
+  + "modèles différents (fan-out cross-abonnement). N'y mets que des "
+  + "travaux qui ne dépendent pas les uns des autres et qui ne touchent pas "
+  + "aux mêmes fichiers : ils tournent dans le MÊME working directory. Une "
+  + "tâche en échec n'annule pas les autres.\n"
+  + `${MODELS_DOC}\n${EFFORT_DOC}\n${SPEED_DOC}\n${RECO_DOC}`;
+
+const CHECK_QUOTAS_DESCRIPTION =
+  "Rend l'état de consommation des deux abonnements (fenêtres de quota, "
+  + "pourcentage utilisé, heure de reset), tel que rapporté nativement par "
+  + "les CLIs. Appelle-le AVANT de choisir un provider quand tu hésites, "
+  + "ou quand tu veux répartir une grosse charge sur l'abonnement le moins "
+  + "entamé. Sans coût ni consommation.";
+
+/**
+ * Descriptions des paramètres, telles que sérialisées dans le schéma envoyé au
+ * modèle. Listées ici pour que le coût du bridge soit mesurable et auditable.
+ */
+const PARAMETER_DOCS = [
+  MODELS_DOC,
+  EFFORT_DOC,
+  SPEED_DOC,
+  "Consigne COMPLÈTE et autonome pour le sub-agent",
+  `Entre 1 et ${MAX_PARALLEL_TASKS} sous-tâches indépendantes.`,
+];
+
+/** Surcoût de structure JSON par outil exposé (noms, types, accolades). */
+const TOOL_STRUCTURE_TOKENS = 40;
+const CHARS_PER_TOKEN = 4;
+
+/**
+ * Coût du bridge `conductor` dans la fenêtre de contexte : il est injecté dans
+ * chaque tour d'une conversation orchestratrice, donc mesurable plutôt que
+ * déduit. Approximation à 4 caractères par token, comme le reste de la jauge.
+ */
+export function conductorToolTokens(): number {
+  const text = [
+    SERVER_INSTRUCTIONS,
+    DELEGATE_DESCRIPTION,
+    DELEGATE_PARALLEL_DESCRIPTION,
+    CHECK_QUOTAS_DESCRIPTION,
+    ...PARAMETER_DOCS,
+  ].join(" ");
+  return Math.round(text.length / CHARS_PER_TOKEN) + 3 * TOOL_STRUCTURE_TOKENS;
+}
+
 export function createConductorServer(): McpServer {
   const server = new McpServer(
     { name: "conductor", version: "0.1.0" },
-    {
-      instructions:
-        "Pupitre Conductor : délègue du travail à un autre modèle (l'autre "
-        + "abonnement compris) et récupère son résultat. " + RECO_DOC,
-    },
+    { instructions: SERVER_INSTRUCTIONS },
   );
 
   server.registerTool("delegate", {
     title: "Déléguer une sous-tâche",
-    description:
-      "Confie UNE sous-tâche à un sub-agent (un CLI complet, avec ses outils, "
-      + "dans le working directory du projet), attend qu'il termine et te rend "
-      + "son résultat texte. Bloquant : n'appelle cet outil que si tu veux "
-      + "vraiment attendre. Pour plusieurs sous-tâches indépendantes, préfère "
-      + "delegate_parallel. Le sub-agent est un ONE-SHOT sans mémoire entre "
-      + "appels et ne peut pas déléguer lui-même.\n"
-      + `${MODELS_DOC}\n${EFFORT_DOC}\n${SPEED_DOC}\n${RECO_DOC}`,
+    description: DELEGATE_DESCRIPTION,
     inputSchema: { ...taskShape, ...conversationIdShape },
   }, async (args) => {
     try {
@@ -296,15 +347,7 @@ export function createConductorServer(): McpServer {
 
   server.registerTool("delegate_parallel", {
     title: "Déléguer plusieurs sous-tâches en parallèle",
-    description:
-      "Lance jusqu'à 4 sous-tâches INDÉPENDANTES en même temps, puis attend "
-      + "qu'elles soient toutes terminées et rend leurs résultats dans l'ordre "
-      + "des tâches fournies. Les tâches peuvent viser des providers et des "
-      + "modèles différents (fan-out cross-abonnement). N'y mets que des "
-      + "travaux qui ne dépendent pas les uns des autres et qui ne touchent pas "
-      + "aux mêmes fichiers : ils tournent dans le MÊME working directory. Une "
-      + "tâche en échec n'annule pas les autres.\n"
-      + `${MODELS_DOC}\n${EFFORT_DOC}\n${SPEED_DOC}\n${RECO_DOC}`,
+    description: DELEGATE_PARALLEL_DESCRIPTION,
     inputSchema: {
       tasks: z.array(z.object(taskShape)).min(1).max(MAX_PARALLEL_TASKS)
         .describe(`Entre 1 et ${MAX_PARALLEL_TASKS} sous-tâches indépendantes.`),
@@ -342,12 +385,7 @@ export function createConductorServer(): McpServer {
 
   server.registerTool("check_quotas", {
     title: "État des quotas",
-    description:
-      "Rend l'état de consommation des deux abonnements (fenêtres de quota, "
-      + "pourcentage utilisé, heure de reset), tel que rapporté nativement par "
-      + "les CLIs. Appelle-le AVANT de choisir un provider quand tu hésites, "
-      + "ou quand tu veux répartir une grosse charge sur l'abonnement le moins "
-      + "entamé. Sans coût ni consommation.",
+    description: CHECK_QUOTAS_DESCRIPTION,
     inputSchema: {},
   }, async () => {
     try {

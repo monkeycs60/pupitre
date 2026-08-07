@@ -63,6 +63,51 @@ test("CRUD d'un preset personnalisé", () => {
   expect(presets.get(created.id)).toBeNull();
 });
 
+test("la permission d'un preset est optionnelle, canonique et persistante", () => {
+  const inherited = presets.create({
+    name: "Hérité",
+    provider: "claude",
+    model: "sonnet",
+    effort: "high",
+    speed: null,
+    orchestrator: true,
+  });
+  expect(inherited.permission_mode).toBeNull();
+
+  const autonomous = presets.create({
+    name: "Autonome",
+    provider: "claude",
+    model: "sonnet",
+    effort: "high",
+    speed: null,
+    orchestrator: true,
+    permission_mode: "bypassPermissions",
+  });
+  expect(autonomous.permission_mode).toBe("bypassPermissions");
+
+  const updated = presets.update(autonomous.id, {
+    name: autonomous.name,
+    provider: autonomous.provider,
+    model: autonomous.model,
+    effort: autonomous.effort,
+    speed: autonomous.speed,
+    orchestrator: autonomous.orchestrator,
+    permission_mode: null,
+  });
+  expect(updated?.permission_mode).toBeNull();
+
+  const restoredOnUpdate = presets.update(autonomous.id, {
+    name: autonomous.name,
+    provider: autonomous.provider,
+    model: autonomous.model,
+    effort: autonomous.effort,
+    speed: autonomous.speed,
+    orchestrator: autonomous.orchestrator,
+    permission_mode: "bypassPermissions",
+  });
+  expect(restoredOnUpdate?.permission_mode).toBe("bypassPermissions");
+});
+
 test("les presets intégrés s'éditent et se restaurent, mais ne se suppriment pas", () => {
   const updated = presets.update("builtin-eco", {
     name: "Éco maison",

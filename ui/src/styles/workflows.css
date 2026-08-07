@@ -88,6 +88,87 @@
   gap: var(--space-3);
 }
 
+.workflow-skill-field,
+.workflow-skill-combobox {
+  min-width: 0;
+}
+
+.workflow-skill-combobox {
+  position: relative;
+}
+
+.workflow-skill-combobox > input {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px var(--space-2);
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.workflow-skill-combobox > input:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.workflow-skill-options {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-popover);
+}
+
+.workflow-skill-option {
+  display: grid;
+  width: 100%;
+  gap: 1px;
+  padding: var(--space-2);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+}
+
+.workflow-skill-option:hover,
+.workflow-skill-option.is-selected,
+.workflow-skill-option.is-active {
+  background: var(--bg-active);
+}
+
+.workflow-skill-option strong,
+.workflow-skill-option small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-skill-option strong {
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+}
+
+.workflow-skill-option small {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.workflow-skill-empty {
+  padding: var(--space-2);
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
 .workflow-form textarea {
   width: 100%;
   min-height: 84px;

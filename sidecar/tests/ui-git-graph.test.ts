@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { gitRefOptions, layoutGitGraph } from '../../ui/src/gitGraph'
+import { gitRefOptions, layoutGitGraph, updateGitCompareRef } from '../../ui/src/gitGraph'
 import type { GitCommit, GitSnapshot } from '../../ui/src/types'
 
 function commit(sha: string, parents: string[]): GitCommit {
@@ -57,4 +57,17 @@ test('expose le parent de HEAD même hors de la fenêtre des commits', () => {
     'parent-outside-window',
     'parent-o · Parent de HEAD',
   ])
+})
+
+test('alimente la base ou la cible depuis un commit sans écraser l’autre référence', () => {
+  const refs = { baseRef: 'base', headRef: 'head' }
+
+  expect(updateGitCompareRef(refs, 'base', 'commit-a')).toEqual({
+    baseRef: 'commit-a',
+    headRef: 'head',
+  })
+  expect(updateGitCompareRef(refs, 'head', 'commit-b')).toEqual({
+    baseRef: 'base',
+    headRef: 'commit-b',
+  })
 })

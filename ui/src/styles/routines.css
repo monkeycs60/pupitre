@@ -59,6 +59,11 @@
   font-size: var(--text-xs);
 }
 
+.routine-form label small {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
 .routines-header select,
 .routines-header input,
 .routine-form input,

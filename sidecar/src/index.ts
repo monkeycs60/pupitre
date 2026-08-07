@@ -6,6 +6,7 @@ import { ConversationStore } from "./stores/conversations";
 import { ProjectStore } from "./stores/projects";
 import { PresetStore } from "./stores/presets";
 import { SettingsStore } from "./stores/settings";
+import { actionFormat } from "./response-format";
 import { QuotaTracker } from "./quotas";
 import { QuotaRefresher } from "./quota-refresh";
 import { SubtaskRunner } from "./subtasks";
@@ -27,6 +28,7 @@ import { RoutineScheduler, RoutineStore } from "./routines";
 import { SearchIndex } from "./search";
 import { CostStore } from "./costs";
 import { MemoryStore } from "./memory";
+import { GamificationService } from "./gamification";
 
 if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
@@ -54,6 +56,7 @@ if (process.argv.includes("--conductor-mcp")) {
   const costs = new CostStore(db);
   const memory = new MemoryStore();
   const git = new GitProjectService(db, projects);
+  const gamification = new GamificationService(db, projects, git);
   const configuredPort = process.env.PUPITRE_PORT;
   const port = configuredPort === undefined ? 4820 : Number(configuredPort);
   if (configuredPort?.trim() === "" || !Number.isInteger(port) || port < 0 || port > 65_535) {
@@ -76,6 +79,8 @@ if (process.argv.includes("--conductor-mcp")) {
       const seconds = settings.get<number>("longTaskThresholdSeconds") ?? 120;
       return Number.isFinite(seconds) && seconds >= 10 ? seconds * 1_000 : 120_000;
     },
+    undefined,
+    () => actionFormat(settings.get("actionFormat")),
   );
   // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
   // tournent en parallèle du tour parent qui les a demandées.
@@ -164,6 +169,7 @@ if (process.argv.includes("--conductor-mcp")) {
     search,
     costs,
     memory,
+    gamification,
   }), port);
   routines.start();
 

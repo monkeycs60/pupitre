@@ -50,6 +50,19 @@ test("crée une conversation avec un effort persisté", () => {
   expect(convs.get(c.id)?.effort).toBe("xhigh");
 });
 
+test("persiste et modifie le mode de permission d'une conversation", () => {
+  const c = convs.create({
+    projectId,
+    provider: "claude",
+    model: "opus",
+    permissionMode: "bypassPermissions",
+    firstMessage: "Active le mode YOLO",
+  });
+
+  expect(c.permission_mode).toBe("bypassPermissions");
+  expect(convs.setPermissionMode(c.id, null)?.permission_mode).toBeNull();
+});
+
 test("met à jour le modèle dans le même provider et estime la ré-ingestion", () => {
   const c = convs.create({
     projectId,

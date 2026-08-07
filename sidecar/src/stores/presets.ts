@@ -1,6 +1,39 @@
 import type { Database } from "bun:sqlite";
 import type { Provider } from "../events";
 
+export const PRESET_PERMISSION_MODES = [
+  "default",
+  "acceptEdits",
+  "plan",
+  "dontAsk",
+  "bypassPermissions",
+] as const;
+
+export type PresetPermissionMode = typeof PRESET_PERMISSION_MODES[number];
+
+/**
+ * Les alias conviviaux restent acceptés à l'entrée de l'API. Le stockage garde
+ * la valeur native de Claude Code pour ne pas casser les projets existants qui
+ * utilisent déjà `permission_mode`.
+ */
+const PERMISSION_MODE_ALIASES: Readonly<Record<string, PresetPermissionMode>> = {
+  yolo: "bypassPermissions",
+  autonomous: "bypassPermissions",
+  autonome: "bypassPermissions",
+};
+
+export function normalizePresetPermissionMode(
+  value: unknown,
+): PresetPermissionMode | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string") throw new Error("permission_mode invalide");
+  const normalized = PERMISSION_MODE_ALIASES[value] ?? value;
+  if (!(PRESET_PERMISSION_MODES as readonly string[]).includes(normalized)) {
+    throw new Error("permission_mode invalide");
+  }
+  return normalized as PresetPermissionMode;
+}
+
 export interface PresetInput {
   name: string;
   provider: Provider;
@@ -8,13 +41,19 @@ export interface PresetInput {
   effort: string | null;
   speed: "standard" | "fast" | null;
   orchestrator: boolean;
+  subagent_preset_id?: string | null;
+  subagent_effort?: string | null;
+  permission_mode?: PresetPermissionMode | null;
   review_provider?: Provider;
   review_model?: string;
   review_effort?: string;
 }
 
-export interface Preset extends Omit<PresetInput, "review_provider" | "review_model" | "review_effort"> {
+export interface Preset extends Omit<PresetInput, "permission_mode" | "review_provider" | "review_model" | "review_effort"> {
   id: string;
+  subagent_preset_id: string | null;
+  subagent_effort: string | null;
+  permission_mode: PresetPermissionMode | null;
   review_provider: Provider;
   review_model: string;
   review_effort: string;
@@ -28,8 +67,9 @@ export interface Preset extends Omit<PresetInput, "review_provider" | "review_mo
   updated_at: string;
 }
 
-type BuiltInPreset = PresetInput & {
+type BuiltInPreset = Omit<PresetInput, "permission_mode"> & {
   id: string;
+  permission_mode: PresetPermissionMode | null;
   review_provider: Provider;
   review_model: string;
   review_effort: string;
@@ -44,6 +84,9 @@ const BUILT_INS: ReadonlyArray<BuiltInPreset> = [
     effort: "low",
     speed: "standard",
     orchestrator: true,
+    subagent_preset_id: null,
+    subagent_effort: null,
+    permission_mode: null,
     review_provider: "codex",
     review_model: "gpt-5.6-sol",
     review_effort: "high",
@@ -56,6 +99,9 @@ const BUILT_INS: ReadonlyArray<BuiltInPreset> = [
     effort: "max",
     speed: null,
     orchestrator: true,
+    subagent_preset_id: null,
+    subagent_effort: null,
+    permission_mode: null,
     review_provider: "claude",
     review_model: "opus",
     review_effort: "high",
@@ -68,6 +114,9 @@ const BUILT_INS: ReadonlyArray<BuiltInPreset> = [
     effort: "low",
     speed: "fast",
     orchestrator: true,
+    subagent_preset_id: null,
+    subagent_effort: null,
+    permission_mode: null,
     review_provider: "codex",
     review_model: "gpt-5.6-sol",
     review_effort: "high",
@@ -76,12 +125,15 @@ const BUILT_INS: ReadonlyArray<BuiltInPreset> = [
 
 export class PresetStore {
   constructor(private db: Database) {
+    ensurePermissionModeColumn(this.db);
     const now = new Date().toISOString();
     const insert = this.db.query(`
       INSERT OR IGNORE INTO presets
         (id, name, provider, model, effort, speed, orchestrator,
-         review_provider, review_model, review_effort, built_in, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+         subagent_preset_id, subagent_effort,
+         permission_mode, review_provider, review_model, review_effort,
+         built_in, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `);
     for (const preset of BUILT_INS) {
       insert.run(
@@ -92,6 +144,9 @@ export class PresetStore {
         preset.effort,
         preset.speed,
         preset.orchestrator ? 1 : 0,
+        preset.subagent_preset_id ?? null,
+        preset.subagent_effort ?? null,
+        preset.permission_mode,
         preset.review_provider,
         preset.review_model,
         preset.review_effort,
@@ -129,11 +184,14 @@ export class PresetStore {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const review = reviewConfig(input, defaultReviewConfig(input.provider));
+    const permissionMode = normalizePresetPermissionMode(input.permission_mode);
     this.db.query(`
       INSERT INTO presets
         (id, name, provider, model, effort, speed, orchestrator,
-         review_provider, review_model, review_effort, built_in, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+         subagent_preset_id, subagent_effort,
+         permission_mode, review_provider, review_model, review_effort,
+         built_in, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `).run(
       id,
       input.name,
@@ -142,6 +200,9 @@ export class PresetStore {
       input.effort,
       input.speed,
       input.orchestrator ? 1 : 0,
+      input.subagent_preset_id ?? null,
+      input.subagent_effort ?? null,
+      permissionMode,
       review.provider,
       review.model,
       review.effort,
@@ -154,6 +215,15 @@ export class PresetStore {
   update(id: string, input: PresetInput): Preset | null {
     const preset = this.get(id);
     if (!preset) return null;
+    const subagentPresetId = input.subagent_preset_id === undefined
+      ? preset.subagent_preset_id
+      : input.subagent_preset_id;
+    const subagentEffort = input.subagent_effort === undefined
+      ? preset.subagent_effort
+      : input.subagent_effort;
+    const permissionMode = input.permission_mode === undefined
+      ? preset.permission_mode
+      : normalizePresetPermissionMode(input.permission_mode);
     const review = reviewConfig(input, {
       provider: preset.review_provider,
       model: preset.review_model,
@@ -162,7 +232,8 @@ export class PresetStore {
     this.db.query(`
       UPDATE presets
       SET name = ?, provider = ?, model = ?, effort = ?, speed = ?,
-          orchestrator = ?, review_provider = ?, review_model = ?,
+          orchestrator = ?, subagent_preset_id = ?, subagent_effort = ?,
+          permission_mode = ?, review_provider = ?, review_model = ?,
           review_effort = ?, updated_at = ?
       WHERE id = ?
     `).run(
@@ -172,6 +243,9 @@ export class PresetStore {
       input.effort,
       input.speed,
       input.orchestrator ? 1 : 0,
+      subagentPresetId ?? null,
+      subagentEffort ?? null,
+      permissionMode,
       review.provider,
       review.model,
       review.effort,
@@ -194,7 +268,8 @@ export class PresetStore {
     this.db.query(`
       UPDATE presets
       SET name = ?, provider = ?, model = ?, effort = ?, speed = ?,
-          orchestrator = ?, review_provider = ?, review_model = ?,
+          orchestrator = ?, subagent_preset_id = ?, subagent_effort = ?,
+          permission_mode = ?, review_provider = ?, review_model = ?,
           review_effort = ?, updated_at = ?
       WHERE id = ?
     `).run(
@@ -204,6 +279,9 @@ export class PresetStore {
       original.effort,
       original.speed,
       original.orchestrator ? 1 : 0,
+      original.subagent_preset_id ?? null,
+      original.subagent_effort ?? null,
+      original.permission_mode,
       original.review_provider,
       original.review_model,
       original.review_effort,
@@ -230,8 +308,16 @@ export class PresetStore {
       ...row,
       orchestrator: !!row.orchestrator,
       built_in: !!row.built_in,
+      permission_mode: normalizePresetPermissionMode(row.permission_mode),
     };
   }
+}
+
+/** La colonne appartient au store pour rester compatible avec les bases M2. */
+function ensurePermissionModeColumn(db: Database): void {
+  const columns = db.query("PRAGMA table_info(presets)").all() as Array<{ name?: string }>;
+  if (columns.some((column) => column.name === "permission_mode")) return;
+  db.exec("ALTER TABLE presets ADD COLUMN permission_mode TEXT NULL");
 }
 
 export interface ReviewModelConfig {

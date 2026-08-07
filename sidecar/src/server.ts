@@ -1,12 +1,21 @@
 import type { ServerWebSocket } from "bun";
-import { existsSync } from "node:fs";
-import type { Provider, StoredEvent } from "./events";
+import { basename, extname } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import type { MediaAttachment, Provider, StoredEvent } from "./events";
 import type { MediaStore } from "./media";
 import type { ConversationRunner } from "./runner";
-import type { ConversationStore } from "./stores/conversations";
+import type { Conversation, ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
-import type { PresetInput, PresetStore } from "./stores/presets";
-import { defaultReviewConfig } from "./stores/presets";
+import type {
+  PresetInput,
+  PresetPermissionMode,
+  PresetStore,
+} from "./stores/presets";
+import {
+  defaultReviewConfig,
+  normalizePresetPermissionMode,
+} from "./stores/presets";
 import type { SettingsStore } from "./stores/settings";
 import type { QuotaTracker } from "./quotas";
 import type { QuotaRefresher } from "./quota-refresh";
@@ -33,7 +42,16 @@ import type { RoutineInput, RoutineScheduler, RoutineStore } from "./routines";
 import { fleetSnapshot } from "./fleet";
 import type { SearchIndex } from "./search";
 import type { CostStore } from "./costs";
-import type { MemoryStore } from "./memory";
+import {
+  MemoryFileExistsError,
+  MemoryFileTooLargeError,
+  MemoryPathError,
+  type MemoryStore,
+} from "./memory";
+import type { GamificationService } from "./gamification";
+import { FILESYSTEM_SCOPES, type FilesystemScope } from "./access";
+import { actionFormat } from "./response-format";
+import { conductorToolTokens } from "./conductor-mcp";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -76,6 +94,7 @@ export interface ServerDeps {
   search: SearchIndex;
   costs: CostStore;
   memory: MemoryStore;
+  gamification?: GamificationService;
   /**
    * Arrêt propre du sidecar, déclenché par `POST /api/shutdown` : c'est ce qui
    * permet à un sidecar plus récent de reprendre le port (cf. claimServer).
@@ -110,7 +129,7 @@ class HttpError extends Error {
 const TAURI_CORS_HEADERS = {
   "access-control-allow-origin": "tauri://localhost",
   "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-  "access-control-allow-headers": "content-type",
+  "access-control-allow-headers": "content-type, x-file-name",
   vary: "Origin",
 };
 
@@ -145,6 +164,19 @@ function requiredString(
   return value;
 }
 
+function memoryHttpError(error: unknown, fallback = "fichier mémoire inconnu"): never {
+  if (error instanceof MemoryFileTooLargeError) {
+    throw new HttpError(413, error.message);
+  }
+  if (error instanceof MemoryPathError) {
+    throw new HttpError(400, error.message);
+  }
+  if (error instanceof MemoryFileExistsError) {
+    throw new HttpError(409, error.message);
+  }
+  throw new HttpError(404, fallback);
+}
+
 function strongReviewModel(model: string, field: string): string {
   const value = model.trim();
   if (/haiku|luna/i.test(value)) {
@@ -169,7 +201,7 @@ function byteLimit(envName: string, fallback: number): number {
 
 function validatedImages(body: Record<string, unknown>, media: MediaStore): string[] {
   const images = optionalImages(body);
-  const imageLimit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
+  const mediaLimit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
   const totalLimit = byteLimit(
     "PUPITRE_MESSAGE_MEDIA_MAX_BYTES",
     DEFAULT_MESSAGE_MEDIA_MAX_BYTES,
@@ -182,7 +214,7 @@ function validatedImages(body: Record<string, unknown>, media: MediaStore): stri
     } catch {
       throw new HttpError(400, `media inconnu ou invalide : ${name}`);
     }
-    if (size > imageLimit) {
+    if (size > mediaLimit) {
       throw new HttpError(413, `image trop volumineuse : ${name}`);
     }
     total += size;
@@ -191,6 +223,78 @@ function validatedImages(body: Record<string, unknown>, media: MediaStore): stri
     }
   }
   return images;
+}
+
+function optionalAttachments(body: Record<string, unknown>): unknown[] {
+  const value = body.attachments;
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new HttpError(400, "champ attachments invalide");
+  return value;
+}
+
+function validatedAttachments(
+  body: Record<string, unknown>,
+  media: MediaStore,
+): MediaAttachment[] {
+  const attachments = optionalAttachments(body);
+  const mediaLimit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
+  const totalLimit = byteLimit(
+    "PUPITRE_MESSAGE_MEDIA_MAX_BYTES",
+    DEFAULT_MESSAGE_MEDIA_MAX_BYTES,
+  );
+  let total = 0;
+  return attachments.map((value) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new HttpError(400, "attachment invalide");
+    }
+    const item = value as Record<string, unknown>;
+    if (
+      typeof item.name !== "string"
+      || typeof item.originalName !== "string"
+      || typeof item.mimeType !== "string"
+    ) {
+      throw new HttpError(400, "attachment invalide");
+    }
+    let size: number;
+    try {
+      size = media.byteLength(item.name);
+    } catch {
+      throw new HttpError(400, `media inconnu ou invalide : ${item.name}`);
+    }
+    if (size > mediaLimit) {
+      throw new HttpError(413, `fichier trop volumineux : ${item.originalName}`);
+    }
+    total += size;
+    if (total > totalLimit) {
+      throw new HttpError(413, "taille totale des pièces jointes dépassée");
+    }
+    return {
+      name: item.name,
+      originalName: item.originalName,
+      mimeType: item.mimeType,
+      size,
+    };
+  });
+}
+
+function messageWithAttachments(
+  body: Record<string, unknown>,
+  media: MediaStore,
+): { message: string; images: string[]; attachments: MediaAttachment[] } {
+  const value = body.message;
+  if (typeof value !== "string") {
+    throw new HttpError(400, "champ message invalide");
+  }
+  const images = validatedImages(body, media);
+  const attachments = validatedAttachments(body, media);
+  const attachmentImages = attachments
+    .filter((attachment) => attachment.mimeType.startsWith("image/"))
+    .map((attachment) => attachment.name);
+  const imageNames = [...new Set([...images, ...attachmentImages])];
+  if (value.trim() === "" && imageNames.length === 0) {
+    throw new HttpError(400, "message ou image requis");
+  }
+  return { message: value, images: imageNames, attachments };
 }
 
 function optionalEffort(
@@ -244,6 +348,116 @@ function optionalBoolean(
   return value;
 }
 
+const COMMON_SUBAGENT_EFFORTS = ["low", "medium", "high", "xhigh"] as const;
+const ANY_SUBAGENT_EFFORTS = [...COMMON_SUBAGENT_EFFORTS, "max"] as const;
+
+function optionalNamedEffort(
+  body: Record<string, unknown>,
+  field: string,
+  provider?: Provider,
+): string | null {
+  const value = body[field];
+  if (value === undefined || value === null || value === "") return null;
+  const allowed = provider
+    ? EFFORTS_BY_PROVIDER[provider]
+    : ANY_SUBAGENT_EFFORTS;
+  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) {
+    throw new HttpError(400, `${field} invalide${provider ? ` pour ${provider}` : ""}`);
+  }
+  return value;
+}
+
+function optionalNamedPresetId(
+  body: Record<string, unknown>,
+  field: string,
+): string | null {
+  const value = body[field];
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new HttpError(400, `${field} invalide`);
+  }
+  return value;
+}
+
+function validatePresetSubagentConfig(input: PresetInput, deps: ServerDeps): void {
+  if (input.subagent_preset_id === null || input.subagent_preset_id === undefined) {
+    if (input.subagent_effort !== null && input.subagent_effort !== undefined) {
+      const allowed = COMMON_SUBAGENT_EFFORTS as readonly string[];
+      if (!allowed.includes(input.subagent_effort)) {
+        throw new HttpError(400, "subagent_effort invalide");
+      }
+    }
+    return;
+  }
+  const target = deps.presets.get(input.subagent_preset_id);
+  if (!target) throw new HttpError(404, "preset sub-agent inconnu");
+  if (
+    input.subagent_effort !== null
+    && input.subagent_effort !== undefined
+    && !(EFFORTS_BY_PROVIDER[target.provider] as readonly string[]).includes(input.subagent_effort)
+  ) {
+    throw new HttpError(400, `subagent_effort invalide pour ${target.provider}`);
+  }
+}
+
+function optionalPresetPermissionMode(
+  body: Record<string, unknown>,
+): PresetPermissionMode | null | undefined {
+  if (body.permission_mode === undefined) return undefined;
+  try {
+    return normalizePresetPermissionMode(body.permission_mode);
+  } catch {
+    throw new HttpError(
+      400,
+      "permission_mode invalide (default, acceptEdits, plan, dontAsk ou yolo/autonomous)",
+    );
+  }
+}
+
+function conversationSubagentConfig(
+  body: Record<string, unknown>,
+  deps: ServerDeps,
+): { subagentPresetId: string | null; subagentEffort: string | null } {
+  const subagentPresetId = optionalNamedPresetId(body, "subagentPresetId");
+  const target = subagentPresetId ? deps.presets.get(subagentPresetId) : null;
+  if (subagentPresetId && !target) throw new HttpError(404, "preset sub-agent inconnu");
+  const subagentEffort = optionalNamedEffort(body, "subagentEffort", target?.provider);
+  if (!target && subagentEffort === "max") {
+    throw new HttpError(400, "subagentEffort max exige un preset Claude");
+  }
+  return {
+    subagentPresetId,
+    subagentEffort,
+  };
+}
+
+export function effectiveSubtaskConfig(
+  conversation: Conversation,
+  requested: {
+    provider: Provider;
+    model: string;
+    effort: string | null;
+    speed: "standard" | "fast" | null;
+  },
+  presets: PresetStore,
+): typeof requested {
+  const lockedPreset = conversation.subagent_preset_id
+    ? presets.get(conversation.subagent_preset_id)
+    : null;
+  if (!lockedPreset) {
+    return {
+      ...requested,
+      effort: conversation.subagent_effort ?? requested.effort,
+    };
+  }
+  return {
+    provider: lockedPreset.provider,
+    model: lockedPreset.model,
+    effort: conversation.subagent_effort ?? lockedPreset.effort,
+    speed: lockedPreset.speed,
+  };
+}
+
 function presetInput(body: Record<string, unknown>): PresetInput {
   const name = requiredString(body, "name");
   const provider = requiredString(body, "provider");
@@ -279,6 +493,9 @@ function presetInput(body: Record<string, unknown>): PresetInput {
       throw new HttpError(400, `review_effort invalide pour ${effortProvider}`);
     }
   }
+  const subagentPresetIdValue = body.subagent_preset_id;
+  const subagentEffortValue = body.subagent_effort;
+  const permissionMode = optionalPresetPermissionMode(body);
   return {
     name,
     provider,
@@ -286,6 +503,13 @@ function presetInput(body: Record<string, unknown>): PresetInput {
     effort: optionalEffort(body, provider),
     speed: optionalSpeed(body, provider),
     orchestrator: optionalBoolean(body, "orchestrator", true),
+    ...(subagentPresetIdValue !== undefined
+      ? { subagent_preset_id: optionalNamedPresetId(body, "subagent_preset_id") }
+      : {}),
+    ...(subagentEffortValue !== undefined
+      ? { subagent_effort: optionalNamedEffort(body, "subagent_effort") }
+      : {}),
+    ...(permissionMode !== undefined ? { permission_mode: permissionMode } : {}),
     ...(reviewProvider ? { review_provider: reviewProvider } : {}),
     ...(typeof reviewModelValue === "string" ? { review_model: reviewModelValue } : {}),
     ...(typeof reviewEffortValue === "string" ? { review_effort: reviewEffortValue } : {}),
@@ -356,16 +580,66 @@ function reviewModelConfig(
   };
 }
 
-function mediaExtension(contentType: string | null): string {
-  const mime = contentType?.split(";", 1)[0]?.trim().toLowerCase();
+function mediaMimeType(contentType: string | null, fileName: string | null): string {
+  const declared = contentType?.split(";", 1)[0]?.trim().toLowerCase();
+  if (declared && declared !== "application/octet-stream") return declared;
+  const extension = extname(fileName ?? "").toLowerCase();
+  switch (extension) {
+    case ".csv": return "text/csv";
+    case ".doc": return "application/msword";
+    case ".docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case ".json": return "application/json";
+    case ".md": return "text/markdown";
+    case ".pdf": return "application/pdf";
+    case ".txt": return "text/plain";
+    case ".xls": return "application/vnd.ms-excel";
+    case ".xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    case ".xml": return "application/xml";
+    case ".zip": return "application/zip";
+    default: return declared || "application/octet-stream";
+  }
+}
+
+function mediaExtension(contentType: string | null, fileName: string | null): string {
+  const mime = mediaMimeType(contentType, fileName);
   switch (mime) {
     case "image/jpeg": return "jpg";
     case "image/gif": return "gif";
     case "image/webp": return "webp";
     case "image/svg+xml": return "svg";
     case "image/png":
-    default:
       return "png";
+    case "application/pdf": return "pdf";
+    case "application/msword": return "doc";
+    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": return "docx";
+    case "application/vnd.ms-excel": return "xls";
+    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": return "xlsx";
+    case "application/json": return "json";
+    case "application/xml": return "xml";
+    case "application/zip": return "zip";
+    case "text/csv": return "csv";
+    case "text/markdown": return "md";
+    case "text/plain": return "txt";
+    default: return extname(fileName ?? "").replace(".", "") || "bin";
+  }
+}
+
+function fileNameHeader(value: string | null): string {
+  if (!value) return "piece-jointe";
+  try {
+    return basename(decodeURIComponent(value)) || "piece-jointe";
+  } catch {
+    return basename(value) || "piece-jointe";
+  }
+}
+
+function droppedFilePath(value: string): string {
+  const path = value.trim();
+  if (!path.startsWith("file://")) return path;
+  try {
+    return fileURLToPath(path);
+  } catch {
+    return path;
   }
 }
 
@@ -551,6 +825,25 @@ export function createServer(deps: ServerDeps) {
           return json({ ok: true });
         }
 
+        if (request.method === "GET" && pathname === "/api/gamification") {
+          if (!deps.gamification) throw new HttpError(501, "progression non câblée");
+          const projectId = url.searchParams.get("projectId") ?? undefined;
+          if (projectId && !deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+          return json(deps.gamification.snapshot(projectId));
+        }
+
+        if (request.method === "POST" && pathname === "/api/gamification/activity") {
+          if (!deps.gamification) throw new HttpError(501, "progression non câblée");
+          const body = await readObject(request);
+          const day = requiredString(body, "day");
+          const activeMs = body.activeMs;
+          if (typeof activeMs !== "number" || !Number.isFinite(activeMs) || activeMs < 0 || activeMs > 60_000) {
+            throw new HttpError(400, "durée active invalide");
+          }
+          deps.gamification.addActiveTime(day, activeMs);
+          return json({ ok: true });
+        }
+
         if (request.method === "POST" && pathname === "/api/shutdown") {
           if (!deps.shutdown) throw new HttpError(501, "arrêt non câblé");
           // Différé pour que la réponse parte avant l'arrêt du process.
@@ -573,12 +866,24 @@ export function createServer(deps: ServerDeps) {
           return json(deps.memory.list());
         }
 
+        if (request.method === "POST" && pathname === "/api/memory") {
+          const body = await readObject(request);
+          const path = requiredString(body, "path");
+          const content = body.content === undefined ? "" : body.content;
+          if (typeof content !== "string") throw new HttpError(400, "contenu mémoire invalide");
+          try {
+            return json(deps.memory.create(path, content), 201);
+          } catch (error) {
+            memoryHttpError(error, "création du fichier mémoire impossible");
+          }
+        }
+
         const memoryPath = routeId(pathname, /^\/api\/memory\/([^/]+)$/);
         if (request.method === "GET" && memoryPath !== null) {
           try {
             return json(deps.memory.read(memoryPath));
-          } catch {
-            throw new HttpError(404, "fichier mémoire inconnu");
+          } catch (error) {
+            memoryHttpError(error);
           }
         }
         if (request.method === "PUT" && memoryPath !== null) {
@@ -587,16 +892,24 @@ export function createServer(deps: ServerDeps) {
           try {
             return json(deps.memory.write(memoryPath, body.content));
           } catch (error) {
-            if (error instanceof Error && error.message.includes("volumineux")) throw new HttpError(413, error.message);
-            throw new HttpError(404, "fichier mémoire inconnu");
+            memoryHttpError(error);
+          }
+        }
+        if (request.method === "PATCH" && memoryPath !== null) {
+          const body = await readObject(request);
+          const newPath = requiredString(body, "newPath");
+          try {
+            return json(deps.memory.rename(memoryPath, newPath));
+          } catch (error) {
+            memoryHttpError(error, "renommage du fichier mémoire impossible");
           }
         }
         if (request.method === "DELETE" && memoryPath !== null) {
           try {
             deps.memory.delete(memoryPath);
             return empty(204);
-          } catch {
-            throw new HttpError(404, "fichier mémoire inconnu");
+          } catch (error) {
+            memoryHttpError(error);
           }
         }
 
@@ -625,6 +938,11 @@ export function createServer(deps: ServerDeps) {
             project = deps.projects.create({ name, path });
           } catch {
             throw new HttpError(409, "projet déjà existant");
+          }
+          const appFilesystemScope = deps.settings.get<unknown>("filesystemScope");
+          if (FILESYSTEM_SCOPES.includes(appFilesystemScope as FilesystemScope)) {
+            deps.projects.setFilesystemScope(project.id, appFilesystemScope as FilesystemScope);
+            project = deps.projects.get(project.id)!;
           }
           deps.skills.refresh();
           return json(project, 201);
@@ -754,7 +1072,35 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(404, "preset inconnu");
           }
           deps.projects.setDefaultPreset(projectDefaultPresetId, presetId as string | null);
+          const preset = typeof presetId === "string" ? deps.presets.get(presetId) : null;
+          // Une permission absente signifie « hériter du projet » : ne pas
+          // réinitialiser le choix existant quand un preset sans override devient
+          // le défaut. Une permission explicite devient le mode du projet, ce
+          // qui conserve le chemin d'exécution actuel sans toucher au contrat
+          // des conversations.
+          if (preset?.permission_mode) {
+            deps.projects.setPermissionMode(projectDefaultPresetId, preset.permission_mode);
+          }
           return json(deps.projects.get(projectDefaultPresetId));
+        }
+
+        const projectFilesystemScopeId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/filesystem-scope$/,
+        );
+        if (request.method === "PUT" && projectFilesystemScopeId !== null) {
+          if (!deps.projects.get(projectFilesystemScopeId)) {
+            throw new HttpError(404, "projet inconnu");
+          }
+          const body = await readObject(request);
+          if (!FILESYSTEM_SCOPES.includes(body.scope as FilesystemScope)) {
+            throw new HttpError(400, "portée filesystem invalide");
+          }
+          deps.projects.setFilesystemScope(
+            projectFilesystemScopeId,
+            body.scope as FilesystemScope,
+          );
+          return json(deps.projects.get(projectFilesystemScopeId));
         }
 
         const projectGardienModeId = routeId(
@@ -810,7 +1156,11 @@ export function createServer(deps: ServerDeps) {
           if (!deps.projects.get(projectConversationsId)) {
             throw new HttpError(404, "projet inconnu");
           }
-          return json(deps.conversations.listByProject(projectConversationsId));
+          const scope = url.searchParams.get("scope") ?? "active";
+          if (scope !== "active" && scope !== "archived" && scope !== "trash") {
+            throw new HttpError(400, "portée de conversations invalide");
+          }
+          return json(deps.conversations.listByProject(projectConversationsId, scope));
         }
 
         const projectCostsId = routeId(pathname, /^\/api\/projects\/([^/]+)\/costs$/);
@@ -862,6 +1212,8 @@ export function createServer(deps: ServerDeps) {
             effort: config.effort,
             speed: config.speed,
             orchestrator: config.orchestrator,
+            subagentPresetId: "subagent_preset_id" in config ? config.subagent_preset_id : null,
+            subagentEffort: "subagent_effort" in config ? config.subagent_effort : null,
             firstMessage: message,
           });
           void deps.runner.runTurn(conversation.id, message, [])
@@ -958,6 +1310,7 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "POST" && pathname === "/api/presets") {
           const body = await readObject(request);
           const input = presetInput(body);
+          validatePresetSubagentConfig(input, deps);
           try {
             return json(deps.presets.create(input), 201);
           } catch {
@@ -968,8 +1321,10 @@ export function createServer(deps: ServerDeps) {
         const presetId = routeId(pathname, /^\/api\/presets\/([^/]+)$/);
         if (request.method === "PUT" && presetId !== null) {
           const body = await readObject(request);
+          const input = presetInput(body);
+          validatePresetSubagentConfig(input, deps);
           try {
-            const preset = deps.presets.update(presetId, presetInput(body));
+            const preset = deps.presets.update(presetId, input);
             if (!preset) throw new HttpError(404, "preset inconnu");
             return json(preset);
           } catch (error) {
@@ -1006,7 +1361,9 @@ export function createServer(deps: ServerDeps) {
         }
 
         if (request.method === "GET" && pathname === "/api/settings") {
-          return json(deps.settings.all());
+          // Lecture seule, calculée : l'UI en a besoin pour isoler le coût du
+          // bridge conductor dans la jauge de contexte.
+          return json({ ...deps.settings.all(), conductorToolTokens: conductorToolTokens() });
         }
 
         if (request.method === "PUT" && pathname === "/api/settings") {
@@ -1028,6 +1385,19 @@ export function createServer(deps: ServerDeps) {
             deps.settings.set("longTaskThresholdSeconds", threshold);
             updated = true;
           }
+          if ("filesystemScope" in body) {
+            if (!FILESYSTEM_SCOPES.includes(body.filesystemScope as FilesystemScope)) {
+              throw new HttpError(400, "portée filesystem invalide");
+            }
+            deps.settings.set("filesystemScope", body.filesystemScope);
+            updated = true;
+          }
+          if ("actionFormat" in body) {
+            // Normalisé côté serveur : un intitulé vide ou une liste absente
+            // retombe sur les défauts au lieu de désactiver la détection.
+            deps.settings.set("actionFormat", actionFormat(body.actionFormat));
+            updated = true;
+          }
           if (!updated) throw new HttpError(400, "aucun réglage reconnu");
           return json(deps.settings.all());
         }
@@ -1045,20 +1415,24 @@ export function createServer(deps: ServerDeps) {
           const model = requiredString(body, "model");
           const effort = optionalEffort(body, provider as Provider);
           const speed = optionalSpeed(body, provider as Provider);
-          const message = requiredString(body, "message");
-          const images = validatedImages(body, deps.media);
+          const permissionMode = optionalPresetPermissionMode(body);
+          const { message, images, attachments } = messageWithAttachments(body, deps.media);
           // Défaut ON : une conversation peut déléguer sauf mention contraire.
           const orchestrator = optionalBoolean(body, "orchestrator", true);
+          const { subagentPresetId, subagentEffort } = conversationSubagentConfig(body, deps);
           const conversation = deps.conversations.create({
             projectId,
             provider: provider as Provider,
             model,
             effort,
             speed,
+            permissionMode,
             orchestrator,
-            firstMessage: message,
+            subagentPresetId,
+            subagentEffort,
+            firstMessage: message.trim() || "Image jointe",
           });
-          void deps.runner.runTurn(conversation.id, message, images)
+          void deps.runner.runTurn(conversation.id, message, images, attachments)
             .catch((error) => console.error("Échec du tour", error));
           return json(conversation, 201);
         }
@@ -1100,6 +1474,24 @@ export function createServer(deps: ServerDeps) {
           } finally {
             releaseActivity();
           }
+        }
+
+        const conversationPermissionId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/permission-mode$/,
+        );
+        if (request.method === "PUT" && conversationPermissionId !== null) {
+          const conversation = deps.conversations.get(conversationPermissionId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          if (deps.runner.activity.isBusy(conversationPermissionId)) {
+            throw new HttpError(409, "un tour est déjà en cours");
+          }
+          const body = await readObject(request);
+          const permissionMode = optionalPresetPermissionMode(body);
+          if (permissionMode === undefined) {
+            throw new HttpError(400, "permission_mode manquant");
+          }
+          return json(deps.conversations.setPermissionMode(conversationPermissionId, permissionMode));
         }
 
         const conversationDebriefId = routeId(
@@ -1223,6 +1615,8 @@ export function createServer(deps: ServerDeps) {
                 effort,
                 speed,
                 orchestrator,
+                subagentPresetId: source.subagent_preset_id,
+                subagentEffort: source.subagent_effort,
                 continuedFrom: source.id,
                 handoffPending: true,
                 firstMessage: `Suite — ${source.title}`,
@@ -1279,12 +1673,11 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(409, "passation en cours sur cette conversation");
           }
           const body = await readObject(request);
-          const message = requiredString(body, "message");
-          const images = validatedImages(body, deps.media);
+          const { message, images, attachments } = messageWithAttachments(body, deps.media);
           if (deps.runner.activity.isBusy(messageConversationId)) {
             throw new HttpError(409, "un tour est déjà en cours");
           }
-          void deps.runner.runTurn(messageConversationId, message, images)
+          void deps.runner.runTurn(messageConversationId, message, images, attachments)
             .catch((error) => console.error("Échec du tour", error));
           return empty(202);
         }
@@ -1322,6 +1715,49 @@ export function createServer(deps: ServerDeps) {
           const body = await readObject(request);
           deps.conversations.setPinned(conversationPinId, requiredPinned(body));
           return empty(204);
+        }
+
+        const conversationRenameId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/rename$/,
+        );
+        if (request.method === "POST" && conversationRenameId !== null) {
+          if (!deps.conversations.get(conversationRenameId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          const body = await readObject(request);
+          const title = requiredString(body, "title");
+          return json(deps.conversations.rename(conversationRenameId, title));
+        }
+
+        const conversationArchiveId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/archive$/,
+        );
+        if (request.method === "POST" && conversationArchiveId !== null) {
+          if (!deps.conversations.get(conversationArchiveId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          const body = await readObject(request);
+          if (typeof body.archived !== "boolean") {
+            throw new HttpError(400, "champ archived invalide");
+          }
+          return json(deps.conversations.setArchived(conversationArchiveId, body.archived));
+        }
+
+        const conversationTrashId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/trash$/,
+        );
+        if (request.method === "POST" && conversationTrashId !== null) {
+          if (!deps.conversations.get(conversationTrashId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          const body = await readObject(request);
+          if (typeof body.deleted !== "boolean") {
+            throw new HttpError(400, "champ deleted invalide");
+          }
+          return json(deps.conversations.setDeleted(conversationTrashId, body.deleted));
         }
 
         const conversationEventsId = routeId(
@@ -1551,7 +1987,8 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "POST" && pathname === "/api/subtasks") {
           const body = await readObject(request);
           const conversationId = requiredString(body, "conversationId");
-          if (!deps.conversations.get(conversationId)) {
+          const conversation = deps.conversations.get(conversationId);
+          if (!conversation) {
             throw new HttpError(404, "conversation inconnue");
           }
           const provider = requiredString(body, "provider");
@@ -1559,19 +1996,35 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(400, "provider invalide");
           }
           const model = requiredString(body, "model");
-          const effort = optionalEffort(body, provider as Provider);
-          const speed = optionalSpeed(body, provider as Provider);
+          // Quand la conversation impose déjà un preset ou un effort, les
+          // valeurs demandées par l'outil MCP sont volontairement ignorées :
+          // cela rend le verrou effectif même si l'orchestrateur demande autre
+          // chose dans son appel delegate.
+          const parentLocksSubagent = conversation.subagent_preset_id !== null
+            || conversation.subagent_effort !== null;
+          const effort = parentLocksSubagent
+            ? null
+            : optionalEffort(body, provider as Provider);
+          const speed = parentLocksSubagent
+            ? null
+            : optionalSpeed(body, provider as Provider);
           const prompt = requiredString(body, "prompt");
           const label = optionalLabel(body);
+          const effective = effectiveSubtaskConfig(conversation, {
+            provider: provider as Provider,
+            model,
+            effort,
+            speed,
+          }, deps.presets);
           try {
             // Lancement asynchrone : on rend l'id tout de suite, le suivi passe
             // par /ws?conversation=<id> ou GET /api/subtasks/:id.
             const subtask = deps.subtasks.start({
               conversationId,
-              provider: provider as Provider,
-              model,
-              effort,
-              speed,
+              provider: effective.provider,
+              model: effective.model,
+              effort: effective.effort,
+              speed: effective.speed,
               prompt,
               label,
             });
@@ -1627,20 +2080,54 @@ export function createServer(deps: ServerDeps) {
           return json(deps.subtasks.listByConversation(conversationSubtasksId));
         }
 
+        if (request.method === "POST" && pathname === "/api/media/import") {
+          const body = await readObject(request);
+          const sourcePath = droppedFilePath(requiredString(body, "path"));
+          const limit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
+          let stat: ReturnType<typeof statSync>;
+          try {
+            stat = statSync(sourcePath);
+          } catch {
+            throw new HttpError(400, "fichier introuvable");
+          }
+          if (!stat.isFile()) throw new HttpError(400, "le chemin déposé n'est pas un fichier");
+          if (stat.size === 0) throw new HttpError(400, "fichier vide");
+          if (stat.size > limit) throw new HttpError(413, "fichier trop volumineux");
+          const originalName = basename(sourcePath) || "piece-jointe";
+          const mimeType = mediaMimeType(null, originalName);
+          const name = deps.media.importFile(sourcePath);
+          return json({
+            name,
+            originalName,
+            mimeType,
+            size: stat.size,
+          }, 201);
+        }
+
         if (request.method === "POST" && pathname === "/api/media") {
           const limit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
           const declaredLength = Number(request.headers.get("content-length"));
           if (Number.isFinite(declaredLength) && declaredLength > limit) {
-            throw new HttpError(413, "image trop volumineuse");
+            throw new HttpError(413, "fichier trop volumineux");
           }
           const bytes = Buffer.from(await request.arrayBuffer());
-          if (bytes.length === 0) throw new HttpError(400, "image vide");
-          if (bytes.length > limit) throw new HttpError(413, "image trop volumineuse");
+          if (bytes.length === 0) throw new HttpError(400, "fichier vide");
+          if (bytes.length > limit) throw new HttpError(413, "fichier trop volumineux");
+          const originalName = fileNameHeader(request.headers.get("x-file-name"));
+          const contentType = mediaMimeType(
+            request.headers.get("content-type"),
+            originalName,
+          );
           const name = deps.media.importBytes(
             bytes,
-            mediaExtension(request.headers.get("content-type")),
+            mediaExtension(contentType, originalName),
           );
-          return json({ name }, 201);
+          return json({
+            name,
+            originalName,
+            mimeType: contentType,
+            size: bytes.length,
+          }, 201);
         }
 
         const mediaName = routeId(pathname, /^\/media\/([^/]+)$/);

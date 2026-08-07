@@ -1,4 +1,4 @@
-import ReactMarkdown from 'react-markdown'
+import Markdown from './Markdown'
 import type { DebriefBlock } from './groupEvents'
 
 export function DebriefCard({
@@ -25,7 +25,7 @@ export function DebriefCard({
         </span>
       </summary>
       <div className="debrief-card-content">
-        <ReactMarkdown>{block.contentMd}</ReactMarkdown>
+        <Markdown>{block.contentMd}</Markdown>
         {onQuestion ? (
           <button
             type="button"

@@ -176,7 +176,8 @@ test("port du sidecar non résolu : le tour orchestrateur échoue explicitement"
     orchestrator: false, firstMessage: "simple",
   });
   await broken.runTurn(plain.id, "simple", []);
-  expect(claudeArgs()).toContain("-- simple");
+  // La consigne de format précède la demande ; c'est bien le CLI qui a tourné.
+  expect(claudeArgs()).toContain("simple");
 });
 
 test("garde de profondeur : un tour de sous-tâche ne reçoit jamais le conductor", async () => {
@@ -191,7 +192,11 @@ test("garde de profondeur : un tour de sous-tâche ne reçoit jamais le conducto
   });
   await subtasks.waitResult(subtask.id);
 
-  const turns = claudeArgs().trim().split("\n");
+  // Le digest asynchrone invoque aussi le fake Claude, et les prompts sont
+  // multi-lignes : seule la ligne de flags d'un vrai tour porte
+  // `--permission-mode`.
+  const turns = claudeArgs().trim().split("\n")
+    .filter((line) => line.includes("--permission-mode"));
   expect(turns).toHaveLength(2);
   expect(turns[1]).toContain("-- sous-tâche");
   expect(turns[1]).not.toContain("--mcp-config");

@@ -224,11 +224,25 @@ test("premier tour : session avec le threadId, deltas dans l'ordre, tool + usage
     model: "gpt-5.6-luna",
     cwd: "/tmp",
     approvalPolicy: "never",
+    sandbox: "workspace-write",
     serviceTier: "fast",
   });
+  expect(start.params.runtimeWorkspaceRoots).toContain("/tmp");
+  expect(start.params.runtimeWorkspaceRoots).toContain("/home/clement/.claude");
+  expect(start.params.runtimeWorkspaceRoots).toContain("/home/clement/.codex");
   const turnStart = requests.find((r) => r.method === "turn/start")!;
   expect(turnStart.params).toMatchObject({ threadId: "fake-thread-0001", effort: "high" });
   expect(turnStart.params.input[0]).toEqual({ type: "text", text: "salut" });
+});
+
+test("full-system : le thread Codex passe en danger-full-access", async () => {
+  const files = useFake();
+  await collect(newClient(), { filesystemScope: "full-system" });
+  const start = sentRequests(files.log).find((r) => r.method === "thread/start")!;
+  expect(start.params).toMatchObject({
+    sandbox: "danger-full-access",
+  });
+  expect(start.params.runtimeWorkspaceRoots).toBeUndefined();
 });
 
 test("images jointes : passées en localImage dans l'input du tour", async () => {

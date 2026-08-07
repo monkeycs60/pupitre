@@ -21,6 +21,7 @@ import { useNow } from './useNow'
 import type {
   ConversationSpeed,
   Preset,
+  PresetPermissionMode,
   Project,
   Provider,
   QuotaSnapshot,
@@ -32,7 +33,12 @@ export interface ConversationConfig {
   model: string
   effort: string
   speed: ConversationSpeed
+  permissionMode: PresetPermissionMode | null
   orchestrator: boolean
+  /** Preset imposé aux sous-agents ; null = choix laissé au modèle principal. */
+  subagentPresetId: string | null
+  /** Effort imposé, ou null = effort du preset / choix du modèle principal. */
+  subagentEffort: string | null
 }
 
 interface ConfigPanelProps {
@@ -42,6 +48,7 @@ interface ConfigPanelProps {
   onConfigChange: (config: ConversationConfig) => void
   onProjectUpdated: (project: Project) => void
   onError: (message: string) => void
+  onReady?: (ready: boolean) => void
 }
 
 function errorMessage(error: unknown): string {
@@ -54,7 +61,10 @@ function configOf(preset: Preset): ConversationConfig {
     model: preset.model,
     effort: preset.effort ?? 'high',
     speed: preset.speed ?? 'standard',
+    permissionMode: preset.permission_mode ?? null,
     orchestrator: preset.orchestrator,
+    subagentPresetId: preset.subagent_preset_id ?? null,
+    subagentEffort: preset.subagent_effort ?? null,
   }
 }
 
@@ -64,6 +74,9 @@ function sameConfig(left: ConversationConfig, right: ConversationConfig): boolea
     && left.model === right.model
     && left.effort === right.effort
     && left.orchestrator === right.orchestrator
+    && left.subagentPresetId === right.subagentPresetId
+    && left.subagentEffort === right.subagentEffort
+    && left.permissionMode === right.permissionMode
     && (left.provider === 'codex' ? left.speed === right.speed : true)
 }
 
@@ -81,12 +94,14 @@ export function ConfigPanel({
   onConfigChange,
   onProjectUpdated,
   onError,
+  onReady,
 }: ConfigPanelProps) {
   const [presets, setPresets] = useState<Preset[]>([])
   const [selectedPresetId, setSelectedPresetId] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [action, setAction] = useState<MenuAction>(null)
   const [draftName, setDraftName] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
   const [isBusy, setIsBusy] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const now = useNow()
@@ -94,10 +109,15 @@ export function ConfigPanel({
   const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? null
   const isDefault = (project.default_preset_id ?? '') === selectedPresetId && selectedPresetId !== ''
   // « Modifié » : le preset est choisi mais les réglages ne sont plus les siens.
-  const isDirty = selectedPreset !== null && !sameConfig(config, configOf(selectedPreset))
+  const isPermissionDirty = selectedPreset !== null
+    && config.permissionMode !== (selectedPreset.permission_mode ?? null)
+  const isDirty = selectedPreset !== null
+    && (!sameConfig(config, configOf(selectedPreset)) || isPermissionDirty)
 
   useEffect(() => {
     const abortController = new AbortController()
+    setIsLoading(true)
+    onReady?.(false)
     void listPresets(abortController.signal)
       .then((loaded) => {
         setPresets(loaded)
@@ -107,13 +127,27 @@ export function ConfigPanel({
         if (projectDefault) {
           setSelectedPresetId(projectDefault.id)
           onConfigChange(configOf(projectDefault))
+        } else {
+          setSelectedPresetId('')
         }
       })
       .catch((error: unknown) => {
         if (!abortController.signal.aborted) onError(errorMessage(error))
       })
+      .finally(() => {
+        if (!abortController.signal.aborted) {
+          setIsLoading(false)
+          onReady?.(true)
+        }
+      })
     return () => abortController.abort()
-  }, [project.default_preset_id])
+  }, [
+    onConfigChange,
+    onError,
+    onReady,
+    project.default_preset_id,
+    project.id,
+  ])
 
   // Un menu ouvert doit se refermer au clic ailleurs, sinon il masque la config.
   useEffect(() => {
@@ -144,7 +178,10 @@ export function ConfigPanel({
       model: PROVIDER_MODELS[provider][0],
       effort: 'high',
       speed: 'standard',
+      permissionMode: config.permissionMode,
       orchestrator: config.orchestrator,
+      subagentPresetId: config.subagentPresetId,
+      subagentEffort: config.subagentEffort,
     })
   }
 
@@ -177,14 +214,19 @@ export function ConfigPanel({
     if (!selectedPreset) return
     setMenuOpen(false)
     void run(async () => {
-      replace(await updatePreset(selectedPreset.id, {
+      const updated = await updatePreset(selectedPreset.id, {
         name: selectedPreset.name,
         provider: config.provider,
         model: config.model,
         effort: config.effort,
         speed: config.provider === 'codex' ? config.speed : null,
         orchestrator: config.orchestrator,
-      }))
+        subagent_preset_id: config.subagentPresetId,
+        subagent_effort: config.subagentEffort,
+        permission_mode: config.permissionMode,
+      })
+      replace(updated)
+      if (isDefault) onProjectUpdated(await setProjectDefaultPreset(project.id, updated.id))
     })
   }
 
@@ -199,6 +241,9 @@ export function ConfigPanel({
         effort: selectedPreset.effort,
         speed: selectedPreset.speed,
         orchestrator: selectedPreset.orchestrator,
+        subagent_preset_id: selectedPreset.subagent_preset_id,
+        subagent_effort: selectedPreset.subagent_effort,
+        permission_mode: selectedPreset.permission_mode,
       }))
       setAction(null)
       setDraftName('')
@@ -216,6 +261,9 @@ export function ConfigPanel({
         effort: config.effort,
         speed: config.provider === 'codex' ? config.speed : null,
         orchestrator: config.orchestrator,
+        subagent_preset_id: config.subagentPresetId,
+        subagent_effort: config.subagentEffort,
+        permission_mode: config.permissionMode,
       })
       setPresets((current) => [...current, created])
       setSelectedPresetId(created.id)
@@ -265,7 +313,7 @@ export function ConfigPanel({
   }
 
   return (
-    <section className="config-panel" aria-label="Configuration de la conversation">
+    <section className={`config-panel${isLoading ? ' is-loading' : ''}`} aria-label="Configuration de la conversation">
       <header className="config-header">
         <h2>Configuration</h2>
         <div className="config-preset">
@@ -276,6 +324,7 @@ export function ConfigPanel({
             id="config-preset-select"
             value={selectedPresetId}
             onChange={(event) => handlePresetChange(event.target.value)}
+            disabled={isLoading}
           >
             <option value="">Sans preset</option>
             {presets.map((preset) => (
@@ -391,6 +440,14 @@ export function ConfigPanel({
         </div>
       ) : null}
 
+      <details className="config-advanced">
+        <summary>
+          <span className="config-advanced-summary">
+            {isLoading ? 'Chargement de la configuration…' : `${selectedPreset?.name ?? 'Réglages'} · ${config.provider} · ${config.model} · ${config.effort}`}
+          </span>
+          <span className="config-advanced-action">Modifier</span>
+        </summary>
+        <div className="config-advanced-content">
       <div className="config-field">
         <span className="config-label">Provider</span>
         <div className="segmented" role="radiogroup" aria-label="Provider">
@@ -477,6 +534,45 @@ export function ConfigPanel({
       ) : null}
 
       <div className="config-field">
+        <span className="config-label">Accès filesystem</span>
+        <p className="config-inherited-value">
+          {project.filesystem_scope === 'full-system'
+            ? 'Tout le système'
+            : 'Projet + racines IA'}
+          <span> · réglé au niveau du projet</span>
+        </p>
+        <p className="config-help">
+          Les racines <code>~/.claude</code> et <code>~/.codex</code> restent toujours
+          accessibles. Modifie cette portée depuis le bouton ⚙ du projet.
+        </p>
+      </div>
+
+      <div className="config-field">
+        <label className="config-label" htmlFor="config-permission-mode">
+          Autonomie du preset
+        </label>
+        <select
+          id="config-permission-mode"
+          value={config.permissionMode ?? ''}
+          onChange={(event) => {
+            const value = event.target.value
+            patch({ permissionMode: value === '' ? null : value as PresetPermissionMode })
+          }}
+        >
+          <option value="">Hériter du projet</option>
+          <option value="default">Par défaut du provider</option>
+          <option value="acceptEdits">Éditions acceptées</option>
+          <option value="plan">Plan / lecture seule</option>
+          <option value="dontAsk">Autonome (sans demande)</option>
+          <option value="bypassPermissions">YOLO · sans permissions</option>
+        </select>
+        <p className="config-help">
+          Pour Claude, YOLO active aussi <code>--dangerously-skip-permissions</code>.
+          La portée filesystem reste réglée séparément au niveau du projet.
+        </p>
+      </div>
+
+      <div className="config-field">
         <span className="config-label">Sub-agents</span>
         <label className="config-switch">
           <input
@@ -490,7 +586,15 @@ export function ConfigPanel({
         <HelpLink slug="orchestration" />
       </div>
 
-      {config.orchestrator ? <DelegationPool /> : null}
+      {config.orchestrator ? (
+        <DelegationPool
+          config={config}
+          presets={presets}
+          onConfigChange={onConfigChange}
+        />
+      ) : null}
+        </div>
+      </details>
     </section>
   )
 }
@@ -501,7 +605,22 @@ export function ConfigPanel({
  * deux abonnements. On montre donc le pool réellement atteignable et le routage
  * recommandé, plutôt qu'une liste qui laisserait croire à un choix déjà fait.
  */
-function DelegationPool() {
+function DelegationPool({
+  config,
+  presets,
+  onConfigChange,
+}: {
+  config: ConversationConfig
+  presets: Preset[]
+  onConfigChange: (config: ConversationConfig) => void
+}) {
+  const selectedSubagentPreset = presets.find(
+    (preset) => preset.id === config.subagentPresetId,
+  ) ?? null
+  const effortOptions = selectedSubagentPreset
+    ? PROVIDER_EFFORTS[selectedSubagentPreset.provider]
+    : (['low', 'medium', 'high', 'xhigh'] as const)
+
   return (
     <div className="delegation-pool">
       <p className="delegation-lead">
@@ -518,6 +637,43 @@ function DelegationPool() {
           </div>
         ))}
       </div>
+      <div className="delegation-controls">
+        <label>
+          <span>Agent imposé</span>
+          <select
+            value={config.subagentPresetId ?? ''}
+            onChange={(event) => onConfigChange({
+              ...config,
+              subagentPresetId: event.target.value || null,
+              subagentEffort: null,
+            })}
+          >
+            <option value="">Choix du modèle principal</option>
+            {presets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name} · {preset.provider} {preset.model}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Effort sub-agent</span>
+          <select
+            value={config.subagentEffort ?? ''}
+            onChange={(event) => onConfigChange({
+              ...config,
+              subagentEffort: event.target.value || null,
+            })}
+          >
+            <option value="">
+              {selectedSubagentPreset ? 'Effort du preset' : 'Choix du modèle principal'}
+            </option>
+            {effortOptions.map((effort) => (
+              <option key={effort} value={effort}>{effort}</option>
+            ))}
+          </select>
+        </label>
+      </div>
       <p className="delegation-note">
         Routage recommandé pour l’exécution :{' '}
         <strong>
@@ -526,7 +682,12 @@ function DelegationPool() {
         {' '}(effort {DELEGATION_ROUTING.effort}, {DELEGATION_ROUTING.speed}).
         Les gros modèles restent pour la conception et la revue. Maximum{' '}
         {MAX_CONCURRENT_SUBTASKS} sous-tâches simultanées ; un sub-agent ne peut
-        pas déléguer à son tour.
+        pas déléguer à son tour.{' '}
+        {selectedSubagentPreset
+          ? `Le preset « ${selectedSubagentPreset.name} » verrouille son provider et son modèle${config.subagentEffort ? `, avec effort ${config.subagentEffort}` : ' ; son effort est repris'}.`
+          : config.subagentEffort
+            ? `Le modèle reste libre, mais l’effort ${config.subagentEffort} est imposé.`
+            : 'Sans verrou, le modèle principal choisit chaque sous-tâche.'}
       </p>
     </div>
   )

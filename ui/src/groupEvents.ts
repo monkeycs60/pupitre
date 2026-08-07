@@ -67,7 +67,13 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
         flushTurnFooter()
         turnNumber += 1
         assistant = null
-        blocks.push({ kind: 'user', id: `user-${eventKey}`, text: event.text, images: event.images })
+        blocks.push({
+          kind: 'user',
+          id: `user-${eventKey}`,
+          text: event.text,
+          images: event.images,
+          attachments: event.attachments ?? [],
+        })
         break
       case 'text-delta':
         if (assistant === null) {

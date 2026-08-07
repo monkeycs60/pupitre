@@ -1,7 +1,10 @@
-import ReactMarkdown from 'react-markdown'
+import { memo } from 'react'
+import Markdown from './Markdown'
 import type { EventBlock } from './eventBlocks'
+import type { Attachment } from './types'
 import { mediaUrl } from './transport'
 import { useNow } from './useNow'
+import { AttachmentPreview } from './AttachmentPreview'
 
 interface EventViewProps {
   block: EventBlock
@@ -51,6 +54,17 @@ export function ImageGallery({
           </button>
         )
       })}
+    </div>
+  )
+}
+
+function AttachmentList({ attachments }: { attachments: Attachment[] }) {
+  const files = attachments.filter((attachment) => !attachment.mimeType.startsWith('image/'))
+  if (files.length === 0) return null
+
+  return (
+    <div className="event-attachments" aria-label="Pièces jointes">
+      {files.map((attachment) => <AttachmentPreview key={attachment.name} attachment={attachment} />)}
     </div>
   )
 }
@@ -131,7 +145,13 @@ function TurnFooter({ block }: { block: Extract<EventBlock, { kind: 'turn-footer
   )
 }
 
-export function EventView({ block, onImageOpen, onImageLoad }: EventViewProps) {
+/**
+ * Mémoïsé : la frappe dans le composeur re-rend `Chat`, et sans ce garde-fou
+ * chaque touche re-parsait le Markdown de TOUS les messages du fil.
+ */
+export const EventView = memo(EventViewImpl)
+
+function EventViewImpl({ block, onImageOpen, onImageLoad }: EventViewProps) {
   switch (block.kind) {
     case 'user':
       return (
@@ -144,6 +164,7 @@ export function EventView({ block, onImageOpen, onImageLoad }: EventViewProps) {
               onImageOpen={onImageOpen}
               onImageLoad={onImageLoad}
             />
+            <AttachmentList attachments={block.attachments} />
           </div>
         </article>
       )
@@ -152,7 +173,7 @@ export function EventView({ block, onImageOpen, onImageLoad }: EventViewProps) {
       return (
         <article className="message-row message-row-assistant">
           <div className="message-bubble assistant-message">
-            <ReactMarkdown>{block.text}</ReactMarkdown>
+            <Markdown scope={block.id}>{block.text}</Markdown>
             {block.streaming ? (
               <span className="streaming-caret" aria-hidden="true" />
             ) : null}

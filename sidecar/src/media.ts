@@ -8,7 +8,7 @@ export class MediaStore {
     mkdirSync(this.dir, { recursive: true });
   }
   importFile(absPath: string): string {
-    const name = crypto.randomUUID() + (extname(absPath) || ".png");
+    const name = crypto.randomUUID() + (extname(absPath) || ".bin");
     copyFileSync(absPath, join(this.dir, name));
     return name;
   }

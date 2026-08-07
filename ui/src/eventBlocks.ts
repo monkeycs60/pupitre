@@ -1,10 +1,11 @@
-import type { AppEvent } from './types'
+import type { AppEvent, Attachment } from './types'
 
 interface UserBlock {
   kind: 'user'
   id: string
   text: string
   images: string[]
+  attachments: Attachment[]
 }
 
 interface AssistantBlock {

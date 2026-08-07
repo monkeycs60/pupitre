@@ -90,6 +90,10 @@ export function useConversationEvents(
           return
         }
 
+        if (event.type === 'status' && event.state !== 'running') {
+          window.dispatchEvent(new Event('pupitre:turn-complete'))
+        }
+
         if (buffer !== null) buffer.push(event)
         else setEvents((current) => mergeReplayAndBuffer(current, [event]))
       })

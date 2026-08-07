@@ -1,10 +1,19 @@
 import type { Database } from "bun:sqlite";
 import type { AppEvent, Provider, StoredEvent } from "../events";
+import { taskSummary, taskTitle } from "../conversation-title";
+import type { PresetPermissionMode } from "./presets";
 
 export interface Conversation {
-  id: string; project_id: string; title: string; provider: Provider;
+  id: string; project_id: string; title: string; summary: string; provider: Provider;
   model: string; effort: string | null; speed: "standard" | "fast" | null;
+  permission_mode: PresetPermissionMode | null;
+  subagent_preset_id: string | null; subagent_effort: string | null;
   cli_session_id: string | null; pinned: boolean;
+  /** Renommé à la main : le digest automatique ne l'écrase plus. */
+  title_locked: boolean;
+  /** Numéro de tour du dernier digest généré (0 = aucun). */
+  digest_turn: number;
+  archived: boolean; deleted_at: string | null;
   continued_from: string | null;
   handoff_pending: boolean;
   routine_id: string | null;
@@ -24,6 +33,9 @@ export class ConversationStore {
     model: string;
     effort?: string | null;
     speed?: "standard" | "fast" | null;
+    permissionMode?: PresetPermissionMode | null;
+    subagentPresetId?: string | null;
+    subagentEffort?: string | null;
     /** Défaut ON : toute nouvelle conversation peut déléguer. */
     orchestrator?: boolean;
     continuedFrom?: string | null;
@@ -34,23 +46,27 @@ export class ConversationStore {
   }): Conversation {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    const title = input.firstMessage.length > TITLE_MAX
-      ? input.firstMessage.slice(0, TITLE_MAX) + "…"
-      : input.firstMessage;
+    const title = taskTitle(input.firstMessage);
+    const summary = taskSummary(input.firstMessage);
     this.db.query(
       `INSERT INTO conversations
-         (id, project_id, title, provider, model, effort, speed, orchestrator,
+         (id, project_id, title, summary, provider, model, effort, speed, permission_mode, orchestrator,
+          subagent_preset_id, subagent_effort,
           continued_from, handoff_pending, routine_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
       title,
+      summary,
       input.provider,
       input.model,
       input.effort ?? null,
       input.speed ?? null,
+      input.permissionMode ?? null,
       input.orchestrator === false ? 0 : 1,
+      input.subagentPresetId ?? null,
+      input.subagentEffort ?? null,
       input.continuedFrom ?? null,
       input.handoffPending ? 1 : 0,
       input.routineId ?? null,
@@ -60,26 +76,114 @@ export class ConversationStore {
     return this.get(id)!;
   }
 
+  setPermissionMode(id: string, mode: PresetPermissionMode | null): Conversation | null {
+    this.db.query(
+      "UPDATE conversations SET permission_mode = ?, updated_at = ? WHERE id = ?",
+    ).run(mode, new Date().toISOString(), id);
+    return this.get(id);
+  }
+
   get(id: string): Conversation | null {
     const row = this.db.query("SELECT * FROM conversations WHERE id = ?").get(id) as any;
     return row ? {
       ...row,
+      summary: row.summary || row.title,
       pinned: !!row.pinned,
+      title_locked: !!row.title_locked,
+      digest_turn: row.digest_turn ?? 0,
       orchestrator: !!row.orchestrator,
       handoff_pending: !!row.handoff_pending,
+      archived: !!row.archived,
+      deleted_at: row.deleted_at ?? null,
     } : null;
   }
 
-  listByProject(projectId: string): Conversation[] {
+  listByProject(projectId: string, scope: "active" | "archived" | "trash" = "active"): Conversation[] {
+    const predicate = scope === "trash"
+      ? "deleted_at IS NOT NULL"
+      : scope === "archived"
+        ? "deleted_at IS NULL AND archived = 1"
+        : "deleted_at IS NULL AND archived = 0";
     const rows = this.db.query(
-      "SELECT * FROM conversations WHERE project_id = ? ORDER BY pinned DESC, updated_at DESC"
+      `SELECT * FROM conversations WHERE project_id = ? AND ${predicate}
+       ORDER BY pinned DESC, updated_at DESC`
     ).all(projectId) as any[];
     return rows.map((r) => ({
       ...r,
+      summary: r.summary || r.title,
       pinned: !!r.pinned,
+      title_locked: !!r.title_locked,
+      digest_turn: r.digest_turn ?? 0,
       orchestrator: !!r.orchestrator,
       handoff_pending: !!r.handoff_pending,
+      archived: !!r.archived,
+      deleted_at: r.deleted_at ?? null,
     }));
+  }
+
+  /** Renommage manuel : fige le titre, la régénération automatique s'arrête là. */
+  rename(id: string, title: string): Conversation | null {
+    const nextTitle = title.trim().slice(0, TITLE_MAX);
+    if (!nextTitle) return this.get(id);
+    this.db.query(
+      "UPDATE conversations SET title = ?, title_locked = 1, updated_at = ? WHERE id = ?"
+    ).run(nextTitle, new Date().toISOString(), id);
+    return this.get(id);
+  }
+
+  /**
+   * Titre + résumé régénérés automatiquement. Ne touche à rien si l'utilisateur
+   * a renommé la conversation à la main.
+   */
+  updateDigest(id: string, digest: { title: string; summary: string }, turn: number): Conversation | null {
+    const nextTitle = digest.title.trim().slice(0, TITLE_MAX);
+    const nextSummary = digest.summary.trim();
+    if (!nextTitle || !nextSummary) return this.get(id);
+    this.db.query(
+      `UPDATE conversations SET title = ?, summary = ?, digest_turn = ?, updated_at = ?
+       WHERE id = ? AND title_locked = 0`
+    ).run(nextTitle, nextSummary, turn, new Date().toISOString(), id);
+    return this.get(id);
+  }
+
+  /** Nombre de messages utilisateur : sert de compteur de tours pour le digest. */
+  turnCount(id: string): number {
+    const row = this.db.query(
+      `SELECT COUNT(*) AS n FROM events
+       WHERE conversation_id = ? AND json_extract(payload, '$.type') = 'user-message'`
+    ).get(id) as { n: number } | null;
+    return row?.n ?? 0;
+  }
+
+  /**
+   * Matière du digest : le premier message (l'intention initiale) et les
+   * derniers échanges (où la conversation en est vraiment).
+   */
+  digestSource(id: string, recent = 6): { first: string; latest: string[] } {
+    const rows = this.db.query(
+      `SELECT payload FROM events
+       WHERE conversation_id = ?
+         AND json_extract(payload, '$.type') IN ('user-message', 'text-final')
+       ORDER BY id`
+    ).all(id) as Array<{ payload: string }>;
+    const texts = rows.map((row) => {
+      const event = JSON.parse(row.payload) as { type: string; text?: string };
+      return `${event.type === "user-message" ? "Utilisateur" : "Agent"} : ${event.text ?? ""}`;
+    }).filter((line) => line.trim().length > 12);
+    return { first: texts[0] ?? "", latest: texts.slice(-recent) };
+  }
+
+  setArchived(id: string, archived: boolean): Conversation | null {
+    this.db.query("UPDATE conversations SET archived = ?, updated_at = ? WHERE id = ?")
+      .run(archived ? 1 : 0, new Date().toISOString(), id);
+    return this.get(id);
+  }
+
+  setDeleted(id: string, deleted: boolean): Conversation | null {
+    const now = new Date().toISOString();
+    this.db.query("UPDATE conversations SET deleted_at = ?, updated_at = ? WHERE id = ?")
+      .run(deleted ? now : null, now, id);
+    return this.get(id);
   }
 
   setPinned(id: string, pinned: boolean): void {

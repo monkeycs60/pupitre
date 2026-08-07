@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getProjectGit, getProjectGitDiff } from './api'
 import { DiffViewer } from './DiffViewer'
-import { gitRefOptions, layoutGitGraph } from './gitGraph'
+import { gitRefOptions, layoutGitGraph, updateGitCompareRef } from './gitGraph'
 import type { GitSnapshot, Project } from './types'
 
 interface GitViewProps {
@@ -78,6 +78,14 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
     }
   }
 
+  function updateCompareRef(target: 'base' | 'head', value: string) {
+    const nextRefs = updateGitCompareRef({ baseRef, headRef }, target, value)
+    setBaseRef(nextRefs.baseRef)
+    setHeadRef(nextRefs.headRef)
+    setDiff(null)
+    setError(null)
+  }
+
   return (
     <div className="git-workspace">
       <header className="git-header">
@@ -112,7 +120,7 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
                     type="button"
                     className={branch.current ? 'is-current' : ''}
                     key={branch.fullName}
-                    onClick={() => setHeadRef(branch.sha)}
+                    onClick={() => updateCompareRef('head', branch.sha)}
                     title={`Comparer vers ${branch.name}`}
                   >
                     {branch.current ? '● ' : ''}{branch.name}
@@ -131,6 +139,43 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
                 ))}
               </div>
             </div>
+          </section>
+
+          <section className="git-compare" aria-label="Comparer deux références">
+            <div className="git-section-heading">
+              <div>
+                <span className="git-section-label">Lecture ciblée</span>
+                <h2>Comparer deux références</h2>
+              </div>
+              <div className="git-compare-controls">
+                <label>
+                  <span>Base</span>
+                  <select value={baseRef} onChange={(event) => updateCompareRef('base', event.target.value)}>
+                    {refOptions.map(([value, label]) => <option value={value} key={`base-${value}`}>{label}</option>)}
+                  </select>
+                </label>
+                <span aria-hidden="true">→</span>
+                <label>
+                  <span>Cible</span>
+                  <select value={headRef} onChange={(event) => updateCompareRef('head', event.target.value)}>
+                    {refOptions.map(([value, label]) => <option value={value} key={`head-${value}`}>{label}</option>)}
+                  </select>
+                </label>
+                <button type="button" onClick={() => void compare()} disabled={!baseRef || !headRef || isComparing}>
+                  {isComparing ? 'Comparaison…' : 'Afficher le diff'}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="git-compare-result" aria-label="Résultat de la comparaison" aria-live="polite">
+            {diff === null ? (
+              <p className="git-diff-empty">Choisissez deux points pour relire exactement ce qui a changé.</p>
+            ) : diff.trim() === '' ? (
+              <p className="git-diff-empty">Aucune différence entre ces références.</p>
+            ) : (
+              <DiffViewer diff={diff} label="Diff Git" />
+            )}
           </section>
 
           <section className="git-history" aria-label="Graphe des commits">
@@ -167,6 +212,26 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
                       <div className="git-commit-title">
                         <strong>{row.commit.subject}</strong>
                         <code>{shortSha(row.commit.sha)}</code>
+                        <div className="git-commit-ref-actions" aria-label={`Utiliser ${shortSha(row.commit.sha)} pour la comparaison`}>
+                          <button
+                            type="button"
+                            className={baseRef === row.commit.sha ? 'is-selected' : ''}
+                            aria-pressed={baseRef === row.commit.sha}
+                            onClick={() => updateCompareRef('base', row.commit.sha)}
+                            title={`Utiliser ${shortSha(row.commit.sha)} comme base`}
+                          >
+                            Base
+                          </button>
+                          <button
+                            type="button"
+                            className={headRef === row.commit.sha ? 'is-selected' : ''}
+                            aria-pressed={headRef === row.commit.sha}
+                            onClick={() => updateCompareRef('head', row.commit.sha)}
+                            title={`Utiliser ${shortSha(row.commit.sha)} comme cible`}
+                          >
+                            Cible
+                          </button>
+                        </div>
                       </div>
                       <div className="git-commit-meta">
                         <span>{row.commit.author} · {commitDate(row.commit.authoredAt)}</span>
@@ -200,40 +265,6 @@ export function GitView({ project, onConversationSelect, onGuardianSelect }: Git
                 )
               })}
             </div>
-          </section>
-
-          <section className="git-compare" aria-label="Comparer deux références">
-            <div className="git-section-heading">
-              <div>
-                <span className="git-section-label">Lecture ciblée</span>
-                <h2>Comparer deux références</h2>
-              </div>
-              <div className="git-compare-controls">
-                <label>
-                  <span>Base</span>
-                  <select value={baseRef} onChange={(event) => setBaseRef(event.target.value)}>
-                    {refOptions.map(([value, label]) => <option value={value} key={`base-${value}`}>{label}</option>)}
-                  </select>
-                </label>
-                <span aria-hidden="true">→</span>
-                <label>
-                  <span>Cible</span>
-                  <select value={headRef} onChange={(event) => setHeadRef(event.target.value)}>
-                    {refOptions.map(([value, label]) => <option value={value} key={`head-${value}`}>{label}</option>)}
-                  </select>
-                </label>
-                <button type="button" onClick={() => void compare()} disabled={!baseRef || !headRef || isComparing}>
-                  {isComparing ? 'Comparaison…' : 'Afficher le diff'}
-                </button>
-              </div>
-            </div>
-            {diff === null ? (
-              <p className="git-diff-empty">Choisissez deux points pour relire exactement ce qui a changé.</p>
-            ) : diff.trim() === '' ? (
-              <p className="git-diff-empty">Aucune différence entre ces références.</p>
-            ) : (
-              <DiffViewer diff={diff} label="Diff Git" />
-            )}
           </section>
         </>
       ) : null}

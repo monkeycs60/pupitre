@@ -37,7 +37,8 @@ quand il est utilisé par l'autre provider.
 
 Le rail **Skills** ouvre le seul panneau latéral de l'application. Il compare les
 mots du brouillon — ou, si le composer est vide, du dernier message — aux
-descriptions et déclencheurs indexés. **Lancer** ajoute l'invocation au composer
+descriptions et déclencheurs indexés. **Ajouter au message** préfixe le brouillon
+avec l'invocation
 sans envoyer le message.
 
 Le panneau est fermé par défaut et mémorise votre choix. Le matching reste local

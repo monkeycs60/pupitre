@@ -1,20 +1,28 @@
-import { useState } from 'react'
-import type { ClipboardEvent, FormEvent, KeyboardEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type {
+  ChangeEvent,
+  ClipboardEvent,
+  DragEvent,
+  FormEvent,
+  KeyboardEvent,
+} from 'react'
 import {
   ApiError,
   cancelConversation,
   createDebrief,
   createTestInventory,
   createConversation,
+  importMediaPath,
   sendMessage,
   uploadMedia,
 } from './api'
 import { buildCreateConversationInput } from './conversationDraft'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
-import type { Conversation, Project, QuotaSnapshot } from './types'
+import type { Attachment, Conversation, Project, QuotaSnapshot } from './types'
 import { PROVIDER_MODELS } from './modelOptions'
 import { mediaUrl } from './transport'
 import { HelpLink } from './HelpLink'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
 
 interface ComposerProps {
   conversationId: string | null
@@ -28,9 +36,105 @@ interface ComposerProps {
   focusRequest: number
 }
 
-interface UploadedImage {
+interface UploadedAttachment {
   id: string
-  name: string
+  attachment: Attachment
+}
+
+const IMAGE_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.svg', '.webp'])
+
+function imageMimeFromName(name: string): string | null {
+  const extension = name.slice(name.lastIndexOf('.')).toLowerCase()
+  switch (extension) {
+    case '.gif': return 'image/gif'
+    case '.jpeg':
+    case '.jpg': return 'image/jpeg'
+    case '.svg': return 'image/svg+xml'
+    case '.webp': return 'image/webp'
+    case '.png': return 'image/png'
+    default: return null
+  }
+}
+
+function isImageFile(file: File, itemType = ''): boolean {
+  if (file.type.startsWith('image/') || itemType.startsWith('image/')) return true
+  const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+  return IMAGE_EXTENSIONS.has(extension)
+}
+
+function filesFromTransfer(dataTransfer: DataTransfer): File[] {
+  const itemCandidates: Array<{ file: File; itemType?: string }> = []
+  for (const item of Array.from(dataTransfer.items)) {
+    if (item.kind !== 'file') continue
+    const file = item.getAsFile()
+    if (file !== null) itemCandidates.push({ file, itemType: item.type })
+  }
+
+  const candidates: Array<{ file: File; itemType?: string }> = itemCandidates.length > 0
+    ? itemCandidates
+    : Array.from(dataTransfer.files).map((file) => ({ file }))
+
+  const seen = new Set<string>()
+  return candidates.flatMap(({ file, itemType }) => {
+    const key = `${file.name}:${file.size}:${file.lastModified}:${file.type || itemType || 'image'}`
+    if (seen.has(key)) return []
+    seen.add(key)
+    return [file]
+  })
+}
+
+function imageFilesFromTransfer(dataTransfer: DataTransfer): File[] {
+  return filesFromTransfer(dataTransfer).filter((file) => isImageFile(file))
+}
+
+function isImageAttachment(attachment: Attachment): boolean {
+  return attachment.mimeType.startsWith('image/')
+    || imageMimeFromName(attachment.originalName) !== null
+}
+
+function hasTauriRuntime(): boolean {
+  return typeof window !== 'undefined'
+    && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
+}
+
+function uploadableImage(file: File): Blob {
+  if (file.type.startsWith('image/')) return file
+  const mime = imageMimeFromName(file.name)
+  return mime === null ? file : file.slice(0, file.size, mime)
+}
+
+function imageExtensionFromMime(mime: string): string {
+  switch (mime) {
+    case 'image/gif': return 'gif'
+    case 'image/jpeg': return 'jpg'
+    case 'image/svg+xml': return 'svg'
+    case 'image/webp': return 'webp'
+    default: return 'png'
+  }
+}
+
+async function readClipboardImages(): Promise<File[]> {
+  if (typeof navigator.clipboard?.read !== 'function') return []
+
+  try {
+    const clipboardItems = await navigator.clipboard.read()
+    const files: File[] = []
+    for (const item of clipboardItems) {
+      const mime = item.types.find((type) => type.startsWith('image/'))
+      if (mime === undefined) continue
+      const blob = await item.getType(mime)
+      files.push(new File(
+        [blob],
+        `capture-${crypto.randomUUID()}.${imageExtensionFromMime(mime)}`,
+        { type: mime },
+      ))
+    }
+    return files
+  } catch {
+    // La WebView peut refuser la lecture du presse-papiers sans permission.
+    // Dans ce cas, le collage texte doit continuer à fonctionner normalement.
+    return []
+  }
 }
 
 function errorMessage(error: unknown): string {
@@ -48,64 +152,171 @@ export function Composer({
   onMessageChange,
   focusRequest,
 }: ComposerProps) {
+  const isNewConversation = conversationId === null
   const [config, setConfig] = useState<ConversationConfig>({
     provider: 'claude',
     model: PROVIDER_MODELS.claude[0],
     effort: 'high',
     speed: 'standard',
+    permissionMode: null,
     orchestrator: true,
+    subagentPresetId: null,
+    subagentEffort: null,
   })
-  const [images, setImages] = useState<UploadedImage[]>([])
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([])
   const [pendingUploads, setPendingUploads] = useState(0)
+  const [isDragActive, setIsDragActive] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [isCreatingDebrief, setIsCreatingDebrief] = useState(false)
   const [isCreatingTestInventory, setIsCreatingTestInventory] = useState(false)
+  const [configReady, setConfigReady] = useState(!isNewConversation)
   const [toast, setToast] = useState<string | null>(null)
-  const isNewConversation = conversationId === null
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const importPathsRef = useRef<(paths: string[]) => void>(() => {})
   const canSubmit =
-    message.trim().length > 0 &&
+    (message.trim().length > 0 || attachments.length > 0) &&
     pendingUploads === 0 &&
     !isSubmitting &&
-    !isRunning
+    !isRunning &&
+    configReady
 
-  async function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
-    const imageFiles = Array.from(event.clipboardData.items).flatMap((item) => {
-      if (item.kind !== 'file' || !item.type.startsWith('image/')) return []
-      const file = item.getAsFile()
-      return file === null ? [] : [file]
-    })
+  async function importFiles(files: File[]) {
+    if (files.length === 0 || isRunning) return
 
-    if (imageFiles.length === 0) return
-
-    event.preventDefault()
     setToast(null)
-    setPendingUploads((current) => current + imageFiles.length)
+    setPendingUploads((current) => current + files.length)
 
-    const results = await Promise.allSettled(imageFiles.map(uploadMedia))
+    const results = await Promise.allSettled(
+      files.map((file) => uploadMedia(uploadableImage(file), file.name)),
+    )
     const uploaded = results.flatMap((result) =>
       result.status === 'fulfilled'
-        ? [{ id: crypto.randomUUID(), name: result.value.name }]
+        ? [{ id: crypto.randomUUID(), attachment: result.value }]
         : [],
     )
 
     if (uploaded.length > 0) {
-      setImages((current) => [...current, ...uploaded])
+      setAttachments((current) => [...current, ...uploaded])
     }
-    if (uploaded.length !== imageFiles.length) {
-      setToast('Impossible de téléverser une image.')
+    if (uploaded.length !== files.length) {
+      setToast('Impossible de téléverser une pièce jointe.')
     }
-    setPendingUploads((current) => current - imageFiles.length)
+    setPendingUploads((current) => current - files.length)
   }
+
+  async function importPaths(paths: string[]) {
+    if (paths.length === 0 || isRunning) return
+
+    setToast(null)
+    setPendingUploads((current) => current + paths.length)
+    const results = await Promise.allSettled(paths.map(importMediaPath))
+    const uploaded = results.flatMap((result) =>
+      result.status === 'fulfilled'
+        ? [{ id: crypto.randomUUID(), attachment: result.value }]
+        : [],
+    )
+    if (uploaded.length > 0) {
+      setAttachments((current) => [...current, ...uploaded])
+    }
+    if (uploaded.length !== paths.length) {
+      const rejected = results.find((result) => result.status === 'rejected')
+      const reason = rejected?.status === 'rejected' ? errorMessage(rejected.reason) : null
+      setToast(reason === null
+        ? 'Impossible d’importer un ou plusieurs fichiers.'
+        : `Impossible d’importer un ou plusieurs fichiers : ${reason}`)
+    }
+    setPendingUploads((current) => current - paths.length)
+  }
+
+  async function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const hasImageItem = Array.from(event.clipboardData.items)
+      .some((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    const imageFiles = imageFilesFromTransfer(event.clipboardData)
+    if (hasImageItem) event.preventDefault()
+    const clipboardImages = imageFiles.length > 0 ? imageFiles : await readClipboardImages()
+    if (clipboardImages.length === 0) return
+
+    event.preventDefault()
+    await importFiles(clipboardImages)
+  }
+
+  function handleDragEnter(event: DragEvent<HTMLFormElement>) {
+    if (isRunning || filesFromTransfer(event.dataTransfer).length === 0) return
+    event.preventDefault()
+    setIsDragActive(true)
+  }
+
+  function handleDragOver(event: DragEvent<HTMLFormElement>) {
+    if (isRunning || filesFromTransfer(event.dataTransfer).length === 0) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setIsDragActive(true)
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLFormElement>) {
+    const nextTarget = event.relatedTarget
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return
+    setIsDragActive(false)
+  }
+
+  async function handleDrop(event: DragEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsDragActive(false)
+    if (isRunning) return
+
+    const droppedFiles = Array.from(event.dataTransfer.files)
+    await importFiles(droppedFiles)
+  }
+
+  async function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    await importFiles(selectedFiles)
+  }
+
+  importPathsRef.current = importPaths
+
+  useEffect(() => {
+    if (!hasTauriRuntime()) return
+
+    let disposed = false
+    let unlisten: (() => void) | undefined
+    void getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type === 'enter' || event.payload.type === 'over') {
+        setIsDragActive(true)
+        return
+      }
+      if (event.payload.type === 'leave') {
+        setIsDragActive(false)
+        return
+      }
+      setIsDragActive(false)
+      void importPathsRef.current(event.payload.paths)
+    }).then((cleanup) => {
+      if (disposed) cleanup()
+      else unlisten = cleanup
+    }).catch(() => {
+      // Le runtime navigateur n'expose pas l'événement Tauri en mode dev web.
+    })
+
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [])
 
   async function handleSubmit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
     const trimmedMessage = message.trim()
-    if (!trimmedMessage || !canSubmit) return
+    if ((!trimmedMessage && attachments.length === 0) || !canSubmit) return
 
     setIsSubmitting(true)
     setToast(null)
-    const imageNames = images.map((image) => image.name)
+    const attachmentInputs = attachments.map((item) => item.attachment)
+    const imageNames = attachmentInputs
+      .filter(isImageAttachment)
+      .map((attachment) => attachment.name)
 
     try {
       if (conversationId === null) {
@@ -114,15 +325,17 @@ export function Composer({
           ...config,
           message: trimmedMessage,
           images: imageNames,
+          attachments: attachmentInputs,
         }))
         onConversationCreated(conversation)
       } else {
         await sendMessage(conversationId, {
           message: trimmedMessage,
           images: imageNames,
+          attachments: attachmentInputs,
         })
         onMessageChange('')
-        setImages([])
+        setAttachments([])
       }
     } catch (error: unknown) {
       if (error instanceof ApiError && error.status === 409) {
@@ -136,6 +349,13 @@ export function Composer({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    // WebKitGTK ouvre son sélecteur d'emoji natif sur Ctrl+; et Ctrl+. — ce
+    // raccourci est réservé à la dictée vocale, on le neutralise ici.
+    if (event.ctrlKey && (event.key === ';' || event.key === '.' || event.key === ':')) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) {
       return
     }
@@ -201,7 +421,14 @@ export function Composer({
         </div>
       ) : null}
 
-      <form className="composer" onSubmit={(event) => void handleSubmit(event)}>
+      <form
+        className={`composer${isDragActive ? ' is-drag-active' : ''}`}
+        onSubmit={(event) => void handleSubmit(event)}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={(event) => void handleDrop(event)}
+      >
         {isNewConversation ? (
           <ConfigPanel
             project={project}
@@ -210,27 +437,43 @@ export function Composer({
             onConfigChange={setConfig}
             onProjectUpdated={onProjectUpdated}
             onError={setToast}
+            onReady={setConfigReady}
           />
         ) : null}
 
-        {images.length > 0 || pendingUploads > 0 ? (
-          <div className="composer-images" aria-label="Images jointes">
-            {images.map((image) => (
-              <div className="composer-image" key={image.id}>
-                <img src={mediaUrl(image.name)} alt="Image jointe" />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setImages((current) =>
-                      current.filter((item) => item.id !== image.id),
-                    )
-                  }
-                  aria-label="Retirer l’image"
-                  title="Retirer l’image"
-                >
-                  ×
-                </button>
-              </div>
+        {attachments.length > 0 || pendingUploads > 0 ? (
+          <div className="composer-attachments" aria-label="Pièces jointes">
+            {attachments.map(({ id, attachment }) => (
+              isImageAttachment(attachment) ? (
+                <div className="composer-image" key={id}>
+                  <img src={mediaUrl(attachment.name)} alt={attachment.originalName} />
+                  <button
+                    type="button"
+                    onClick={() => setAttachments((current) => current.filter((item) => item.id !== id))}
+                    aria-label={`Retirer ${attachment.originalName}`}
+                    title="Retirer la pièce jointe"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <div className="composer-file" key={id}>
+                  <span className="composer-file-kind" aria-hidden="true">
+                    {attachment.originalName.split('.').pop()?.toUpperCase() ?? 'FICHIER'}
+                  </span>
+                  <span className="composer-file-name" title={attachment.originalName}>
+                    {attachment.originalName}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachments((current) => current.filter((item) => item.id !== id))}
+                    aria-label={`Retirer ${attachment.originalName}`}
+                    title="Retirer la pièce jointe"
+                  >
+                    ×
+                  </button>
+                </div>
+              )
             ))}
             {pendingUploads > 0 ? (
               <span className="composer-uploading">Import en cours…</span>
@@ -251,9 +494,33 @@ export function Composer({
           autoFocus={isNewConversation || focusRequest > 0}
         />
 
+        {isDragActive ? (
+          <div className="composer-drop-hint" aria-live="polite">
+            Déposez vos fichiers ici
+          </div>
+        ) : null}
+
         <div className="composer-actions">
-          <span>Entrée pour envoyer · Shift+Entrée pour une nouvelle ligne · <HelpLink slug="tester" label="Tester ?" /> · <HelpLink slug="debrief" label="Débrief ?" /></span>
+          <span>Collez ou déposez un fichier · Entrée pour envoyer · Shift+Entrée pour une nouvelle ligne · <HelpLink slug="tester" label="Tester ?" /> · <HelpLink slug="debrief" label="Débrief ?" /></span>
           <div>
+            <input
+              ref={fileInputRef}
+              className="composer-file-input"
+              type="file"
+              accept="image/*,.csv,.doc,.docx,.json,.md,.pdf,.txt,.xls,.xlsx,.xml,.zip"
+              multiple
+              onChange={(event) => void handleFileInputChange(event)}
+              tabIndex={-1}
+            />
+            <button
+              type="button"
+              className="attach-button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isRunning || pendingUploads > 0 || isSubmitting}
+              title="Joindre une ou plusieurs pièces jointes"
+            >
+              Joindre
+            </button>
             {!isNewConversation ? (
               <button
                 type="button"

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent, KeyboardEvent } from 'react'
 import {
   createWorkflow,
   deleteWorkflow,
@@ -28,6 +28,130 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible de sauvegarder le workflow.'
 }
 
+function normalized(value: string): string {
+  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+}
+
+function skillOptionLabel(skill: SkillSummary): string {
+  return `${skill.name} · $${skill.invocation}`
+}
+
+interface SkillComboboxProps {
+  skills: SkillSummary[]
+  query: string
+  selectedId: string
+  onQueryChange: (query: string) => void
+  onSelect: (skill: SkillSummary | null) => void
+}
+
+function SkillCombobox({
+  skills,
+  query,
+  selectedId,
+  onQueryChange,
+  onSelect,
+}: SkillComboboxProps) {
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const filteredSkills = useMemo(() => {
+    const needle = normalized(query.trim())
+    if (!needle) return skills
+    return skills.filter((skill) => normalized([
+      skill.name,
+      skill.invocation,
+      skill.description,
+      skill.provenance,
+      ...skill.triggers,
+    ].join(' ')).includes(needle))
+  }, [query, skills])
+
+  function selectSkill(skill: SkillSummary) {
+    onQueryChange(skillOptionLabel(skill))
+    onSelect(skill)
+    setActiveIndex(0)
+    setOpen(false)
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setOpen(true)
+      setActiveIndex((current) => filteredSkills.length
+        ? Math.min(current + 1, filteredSkills.length - 1)
+        : 0)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setOpen(true)
+      setActiveIndex((current) => Math.max(current - 1, 0))
+    } else if (event.key === 'Enter' && open) {
+      const skill = filteredSkills[activeIndex]
+      if (skill) {
+        event.preventDefault()
+        selectSkill(skill)
+      }
+    } else if (event.key === 'Escape' && open) {
+      event.preventDefault()
+      setOpen(false)
+    }
+  }
+
+  return (
+    <div
+      className="workflow-skill-combobox"
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget as Node | null
+        if (!nextTarget || !event.currentTarget.contains(nextTarget)) setOpen(false)
+      }}
+    >
+      <input
+        value={query}
+        onChange={(event) => {
+          const nextQuery = event.target.value
+          onQueryChange(nextQuery)
+          const exactMatch = skills.find((skill) => normalized(skillOptionLabel(skill)) === normalized(nextQuery.trim()))
+          onSelect(exactMatch ?? null)
+          setActiveIndex(0)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        placeholder="Rechercher un skill"
+        required
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls="workflow-skill-options"
+        aria-expanded={open}
+        aria-activedescendant={open && filteredSkills[activeIndex]
+          ? `workflow-skill-option-${encodeURIComponent(filteredSkills[activeIndex]!.id)}`
+          : undefined}
+        aria-invalid={query.trim() !== '' && selectedId === ''}
+      />
+      {open ? (
+        <div id="workflow-skill-options" className="workflow-skill-options" role="listbox" aria-label="Skills disponibles">
+          {filteredSkills.length === 0 ? (
+            <p className="workflow-skill-empty">Aucun skill correspondant.</p>
+          ) : filteredSkills.map((skill, index) => (
+            <button
+              type="button"
+              key={skill.id}
+              id={`workflow-skill-option-${encodeURIComponent(skill.id)}`}
+              className={`workflow-skill-option ${skill.id === selectedId ? 'is-selected' : ''} ${index === activeIndex ? 'is-active' : ''}`}
+              role="option"
+              aria-selected={skill.id === selectedId}
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => selectSkill(skill)}
+            >
+              <strong>{skillOptionLabel(skill)}</strong>
+              <small>{skill.provider} · {skill.provenance} · {skill.description || 'Sans description.'}</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function WorkflowDialog({
   project,
   workflows,
@@ -39,6 +163,7 @@ export function WorkflowDialog({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [skillId, setSkillId] = useState('')
+  const [skillQuery, setSkillQuery] = useState('')
   const [prompt, setPrompt] = useState('')
   const [presetId, setPresetId] = useState(project.default_preset_id ?? 'builtin-speed')
   const [provider, setProvider] = useState<Provider>('codex')
@@ -58,7 +183,6 @@ export function WorkflowDialog({
       if (controller.signal.aborted) return
       setSkills(loadedSkills)
       setPresets(loadedPresets)
-      setSkillId((current) => current || loadedSkills[0]?.id || '')
     }).catch((loadError: unknown) => {
       if (!controller.signal.aborted) setError(errorMessage(loadError))
     })
@@ -68,6 +192,8 @@ export function WorkflowDialog({
   function resetForm() {
     setEditingId(null)
     setName('')
+    setSkillId('')
+    setSkillQuery('')
     setPrompt('')
     setPresetId(project.default_preset_id ?? 'builtin-speed')
     setProvider('codex')
@@ -81,6 +207,8 @@ export function WorkflowDialog({
     setEditingId(workflow.id)
     setName(workflow.name)
     setSkillId(workflow.skill_id ?? '')
+    const selectedSkill = skills.find((skill) => skill.id === workflow.skill_id)
+    setSkillQuery(selectedSkill ? skillOptionLabel(selectedSkill) : workflow.skill_invocation ? `$${workflow.skill_invocation}` : '')
     setPrompt(workflow.prompt)
     setPresetId(workflow.preset_id ?? '')
     setProvider(workflow.provider)
@@ -92,7 +220,11 @@ export function WorkflowDialog({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!name.trim() || !skillId || !prompt.trim() || isSubmitting) return
+    if (isSubmitting || !name.trim() || !prompt.trim()) return
+    if (!skillId) {
+      setError('Choisissez un skill dans la liste.')
+      return
+    }
     setIsSubmitting(true)
     setError(null)
     const input = {
@@ -180,12 +312,15 @@ export function WorkflowDialog({
               <span>Nom du workflow</span>
               <input value={name} onChange={(event) => setName(event.target.value)} required />
             </label>
-            <label>
+            <label className="workflow-skill-field">
               <span>Skill</span>
-              <select value={skillId} onChange={(event) => setSkillId(event.target.value)} required>
-                <option value="" disabled>Choisir un skill</option>
-                {skills.map((skill) => <option key={skill.id} value={skill.id}>{skill.favorite ? '★ ' : ''}{skill.name}</option>)}
-              </select>
+              <SkillCombobox
+                skills={skills}
+                query={skillQuery}
+                selectedId={skillId}
+                onQueryChange={setSkillQuery}
+                onSelect={(skill) => setSkillId(skill?.id ?? '')}
+              />
             </label>
             <label>
               <span>Prompt pré-rempli</span>

@@ -13,6 +13,66 @@
   background: var(--bg-workspace);
 }
 
+.conversation-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: min(100%, 840px);
+  padding: var(--space-2) var(--space-7) 0;
+  margin: 0 auto;
+}
+
+.conversation-search {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+}
+
+.conversation-search input {
+  min-width: 0;
+  flex: 1;
+  min-height: 28px;
+  padding: 4px var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-right: 0;
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+  outline: none;
+}
+
+.conversation-search input:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.conversation-search button,
+.conversation-jump {
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.conversation-search button {
+  min-width: 30px;
+  color: var(--text);
+  font-size: var(--text-md);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.conversation-search button:hover,
+.conversation-jump:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
 .events-list {
   width: min(100%, 840px);
   min-height: 100%;
@@ -32,6 +92,13 @@
 .message-row {
   display: flex;
   margin: 0 0 var(--space-4);
+  /* Le navigateur saute la mise en page et la peinture des messages hors
+     écran. `contain-intrinsic-size` leur réserve une hauteur estimée, sinon
+     la barre de défilement sauterait à chaque message qui entre dans le
+     viewport. Complémentaire de la mémoïsation : celle-ci évite le re-rendu
+     React, celle-là le coût de rendu du navigateur. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
 }
 
 .message-row-user {
@@ -112,13 +179,31 @@
   border-left: 2px solid var(--border-strong);
 }
 
+.assistant-message li {
+  margin-bottom: var(--space-2);
+  line-height: 1.6;
+}
+
+.assistant-message li > p {
+  margin-bottom: var(--space-1);
+}
+
 .assistant-message code {
   display: inline;
-  padding: 1px var(--space-1);
+  /* Marge latérale : collé au texte, un chemin devient illisible. */
+  margin: 0 2px;
+  padding: 1px 5px;
   color: var(--text);
+  font-family: var(--font-mono);
   font-size: var(--text-code);
+  /* Un chemin long se coupe au lieu de pousser la bulle hors cadre. */
+  overflow-wrap: anywhere;
   background: var(--bg-input);
   border-radius: var(--r-xs);
+}
+
+.assistant-message pre code {
+  margin: 0;
 }
 
 .assistant-message pre {
@@ -157,6 +242,42 @@
 }
 
 /* --- Cartes outil --------------------------------------------------------- */
+
+.tool-batch {
+  margin: var(--space-1) 0 var(--space-3);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-raised) 72%, transparent);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+
+.tool-batch > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+  padding: var(--space-1) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-batch > summary::-webkit-details-marker { display: none; }
+.tool-batch > summary:hover { color: var(--text); background: var(--bg-hover); }
+.tool-batch[open] > summary .tool-card-chevron { transform: rotate(90deg); }
+
+.tool-batch-content {
+  display: grid;
+  gap: 0;
+  padding: 0 var(--space-2) var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tool-batch-content .tool-card {
+  margin: var(--space-2) 0 0;
+}
 
 .tool-card {
   margin: var(--space-1) 0 var(--space-4);
@@ -308,6 +429,296 @@
   object-fit: contain;
 }
 
+.event-attachments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  align-items: start;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.event-attachment {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.event-attachment-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.event-attachment-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.event-attachment-kind {
+  flex: none;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.event-attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-attachment-actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+}
+
+.event-attachment-action {
+  color: var(--accent);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.event-attachment-action:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.event-attachment-meta,
+.event-attachment-unavailable,
+.event-attachment-truncated {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.event-attachment-preview {
+  min-width: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.event-attachment-code {
+  max-height: 260px;
+  padding: var(--space-2) 0 0;
+  margin: 0;
+  overflow: auto;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.event-attachment-code code {
+  font: inherit;
+}
+
+.event-attachment-markdown {
+  max-height: 260px;
+  padding-top: var(--space-2);
+  overflow: auto;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.event-attachment-markdown > :first-child {
+  margin-top: 0;
+}
+
+.event-attachment-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.event-attachment-markdown p,
+.event-attachment-markdown ul,
+.event-attachment-markdown ol,
+.event-attachment-markdown pre,
+.event-attachment-markdown blockquote {
+  margin: 0 0 var(--space-2);
+}
+
+.event-attachment-markdown ul,
+.event-attachment-markdown ol {
+  padding-left: var(--space-5);
+}
+
+.event-attachment-markdown h1,
+.event-attachment-markdown h2,
+.event-attachment-markdown h3,
+.event-attachment-markdown h4 {
+  margin: var(--space-3) 0 var(--space-1);
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+}
+
+.event-attachment-markdown blockquote {
+  padding-left: var(--space-2);
+  color: var(--text-muted);
+  border-left: 2px solid var(--border-strong);
+}
+
+.event-attachment-markdown code {
+  padding: 1px var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  background: var(--bg-input);
+  border-radius: var(--r-xs);
+}
+
+.event-attachment-markdown pre {
+  padding: var(--space-2);
+  overflow: auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-xs);
+}
+
+.event-attachment-markdown pre code {
+  padding: 0;
+  background: transparent;
+}
+
+/* --- Tableaux GFM (partout où le Markdown est rendu) ---------------------- */
+
+.markdown-table-wrap {
+  max-width: 100%;
+  margin: var(--space-2) 0;
+  overflow-x: auto;
+}
+
+.markdown-table-wrap table {
+  width: 100%;
+  font-size: var(--text-sm);
+  border-collapse: collapse;
+}
+
+.markdown-table-wrap th,
+.markdown-table-wrap td {
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid var(--border-subtle);
+}
+
+.markdown-table-wrap th {
+  color: var(--text-strong);
+  font-weight: 600;
+  background: var(--bg-input);
+}
+
+.markdown-table-wrap tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--bg-input) 45%, transparent);
+}
+
+/* --- Checklists DO THIS --------------------------------------------------- */
+
+/* La liste d'actions perd sa puce : le numéro et la case la remplacent. */
+.assistant-message ul:has(> .markdown-task-item),
+.assistant-message ol:has(> .markdown-task-item) {
+  display: grid;
+  gap: 1px;
+  margin: var(--space-2) 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+/* Grille à 3 colonnes : case, numéro, texte. Le texte reste UN SEUL bloc — le
+   passer en enfant direct d'un flex éclatait chaque mot en colonne. */
+.markdown-task-item {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2);
+  /* Ligne entière cliquable : le curseur doit l'annoncer partout. */
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.markdown-task-item:hover {
+  background: var(--bg-hover);
+}
+
+.markdown-task-item > input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 4px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.markdown-task-item:focus-within {
+  outline: 1px solid var(--accent-border);
+  outline-offset: -1px;
+}
+
+.markdown-task-number {
+  min-width: 16px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  text-align: right;
+}
+
+.markdown-task-body {
+  line-height: 1.6;
+}
+
+/* Le code inline retrouve un curseur texte : il reste sélectionnable. */
+.markdown-task-body code {
+  cursor: text;
+}
+
+/* Cochée = action reprise dans le composeur : on marque la sélection, pas
+   l'achèvement — d'où l'absence de texte barré. */
+.markdown-task-item:has(input:checked) {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.markdown-task-item:has(input:checked) .markdown-task-number {
+  color: var(--accent);
+}
+
+/* --- Diagrammes Mermaid --------------------------------------------------- */
+
+.mermaid-figure {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  overflow-x: auto;
+  text-align: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+}
+
+.mermaid-figure svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-fallback.is-invalid {
+  border-left: 2px solid var(--warn);
+}
+
 /* --- Pied de tour : statut, usage, erreurs -------------------------------- */
 
 .turn-footer {
@@ -417,6 +828,17 @@
 }
 
 @media (max-width: 900px) {
+  .conversation-toolbar {
+    padding-right: var(--space-4);
+    padding-left: var(--space-4);
+  }
+
+  .conversation-jump {
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .events-list {
     padding-right: var(--space-5);
     padding-left: var(--space-5);

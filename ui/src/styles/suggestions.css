@@ -137,6 +137,21 @@
   line-height: 1.4;
 }
 
+.suggestion-row .suggestion-description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.suggestion-row .suggestion-reason {
+  color: var(--text-faint);
+}
+
+.suggestion-row .suggestion-source {
+  color: var(--text-faint);
+}
+
 .suggestion-row code {
   overflow: hidden;
   color: var(--text-faint);
@@ -145,7 +160,14 @@
   white-space: nowrap;
 }
 
-.suggestion-row button {
+.suggestion-actions {
+  display: grid;
+  flex: none;
+  gap: var(--space-1);
+  min-width: 112px;
+}
+
+.suggestion-add {
   flex: none;
   min-height: 28px;
   padding: 3px var(--space-2);
@@ -158,9 +180,33 @@
   cursor: pointer;
 }
 
-.suggestion-row button:hover {
+.suggestion-add:hover {
   color: var(--text-strong);
   background: var(--bg-active);
+}
+
+.suggestion-feedback {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.suggestion-feedback button {
+  min-height: 22px;
+  padding: 2px 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.suggestion-feedback button:hover,
+.suggestion-feedback button.is-selected {
+  color: var(--text-strong);
+  background: var(--bg-active);
+  border-color: var(--border-subtle);
 }
 
 .skill-suggestions-rail {

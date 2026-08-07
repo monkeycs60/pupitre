@@ -1,5 +1,7 @@
 import type { AppEvent } from "../events";
+import type { MediaAttachment } from "../events";
 import type { ConductorTarget } from "../conductor";
+import type { FilesystemScope } from "../access";
 
 export interface TurnOptions {
   cwd: string;
@@ -9,9 +11,11 @@ export interface TurnOptions {
   prompt: string;
   cliSessionId: string | null; // null = premier tour
   permissionMode: string;
+  filesystemScope?: FilesystemScope;
   /** Sandbox Codex ; les scans Gardien sont explicitement en lecture seule. */
-  sandboxMode?: "read-only" | "workspace-write";
+  sandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
   images: string[]; // chemins absolus d'images jointes par l'utilisateur
+  attachments?: MediaAttachment[];
   signal?: AbortSignal;
   /**
    * Présent uniquement pour les tours d'une conversation ORCHESTRATRICE : le CLI

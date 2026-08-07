@@ -609,6 +609,7 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     effort: "high",
     speed: "standard",
     orchestrator: true,
+    permission_mode: "autonomous",
     review_provider: "claude",
     review_model: "opus",
     review_effort: "high",
@@ -627,17 +628,44 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
   expect(updated.status).toBe(200);
   expect(await updated.json()).toEqual(expect.objectContaining({
     name: "Revue rapide",
+    permission_mode: "bypassPermissions",
     review_provider: "claude",
     review_model: "opus",
     review_effort: "high",
   }));
 
+  const invalidPermission = await postJson("/api/presets", {
+    name: "Permission invalide",
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "low",
+    speed: "standard",
+    orchestrator: true,
+    permission_mode: "confirm-everything",
+  });
+  expect(invalidPermission.status).toBe(400);
+
   const project = await createProject(tmpdir());
+  expect(project).toEqual(expect.objectContaining({
+    filesystem_scope: "project-and-ai-roots",
+  }));
+  const fullFilesystem = await putJson(
+    `/api/projects/${project.id}/filesystem-scope`,
+    { scope: "full-system" },
+  );
+  expect(fullFilesystem.status).toBe(200);
+  expect(await fullFilesystem.json()).toEqual(expect.objectContaining({
+    filesystem_scope: "full-system",
+  }));
   const selected = await putJson(`/api/projects/${project.id}/default-preset`, {
     presetId: preset.id,
   });
   expect(selected.status).toBe(200);
-  expect(await selected.json()).toEqual(expect.objectContaining({ default_preset_id: preset.id }));
+  const selectedProject = await selected.json();
+  expect(selectedProject).toEqual(expect.objectContaining({ default_preset_id: preset.id }));
+  expect(selectedProject).toEqual(expect.objectContaining({
+    permission_mode: "bypassPermissions",
+  }));
 
   const editedBuiltIn = await putJson(`/api/presets/${builtIns[0]!.id}`, {
     name: "Éco maison",
@@ -911,7 +939,8 @@ test("la création d'un preset invalide conserve son erreur de validation", asyn
 test("persiste les seuils de quota dans settings", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const emptySettings = await fetch(`${current.baseUrl}/api/settings`);
-  expect(await emptySettings.json()).toEqual({});
+  // `conductorToolTokens` est calculé en lecture, pas un réglage persisté.
+  expect(await emptySettings.json()).toMatchObject({ conductorToolTokens: expect.any(Number) });
 
   const saved = await putJson("/api/settings", {
     quotaThresholds: { lastHour: false, usedPercent: 91 },
@@ -933,6 +962,21 @@ test("persiste les seuils de quota dans settings", async () => {
     quotaThresholds: { lastHour: true, usedPercent: 101 },
   });
   expect(invalid.status).toBe(400);
+
+  const globalFilesystem = await putJson("/api/settings", {
+    filesystemScope: "full-system",
+  });
+  expect(await globalFilesystem.json()).toEqual({
+    filesystemScope: "full-system",
+    longTaskThresholdSeconds: 45,
+    quotaThresholds: { lastHour: false, usedPercent: 91 },
+  });
+  const inheritedProject = await createProject(tmpdir());
+  expect(inheritedProject).toEqual(expect.objectContaining({
+    filesystem_scope: "full-system",
+  }));
+
+  await putJson("/api/settings", { filesystemScope: "project-and-ai-roots" });
 });
 
 test("CRUD et exécution immédiate d'une routine avec notification", async () => {

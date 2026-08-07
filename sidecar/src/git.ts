@@ -55,6 +55,18 @@ export interface GitDiff {
   diff: string;
 }
 
+export interface GitLinkedCommit {
+  sha: string;
+  projectId: string;
+  conversationId: string;
+  linkedAt: string;
+  authoredAt: string;
+  additions: number;
+  deletions: number;
+  files: number;
+  pushed: boolean;
+}
+
 export interface GitTurnTracking {
   id: string;
   projectId: string;
@@ -198,6 +210,62 @@ export class GitProjectService {
     record();
   }
 
+  /** Statistiques des commits attribués à une conversation pour la progression. */
+  linkedCommitStats(projectId?: string): GitLinkedCommit[] {
+    const projects = projectId
+      ? [this.projects.get(projectId)].filter((project): project is NonNullable<typeof project> => project !== null)
+      : this.projects.list();
+    const rows = this.db.query(`
+      SELECT commit_sha, project_id, conversation_id, created_at
+      FROM commit_links
+      ${projectId ? "WHERE project_id = ?" : ""}
+      ORDER BY created_at, commit_sha
+    `).all(...(projectId ? [projectId] : [])) as Array<{
+      commit_sha: string;
+      project_id: string;
+      conversation_id: string;
+      created_at: string;
+    }>;
+    const paths = new Map(projects.map((project) => [project.id, project.path]));
+    const stats: GitLinkedCommit[] = [];
+    for (const row of rows) {
+      const cwd = paths.get(row.project_id);
+      if (!cwd) continue;
+      try {
+        const metadata = this.runGit(cwd, [
+          "show", "--format=%aI", "--numstat", "--no-renames", row.commit_sha, "--",
+        ]);
+        const lines = metadata.split("\n");
+        const authoredAt = lines.shift()?.trim() ?? "";
+        let additions = 0;
+        let deletions = 0;
+        let files = 0;
+        for (const line of lines) {
+          const [rawAdditions, rawDeletions] = line.split("\t");
+          if (rawAdditions === undefined || rawDeletions === undefined) continue;
+          additions += /^\d+$/.test(rawAdditions) ? Number(rawAdditions) : 0;
+          deletions += /^\d+$/.test(rawDeletions) ? Number(rawDeletions) : 0;
+          files += 1;
+        }
+        stats.push({
+          sha: row.commit_sha,
+          projectId: row.project_id,
+          conversationId: row.conversation_id,
+          linkedAt: row.created_at,
+          authoredAt,
+          additions,
+          deletions,
+          files,
+          pushed: this.isReachableFromRemote(cwd, row.commit_sha),
+        });
+      } catch {
+        // Un commit supprimé du reflog ou un dépôt devenu indisponible ne doit
+        // pas rendre la jauge de progression inutilisable.
+      }
+    }
+    return stats;
+  }
+
   private projectPath(projectId: string): string {
     const project = this.projects.get(projectId);
     if (!project) throw new GitProjectError("projet inconnu");
@@ -287,6 +355,14 @@ export class GitProjectService {
     } catch {
       return null;
     }
+  }
+
+  private isReachableFromRemote(cwd: string, sha: string): boolean {
+    const result = Bun.spawnSync(
+      ["git", "branch", "--remotes", "--contains", sha],
+      { cwd, stdout: "pipe", stderr: "pipe" },
+    );
+    return result.exitCode === 0 && result.stdout.toString().trim() !== "";
   }
 
   private parseCommits(output: string): Omit<GitCommit, "conversations" | "guardian">[] {

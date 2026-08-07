@@ -1,6 +1,54 @@
 import { useEffect, useState } from 'react'
 import { suggestSkills } from './api'
+import {
+  SKILL_SUGGESTION_ACTION_LABEL,
+  rankSuggestionsWithFeedback,
+  setSuggestionFeedback,
+  suggestionFeedbackKey,
+  type SuggestionFeedback,
+  type SuggestionFeedbackMap,
+} from './skillSuggestionFeedback'
 import type { SkillSuggestion, SkillSuggestionResult } from './types'
+
+const SUGGESTION_FEEDBACK_STORAGE_KEY = 'pupitre.skill-suggestion-feedback.v1'
+
+function readSuggestionFeedback(): SuggestionFeedbackMap {
+  if (typeof window === 'undefined') return {}
+  try {
+    const parsed: unknown = JSON.parse(
+      window.localStorage.getItem(SUGGESTION_FEEDBACK_STORAGE_KEY) ?? '{}',
+    )
+    if (!parsed || typeof parsed !== 'object') return {}
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, SuggestionFeedback] => (
+        entry[1] === 'useful' || entry[1] === 'irrelevant'
+      )),
+    )
+  } catch {
+    return {}
+  }
+}
+
+function writeSuggestionFeedback(feedback: SuggestionFeedbackMap): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(
+      SUGGESTION_FEEDBACK_STORAGE_KEY,
+      JSON.stringify(feedback),
+    )
+  } catch {
+    // Le panneau reste utilisable si le stockage web est indisponible.
+  }
+}
+
+const SKILL_SOURCE_LABELS: Record<SkillSuggestion['provenance'], string> = {
+  'claude-global': 'Claude · global',
+  'claude-plugin': 'Claude · plugin',
+  'claude-project': 'Claude · projet',
+  'codex-prompt': 'Codex · prompt',
+  'agents-global': 'AGENTS · global',
+  'agents-project': 'AGENTS · projet',
+}
 
 interface SkillsSuggestionsPanelProps {
   projectId: string
@@ -39,6 +87,7 @@ export function SkillsSuggestionsPanel({
 }: SkillsSuggestionsPanelProps) {
   const [state, setState] = useState<SuggestionState | null>(null)
   const [error, setError] = useState<SuggestionError | null>(null)
+  const [feedback, setFeedback] = useState<SuggestionFeedbackMap>(() => readSuggestionFeedback())
   const normalizedText = text.trim()
 
   useEffect(() => {
@@ -94,8 +143,17 @@ export function SkillsSuggestionsPanel({
   }
 
   const result = state?.text === normalizedText ? state.result : null
+  const suggestions = result === null
+    ? []
+    : rankSuggestionsWithFeedback(result.suggestions, projectId, feedback)
   const currentError = error?.text === normalizedText ? error.message : null
   const loading = normalizedText.length >= 3 && result === null && currentError === null
+
+  function handleFeedback(skillId: string, value: SuggestionFeedback) {
+    const next = setSuggestionFeedback(feedback, projectId, skillId, value)
+    setFeedback(next)
+    writeSuggestionFeedback(next)
+  }
 
   return (
     <aside className="skill-suggestions" aria-labelledby="skill-suggestions-title">
@@ -124,7 +182,7 @@ export function SkillsSuggestionsPanel({
           <p className="suggestions-status">Recherche dans la bibliothèque…</p>
         ) : currentError ? (
           <p className="suggestions-error" role="alert">{currentError}</p>
-        ) : result?.suggestions.length === 0 ? (
+        ) : suggestions.length === 0 ? (
           <p className="suggestions-empty">
             Aucune correspondance nette. Vous pouvez toujours invoquer un skill avec <code>$son-nom</code>.
           </p>
@@ -136,22 +194,50 @@ export function SkillsSuggestionsPanel({
               <p className="suggestions-status">Correspondances proches · affinage en cours…</p>
             ) : null}
             <div className="suggestion-list">
-              {result?.suggestions.map((skill) => (
-                <div className="suggestion-row" key={skill.id}>
-                  <div>
-                    <strong>{skill.name}</strong>
-                    <span>{skill.reason}</span>
-                    <code>${skill.invocation}</code>
+              {suggestions.map((skill) => {
+                const currentFeedback = feedback[suggestionFeedbackKey(projectId, skill.id)]
+                return (
+                  <div className="suggestion-row" key={skill.id}>
+                    <div>
+                      <strong>{skill.name}</strong>
+                      <span className="suggestion-description">{skill.description}</span>
+                      <span className="suggestion-reason">{skill.reason}</span>
+                      <span className="suggestion-source">{SKILL_SOURCE_LABELS[skill.provenance]}</span>
+                      <code>${skill.invocation}</code>
+                    </div>
+                    <div className="suggestion-actions">
+                      <button
+                        type="button"
+                      className="suggestion-add"
+                        onClick={() => onLaunch(skill)}
+                        title="Ajouter l’invocation au message sans lancer le tour."
+                      >
+                        {SKILL_SUGGESTION_ACTION_LABEL}
+                      </button>
+                      <div className="suggestion-feedback" aria-label={`Évaluer ${skill.name}`}>
+                        <button
+                          type="button"
+                          className={currentFeedback === 'useful' ? 'is-selected' : undefined}
+                          aria-pressed={currentFeedback === 'useful'}
+                          onClick={() => handleFeedback(skill.id, 'useful')}
+                          title="Marquer cette suggestion comme utile."
+                        >
+                          Utile
+                        </button>
+                        <button
+                          type="button"
+                          className={currentFeedback === 'irrelevant' ? 'is-selected' : undefined}
+                          aria-pressed={currentFeedback === 'irrelevant'}
+                          onClick={() => handleFeedback(skill.id, 'irrelevant')}
+                          title="Marquer cette suggestion comme pas pertinente."
+                        >
+                          Pas pertinent
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onLaunch(skill)}
-                    title="Ajouter l’invocation au composer sans lancer le tour."
-                  >
-                    Lancer
-                  </button>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </>
         )}

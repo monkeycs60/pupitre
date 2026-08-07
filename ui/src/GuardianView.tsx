@@ -26,6 +26,7 @@ interface GuardianViewProps {
   refreshToken: number
   onProjectUpdated: (project: Project) => void
   onReviewsChanged: () => void
+  onStartReview?: () => void
 }
 
 function errorMessage(error: unknown): string {
@@ -70,6 +71,7 @@ export function GuardianView({
   refreshToken,
   onProjectUpdated,
   onReviewsChanged,
+  onStartReview,
 }: GuardianViewProps) {
   const [reviews, setReviews] = useState<Review[]>([])
   const [selectedId, setSelectedId] = useState(initialReviewId)
@@ -127,7 +129,7 @@ export function GuardianView({
       controller.abort()
       clearTimeout(pollTimer)
     }
-  }, [project.id, refreshToken])
+  }, [onReviewsChanged, project.id, refreshToken])
 
   const selected = reviews.find((review) => review.id === selectedId) ?? null
   const pendingCount = reviews.filter(pending).length
@@ -236,9 +238,15 @@ export function GuardianView({
             <div className="guardian-empty">
               <p>Aucune review.</p>
               <span>
-                Ouvrez une conversation puis lancez « Review Gardien » pour analyser
-                le dernier diff Git et ancrer les risques aux lignes concernées.
+                {onStartReview
+                  ? 'Relisez directement les changements de la conversation ouverte, puis ajustez le scope seulement si nécessaire.'
+                  : 'Ouvrez une conversation puis lancez « Review Gardien » pour analyser le dernier diff Git et ancrer les risques aux lignes concernées.'}
               </span>
+              {onStartReview ? (
+                <button type="button" className="header-action guardian-empty-action" onClick={onStartReview}>
+                  Relire les changements actuels
+                </button>
+              ) : null}
             </div>
           ) : null}
           {reviews.map((review) => {

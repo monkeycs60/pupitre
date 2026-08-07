@@ -43,6 +43,16 @@ function duration(run: RoutineRun): string {
   return `${Math.floor(seconds / 60)} min ${seconds % 60} s`
 }
 
+const SCHEDULE_PRESETS = [
+  { value: '0 9 * * 1-5', label: 'Jours ouvrés · 09:00' },
+  { value: '0 9 * * *', label: 'Tous les jours · 09:00' },
+  { value: '0 9 * * 1', label: 'Chaque lundi · 09:00' },
+] as const
+
+function scheduleLabel(schedule: string): string {
+  return SCHEDULE_PRESETS.find((preset) => preset.value === schedule)?.label ?? 'Planning personnalisé'
+}
+
 function toInput(routine: Routine, enabled = routine.enabled): RoutineInput {
   return {
     projectId: routine.project_id,
@@ -80,6 +90,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
   const [longTaskThreshold, setLongTaskThreshold] = useState(120)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const selectedSchedulePreset = SCHEDULE_PRESETS.some((preset) => preset.value === schedule) ? schedule : 'custom'
 
   const selected = useMemo(
     () => routines.find((routine) => routine.id === selectedId) ?? null,
@@ -109,7 +120,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
         setRoutines(loadedRoutines)
         setSelectedId((current) => loadedRoutines.some((item) => item.id === current)
           ? current
-          : loadedRoutines[0]?.id ?? null)
+          : null)
       } catch (loadError) {
         if (!disposed) setError(errorMessage(loadError))
       } finally {
@@ -192,7 +203,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
     setRoutines(items)
     setSelectedId(preferredId && items.some((item) => item.id === preferredId)
       ? preferredId
-      : items[0]?.id ?? null)
+      : null)
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -309,7 +320,15 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
             <span>Notif tâche ≥</span>
             <input type="number" min={10} max={86400} value={longTaskThreshold} onChange={(event) => setLongTaskThreshold(Number(event.target.value))} />
           </label>
-          <button type="button" className="text-button threshold-save" onClick={() => void saveLongTaskThreshold()} disabled={busy === 'threshold'}>{busy === 'threshold' ? '…' : 's'}</button>
+          <button
+            type="button"
+            className="text-button threshold-save"
+            onClick={() => void saveLongTaskThreshold()}
+            disabled={busy === 'threshold'}
+            title="Enregistrer le seuil de notification"
+          >
+            {busy === 'threshold' ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
           <button type="button" className="header-action" onClick={startCreate}>Nouvelle routine</button>
         </div>
       </header>
@@ -320,7 +339,8 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
         <form className="routine-form" onSubmit={(event) => void submit(event)}>
           <label><span>Projet</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)} required disabled={editingId !== null}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
           <label><span>Nom</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label>
-          <label><span>Planning cron</span><input className="cron-input" value={schedule} onChange={(event) => setSchedule(event.target.value)} placeholder="0 9 * * 1-5" required /></label>
+          <label><span>Fréquence</span><select value={selectedSchedulePreset} onChange={(event) => setSchedule(event.target.value === 'custom' ? '' : event.target.value)} required><option value="custom">Planning personnalisé</option>{SCHEDULE_PRESETS.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}</select></label>
+          {selectedSchedulePreset === 'custom' ? <label><span>Cron avancé</span><input className="cron-input" value={schedule} onChange={(event) => setSchedule(event.target.value)} placeholder="0 9 * * 1-5" required aria-describedby="routine-schedule-help" /><small id="routine-schedule-help">Fuseau local · cinq champs cron</small></label> : null}
           <label><span>Workflow</span><select value={workflowId} onChange={(event) => setWorkflowId(event.target.value)}><option value="">Prompt libre</option>{workflows.map((workflow) => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>
           {!workflowId ? <label className="routine-prompt"><span>Prompt</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} required /></label> : null}
           {!workflowId ? <label><span>Preset</span><select value={presetId} onChange={(event) => setPresetId(event.target.value)}>{presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}</select></label> : null}
@@ -339,7 +359,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
           ) : routines.map((routine) => (
             <button key={routine.id} type="button" className={`routine-row ${selectedId === routine.id ? 'is-selected' : ''}`} onClick={() => setSelectedId(routine.id)}>
               <span className="routine-row-title"><strong>{routine.name}</strong><em className={routine.enabled ? 'is-on' : ''}>{routine.enabled ? 'active' : 'pause'}</em></span>
-              <span>{projects.find((project) => project.id === routine.project_id)?.name ?? 'Projet'} · <code>{routine.schedule}</code></span>
+              <span>{projects.find((project) => project.id === routine.project_id)?.name ?? 'Projet'} · {scheduleLabel(routine.schedule)}</span>
               <span>Prochain passage · {compactDate(routine.next_run_at)}</span>
             </button>
           ))}
@@ -357,7 +377,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
                   <button type="button" className="header-action" onClick={() => void runNow(selected)} disabled={busy === `run-${selected.id}`}>{busy === `run-${selected.id}` ? 'Exécution…' : 'Lancer maintenant'}</button>
                 </div>
               </header>
-              <div className="routine-meta"><span>cron <code>{selected.schedule}</code></span><span>{selected.provider} · {selected.model}</span><span>prochain {compactDate(selected.next_run_at)}</span></div>
+              <div className="routine-meta"><span>{scheduleLabel(selected.schedule)} · <code>{selected.schedule}</code></span><span>{selected.provider} · {selected.model}</span><span>prochain {compactDate(selected.next_run_at)}</span></div>
               <h3>Historique</h3>
               {runs.length === 0 ? <div className="routine-empty"><strong>Aucun passage</strong><p>Lancez la routine maintenant ou attendez sa prochaine occurrence.</p></div> : (
                 <div className="routine-runs">

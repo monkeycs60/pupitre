@@ -1,5 +1,12 @@
 import type { GitCommit, GitSnapshot } from './types'
 
+export type GitCompareTarget = 'base' | 'head'
+
+export interface GitCompareRefs {
+  baseRef: string
+  headRef: string
+}
+
 export interface GitGraphSegment {
   from: number
   to: number
@@ -11,6 +18,16 @@ export interface GitGraphRow {
   lane: number
   laneCount: number
   segments: GitGraphSegment[]
+}
+
+export function updateGitCompareRef(
+  refs: GitCompareRefs,
+  target: GitCompareTarget,
+  value: string,
+): GitCompareRefs {
+  return target === 'base'
+    ? { ...refs, baseRef: value }
+    : { ...refs, headRef: value }
 }
 
 export function gitRefOptions(snapshot: GitSnapshot): Array<[string, string]> {

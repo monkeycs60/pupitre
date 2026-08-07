@@ -53,6 +53,10 @@ function resultDetail(result: SearchResult): string {
   return `${source} · ${result.excerpt}`
 }
 
+function resultKindLabel(kind: SearchResult['kind']): string {
+  return kind === 'debrief' ? 'Débriefs' : kind === 'event' ? 'Messages' : 'Conversations'
+}
+
 export function CommandPalette({
   open,
   onOpenChange,
@@ -165,18 +169,32 @@ export function CommandPalette({
           id: `conversation-${conversation.id}`,
           group: 'Conversation récente',
           label: conversation.title,
-          detail: `${project?.name ?? 'Projet'} · ${conversation.provider} ${conversation.model}`,
+          detail: `${conversation.summary || 'Sans résumé'} · ${project?.name ?? 'Projet'} · ${conversation.provider} ${conversation.model}`,
           run: () => onConversationSelect(conversation.project_id, conversation.id),
         })
       }
     }
+    const groupedResults = new Map<string, SearchResult[]>()
     for (const result of results) {
+      const group = groupedResults.get(result.conversationId) ?? []
+      group.push(result)
+      groupedResults.set(result.conversationId, group)
+    }
+    for (const resultGroup of groupedResults.values()) {
+      const firstResult = resultGroup[0]
+      if (!firstResult) continue
+      const project = projects.find((item) => item.id === firstResult.projectId)
+      const conversation = conversations.find((item) => item.id === firstResult.conversationId)
+      const kinds = [...new Set(resultGroup.map((result) => result.kind))]
+        .map(resultKindLabel)
+        .join(', ')
+      const excerpts = resultGroup.slice(0, 3).map(resultDetail).join(' · ')
       add({
-        id: `search-${result.kind}-${result.sourceId}`,
+        id: `search-${firstResult.conversationId}`,
         group: 'Recherche',
-        label: result.title,
-        detail: resultDetail(result),
-        run: () => onConversationSelect(result.projectId, result.conversationId),
+        label: conversation?.title ?? firstResult.title,
+        detail: `${project?.name ?? 'Projet'} · ${resultGroup.length} occurrence${resultGroup.length === 1 ? '' : 's'} · ${kinds} · ${excerpts}`,
+        run: () => onConversationSelect(firstResult.projectId, firstResult.conversationId),
       })
     }
     for (const workflow of workflows.filter((item) => matches(query, item.name, item.prompt, item.skill_name)).slice(0, 8)) {
@@ -240,6 +258,7 @@ export function CommandPalette({
 
   if (!open) return null
   let previousGroup = ''
+  const activeItem = items.length > 0 ? items[Math.min(selectedIndex, items.length - 1)] : null
   return (
     <div className="palette-scrim" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onOpenChange(false) }}>
       <section className="command-palette" role="dialog" aria-modal="true" aria-labelledby="palette-title">
@@ -251,9 +270,14 @@ export function CommandPalette({
           onKeyDown={handleInputKey}
           placeholder="Rechercher un fil, lancer une action…"
           aria-label="Recherche globale"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="palette-results"
+          aria-expanded
+          aria-activedescendant={activeItem ? `palette-option-${encodeURIComponent(activeItem.id)}` : undefined}
         />
         {error ? <p className="palette-error" role="alert">{error}</p> : null}
-        <div className="palette-results" role="listbox">
+        <div id="palette-results" className="palette-results" role="listbox" aria-label="Résultats de recherche et commandes">
           {items.length === 0 ? <p className="palette-empty">Aucun résultat.</p> : items.map((item, index) => {
             const showGroup = item.group !== previousGroup
             previousGroup = item.group
@@ -262,6 +286,7 @@ export function CommandPalette({
                 {showGroup ? <h3>{item.group}</h3> : null}
                 <button
                   type="button"
+                  id={`palette-option-${encodeURIComponent(item.id)}`}
                   className={index === selectedIndex ? 'is-selected' : ''}
                   onMouseEnter={() => setSelectedIndex(index)}
                   onClick={() => void execute(item)}

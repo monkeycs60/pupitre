@@ -40,7 +40,7 @@ function summary(
   };
 }
 
-test("le matcher lexical privilégie les triggers et rend trois suggestions maximum", () => {
+test("le matcher lexical privilégie les triggers et écarte les correspondances faibles", () => {
   const result = lexicalSkillSuggestions([
     summary("support", "csm-support", "Répond aux demandes client.", ["ticket client"]),
     summary("mail", "ecrire-mail", "Rédige une réponse client."),
@@ -48,11 +48,25 @@ test("le matcher lexical privilégie les triggers et rend trois suggestions maxi
     summary("crm", "crm", "Classe un ticket client."),
   ], "Peux-tu répondre à ce ticket client ?");
 
-  expect(result.suggestions).toHaveLength(3);
+  expect(result.suggestions).toHaveLength(2);
   expect(result.suggestions[0]).toMatchObject({
     id: "support",
     reason: "déclencheur « ticket client »",
   });
+  expect(result.suggestions.map((skill) => skill.id)).not.toContain("audit");
+  expect(result.suggestions.map((skill) => skill.id)).not.toContain("mail");
+});
+
+test("un mot de développement générique ne suffit pas, mais un trigger explicite reste valide", () => {
+  const result = lexicalSkillSuggestions([
+    summary("buddy", "cardputer-buddy", "Aide à pousser du code vers le matériel.", ["push"]),
+    summary("release", "git-release", "Publie une version stable.", ["commit et push"]),
+  ], "commit et push");
+
+  expect(result.suggestions.map((skill) => skill.id)).toEqual(["release"]);
+  expect(lexicalSkillSuggestions([
+    summary("buddy", "cardputer-buddy", "Aide à pousser du code vers le matériel.", ["push"]),
+  ], "push").suggestions).toEqual([]);
 });
 
 test("Luna ne départage qu'un cas ambigu demandé et le résultat est mis en cache", async () => {

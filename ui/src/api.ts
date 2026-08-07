@@ -1,3 +1,4 @@
+import type { ActionFormat } from './actionHeadings'
 import type {
   Conversation,
   ConversationSpeed,
@@ -13,6 +14,7 @@ import type {
   MemoryDocument,
   MemoryFile,
   Preset,
+  PresetPermissionMode,
   Provider,
   QuotaSnapshot,
   Review,
@@ -29,6 +31,9 @@ import type {
   TestInventory,
   TestScope,
   Workflow,
+  Attachment,
+  FilesystemScope,
+  GamificationSnapshot,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -48,14 +53,19 @@ export interface CreateConversationInput {
   model: string
   effort?: string
   speed?: ConversationSpeed
+  permissionMode?: PresetPermissionMode | null
   orchestrator: boolean
+  subagentPresetId?: string | null
+  subagentEffort?: string | null
   message: string
   images?: string[]
+  attachments?: Attachment[]
 }
 
 export interface SendMessageInput {
   message: string
   images?: string[]
+  attachments?: Attachment[]
 }
 
 export interface ModelConfigInput {
@@ -73,6 +83,9 @@ export interface PresetInput {
   effort: string | null
   speed: ConversationSpeed | null
   orchestrator: boolean
+  subagent_preset_id?: string | null
+  subagent_effort?: string | null
+  permission_mode?: PresetPermissionMode | null
   review_provider?: Provider
   review_model?: string
   review_effort?: string
@@ -120,6 +133,10 @@ export interface StartReviewInput {
 export interface Settings {
   quotaThresholds?: QuotaThresholds
   longTaskThresholdSeconds?: number
+  filesystemScope?: FilesystemScope
+  actionFormat?: ActionFormat
+  /** Lecture seule : calculé par le sidecar, ignoré en écriture. */
+  conductorToolTokens?: number
 }
 
 export class ApiError extends Error {
@@ -195,6 +212,18 @@ export function getHealth(): Promise<{ ok: true }> {
   return fetchJson('/api/health')
 }
 
+export function getGamification(projectId?: string, signal?: AbortSignal): Promise<GamificationSnapshot> {
+  const suffix = projectId ? `?projectId=${routeId(projectId)}` : ''
+  return fetchJson(`/api/gamification${suffix}`, { signal })
+}
+
+export function addGamificationActivity(
+  day: string,
+  activeMs: number,
+): Promise<void> {
+  return fetchVoid('/api/gamification/activity', jsonPost({ day, activeMs }))
+}
+
 export function getFleet(signal?: AbortSignal): Promise<FleetItem[]> {
   return fetchJson('/api/fleet', { signal })
 }
@@ -213,12 +242,26 @@ export function listMemory(): Promise<MemoryFile[]> {
   return fetchJson('/api/memory')
 }
 
+export function createMemory(path: string, content = ''): Promise<MemoryDocument> {
+  return fetchJson('/api/memory', {
+    ...jsonPost({ path, content }),
+  })
+}
+
 export function getMemory(path: string, signal?: AbortSignal): Promise<MemoryDocument> {
   return fetchJson(`/api/memory/${routeId(path)}`, { signal })
 }
 
 export function updateMemory(path: string, content: string): Promise<MemoryDocument> {
   return fetchJson(`/api/memory/${routeId(path)}`, jsonPut({ content }))
+}
+
+export function renameMemory(path: string, newPath: string): Promise<MemoryDocument> {
+  return fetchJson(`/api/memory/${routeId(path)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ newPath }),
+  })
 }
 
 export function deleteMemory(path: string): Promise<void> {
@@ -362,6 +405,16 @@ export function setProjectDefaultPreset(
   )
 }
 
+export function setProjectFilesystemScope(
+  id: string,
+  scope: FilesystemScope,
+): Promise<Project> {
+  return fetchJson(
+    `/api/projects/${routeId(id)}/filesystem-scope`,
+    jsonPut({ scope }),
+  )
+}
+
 export function setProjectGardienMode(
   id: string,
   mode: GardienMode,
@@ -413,10 +466,21 @@ export function updateSettings(settings: Settings): Promise<Settings> {
   return fetchJson('/api/settings', jsonPut(settings))
 }
 
+export function setConversationPermissionMode(
+  id: string,
+  permissionMode: PresetPermissionMode | null,
+): Promise<Conversation> {
+  return fetchJson(
+    `/api/conversations/${routeId(id)}/permission-mode`,
+    jsonPut({ permission_mode: permissionMode }),
+  )
+}
+
 export function listProjectConversations(
   projectId: string,
+  scope: 'active' | 'archived' | 'trash' = 'active',
 ): Promise<Conversation[]> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/conversations`)
+  return fetchJson(`/api/projects/${routeId(projectId)}/conversations?scope=${scope}`)
 }
 
 export function getProjectCosts(
@@ -503,6 +567,36 @@ export function setConversationPinned(
   return fetchVoid(
     `/api/conversations/${routeId(conversationId)}/pin`,
     jsonPost({ pinned }),
+  )
+}
+
+export function renameConversation(
+  conversationId: string,
+  title: string,
+): Promise<Conversation> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/rename`,
+    jsonPost({ title }),
+  )
+}
+
+export function setConversationArchived(
+  conversationId: string,
+  archived: boolean,
+): Promise<Conversation> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/archive`,
+    jsonPost({ archived }),
+  )
+}
+
+export function setConversationDeleted(
+  conversationId: string,
+  deleted: boolean,
+): Promise<Conversation> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/trash`,
+    jsonPost({ deleted }),
   )
 }
 
@@ -633,12 +727,20 @@ export function getQuotas(signal?: AbortSignal): Promise<QuotaSnapshot> {
   return fetchJson('/api/quotas', { signal })
 }
 
-export function uploadMedia(image: Blob): Promise<{ name: string }> {
+export function uploadMedia(file: Blob, originalName = ''): Promise<Attachment> {
+  const headers: Record<string, string> = {
+    'content-type': file.type || 'application/octet-stream',
+  }
+  if (originalName) headers['x-file-name'] = encodeURIComponent(originalName)
   return fetchJson('/api/media', {
     method: 'POST',
-    headers: { 'content-type': image.type || 'application/octet-stream' },
-    body: image,
+    headers,
+    body: file,
   })
+}
+
+export function importMediaPath(path: string): Promise<Attachment> {
+  return fetchJson('/api/media/import', jsonPost({ path }))
 }
 
 export async function fetchMedia(name: string): Promise<Blob> {

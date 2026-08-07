@@ -32,7 +32,9 @@ test("premier tour : exec --json avec cwd et modèle, sans resume", async () => 
     images: [],
   });
   const args = readFileSync(argsFile, "utf8");
-  expect(args).toContain("exec --json --skip-git-repo-check -m gpt-5.6-luna -s workspace-write");
+  expect(args).toContain("exec --json --skip-git-repo-check -m gpt-5.6-luna -s workspace-write --add-dir");
+  expect(args).toContain("/home/clement/.claude");
+  expect(args).toContain("/home/clement/.codex");
   expect(args).not.toContain("-C"); // le cwd passe par le spawn, pas par -C
   expect(args).not.toContain("model_reasoning_effort");
   expect(args).not.toContain("fast_mode");
@@ -94,9 +96,26 @@ test("tour suivant : utilise exec resume <sessionId>", async () => {
   // resume ne supporte ni -C ni -s : sandbox via -c sandbox_mode (vérifié en réel)
   expect(args).not.toContain("-C");
   expect(args).not.toContain("-s workspace-write");
-  expect(args).toContain('sandbox_mode="workspace-write"');
+  expect(args).toContain('sandbox_mode="danger-full-access"');
   expect(args).toContain('-c model_reasoning_effort="high"');
   expect(args).toContain('--enable fast_mode -c service_tier="fast"');
+});
+
+test("premier tour full-system : désactive le sandbox workspace", async () => {
+  const argsFile = useFakeCodex();
+  await collect({
+    cwd: "/tmp",
+    model: "gpt-5.6-luna",
+    prompt: "tout",
+    cliSessionId: null,
+    permissionMode: "bypassPermissions",
+    filesystemScope: "full-system",
+    images: [],
+  });
+  expect(readFileSync(argsFile, "utf8")).toContain(
+    "-s danger-full-access",
+  );
+  expect(readFileSync(argsFile, "utf8")).not.toContain("--add-dir");
 });
 
 test("sépare un prompt ressemblant à une option avec --", async () => {

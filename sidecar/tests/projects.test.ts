@@ -28,3 +28,17 @@ test("épingle et désépingle", () => {
   store.setPinned(p.id, true);
   expect(store.list()[0].pinned).toBe(true);
 });
+
+test("applique le mode de permission porté par le preset par défaut", () => {
+  const p = store.create({ name: "a", path: "/tmp/permission" });
+  expect(p.permission_mode).toBe("acceptEdits");
+  store.setPermissionMode(p.id, "bypassPermissions");
+  expect(store.get(p.id)?.permission_mode).toBe("bypassPermissions");
+});
+
+test("les racines IA sont la portée filesystem par défaut", () => {
+  const p = store.create({ name: "a", path: "/tmp/filesystem-default" });
+  expect(p.filesystem_scope).toBe("project-and-ai-roots");
+  store.setFilesystemScope(p.id, "full-system");
+  expect(store.get(p.id)?.filesystem_scope).toBe("full-system");
+});

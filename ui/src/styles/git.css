@@ -8,6 +8,7 @@
   height: 100%;
   min-height: 0;
   overflow-y: auto;
+  --git-header-offset: 76px;
   color: var(--text);
   background: var(--bg-app);
 }
@@ -28,6 +29,10 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.git-header > div:first-child {
+  min-width: 0;
+}
+
 .workspace-kicker,
 .git-section-label {
   display: block;
@@ -41,12 +46,15 @@
 }
 
 .git-header h1 {
+  overflow: hidden;
   margin: 0;
   color: var(--text-strong);
   font-size: var(--text-lg);
   font-weight: 600;
   line-height: 1.35;
   letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .git-header p {
@@ -146,7 +154,8 @@
 /* --- Cartes historique et comparaison ------------------------------------- */
 
 .git-history,
-.git-compare {
+.git-compare,
+.git-compare-result {
   width: min(100% - 48px, 980px);
   margin: var(--space-5) auto 0;
   background: var(--bg-raised);
@@ -155,7 +164,18 @@
 }
 
 .git-compare {
+  position: sticky;
+  z-index: 2;
+  top: var(--git-header-offset);
+  margin-bottom: 0;
+  box-shadow: var(--shadow-popover);
+}
+
+.git-compare-result {
+  margin-top: 0;
   margin-bottom: var(--space-6);
+  border-top: 0;
+  border-radius: 0 0 var(--r-md) var(--r-md);
 }
 
 .git-section-heading {
@@ -245,11 +265,38 @@
 
 .git-commit-title strong {
   overflow: hidden;
+  min-width: 0;
   color: var(--text);
   font-size: var(--text-base);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.git-commit-ref-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.git-commit-ref-actions button {
+  padding: 1px var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.git-commit-ref-actions button:hover,
+.git-commit-ref-actions button.is-selected {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
 }
 
 .git-commit-title code {
@@ -392,7 +439,7 @@
   cursor: default;
 }
 
-.git-compare .diff-table {
+.git-compare-result .diff-table {
   overflow-x: auto;
 }
 
