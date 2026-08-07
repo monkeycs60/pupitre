@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { Fragment, useId, useState } from 'react'
 import { formatCompact } from './formatCompact'
 
 const RADIUS = 52
@@ -9,6 +9,10 @@ const GAP = 3
 export interface DonutSlice {
   label: string
   value: number
+  /** Titre de regroupement affiché au-dessus de cette part dans la légende. */
+  groupLabel?: string
+  /** Précision sous le libellé : ce que la part recouvre exactement. */
+  detail?: string
   /** Hachures : part subie, rechargée à chaque session, non compressible. */
   hatched?: boolean
   /** Teinte neutre : une absence de consommation, pas une catégorie. */
@@ -121,9 +125,17 @@ export function DonutChart({
       </svg>
 
       <ul className="donut-legend">
-        {segments.map((segment) => (
+        {segments.map((segment, position) => (
+          <Fragment key={segment.slice.label}>
+          {segment.slice.groupLabel
+            && segment.slice.groupLabel !== segments[position - 1]?.slice.groupLabel ? (
+              <li className="donut-group-title" aria-hidden="true">
+                {segment.slice.groupLabel}
+              </li>
+            ) : null}
           <li
             key={segment.slice.label}
+            data-group={segment.slice.groupLabel}
             className={[
               active === segment.index ? 'is-active' : '',
               segment.slice.inferred ? 'is-inferred' : '',
@@ -147,10 +159,14 @@ export function DonutChart({
               {segment.slice.hatched ? (
                 <abbr title="Rechargé à chaque session : non compressible"> ▨</abbr>
               ) : null}
+              {segment.slice.detail ? (
+                <small className="donut-detail">{segment.slice.detail}</small>
+              ) : null}
             </span>
             <span className="donut-tokens">{formatCompact(segment.slice.value)}</span>
             <span className="donut-percent">{percentLabel(segment.percent)}</span>
           </li>
+          </Fragment>
         ))}
       </ul>
     </div>

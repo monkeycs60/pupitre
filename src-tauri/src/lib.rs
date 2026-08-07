@@ -194,6 +194,13 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // La géométrie est enregistrée AVANT la destruction : `Destroyed`
+            // arrive trop tard, la fenêtre n'a plus de taille à lire, et
+            // l'application repartait donc de sa taille par défaut.
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                use tauri_plugin_window_state::{AppHandleExt, StateFlags};
+                let _ = window.app_handle().save_window_state(StateFlags::all());
+            }
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 stop_sidecar(window.app_handle());
             }

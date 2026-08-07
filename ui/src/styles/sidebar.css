@@ -1231,13 +1231,16 @@
 
 .context-gauge-detail {
   position: absolute;
-  top: calc(100% + var(--space-2));
+  top: 100%;
+  margin-top: var(--space-2);
   left: 0;
   z-index: 40;
   width: 560px;
   padding: var(--space-4);
   font-family: var(--font-sans);
-  pointer-events: none;
+  /* Le panneau est survolable : on peut y promener la souris sans qu'il
+     disparaisse. Il touche la jauge (pas de `top` décalé) pour que le curseur
+     n'ait aucun vide à traverser. */
   visibility: hidden;
   background: var(--bg-overlay);
   border: 1px solid var(--border);
@@ -1248,9 +1251,21 @@
 }
 
 .context-gauge-hover:hover .context-gauge-detail,
-.context-gauge-hover:focus-within .context-gauge-detail {
+.context-gauge-hover:focus-within .context-gauge-detail,
+.context-gauge-detail:hover {
   visibility: visible;
   opacity: 1;
+}
+
+/* Pont invisible entre la jauge et le panneau : sans lui, le curseur quitte la
+   zone survolée en traversant la marge et le panneau se referme. */
+.context-gauge-detail::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: var(--space-2);
+  content: '';
 }
 
 .context-gauge-detail-header {
@@ -1448,4 +1463,26 @@
   color: var(--warn);
   background: var(--warn-soft);
   border-radius: var(--r-full);
+}
+
+/* --- Légende groupée de l'anneau ----------------------------------------- */
+
+.donut-group-title {
+  display: block;
+  padding: var(--space-2) 5px 2px;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.donut-legend li:first-child.donut-group-title {
+  padding-top: 0;
+}
+
+.donut-detail {
+  display: block;
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.35;
 }

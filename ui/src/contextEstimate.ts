@@ -38,9 +38,15 @@ const CHARS_PER_TOKEN = 4
 /** Taille de la consigne de format injectée par Pupitre à chaque tour. */
 const PUPITRE_PREAMBLE_TOKENS = 95
 
+/** Regroupement affiché dans la légende : c'est la lecture, pas le calcul. */
+export type ContextGroup = 'fixe' | 'conversation' | 'outils' | 'libre'
+
 export interface ContextPart {
   label: string
   tokens: number
+  group: ContextGroup
+  /** Détail d'une part agrégée, affiché sous son libellé. */
+  detail?: string
   /** Déduit par soustraction plutôt que mesuré. */
   inferred?: boolean
   /**
@@ -101,31 +107,41 @@ export function contextParts(
 
   const pupitre = turns * PUPITRE_PREAMBLE_TOKENS
   const measured = user + assistant + tools + pupitre + conductorTokens
+  // Tout ce qui est rechargé à chaque session est agrégé en UNE part : le
+  // détail intéresse moins que le total, puisque le levier est le même —
+  // réduire les serveurs MCP chargés.
+  const fixedKnown = pupitre + conductorTokens
+  const fixedInferred = usedTokens > measured ? usedTokens - measured : 0
+  const fixed = fixedKnown + fixedInferred
   const parts: ContextPart[] = [
-    { label: 'Vos messages', tokens: user },
-    { label: 'Réponses de l’agent', tokens: assistant },
-    { label: 'Appels et sorties d’outils', tokens: tools },
-    { label: 'Consigne de format Pupitre', tokens: pupitre, persistent: true },
-    { label: 'Bridge conductor (Pupitre)', tokens: conductorTokens, persistent: true },
-  ]
-  // Le reliquat n'a de sens que si le provider a publié un total crédible.
-  if (usedTokens > measured) {
-    parts.push({
-      // Le bridge conductor en est sorti : ne reste ici que ce que le CLI ne
-      // publie pas — prompt système, serveurs MCP de l'utilisateur, mémoire.
-      label: 'Système, MCP tiers, mémoire',
-      tokens: usedTokens - measured,
-      inferred: true,
+    {
+      label: 'Charge fixe',
+      tokens: fixed,
+      group: 'fixe',
+      detail: 'prompt système, outils MCP, mémoire, consigne Pupitre',
       persistent: true,
-    })
-  }
-  const used = parts
-    .filter((part) => part.tokens > 0)
-    .sort((left, right) => right.tokens - left.tokens)
+      // Majoritairement déduite : seule la part Pupitre est mesurée.
+      inferred: fixedInferred > fixedKnown,
+    },
+    { label: 'Vos messages', tokens: user, group: 'conversation' },
+    { label: 'Réponses de l’agent', tokens: assistant, group: 'conversation' },
+    {
+      label: 'Fichiers lus et commandes',
+      tokens: tools,
+      group: 'outils',
+      detail: 'ce que les outils ont lu et renvoyé pendant les tours',
+    },
+  ]
+  const used = parts.filter((part) => part.tokens > 0)
   // La place libre ferme l'anneau : la répartition se lit sur la fenêtre
   // entière, pas sur le seul contexte déjà consommé.
   if (windowTokens > usedTokens) {
-    used.push({ label: 'Disponible', tokens: windowTokens - usedTokens, free: true })
+    used.push({
+      label: 'Disponible',
+      tokens: windowTokens - usedTokens,
+      group: 'libre',
+      free: true,
+    })
   }
   return used
 }

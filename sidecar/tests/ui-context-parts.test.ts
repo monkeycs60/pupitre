@@ -12,25 +12,27 @@ const events = [
   { type: "tool-end" as const, toolId: "t1", output: "c".repeat(1_200), images: [] },
 ];
 
-test("décompose le contexte par origine, du plus lourd au plus léger", () => {
+test("regroupe le contexte en charge fixe, conversation et outils", () => {
   const parts = contextParts(events, 10_000);
-  expect(parts.map((part) => part.label)).toEqual([
-    "Système, MCP tiers, mémoire",
-    "Appels et sorties d’outils",
-    "Réponses de l’agent",
-    "Vos messages",
-    "Consigne de format Pupitre",
+  expect(parts.map((part) => [part.label, part.group])).toEqual([
+    ["Charge fixe", "fixe"],
+    ["Vos messages", "conversation"],
+    ["Réponses de l’agent", "conversation"],
+    ["Fichiers lus et commandes", "outils"],
   ]);
 });
 
-test("le reliquat comble l'écart avec le total du provider", () => {
+test("la charge fixe absorbe le reliquat du total provider", () => {
   const parts = contextParts(events, 10_000);
   expect(parts.reduce((sum, part) => sum + part.tokens, 0)).toBe(10_000);
-  expect(parts.find((part) => part.inferred)?.tokens).toBe(10_000 - (100 + 200 + 300 + 95));
+  // Consigne Pupitre (95) + tout ce que le CLI ne publie pas.
+  expect(parts[0]).toMatchObject({ label: "Charge fixe", tokens: 10_000 - (100 + 200 + 300) });
 });
 
-test("sans total provider crédible, aucune ligne déduite n'est inventée", () => {
-  expect(contextParts(events, 0).some((part) => part.inferred)).toBe(false);
+test("sans total provider crédible, la charge fixe reste celle qu'on mesure", () => {
+  const fixed = contextParts(events, 0).find((part) => part.label === "Charge fixe");
+  expect(fixed?.tokens).toBe(95);
+  expect(fixed?.inferred).toBe(false);
 });
 
 test("une conversation vide ne produit aucune ligne", () => {
@@ -48,11 +50,11 @@ test("une fenêtre déjà pleine n'ajoute pas de part disponible", () => {
   expect(contextParts(events, 10_000, 10_000).some((part) => part.free)).toBe(false);
 });
 
-test("les parts rechargées à chaque session sont marquées incompressibles", () => {
+test("une seule part est marquée incompressible : la charge fixe", () => {
   const persistent = contextParts(events, 10_000, 1_000_000)
     .filter((part) => part.persistent)
     .map((part) => part.label);
-  expect(persistent).toEqual(["Système, MCP tiers, mémoire", "Consigne de format Pupitre"]);
+  expect(persistent).toEqual(["Charge fixe"]);
 });
 
 test("les grands nombres s'abrègent en millions", () => {
@@ -62,19 +64,20 @@ test("les grands nombres s'abrègent en millions", () => {
   expect(formatCompact(842)).toBe("842");
 });
 
-test("le bridge conductor sort de l'agrégat déduit quand il est mesuré", () => {
-  const parts = contextParts(events, 10_000, 1_000_000, 1_200);
-  const bridge = parts.find((part) => part.label === "Bridge conductor (Pupitre)");
-  expect(bridge).toMatchObject({ tokens: 1_200, persistent: true });
-  expect(bridge?.inferred).toBeUndefined();
-  // Le déduit se réduit d'autant : le total reste celui du provider.
-  expect(parts.find((part) => part.inferred)?.tokens)
-    .toBe(10_000 - (100 + 200 + 300 + 95 + 1_200));
+test("le bridge conductor entre dans la charge fixe sans gonfler le total", () => {
+  const withBridge = contextParts(events, 10_000, 1_000_000, 1_200);
+  const without = contextParts(events, 10_000, 1_000_000, 0);
+  const fixed = (parts: typeof withBridge) =>
+    parts.find((part) => part.label === "Charge fixe")?.tokens;
+  // Mesurer le bridge déplace des tokens du déduit vers le mesuré : le total
+  // de la charge fixe, lui, ne bouge pas.
+  expect(fixed(withBridge)).toBe(fixed(without));
+  expect(withBridge.reduce((sum, part) => sum + part.tokens, 0)).toBe(1_000_000);
 });
 
 test("le ratio incompressible se rapporte à la fenêtre entière", () => {
   const parts = contextParts(events, 10_000, 20_000);
-  // Déduit (9 305) + consigne Pupitre (95) = 9 400 sur 20 000.
+  // Charge fixe = 10 000 - (100 + 200 + 300) = 9 400, sur une fenêtre de 20 000.
   expect(persistentRatio(parts, 20_000)).toBeCloseTo(0.47, 2);
   expect(persistentRatio(parts, 0)).toBe(0);
 });

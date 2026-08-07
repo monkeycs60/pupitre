@@ -152,6 +152,27 @@ export class ApiError extends Error {
   }
 }
 
+// En développement, Vite peut répondre 502/503 pendant que Tauri compile puis
+// démarre le sidecar. Les lectures initiales peuvent donc être rejouées sans
+// risque ; les écritures restent volontairement en échec immédiat.
+const READ_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 3_000, 3_000]
+
+function isReadRequest(init?: RequestInit): boolean {
+  const method = init?.method?.toUpperCase() ?? 'GET'
+  return method === 'GET' || method === 'HEAD'
+}
+
+function isRetryableReadFailure(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    return error.status === 502 || error.status === 503 || error.status === 504
+  }
+  return error instanceof TypeError
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
 async function ensureOk(response: Response): Promise<Response> {
   if (response.ok) return response
 
@@ -169,8 +190,28 @@ async function fetchJson<T>(
   input: string,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await ensureOk(await fetch(httpUrl(input), init))
-  return response.json() as Promise<T>
+  const retryRead = isReadRequest(init)
+  let attempt = 0
+
+  while (true) {
+    try {
+      const response = await ensureOk(await fetch(httpUrl(input), init))
+      return response.json() as Promise<T>
+    } catch (error) {
+      const signalAborted = init?.signal?.aborted === true
+      if (
+        !retryRead
+        || signalAborted
+        || isAbortError(error)
+        || !isRetryableReadFailure(error)
+        || attempt >= READ_RETRY_DELAYS_MS.length
+      ) {
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, READ_RETRY_DELAYS_MS[attempt]))
+      attempt += 1
+    }
+  }
 }
 
 async function fetchVoid(

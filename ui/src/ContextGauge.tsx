@@ -5,10 +5,19 @@ import {
   persistentRatio,
 } from './contextEstimate'
 import { DonutChart } from './DonutChart'
+import type { ContextGroup } from './contextEstimate'
 import type { DonutSlice } from './DonutChart'
 import { formatCompact } from './formatCompact'
 import type { McpServerRef } from './api'
 import type { AppEvent, Conversation } from './types'
+
+/** Titres de section de la légende, dans l'ordre de lecture de l'anneau. */
+const GROUP_LABELS: Record<ContextGroup, string> = {
+  fixe: 'Rechargé à chaque session',
+  conversation: 'Conversation en cours',
+  outils: 'Travail des outils',
+  libre: 'Reste',
+}
 
 export function ContextGauge({
   conversation,
@@ -39,6 +48,8 @@ export function ContextGauge({
   const slices: DonutSlice[] = parts.map((part) => ({
     label: part.label,
     value: part.tokens,
+    groupLabel: GROUP_LABELS[part.group],
+    detail: part.detail,
     hatched: part.persistent,
     muted: part.free,
     inferred: part.inferred,
