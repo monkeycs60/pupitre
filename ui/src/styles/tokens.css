@@ -47,15 +47,22 @@
   --ok-soft: rgba(78, 201, 165, 0.12);
   --neutral-soft: rgba(255, 255, 255, 0.05);
 
-  /* Palette catégorielle des graphiques, validée pour fond sombre : bande de
-     luminosité, plancher de chroma, séparation daltonisme (pire paire adjacente
-     ΔE 8,4) et contraste ≥ 3:1 sur `--bg-overlay`. Ne pas réordonner ni
-     substituer une teinte isolée sans revalider l'ensemble. */
+  /* Palette catégorielle des graphiques, validée pour fond sombre sur la liste
+     de paires ADJACENTES — celle d'un anneau ou d'un empilement : bande de
+     luminosité, plancher de chroma, séparation daltonisme (pire paire ΔE 8,4)
+     et contraste sur `--bg-overlay`. Le vert `--viz-6` passe sous 3:1 : il
+     n'est utilisable qu'accompagné d'une légende visible, ce qui est le cas
+     partout ici. Ne pas réordonner ni substituer une teinte isolée sans
+     revalider l'ensemble — substituer ce vert casse sa séparation avec le
+     magenta voisin. */
   --viz-1: #3987e5;
   --viz-2: #d95926;
   --viz-3: #199e70;
   --viz-4: #c98500;
   --viz-5: #d55181;
+  --viz-6: #008300;
+  --viz-7: #9085e9;
+  --viz-8: #e66767;
 
   /* Rayons */
   --r-xs: 3px;

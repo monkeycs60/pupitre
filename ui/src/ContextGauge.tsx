@@ -19,13 +19,8 @@ const GROUP_LABELS: Record<ContextGroup, string> = {
   libre: 'Reste',
 }
 
-/** Une teinte par groupe : l'anneau se lit par blocs, pas part par part. */
-const GROUP_COLORS: Record<ContextGroup, number> = {
-  fixe: 1,
-  conversation: 2,
-  outils: 3,
-  libre: 4,
-}
+/** Créneaux de la palette validée : au-delà, on retombe sur une nuance. */
+const PALETTE_SLOTS = 8
 
 export function ContextGauge({
   conversation,
@@ -67,23 +62,24 @@ export function ContextGauge({
     contextBaseline,
     contextProfile,
   )
-  // Rang dans le groupe : c'est lui qui choisit la nuance de la teinte.
-  const rank = new Map<ContextGroup, number>()
-  const slices: DonutSlice[] = parts.map((part) => ({
-    label: part.label,
-    value: part.tokens,
-    groupLabel: GROUP_LABELS[part.group],
-    colorIndex: GROUP_COLORS[part.group],
-    shade: (() => {
-      const next = rank.get(part.group) ?? 0
-      rank.set(part.group, next + 1)
-      return next
-    })(),
-    detail: part.detail,
-    hatched: part.persistent,
-    muted: part.free,
-    inferred: part.inferred,
-  }))
+  // Une teinte distincte par part, dans l'ordre de la palette. Au-delà de ses
+  // huit créneaux on réutilise le premier avec une nuance, plutôt que
+  // d'inventer une teinte non validée.
+  let slot = 0
+  const slices: DonutSlice[] = parts.map((part) => {
+    const index = part.free ? -1 : slot++
+    return {
+      label: part.label,
+      value: part.tokens,
+      groupLabel: GROUP_LABELS[part.group],
+      colorIndex: (index % PALETTE_SLOTS) + 1,
+      shade: Math.floor(index / PALETTE_SLOTS),
+      detail: part.detail,
+      hatched: part.persistent,
+      muted: part.free,
+      inferred: part.inferred,
+    }
+  })
   const persistent = persistentRatio(parts, estimate.windowTokens)
   const persistentAlert = persistent >= PERSISTENT_ALERT_RATIO
 
