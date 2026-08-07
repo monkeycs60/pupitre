@@ -4,8 +4,9 @@ import {
   measureProjectMcpServers,
   setProjectFilesystemScope,
   updateProjectMcpServers,
+  verifyProjectMcpCost,
 } from './api'
-import type { ProjectMcpConfig } from './api'
+import type { McpContextProbe, ProjectMcpConfig } from './api'
 import { formatCompact } from './formatCompact'
 import type { FilesystemScope, Project } from './types'
 
@@ -25,6 +26,8 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
   const [error, setError] = useState<string | null>(null)
   const [mcp, setMcp] = useState<ProjectMcpConfig | null>(null)
   const [measuring, setMeasuring] = useState(false)
+  const [verifying, setVerifying] = useState(false)
+  const [probe, setProbe] = useState<McpContextProbe | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -73,6 +76,18 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
       setError(errorMessage(measureError))
     } finally {
       setMeasuring(false)
+    }
+  }
+
+  async function handleVerify() {
+    setVerifying(true)
+    setError(null)
+    try {
+      setProbe(await verifyProjectMcpCost(project.id))
+    } catch (verifyError: unknown) {
+      setError(errorMessage(verifyError))
+    } finally {
+      setVerifying(false)
     }
   }
 
@@ -151,7 +166,16 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
                     disabled={saving || measuring}
                     onClick={() => void handleMeasure()}
                   >
-                    {measuring ? 'Mesure en cours…' : 'Mesurer le coût'}
+                    {measuring ? 'Mesure en cours…' : 'Estimer le coût'}
+                  </button>
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={saving || verifying}
+                    title="Lance deux tours CLI réels et compare le contexte obtenu"
+                    onClick={() => void handleVerify()}
+                  >
+                    {verifying ? 'Vérification…' : 'Vérifier en réel'}
                   </button>
                   {mcp.used.length > 0 ? (
                     <button
@@ -230,6 +254,20 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
                   </>
                 )}
               </p>
+              {probe ? (
+                <p className="project-mcp-total">
+                  {probe.error ? (
+                    <span className="project-mcp-failed">Vérification impossible : {probe.error}</span>
+                  ) : (
+                    <>
+                      Mesure réelle : la sélection enregistrée coûte{' '}
+                      <strong>{formatCompact(probe.cost)} tokens</strong>{' '}
+                      ({formatCompact(probe.without)} sans aucun serveur,{' '}
+                      {formatCompact(probe.withServers)} avec).
+                    </>
+                  )}
+                </p>
+              ) : null}
             </div>
           ) : null}
           {error ? <p className="modal-error" role="alert">{error}</p> : null}

@@ -59,6 +59,7 @@ import {
   usedMcpServers,
 } from "./mcp-inventory";
 import { measureMcpServers } from "./mcp-probe";
+import { verifyMcpContextCost } from "./mcp-verify";
 import type { McpServerWeight } from "./mcp-probe";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
@@ -1203,6 +1204,26 @@ export function createServer(deps: ServerDeps) {
           }
           deps.settings.set("mcpWeights", cache);
           return json(weights);
+        }
+
+        const projectMcpVerifyId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/mcp-servers\/verify$/,
+        );
+        if (request.method === "POST" && projectMcpVerifyId !== null) {
+          const project = deps.projects.get(projectMcpVerifyId);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          // Vérité terrain : deux tours CLI minimaux, avec et sans les serveurs
+          // retenus. Coûteux, donc jamais automatique.
+          const available = claudeServerDefinitions(project.path);
+          const selected = project.mcp_servers === null
+            ? available
+            : Object.fromEntries(
+              project.mcp_servers
+                .filter((name) => name in available)
+                .map((name) => [name, available[name]]),
+            );
+          return json(await verifyMcpContextCost(project.path, selected));
         }
 
         const projectMcpId = routeId(pathname, /^\/api\/projects\/([^/]+)\/mcp-servers$/);

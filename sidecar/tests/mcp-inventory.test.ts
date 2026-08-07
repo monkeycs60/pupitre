@@ -103,3 +103,24 @@ test("déduit les serveurs appelés depuis les noms d'outils", () => {
 test("un historique sans outil MCP ne suggère rien", () => {
   expect(usedMcpServers(["Read", "Write", "Bash"])).toEqual([]);
 });
+
+test("un serveur sans instructions ne coûte que ses noms d'outils", async () => {
+  // Calibration : tavily publie 5 outils et aucune instruction ; le CLI mesure
+  // 56 tokens de surcoût réel.
+  const { weighForTest } = await import("../src/mcp-probe");
+  const tools = [
+    { name: "tavily_crawl" }, { name: "tavily_extract" }, { name: "tavily_map" },
+    { name: "tavily_research" }, { name: "tavily_search" },
+  ];
+  const weight = weighForTest("tavily", tools, "");
+  expect(weight.tokens).toBeGreaterThan(40);
+  expect(weight.tokens).toBeLessThan(80);
+});
+
+test("les instructions d'un serveur dominent son coût", async () => {
+  const { weighForTest } = await import("../src/mcp-probe");
+  const tools = [{ name: "a" }, { name: "b" }];
+  const sans = weighForTest("x", tools, "");
+  const avec = weighForTest("x", tools, "i".repeat(1_000));
+  expect(avec.tokens! - sans.tokens!).toBeGreaterThan(200);
+});

@@ -523,6 +523,19 @@ export interface ProjectMcpConfig {
   used: string[]
 }
 
+export interface McpContextProbe {
+  withServers: number
+  without: number
+  /** Coût réel de la sélection, mesuré par deux tours CLI. */
+  cost: number
+  error?: string
+}
+
+/** Vérité terrain : deux tours CLI minimaux, avec et sans les serveurs. */
+export function verifyProjectMcpCost(projectId: string): Promise<McpContextProbe> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/mcp-servers/verify`, { method: 'POST' })
+}
+
 /** Relance la mesure : lance chaque serveur et pèse ses définitions d'outils. */
 export function measureProjectMcpServers(projectId: string): Promise<McpServerWeight[]> {
   return fetchJson(`/api/projects/${routeId(projectId)}/mcp-servers/measure`, { method: 'POST' })

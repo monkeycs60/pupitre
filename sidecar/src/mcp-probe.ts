@@ -2,9 +2,18 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
 /**
- * Mesure du poids réel d'un serveur MCP : on le lance, on fait la poignée de
- * main MCP, on appelle `tools/list` et on pèse les définitions renvoyées.
- * C'est exactement ce que le CLI injecte dans la fenêtre de contexte.
+ * Coût d'un serveur MCP dans la fenêtre de contexte.
+ *
+ * Attention au contre-sens : les CLI récents ne chargent PAS les schémas
+ * d'outils au démarrage, ils les diffèrent et ne présentent que les noms. Peser
+ * le JSON de `tools/list` surestimait donc le coût d'un facteur ~35. Ce qui est
+ * réellement injecté, c'est :
+ *   - les `instructions` du serveur, renvoyées par `initialize` ;
+ *   - le nom de chaque outil, plus un petit surcoût de présentation.
+ *
+ * Calibré contre deux mesures CLI réelles : tavily (aucune instruction,
+ * 5 outils) coûte 56 tokens ; reddit-mcp-buddy (1 055 caractères
+ * d'instructions, 5 outils) en coûte 429.
  *
  * Volontairement à la demande, jamais au démarrage : lancer une quinzaine de
  * process npx coûte plusieurs secondes et de la bande passante.
@@ -12,8 +21,10 @@ import { createInterface } from "node:readline";
 
 const HANDSHAKE_TIMEOUT_MS = 20_000;
 const CHARS_PER_TOKEN = 4;
-/** Surcoût de structure par outil, au-delà du JSON des définitions. */
-const TOOL_STRUCTURE_TOKENS = 8;
+/** Nom de l'outil mis en forme dans la liste présentée au modèle. */
+const TOOL_NAME_TOKENS = 8;
+/** En-tête du serveur quand il publie des instructions. */
+const SERVER_HEADER_TOKENS = 12;
 
 export interface McpServerWeight {
   name: string;
@@ -51,6 +62,7 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
     });
 
     let settled = false;
+    let instructions = "";
     const finish = (result: McpServerWeight) => {
       if (settled) return;
       settled = true;
@@ -82,6 +94,8 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
         return;
       }
       if (message.id === 1) {
+        // Les instructions du serveur, elles, sont injectées en entier.
+        instructions = String(message.result?.instructions ?? "");
         child.stdin.write(`${JSON.stringify({
           jsonrpc: "2.0",
           method: "notifications/initialized",
@@ -89,7 +103,7 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
         child.stdin.write(request(2, "tools/list", {}));
         return;
       }
-      if (message.id === 2) finish(weigh(name, message.result?.tools));
+      if (message.id === 2) finish(weigh(name, message.result?.tools, instructions));
     });
 
     child.stdin.on("error", () => {
@@ -103,16 +117,20 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
   });
 }
 
-function weigh(name: string, tools: unknown): McpServerWeight {
+/** Exporté pour les tests : la calibration est le cœur de cette mesure. */
+export const weighForTest = weigh;
+
+function weigh(name: string, tools: unknown, instructions = ""): McpServerWeight {
   if (!Array.isArray(tools)) {
     return { name, tokens: null, toolCount: 0, error: "réponse tools/list invalide" };
   }
-  return {
-    name,
-    tokens: Math.round(JSON.stringify(tools).length / CHARS_PER_TOKEN)
-      + tools.length * TOOL_STRUCTURE_TOKENS,
-    toolCount: tools.length,
-  };
+  const names = tools
+    .map((tool) => String((tool as { name?: unknown }).name ?? ""))
+    .join(" ");
+  const tokens = Math.round((instructions.length + names.length) / CHARS_PER_TOKEN)
+    + tools.length * TOOL_NAME_TOKENS
+    + (instructions ? SERVER_HEADER_TOKENS : 0);
+  return { name, tokens, toolCount: tools.length };
 }
 
 /**
@@ -146,7 +164,7 @@ async function probeHttp(name: string, url: string): Promise<McpServerWeight> {
   };
 
   try {
-    const initialized = await post({
+    const initialized: any = await post({
       jsonrpc: "2.0",
       id: 1,
       method: "initialize",
@@ -160,7 +178,11 @@ async function probeHttp(name: string, url: string): Promise<McpServerWeight> {
       { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
       initialized.sessionId ?? undefined,
     );
-    return weigh(name, listed.message?.result?.tools);
+    return weigh(
+      name,
+      listed.message?.result?.tools,
+      String(initialized.message?.result?.instructions ?? ""),
+    );
   } catch (error) {
     return { name, tokens: null, toolCount: 0, error: String(error) };
   }
