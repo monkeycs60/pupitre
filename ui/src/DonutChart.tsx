@@ -19,6 +19,12 @@ export interface DonutSlice {
   muted?: boolean
   /** Légende en italique : valeur déduite plutôt que mesurée. */
   inferred?: boolean
+  /**
+   * Créneau de la palette (1 à 5). Plusieurs parts d'un même groupe partagent
+   * la même teinte : la palette validée ne compte que cinq créneaux, et en
+   * inventer un sixième casserait ses garanties de contraste.
+   */
+  colorIndex?: number
 }
 
 /**
@@ -95,7 +101,9 @@ export function DonutChart({
                 cx="64"
                 cy="64"
                 r={RADIUS}
-                stroke={segment.slice.muted ? 'var(--border-subtle)' : `var(--viz-${segment.index + 1})`}
+                stroke={segment.slice.muted
+                  ? 'var(--border-subtle)'
+                  : `var(--viz-${segment.slice.colorIndex ?? segment.index + 1})`}
                 strokeDasharray={segment.dash}
                 strokeDashoffset={segment.offset}
                 onMouseEnter={() => setActive(segment.index)}
@@ -150,7 +158,7 @@ export function DonutChart({
               style={{
                 background: segment.slice.muted
                   ? 'var(--border-strong)'
-                  : `var(--viz-${segment.index + 1})`,
+                  : `var(--viz-${segment.slice.colorIndex ?? segment.index + 1})`,
               }}
               aria-hidden="true"
             />

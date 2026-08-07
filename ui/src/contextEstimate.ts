@@ -32,8 +32,13 @@ export function contextWindowTokens(provider: Provider, model: string): number {
   return MODEL_CONTEXT_WINDOWS[provider]?.[model] ?? FALLBACK_CONTEXT_WINDOWS[provider]
 }
 
-/** Approximation usuelle : 4 caractères par token, toutes langues confondues. */
-const CHARS_PER_TOKEN = 4
+/**
+ * Calibré, pas supposé : sur du français mêlé de code, deux échantillons de
+ * 3 234 et 9 702 caractères envoyés au CLI coûtent respectivement 926 et 2 768
+ * tokens, soit 3,49 et 3,51 caractères par token. La valeur usuelle de 4
+ * sous-estimait donc toutes les parts mesurées d'environ 13 %.
+ */
+const CHARS_PER_TOKEN = 3.5
 
 /** Taille de la consigne de format injectée par Pupitre à chaque tour. */
 const PUPITRE_PREAMBLE_TOKENS = 95
@@ -94,25 +99,33 @@ export function contextParts(
   baselineTokens = 0,
 ): ContextPart[] {
   let user = 0
-  let assistant = 0
+  let assistantText = 0
   let tools = 0
   let turns = 0
+  // Génération réellement facturée, tour par tour : elle inclut le raisonnement
+  // du modèle, que le texte visible ne montre pas.
+  let generated = 0
 
   for (const event of events) {
     if (event.type === 'user-message') {
       user += approximateTokens(event.text)
       turns += 1
     } else if (event.type === 'text-final' || event.type === 'text-delta') {
-      assistant += approximateTokens(event.text)
+      assistantText += approximateTokens(event.text)
     } else if (event.type === 'tool-end') {
       tools += approximateTokens(event.output)
     } else if (event.type === 'tool-start') {
       tools += approximateTokens(JSON.stringify(event.input ?? ''))
+    } else if (event.type === 'usage') {
+      generated += event.outputTokens
     }
   }
 
+  // Le raisonnement est la part générée que le texte visible n'explique pas.
+  const reasoning = Math.max(0, generated - assistantText)
+
   const pupitre = turns * PUPITRE_PREAMBLE_TOKENS
-  const measured = user + assistant + tools + pupitre + conductorTokens
+  const measured = user + assistantText + reasoning + tools + pupitre + conductorTokens
   // Ce que Pupitre injecte lui-même est isolé : c'est la seule part de la
   // charge fixe sur laquelle l'application a la main.
   const fixedPupitre = pupitre + conductorTokens
@@ -145,7 +158,13 @@ export function contextParts(
       inferred: true,
     },
     { label: 'Vos messages', tokens: user, group: 'conversation' },
-    { label: 'Réponses de l’agent', tokens: assistant, group: 'conversation' },
+    { label: 'Réponses de l’agent', tokens: assistantText, group: 'conversation' },
+    {
+      label: 'Raisonnement du modèle',
+      tokens: reasoning,
+      group: 'conversation',
+      detail: 'tokens générés que la réponse visible ne montre pas',
+    },
     {
       label: 'Fichiers lus et commandes',
       tokens: tools,

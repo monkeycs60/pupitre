@@ -19,6 +19,14 @@ const GROUP_LABELS: Record<ContextGroup, string> = {
   libre: 'Reste',
 }
 
+/** Une teinte par groupe : l'anneau se lit par blocs, pas part par part. */
+const GROUP_COLORS: Record<ContextGroup, number> = {
+  fixe: 1,
+  conversation: 2,
+  outils: 3,
+  libre: 4,
+}
+
 export function ContextGauge({
   conversation,
   events,
@@ -59,6 +67,7 @@ export function ContextGauge({
     label: part.label,
     value: part.tokens,
     groupLabel: GROUP_LABELS[part.group],
+    colorIndex: GROUP_COLORS[part.group],
     detail: part.detail,
     hatched: part.persistent,
     muted: part.free,

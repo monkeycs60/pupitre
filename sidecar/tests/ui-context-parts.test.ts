@@ -12,6 +12,8 @@ const events = [
   { type: "tool-end" as const, toolId: "t1", output: "c".repeat(1_200), images: [] },
 ];
 
+const MESURE = { user: 114, assistant: 229, tools: 343, pupitre: 95 };
+
 test("regroupe le contexte en charge fixe, conversation et outils", () => {
   const parts = contextParts(events, 10_000);
   expect(parts.map((part) => [part.label, part.group])).toEqual([
@@ -23,12 +25,40 @@ test("regroupe le contexte en charge fixe, conversation et outils", () => {
   ]);
 });
 
+test("le ratio caractères/token calibré vaut 3,5", () => {
+  const parts = contextParts(events, 10_000);
+  // 400 caractères de message utilisateur → 114 tokens, pas 100.
+  expect(parts.find((part) => part.label === "Vos messages")?.tokens).toBe(MESURE.user);
+  expect(parts.find((part) => part.label === "Réponses de l’agent")?.tokens)
+    .toBe(MESURE.assistant);
+});
+
+test("le raisonnement est la génération que le texte visible n'explique pas", () => {
+  const withUsage = [
+    ...events,
+    { type: "usage" as const, inputTokens: 500, outputTokens: 900 },
+  ];
+  const parts = contextParts(withUsage, 10_000);
+  // 900 tokens générés, 229 de texte visible : le reste est du raisonnement.
+  expect(parts.find((part) => part.label === "Raisonnement du modèle")?.tokens)
+    .toBe(900 - MESURE.assistant);
+});
+
+test("sans surplus de génération, aucune part de raisonnement n'apparaît", () => {
+  const withUsage = [
+    ...events,
+    { type: "usage" as const, inputTokens: 500, outputTokens: 100 },
+  ];
+  expect(contextParts(withUsage, 10_000).some((part) => part.label === "Raisonnement du modèle"))
+    .toBe(false);
+});
+
 test("la charge fixe absorbe le reliquat du total provider", () => {
   const parts = contextParts(events, 10_000);
   expect(parts.reduce((sum, part) => sum + part.tokens, 0)).toBe(10_000);
   // Sans mesure de référence, tout le reliquat est déclaré non attribué.
   expect(parts.find((part) => part.label === "Non attribué")?.tokens)
-    .toBe(10_000 - (100 + 200 + 300 + 95));
+    .toBe(10_000 - (MESURE.user + MESURE.assistant + MESURE.tools + MESURE.pupitre));
 });
 
 test("sans total provider crédible, seule la part Pupitre subsiste", () => {
