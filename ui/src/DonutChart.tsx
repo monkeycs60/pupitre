@@ -20,11 +20,14 @@ export interface DonutSlice {
   /** Légende en italique : valeur déduite plutôt que mesurée. */
   inferred?: boolean
   /**
-   * Créneau de la palette (1 à 5). Plusieurs parts d'un même groupe partagent
-   * la même teinte : la palette validée ne compte que cinq créneaux, et en
-   * inventer un sixième casserait ses garanties de contraste.
+   * Créneau de la palette (1 à 5). La palette validée n'en compte que cinq,
+   * alors que la répartition peut avoir dix parts : les parts d'un même groupe
+   * partagent donc le créneau et se distinguent par une rampe de luminosité —
+   * une teinte, plusieurs valeurs, ce qu'autorise un dégradé séquentiel.
    */
   colorIndex?: number
+  /** Rang dans son groupe, qui choisit le degré de la rampe. */
+  shade?: number
 }
 
 /**
@@ -69,6 +72,16 @@ export function DonutChart({
     return segment
   })
 
+  /** Rampe séquentielle : la teinte du groupe, éclaircie vers le fond. */
+  const sliceColor = (slice: DonutSlice, index: number) => {
+    if (slice.muted) return 'var(--border-subtle)'
+    const hue = `var(--viz-${slice.colorIndex ?? index + 1})`
+    const shade = slice.shade ?? 0
+    if (shade === 0) return hue
+    // 22 % de fond par degré : trois nuances restent nettement séparées.
+    return `color-mix(in srgb, ${hue} ${Math.max(30, 100 - shade * 22)}%, var(--bg-overlay))`
+  }
+
   const focused = active === null ? null : segments[active]
   const percentLabel = (percent: number) =>
     `${percent.toLocaleString('fr-FR', { maximumFractionDigits: percent < 10 ? 1 : 0 })} %`
@@ -101,9 +114,7 @@ export function DonutChart({
                 cx="64"
                 cy="64"
                 r={RADIUS}
-                stroke={segment.slice.muted
-                  ? 'var(--border-subtle)'
-                  : `var(--viz-${segment.slice.colorIndex ?? segment.index + 1})`}
+                stroke={sliceColor(segment.slice, segment.index)}
                 strokeDasharray={segment.dash}
                 strokeDashoffset={segment.offset}
                 onMouseEnter={() => setActive(segment.index)}
@@ -155,11 +166,7 @@ export function DonutChart({
           >
             <span
               className={`donut-chip ${segment.slice.hatched ? 'is-hatched' : ''}`}
-              style={{
-                background: segment.slice.muted
-                  ? 'var(--border-strong)'
-                  : `var(--viz-${segment.slice.colorIndex ?? segment.index + 1})`,
-              }}
+              style={{ background: sliceColor(segment.slice, segment.index) }}
               aria-hidden="true"
             />
             <span className="donut-label">

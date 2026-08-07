@@ -15,8 +15,15 @@ import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import { ContextGauge } from './ContextGauge'
 import { GitView } from './GitView'
-import { getGardienStatus, getSettings, listProjectConversations, listProjectMcpServers, listProjects } from './api'
-import type { McpServerRef } from './api'
+import {
+  getGardienStatus,
+  getProjectContextProfile,
+  getSettings,
+  listProjectConversations,
+  listProjectMcpServers,
+  listProjects,
+} from './api'
+import type { ContextProfile, McpServerRef } from './api'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import { modelLabel } from './modelOptions'
 import type { ActionFormat } from './actionHeadings'
@@ -94,6 +101,11 @@ function App() {
   const [conductorTokens, setConductorTokens] = useState(0)
   /** Charge fixe mesurée : contexte d'un tour à vide. */
   const [contextBaseline, setContextBaseline] = useState(0)
+  /** Poids mesurés des instructions et des serveurs MCP du projet ouvert. */
+  const [contextProfile, setContextProfile] = useState<ContextProfile>({
+    instructionsTokens: 0,
+    mcpTokens: 0,
+  })
   /** Serveurs MCP configurés par l'utilisateur pour le projet ouvert. */
   const [mcpServers, setMcpServers] = useState<McpServerRef[]>([])
   /** Dernier poids mesuré par serveur, affiché dans le diagnostic de contexte. */
@@ -198,6 +210,9 @@ function App() {
       return
     }
     const controller = new AbortController()
+    void getProjectContextProfile(projectId, controller.signal)
+      .then(setContextProfile)
+      .catch(() => {})
     void listProjectMcpServers(projectId, controller.signal)
       .then((config) => {
         setMcpServers(config.servers)
@@ -603,6 +618,7 @@ function App() {
                     events={events}
                     conductorTokens={conductorTokens}
                     contextBaseline={contextBaseline}
+                    contextProfile={contextProfile}
                     mcpServers={mcpServers}
                     mcpWeights={mcpWeights}
                     onOpenProjectSettings={() => setProjectSettingsOpen(true)}

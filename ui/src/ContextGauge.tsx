@@ -8,7 +8,7 @@ import { DonutChart } from './DonutChart'
 import type { ContextGroup } from './contextEstimate'
 import type { DonutSlice } from './DonutChart'
 import { formatCompact } from './formatCompact'
-import type { McpServerRef } from './api'
+import type { ContextProfile, McpServerRef } from './api'
 import type { AppEvent, Conversation } from './types'
 
 /** Titres de section de la légende, dans l'ordre de lecture de l'anneau. */
@@ -32,6 +32,7 @@ export function ContextGauge({
   events,
   conductorTokens = 0,
   contextBaseline = 0,
+  contextProfile,
   mcpServers = [],
   mcpWeights = {},
   onOpenProjectSettings,
@@ -43,6 +44,8 @@ export function ContextGauge({
   conductorTokens?: number
   /** Contexte d'un tour à vide, mesuré : borne la charge fixe affichée. */
   contextBaseline?: number
+  /** Poids mesurés des instructions et des serveurs MCP. */
+  contextProfile?: ContextProfile
   /** Dernier poids mesuré par serveur, affiché en regard de chaque nom. */
   mcpWeights?: Record<string, { tokens: number | null }>
   /** Ouvre la configuration du projet, pour agir depuis le diagnostic. */
@@ -62,12 +65,20 @@ export function ContextGauge({
     estimate.windowTokens,
     conversation.orchestrator ? conductorTokens : 0,
     contextBaseline,
+    contextProfile,
   )
+  // Rang dans le groupe : c'est lui qui choisit la nuance de la teinte.
+  const rank = new Map<ContextGroup, number>()
   const slices: DonutSlice[] = parts.map((part) => ({
     label: part.label,
     value: part.tokens,
     groupLabel: GROUP_LABELS[part.group],
     colorIndex: GROUP_COLORS[part.group],
+    shade: (() => {
+      const next = rank.get(part.group) ?? 0
+      rank.set(part.group, next + 1)
+      return next
+    })(),
     detail: part.detail,
     hatched: part.persistent,
     muted: part.free,

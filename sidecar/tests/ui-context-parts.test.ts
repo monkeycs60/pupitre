@@ -12,15 +12,16 @@ const events = [
   { type: "tool-end" as const, toolId: "t1", output: "c".repeat(1_200), images: [] },
 ];
 
-const MESURE = { user: 114, assistant: 229, tools: 343, pupitre: 95 };
+// Ratios calibrés : 3,5 pour la prose, 3 pour le code des sorties d'outils.
+const MESURE = { user: 114, assistant: 229, tools: 400, pupitre: 95 };
 
 test("regroupe le contexte en charge fixe, conversation et outils", () => {
   const parts = contextParts(events, 10_000);
   expect(parts.map((part) => [part.label, part.group])).toEqual([
     ["Consignes Pupitre", "fixe"],
-    ["Non attribué", "conversation"],
     ["Vos messages", "conversation"],
     ["Réponses de l’agent", "conversation"],
+    ["Autres", "conversation"],
     ["Fichiers lus et commandes", "outils"],
   ]);
 });
@@ -57,7 +58,7 @@ test("la charge fixe absorbe le reliquat du total provider", () => {
   const parts = contextParts(events, 10_000);
   expect(parts.reduce((sum, part) => sum + part.tokens, 0)).toBe(10_000);
   // Sans mesure de référence, tout le reliquat est déclaré non attribué.
-  expect(parts.find((part) => part.label === "Non attribué")?.tokens)
+  expect(parts.find((part) => part.label === "Autres")?.tokens)
     .toBe(10_000 - (MESURE.user + MESURE.assistant + MESURE.tools + MESURE.pupitre));
 });
 
@@ -92,9 +93,10 @@ test("la charge fixe reste bornée par la mesure de référence", () => {
   // Avec une mesure de 30 000, la charge fixe vaut exactement ça — jamais le
   // reliquat entier, qui absorbe aussi l'erreur d'estimation.
   const measured = contextParts(events, 500_000, 1_000_000, 0, 30_000);
-  expect(measured.find((part) => part.label === "Prompt système et mémoire")?.tokens)
+  // Sans profil détaillé, toute la base est imputée au prompt système.
+  expect(measured.find((part) => part.label === "Prompt système du CLI")?.tokens)
     .toBe(30_000);
-  expect(measured.find((part) => part.label === "Non attribué")?.tokens)
+  expect(measured.find((part) => part.label === "Autres")?.tokens)
     .toBeGreaterThan(400_000);
 });
 
@@ -111,7 +113,7 @@ test("le bridge conductor bascule du déduit vers les consignes Pupitre", () => 
   const part = (parts: typeof withBridge, label: string) =>
     parts.find((item) => item.label === label)!.tokens;
   expect(part(withBridge, "Consignes Pupitre") - part(without, "Consignes Pupitre")).toBe(1_200);
-  expect(part(without, "Non attribué") - part(withBridge, "Non attribué")).toBe(1_200);
+  expect(part(without, "Autres") - part(withBridge, "Autres")).toBe(1_200);
   expect(withBridge.reduce((sum, item) => sum + item.tokens, 0)).toBe(1_000_000);
 });
 
@@ -125,4 +127,39 @@ test("le ratio incompressible se rapporte à la fenêtre entière", () => {
 test("le seuil d'alerte reste sous la moitié de la fenêtre", () => {
   expect(PERSISTENT_ALERT_RATIO).toBeGreaterThan(0);
   expect(PERSISTENT_ALERT_RATIO).toBeLessThan(0.5);
+});
+
+test("la charge fixe détaille instructions et MCP quand ils sont mesurés", () => {
+  const parts = contextParts(events, 500_000, 1_000_000, 0, 30_000, {
+    instructionsTokens: 1_800,
+    mcpTokens: 6_100,
+  });
+  const at = (label: string) => parts.find((part) => part.label === label)?.tokens;
+  expect(at("Instructions globales")).toBe(1_800);
+  expect(at("Outils MCP")).toBe(6_100);
+  // Le prompt système est le reste de la base mesurée, jamais publié tel quel.
+  expect(at("Prompt système du CLI")).toBe(30_000 - 1_800 - 6_100);
+});
+
+test("un profil plus lourd que la base mesurée ne crée pas de part négative", () => {
+  const parts = contextParts(events, 500_000, 1_000_000, 0, 5_000, {
+    instructionsTokens: 9_000,
+    mcpTokens: 9_000,
+  });
+  for (const part of parts) expect(part.tokens).toBeGreaterThanOrEqual(0);
+  expect(parts.find((part) => part.label === "Instructions globales")?.tokens).toBe(5_000);
+});
+
+test("les images d'un message sont comptées", () => {
+  const withImage = [
+    { type: "user-message" as const, text: "regarde", images: ["a.png", "b.png"] },
+  ];
+  expect(contextParts(withImage, 10_000).find((part) => part.label === "Images et captures")?.tokens)
+    .toBe(3_000);
+});
+
+test("les sorties d'outils utilisent le ratio du code", () => {
+  // 1 200 caractères de sortie d'outil : 400 tokens à 3 par token, pas 343.
+  expect(contextParts(events, 10_000).find((part) => part.label === "Fichiers lus et commandes")?.tokens)
+    .toBe(MESURE.tools);
 });

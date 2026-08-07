@@ -515,6 +515,20 @@ export interface McpServerWeight {
   error?: string
 }
 
+export interface ContextProfile {
+  /** CLAUDE.md, AGENTS.md et fichiers mémoire, global et projet. */
+  instructionsTokens: number
+  /** Somme mesurée des serveurs MCP effectivement chargés. */
+  mcpTokens: number
+}
+
+export function getProjectContextProfile(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<ContextProfile> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/context-profile`, { signal })
+}
+
 export interface ProjectMcpConfig {
   servers: McpServerRef[]
   /** `null` = aucun filtre, tous les serveurs configurés sont chargés. */

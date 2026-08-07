@@ -60,6 +60,7 @@ import {
 } from "./mcp-inventory";
 import { measureMcpServers } from "./mcp-probe";
 import { verifyMcpContextCost } from "./mcp-verify";
+import { instructionsTokens } from "./context-profile";
 import type { McpServerWeight } from "./mcp-probe";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
@@ -1204,6 +1205,28 @@ export function createServer(deps: ServerDeps) {
           }
           deps.settings.set("mcpWeights", cache);
           return json(weights);
+        }
+
+        const projectProfileId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/context-profile$/,
+        );
+        if (request.method === "GET" && projectProfileId !== null) {
+          const project = deps.projects.get(projectProfileId);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const weights = deps.settings.get<Record<string, McpServerWeight>>("mcpWeights") ?? {};
+          // Seuls les serveurs effectivement chargés comptent : un serveur
+          // décoché ne pèse plus rien dans la fenêtre.
+          const loaded = project.mcp_servers
+            ?? listMcpServers(project.path).map((server) => server.name);
+          const mcpTokens = loaded.reduce(
+            (sum, name) => sum + (weights[name]?.tokens ?? 0),
+            0,
+          );
+          return json({
+            instructionsTokens: instructionsTokens(project.path),
+            mcpTokens,
+          });
         }
 
         const projectMcpVerifyId = routeId(

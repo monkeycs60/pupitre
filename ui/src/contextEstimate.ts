@@ -40,6 +40,19 @@ export function contextWindowTokens(provider: Provider, model: string): number {
  */
 const CHARS_PER_TOKEN = 3.5
 
+/**
+ * Le code et le JSON se tokenisent plus finement que la prose : ponctuation,
+ * identifiants découpés, indentation. Les sorties d'outils en sont presque
+ * exclusivement composées.
+ */
+const CHARS_PER_TOKEN_CODE = 3
+
+/**
+ * Ordre de grandeur d'une capture d'écran de la taille de celles échangées
+ * ici. Une image n'est pas gratuite, et ne rien compter la rendait invisible.
+ */
+const TOKENS_PER_IMAGE = 1_500
+
 /** Taille de la consigne de format injectée par Pupitre à chaque tour. */
 const PUPITRE_PREAMBLE_TOKENS = 95
 
@@ -68,6 +81,10 @@ function approximateTokens(text: string): number {
   return Math.round(text.length / CHARS_PER_TOKEN)
 }
 
+function approximateCodeTokens(text: string): number {
+  return Math.round(text.length / CHARS_PER_TOKEN_CODE)
+}
+
 /**
  * Décompose le contexte occupé. Seul le total vient du provider : le détail est
  * reconstitué depuis les événements stockés, et le reliquat regroupe ce que le
@@ -85,6 +102,14 @@ export function persistentRatio(parts: ContextPart[], windowTokens: number): num
   return persistent / windowTokens
 }
 
+/** Parts de la charge fixe que le sidecar sait mesurer sur disque. */
+export interface ContextProfile {
+  /** CLAUDE.md global et de projet, AGENTS.md, fichiers mémoire. */
+  instructionsTokens?: number
+  /** Somme des serveurs MCP retenus, d'après la dernière mesure. */
+  mcpTokens?: number
+}
+
 export function contextParts(
   events: AppEvent[],
   usedTokens: number,
@@ -97,11 +122,14 @@ export function contextParts(
    * le reliquat reste alors entièrement non attribué.
    */
   baselineTokens = 0,
+  /** Poids mesurés de la charge fixe, quand le sidecar a pu les établir. */
+  profile: ContextProfile = {},
 ): ContextPart[] {
   let user = 0
   let assistantText = 0
   let tools = 0
   let turns = 0
+  let images = 0
   // Génération réellement facturée, tour par tour : elle inclut le raisonnement
   // du modèle, que le texte visible ne montre pas.
   let generated = 0
@@ -109,13 +137,14 @@ export function contextParts(
   for (const event of events) {
     if (event.type === 'user-message') {
       user += approximateTokens(event.text)
+      images += event.images.length * TOKENS_PER_IMAGE
       turns += 1
     } else if (event.type === 'text-final' || event.type === 'text-delta') {
       assistantText += approximateTokens(event.text)
     } else if (event.type === 'tool-end') {
-      tools += approximateTokens(event.output)
+      tools += approximateCodeTokens(event.output)
     } else if (event.type === 'tool-start') {
-      tools += approximateTokens(JSON.stringify(event.input ?? ''))
+      tools += approximateCodeTokens(JSON.stringify(event.input ?? ''))
     } else if (event.type === 'usage') {
       generated += event.outputTokens
     }
@@ -125,7 +154,8 @@ export function contextParts(
   const reasoning = Math.max(0, generated - assistantText)
 
   const pupitre = turns * PUPITRE_PREAMBLE_TOKENS
-  const measured = user + assistantText + reasoning + tools + pupitre + conductorTokens
+  const measured = user + images + assistantText + reasoning + tools + pupitre
+    + conductorTokens
   // Ce que Pupitre injecte lui-même est isolé : c'est la seule part de la
   // charge fixe sur laquelle l'application a la main.
   const fixedPupitre = pupitre + conductorTokens
@@ -135,12 +165,32 @@ export function contextParts(
   // milliers de tokens pour un prompt système qui en pèse trente mille.
   const baseline = Math.min(baselineTokens, remainder)
   const unattributed = remainder - baseline
+  // La charge fixe se décompose en trois postes mesurables et un reste : le
+  // prompt système du CLI n'est jamais publié, on l'obtient par soustraction.
+  const instructions = Math.min(profile.instructionsTokens ?? 0, baseline)
+  const mcp = Math.min(profile.mcpTokens ?? 0, baseline - instructions)
+  const systemPrompt = baseline - instructions - mcp
   const parts: ContextPart[] = [
     {
-      label: 'Prompt système et mémoire',
-      tokens: baseline,
+      label: 'Prompt système du CLI',
+      tokens: systemPrompt,
       group: 'fixe',
-      detail: 'prompt système du CLI, serveurs MCP, CLAUDE.md, mémoire — mesuré à vide',
+      detail: 'outils intégrés, règles du CLI — non publié, obtenu par soustraction',
+      persistent: true,
+      inferred: true,
+    },
+    {
+      label: 'Instructions globales',
+      tokens: instructions,
+      group: 'fixe',
+      detail: 'CLAUDE.md, AGENTS.md et fichiers mémoire, global et projet',
+      persistent: true,
+    },
+    {
+      label: 'Outils MCP',
+      tokens: mcp,
+      group: 'fixe',
+      detail: 'instructions et noms d’outils des serveurs chargés',
       persistent: true,
     },
     {
@@ -150,20 +200,26 @@ export function contextParts(
       detail: 'format de réponse, et bridge de délégation si la conversation orchestre',
       persistent: true,
     },
-    {
-      label: 'Non attribué',
-      tokens: unattributed,
-      group: 'conversation',
-      detail: 'raisonnement du modèle, images, contenu que les événements ne tracent pas',
-      inferred: true,
-    },
     { label: 'Vos messages', tokens: user, group: 'conversation' },
+    {
+      label: 'Images et captures',
+      tokens: images,
+      group: 'conversation',
+      detail: 'estimation : une capture pèse environ 1 500 tokens',
+    },
     { label: 'Réponses de l’agent', tokens: assistantText, group: 'conversation' },
     {
       label: 'Raisonnement du modèle',
       tokens: reasoning,
       group: 'conversation',
       detail: 'tokens générés que la réponse visible ne montre pas',
+    },
+    {
+      label: 'Autres',
+      tokens: unattributed,
+      group: 'conversation',
+      detail: 'contenu que les événements ne tracent pas, et écart d’estimation',
+      inferred: true,
     },
     {
       label: 'Fichiers lus et commandes',
