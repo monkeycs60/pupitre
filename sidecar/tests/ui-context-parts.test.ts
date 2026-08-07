@@ -15,7 +15,8 @@ const events = [
 test("regroupe le contexte en charge fixe, conversation et outils", () => {
   const parts = contextParts(events, 10_000);
   expect(parts.map((part) => [part.label, part.group])).toEqual([
-    ["Charge fixe", "fixe"],
+    ["Système, MCP, mémoire", "fixe"],
+    ["Consignes Pupitre", "fixe"],
     ["Vos messages", "conversation"],
     ["Réponses de l’agent", "conversation"],
     ["Fichiers lus et commandes", "outils"],
@@ -25,14 +26,17 @@ test("regroupe le contexte en charge fixe, conversation et outils", () => {
 test("la charge fixe absorbe le reliquat du total provider", () => {
   const parts = contextParts(events, 10_000);
   expect(parts.reduce((sum, part) => sum + part.tokens, 0)).toBe(10_000);
-  // Consigne Pupitre (95) + tout ce que le CLI ne publie pas.
-  expect(parts[0]).toMatchObject({ label: "Charge fixe", tokens: 10_000 - (100 + 200 + 300) });
+  // Ce que le CLI ne publie pas, une fois retirées les parts mesurées.
+  expect(parts[0]).toMatchObject({
+    label: "Système, MCP, mémoire",
+    tokens: 10_000 - (100 + 200 + 300 + 95),
+  });
 });
 
-test("sans total provider crédible, la charge fixe reste celle qu'on mesure", () => {
-  const fixed = contextParts(events, 0).find((part) => part.label === "Charge fixe");
-  expect(fixed?.tokens).toBe(95);
-  expect(fixed?.inferred).toBe(false);
+test("sans total provider crédible, seule la part Pupitre subsiste", () => {
+  const parts = contextParts(events, 0);
+  expect(parts.find((part) => part.inferred)).toBeUndefined();
+  expect(parts.find((part) => part.label === "Consignes Pupitre")?.tokens).toBe(95);
 });
 
 test("une conversation vide ne produit aucune ligne", () => {
@@ -50,11 +54,11 @@ test("une fenêtre déjà pleine n'ajoute pas de part disponible", () => {
   expect(contextParts(events, 10_000, 10_000).some((part) => part.free)).toBe(false);
 });
 
-test("une seule part est marquée incompressible : la charge fixe", () => {
+test("la charge fixe distingue ce que Pupitre injecte du reste", () => {
   const persistent = contextParts(events, 10_000, 1_000_000)
     .filter((part) => part.persistent)
     .map((part) => part.label);
-  expect(persistent).toEqual(["Charge fixe"]);
+  expect(persistent).toEqual(["Système, MCP, mémoire", "Consignes Pupitre"]);
 });
 
 test("les grands nombres s'abrègent en millions", () => {
@@ -64,20 +68,20 @@ test("les grands nombres s'abrègent en millions", () => {
   expect(formatCompact(842)).toBe("842");
 });
 
-test("le bridge conductor entre dans la charge fixe sans gonfler le total", () => {
+test("le bridge conductor bascule du déduit vers les consignes Pupitre", () => {
   const withBridge = contextParts(events, 10_000, 1_000_000, 1_200);
   const without = contextParts(events, 10_000, 1_000_000, 0);
-  const fixed = (parts: typeof withBridge) =>
-    parts.find((part) => part.label === "Charge fixe")?.tokens;
-  // Mesurer le bridge déplace des tokens du déduit vers le mesuré : le total
-  // de la charge fixe, lui, ne bouge pas.
-  expect(fixed(withBridge)).toBe(fixed(without));
-  expect(withBridge.reduce((sum, part) => sum + part.tokens, 0)).toBe(1_000_000);
+  const part = (parts: typeof withBridge, label: string) =>
+    parts.find((item) => item.label === label)!.tokens;
+  expect(part(withBridge, "Consignes Pupitre") - part(without, "Consignes Pupitre")).toBe(1_200);
+  expect(part(without, "Système, MCP, mémoire") - part(withBridge, "Système, MCP, mémoire"))
+    .toBe(1_200);
+  expect(withBridge.reduce((sum, item) => sum + item.tokens, 0)).toBe(1_000_000);
 });
 
 test("le ratio incompressible se rapporte à la fenêtre entière", () => {
   const parts = contextParts(events, 10_000, 20_000);
-  // Charge fixe = 10 000 - (100 + 200 + 300) = 9 400, sur une fenêtre de 20 000.
+  // Déduit (9 305) + consignes Pupitre (95) = 9 400, sur une fenêtre de 20 000.
   expect(persistentRatio(parts, 20_000)).toBeCloseTo(0.47, 2);
   expect(persistentRatio(parts, 0)).toBe(0);
 });

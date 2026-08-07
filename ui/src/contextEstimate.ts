@@ -107,21 +107,25 @@ export function contextParts(
 
   const pupitre = turns * PUPITRE_PREAMBLE_TOKENS
   const measured = user + assistant + tools + pupitre + conductorTokens
-  // Tout ce qui est rechargé à chaque session est agrégé en UNE part : le
-  // détail intéresse moins que le total, puisque le levier est le même —
-  // réduire les serveurs MCP chargés.
-  const fixedKnown = pupitre + conductorTokens
+  // Ce que Pupitre injecte lui-même est isolé : c'est la seule part de la
+  // charge fixe sur laquelle l'application a la main.
+  const fixedPupitre = pupitre + conductorTokens
   const fixedInferred = usedTokens > measured ? usedTokens - measured : 0
-  const fixed = fixedKnown + fixedInferred
   const parts: ContextPart[] = [
     {
-      label: 'Charge fixe',
-      tokens: fixed,
+      label: 'Système, MCP, mémoire',
+      tokens: fixedInferred,
       group: 'fixe',
-      detail: 'prompt système, outils MCP, mémoire, consigne Pupitre',
+      detail: 'prompt système du CLI, serveurs MCP, CLAUDE.md, mémoire projet',
       persistent: true,
-      // Majoritairement déduite : seule la part Pupitre est mesurée.
-      inferred: fixedInferred > fixedKnown,
+      inferred: true,
+    },
+    {
+      label: 'Consignes Pupitre',
+      tokens: fixedPupitre,
+      group: 'fixe',
+      detail: 'format de réponse, et bridge de délégation si la conversation orchestre',
+      persistent: true,
     },
     { label: 'Vos messages', tokens: user, group: 'conversation' },
     { label: 'Réponses de l’agent', tokens: assistant, group: 'conversation' },

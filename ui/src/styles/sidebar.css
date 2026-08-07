@@ -1467,16 +1467,19 @@
 
 /* --- Légende groupée de l'anneau ----------------------------------------- */
 
-.donut-group-title {
+/* Sélecteur plus spécifique que `.donut-legend li` : sans ça, le titre héritait
+   de la grille à quatre colonnes et son texte se pliait dans la colonne de
+   10 px réservée à la pastille. */
+.donut-legend li.donut-group-title {
   display: block;
-  padding: var(--space-2) 5px 2px;
+  padding: var(--space-3) 5px 2px;
   color: var(--text-faint);
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.donut-legend li:first-child.donut-group-title {
+.donut-legend li.donut-group-title:first-child {
   padding-top: 0;
 }
 
@@ -1485,4 +1488,31 @@
   color: var(--text-faint);
   font-size: 10px;
   line-height: 1.35;
+}
+
+/* Liste dépliable des serveurs MCP, sous l'anneau de contexte. */
+.context-gauge-servers-list {
+  margin-top: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.context-gauge-servers-list summary {
+  cursor: pointer;
+}
+
+.context-gauge-servers-list ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px var(--space-3);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.context-gauge-servers-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
 }

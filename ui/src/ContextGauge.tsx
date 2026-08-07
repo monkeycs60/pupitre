@@ -105,26 +105,25 @@ export function ContextGauge({
           {persistentAlert ? (
             <p className="context-gauge-alert" role="status">
               <strong>{Math.round(persistent * 100)} % de la fenêtre part en charge fixe.</strong>{' '}
-              Cette charge est payée dans <em>toutes</em> vos conversations.
-              {mcpServers.length > 0 ? (
-                <>
-                  {' '}Vos {mcpServers.length} serveurs MCP y contribuent :{' '}
-                  <span className="context-gauge-servers">
-                    {mcpServers.map((server) => server.name).join(', ')}
-                  </span>
-                  . En désactiver un que vous n’utilisez pas libère du contexte partout.
-                </>
-              ) : (
-                ' Réduire les serveurs MCP chargés libère du contexte partout.'
-              )}
+              Cette charge est payée dans <em>toutes</em> vos conversations : désactiver
+              un serveur MCP inutilisé libère du contexte partout.
             </p>
           ) : null}
-          <p>
-            Le total vient du provider ; la répartition est estimée depuis les
-            événements. Les parts hachées <span aria-hidden="true">▨</span> sont
-            rechargées à chaque session : ni un résumé ni une nouvelle
-            conversation ne les réduisent.
-          </p>
+          {mcpServers.length > 0 ? (
+            <details className="context-gauge-servers-list">
+              <summary>{mcpServers.length} serveurs MCP chargés</summary>
+              <ul>
+                {mcpServers.map((server) => (
+                  <li key={`${server.provider}:${server.name}`}>
+                    <span className={`project-mcp-badge is-${server.provider}`}>
+                      {server.provider === 'claude' ? 'CL' : 'CX'}
+                    </span>
+                    {server.name}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </div>
       </div>
 
