@@ -141,13 +141,26 @@ test("la charge fixe détaille instructions et MCP quand ils sont mesurés", () 
   expect(at("Prompt système du CLI")).toBe(30_000 - 1_800 - 6_100);
 });
 
-test("un profil plus lourd que la base mesurée ne crée pas de part négative", () => {
-  const parts = contextParts(events, 500_000, 1_000_000, 0, 5_000, {
+test("instructions et MCP s'affichent même sans mesure de référence", () => {
+  // Le cas courant : on sait peser les fichiers et les serveurs sur disque,
+  // alors que la base demande un tour CLI que l'utilisateur n'a pas lancé.
+  const parts = contextParts(events, 500_000, 1_000_000, 0, 0, {
+    instructionsTokens: 1_800,
+    mcpTokens: 6_100,
+  });
+  const at = (label: string) => parts.find((part) => part.label === label)?.tokens;
+  expect(at("Instructions globales")).toBe(1_800);
+  expect(at("Outils MCP")).toBe(6_100);
+  // Le prompt système, lui, reste absent tant qu'il n'est pas mesuré.
+  expect(at("Prompt système du CLI")).toBeUndefined();
+});
+
+test("un profil plus lourd que le reliquat ne crée pas de part négative", () => {
+  const parts = contextParts(events, 2_000, 1_000_000, 0, 5_000, {
     instructionsTokens: 9_000,
     mcpTokens: 9_000,
   });
   for (const part of parts) expect(part.tokens).toBeGreaterThanOrEqual(0);
-  expect(parts.find((part) => part.label === "Instructions globales")?.tokens).toBe(5_000);
 });
 
 test("les images d'un message sont comptées", () => {

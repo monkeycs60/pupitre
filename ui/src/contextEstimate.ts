@@ -164,12 +164,13 @@ export function contextParts(
   // elle absorbait tout l'écart d'estimation et affichait des centaines de
   // milliers de tokens pour un prompt système qui en pèse trente mille.
   const baseline = Math.min(baselineTokens, remainder)
-  const unattributed = remainder - baseline
-  // La charge fixe se décompose en trois postes mesurables et un reste : le
-  // prompt système du CLI n'est jamais publié, on l'obtient par soustraction.
-  const instructions = Math.min(profile.instructionsTokens ?? 0, baseline)
-  const mcp = Math.min(profile.mcpTokens ?? 0, baseline - instructions)
-  const systemPrompt = baseline - instructions - mcp
+  // Instructions et serveurs MCP sont mesurés indépendamment : les borner par
+  // la mesure de référence les faisait disparaître tant qu'elle valait zéro,
+  // alors qu'on sait les chiffrer sans elle. Seul le prompt système du CLI en
+  // dépend, puisqu'il s'obtient par soustraction.
+  const instructions = Math.min(profile.instructionsTokens ?? 0, remainder)
+  const mcp = Math.min(profile.mcpTokens ?? 0, remainder - instructions)
+  const systemPrompt = Math.max(0, baseline - instructions - mcp)
   const parts: ContextPart[] = [
     {
       label: 'Prompt système du CLI',
@@ -216,7 +217,7 @@ export function contextParts(
     },
     {
       label: 'Autres',
-      tokens: unattributed,
+      tokens: Math.max(0, remainder - systemPrompt - instructions - mcp),
       group: 'conversation',
       detail: 'contenu que les événements ne tracent pas, et écart d’estimation',
       inferred: true,

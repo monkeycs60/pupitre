@@ -1214,11 +1214,25 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "GET" && projectProfileId !== null) {
           const project = deps.projects.get(projectProfileId);
           if (!project) throw new HttpError(404, "projet inconnu");
-          const weights = deps.settings.get<Record<string, McpServerWeight>>("mcpWeights") ?? {};
+          let weights = deps.settings.get<Record<string, McpServerWeight>>("mcpWeights") ?? {};
           // Seuls les serveurs effectivement chargés comptent : un serveur
           // décoché ne pèse plus rien dans la fenêtre.
           const loaded = project.mcp_servers
             ?? listMcpServers(project.path).map((server) => server.name);
+          // Première consultation : on pèse les serveurs une fois plutôt que
+          // d'afficher zéro et d'attendre une action manuelle que rien
+          // n'annonce. Les fois suivantes viennent du cache.
+          if (loaded.some((name) => weights[name] === undefined)) {
+            const measured = await measureMcpServers({
+              ...codexServerDefinitions(),
+              ...claudeServerDefinitions(project.path),
+            });
+            weights = { ...weights };
+            for (const weight of measured) {
+              if (weight.tokens !== null) weights[weight.name] = weight;
+            }
+            deps.settings.set("mcpWeights", weights);
+          }
           const mcpTokens = loaded.reduce(
             (sum, name) => sum + (weights[name]?.tokens ?? 0),
             0,

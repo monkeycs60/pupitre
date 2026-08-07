@@ -5,6 +5,8 @@ const RADIUS = 52
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 /** Écart entre segments : la séparation ne repose pas que sur la couleur. */
 const GAP = 3
+/** Écart plus large entre deux groupes : la structure se lit sur l'anneau. */
+const GROUP_GAP = 9
 
 export interface DonutSlice {
   label: string
@@ -60,7 +62,9 @@ export function DonutChart({
   let consumed = 0
   const segments = slices.map((slice, index) => {
     const fraction = slice.value / total
-    const length = Math.max(0, fraction * CIRCUMFERENCE - GAP)
+    // Dernière part de son groupe : l'écart qui suit marque la frontière.
+    const endsGroup = slices[index + 1]?.groupLabel !== slice.groupLabel
+    const length = Math.max(0, fraction * CIRCUMFERENCE - (endsGroup ? GROUP_GAP : GAP))
     const segment = {
       slice,
       index,
@@ -156,6 +160,7 @@ export function DonutChart({
             key={segment.slice.label}
             data-group={segment.slice.groupLabel}
             className={[
+              'donut-legend-item',
               active === segment.index ? 'is-active' : '',
               segment.slice.inferred ? 'is-inferred' : '',
               selected === segment.slice.label ? 'is-selected' : '',
