@@ -12,6 +12,17 @@ export interface LastActiveLocation {
   conversationId: string | null
 }
 
+export function locationForSelection(
+  project: Project | null,
+  conversation: Conversation | null,
+): LastActiveLocation | null {
+  if (project === null) return null
+  return {
+    projectId: project.id,
+    conversationId: conversation?.project_id === project.id ? conversation.id : null,
+  }
+}
+
 function nonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }

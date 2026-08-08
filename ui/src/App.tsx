@@ -44,6 +44,13 @@ import { useFleet } from './useFleet'
 import { ProgressView } from './ProgressView'
 import { AppSettingsView } from './AppSettingsView'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
+import {
+  locationForSelection,
+  readLastActiveLocation,
+  restoreConversation,
+  restoreProject,
+  writeLastActiveLocation,
+} from './restoreLocation'
 
 const DEFAULT_SIDEBAR_WIDTH = 296
 const MIN_SIDEBAR_WIDTH = 240
@@ -89,6 +96,7 @@ function App() {
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
+  const [locationRestored, setLocationRestored] = useState(false)
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
   // conversation ouverte — la sidebar n'en affiche l'indicateur que pour elle.
   const [runningSubtasks, setRunningSubtasks] = useState(0)
@@ -158,6 +166,59 @@ function App() {
       ignore = true
     }
   }, [])
+
+  useEffect(() => {
+    let ignore = false
+    const savedLocation = readLastActiveLocation(window.localStorage)
+    if (savedLocation === null) {
+      setLocationRestored(true)
+      return () => {
+        ignore = true
+      }
+    }
+
+    void listProjects()
+      .then(async (projects) => {
+        if (ignore) return
+        const project = restoreProject(projects, savedLocation)
+        if (project === null) {
+          setLocationRestored(true)
+          return
+        }
+
+        setSelectedProject(project)
+        const rememberedProjectStillExists = project.id === savedLocation.projectId
+        try {
+          const conversations = await listProjectConversations(project.id)
+          if (ignore) return
+          setSelectedConversation(restoreConversation(
+            conversations,
+            rememberedProjectStillExists ? savedLocation.conversationId : null,
+          ))
+        } catch {
+          // La sidebar gère son propre chargement ; le projet reste restauré.
+        }
+        if (!ignore) setLocationRestored(true)
+      })
+      .catch(() => {
+        if (!ignore) setLocationRestored(true)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!locationRestored) return
+    const location = locationForSelection(selectedProject, selectedConversation)
+    if (location !== null) writeLastActiveLocation(window.localStorage, location)
+  }, [
+    locationRestored,
+    selectedProject?.id,
+    selectedConversation?.id,
+    selectedConversation?.project_id,
+  ])
 
   function handleSidebarResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return

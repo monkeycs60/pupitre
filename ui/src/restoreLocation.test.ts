@@ -3,6 +3,7 @@ import type { Conversation, Project } from './types'
 import {
   LAST_ACTIVE_LOCATION_STORAGE_KEY,
   type StorageLike,
+  locationForSelection,
   readLastActiveLocation,
   restoreConversation,
   restoreProject,
@@ -135,4 +136,9 @@ test('écrit le snapshot sans propager une erreur de stockage', () => {
 test('les conversations d’un autre projet restent hors de la liste restaurée', () => {
   expect(restoreConversation(conversations, conversationsFromAnotherProject[0].id)?.project_id)
     .toBe('project-1')
+})
+
+test('n’écrit pas une conversation appartenant à un autre projet', () => {
+  expect(locationForSelection(projects[0], conversationsFromAnotherProject[0]))
+    .toEqual({ projectId: 'project-1', conversationId: null })
 })
