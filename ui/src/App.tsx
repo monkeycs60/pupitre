@@ -43,6 +43,7 @@ import { ResumeCommandButton } from './ResumeCommandButton'
 import { HelpView } from './HelpView'
 import type { AppEvent, WorkspaceView } from './types'
 import { useGamification } from './useGamification'
+import { useFleet } from './useFleet'
 import { ProgressView } from './ProgressView'
 import { AppSettingsView } from './AppSettingsView'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
@@ -122,6 +123,7 @@ function App() {
   )
   const quotas = useQuotas()
   const gamification = useGamification()
+  const fleet = useFleet()
   useAppNotifications()
   const guardianAckEventCount = guardianAckCount(events)
   // Le digest est régénéré côté sidecar après un tour : on rafraîchit le titre
@@ -540,6 +542,7 @@ function App() {
         onProgressSelect={handleProgressSelect}
         onSettingsSelect={handleSettingsSelect}
         pendingReviews={gardienOpenCount}
+        fleetActive={fleet.items.length}
       />
       {showSidebar ? (
       <>
@@ -668,15 +671,18 @@ function App() {
               ) : null}
               {selectedConversation !== null ? (
                 <div className="header-actions">
-                  <ResumeCommandButton conversation={selectedConversation} />
                   <button
                     type="button"
-                    className="header-action"
+                    className="header-action header-action-icon"
                     onClick={() => setShowReviewDialog(true)}
-                    title="Analyser le dernier diff Git avec un modèle fort"
+                    title="Review Gardien : analyser le dernier diff Git avec un modèle fort"
+                    aria-label="Review Gardien"
                   >
-                    Review Gardien
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+                    </svg>
                   </button>
+                  <ResumeCommandButton conversation={selectedConversation} />
                   <details className="header-action-menu">
                     <summary className="header-action header-action-icon" title="Actions de la conversation">
                       <span aria-hidden="true">⋯</span>

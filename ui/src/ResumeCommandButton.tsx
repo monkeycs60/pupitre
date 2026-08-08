@@ -23,18 +23,36 @@ export function ResumeCommandButton({ conversation }: { conversation: Conversati
   const command = resumeCommand(conversation)
   if (!command) return null
 
+  const label = state === 'copied'
+    ? 'Commande copiée'
+    : state === 'error'
+      ? 'Copie impossible'
+      : 'Reprendre au terminal'
+
   return (
     <button
       type="button"
-      className="header-action"
+      className="header-action header-action-icon"
       onClick={() => {
         void copyText(command)
           .then(() => setState('copied'))
           .catch(() => setState('error'))
       }}
-      title={`Copier la commande pour reprendre cette session dans un terminal : ${command}. Voir Aide > Reprise terminal.`}
+      title={`${label} — copie la commande : ${command}. Voir Aide > Reprise terminal.`}
+      aria-label={label}
     >
-      {state === 'copied' ? 'Commande copiée' : state === 'error' ? 'Copie impossible' : 'Reprendre au terminal'}
+      {state === 'copied' ? (
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3.5 8.5 6.5 11.5 12.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : (
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 4.5 6 8l-3 3.5" />
+            <path d="M8 12h5" />
+          </g>
+        </svg>
+      )}
     </button>
   )
 }

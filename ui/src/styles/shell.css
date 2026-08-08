@@ -424,6 +424,11 @@ body.is-resizing-sidebar {
   border-radius: var(--r-full);
 }
 
+.rail-badge.is-live {
+  background: var(--accent);
+  animation: livepulse 1.4s var(--ease) infinite;
+}
+
 /* --- Zone de travail ----------------------------------------------------- */
 
 .workspace {

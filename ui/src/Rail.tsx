@@ -23,6 +23,8 @@ interface RailProps {
   onProgressSelect: () => void
   onSettingsSelect: () => void
   pendingReviews?: number
+  /** Runs actifs (tours + sub-agents + routines), pour la pastille Fleet. */
+  fleetActive?: number
 }
 
 type NavName =
@@ -131,6 +133,7 @@ export function Rail({
   onProgressSelect,
   onSettingsSelect,
   pendingReviews = 0,
+  fleetActive = 0,
 }: RailProps) {
   const [projects, setProjects] = useState<Project[]>([])
 
@@ -167,7 +170,7 @@ export function Rail({
     needsProject?: boolean
     badge?: number
   }> = [
-    { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect },
+    { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive },
     { name: 'guardian', label: 'Gardien', view: 'guardian', onClick: onGuardianSelect, needsProject: true, badge: pendingReviews },
     { name: 'git', label: 'Git', view: 'git', onClick: onGitSelect, needsProject: true },
     { name: 'progress', label: 'Progression', view: 'progress', onClick: onProgressSelect },
@@ -230,7 +233,10 @@ export function Rail({
           >
             <RailIcon name={item.name} />
             {item.badge && item.badge > 0 ? (
-              <span className="rail-badge" aria-hidden="true" />
+              <span
+                className={`rail-badge ${item.name === 'fleet' ? 'is-live' : ''}`}
+                aria-hidden="true"
+              />
             ) : null}
           </button>
         ))}

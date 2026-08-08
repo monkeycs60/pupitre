@@ -174,7 +174,6 @@ export function Composer({
   const [isCancelling, setIsCancelling] = useState(false)
   const [isCreatingSessionSummary, setIsCreatingSessionSummary] = useState(false)
   const [isCreatingTestInventory, setIsCreatingTestInventory] = useState(false)
-  const [actionsOpen, setActionsOpen] = useState(false)
   const [configReady, setConfigReady] = useState(!isNewConversation)
   const [toast, setToast] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -385,7 +384,6 @@ export function Composer({
 
   async function handleSessionSummary() {
     if (conversationId === null || isCreatingSessionSummary || isRunning) return
-    setActionsOpen(false)
     setIsCreatingSessionSummary(true)
     setToast(null)
     try {
@@ -400,7 +398,6 @@ export function Composer({
 
   async function handleTestInventory() {
     if (conversationId === null || isCreatingTestInventory || isRunning) return
-    setActionsOpen(false)
     setIsCreatingTestInventory(true)
     setToast(null)
     try {
@@ -557,45 +554,36 @@ export function Composer({
                     <path d="M8 2.5 9.6 6l3.9.4-2.9 2.6.8 3.8L8 10.9 4.6 12.8l.8-3.8L2.5 6.4 6.4 6 8 2.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-                <div className="composer-action-menu">
-                  <button
-                    type="button"
-                    className="composer-icon-button"
-                    onClick={() => setActionsOpen((current) => !current)}
-                    aria-expanded={actionsOpen}
-                    aria-haspopup="menu"
-                    disabled={isRunning || isSubmitting}
-                    title={isCreatingTestInventory || isCreatingSessionSummary ? 'Action en cours…' : 'Tester · Résumé session'}
-                    aria-label="Actions"
-                  >
-                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 2v4L3 12.5A1 1 0 0 0 3.9 14h8.2a1 1 0 0 0 .9-1.5L10 6V2" />
-                        <path d="M5.5 2h5" />
-                      </g>
-                    </svg>
-                  </button>
-                  {actionsOpen ? (
-                    <div className="composer-action-list" role="menu">
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => void handleTestInventory()}
-                        disabled={isCreatingTestInventory || isCreatingSessionSummary}
-                      >
-                        {isCreatingTestInventory ? 'Inventaire en cours…' : 'Tester'}
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => void handleSessionSummary()}
-                        disabled={isCreatingTestInventory || isCreatingSessionSummary}
-                      >
-                        {isCreatingSessionSummary ? 'Résumé en cours…' : 'Résumé session'}
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
+                <button
+                  type="button"
+                  className="composer-icon-button"
+                  onClick={() => void handleTestInventory()}
+                  disabled={isRunning || isSubmitting || isCreatingTestInventory}
+                  title={isCreatingTestInventory ? 'Inventaire en cours…' : 'Tester : inventaire des vérifications'}
+                  aria-label="Tester"
+                >
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2v4L3 12.5A1 1 0 0 0 3.9 14h8.2a1 1 0 0 0 .9-1.5L10 6V2" />
+                      <path d="M5.5 2h5" />
+                    </g>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="composer-icon-button"
+                  onClick={() => void handleSessionSummary()}
+                  disabled={isRunning || isSubmitting || isCreatingSessionSummary}
+                  title={isCreatingSessionSummary ? 'Résumé en cours…' : 'Résumé de la session'}
+                  aria-label="Résumé de la session"
+                >
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 2.5h6l2 2V13.5H4Z" />
+                      <path d="M10 2.5V5h2M6 8h4M6 10.5h3" />
+                    </g>
+                  </svg>
+                </button>
               </>
             ) : null}
             {composerModel ? (
