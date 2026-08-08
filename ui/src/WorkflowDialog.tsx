@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import {
   createWorkflow,
@@ -20,6 +20,7 @@ import type {
 interface WorkflowDialogProps {
   project: Project
   workflows: Workflow[]
+  initialWorkflow?: Workflow | null
   onClose: () => void
   onChanged: (workflows: Workflow[]) => void
 }
@@ -155,6 +156,7 @@ function SkillCombobox({
 export function WorkflowDialog({
   project,
   workflows,
+  initialWorkflow = null,
   onClose,
   onChanged,
 }: WorkflowDialogProps) {
@@ -203,7 +205,7 @@ export function WorkflowDialog({
     setOrchestrator(true)
   }
 
-  function edit(workflow: Workflow) {
+  const edit = useCallback((workflow: Workflow) => {
     setEditingId(workflow.id)
     setName(workflow.name)
     setSkillId(workflow.skill_id ?? '')
@@ -216,7 +218,12 @@ export function WorkflowDialog({
     setEffort(workflow.effort ?? 'high')
     setSpeed(workflow.speed ?? 'standard')
     setOrchestrator(workflow.orchestrator)
-  }
+  }, [skills])
+
+  useEffect(() => {
+    if (initialWorkflow === null || skills.length === 0) return
+    edit(initialWorkflow)
+  }, [edit, initialWorkflow, skills.length])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

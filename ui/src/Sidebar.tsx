@@ -3,6 +3,7 @@ import {
   listProjectConversations,
   listProjectWorkflows,
   renameConversation,
+  runWorkflow,
   setConversationArchived,
   setConversationDeleted,
   setConversationPinned,
@@ -15,6 +16,7 @@ import type { GamificationPulse } from './useGamification'
 import { WorkflowDialog } from './WorkflowDialog'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { modelLabel } from './modelOptions'
+import { filterWorkflows, workflowSummary } from './workflowSidebar'
 
 declare global {
   interface Window {
@@ -62,6 +64,7 @@ function conversationRelation(
 }
 
 type ConversationScope = 'active' | 'archived' | 'trash'
+type SidebarTab = 'conversations' | 'workflows'
 
 function relativeConversationTime(value: string): string {
   const elapsed = Math.max(0, Date.now() - Date.parse(value))
@@ -136,10 +139,13 @@ export function Sidebar({
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [isSubmitting] = useState(false)
+  const [isRunningWorkflow, setIsRunningWorkflow] = useState<string | null>(null)
   const [showWorkflowDialog, setShowWorkflowDialog] = useState(false)
+  const [workflowToEdit, setWorkflowToEdit] = useState<Workflow | null>(null)
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('conversations')
   const [conversationScope, setConversationScope] = useState<ConversationScope>('active')
   const [filterText, setFilterText] = useState('')
+  const [workflowFilterText, setWorkflowFilterText] = useState('')
   const [openConversationMenu, setOpenConversationMenu] = useState<string | null>(null)
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
@@ -170,6 +176,14 @@ export function Sidebar({
       ignore = true
     }
   }, [selectedProject, conversationListVersion, conversationScope])
+
+  useEffect(() => {
+    setSidebarTab('conversations')
+    setFilterText('')
+    setWorkflowFilterText('')
+    setWorkflowToEdit(null)
+    setShowWorkflowDialog(false)
+  }, [selectedProject?.id])
 
   function handleProjectSettings(project: Project) {
     setProjectSettingsProject(project)
@@ -273,6 +287,26 @@ export function Sidebar({
     }
   }
 
+  function openWorkflowDialog(workflow: Workflow | null = null) {
+    setWorkflowToEdit(workflow)
+    setShowWorkflowDialog(true)
+  }
+
+  async function handleWorkflowRun(workflow: Workflow) {
+    if (isRunningWorkflow !== null) return
+    setError(null)
+    setIsRunningWorkflow(workflow.id)
+    try {
+      const conversation = await runWorkflow(workflow.id)
+      setSidebarTab('conversations')
+      onConversationSelect(conversation)
+    } catch (runError: unknown) {
+      setError(errorMessage(runError))
+    } finally {
+      setIsRunningWorkflow(null)
+    }
+  }
+
 
   return (
     <aside className="sidebar">
@@ -303,12 +337,34 @@ export function Sidebar({
         ) : null}
       </div>
 
-      <section className="sidebar-section conversations" aria-labelledby="conversations-title">
-        <div className="section-heading">
-          <h2 id="conversations-title">Conversations</h2>
-          <span className="conversation-count">{conversations.length}</span>
+      <section className="sidebar-section conversations" aria-label="Navigation du projet">
+        <div className="sidebar-tabs" role="tablist" aria-label="Contenu de la sidebar">
+          <button
+            id="sidebar-conversations-tab"
+            type="button"
+            role="tab"
+            aria-selected={sidebarTab === 'conversations'}
+            aria-controls="sidebar-conversations-panel"
+            className={sidebarTab === 'conversations' ? 'is-selected' : ''}
+            onClick={() => setSidebarTab('conversations')}
+          >
+            Conversations <span>{conversations.length}</span>
+          </button>
+          <button
+            id="sidebar-workflows-tab"
+            type="button"
+            role="tab"
+            aria-selected={sidebarTab === 'workflows'}
+            aria-controls="sidebar-workflows-panel"
+            className={sidebarTab === 'workflows' ? 'is-selected' : ''}
+            onClick={() => setSidebarTab('workflows')}
+          >
+            Workflows <span>{workflows.length}</span>
+          </button>
         </div>
 
+        {sidebarTab === 'conversations' ? (
+          <div id="sidebar-conversations-panel" role="tabpanel" aria-labelledby="sidebar-conversations-tab">
         {/* Deux libellés entiers ne tiennent pas à côté du titre dans la largeur
             de la sidebar : ils se tronquaient. Ils ont leur propre rangée. */}
         <div className="section-actions">
@@ -316,21 +372,11 @@ export function Sidebar({
             type="button"
             className="section-action section-action--primary"
             onClick={onConversationCreate}
-            disabled={selectedProject === null || isSubmitting}
+            disabled={selectedProject === null}
             title="Démarrer une nouvelle conversation dans ce projet"
           >
             <span aria-hidden="true">+</span>
             <span>Nouvelle conversation</span>
-          </button>
-          <button
-            type="button"
-            className="section-action"
-            onClick={() => setShowWorkflowDialog(true)}
-            disabled={selectedProject === null || isSubmitting}
-            title="Créer un workflow réutilisable pour ce projet"
-          >
-            <span aria-hidden="true">+</span>
-            <span>Workflow</span>
           </button>
         </div>
 
@@ -504,6 +550,68 @@ export function Sidebar({
             ))
           })()}
         </div>
+          </div>
+        ) : (
+          <div id="sidebar-workflows-panel" className="workflow-sidebar-panel" role="tabpanel" aria-labelledby="sidebar-workflows-tab">
+            <div className="section-actions">
+              <button
+                type="button"
+                className="section-action section-action--primary"
+                onClick={() => openWorkflowDialog()}
+                disabled={selectedProject === null}
+                title="Créer un workflow réutilisable pour ce projet"
+              >
+                <span aria-hidden="true">+</span>
+                <span>Nouveau workflow</span>
+              </button>
+            </div>
+
+            <div className="conversation-filter-input">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+                  <circle cx="7" cy="7" r="4.2" />
+                  <path d="m10.2 10.2 3 3" />
+                </g>
+              </svg>
+              <input
+                type="text"
+                value={workflowFilterText}
+                onChange={(event) => setWorkflowFilterText(event.target.value)}
+                placeholder={`Filtrer ${workflows.length} workflow${workflows.length > 1 ? 's' : ''}…`}
+                aria-label="Filtrer les workflows"
+              />
+            </div>
+
+            {selectedProject === null ? (
+              <p className="list-empty">Sélectionnez un projet</p>
+            ) : workflows.length === 0 ? (
+              <p className="list-empty">Aucun workflow. Créez un raccourci pour vos tâches répétitives.</p>
+            ) : (() => {
+              const filtered = filterWorkflows(workflows, workflowFilterText)
+              return filtered.length === 0 ? (
+                <p className="list-empty">Aucun workflow ne correspond</p>
+              ) : (
+                <div className="workflow-sidebar-list">
+                  {filtered.map((workflow) => (
+                    <article className="workflow-sidebar-row" key={workflow.id}>
+                      <div className="workflow-sidebar-copy">
+                        <strong>{workflow.name}</strong>
+                        <p title={workflowSummary(workflow)}>{workflowSummary(workflow)}</p>
+                        <span><code>${workflow.skill_invocation}</code> · {workflow.preset_id ? 'preset' : modelLabel(workflow.model)}</span>
+                      </div>
+                      <div className="workflow-sidebar-actions">
+                        <button type="button" onClick={() => void handleWorkflowRun(workflow)} disabled={isRunningWorkflow !== null}>
+                          {isRunningWorkflow === workflow.id ? 'Lancement…' : 'Lancer →'}
+                        </button>
+                        <button type="button" onClick={() => openWorkflowDialog(workflow)} aria-label={`Modifier ${workflow.name}`} title="Modifier ce workflow">✎</button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )
+            })()}
+          </div>
+        )}
       </section>
 
       {error && (
@@ -517,7 +625,11 @@ export function Sidebar({
           key={selectedProject.id}
           project={selectedProject}
           workflows={workflows}
-          onClose={() => setShowWorkflowDialog(false)}
+          initialWorkflow={workflowToEdit}
+          onClose={() => {
+            setShowWorkflowDialog(false)
+            setWorkflowToEdit(null)
+          }}
           onChanged={setWorkflows}
         />
       ) : null}
