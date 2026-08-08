@@ -318,17 +318,22 @@ export class DebriefRunner {
     generation: Omit<DebriefGenerationInput, "prompt">,
     summaries: string[],
   ): Promise<string> {
-    return this.generateSessionSummaryValidated({
-      ...generation,
-      prompt: [
-        "Fusionne les résumés de session suivants en un seul résumé très court.",
-        "Élimine les répétitions, conserve uniquement les changements concrets et n'invente aucun élément.",
-        "Retourne uniquement du Markdown avec les titres ## Implémenté et, seulement si nécessaire, ## À terminer.",
-        "Limite-toi à 8 puces au total.",
-        "",
-        summaries.join("\n\n---\n\n"),
-      ].join("\n"),
-    });
+    // Même discipline que consolidateDebriefs : une très longue session peut
+    // produire plus de partiels que la fenêtre du provider n'en accepte d'un
+    // coup — on consolide par paliers bornés au lieu d'un join intégral.
+    let current = summaries;
+    while (current.length > 1) {
+      const groups = groupTexts(current, MAX_CONSOLIDATION_SOURCE_CHARS);
+      const next: string[] = [];
+      for (const group of groups) {
+        next.push(await this.generateSessionSummaryValidated({
+          ...generation,
+          prompt: sessionSummaryConsolidationPrompt(group.join("\n\n---\n\n")),
+        }));
+      }
+      current = next;
+    }
+    return current[0]!;
   }
 
   private async consolidateDebriefs(
@@ -500,9 +505,36 @@ function validateDebrief(content: string): void {
 
 function validateSessionSummary(content: string): void {
   if (!content) throw new Error("résumé de session vide");
-  if (!content.includes("## Implémenté")) {
+  const lines = content.split("\n");
+  const headings = lines.map((line) => line.trim()).filter((line) => line.startsWith("#"));
+  if (!headings.includes("## Implémenté")) {
     throw new Error("résumé de session invalide : section manquante « Implémenté »");
   }
+  // Le prompt impose exactement ces deux titres : tout autre titre signale un
+  // résumé hors format qu'il ne faut pas épingler tel quel dans le fil.
+  for (const heading of headings) {
+    if (heading !== "## Implémenté" && heading !== "## À terminer") {
+      throw new Error(`résumé de session invalide : titre interdit « ${heading} »`);
+    }
+  }
+  const bullets = lines.filter((line) => /^\s*[-*] /.test(line));
+  if (bullets.length === 0) {
+    throw new Error("résumé de session invalide : aucune puce");
+  }
+  if (bullets.length > 8) {
+    throw new Error(`résumé de session invalide : ${bullets.length} puces (maximum 8)`);
+  }
+}
+
+function sessionSummaryConsolidationPrompt(content: string): string {
+  return [
+    "Fusionne les résumés de session suivants en un seul résumé très court.",
+    "Élimine les répétitions, conserve uniquement les changements concrets et n'invente aucun élément.",
+    "Retourne uniquement du Markdown avec les titres ## Implémenté et, seulement si nécessaire, ## À terminer.",
+    "Limite-toi à 8 puces au total.",
+    "",
+    content,
+  ].join("\n");
 }
 
 function consolidationPrompt(content: string, label: string): string {

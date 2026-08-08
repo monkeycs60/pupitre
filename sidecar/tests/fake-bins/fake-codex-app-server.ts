@@ -10,6 +10,8 @@
 // - FAKE_APP_SERVER_SLOW_MS=n  : délai avant la réponse à thread/start (test d'annulation au setup)
 // - FAKE_APP_SERVER_SLOW_TURN_MS=n : délai avant la réponse à turn/start
 // - FAKE_APP_SERVER_INIT_ERROR=1 : `initialize` répond une erreur JSON-RPC, process vivant
+// - FAKE_APP_SERVER_REJECT_CAPABILITIES=1 : simule un app-server ancien qui
+//   rejette `initialize` dès que `capabilities` est présent
 // - FAKE_APP_SERVER_CHILD_PID   : fichier où écrire le pid d'un enfant longue durée
 //   (simule un serveur MCP npx : il doit mourir avec l'app-server)
 import { spawn } from "node:child_process";
@@ -106,6 +108,13 @@ lines.on("line", (line) => {
     case "initialize":
       if (process.env.FAKE_APP_SERVER_INIT_ERROR === "1") {
         send({ jsonrpc: "2.0", id, error: { code: -32000, message: "handshake refusé" } });
+        return;
+      }
+      if (
+        process.env.FAKE_APP_SERVER_REJECT_CAPABILITIES === "1" &&
+        params?.capabilities !== undefined
+      ) {
+        send({ jsonrpc: "2.0", id, error: { code: -32602, message: "unknown field `capabilities`" } });
         return;
       }
       send({ jsonrpc: "2.0", id, result: { userAgent: "fake-codex-app-server/0.0.0" } });

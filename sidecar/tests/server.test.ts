@@ -233,9 +233,9 @@ cat "${fixture}"
     async (input) => input.prompt.includes("résumé de session")
       ? [
         "## Implémenté",
-        "Le résumé court est disponible [événement #1].",
+        "- Le résumé court est disponible [événement #1].",
         "## À terminer",
-        "Vérifier le parcours de passation.",
+        "- Vérifier le parcours de passation.",
       ].join("\n\n")
       : [
       "## Ce qui a été construit",

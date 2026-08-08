@@ -130,6 +130,8 @@ export class CodexAppServerClient {
   /** Tue le process courant ET fait son cleanup (cf. shutdown). */
   private killCurrent: (() => void) | null = null;
   private discoveredMcpNames: string[] | null = null;
+  /** Faux uniquement face à un app-server ancien qui a rejeté l'opt-in. */
+  private experimentalApi = true;
 
   constructor(private readonly mcpNames: McpNameProvider = discoverEnabledMcpNames) {}
 
@@ -362,13 +364,23 @@ export class CodexAppServerClient {
       onDead("codex app-server arrêté (shutdown)");
     };
 
+    const clientInfo = { name: "pupitre", title: "Pupitre", version: "0.1.0" };
+    this.experimentalApi = true;
     this.ready = this.request("initialize", {
-      clientInfo: { name: "pupitre", title: "Pupitre", version: "0.1.0" },
+      clientInfo,
       // `thread/start.runtimeWorkspaceRoots` est expérimental dans le
       // protocole app-server. Pupitre l'utilise pour borner les racines
       // accessibles au thread : il faut donc négocier explicitement l'API
       // expérimentale dès le handshake.
       capabilities: { experimentalApi: true },
+    }).catch((error) => {
+      // Un app-server plus ancien peut rejeter le champ `capabilities` tout
+      // entier : sans ce repli, toutes les conversations Codex deviendraient
+      // indisponibles. On retente nu, et openThread renonce alors aux champs
+      // expérimentaux (runtimeWorkspaceRoots) pour ne pas re-échouer plus loin.
+      if (this.proc !== child) throw error;
+      this.experimentalApi = false;
+      return this.request("initialize", { clientInfo }).then(() => undefined);
     }).then(() => {
       this.notify("initialized", {});
     });
@@ -397,7 +409,9 @@ export class CodexAppServerClient {
       // globales demandées par l'utilisateur. Les appels de review/debrief
       // passent explicitement `read-only` et ne suivent donc pas ce défaut.
       sandbox: opts.sandboxMode ?? (fullSystem ? "danger-full-access" : "workspace-write"),
-      ...(!fullSystem ? { runtimeWorkspaceRoots: [opts.cwd, ...aiRoots()] } : {}),
+      ...(!fullSystem && this.experimentalApi
+        ? { runtimeWorkspaceRoots: [opts.cwd, ...aiRoots()] }
+        : {}),
       // null est volontaire : un thread repris conserve sinon son tier `fast`.
       serviceTier: opts.speed === "fast" ? "fast" : null,
     };
@@ -637,11 +651,23 @@ export class CodexAppServerClient {
     }
     if (item.type === "commandExecution") {
       if (started) {
+        // Codex app-server ne passe pas ses éditions par une commande bash
+        // visible : il décrit chaque fichier touché dans `commandActions`
+        // ({ type, path, name }). On les remonte pour que l'UI affiche les
+        // chips de fichiers d'un tour Codex (les lectures y sont filtrées).
+        const actions = Array.isArray(item.commandActions)
+          ? item.commandActions.flatMap((raw: unknown) => {
+              const action = raw as Record<string, unknown> | undefined;
+              return action && typeof action.path === "string"
+                ? [{ type: String(action.type ?? ""), path: action.path }]
+                : [];
+            })
+          : [];
         ctx.emit({
           type: "tool-start",
           toolId: item.id,
           toolName: "shell",
-          input: { command: String(item.command ?? "") },
+          input: { command: String(item.command ?? ""), actions },
         });
       } else {
         ctx.emit({

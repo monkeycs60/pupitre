@@ -106,6 +106,73 @@ test("un résumé de session ne conserve que les changements concrets", async ()
   db.close();
 });
 
+test("un résumé au format non conforme est rejeté avant persistance", async () => {
+  const { db, projects, conversations, conversation } = setup();
+  conversations.appendEvent(conversation.id, {
+    type: "text-final",
+    text: "Changement concret.",
+  });
+  let generated = "## Implémenté\n- ok\n\n## Digression\n- hors format";
+  const runner = new DebriefRunner(
+    new DebriefStore(db),
+    conversations,
+    projects,
+    new QuotaTracker(db),
+    () => {},
+    async () => generated,
+  );
+
+  await expect(runner.generateSessionSummary(conversation.id)).rejects.toThrow(
+    "titre interdit",
+  );
+
+  generated = `## Implémenté\n${Array.from({ length: 9 }, (_, i) => `- puce ${i}`).join("\n")}`;
+  await expect(runner.generateSessionSummary(conversation.id)).rejects.toThrow(
+    "maximum 8",
+  );
+
+  // Rien ne doit avoir été persisté dans le fil.
+  expect(
+    conversations.listEvents(conversation.id).some((event) => event.type === "session-summary-ref"),
+  ).toBe(false);
+  db.close();
+});
+
+test("consolide les résumés partiels par paliers bornés", async () => {
+  const { db, projects, conversations, conversation } = setup();
+  for (let index = 0; index < 460; index += 1) {
+    conversations.appendEvent(conversation.id, {
+      type: "text-final",
+      text: `Événement long ${index} ${"x".repeat(7_900)}`,
+    });
+  }
+  const prompts: string[] = [];
+  const runner = new DebriefRunner(
+    new DebriefStore(db),
+    conversations,
+    projects,
+    new QuotaTracker(db),
+    () => {},
+    async (input) => {
+      prompts.push(input.prompt);
+      return `## Implémenté\n- ${"x".repeat(5_900)}`;
+    },
+  );
+
+  const summary = await runner.generateSessionSummary(conversation.id);
+
+  expect(summary.content_md).toContain("## Implémenté");
+  // Plusieurs partiels, puis une consolidation en plus d'un appel : par paliers.
+  expect(prompts.length).toBeGreaterThan(20);
+  const consolidations = prompts.filter((prompt) => prompt.includes("Fusionne les résumés"));
+  expect(consolidations.length).toBeGreaterThan(1);
+  // Aucun appel de consolidation ne doit dépasser la fenêtre bornée.
+  for (const prompt of consolidations) {
+    expect(prompt.length).toBeLessThan(110_000);
+  }
+  db.close();
+});
+
 test("la version suivante ne résume que les événements postérieurs au dernier débrief", async () => {
   const { db, projects, conversations, conversation } = setup();
   conversations.appendEvent(conversation.id, {

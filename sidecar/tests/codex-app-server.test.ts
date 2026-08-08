@@ -65,6 +65,7 @@ afterEach(() => {
   delete process.env.FAKE_APP_SERVER_SLOW_MS;
   delete process.env.FAKE_APP_SERVER_SLOW_TURN_MS;
   delete process.env.FAKE_APP_SERVER_INIT_ERROR;
+  delete process.env.FAKE_APP_SERVER_REJECT_CAPABILITIES;
   delete process.env.FAKE_APP_SERVER_CHILD_PID;
   delete process.env.PUPITRE_APPSERVER_TIMEOUT_MS;
   delete process.env.PUPITRE_APPSERVER_IDLE_MS;
@@ -92,6 +93,24 @@ test("négocie l'API expérimentale pour les champs app-server utilisés par Pup
 
   const initialize = sentRequests(files.log).find((request) => request.method === "initialize");
   expect(initialize?.params.capabilities).toEqual({ experimentalApi: true });
+});
+
+test("app-server ancien : retente initialize sans capabilities et omet les champs expérimentaux", async () => {
+  const files = useFake();
+  process.env.FAKE_APP_SERVER_REJECT_CAPABILITIES = "1";
+
+  const events = await collect(newClient());
+  expect(events.at(-1)).toEqual({ type: "status", state: "done" });
+
+  const inits = sentRequests(files.log).filter((request) => request.method === "initialize");
+  expect(inits).toHaveLength(2);
+  expect(inits[0]?.params.capabilities).toEqual({ experimentalApi: true });
+  expect(inits[1]?.params.capabilities).toBeUndefined();
+
+  // `runtimeWorkspaceRoots` est expérimental : sans l'opt-in, l'envoyer ferait
+  // rejeter thread/start par le même app-server ancien.
+  const start = sentRequests(files.log).find((request) => request.method === "thread/start")!;
+  expect(start.params.runtimeWorkspaceRoots).toBeUndefined();
 });
 
 test("l'ancien opt-in conserve la configuration utilisateur sans borne", async () => {
