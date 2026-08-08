@@ -151,16 +151,40 @@ export function parseApplyPatch(command: string): Array<{ path: string; added: n
   return Array.from(totals, ([path, delta]) => ({ path, ...delta }))
 }
 
-/** Codex édite via `shell` + heredoc `apply_patch` plutôt que via Edit/Write. */
+/** Types d'action `commandExecution` de Codex qui ne modifient pas le fichier :
+ *  ils ne doivent pas produire de chip d'édition. */
+const READ_ONLY_CODEX_ACTIONS = new Set(['read', 'list', 'search'])
+
+/** Fichiers édités par un outil `shell`.
+ *  Deux sources réelles, sans rien inventer :
+ *  1. un `apply_patch` en heredoc dans la commande bash (chemins + deltas exacts) ;
+ *  2. les `commandActions` structurées de Codex app-server (type + path), dont on
+ *     retient tout ce qui n'est pas une lecture — sans compte de lignes fiable. */
 function shellApplyPatchEdits(
   toolName: string,
   input: unknown,
 ): Array<{ path: string; added: number; removed: number }> {
   if (toolName !== 'shell') return []
   if (input === null || typeof input !== 'object') return []
-  const command = (input as Record<string, unknown>).command
-  if (typeof command !== 'string') return []
-  return parseApplyPatch(command)
+  const record = input as Record<string, unknown>
+  const edits: Array<{ path: string; added: number; removed: number }> = []
+
+  if (typeof record.command === 'string') {
+    edits.push(...parseApplyPatch(record.command))
+  }
+
+  if (Array.isArray(record.actions)) {
+    for (const raw of record.actions) {
+      if (raw === null || typeof raw !== 'object') continue
+      const action = raw as Record<string, unknown>
+      const path = action.path
+      const type = typeof action.type === 'string' ? action.type : ''
+      if (typeof path !== 'string' || READ_ONLY_CODEX_ACTIONS.has(type)) continue
+      edits.push({ path, added: 0, removed: 0 })
+    }
+  }
+
+  return edits
 }
 
 export function guardianAckCount(events: ReadonlyArray<AppEvent>): number {
