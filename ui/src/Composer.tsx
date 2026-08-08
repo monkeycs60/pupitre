@@ -19,9 +19,8 @@ import {
 import { buildCreateConversationInput } from './conversationDraft'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import type { Attachment, Conversation, Project, QuotaSnapshot } from './types'
-import { PROVIDER_MODELS } from './modelOptions'
+import { PROVIDER_MODELS, modelLabel } from './modelOptions'
 import { mediaUrl } from './transport'
-import { HelpLink } from './HelpLink'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 
 interface ComposerProps {
@@ -34,6 +33,10 @@ interface ComposerProps {
   message: string
   onMessageChange: (message: string) => void
   focusRequest: number
+  /** Libellé provider · modèle · effort de la conversation ouverte (en-tête du
+   *  composer, comme la maquette). Null pour une nouvelle conversation : dérivé
+   *  de la config choisie. */
+  providerLabel?: string | null
 }
 
 interface UploadedAttachment {
@@ -151,6 +154,7 @@ export function Composer({
   message,
   onMessageChange,
   focusRequest,
+  providerLabel = null,
 }: ComposerProps) {
   const isNewConversation = conversationId === null
   const [config, setConfig] = useState<ConversationConfig>({
@@ -409,6 +413,11 @@ export function Composer({
     }
   }
 
+  const composerModel = providerLabel
+    ?? (isNewConversation
+      ? `${config.provider} · ${modelLabel(config.model)} · ${config.effort ?? 'default'}`
+      : null)
+
   return (
     <div className="composer-area">
       {toast !== null ? (
@@ -484,18 +493,26 @@ export function Composer({
           </div>
         ) : null}
 
-        <textarea
-          key={`composer-message-${focusRequest}`}
-          value={message}
-          onChange={(event) => onMessageChange(event.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={(event) => void handlePaste(event)}
-          placeholder={isRunning ? 'tour en cours…' : 'Écrivez un message…'}
-          aria-label="Message"
-          rows={3}
-          disabled={isRunning}
-          autoFocus={isNewConversation || focusRequest > 0}
-        />
+        <div className="composer-input-wrap">
+          <textarea
+            key={`composer-message-${focusRequest}`}
+            value={message}
+            onChange={(event) => onMessageChange(event.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={(event) => void handlePaste(event)}
+            placeholder={isRunning ? 'tour en cours…' : ''}
+            aria-label="Message"
+            rows={3}
+            disabled={isRunning}
+            autoFocus={isNewConversation || focusRequest > 0}
+          />
+          {message === '' && !isRunning ? (
+            <div className="composer-placeholder" aria-hidden="true">
+              Écris ton message, ou <span className="composer-ph-key">/</span> pour une action,{' '}
+              <span className="composer-ph-key">$</span> pour un skill
+            </div>
+          ) : null}
+        </div>
 
         {isDragActive ? (
           <div className="composer-drop-hint" aria-live="polite">
@@ -504,8 +521,7 @@ export function Composer({
         ) : null}
 
         <div className="composer-actions">
-          <span>Collez ou déposez un fichier · Entrée pour envoyer · Shift+Entrée pour une nouvelle ligne · <HelpLink slug="tester" label="Tester ?" /></span>
-          <div>
+          <div className="composer-tools">
             <input
               ref={fileInputRef}
               className="composer-file-input"
@@ -517,48 +533,79 @@ export function Composer({
             />
             <button
               type="button"
-              className="attach-button"
+              className="composer-icon-button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isRunning || pendingUploads > 0 || isSubmitting}
               title="Joindre une ou plusieurs pièces jointes"
+              aria-label="Joindre"
             >
-              Joindre
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M9.5 4 5 8.5a2.1 2.1 0 0 0 3 3l4.5-4.5a3.5 3.5 0 0 0-5-5L3 6.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
             {!isNewConversation ? (
-              <div className="composer-action-menu">
+              <>
                 <button
                   type="button"
-                  className="composer-action-trigger"
-                  onClick={() => setActionsOpen((current) => !current)}
-                  aria-expanded={actionsOpen}
-                  aria-haspopup="menu"
+                  className="composer-icon-button"
+                  onClick={() => onMessageChange(message.length > 0 ? `${message} $` : '$')}
                   disabled={isRunning || isSubmitting}
+                  title="Insérer un skill ($)"
+                  aria-label="Insérer un skill"
                 >
-                  {isCreatingTestInventory || isCreatingSessionSummary ? 'Action…' : 'Actions'}
-                  <span aria-hidden="true">⌄</span>
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M8 2.5 9.6 6l3.9.4-2.9 2.6.8 3.8L8 10.9 4.6 12.8l.8-3.8L2.5 6.4 6.4 6 8 2.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </button>
-                {actionsOpen ? (
-                  <div className="composer-action-list" role="menu">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => void handleTestInventory()}
-                      disabled={isCreatingTestInventory || isCreatingSessionSummary}
-                    >
-                      {isCreatingTestInventory ? 'Inventaire en cours…' : 'Tester'}
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => void handleSessionSummary()}
-                      disabled={isCreatingTestInventory || isCreatingSessionSummary}
-                    >
-                      {isCreatingSessionSummary ? 'Résumé en cours…' : 'Résumé session'}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+                <div className="composer-action-menu">
+                  <button
+                    type="button"
+                    className="composer-icon-button"
+                    onClick={() => setActionsOpen((current) => !current)}
+                    aria-expanded={actionsOpen}
+                    aria-haspopup="menu"
+                    disabled={isRunning || isSubmitting}
+                    title={isCreatingTestInventory || isCreatingSessionSummary ? 'Action en cours…' : 'Tester · Résumé session'}
+                    aria-label="Actions"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 2v4L3 12.5A1 1 0 0 0 3.9 14h8.2a1 1 0 0 0 .9-1.5L10 6V2" />
+                        <path d="M5.5 2h5" />
+                      </g>
+                    </svg>
+                  </button>
+                  {actionsOpen ? (
+                    <div className="composer-action-list" role="menu">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => void handleTestInventory()}
+                        disabled={isCreatingTestInventory || isCreatingSessionSummary}
+                      >
+                        {isCreatingTestInventory ? 'Inventaire en cours…' : 'Tester'}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => void handleSessionSummary()}
+                        disabled={isCreatingTestInventory || isCreatingSessionSummary}
+                      >
+                        {isCreatingSessionSummary ? 'Résumé en cours…' : 'Résumé session'}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </>
             ) : null}
+            {composerModel ? (
+              <>
+                <span className="composer-tools-divider" aria-hidden="true" />
+                <span className="composer-model">{composerModel}</span>
+              </>
+            ) : null}
+          </div>
+          <div className="composer-send-group">
             {isRunning && conversationId !== null ? (
               <button
                 type="button"
@@ -566,7 +613,7 @@ export function Composer({
                 onClick={() => void handleCancel()}
                 disabled={isCancelling}
               >
-                {isCancelling ? 'Annulation…' : 'Annuler'}
+                {isCancelling ? 'Annulation…' : 'Annuler le tour'}
               </button>
             ) : null}
             <button type="submit" className="send-button" disabled={!canSubmit}>
@@ -575,6 +622,7 @@ export function Composer({
                   ? 'Création…'
                   : 'Envoi…'
                 : 'Envoyer'}
+              {!isSubmitting ? <kbd aria-hidden="true">⏎</kbd> : null}
             </button>
           </div>
         </div>

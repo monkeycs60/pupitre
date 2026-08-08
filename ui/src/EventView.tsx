@@ -112,7 +112,7 @@ function TurnFooter({ block }: { block: Extract<EventBlock, { kind: 'turn-footer
           {block.status?.error ?? 'Une erreur est survenue.'}
         </div>
       ) : null}
-      <div className="turn-meta">
+      <div className={`turn-meta${isDone ? ' turn-meta-done' : ''}`}>
         {isRunning ? (
           <span className="running-indicator" role="status">
             <span aria-hidden="true">●</span> en cours

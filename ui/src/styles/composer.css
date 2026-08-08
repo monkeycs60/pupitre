@@ -773,26 +773,89 @@
   font-style: italic;
 }
 
+/* Faux placeholder stylé (/ et $ en accent), comme la maquette. */
+.composer-input-wrap {
+  position: relative;
+}
+
+.composer-placeholder {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-3);
+  right: var(--space-3);
+  color: var(--text-faint);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  pointer-events: none;
+}
+
+.composer-ph-key {
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
 /* --- Barre d'actions --------------------------------------------------------- */
 
 .composer-actions {
   display: flex;
-  min-height: 40px;
+  min-height: 44px;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
-  border-top: 1px solid var(--border-subtle);
+  padding: 8px 10px 10px 12px;
 }
 
-.composer-actions > span {
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-
-.composer-actions > div {
+.composer-tools {
   display: flex;
+  align-items: center;
   gap: var(--space-1);
+  min-width: 0;
+}
+
+.composer-tools-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 var(--space-1);
+  background: var(--border-subtle);
+}
+
+.composer-model {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-send-group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.composer-icon-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.composer-icon-button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.composer-icon-button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .composer-action-menu {
@@ -822,9 +885,21 @@
 }
 
 .send-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 14px;
   color: var(--on-accent);
+  font-weight: 600;
   background: var(--accent);
   border: 1px solid transparent;
+}
+
+.send-button kbd {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  opacity: 0.6;
 }
 
 .send-button:hover:not(:disabled) {
@@ -846,9 +921,11 @@
 }
 
 .cancel-button {
+  min-height: 30px;
+  padding: 0 12px;
   color: var(--danger);
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(242, 85, 90, 0.32);
 }
 
 .cancel-button:hover:not(:disabled) {

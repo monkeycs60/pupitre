@@ -12,6 +12,7 @@ import { groupEvents } from './groupEvents'
 import { retryCountdownSeconds } from './backoff'
 import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
+import { modelLabel } from './modelOptions'
 import type {
   AppEvent,
   Conversation,
@@ -305,6 +306,9 @@ export function Chat({
             message={message}
             onMessageChange={setMessage}
             focusRequest={focusRequest}
+            providerLabel={conversation
+              ? `${conversation.provider} · ${modelLabel(conversation.model)} · ${conversation.effort ?? 'default'}${conversation.speed === 'fast' ? ' · rapide' : ''}`
+              : null}
           />
         </div>
         <SkillsSuggestionsPanel

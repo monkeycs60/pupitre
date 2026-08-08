@@ -93,6 +93,8 @@ function App() {
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
   const [reviewListVersion, setReviewListVersion] = useState(0)
   const [gardienPollVersion, setGardienPollVersion] = useState(0)
+  /** Nombre d'alertes Gardien ouvertes du projet, pour la pastille du rail. */
+  const [gardienOpenCount, setGardienOpenCount] = useState(0)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
   // conversation ouverte — la sidebar n'en affiche l'indicateur que pour elle.
@@ -246,6 +248,7 @@ function App() {
   }
 
   useEffect(() => {
+    setGardienOpenCount(0)
     if (!selectedProject?.id) return
     const projectId: string = selectedProject.id
     let disposed = false
@@ -266,6 +269,7 @@ function App() {
           setGardienPollVersion((current) => current + 1)
         }
         previousSignature = signature
+        setGardienOpenCount(status.openFlagCount ?? status.pendingReviewCount ?? 0)
       } catch {
         // Les vues Gardien et Sidebar conservent leur propre affichage d'erreur.
       } finally {
@@ -535,6 +539,7 @@ function App() {
         onHelpSelect={() => handleHelpSelect()}
         onProgressSelect={handleProgressSelect}
         onSettingsSelect={handleSettingsSelect}
+        pendingReviews={gardienOpenCount}
       />
       {showSidebar ? (
       <>

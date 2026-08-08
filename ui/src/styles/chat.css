@@ -17,8 +17,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  width: min(100%, 840px);
-  padding: var(--space-2) var(--space-7) 0;
+  width: min(100%, 760px);
+  padding: var(--space-2) var(--space-6) 0;
   margin: 0 auto;
 }
 
@@ -74,9 +74,9 @@
 }
 
 .events-list {
-  width: min(100%, 840px);
+  width: min(100%, 760px);
   min-height: 100%;
-  padding: var(--space-6) var(--space-7) var(--space-8);
+  padding: var(--space-6) var(--space-6) var(--space-8);
   margin: 0 auto;
 }
 
@@ -91,7 +91,7 @@
 
 .message-row {
   display: flex;
-  margin: 0 0 var(--space-4);
+  margin: 0 0 var(--space-6);
   /* Le navigateur saute la mise en page et la peinture des messages hors
      écran. `contain-intrinsic-size` leur réserve une hauteur estimée, sinon
      la barre de défilement sauterait à chaque message qui entre dans le
@@ -112,23 +112,25 @@
 .message-bubble {
   min-width: 0;
   font-size: var(--text-md);
-  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
 .user-message {
-  max-width: min(76%, 560px);
-  padding: var(--space-2) var(--space-3);
+  max-width: 82%;
+  padding: var(--space-3) var(--space-4);
   color: var(--text-strong);
   white-space: pre-wrap;
+  line-height: 1.62;
   background: var(--bg-raised);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--r-md);
+  /* Coin cassé côté message : signature visuelle des bulles utilisateur. */
+  border-radius: 12px 12px 4px 12px;
 }
 
 .assistant-message {
   width: 100%;
   color: var(--text);
+  line-height: 1.68;
 }
 
 .assistant-message > :first-child {
@@ -737,6 +739,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Tour terminé : liseré et fond verts, comme une notification résolue. */
+.turn-meta-done {
+  justify-content: flex-start;
+  padding: var(--space-2) var(--space-3);
+  background: var(--ok-soft);
+  border-left: 2px solid var(--ok);
+  border-radius: 0 7px 7px 0;
+}
+
 .running-indicator {
   color: var(--accent);
 }
@@ -754,6 +765,7 @@
 
 .done-indicator {
   color: var(--ok);
+  font-weight: 600;
 }
 
 .turn-timing {
