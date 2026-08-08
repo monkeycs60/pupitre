@@ -90,6 +90,27 @@
   font-size: var(--text-base);
 }
 
+.git-error { margin: var(--space-3) var(--space-5); padding: var(--space-2); color: var(--danger); background: var(--danger-soft); border: 1px solid var(--border); border-radius: var(--r-sm); }
+
+.git-review-actions { display: flex; align-items: center; gap: var(--space-2); }
+.git-review-settings { position: relative; }
+.git-review-settings summary { min-width: 32px; min-height: 32px; padding: var(--space-1); color: var(--text-muted); cursor: pointer; }
+.git-review-settings > div { position: absolute; right: 0; z-index: 4; display: grid; gap: var(--space-2); width: 240px; margin: var(--space-1) 0 0; padding: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--r-sm); box-shadow: var(--shadow-popover); }
+.git-review-settings label { display: grid; gap: var(--space-1); }.git-review-settings label:has(input) { display: flex; align-items: center; }
+
+.git-overlay-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 280px; margin: var(--space-5) auto; width: min(100% - 48px, 1200px); border: 1px solid var(--border-subtle); background: var(--bg-raised); }
+.git-file-tree { overflow: auto; background: var(--bg-panel); border-right: 1px solid var(--border-subtle); }
+.git-file-tree button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; align-items: center; gap: var(--space-1); width: 100%; min-height: 30px; padding: var(--space-1) var(--space-2); color: var(--text-muted); text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--border-subtle); cursor: pointer; }
+.git-file-tree button:hover, .git-file-tree button.is-selected { color: var(--text); background: var(--bg-active); }
+.git-file-tree button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-file-tree small, .git-file-tree em, .git-file-tree strong { font-family: var(--font-mono); font-size: var(--text-xs); font-style: normal; font-variant-numeric: tabular-nums; }
+.git-file-tree .risk-red { color: var(--danger); }.git-file-tree .risk-orange { color: var(--warn); }.git-file-tree .risk-grey { color: var(--text-faint); }
+.git-overlay-diff { min-width: 0; overflow: auto; background: var(--bg-input); }
+.git-review-toolbar { display: flex; align-items: center; gap: var(--space-3); min-height: 40px; padding: var(--space-1) var(--space-3); color: var(--text-muted); font-size: var(--text-sm); background: var(--bg-raised); border-bottom: 1px solid var(--border-subtle); }
+.git-review-toolbar > button:last-child { margin-left: auto; }.git-review-toolbar > button.is-active { color: var(--text); background: var(--bg-active); border-color: var(--border-strong); }
+
+@media (max-width: 760px) { .git-overlay-layout { grid-template-columns: 1fr; width: 100%; margin: 0; } .git-file-tree { max-height: 160px; border-right: 0; border-bottom: 1px solid var(--border-subtle); } }
+
 /* --- Bandeau branches / worktrees ---------------------------------------- */
 
 .git-ref-strip {

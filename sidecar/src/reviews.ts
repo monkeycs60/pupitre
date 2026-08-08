@@ -1,4 +1,5 @@
 import type { AppEvent, Provider } from "./events";
+import { createHash } from "node:crypto";
 import { runClaudeTurn } from "./adapters/claude";
 import { runCodexTurn } from "./adapters/codex";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
@@ -9,7 +10,6 @@ import { defaultReviewConfig } from "./stores/presets";
 import type {
   CounterVerdict,
   Review,
-  ReviewDecisionInput,
   ReviewFlag,
   ReviewFlagInput,
   ReviewSeverity,
@@ -47,6 +47,8 @@ export interface StartReviewInput {
   model: string;
   effort: string;
   codeProvider?: Provider;
+  scope?: string;
+  incremental?: boolean;
 }
 
 export interface CounterOpinionConfig {
@@ -63,6 +65,15 @@ export interface CounterOpinionDefaults {
 
 type CounterSubtasks = Pick<SubtaskRunner, "start" | "waitResult">;
 
+export interface ReviewProgress {
+  reviewId: string;
+  projectId: string;
+  zoneDone: number;
+  zoneTotal: number;
+}
+
+type ReviewStatusListener = () => void;
+
 interface CapturedDiff {
   base: string;
   head: string;
@@ -70,10 +81,14 @@ interface CapturedDiff {
 }
 
 class ReviewOutputError extends Error {}
+export class DispatchConflictError extends Error {}
 
 export class ReviewRunner {
   private active = new Map<string, Promise<void>>();
   private activeCounters = new Map<string, Promise<void>>();
+  private activeDispatches = new Map<string, Promise<void>>();
+  private progress = new Map<string, ReviewProgress>();
+  private statusListeners = new Set<ReviewStatusListener>();
   private scanner: ReviewScanner;
 
   constructor(
@@ -94,19 +109,44 @@ export class ReviewRunner {
     if (!conversation || conversation.project_id !== project.id) {
       throw new Error("conversation inconnue pour ce projet");
     }
+    const scope = input.scope ?? "worktree";
+    const parent = input.incremental ? this.store.latestDone(input.projectId, scope) : null;
     const review = this.store.create({
       ...input,
       codeProvider: input.codeProvider ?? conversation.provider,
+      scope,
+      parentReviewId: parent?.id ?? null,
     });
-    const run = this.execute(review.id, project.path, input)
+    this.progress.set(review.id, { reviewId: review.id, projectId: project.id, zoneDone: 0, zoneTotal: 0 });
+    const run = this.execute(review.id, project.path, { ...input, scope, parentReviewId: parent?.id ?? null })
       .catch((error) => {
         this.store.fail(review.id, errorMessage(error));
+        this.progress.delete(review.id);
+        this.notifyStatus();
       })
       .finally(() => {
         this.active.delete(review.id);
       });
     this.active.set(review.id, run);
+    this.notifyStatus();
     return review;
+  }
+
+  subscribeStatus(listener: ReviewStatusListener): () => void {
+    this.statusListeners.add(listener);
+    return () => this.statusListeners.delete(listener);
+  }
+
+  reviewStatus(projectId: string): {
+    openBySeverity: Record<ReviewSeverity, number>;
+    running: { reviewId: string; zoneDone: number; zoneTotal: number } | null;
+  } | null {
+    if (!this.projects.get(projectId)) return null;
+    const snapshot = this.store.reviewStatus(projectId);
+    const running = [...this.progress.values()].find((item) => item.projectId === projectId) ?? null;
+    return { ...snapshot, running: running && {
+      reviewId: running.reviewId, zoneDone: running.zoneDone, zoneTotal: running.zoneTotal,
+    } };
   }
 
   get(id: string): Review | null {
@@ -121,8 +161,10 @@ export class ReviewRunner {
     return this.store.getFlag(id);
   }
 
-  setFlagStatus(id: string, status: "open" | "acked" | "dismissed") {
-    return this.store.setFlagStatus(id, status);
+  setFlagStatus(id: string, status: "open" | "agent_running" | "treated" | "ignored" | "resolved") {
+    const flag = this.store.setFlagStatus(id, status);
+    if (flag) this.notifyStatus();
+    return flag;
   }
 
   setFlagCodeProvider(id: string, provider: Provider) {
@@ -131,19 +173,67 @@ export class ReviewRunner {
 
   updateFlag(
     id: string,
-    input: { status?: "open" | "acked" | "dismissed"; codeProvider?: Provider },
+    input: {
+      status?: "open" | "agent_running" | "treated" | "ignored" | "resolved";
+      codeProvider?: Provider;
+      hunkHash?: string | null;
+      subtaskId?: string | null;
+      userMessage?: string | null;
+    },
   ) {
-    return this.store.updateFlag(id, input);
+    const flag = this.store.updateFlag(id, input);
+    if (flag) this.notifyStatus();
+    return flag;
   }
 
-  setDecisionStatus(id: string, status: "acked" | "dismissed") {
-    return this.store.setDecisionStatus(id, status);
+  dispatchFlag(id: string, message?: string): { subtaskId: string } {
+    if (!this.subtasks) throw new Error("moteur de sous-tâches indisponible");
+    const flag = this.store.getFlag(id);
+    if (!flag) throw new Error("flag inconnu");
+    if (flag.status !== "open" && flag.status !== "countered") {
+      throw new DispatchConflictError("ce flag ne peut pas être dispatché dans son état actuel");
+    }
+    const review = this.store.get(flag.review_id);
+    if (!review) throw new Error("review inconnue");
+    const conversationId = this.store.linkedConversationId(review.project_id, review.diff_text)
+      ?? review.conversation_id;
+    const userMessage = message?.trim() || undefined;
+    const run = this.executeDispatch(review, flag, conversationId, userMessage)
+      .catch(() => {})
+      .finally(() => this.activeDispatches.delete(id));
+    // executeDispatch starts synchronously until its first await (the subtask is
+    // created before waiting), so retrieve its persisted id immediately.
+    const started = this.store.getFlag(id);
+    if (!started?.subtask_id) throw new Error("échec du lancement de la sous-tâche");
+    this.activeDispatches.set(id, run);
+    return { subtaskId: started.subtask_id };
   }
 
-  gardienStatus(projectId: string) {
-    const project = this.projects.get(projectId);
-    if (!project) return null;
-    return this.store.gardienStatus(projectId, project.gardien_mode);
+  dispatchAll(reviewId: string, severities: ReviewSeverity[] = ["red", "orange"]): number {
+    const review = this.store.get(reviewId);
+    if (!review) throw new Error("review inconnu");
+    const flags = review.flags.filter((flag) =>
+      severities.includes(flag.severity) && (flag.status === "open" || flag.status === "countered"),
+    );
+    const targetConversation = this.store.linkedConversationId(review.project_id, review.diff_text)
+      ?? review.conversation_id;
+    void (async () => {
+      for (let index = 0; index < flags.length; index += MAX_CONCURRENT_SUBTASKS) {
+        const chunk = flags.slice(index, index + MAX_CONCURRENT_SUBTASKS);
+        await Promise.all(chunk.map(async (flag) => {
+          const run = this.executeDispatch(review, flag, targetConversation, undefined)
+            .catch(() => {})
+            .finally(() => this.activeDispatches.delete(flag.id));
+          this.activeDispatches.set(flag.id, run);
+          await run;
+        }));
+      }
+    })();
+    return flags.length;
+  }
+
+  private notifyStatus(): void {
+    for (const listener of this.statusListeners) listener();
   }
 
   counterDefaults(flagId: string): CounterOpinionDefaults | null {
@@ -209,18 +299,47 @@ export class ReviewRunner {
     return this.store.get(id);
   }
 
-  private async execute(id: string, cwd: string, input: StartReviewInput): Promise<void> {
+  private async execute(
+    id: string,
+    cwd: string,
+    input: StartReviewInput & { parentReviewId?: string | null },
+  ): Promise<void> {
     const maxBytes = positiveEnv("PUPITRE_REVIEW_DIFF_MAX_BYTES", DEFAULT_DIFF_MAX_BYTES);
     const { base, head, diff } = input.gitRefHead === WORKTREE_HEAD_REF
       ? await this.captureWorktree(cwd, input, maxBytes)
       : await this.captureRange(cwd, input, maxBytes);
     this.store.setDiff(id, base, head, diff);
+    const parent = input.parentReviewId ? this.store.get(input.parentReviewId) : null;
+    const unchanged = parent?.flags.filter((flag) =>
+      flag.hunk_hash !== null && flag.hunk_hash === hunkHashFor(diff, flag.file, flag.line_start),
+    ) ?? [];
+    if (unchanged.length > 0) this.store.copyFlags(id, unchanged);
+    const resolved = parent?.flags.filter((flag) =>
+      flag.subtask_id !== null
+      && flag.hunk_hash !== null
+      && flag.hunk_hash !== hunkHashFor(diff, flag.file, flag.line_start),
+    ) ?? [];
     if (diff.trim() === "") {
       this.store.complete(id, []);
+      this.store.copyFlags(id, resolved);
+      this.markResolved(id, resolved);
+      this.progress.delete(id);
+      this.notifyStatus();
+      return;
+    }
+    const scanDiff = filterUnchangedHunks(diff, unchanged);
+    if (scanDiff.trim() === "") {
+      this.store.complete(id, []);
+      this.store.copyFlags(id, resolved);
+      this.markResolved(id, resolved);
+      this.progress.delete(id);
+      this.notifyStatus();
       return;
     }
 
-    const zones = splitDiffIntoZones(diff);
+    const zones = splitDiffIntoZones(scanDiff);
+    this.progress.set(id, { reviewId: id, projectId: input.projectId, zoneDone: 0, zoneTotal: zones.length });
+    this.notifyStatus();
     const flags: ReviewFlagInput[] = [];
     for (const [index, zone] of zones.entries()) {
       const prompt = reviewPrompt(zone, index + 1, zones.length);
@@ -231,16 +350,81 @@ export class ReviewRunner {
         effort: input.effort,
         prompt,
       }, zone));
+      const current = this.progress.get(id);
+      if (current) {
+        current.zoneDone = index + 1;
+        this.notifyStatus();
+      }
     }
     const uniqueFlags = deduplicateFlags(flags);
-    const decisions = await this.extractDecisions(cwd, input, uniqueFlags);
-    this.store.complete(id, uniqueFlags, decisions);
+    this.store.complete(id, uniqueFlags.map((flag) => ({
+      ...flag,
+      hunk_hash: hunkHashFor(diff, flag.file, flag.line_start),
+    })));
+    const rescannedHunks = new Set(uniqueFlags.map((flag) => hunkHashFor(diff, flag.file, flag.line_start)));
+    const resolvedWithoutResignal = resolved.filter((flag) =>
+      !rescannedHunks.has(hunkHashFor(diff, flag.file, flag.line_start)),
+    );
+    this.store.copyFlags(id, resolvedWithoutResignal);
+    this.markResolved(id, resolvedWithoutResignal);
     const project = this.projects.get(input.projectId);
     if (project?.auto_counter_red && this.subtasks) {
       const redIds = this.store.get(id)?.flags
         .filter((flag) => flag.severity === "red")
         .map((flag) => flag.id) ?? [];
       if (redIds.length > 0) this.startCounterOpinions(redIds);
+    }
+    this.progress.delete(id);
+    this.notifyStatus();
+  }
+
+  private async executeDispatch(
+    review: Review,
+    flag: ReviewFlag,
+    conversationId: string,
+    userMessage: string | undefined,
+  ): Promise<void> {
+    try {
+      let subtask;
+      for (;;) {
+        try {
+          subtask = this.subtasks!.start({
+            conversationId,
+            provider: flag.code_provider,
+            model: review.review_model,
+            effort: review.review_effort,
+            prompt: dispatchPrompt(flag, counterContext(review.diff_text, flag), userMessage),
+            label: `Gardien · ${flag.file}:${flag.line_start}`,
+            readOnly: false,
+          });
+          break;
+        } catch (error) {
+          if (!(error instanceof SubtaskLimitError)) throw error;
+          await Bun.sleep(100);
+        }
+      }
+      this.store.updateFlag(flag.id, {
+        status: "agent_running", subtaskId: subtask.id, userMessage: userMessage ?? null,
+      });
+      this.notifyStatus();
+      const result = await this.subtasks!.waitResult(subtask.id);
+      if (!result || result.status !== "done") {
+        this.store.updateFlag(flag.id, { status: "open" });
+        this.notifyStatus();
+      }
+    } catch (error) {
+      this.store.updateFlag(flag.id, { status: "open" });
+      this.notifyStatus();
+      throw error;
+    }
+  }
+
+  private markResolved(reviewId: string, flags: ReviewFlag[]): void {
+    for (const flag of flags) {
+      const copied = this.store.get(reviewId)?.flags.find((candidate) =>
+        candidate.file === flag.file && candidate.line_start === flag.line_start && candidate.message === flag.message,
+      );
+      if (copied) this.store.setFlagStatus(copied.id, "resolved");
     }
   }
 
@@ -370,31 +554,6 @@ export class ReviewRunner {
     }
   }
 
-  private async extractDecisions(
-    cwd: string,
-    input: StartReviewInput,
-    flags: ReviewFlagInput[],
-  ): Promise<ReviewDecisionInput[] | undefined> {
-    if (flags.length <= 4) return undefined;
-    const scanInput: ReviewScanInput = {
-      cwd,
-      provider: input.provider,
-      model: input.model,
-      effort: input.effort,
-      prompt: decisionPrompt(flags),
-    };
-    let response = await this.scanner(scanInput);
-    try {
-      return parseReviewDecisionOutput(response, flags.length);
-    } catch (error) {
-      if (!(error instanceof ReviewOutputError)) throw error;
-      response = await this.scanner({
-        ...scanInput,
-        prompt: decisionRetryPrompt(scanInput.prompt, response, error.message),
-      });
-      return parseReviewDecisionOutput(response, flags.length);
-    }
-  }
 }
 
 export function parseCounterOpinionOutput(output: string): {
@@ -471,6 +630,93 @@ export function splitDiffIntoZones(diff: string, maxChars = DEFAULT_ZONE_CHARS):
   return zones;
 }
 
+/** Hash stable du hunk (en-tête et contenu) ancré à une ligne du fichier. */
+export function hunkHashFor(diff: string, file: string, line: number): string | null {
+  const hunk = findHunk(diff, file, line);
+  return hunk ? createHash("sha1").update(hunk).digest("hex") : null;
+}
+
+function findHunk(diff: string, targetFile: string, targetLine: number): string | null {
+  let oldFile: string | null = null;
+  let file: string | null = null;
+  let hunkStart = -1;
+  let oldCursor = 0;
+  let newCursor = 0;
+  let hunkContains = false;
+  const lines = diff.split("\n");
+  const finish = (end: number) => hunkStart >= 0 && hunkContains
+    ? lines.slice(hunkStart, end).join("\n")
+    : null;
+  for (let index = 0; index <= lines.length; index += 1) {
+    const value = lines[index];
+    if (index === lines.length || value?.startsWith("diff --git ") || value?.startsWith("@@ ")) {
+      const found = finish(index);
+      if (found) return found;
+      hunkStart = -1;
+      hunkContains = false;
+      if (index === lines.length) break;
+      if (value!.startsWith("diff --git ")) {
+        oldFile = null;
+        file = null;
+      }
+      if (value!.startsWith("@@ ")) {
+        const match = value!.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+        if (match) {
+          hunkStart = index;
+          oldCursor = Number(match[1]);
+          newCursor = Number(match[2]);
+        }
+      }
+      continue;
+    }
+    if (hunkStart < 0) {
+      if (value!.startsWith("--- ")) {
+        const path = value!.slice(4).trim();
+        oldFile = path === "/dev/null" ? null : normalizedPath(path);
+      } else if (value!.startsWith("+++ ")) {
+        const path = value!.slice(4).trim();
+        file = path === "/dev/null" ? oldFile : normalizedPath(path);
+      }
+      continue;
+    }
+    if (value!.startsWith("+")) {
+      if (file === targetFile && newCursor === targetLine) hunkContains = true;
+      newCursor += 1;
+    } else if (value!.startsWith("-")) {
+      if (file === targetFile && oldCursor === targetLine) hunkContains = true;
+      oldCursor += 1;
+    } else if (!value!.startsWith("\\")) {
+      if (file === targetFile && newCursor === targetLine) hunkContains = true;
+      oldCursor += 1;
+      newCursor += 1;
+    }
+  }
+  return null;
+}
+
+function filterUnchangedHunks(diff: string, flags: ReviewFlag[]): string {
+  if (flags.length === 0) return diff;
+  const hashes = new Set(flags.map((flag) => flag.hunk_hash).filter((hash): hash is string => hash !== null));
+  const patches = diff.split(/(?=^diff --git )/m).filter((patch) => patch.trim() !== "");
+  return patches.map((patch) => {
+    const lines = patch.split("\n");
+    const firstHunk = lines.findIndex((line) => line.startsWith("@@ "));
+    if (firstHunk < 0) return patch;
+    const preamble = lines.slice(0, firstHunk);
+    const hunks: string[][] = [];
+    for (const line of lines.slice(firstHunk)) {
+      if (line.startsWith("@@ ")) hunks.push([line]);
+      else hunks.at(-1)!.push(line);
+    }
+    const file = patch.match(/^\+\+\+ b\/(.+)$/m)?.[1] ?? patch.match(/^--- a\/(.+)$/m)?.[1];
+    if (!file) return patch;
+    return [
+      ...preamble,
+      ...hunks.filter((hunk) => !hashes.has(createHash("sha1").update(hunk.join("\n")).digest("hex"))).flat(),
+    ].join("\n");
+  }).filter((patch) => /@@ /m.test(patch)).join("\n");
+}
+
 function splitOversizedPatch(patch: string, maxChars: number): string[] {
   if (patch.length <= maxChars) return [patch];
   const lines = patch.split("\n");
@@ -545,41 +791,6 @@ export function parseReviewOutput(output: string, diff: string): ReviewFlagInput
   return parsed.flags.map((raw, index) => validateFlag(raw, index, changed));
 }
 
-export function parseReviewDecisionOutput(
-  output: string,
-  flagCount: number,
-): ReviewDecisionInput[] {
-  const parsed = parseJsonObject(output);
-  if (!Array.isArray(parsed.decisions) || parsed.decisions.length < 2 || parsed.decisions.length > 4) {
-    throw new ReviewOutputError("la clé decisions doit contenir entre 2 et 4 décisions");
-  }
-  const plans = parsed.decisions.map((raw, index) => {
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-      throw new ReviewOutputError(`décision ${index + 1} invalide`);
-    }
-    const decision = raw as Record<string, unknown>;
-    const question = nonEmptyString(decision.question, `décision ${index + 1}.question`);
-    if (!Array.isArray(decision.flag_numbers) || decision.flag_numbers.length === 0) {
-      throw new ReviewOutputError(`décision ${index + 1}.flag_numbers invalide`);
-    }
-    return {
-      question,
-      flag_indexes: decision.flag_numbers.map((number) =>
-        positiveInteger(number, `décision ${index + 1}.flag_numbers`) - 1,
-      ),
-    };
-  });
-  const indexes = plans.flatMap((plan) => plan.flag_indexes);
-  if (
-    indexes.some((index) => index >= flagCount)
-    || new Set(indexes).size !== indexes.length
-    || indexes.length !== flagCount
-  ) {
-    throw new ReviewOutputError("les décisions doivent couvrir chaque flag exactement une fois");
-  }
-  return plans;
-}
-
 function parseJsonObject(output: string): Record<string, unknown> {
   const candidates = [
     ...[...output.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map((match) => match[1] ?? ""),
@@ -626,9 +837,6 @@ function validateFlag(
   if (flag.test_gap !== undefined && typeof flag.test_gap !== "boolean") {
     throw new ReviewOutputError(`flag ${index + 1}.test_gap invalide`);
   }
-  const decision = typeof flag.decision === "string" && flag.decision.trim() !== ""
-    ? flag.decision.trim()
-    : `OK pour accepter ce point : ${message}`;
   const lines = changed.get(file);
   if (!lines || ![...lines].some((line) => line >= lineStart && line <= lineEnd)) {
     throw new ReviewOutputError(
@@ -642,7 +850,6 @@ function validateFlag(
     severity: flag.severity as ReviewSeverity,
     category,
     message,
-    decision,
     ...(typeof flag.test_gap === "boolean" ? { test_gap: flag.test_gap } : {}),
   };
 }
@@ -755,31 +962,10 @@ function reviewPrompt(diff: string, index: number, total: number): string {
     "Réponds UNIQUEMENT par ce JSON, sans markdown ni commentaire :",
     '{"flags":[{"file":"src/fichier.ts","line_start":12,"line_end":14,',
     '"severity":"red|orange|grey","category":"catégorie",',
-    '"message":"Une phrase concrète et actionnable.","test_gap":true|false,',
-    '"decision":"Question explicite commençant par OK pour… ?"}]}',
+    '"message":"Une phrase concrète et actionnable.","test_gap":true|false}]}',
     "S'il n'y a aucun risque réel, réponds exactement {\"flags\":[]}.",
     "",
     diff,
-  ].join("\n");
-}
-
-function decisionPrompt(flags: ReviewFlagInput[]): string {
-  const inventory = flags.map((flag, index) => ({
-    number: index + 1,
-    file: flag.file,
-    lines: `${flag.line_start}-${flag.line_end}`,
-    severity: flag.severity,
-    risk: flag.message,
-    suggested_decision: flag.decision,
-  }));
-  return [
-    "Regroupe ces risques de review en 2 à 4 décisions utilisateur sémantiques.",
-    "Une décision peut couvrir plusieurs risques uniquement s'ils relèvent réellement du même choix.",
-    "Chaque numéro de flag doit apparaître exactement une fois, sans duplication ni oubli.",
-    "Réponds UNIQUEMENT par ce JSON :",
-    '{"decisions":[{"question":"OK pour… ?","flag_numbers":[1,3]}]}',
-    "Risques :",
-    JSON.stringify(inventory),
   ].join("\n");
 }
 
@@ -796,17 +982,6 @@ function formatRetryPrompt(original: string, response: string, reason: string): 
   ].join("\n");
 }
 
-function decisionRetryPrompt(original: string, response: string, reason: string): string {
-  return [
-    original,
-    "",
-    "CORRECTION DE FORMAT : le regroupement précédent est inexploitable.",
-    `Cause : ${reason}.`,
-    "Retourne uniquement l'objet JSON demandé avec 2 à 4 décisions et chaque numéro exactement une fois.",
-    "Réponse précédente :",
-    response.slice(0, 4_000),
-  ].join("\n");
-}
 
 function oppositeProvider(provider: Provider): Provider {
   return provider === "claude" ? "codex" : "claude";
@@ -832,6 +1007,18 @@ function counterOpinionPrompt(review: Review, flag: ReviewFlag): string {
     '{"verdict":"confirmed|dismissed|nuanced","text":"Explication concrète et concise."}',
     "",
     counterContext(review.diff_text, flag),
+  ].join("\n");
+}
+
+function dispatchPrompt(flag: ReviewFlag, context: string, userMessage: string | undefined): string {
+  return [
+    `Le Gardien a signalé un risque ${flag.severity} dans ${flag.file}:${flag.line_start} :`,
+    flag.message,
+    userMessage ? `\nConsigne de l'utilisateur : ${userMessage}` : "",
+    "\nZone concernée (diff, ±30 lignes) :",
+    context,
+    "\nTraite ce point directement dans le code. Modifie les fichiers nécessaires,",
+    "ajoute ou adapte les tests, et termine par un résumé d'une ligne de ce que tu as changé.",
   ].join("\n");
 }
 

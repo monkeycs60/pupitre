@@ -6,10 +6,10 @@ import { join } from "node:path";
 import { openDb } from "../src/db";
 import { QuotaTracker } from "../src/quotas";
 import {
-  parseReviewDecisionOutput,
   parseReviewOutput,
   ReviewRunner,
   splitDiffIntoZones,
+  hunkHashFor,
 } from "../src/reviews";
 import { ConversationStore } from "../src/stores/conversations";
 import { PresetStore } from "../src/stores/presets";
@@ -92,6 +92,44 @@ test("découpe aussi un hunk unique sans jamais dépasser la limite", () => {
   expect(zones.every((zone) => zone.startsWith("diff --git a/src/large.ts"))).toBe(true);
 });
 
+test("un flag porte les statuts et champs de dispatch", () => {
+  const project = projects.create({ name: "statuts", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  store.complete(review.id, [{
+    file: "src/config.ts", line_start: 1, line_end: 1, severity: "red",
+    category: "secret", message: "Ne journalise pas le secret.",
+  }]);
+  const flag = store.get(review.id)!.flags[0]!;
+  expect(flag).toMatchObject({ status: "open", hunk_hash: null, subtask_id: null, user_message: null });
+  expect(store.setFlagStatus(flag.id, "treated")?.status).toBe("treated");
+  expect(store.setFlagStatus(flag.id, "agent_running")?.status).toBe("agent_running");
+  expect(store.setFlagStatus(flag.id, "resolved")?.status).toBe("resolved");
+  expect(store.setFlagStatus(flag.id, "ignored")?.status).toBe("ignored");
+});
+
+test("le hash de hunk est stable et distingue les hunks", () => {
+  const diff = [
+    "diff --git a/src/a.ts b/src/a.ts", "--- a/src/a.ts", "+++ b/src/a.ts",
+    "@@ -1 +1 @@", "-a", "+b", "@@ -10 +10 @@", "-c", "+d",
+  ].join("\n");
+  expect(hunkHashFor(diff, "src/a.ts", 1)).toBe(hunkHashFor(diff, "src/a.ts", 1));
+  expect(hunkHashFor(diff, "src/a.ts", 1)).not.toBe(hunkHashFor(diff, "src/a.ts", 10));
+});
+
+test("le hash de hunk conserve le chemin ancien d'un fichier supprimé", () => {
+  const diff = [
+    "diff --git a/src/deleted.ts b/src/deleted.ts", "deleted file mode 100644",
+    "--- a/src/deleted.ts", "+++ /dev/null", "@@ -4 +0,0 @@", "-throw new Error('refus')",
+  ].join("\n");
+  expect(hunkHashFor(diff, "src/deleted.ts", 4)).toMatch(/^[a-f0-9]{40}$/);
+});
+
 test("parse une sortie JSON fenced et refuse un flag hors des lignes modifiées", () => {
   const diff = [
     "diff --git a/src/config.ts b/src/config.ts",
@@ -112,7 +150,6 @@ test("parse une sortie JSON fenced et refuse un flag hors des lignes modifiées"
     severity: "red",
     category: "secret/credential",
     message: "Ne journalisez pas process.env.SECRET, car sa valeur sera exposée dans les logs ; supprimez ce log ou remplacez-le par un indicateur non sensible.",
-    decision: "OK pour accepter ce point : Ne journalisez pas process.env.SECRET, car sa valeur sera exposée dans les logs ; supprimez ce log ou remplacez-le par un indicateur non sensible.",
   }]);
   expect(() => parseReviewOutput(
     '{"flags":[{"file":"src/config.ts","line_start":99,"line_end":99,'
@@ -237,20 +274,6 @@ test("migre les anciennes alertes de tests vers le marqueur structuré", () => {
   migrated.close();
 });
 
-test("valide un regroupement sémantique de 2 à 4 décisions sans perdre de flag", () => {
-  expect(parseReviewDecisionOutput(JSON.stringify({ decisions: [
-    { question: "OK pour changer le contrat API ?", flag_numbers: [1, 3, 5] },
-    { question: "OK pour migrer les données ?", flag_numbers: [2, 4] },
-  ] }), 5)).toEqual([
-    { question: "OK pour changer le contrat API ?", flag_indexes: [0, 2, 4] },
-    { question: "OK pour migrer les données ?", flag_indexes: [1, 3] },
-  ]);
-  expect(() => parseReviewDecisionOutput(JSON.stringify({ decisions: [
-    { question: "Décision incomplète", flag_numbers: [1, 2] },
-    { question: "Autre décision", flag_numbers: [2, 3] },
-  ] }), 3)).toThrow(/exactement une fois/);
-});
-
 test("le scan headless rejoue la fixture via l'adapter Codex et persiste ses flags", async () => {
   writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
   git("add", ".");
@@ -302,26 +325,12 @@ cat "${join(import.meta.dir, "fixtures/review-scan-codex.jsonl")}"
     severity: "red",
     status: "open",
   });
+  expect(completed?.flags[0]?.hunk_hash).toMatch(/^[a-f0-9]{40}$/);
   expect(readFileSync(argsFile, "utf8")).toContain("-s read-only");
   expect(readFileSync(argsFile, "utf8")).toContain("model_reasoning_effort=\"high\"");
 
-  projects.setGardienMode(project.id, "bloquant");
-  expect(runner.gardienStatus(project.id)).toEqual({
-    mode: "bloquant",
-    blocked: true,
-    openRedCount: 1,
-    openFlagCount: 1,
-    pendingReviewCount: 1,
-  });
-  expect(runner.setFlagStatus(completed!.flags[0]!.id, "acked"))
-    .toMatchObject({ status: "acked" });
-  expect(runner.gardienStatus(project.id)).toEqual({
-    mode: "bloquant",
-    blocked: false,
-    openRedCount: 0,
-    openFlagCount: 0,
-    pendingReviewCount: 0,
-  });
+  expect(runner.setFlagStatus(completed!.flags[0]!.id, "treated"))
+    .toMatchObject({ status: "treated" });
 });
 
 test("la portée conversation couvre plusieurs commits et tout le worktree", async () => {
@@ -717,7 +726,7 @@ test("une sortie invalide reçoit une seule relance de correction de format", as
   expect(prompts[1]).toContain("CORRECTION DE FORMAT");
 });
 
-test("demande au modèle fort de regrouper sémantiquement plus de quatre flags", async () => {
+test("ne lance pas de regroupement supplémentaire quand le scan renvoie plus de quatre flags", async () => {
   writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
   git("add", ".");
   git("commit", "-qm", "head décisions");
@@ -733,12 +742,6 @@ test("demande au modèle fort de regrouper sémantiquement plus de quatre flags"
     quotas,
     async ({ prompt }) => {
       prompts.push(prompt);
-      if (prompt.includes("Regroupe ces risques")) {
-        return JSON.stringify({ decisions: [
-          { question: "OK pour exposer les valeurs sensibles ?", flag_numbers: [1, 2, 3] },
-          { question: "OK pour modifier le contrat de logs ?", flag_numbers: [4, 5] },
-        ] });
-      }
       return JSON.stringify({ flags: Array.from({ length: 5 }, (_, index) => ({
         file: "src/config.ts",
         line_start: 1,
@@ -746,7 +749,6 @@ test("demande au modèle fort de regrouper sémantiquement plus de quatre flags"
         severity: index < 2 ? "red" : "orange",
         category: index < 3 ? "secret" : "contrat",
         message: `Risque ${index + 1}`,
-        decision: `OK pour le risque ${index + 1} ?`,
       })) });
     },
   );
@@ -761,8 +763,128 @@ test("demande au modèle fort de regrouper sémantiquement plus de quatre flags"
   });
 
   const completed = await runner.wait(review.id);
-  expect(prompts).toHaveLength(2);
-  expect(completed?.decisions.map((decision) => decision.flag_ids.length)).toEqual([3, 2]);
+  expect(prompts).toHaveLength(1);
+  expect(completed?.flags).toHaveLength(5);
+});
+
+test("scan incrémental : un hunk intact conserve son flag sans nouveau scan", async () => {
+  writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
+  git("add", ".");
+  git("commit", "-qm", "head incrémental");
+  const project = projects.create({ name: "incrémental", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  let calls = 0;
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => {
+    calls += 1;
+    return JSON.stringify({ flags: [{
+      file: "src/config.ts", line_start: 1, line_end: 1, severity: "red",
+      category: "secret", message: "Le secret est journalisé.",
+    }] });
+  });
+  const input = {
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "HEAD^", gitRefHead: "HEAD",
+    provider: "codex" as const, model: "gpt-5.6-sol", effort: "high",
+  };
+  const first = runner.start(input);
+  await runner.wait(first.id);
+  const second = runner.start({ ...input, incremental: true });
+  const completed = await runner.wait(second.id);
+  expect(calls).toBe(1);
+  expect(completed).toMatchObject({ status: "done", parent_review_id: first.id });
+  expect(completed?.flags[0]).toMatchObject({ status: "open", message: "Le secret est journalisé." });
+});
+
+test("scan incrémental : un hunk modifié après dispatch devient resolved sans re-signalement", async () => {
+  const base = git("rev-parse", "HEAD");
+  writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
+  git("add", ".");
+  git("commit", "-qm", "risque initial");
+  const project = projects.create({ name: "résolution incrémentale", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  let calls = 0;
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => {
+    calls += 1;
+    return JSON.stringify({ flags: calls === 1 ? [{
+      file: "src/config.ts", line_start: 1, line_end: 1, severity: "red",
+      category: "secret", message: "Le secret est journalisé.",
+    }] : [] });
+  });
+  const input = {
+    projectId: project.id, conversationId: conversation.id, gitRefBase: base, gitRefHead: "HEAD",
+    provider: "codex" as const, model: "gpt-5.6-sol", effort: "high",
+  };
+  const first = runner.start(input);
+  const initial = await runner.wait(first.id);
+  store.updateFlag(initial!.flags[0]!.id, { status: "agent_running", subtaskId: "subtask-1" });
+  writeFileSync(join(repo, "src/config.ts"), "console.log('secret corrigé')\n");
+  git("add", ".");
+  git("commit", "-qm", "corrige le risque");
+  const second = runner.start({ ...input, incremental: true });
+  const completed = await runner.wait(second.id);
+  expect(calls).toBe(2);
+  expect(completed?.flags).toHaveLength(1);
+  expect(completed?.flags[0]).toMatchObject({ status: "resolved", subtask_id: "subtask-1" });
+});
+
+test("scan incrémental : un hunk modifié sans dispatch est rescanné", async () => {
+  const base = git("rev-parse", "HEAD");
+  writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
+  git("add", ".");
+  git("commit", "-qm", "risque initial");
+  const project = projects.create({ name: "rescan sans dispatch", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  let calls = 0;
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => {
+    calls += 1;
+    return JSON.stringify({ flags: [{
+      file: "src/config.ts", line_start: 1, line_end: 1, severity: "red",
+      category: "secret", message: `Risque ${calls}`,
+    }] });
+  });
+  const input = {
+    projectId: project.id, conversationId: conversation.id, gitRefBase: base, gitRefHead: "HEAD",
+    provider: "codex" as const, model: "gpt-5.6-sol", effort: "high",
+  };
+  await runner.wait(runner.start(input).id);
+  writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET + ' modifié')\n");
+  git("add", ".");
+  git("commit", "-qm", "modifie le hunk");
+  const completed = await runner.wait(runner.start({ ...input, incremental: true }).id);
+  expect(calls).toBe(2);
+  expect(completed?.flags[0]).toMatchObject({ status: "open", message: "Risque 2" });
+});
+
+test("scan incrémental : un diff devenu vide résout un flag dispatché", async () => {
+  writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
+  const project = projects.create({ name: "diff vide incrémental", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  let calls = 0;
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => {
+    calls += 1;
+    return JSON.stringify({ flags: [{
+      file: "src/config.ts", line_start: 1, line_end: 1, severity: "red",
+      category: "secret", message: "Le secret est journalisé.",
+    }] });
+  });
+  const input = {
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "CONVERSATION", gitRefHead: "WORKTREE",
+    provider: "codex" as const, model: "gpt-5.6-sol", effort: "high",
+  };
+  const first = await runner.wait(runner.start(input).id);
+  store.updateFlag(first!.flags[0]!.id, { status: "agent_running", subtaskId: "subtask-1" });
+  git("add", ".");
+  git("commit", "-qm", "intègre la correction");
+  const second = await runner.wait(runner.start({ ...input, incremental: true }).id);
+  expect(calls).toBe(1);
+  expect(second?.flags[0]).toMatchObject({ status: "resolved", subtask_id: "subtask-1" });
 });
 
 test("le contre-avis passe au provider opposé en lecture seule et persiste son verdict", async () => {
@@ -854,24 +976,11 @@ test("le contre-avis passe au provider opposé en lecture seule et persiste son 
     counter_state: "idle",
     counter_text: null,
   });
-  projects.setGardienMode(project.id, "bloquant");
-  expect(runner.gardienStatus(project.id)).toEqual({
-    mode: "bloquant",
-    blocked: true,
-    openRedCount: 1,
-    openFlagCount: 1,
-    pendingReviewCount: 1,
-  });
-  const decisionId = store.get(review.id)!.decisions[0]!.id;
-  runner.setDecisionStatus(decisionId, "acked");
-  expect(runner.gardienStatus(project.id)?.blocked).toBe(false);
   runner.startCounterOpinions([flagId]);
   expect((await runner.waitCounter(flagId))?.status).toBe("countered");
-  expect(store.get(review.id)!.decisions[0]!.status).toBe("open");
-  expect(runner.gardienStatus(project.id)?.blocked).toBe(true);
 });
 
-test("persiste quatre décisions sémantiques explicites sans regroupement implicite", () => {
+test("persiste tous les flags sans décisions groupées", () => {
   const project = projects.create({ name: "décisions", path: repo });
   const conversation = conversations.create({
     projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
@@ -892,19 +1001,11 @@ test("persiste quatre décisions sémantiques explicites sans regroupement impli
     severity: index < 2 ? "red" as const : "orange" as const,
     category: "contrat API",
     message: `Risque concret ${index}.`,
-    decision: `OK pour le changement ${index} ?`,
   }));
-  store.complete(review.id, flags, [
-    { question: "OK pour les deux changements de contrat ?", flag_indexes: [0, 4] },
-    { question: "OK pour les deux migrations liées ?", flag_indexes: [1, 5] },
-    { question: "OK pour les deux comportements silencieux ?", flag_indexes: [2, 6] },
-    { question: "OK pour la gestion d'erreur ?", flag_indexes: [3] },
-  ]);
+  store.complete(review.id, flags);
 
   const completed = store.get(review.id)!;
-  expect(completed.decisions).toHaveLength(4);
-  expect(completed.decisions.flatMap((decision) => decision.flag_ids).sort())
-    .toEqual(completed.flags.map((flag) => flag.id).sort());
+  expect(completed.flags).toHaveLength(7);
 });
 
 test("contre-expertise chaque flag avec le provider opposé à son auteur réel", async () => {
@@ -1007,43 +1108,6 @@ test("un re-contre-avis échoué ne conserve pas un statut countered sans verdic
     counter_verdict: null,
     counter_text: null,
   });
-  expect(store.get(review.id)!.decisions[0]!.status).toBe("open");
-});
-
-test("synchronise les statuts flag-décision et préserve les acquis au backfill", () => {
-  const project = projects.create({ name: "migration décisions", path: repo });
-  const conversation = conversations.create({
-    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
-  });
-  const review = store.create({
-    projectId: project.id,
-    conversationId: conversation.id,
-    gitRefBase: "base",
-    gitRefHead: "head",
-    provider: "codex",
-    model: "gpt-5.6-sol",
-    effort: "high",
-  });
-  store.complete(review.id, [
-    {
-      file: "src/a.ts", line_start: 1, line_end: 1, severity: "red",
-      category: "données", message: "Préserve A.",
-    },
-    {
-      file: "src/b.ts", line_start: 2, line_end: 2, severity: "orange",
-      category: "contrat", message: "Préserve B.",
-    },
-  ]);
-  const completed = store.get(review.id)!;
-  store.setDecisionStatus(completed.decisions[0]!.id, "acked");
-  store.setFlagStatus(completed.flags[0]!.id, "open");
-  expect(store.getDecision(completed.decisions[0]!.id)?.status).toBe("open");
-  for (const flag of completed.flags) store.setFlagStatus(flag.id, "acked");
-  db.query("UPDATE review_decisions SET status = 'open' WHERE review_id = ?").run(review.id);
-
-  const reopened = new ReviewStore(db).get(review.id)!;
-  expect(reopened.decisions).toHaveLength(2);
-  expect(reopened.decisions.every((decision) => decision.status === "acked")).toBe(true);
 });
 
 test("l'option projet lance automatiquement les contre-avis rouges", async () => {
@@ -1102,6 +1166,42 @@ test("l'option projet lance automatiquement les contre-avis rouges", async () =>
     counter_verdict: "confirmed",
     counter_provider: "claude",
   });
+});
+
+test("dispatch une zone en écriture et rouvre le flag si la sous-tâche échoue", async () => {
+  const project = projects.create({ name: "dispatch", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  store.setDiff(review.id, "base", "head", [
+    "diff --git a/src/config.ts b/src/config.ts", "--- a/src/config.ts", "+++ b/src/config.ts",
+    "@@ -1 +1 @@", "-old", "+new",
+  ].join("\n"));
+  store.complete(review.id, [{
+    file: "src/config.ts", line_start: 1, line_end: 1, severity: "orange",
+    category: "contrat", message: "Préserve le contrat public.",
+  }]);
+  const inputs: SubtaskInput[] = [];
+  const fakeSubtasks = {
+    start(input: SubtaskInput) { inputs.push(input); return { id: "dispatch-1" } as Subtask; },
+    async waitResult(): Promise<SubtaskResult> {
+      return { status: "error", resultText: "", error: "échec", subtask: { id: "dispatch-1" } as Subtask };
+    },
+  };
+  const runner = new ReviewRunner(store, projects, conversations, quotas, undefined, fakeSubtasks);
+  const flag = store.get(review.id)!.flags[0]!;
+  expect(runner.dispatchFlag(flag.id, "Ajoute un test.")).toEqual({ subtaskId: "dispatch-1" });
+  expect(store.getFlag(flag.id)).toMatchObject({ status: "agent_running", subtask_id: "dispatch-1", user_message: "Ajoute un test." });
+  await Bun.sleep(0);
+  expect(store.getFlag(flag.id)?.status).toBe("open");
+  expect(inputs[0]).toMatchObject({
+    readOnly: false, label: "Gardien · src/config.ts:1", conversationId: conversation.id,
+  });
+  expect(inputs[0]!.prompt).toContain("Consigne de l'utilisateur : Ajoute un test.");
 });
 
 test("un scan running orphelin est clôturé au redémarrage", () => {

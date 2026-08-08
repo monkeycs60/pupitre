@@ -3,8 +3,6 @@ import type {
   Conversation,
   ConversationSpeed,
   Debrief,
-  GardienMode,
-  GardienStatus,
   GitDiff,
   GitSnapshot,
   FleetItem,
@@ -18,8 +16,9 @@ import type {
   Provider,
   QuotaSnapshot,
   Review,
-  ReviewDecision,
   ReviewFlag,
+  ReviewFlagStatus,
+  ReviewStatusSnapshot,
   Routine,
   RoutineRun,
   SessionSummary,
@@ -122,6 +121,7 @@ export interface RoutineInput {
 
 export interface StartReviewInput {
   conversationId: string
+  scope?: 'worktree' | 'comparison'
   gitRefBase?: string
   gitRefHead?: string
   presetId?: string | null
@@ -459,18 +459,18 @@ export function setProjectFilesystemScope(
   )
 }
 
-export function setProjectGardienMode(
-  id: string,
-  mode: GardienMode,
-): Promise<Project> {
-  return fetchJson(`/api/projects/${routeId(id)}/gardien-mode`, jsonPut({ mode }))
-}
-
 export function setProjectAutoCounterRed(
   id: string,
   enabled: boolean,
 ): Promise<Project> {
   return fetchJson(`/api/projects/${routeId(id)}/auto-counter-red`, jsonPut({ enabled }))
+}
+
+export function setProjectAutoRescan(
+  id: string,
+  enabled: boolean,
+): Promise<Project> {
+  return fetchJson(`/api/projects/${routeId(id)}/auto-rescan`, jsonPut({ enabled }))
 }
 
 export function listPresets(signal?: AbortSignal): Promise<Preset[]> {
@@ -793,7 +793,7 @@ export function getReview(reviewId: string, signal?: AbortSignal): Promise<Revie
 
 export function setReviewFlagStatus(
   flagId: string,
-  status: 'open' | 'acked' | 'dismissed',
+  status: Extract<ReviewFlagStatus, 'open' | 'treated' | 'ignored'>,
 ): Promise<ReviewFlag> {
   return fetchJson(`/api/review-flags/${routeId(flagId)}`, jsonPatch({ status }))
 }
@@ -805,16 +805,6 @@ export function setReviewFlagCodeProvider(
   return fetchJson(
     `/api/review-flags/${routeId(flagId)}`,
     jsonPatch({ codeProvider }),
-  )
-}
-
-export function setReviewDecisionStatus(
-  decisionId: string,
-  status: 'acked' | 'dismissed',
-): Promise<ReviewDecision> {
-  return fetchJson(
-    `/api/review-decisions/${routeId(decisionId)}`,
-    jsonPatch({ status }),
   )
 }
 
@@ -841,11 +831,22 @@ export function startReviewCounterOpinions(
   )
 }
 
-export function getGardienStatus(
+export function getReviewStatus(
   projectId: string,
   signal?: AbortSignal,
-): Promise<GardienStatus> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/gardien-status`, { signal })
+): Promise<ReviewStatusSnapshot> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/review-status`, { signal })
+}
+
+export function dispatchFlag(flagId: string, message?: string): Promise<{ subtaskId: string }> {
+  return fetchJson(`/api/review-flags/${routeId(flagId)}/dispatch`, jsonPost({ message }))
+}
+
+export function dispatchAllFlags(
+  reviewId: string,
+  severities: Array<'red' | 'orange' | 'grey'> = ['red', 'orange'],
+): Promise<{ dispatched: number }> {
+  return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-all`, jsonPost({ severities }))
 }
 
 export function getSubtask(

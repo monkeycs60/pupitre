@@ -12,6 +12,19 @@ export interface DiffLine {
   severity: ReviewSeverity | null
 }
 
+/** Texte initial proposé au sous-agent pour une zone. */
+export function flagActionDraft(flag: ReviewFlag): string {
+  return flag.message
+}
+
+/** Mise à jour locale sûre pendant la requête PATCH. */
+export function optimisticFlagStatus(
+  flag: ReviewFlag,
+  status: Extract<ReviewFlag['status'], 'treated' | 'ignored'>,
+): ReviewFlag {
+  return { ...flag, status }
+}
+
 const SEVERITY_WEIGHT: Record<ReviewSeverity, number> = {
   grey: 1,
   orange: 2,

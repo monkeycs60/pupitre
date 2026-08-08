@@ -224,7 +224,7 @@ test("exécute le scope en subtask, persiste les preuves et acquitte le flag tes
   expect(store.getScope(started.id)?.evidence_md).toContain("FIN DÉCISIVE A");
   expect(store.getScope(started.id)?.evidence_md).toContain("FIN DÉCISIVE B");
   expect(existsSync(media.absolutePath(store.getScope(started.id)!.images[0]!))).toBe(true);
-  expect(reviews.getFlag(flagId)?.status).toBe("acked");
+  expect(reviews.getFlag(flagId)?.status).toBe("treated");
   expect(broadcasts.some((event) => event.type === "test-scope-result")).toBe(true);
 });
 

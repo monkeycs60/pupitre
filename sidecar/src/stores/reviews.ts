@@ -3,7 +3,7 @@ import type { Provider } from "../events";
 
 export type ReviewStatus = "running" | "done" | "error";
 export type ReviewSeverity = "red" | "orange" | "grey";
-export type ReviewFlagStatus = "open" | "acked" | "dismissed" | "countered";
+export type ReviewFlagStatus = "open" | "countered" | "agent_running" | "treated" | "ignored" | "resolved";
 export type CounterState = "idle" | "queued" | "running" | "done" | "error";
 export type CounterVerdict = "confirmed" | "dismissed" | "nuanced";
 export class CounterAlreadyRunningError extends Error {}
@@ -15,21 +15,7 @@ export interface ReviewFlagInput {
   severity: ReviewSeverity;
   category: string;
   message: string;
-  decision?: string;
   test_gap?: boolean;
-}
-
-export interface ReviewDecision {
-  id: string;
-  review_id: string;
-  question: string;
-  flag_ids: string[];
-  status: "open" | "acked" | "dismissed";
-}
-
-export interface ReviewDecisionInput {
-  question: string;
-  flag_indexes: number[];
 }
 
 export interface ReviewFlag extends ReviewFlagInput {
@@ -45,6 +31,9 @@ export interface ReviewFlag extends ReviewFlagInput {
   counter_effort: string | null;
   counter_subtask_id: string | null;
   counter_error: string | null;
+  hunk_hash: string | null;
+  subtask_id: string | null;
+  user_message: string | null;
   test_gap: boolean;
 }
 
@@ -64,7 +53,8 @@ export interface Review {
   updated_at: string;
   flags: ReviewFlag[];
   code_provider: Provider;
-  decisions: ReviewDecision[];
+  scope: string;
+  parent_review_id: string | null;
 }
 
 export class ReviewStore {
@@ -80,8 +70,6 @@ export class ReviewStore {
       SET counter_state = 'error', counter_error = 'interrompu (sidecar redémarré)'
       WHERE counter_state IN ('queued', 'running')
     `).run();
-    this.backfillDecisions();
-    this.reconcileAllDecisionStatuses();
   }
 
   create(input: {
@@ -93,14 +81,16 @@ export class ReviewStore {
     model: string;
     effort: string;
     codeProvider?: Provider;
+    scope?: string;
+    parentReviewId?: string | null;
   }): Review {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     this.db.query(`
       INSERT INTO reviews
         (id, project_id, conversation_id, git_ref_base, git_ref_head, status,
-         review_provider, review_model, review_effort, code_provider, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?)
+         review_provider, review_model, review_effort, code_provider, scope, parent_review_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.projectId,
@@ -111,6 +101,8 @@ export class ReviewStore {
       input.model,
       input.effort,
       input.codeProvider ?? this.conversationProvider(input.conversationId),
+      input.scope ?? "worktree",
+      input.parentReviewId ?? null,
       now,
       now,
     );
@@ -129,6 +121,36 @@ export class ReviewStore {
     return rows.map((row) => this.hydrate(row));
   }
 
+  latestDone(projectId: string, scope: string): Review | null {
+    const row = this.db.query(`
+      SELECT * FROM reviews
+      WHERE project_id = ? AND scope = ? AND status = 'done'
+      ORDER BY created_at DESC LIMIT 1
+    `).get(projectId, scope) as any;
+    return row ? this.hydrate(row) : null;
+  }
+
+  copyFlags(reviewId: string, flags: ReviewFlag[]): void {
+    const insert = this.db.query(`
+      INSERT INTO review_flags (
+        id, review_id, file, line_start, line_end, severity, category, message,
+        code_provider, is_test_gap, status, counter_state, counter_verdict,
+        counter_text, counter_provider, counter_model, counter_effort,
+        counter_subtask_id, counter_error, hunk_hash, subtask_id, user_message
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const flag of flags) {
+      insert.run(
+        crypto.randomUUID(), reviewId, flag.file, flag.line_start, flag.line_end,
+        flag.severity, flag.category, flag.message, flag.code_provider,
+        flag.test_gap ? 1 : 0, flag.status, flag.counter_state, flag.counter_verdict,
+        flag.counter_text, flag.counter_provider, flag.counter_model, flag.counter_effort,
+        flag.counter_subtask_id, flag.counter_error, flag.hunk_hash, flag.subtask_id,
+        flag.user_message,
+      );
+    }
+  }
+
   linkedCommitShas(projectId: string, conversationId: string): string[] {
     const rows = this.db.query(`
       SELECT commit_sha
@@ -137,6 +159,22 @@ export class ReviewStore {
       ORDER BY created_at, rowid
     `).all(projectId, conversationId) as Array<{ commit_sha: string }>;
     return rows.map((row) => row.commit_sha);
+  }
+
+  /** Conversation ayant produit le plus récent commit visible dans cette review. */
+  linkedConversationId(projectId: string, diff: string): string | null {
+    const shas = [...diff.matchAll(/^index ([0-9a-f]+)\.\.[0-9a-f]+/gm)]
+      .map((match) => match[2])
+      .filter((sha): sha is string => Boolean(sha));
+    for (const sha of shas) {
+      const row = this.db.query(`
+        SELECT conversation_id FROM commit_links
+        WHERE project_id = ? AND commit_sha = ?
+        ORDER BY created_at DESC LIMIT 1
+      `).get(projectId, sha) as { conversation_id: string } | null;
+      if (row) return row.conversation_id;
+    }
+    return null;
   }
 
   listTestingFlags(projectId: string): ReviewFlag[] {
@@ -150,13 +188,12 @@ export class ReviewStore {
     const ack = this.db.transaction(() => {
       const acked: string[] = [];
       const update = this.db.query(`
-        UPDATE review_flags SET status = 'acked'
+        UPDATE review_flags SET status = 'treated'
         WHERE id = ? AND status IN ('open', 'countered')
       `);
       for (const id of [...new Set(ids)]) {
         if (update.run(id).changes !== 1) continue;
         acked.push(id);
-        this.syncDecisionStatuses(id);
       }
       return acked;
     });
@@ -176,6 +213,9 @@ export class ReviewStore {
     input: {
       status?: Exclude<ReviewFlagStatus, "countered">;
       codeProvider?: Provider;
+      hunkHash?: string | null;
+      subtaskId?: string | null;
+      userMessage?: string | null;
     },
   ): ReviewFlag | null {
     const update = this.db.transaction(() => {
@@ -200,31 +240,19 @@ export class ReviewStore {
       if (input.status) {
         this.db.query("UPDATE review_flags SET status = ? WHERE id = ?").run(input.status, id);
       }
-      this.syncDecisionStatuses(id);
+      if (input.hunkHash !== undefined || input.subtaskId !== undefined || input.userMessage !== undefined) {
+        const fields: Array<[string, string | null]> = [];
+        if (input.hunkHash !== undefined) fields.push(["hunk_hash", input.hunkHash]);
+        if (input.subtaskId !== undefined) fields.push(["subtask_id", input.subtaskId]);
+        if (input.userMessage !== undefined) fields.push(["user_message", input.userMessage]);
+        this.db.query(`UPDATE review_flags SET ${fields.map(([field]) => `${field} = ?`).join(", ")} WHERE id = ?`)
+          .run(...fields.map(([, value]) => value), id);
+      }
       return this.getFlag(id);
     });
     return update();
   }
 
-  setDecisionStatus(
-    id: string,
-    status: "acked" | "dismissed",
-  ): ReviewDecision | null {
-    const decision = this.getDecision(id);
-    if (!decision) return null;
-    const update = this.db.transaction(() => {
-      this.db.query("UPDATE review_decisions SET status = ? WHERE id = ?").run(status, id);
-      const flagUpdate = this.db.query("UPDATE review_flags SET status = ? WHERE id = ?");
-      for (const flagId of decision.flag_ids) flagUpdate.run(status, flagId);
-    });
-    update();
-    return this.getDecision(id);
-  }
-
-  getDecision(id: string): ReviewDecision | null {
-    const row = this.db.query("SELECT * FROM review_decisions WHERE id = ?").get(id) as any;
-    return row ? this.hydrateDecision(row) : null;
-  }
 
   getFlag(id: string): ReviewFlag | null {
     const row = this.db.query(`
@@ -265,7 +293,6 @@ export class ReviewStore {
         ).changes !== 1) {
           throw new CounterAlreadyRunningError("un contre-avis est déjà en cours");
         }
-        this.syncDecisionStatuses(input.id);
       }
       return inputs.map((input) => this.getFlag(input.id)!);
     });
@@ -288,13 +315,6 @@ export class ReviewStore {
             counter_text = ?, counter_error = NULL
         WHERE id = ?
       `).run(verdict, text, id);
-      this.db.query(`
-        UPDATE review_decisions
-        SET status = 'open'
-        WHERE EXISTS (
-          SELECT 1 FROM json_each(review_decisions.flag_ids) WHERE value = ?
-        )
-      `).run(id);
     });
     complete();
   }
@@ -307,40 +327,19 @@ export class ReviewStore {
     `).run(error, id);
   }
 
-  gardienStatus(projectId: string, mode: "informatif" | "bloquant"): {
-    mode: "informatif" | "bloquant";
-    blocked: boolean;
-    openRedCount: number;
-    openFlagCount: number;
-    pendingReviewCount: number;
+  reviewStatus(projectId: string): {
+    openBySeverity: Record<ReviewSeverity, number>;
+    running: { reviewId: string; zoneDone: number; zoneTotal: number } | null;
   } {
-    const row = this.db.query(`
-      SELECT
-        (SELECT COUNT(*) FROM review_flags f JOIN reviews r ON r.id = f.review_id
-         WHERE r.project_id = ? AND f.status IN ('open', 'countered')) AS open_flags,
-        (SELECT COUNT(*) FROM review_flags f JOIN reviews r ON r.id = f.review_id
-         WHERE r.project_id = ? AND f.severity = 'red'
-           AND f.status IN ('open', 'countered')) AS open_reds,
-        (SELECT COUNT(*) FROM reviews r
-         WHERE r.project_id = ? AND (
-           r.status = 'running' OR EXISTS (
-             SELECT 1 FROM review_flags f WHERE f.review_id = r.id
-               AND f.status IN ('open', 'countered')
-           )
-         )) AS pending_reviews
-    `).get(projectId, projectId, projectId) as {
-      open_flags: number | bigint;
-      open_reds: number | bigint;
-      pending_reviews: number | bigint;
-    };
-    const openRedCount = Number(row.open_reds);
-    return {
-      mode,
-      blocked: mode === "bloquant" && openRedCount > 0,
-      openRedCount,
-      openFlagCount: Number(row.open_flags),
-      pendingReviewCount: Number(row.pending_reviews),
-    };
+    const rows = this.db.query(`
+      SELECT severity, COUNT(*) AS count FROM review_flags f
+      JOIN reviews r ON r.id = f.review_id
+      WHERE r.project_id = ? AND f.status IN ('open', 'countered', 'agent_running')
+      GROUP BY severity
+    `).all(projectId) as Array<{ severity: ReviewSeverity; count: number | bigint }>;
+    const openBySeverity: Record<ReviewSeverity, number> = { red: 0, orange: 0, grey: 0 };
+    for (const row of rows) openBySeverity[row.severity] = Number(row.count);
+    return { openBySeverity, running: null };
   }
 
   setDiff(id: string, base: string, head: string, diff: string): void {
@@ -351,7 +350,7 @@ export class ReviewStore {
     `).run(base, head, diff, new Date().toISOString(), id);
   }
 
-  complete(id: string, flags: ReviewFlagInput[], decisions?: ReviewDecisionInput[]): void {
+  complete(id: string, flags: Array<ReviewFlagInput & { hunk_hash?: string | null }>): void {
     const complete = this.db.transaction(() => {
       const review = this.db.query(
         "SELECT code_provider, conversation_id FROM reviews WHERE id = ?",
@@ -362,10 +361,9 @@ export class ReviewStore {
       const insert = this.db.query(`
         INSERT INTO review_flags
           (id, review_id, file, line_start, line_end, severity, category, message,
-           decision, code_provider, is_test_gap, status)
+           code_provider, is_test_gap, hunk_hash, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
       `);
-      const stored: Array<ReviewFlagInput & { id: string }> = [];
       for (const flag of flags) {
         const flagId = crypto.randomUUID();
         insert.run(
@@ -377,13 +375,11 @@ export class ReviewStore {
           flag.severity,
           flag.category,
           flag.message,
-          flag.decision ?? decisionQuestion(flag.message),
           defaultCodeProvider,
           (flag.test_gap ?? inferTestGap(flag.category, flag.message)) ? 1 : 0,
+          flag.hunk_hash ?? null,
         );
-        stored.push({ ...flag, id: flagId });
       }
-      this.insertDecisions(id, stored, decisions);
       this.db.query(`
         UPDATE reviews SET status = 'done', error = NULL, updated_at = ? WHERE id = ?
       `).run(new Date().toISOString(), id);
@@ -407,103 +403,13 @@ export class ReviewStore {
       ORDER BY CASE severity WHEN 'red' THEN 0 WHEN 'orange' THEN 1 ELSE 2 END,
                file ASC, line_start ASC
     `).all(row.code_provider, row.id) as any[]).map(hydrateFlag);
-    const decisions = this.db.query(
-      "SELECT * FROM review_decisions WHERE review_id = ? ORDER BY rowid",
-    ).all(row.id).map((decision) => this.hydrateDecision(decision));
     return {
       ...row,
       flags,
       code_provider: row.code_provider ?? this.conversationProvider(row.conversation_id),
-      decisions,
     } as Review;
   }
 
-  private insertDecisions(
-    reviewId: string,
-    flags: Array<ReviewFlagInput & { id: string }>,
-    decisions?: ReviewDecisionInput[],
-  ): void {
-    if (flags.length === 0) return;
-    const plans = decisions ?? flags.map((flag, index) => ({
-      question: flag.decision ?? decisionQuestion(flag.message),
-      flag_indexes: [index],
-    }));
-    validateDecisionPlans(plans, flags.length);
-    const insert = this.db.query(`
-      INSERT INTO review_decisions (id, review_id, question, flag_ids, status)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    for (const plan of plans) {
-      const group = plan.flag_indexes.map((index) => flags[index]!);
-      insert.run(
-        crypto.randomUUID(),
-        reviewId,
-        plan.question,
-        JSON.stringify(group.map((flag) => flag.id)),
-        "open",
-      );
-    }
-  }
-
-  private backfillDecisions(): void {
-    const reviews = this.db.query(`
-      SELECT id FROM reviews r
-      WHERE EXISTS (SELECT 1 FROM review_flags f WHERE f.review_id = r.id)
-        AND NOT EXISTS (SELECT 1 FROM review_decisions d WHERE d.review_id = r.id)
-    `).all() as Array<{ id: string }>;
-    for (const review of reviews) {
-      const flags = this.db.query(
-        "SELECT * FROM review_flags WHERE review_id = ?",
-      ).all(review.id) as Array<ReviewFlagInput & { id: string; status: ReviewFlagStatus }>;
-      const insert = this.db.query(`
-        INSERT INTO review_decisions (id, review_id, question, flag_ids, status)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-      for (const flag of flags) {
-        insert.run(
-          crypto.randomUUID(),
-          review.id,
-          flag.decision ?? decisionQuestion(flag.message),
-          JSON.stringify([flag.id]),
-          decisionStatus([flag.status]),
-        );
-      }
-    }
-  }
-
-  private reconcileAllDecisionStatuses(): void {
-    const decisions = this.db.query(
-      "SELECT id, flag_ids FROM review_decisions",
-    ).all() as Array<{ id: string; flag_ids: string }>;
-    const getStatus = this.db.query("SELECT status FROM review_flags WHERE id = ?");
-    const update = this.db.query("UPDATE review_decisions SET status = ? WHERE id = ?");
-    for (const decision of decisions) {
-      try {
-        const ids = JSON.parse(decision.flag_ids) as unknown;
-        if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) continue;
-        const statuses = ids.flatMap((id) => {
-          const row = getStatus.get(id) as { status: ReviewFlagStatus } | null;
-          return row ? [row.status] : [];
-        });
-        if (statuses.length === ids.length && statuses.length > 0) {
-          update.run(decisionStatus(statuses), decision.id);
-        }
-      } catch {
-        // Une ancienne décision corrompue reste inchangée et visible pour diagnostic.
-      }
-    }
-  }
-
-  private hydrateDecision(row: any): ReviewDecision {
-    let flagIds: string[] = [];
-    try {
-      const parsed: unknown = JSON.parse(row.flag_ids);
-      if (Array.isArray(parsed) && parsed.every((id) => typeof id === "string")) flagIds = parsed;
-    } catch {
-      // Une décision corrompue reste visible mais ne peut acquitter aucun flag.
-    }
-    return { ...row, flag_ids: flagIds } as ReviewDecision;
-  }
 
   private conversationProvider(conversationId: string): Provider {
     const conversation = this.db.query(
@@ -512,21 +418,6 @@ export class ReviewStore {
     return conversation?.provider ?? "codex";
   }
 
-  private syncDecisionStatuses(flagId: string): void {
-    const decisions = this.db.query(`
-      SELECT id, flag_ids FROM review_decisions
-      WHERE EXISTS (SELECT 1 FROM json_each(flag_ids) WHERE value = ?)
-    `).all(flagId) as Array<{ id: string; flag_ids: string }>;
-    const getStatus = this.db.query("SELECT status FROM review_flags WHERE id = ?");
-    const update = this.db.query("UPDATE review_decisions SET status = ? WHERE id = ?");
-    for (const decision of decisions) {
-      const ids = JSON.parse(decision.flag_ids) as string[];
-      const statuses = ids.map((id) =>
-        (getStatus.get(id) as { status: ReviewFlagStatus }).status,
-      );
-      update.run(decisionStatus(statuses), decision.id);
-    }
-  }
 }
 
 function hydrateFlag(row: any): ReviewFlag {
@@ -537,28 +428,4 @@ function inferTestGap(category: string, message: string): boolean {
   const value = `${category} ${message}`;
   return /(?:absence|manque|sans|non)[^\n]{0,48}test|test[^\n]{0,48}(?:absent|manquant|critique)|test coverage|coverage[^\n]{0,32}test|couverture[^\n]{0,32}(?:test|régression)/i
     .test(value);
-}
-
-function validateDecisionPlans(plans: ReviewDecisionInput[], flagCount: number): void {
-  if (plans.length < Math.min(2, flagCount) || plans.length > 4) {
-    throw new Error("une review doit contenir entre 2 et 4 décisions ciblées");
-  }
-  const indexes = plans.flatMap((plan) => plan.flag_indexes);
-  if (
-    plans.some((plan) => !plan.question.trim() || plan.flag_indexes.length === 0)
-    || indexes.some((index) => !Number.isSafeInteger(index) || index < 0 || index >= flagCount)
-    || new Set(indexes).size !== indexes.length
-    || indexes.length !== flagCount
-  ) {
-    throw new Error("les décisions doivent couvrir chaque flag exactement une fois");
-  }
-}
-
-function decisionStatus(statuses: ReviewFlagStatus[]): ReviewDecision["status"] {
-  if (statuses.some((status) => status === "open" || status === "countered")) return "open";
-  return statuses.some((status) => status === "acked") ? "acked" : "dismissed";
-}
-
-function decisionQuestion(message: string): string {
-  return `OK pour accepter ce point : ${message}`;
 }

@@ -3,8 +3,7 @@ export type ConversationSpeed = 'standard' | 'fast'
 export type PresetPermissionMode =
   'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'bypassPermissions'
 export type FilesystemScope = 'project-and-ai-roots' | 'full-system'
-export type GardienMode = 'informatif' | 'bloquant'
-export type WorkspaceView = 'conversations' | 'git' | 'guardian' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'settings'
+export type WorkspaceView = 'conversations' | 'git' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'settings'
 
 export interface Attachment {
   name: string
@@ -51,7 +50,7 @@ export interface ProjectCostReport {
 
 export interface FleetItem {
   id: string
-  kind: 'turn' | 'subtask' | 'routine'
+  kind: 'turn' | 'subtask' | 'routine' | 'review'
   projectId: string
   projectName: string
   conversationId: string
@@ -176,8 +175,8 @@ export interface Project {
   pinned: boolean
   created_at: string
   default_preset_id: string | null
-  gardien_mode: GardienMode
   auto_counter_red: boolean
+  auto_rescan: boolean
 }
 
 export interface Preset {
@@ -337,7 +336,7 @@ export interface SubtaskResult {
 
 export type ReviewStatus = 'running' | 'done' | 'error'
 export type ReviewSeverity = 'red' | 'orange' | 'grey'
-export type ReviewFlagStatus = 'open' | 'acked' | 'dismissed' | 'countered'
+export type ReviewFlagStatus = 'open' | 'countered' | 'agent_running' | 'treated' | 'ignored' | 'resolved'
 export type CounterState = 'idle' | 'queued' | 'running' | 'done' | 'error'
 export type CounterVerdict = 'confirmed' | 'dismissed' | 'nuanced'
 
@@ -351,8 +350,10 @@ export interface ReviewFlag {
   category: string
   message: string
   test_gap?: boolean
-  decision?: string
   status: ReviewFlagStatus
+  hunk_hash?: string | null
+  subtask_id?: string | null
+  user_message?: string | null
   code_provider: Provider
   counter_state: CounterState
   counter_verdict: CounterVerdict | null
@@ -362,14 +363,6 @@ export interface ReviewFlag {
   counter_effort: string | null
   counter_subtask_id: string | null
   counter_error: string | null
-}
-
-export interface ReviewDecision {
-  id: string
-  review_id: string
-  question: string
-  flag_ids: string[]
-  status: 'open' | 'acked' | 'dismissed'
 }
 
 export interface Review {
@@ -388,15 +381,18 @@ export interface Review {
   updated_at: string
   flags: ReviewFlag[]
   code_provider: Provider
-  decisions: ReviewDecision[]
+  scope: 'worktree' | 'comparison'
+  parent_review_id: string | null
 }
 
-export interface GardienStatus {
-  mode: GardienMode
-  blocked: boolean
-  openRedCount: number
-  openFlagCount: number
-  pendingReviewCount: number
+export interface ReviewStatusSnapshot {
+  openBySeverity: Record<ReviewSeverity, number>
+  running: { reviewId: string, zoneDone: number, zoneTotal: number } | null
+}
+
+/** Événement poussé sur le canal Fleet, ciblé sur un projet. */
+export interface ReviewStatusEvent extends ReviewStatusSnapshot {
+  projectId: string
 }
 
 export interface GitGuardianReview {

@@ -153,7 +153,7 @@ export function CommandPalette({
       const actions: Array<[PaletteAction, string, string]> = [
         ['test', 'Tester', 'Proposer des vérifications ciblées'],
         ['summary', 'Résumé session', 'Lister les changements et les éléments à terminer'],
-        ['review', 'Review Gardien', 'Analyser le diff Git avec un modèle fort'],
+        ['review', 'Relire le diff', 'Analyser le diff Git avec le modèle de review'],
       ]
       for (const [action, label, detail] of actions) {
         if (matches(query, label, detail)) add({ id: `action-${action}`, group: 'Action', label, detail, run: () => onAction(action) })

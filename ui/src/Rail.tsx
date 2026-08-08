@@ -12,7 +12,6 @@ interface RailProps {
   onProjectSelect: (project: Project) => void
   onProjectCreated: (project: Project) => void
   workspaceView: WorkspaceView
-  onGuardianSelect: () => void
   onGitSelect: () => void
   onCostsSelect: () => void
   onLibrarySelect: () => void
@@ -29,7 +28,6 @@ interface RailProps {
 
 type NavName =
   | 'fleet'
-  | 'guardian'
   | 'git'
   | 'progress'
   | 'costs'
@@ -41,7 +39,6 @@ type NavName =
 
 const NAV_PATHS: Record<NavName, React.ReactNode> = {
   fleet: <path d="M2 8h3l1.5-4L9 12l1.5-4H14" />,
-  guardian: <path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" />,
   git: (
     <>
       <circle cx="5" cy="4" r="1.5" />
@@ -122,7 +119,6 @@ export function Rail({
   onProjectSelect,
   onProjectCreated,
   workspaceView,
-  onGuardianSelect,
   onGitSelect,
   onCostsSelect,
   onLibrarySelect,
@@ -171,8 +167,7 @@ export function Rail({
     badge?: number
   }> = [
     { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive },
-    { name: 'guardian', label: 'Gardien', view: 'guardian', onClick: onGuardianSelect, needsProject: true, badge: pendingReviews },
-    { name: 'git', label: 'Git', view: 'git', onClick: onGitSelect, needsProject: true },
+    { name: 'git', label: 'Git', view: 'git', onClick: onGitSelect, needsProject: true, badge: pendingReviews },
     { name: 'progress', label: 'Progression', view: 'progress', onClick: onProgressSelect },
     { name: 'costs', label: 'Coûts & quotas', view: 'costs', onClick: onCostsSelect, needsProject: true },
     { name: 'library', label: 'Bibliothèque', view: 'library', onClick: onLibrarySelect },

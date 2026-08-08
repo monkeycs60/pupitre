@@ -6,8 +6,8 @@ export interface Project {
   permission_mode: string; pinned: boolean; created_at: string;
   default_preset_id: string | null;
   filesystem_scope: FilesystemScope;
-  gardien_mode: "informatif" | "bloquant";
   auto_counter_red: boolean;
+  auto_rescan: boolean;
   /**
    * Serveurs MCP autorisés pour ce projet, par nom. `null` = aucun filtre, on
    * garde le comportement natif du CLI (tous les serveurs configurés). Une
@@ -45,6 +45,7 @@ export class ProjectStore {
         ...row,
         pinned: !!row.pinned,
         auto_counter_red: !!row.auto_counter_red,
+        auto_rescan: !!row.auto_rescan,
         filesystem_scope: normalizeFilesystemScope(row.filesystem_scope),
         mcp_servers: parseMcpServers(row.mcp_servers),
       }
@@ -59,6 +60,7 @@ export class ProjectStore {
       ...r,
       pinned: !!r.pinned,
       auto_counter_red: !!r.auto_counter_red,
+      auto_rescan: !!r.auto_rescan,
       filesystem_scope: normalizeFilesystemScope(r.filesystem_scope),
       mcp_servers: parseMcpServers(r.mcp_servers),
     }));
@@ -82,10 +84,6 @@ export class ProjectStore {
       .run(scope, id);
   }
 
-  setGardienMode(id: string, mode: "informatif" | "bloquant"): void {
-    this.db.query("UPDATE projects SET gardien_mode = ? WHERE id = ?").run(mode, id);
-  }
-
   /** `null` restaure le comportement natif : tous les serveurs configurés. */
   setMcpServers(id: string, servers: string[] | null): void {
     this.db.query("UPDATE projects SET mcp_servers = ? WHERE id = ?")
@@ -94,6 +92,11 @@ export class ProjectStore {
 
   setAutoCounterRed(id: string, enabled: boolean): void {
     this.db.query("UPDATE projects SET auto_counter_red = ? WHERE id = ?")
+      .run(enabled ? 1 : 0, id);
+  }
+
+  setAutoRescan(id: string, enabled: boolean): void {
+    this.db.query("UPDATE projects SET auto_rescan = ? WHERE id = ?")
       .run(enabled ? 1 : 0, id);
   }
 }
