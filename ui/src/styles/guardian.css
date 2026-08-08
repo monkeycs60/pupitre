@@ -7,82 +7,7 @@
   height: 100%;
   min-height: 0;
   color: var(--text);
-  background: var(--bg-app);
-}
-
-/* --- En-tête de la vue ---------------------------------------------------- */
-
-.guardian-header {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  min-height: 48px;
-  padding: var(--space-2) var(--space-5);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.guardian-header h1 {
-  margin: 0;
-  color: var(--text-strong);
-  font-size: var(--text-md);
-  font-weight: 600;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-}
-
-.guardian-header p {
-  margin: 1px 0 0;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.guardian-settings {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.guardian-auto-counter {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: 28px;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.guardian-auto-counter input {
-  accent-color: var(--accent);
-}
-
-.guardian-mode {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-
-.guardian-mode select {
-  min-width: 112px;
-  min-height: 28px;
-  padding: 3px var(--space-2);
-  color: var(--text);
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  outline: none;
-}
-
-.guardian-mode select:focus {
-  border-color: var(--accent-border);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  background: var(--bg-workspace);
 }
 
 /* --- Bandeaux d'état ------------------------------------------------------ */
@@ -98,221 +23,425 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-/* --- Trois colonnes : reviews / diff / décisions -------------------------- */
+/* --- Deux volets : sidebar de flags / diff + décision --------------------- */
 
 .guardian-layout {
-  display: grid;
-  grid-template-columns: 232px minmax(420px, 1fr) 300px;
+  display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.review-list,
-.review-decisions {
+.guardian-sidebar {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 340px;
   min-height: 0;
-  overflow-y: auto;
   background: var(--bg-panel);
-}
-
-.review-list {
   border-right: 1px solid var(--border-subtle);
 }
 
-.review-decisions {
-  border-left: 1px solid var(--border-subtle);
+.guardian-sidebar-header {
+  flex: none;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-/* --- Liste des reviews ---------------------------------------------------- */
+.guardian-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
 
-.review-list-item {
-  display: block;
+.guardian-title-row h1 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.guardian-open-pill {
+  padding: 1px 7px;
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--danger-soft);
+  border-radius: var(--r-full);
+}
+
+.guardian-subtitle {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.guardian-review-select {
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  margin-top: var(--space-2);
   color: var(--text);
+  font-size: var(--text-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.guardian-review-select:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.guardian-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.guardian-auto-counter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 24px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.guardian-auto-counter input {
+  accent-color: var(--accent);
+}
+
+.guardian-mode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.guardian-mode select {
+  min-height: 24px;
+  padding: 1px var(--space-1);
+  color: var(--text);
+  font-size: var(--text-xs);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.guardian-mode select:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* --- Boutons de sévérité --------------------------------------------------- */
+
+.guardian-severity-row {
+  display: flex;
+  gap: 5px;
+  margin-top: var(--space-3);
+}
+
+.guardian-severity-btn {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  padding: 7px 8px;
+  color: var(--text-muted);
+  text-align: left;
+  background: var(--neutral-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.guardian-severity-btn:hover {
+  border-color: var(--border-strong);
+}
+
+.guardian-severity-count {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.guardian-severity-label {
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.guardian-severity-btn.severity-red {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-soft);
+}
+
+.guardian-severity-btn.severity-orange {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-color: var(--warn-soft);
+}
+
+.guardian-severity-btn.severity-acked {
+  color: var(--ok);
+  background: var(--ok-soft);
+  border-color: var(--ok-soft);
+}
+
+.guardian-severity-btn.is-active {
+  border-color: currentColor;
+}
+
+/* --- Liste des flags -------------------------------------------------------- */
+
+.guardian-flag-list {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-height: 0;
+  padding: var(--space-2);
+  overflow-y: auto;
+  align-content: start;
+}
+
+.guardian-flag-card {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px;
+  color: inherit;
   text-align: left;
   background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-subtle);
+  border-left: 2px solid var(--border-strong);
+  border-radius: var(--r-md);
   cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease);
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
 
-.review-list-item:hover {
+.guardian-flag-card:hover {
   background: var(--bg-hover);
 }
 
-.review-list-item.is-selected {
-  background: var(--bg-active);
-  box-shadow: inset 2px 0 var(--accent);
+.guardian-flag-card.is-selected {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  border-left-color: var(--accent);
 }
 
-.review-list-title,
-.review-list-meta {
-  display: block;
+.guardian-flag-card.severity-orange {
+  border-left-color: var(--warn);
+}
+
+.guardian-flag-card.severity-red {
+  border-left-color: var(--danger);
+}
+
+.guardian-flag-card.is-acquitted {
+  opacity: 0.72;
+}
+
+.guardian-flag-card-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.guardian-flag-severity {
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  background: var(--neutral-soft);
+  border-radius: var(--r-xs);
+}
+
+.guardian-flag-card.severity-red .guardian-flag-severity {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.guardian-flag-card.severity-orange .guardian-flag-severity {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.guardian-flag-where {
   overflow: hidden;
+  margin-left: auto;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 150px;
 }
 
-.review-list-title {
-  margin-bottom: 2px;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.review-list-item.is-selected .review-list-title {
-  color: var(--text-strong);
-}
-
-.review-list-meta {
-  margin-top: 1px;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
+.guardian-flag-text {
+  color: var(--text);
+  font-size: var(--text-base);
   line-height: 1.45;
 }
 
-.review-list-meta.is-running {
-  color: var(--accent);
+.guardian-flag-card.is-acquitted .guardian-flag-text {
+  color: var(--text-muted);
+  text-decoration: line-through;
 }
 
-.review-list-meta.is-error {
-  color: var(--danger);
+.guardian-flag-status {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
 }
 
-/* --- Colonne des décisions ------------------------------------------------ */
+/* --- Volet principal : diff + décision -------------------------------------- */
 
-.review-decisions-heading {
-  position: sticky;
-  z-index: 1;
-  top: 0;
+.guardian-main {
   display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.guardian-main-header {
+  display: flex;
+  flex: none;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  min-height: 36px;
-  padding: var(--space-1) var(--space-3);
+  gap: var(--space-3);
+  min-height: 52px;
+  padding: 0 var(--space-5);
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.review-decisions-heading h2 {
-  margin: 0;
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  line-height: 1.45;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+.guardian-main-title {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
 }
 
-.review-decisions-heading button,
-.review-decision-actions button,
-.counter-opinion-action {
-  min-height: 28px;
-  padding: 3px var(--space-2);
+.guardian-diff-added {
+  color: var(--ok);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.guardian-diff-removed {
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.guardian-main-header-spacer {
+  flex: 1;
+}
+
+.guardian-main-header button {
+  min-height: 30px;
+  padding: 0 var(--space-3);
   color: var(--text-muted);
   font-size: var(--text-sm);
-  font-weight: 500;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
-    background-color var(--dur-fast) var(--ease);
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
 
-.review-decisions-heading button:hover:not(:disabled),
-.review-decision-actions button:hover:not(:disabled),
-.counter-opinion-action:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--bg-hover);
+.guardian-main-header button:hover {
+  color: var(--text-strong);
   border-color: var(--border-strong);
 }
 
-.review-decisions-heading button:disabled,
-.review-decision-actions button:disabled,
-.counter-opinion-action:disabled {
-  color: var(--text-faint);
-  cursor: default;
+.guardian-main-body {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-4) var(--space-5) var(--space-7);
+  overflow: auto;
 }
 
-.review-decision {
-  padding: var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
+.guardian-diff-panel {
+  overflow: auto;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
 }
 
-.review-decision p {
-  margin: var(--space-1) 0 var(--space-2);
-  color: var(--text);
-  font-size: var(--text-sm);
-  line-height: 1.5;
+/* --- Décision affichée sous le diff ------------------------------------------ */
+
+.guardian-decision {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border-subtle);
 }
 
-.review-decision .review-decision-question {
-  margin: 0 0 var(--space-2);
+.guardian-decision-question {
+  margin: 0;
   color: var(--text-strong);
   font-size: var(--text-base);
   font-weight: 600;
   line-height: 1.45;
 }
 
-/* Une décision traitée reste lisible mais passe au second plan. */
-.review-decision.is-acked .review-decision-question,
-.review-decision.is-dismissed .review-decision-question {
+.guardian-decision.is-acked .guardian-decision-question,
+.guardian-decision.is-dismissed .guardian-decision-question {
   color: var(--text-muted);
 }
 
-.review-decision.is-acked .decision-flag,
-.review-decision.is-dismissed .decision-flag {
+.guardian-decision.is-acked .decision-flag,
+.guardian-decision.is-dismissed .decision-flag {
   opacity: 0.72;
 }
 
 /* --- Flag rattaché à une décision ----------------------------------------- */
 
 .decision-flag {
-  padding: var(--space-2) 0 var(--space-2) var(--space-2);
+  padding: var(--space-3);
+  background: var(--danger-soft);
   border-top: 1px solid var(--border-subtle);
-  border-left: 2px solid var(--border-strong);
+  border-radius: var(--r-md);
 }
 
 .decision-flag.severity-orange {
-  border-left-color: var(--warn);
+  background: var(--warn-soft);
 }
 
-.decision-flag.severity-red {
-  border-left-color: var(--danger);
+.decision-flag.severity-grey {
+  background: var(--neutral-soft);
 }
 
 .decision-flag > header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--space-2);
-}
-
-.decision-flag-location {
-  overflow: hidden;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .decision-flag-severity {
   flex: none;
   padding: 0 6px;
-  color: var(--text-muted);
+  color: var(--danger);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  background: var(--neutral-soft);
-  border-radius: var(--r-full);
+  background: var(--danger-soft);
+  border-radius: var(--r-xs);
 }
 
 .decision-flag.severity-orange .decision-flag-severity {
@@ -320,16 +449,32 @@
   background: var(--warn-soft);
 }
 
-.decision-flag.severity-red .decision-flag-severity {
-  color: var(--danger);
-  background: var(--danger-soft);
+.decision-flag.severity-grey .decision-flag-severity {
+  color: var(--text-muted);
+  background: var(--neutral-soft);
+}
+
+.decision-flag-location {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decision-flag > p {
+  margin: var(--space-2) 0;
+  color: var(--text-muted);
+  font-size: var(--text-code);
+  line-height: 1.6;
 }
 
 .decision-flag-author {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  margin-top: var(--space-1);
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
@@ -346,7 +491,7 @@
 
 /* --- Contre-avis : en attente / en cours / rendu -------------------------- */
 
-.review-decision .counter-opinion-state {
+.decision-flag .counter-opinion-state {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -379,7 +524,7 @@
   }
 }
 
-.review-decision .counter-opinion-error {
+.decision-flag .counter-opinion-error {
   padding: var(--space-1) var(--space-2);
   margin: var(--space-2) 0;
   color: var(--danger);
@@ -430,7 +575,7 @@
   color: var(--warn);
 }
 
-.review-decision .counter-opinion p {
+.decision-flag .counter-opinion p {
   margin: var(--space-1) 0;
   font-size: var(--text-sm);
 }
@@ -441,14 +586,63 @@
   font-size: var(--text-xs);
 }
 
-/* --- Actions d'une décision ----------------------------------------------- */
+/* --- Actions ---------------------------------------------------------------- */
+
+.guardian-decision-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}
+
+.counter-opinion-action {
+  min-height: 26px;
+  padding: 0 10px;
+  color: var(--danger);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--danger-soft);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.counter-opinion-action:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.counter-opinion-action:disabled {
+  color: var(--text-faint);
+  border-color: var(--border);
+  cursor: default;
+}
 
 .review-decision-actions {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  margin-top: var(--space-2);
   font-size: var(--text-sm);
+}
+
+.review-decision-actions button {
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.review-decision-actions button:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
 .review-decision-status {
@@ -493,8 +687,8 @@
 }
 
 @media (max-width: 1100px) {
-  .guardian-layout {
-    grid-template-columns: 200px minmax(420px, 1fr) 264px;
+  .guardian-sidebar {
+    width: 280px;
   }
 
   .review-decision-actions {

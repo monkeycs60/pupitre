@@ -194,7 +194,6 @@ export function QuotaStatus({ snapshot }: { snapshot: QuotaSnapshot }) {
 
   return (
     <section className="quota-status" aria-label="Usage des quotas">
-      <span className="quota-status-title">Usage</span>
       <CompactProviderQuota provider="claude" state={snapshot.claude} now={now} />
       <CompactProviderQuota provider="codex" state={snapshot.codex} now={now} />
     </section>

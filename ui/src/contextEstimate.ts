@@ -85,10 +85,65 @@ function approximateCodeTokens(text: string): number {
   return Math.round(text.length / CHARS_PER_TOKEN_CODE)
 }
 
+interface AssistantTextEstimate {
+  /** Texte visible présent dans l'historique, deltas dédupliqués. */
+  totalTokens: number
+  /** Texte visible produit par le dernier tour, pour isoler son raisonnement. */
+  latestTurnTokens: number
+}
+
 /**
- * Décompose le contexte occupé. Seul le total vient du provider : le détail est
- * reconstitué depuis les événements stockés, et le reliquat regroupe ce que le
- * CLI ne publie pas (prompt système, définitions d'outils MCP, mémoire projet).
+ * Les providers envoient les deltas puis le message final complet. Le final
+ * remplace donc les deltas pour le calcul, comme le fait déjà `groupEvents`.
+ */
+function assistantTextEstimate(events: AppEvent[]): AssistantTextEstimate {
+  const turns = new Map<number, number>()
+  let turn = -1
+  let pending = ''
+
+  const add = (tokens: number) => {
+    if (tokens <= 0) return
+    turns.set(turn, (turns.get(turn) ?? 0) + tokens)
+  }
+
+  const flushPending = () => {
+    if (!pending) return
+    add(approximateTokens(pending))
+    pending = ''
+  }
+
+  for (const event of events) {
+    if (event.type === 'user-message') {
+      flushPending()
+      turn += 1
+    } else if (event.type === 'text-delta') {
+      if (turn < 0) turn = 0
+      pending += event.text
+    } else if (event.type === 'text-final') {
+      if (turn < 0) turn = 0
+      // Le final est le texte complet : il remplace les deltas accumulés.
+      pending = ''
+      add(approximateTokens(event.text))
+    } else if (event.type === 'tool-start' || event.type === 'status') {
+      // Un flux sans final reste comptable lorsqu'il est interrompu par un
+      // outil ou par la fin du tour.
+      flushPending()
+    }
+  }
+  flushPending()
+
+  const totalTokens = [...turns.values()].reduce((sum, tokens) => sum + tokens, 0)
+  return {
+    totalTokens,
+    latestTurnTokens: turn >= 0 ? turns.get(turn) ?? 0 : 0,
+  }
+}
+
+/**
+ * Décompose le contexte occupé. Le total vient du dernier snapshot provider ;
+ * le détail est reconstitué depuis les événements stockés, et le reliquat
+ * regroupe ce que le CLI ne publie pas (prompt système, définitions d'outils
+ * MCP, mémoire projet).
  */
 /** Au-delà, l'incompressible pèse assez pour valoir un arbitrage MCP. */
 export const PERSISTENT_ALERT_RATIO = 0.3
@@ -130,36 +185,92 @@ export function contextParts(
   let tools = 0
   let turns = 0
   let images = 0
-  // Génération réellement facturée, tour par tour : elle inclut le raisonnement
-  // du modèle, que le texte visible ne montre pas.
-  let generated = 0
 
   for (const event of events) {
     if (event.type === 'user-message') {
       user += approximateTokens(event.text)
       images += event.images.length * TOKENS_PER_IMAGE
       turns += 1
-    } else if (event.type === 'text-final' || event.type === 'text-delta') {
-      assistantText += approximateTokens(event.text)
     } else if (event.type === 'tool-end') {
       tools += approximateCodeTokens(event.output)
     } else if (event.type === 'tool-start') {
       tools += approximateCodeTokens(JSON.stringify(event.input ?? ''))
-    } else if (event.type === 'usage') {
-      generated += event.outputTokens
     }
   }
 
-  // Le raisonnement est la part générée que le texte visible n'explique pas.
-  const reasoning = Math.max(0, generated - assistantText)
+  const assistant = assistantTextEstimate(events)
+  assistantText = assistant.totalTokens
+  // `last` du provider décrit le dernier appel et non le cumul de la session.
+  // Les snapshots précédents servent au coût, pas à la fenêtre de contexte.
+  const latestUsage = events.filter((event) => event.type === 'usage').at(-1)
+  const reasoning = Math.max(
+    0,
+    (latestUsage?.outputTokens ?? 0) - assistant.latestTurnTokens,
+  )
 
   const pupitre = turns * PUPITRE_PREAMBLE_TOKENS
-  const measured = user + images + assistantText + reasoning + tools + pupitre
-    + conductorTokens
+  // Une estimation locale peut rester supérieure au snapshot provider (texte
+  // compacté, ratios caractères/token, historique tronqué). Dans ce cas, on
+  // garde la part Pupitre et recale les catégories observées pour que leur
+  // somme reste lisible et ne dépasse jamais le total de référence.
+  const fixedPupitre = usedTokens > 0
+    ? Math.min(usedTokens, pupitre + conductorTokens)
+    : pupitre + conductorTokens
+  const variableMeasured = user + images + assistantText + reasoning + tools
+  const rawMeasured = variableMeasured + fixedPupitre
+  if (usedTokens > 0 && rawMeasured > usedTokens && variableMeasured > 0) {
+    const scale = Math.max(0, usedTokens - fixedPupitre) / variableMeasured
+    user = Math.floor(user * scale)
+    images = Math.floor(images * scale)
+    assistantText = Math.floor(assistantText * scale)
+    tools = Math.floor(tools * scale)
+    // Le reliquat d'arrondi sera absorbé par « Autres » ci-dessous.
+    const scaledReasoning = Math.floor(reasoning * scale)
+    const measured = user + images + assistantText + scaledReasoning + tools
+      + fixedPupitre
+    const remainder = usedTokens > measured ? usedTokens - measured : 0
+    return buildContextParts(
+      { user, images, assistantText, reasoning: scaledReasoning, tools },
+      usedTokens,
+      windowTokens,
+      fixedPupitre,
+      baselineTokens,
+      profile,
+      remainder,
+    )
+  }
+
+  const measured = variableMeasured + fixedPupitre
   // Ce que Pupitre injecte lui-même est isolé : c'est la seule part de la
   // charge fixe sur laquelle l'application a la main.
-  const fixedPupitre = pupitre + conductorTokens
   const remainder = usedTokens > measured ? usedTokens - measured : 0
+  return buildContextParts(
+    { user, images, assistantText, reasoning, tools },
+    usedTokens,
+    windowTokens,
+    fixedPupitre,
+    baselineTokens,
+    profile,
+    remainder,
+  )
+}
+
+function buildContextParts(
+  values: {
+    user: number
+    images: number
+    assistantText: number
+    reasoning: number
+    tools: number
+  },
+  usedTokens: number,
+  windowTokens: number,
+  fixedPupitre: number,
+  baselineTokens: number,
+  profile: ContextProfile,
+  remainder: number,
+): ContextPart[] {
+  const { user, images, assistantText, reasoning, tools } = values
   // La charge fixe est bornée par une MESURE, jamais déduite : sans ce garde-fou
   // elle absorbait tout l'écart d'estimation et affichait des centaines de
   // milliers de tokens pour un prompt système qui en pèse trente mille.

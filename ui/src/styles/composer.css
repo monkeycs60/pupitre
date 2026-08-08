@@ -7,9 +7,8 @@
 .composer-area {
   position: relative;
   flex: none;
-  padding: var(--space-3) var(--space-6) var(--space-4);
-  background: var(--bg-toolbar);
-  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-2) var(--space-6) var(--space-5);
+  background: var(--bg-workspace);
 }
 
 .composer {
@@ -17,9 +16,10 @@
   width: min(100%, 840px);
   margin: 0 auto;
   overflow: hidden;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: 0 -2px 24px rgba(0, 0, 0, 0.25);
   transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 
@@ -795,6 +795,10 @@
   gap: var(--space-1);
 }
 
+.composer-action-menu {
+  position: relative;
+}
+
 .composer-file-input {
   position: absolute;
   width: 1px;
@@ -805,8 +809,7 @@
 
 .send-button,
 .cancel-button,
-.debrief-button,
-.test-button,
+.composer-action-trigger,
 .attach-button {
   min-height: 28px;
   padding: 3px var(--space-3);
@@ -828,16 +831,14 @@
   background: var(--accent-hover);
 }
 
-.debrief-button,
-.test-button,
+.composer-action-trigger,
 .attach-button {
   color: var(--text-muted);
   background: transparent;
   border: 1px solid var(--border);
 }
 
-.debrief-button:hover:not(:disabled),
-.test-button:hover:not(:disabled),
+.composer-action-trigger:hover:not(:disabled),
 .attach-button:hover:not(:disabled) {
   color: var(--text);
   background: var(--bg-hover);
@@ -856,10 +857,54 @@
 
 .send-button:disabled,
 .cancel-button:disabled,
-.debrief-button:disabled,
-.test-button:disabled,
+.composer-action-trigger:disabled,
 .attach-button:disabled {
   opacity: 0.55;
+  cursor: default;
+}
+
+.composer-action-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.composer-action-trigger span {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.composer-action-list {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-1));
+  z-index: 30;
+  display: grid;
+  min-width: 160px;
+  padding: var(--space-1);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-popover);
+}
+
+.composer-action-list button {
+  padding: 6px var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+
+.composer-action-list button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.composer-action-list button:disabled {
+  color: var(--text-faint);
   cursor: default;
 }
 

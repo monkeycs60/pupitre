@@ -20,6 +20,16 @@ export interface DebriefBlock {
   createdAt: string
 }
 
+export interface SessionSummaryBlock {
+  kind: 'session-summary'
+  id: string
+  summaryId: string
+  eventIdFrom: number
+  eventIdTo: number
+  contentMd: string
+  createdAt: string
+}
+
 export interface TestInventoryBlock {
   kind: 'test-inventory'
   id: string
@@ -28,7 +38,12 @@ export interface TestInventoryBlock {
   createdAt: string
 }
 
-export type StreamBlock = EventBlock | SubtaskBlock | DebriefBlock | TestInventoryBlock
+export type StreamBlock =
+  | EventBlock
+  | SubtaskBlock
+  | DebriefBlock
+  | SessionSummaryBlock
+  | TestInventoryBlock
 
 export function guardianAckCount(events: ReadonlyArray<AppEvent>): number {
   return events.reduce(
@@ -143,6 +158,18 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
           kind: 'debrief',
           id: `debrief-${eventKey}-${event.debriefId}`,
           debriefId: event.debriefId,
+          eventIdFrom: event.eventIdFrom,
+          eventIdTo: event.eventIdTo,
+          contentMd: event.contentMd,
+          createdAt: event.createdAt,
+        })
+        break
+      case 'session-summary-ref':
+        assistant = null
+        blocks.push({
+          kind: 'session-summary',
+          id: `session-summary-${eventKey}-${event.summaryId}`,
+          summaryId: event.summaryId,
           eventIdFrom: event.eventIdFrom,
           eventIdTo: event.eventIdTo,
           contentMd: event.contentMd,

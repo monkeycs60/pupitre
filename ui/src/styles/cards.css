@@ -94,6 +94,81 @@
   color: var(--accent-hover);
 }
 
+/* --- Résumé de session --------------------------------------------------- */
+
+.session-summary-card {
+  margin: var(--space-2) 0 var(--space-4);
+  overflow: hidden;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-left: 2px solid var(--ok);
+  border-radius: var(--r-md);
+}
+
+.session-summary-card summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  list-style: none;
+}
+
+.session-summary-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.session-summary-card summary::before {
+  content: '›';
+  color: var(--text-faint);
+  font-size: var(--text-base);
+  transition: transform var(--dur-fast) var(--ease);
+  transform: rotate(0deg);
+}
+
+.session-summary-card[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.session-summary-card-kicker {
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.session-summary-card-range {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-summary-card-content {
+  padding: 0 var(--space-4) var(--space-3) var(--space-6);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.session-summary-card-content h2 {
+  margin: var(--space-3) 0 var(--space-1);
+  color: var(--text-strong);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.session-summary-card-content p,
+.session-summary-card-content ul {
+  margin: var(--space-1) 0;
+}
+
 /* --- Sous-tâches déléguées ------------------------------------------------ */
 
 .subtask-card {

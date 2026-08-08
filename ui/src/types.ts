@@ -275,6 +275,15 @@ export interface Debrief {
   created_at: string
 }
 
+export interface SessionSummary {
+  id: string
+  conversation_id: string
+  event_id_from: number
+  event_id_to: number
+  content_md: string
+  created_at: string
+}
+
 // Miroir de sidecar/src/quotas.ts : forme normalisée des deux providers.
 export interface QuotaWindow {
   label: string
@@ -510,6 +519,14 @@ export type AppEvent =
   | {
       type: 'debrief-ref'
       debriefId: string
+      eventIdFrom: number
+      eventIdTo: number
+      contentMd: string
+      createdAt: string
+    }
+  | {
+      type: 'session-summary-ref'
+      summaryId: string
       eventIdFrom: number
       eventIdTo: number
       contentMd: string

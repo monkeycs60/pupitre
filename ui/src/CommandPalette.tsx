@@ -17,7 +17,7 @@ import type {
   WorkspaceView,
 } from './types'
 
-type PaletteAction = 'test' | 'debrief' | 'review'
+type PaletteAction = 'test' | 'summary' | 'review'
 
 interface CommandPaletteProps {
   open: boolean
@@ -152,7 +152,7 @@ export function CommandPalette({
     if (currentConversation) {
       const actions: Array<[PaletteAction, string, string]> = [
         ['test', 'Tester', 'Proposer des vérifications ciblées'],
-        ['debrief', 'Créer un Débrief', 'Résumer décisions et implications'],
+        ['summary', 'Résumé session', 'Lister les changements et les éléments à terminer'],
         ['review', 'Review Gardien', 'Analyser le diff Git avec un modèle fort'],
       ]
       for (const [action, label, detail] of actions) {

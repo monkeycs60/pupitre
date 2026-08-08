@@ -7,25 +7,26 @@
 :root {
   color-scheme: dark;
 
-  /* Surfaces */
-  --bg-app: #18191d;
-  --bg-workspace: #1d1f24;
-  --bg-panel: #22252c;
-  --bg-sidebar: #292c34;
-  --bg-sidebar-header: #2d3039;
-  --bg-titlebar: #202228;
-  --bg-toolbar: #252830;
-  --bg-raised: #2b2f38;
-  --bg-overlay: #323640;
-  --bg-input: #282c34;
-  --bg-hover: rgba(255, 255, 255, 0.075);
-  --bg-active: rgba(182, 160, 245, 0.18);
+  /* Surfaces — refonte « pupitre-redesign » */
+  --bg-app: #17181c;
+  --bg-workspace: #1c1e23;
+  --bg-panel: #212429;
+  --bg-sidebar: #24272e;
+  --bg-rail: #1e2027;
+  --bg-sidebar-header: #24272e;
+  --bg-titlebar: #1b1d22;
+  --bg-toolbar: #212429;
+  --bg-raised: #26282f;
+  --bg-overlay: #2a2d35;
+  --bg-input: #272a31;
+  --bg-hover: rgba(255, 255, 255, 0.07);
+  --bg-active: rgba(139, 124, 255, 0.14);
   --scrim: rgba(12, 12, 15, 0.66);
 
   /* Filets */
-  --border-subtle: rgba(255, 255, 255, 0.075);
-  --border: rgba(255, 255, 255, 0.13);
-  --border-strong: rgba(255, 255, 255, 0.22);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
 
   /* Texte */
   --text: #e9e8ed;
@@ -34,17 +35,25 @@
   --text-faint: #898691;
 
   /* Accent et sémantique */
-  --accent: #b6a0f5;
-  --accent-hover: #c7b7fa;
-  --accent-soft: rgba(182, 160, 245, 0.16);
-  --accent-border: rgba(182, 160, 245, 0.48);
-  --on-accent: #211d29;
+  --accent: #8b7cff;
+  --accent-hover: #a396ff;
+  --accent-bright: #c4bbff;
+  --accent-soft: rgba(139, 124, 255, 0.14);
+  --accent-border: rgba(139, 124, 255, 0.5);
+  --on-accent: #191623;
   --danger: #f2555a;
   --danger-soft: rgba(242, 85, 90, 0.12);
   --warn: #f0a852;
   --warn-soft: rgba(240, 168, 82, 0.12);
   --ok: #4ec9a5;
   --ok-soft: rgba(78, 201, 165, 0.12);
+  --streak: #f0b64a;
+  --streak-soft: rgba(240, 182, 74, 0.12);
+  /* Providers : codex → vert, claude → or (badges du redesign) */
+  --prov-codex: #4ec9a5;
+  --prov-codex-soft: rgba(78, 201, 165, 0.12);
+  --prov-claude: #f0b64a;
+  --prov-claude-soft: rgba(240, 182, 74, 0.12);
   --neutral-soft: rgba(255, 255, 255, 0.05);
 
   /* Palette catégorielle des graphiques, validée pour fond sombre sur la liste
@@ -178,6 +187,38 @@ pre {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* --- Animations partagées (gamification, jauges, live) ------------------ */
+
+@keyframes livepulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.8); }
+}
+
+@keyframes gauge-fill {
+  from { width: 0; }
+}
+
+@keyframes ring-in {
+  from { stroke-dashoffset: var(--ring-len, 110); }
+}
+
+@keyframes sheen {
+  0% { transform: translateX(-130%); }
+  55%, 100% { transform: translateX(360%); }
+}
+
+@keyframes xp-rise {
+  0% { opacity: 0; transform: translateY(8px) scale(0.96); }
+  18% { opacity: 1; transform: translateY(0) scale(1); }
+  78% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.97) translateY(-6px); }
+  to { opacity: 1; transform: none; }
 }
 
 /* --- Mouvement neutralisé sur demande ----------------------------------- */

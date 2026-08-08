@@ -9,7 +9,7 @@ import type {
 import {
   ApiError,
   cancelConversation,
-  createDebrief,
+  createSessionSummary,
   createTestInventory,
   createConversation,
   importMediaPath,
@@ -168,8 +168,9 @@ export function Composer({
   const [isDragActive, setIsDragActive] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
-  const [isCreatingDebrief, setIsCreatingDebrief] = useState(false)
+  const [isCreatingSessionSummary, setIsCreatingSessionSummary] = useState(false)
   const [isCreatingTestInventory, setIsCreatingTestInventory] = useState(false)
+  const [actionsOpen, setActionsOpen] = useState(false)
   const [configReady, setConfigReady] = useState(!isNewConversation)
   const [toast, setToast] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -378,22 +379,24 @@ export function Composer({
     }
   }
 
-  async function handleDebrief() {
-    if (conversationId === null || isCreatingDebrief || isRunning) return
-    setIsCreatingDebrief(true)
+  async function handleSessionSummary() {
+    if (conversationId === null || isCreatingSessionSummary || isRunning) return
+    setActionsOpen(false)
+    setIsCreatingSessionSummary(true)
     setToast(null)
     try {
-      await createDebrief(conversationId)
-      setToast('Débrief ajouté au fil.')
+      await createSessionSummary(conversationId)
+      setToast('Résumé session ajouté au fil.')
     } catch (error: unknown) {
       setToast(errorMessage(error))
     } finally {
-      setIsCreatingDebrief(false)
+      setIsCreatingSessionSummary(false)
     }
   }
 
   async function handleTestInventory() {
     if (conversationId === null || isCreatingTestInventory || isRunning) return
+    setActionsOpen(false)
     setIsCreatingTestInventory(true)
     setToast(null)
     try {
@@ -501,7 +504,7 @@ export function Composer({
         ) : null}
 
         <div className="composer-actions">
-          <span>Collez ou déposez un fichier · Entrée pour envoyer · Shift+Entrée pour une nouvelle ligne · <HelpLink slug="tester" label="Tester ?" /> · <HelpLink slug="debrief" label="Débrief ?" /></span>
+          <span>Collez ou déposez un fichier · Entrée pour envoyer · Shift+Entrée pour une nouvelle ligne · <HelpLink slug="tester" label="Tester ?" /></span>
           <div>
             <input
               ref={fileInputRef}
@@ -522,26 +525,39 @@ export function Composer({
               Joindre
             </button>
             {!isNewConversation ? (
-              <button
-                type="button"
-                className="test-button"
-                onClick={() => void handleTestInventory()}
-                disabled={isRunning || isCreatingTestInventory || isSubmitting}
-                title="Relire le travail, choisir un périmètre puis exécuter des tests avec preuves"
-              >
-                {isCreatingTestInventory ? 'Inventaire…' : 'Tester'}
-              </button>
-            ) : null}
-            {!isNewConversation ? (
-              <button
-                type="button"
-                className="debrief-button"
-                onClick={() => void handleDebrief()}
-                disabled={isRunning || isCreatingDebrief || isSubmitting}
-                title="Créer un bilan versionné des décisions récentes pour reprendre le contrôle ou préparer une passation"
-              >
-                {isCreatingDebrief ? 'Débrief en cours…' : 'Reprendre le contrôle'}
-              </button>
+              <div className="composer-action-menu">
+                <button
+                  type="button"
+                  className="composer-action-trigger"
+                  onClick={() => setActionsOpen((current) => !current)}
+                  aria-expanded={actionsOpen}
+                  aria-haspopup="menu"
+                  disabled={isRunning || isSubmitting}
+                >
+                  {isCreatingTestInventory || isCreatingSessionSummary ? 'Action…' : 'Actions'}
+                  <span aria-hidden="true">⌄</span>
+                </button>
+                {actionsOpen ? (
+                  <div className="composer-action-list" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void handleTestInventory()}
+                      disabled={isCreatingTestInventory || isCreatingSessionSummary}
+                    >
+                      {isCreatingTestInventory ? 'Inventaire en cours…' : 'Tester'}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void handleSessionSummary()}
+                      disabled={isCreatingTestInventory || isCreatingSessionSummary}
+                    >
+                      {isCreatingSessionSummary ? 'Résumé en cours…' : 'Résumé session'}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             {isRunning && conversationId !== null ? (
               <button

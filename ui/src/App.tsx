@@ -6,8 +6,10 @@ import type {
 } from 'react'
 import { Chat } from './Chat'
 import { Sidebar } from './Sidebar'
+import { Rail } from './Rail'
 import { Titlebar } from './Titlebar'
 import { SwitchModelModal } from './SwitchModelModal'
+import { HandoffModal } from './HandoffModal'
 import { GuardianView } from './GuardianView'
 import { ReviewDialog } from './ReviewDialog'
 import type { Conversation, Project, Review } from './types'
@@ -33,7 +35,7 @@ import { RoutinesView } from './RoutinesView'
 import { useAppNotifications } from './useAppNotifications'
 import { FleetView } from './FleetView'
 import { CommandPalette } from './CommandPalette'
-import { createDebrief, createTestInventory } from './api'
+import { createSessionSummary, createTestInventory } from './api'
 import type { SkillSummary } from './types'
 import { CostsView } from './CostsView'
 import { MemoryView } from './MemoryView'
@@ -82,6 +84,7 @@ function App() {
   const [conversationListVersion, setConversationListVersion] = useState(0)
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
+  const [showHandoff, setShowHandoff] = useState(false)
   const [showReviewDialog, setShowReviewDialog] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
@@ -285,9 +288,11 @@ function App() {
       setIsCreatingConversation(false)
       setShowSwitchModel(false)
       setShowReviewDialog(false)
-      setWorkspaceView('conversations')
       setFocusedReviewId(null)
     }
+    // Cliquer un avatar de projet dans le rail ramène toujours à ses
+    // conversations, même si le projet était déjà sélectionné.
+    setWorkspaceView('conversations')
     setSelectedProject(project)
   }
 
@@ -340,6 +345,7 @@ function App() {
     setSelectedConversation(conversation)
     setIsCreatingConversation(false)
     setShowSwitchModel(false)
+    setShowHandoff(false)
     setConversationListVersion((current) => current + 1)
   }
 
@@ -435,7 +441,7 @@ function App() {
     setWorkspaceView('conversations')
   }
 
-  async function handlePaletteAction(action: 'test' | 'debrief' | 'review') {
+  async function handlePaletteAction(action: 'test' | 'summary' | 'review') {
     if (!selectedConversation) return
     setWorkspaceView('conversations')
     if (action === 'review') {
@@ -443,7 +449,7 @@ function App() {
       return
     }
     if (action === 'test') await createTestInventory(selectedConversation.id)
-    else await createDebrief(selectedConversation.id)
+    else await createSessionSummary(selectedConversation.id)
   }
 
   async function handleRoutineConversationSelect(projectId: string, conversationId: string) {
@@ -500,13 +506,38 @@ function App() {
                     ? 'Paramètres'
       : selectedConversation?.title ?? null
 
+  const showSidebar = workspaceView === 'conversations'
+
   return (
     <ActionFormatContext.Provider value={actionFormat}>
     <main
-      className="app-shell"
+      className={`app-shell ${showSidebar ? '' : 'app-shell--no-sidebar'}`}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
-      <Titlebar crumbs={[selectedProject?.name, titlebarView]} />
+      <Titlebar
+        crumbs={[selectedProject?.name, titlebarView]}
+        onSearch={() => setPaletteOpen(true)}
+        gamification={gamification.snapshot}
+      />
+      <Rail
+        selectedProject={selectedProject}
+        projectListVersion={projectListVersion}
+        onProjectSelect={handleProjectSelect}
+        onProjectCreated={handleProjectSelect}
+        workspaceView={workspaceView}
+        onGuardianSelect={handleGuardianSelect}
+        onGitSelect={handleGitSelect}
+        onCostsSelect={handleCostsSelect}
+        onLibrarySelect={handleLibrarySelect}
+        onRoutinesSelect={handleRoutinesSelect}
+        onFleetSelect={handleFleetSelect}
+        onMemorySelect={handleMemorySelect}
+        onHelpSelect={() => handleHelpSelect()}
+        onProgressSelect={handleProgressSelect}
+        onSettingsSelect={handleSettingsSelect}
+      />
+      {showSidebar ? (
+      <>
       <Sidebar
         selectedProject={selectedProject}
         selectedConversation={selectedConversation}
@@ -515,24 +546,12 @@ function App() {
         onConversationCreate={handleConversationCreate}
         onConversationClosed={handleConversationClosed}
         conversationListVersion={conversationListVersion}
-        projectListVersion={projectListVersion}
         quotas={quotas}
         runningSubtasks={runningSubtasks}
         workspaceView={workspaceView}
-        onGuardianSelect={handleGuardianSelect}
-        onGitSelect={handleGitSelect}
-        onCostsSelect={handleCostsSelect}
-        onLibrarySelect={handleLibrarySelect}
-        onRoutinesSelect={handleRoutinesSelect}
-        onFleetSelect={handleFleetSelect}
-        onPaletteSelect={() => setPaletteOpen(true)}
-        onMemorySelect={handleMemorySelect}
-        onHelpSelect={() => handleHelpSelect()}
         onProgressSelect={handleProgressSelect}
-        onSettingsSelect={handleSettingsSelect}
         gamification={gamification.snapshot}
         xpPulse={gamification.xpPulse}
-        reviewListVersion={effectiveReviewListVersion}
       />
       <div
         className="sidebar-resize-handle"
@@ -550,6 +569,8 @@ function App() {
       >
         <span aria-hidden="true" />
       </div>
+      </>
+      ) : null}
 
       <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'costs' ? 'Coûts' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : workspaceView === 'memory' ? 'Mémoire' : workspaceView === 'help' ? 'Aide' : workspaceView === 'progress' ? 'Progression' : workspaceView === 'settings' ? 'Paramètres' : 'Conversation'}>
         {workspaceView === 'library' ? (
@@ -603,29 +624,43 @@ function App() {
         ) : (
           <>
             <header className="conversation-header">
-              <div>
-                <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
+              <div className="conversation-title-block">
+                <div className="conversation-title-row">
+                  <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
+                  {selectedConversation !== null
+                  && gamification.snapshot?.conversations[selectedConversation.id] ? (
+                    <span
+                      className="conversation-title-complexity"
+                      title={`${gamification.snapshot.conversations[selectedConversation.id].commits} commit(s) · ×${gamification.snapshot.conversations[selectedConversation.id].multiplier.toLocaleString('fr-FR')}`}
+                    >
+                      C{gamification.snapshot.conversations[selectedConversation.id].complexity}
+                    </span>
+                  ) : null}
+                </div>
                 {selectedConversation !== null ? (
                   <p>
-                    {selectedConversation.provider} · {modelLabel(selectedConversation.model)} ·{' '}
+                    <span className={`conversation-prov is-${selectedConversation.provider}`}>
+                      {selectedConversation.provider.toUpperCase()}
+                    </span>
+                    {modelLabel(selectedConversation.model)} ·{' '}
                     {selectedConversation.effort ?? 'default'}
                     {selectedConversation.speed === 'fast' ? ' · rapide' : ''}
                   </p>
                 ) : null}
-                {selectedConversation !== null ? (
-                  <ContextGauge
-                    conversation={selectedConversation}
-                    events={events}
-                    conductorTokens={conductorTokens}
-                    contextBaseline={contextBaseline}
-                    contextProfile={contextProfile}
-                    mcpServers={mcpServers}
-                    mcpWeights={mcpWeights}
-                    onOpenProjectSettings={() => setProjectSettingsOpen(true)}
-                    onHandoffSuggested={() => setShowSwitchModel(true)}
-                  />
-                ) : null}
               </div>
+              {selectedConversation !== null ? (
+                <ContextGauge
+                  conversation={selectedConversation}
+                  events={events}
+                  conductorTokens={conductorTokens}
+                  contextBaseline={contextBaseline}
+                  contextProfile={contextProfile}
+                  mcpServers={mcpServers}
+                  mcpWeights={mcpWeights}
+                  onOpenProjectSettings={() => setProjectSettingsOpen(true)}
+                  onHandoff={() => setShowHandoff(true)}
+                />
+              ) : null}
               {selectedConversation !== null ? (
                 <div className="header-actions">
                   <ResumeCommandButton conversation={selectedConversation} />
@@ -677,6 +712,14 @@ function App() {
                 onClose={() => setShowSwitchModel(false)}
                 onSwitched={handleConversationSwitched}
                 onHandoff={handleConversationHandoff}
+              />
+            ) : null}
+            {showHandoff && selectedConversation !== null ? (
+              <HandoffModal
+                key={`handoff-${selectedConversation.id}`}
+                conversation={selectedConversation}
+                onClose={() => setShowHandoff(false)}
+                onCreated={handleConversationHandoff}
               />
             ) : null}
             {showReviewDialog && selectedConversation !== null ? (

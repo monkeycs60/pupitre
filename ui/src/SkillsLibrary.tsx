@@ -29,8 +29,23 @@ const PROVENANCE_LABELS: Record<SkillProvenance, string> = {
   'agents-project': 'Codex · AGENTS projet',
 }
 
+const SCOPE_BADGES: Record<SkillProvenance, { label: string; kind: string }> = {
+  'claude-project': { label: 'PROJET', kind: 'projet' },
+  'agents-project': { label: 'PROJET', kind: 'projet' },
+  'claude-global': { label: 'GLOBAL', kind: 'global' },
+  'claude-plugin': { label: 'PLUGIN', kind: 'plugin' },
+  'codex-prompt': { label: 'CODEX', kind: 'codex' },
+  'agents-global': { label: 'CODEX', kind: 'codex' },
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible de charger les skills.'
+}
+
+function formatDate(iso: string): string {
+  const value = new Date(iso)
+  if (Number.isNaN(value.getTime())) return '—'
+  return value.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 export function SkillsLibrary({ project }: SkillsLibraryProps) {
@@ -120,117 +135,132 @@ export function SkillsLibrary({ project }: SkillsLibraryProps) {
 
   return (
     <section className="skills-library" aria-labelledby="skills-library-title">
-      <header className="library-header">
-        <div>
-          <h1 id="skills-library-title">Bibliothèque</h1>
-          <p>Skills Claude, prompts Codex et consignes AGENTS indexés localement.</p>
-          <HelpLink slug="skills" />
-        </div>
-        <div className="library-header-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => void handleRefresh()}
-            disabled={refreshing}
-            title="Relire immédiatement les sources locales ; le watcher garde ensuite l’index à jour."
-          >
-            {refreshing ? 'Actualisation…' : 'Actualiser'}
-          </button>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => setShowComposer(true)}
-            disabled={!project}
-            title={project
-              ? 'Faire rédiger et installer un nouveau SKILL.md avec Codex Sol.'
-              : 'Sélectionnez un projet pour donner son contexte au composer.'}
-          >
-            Nouveau skill
-          </button>
-        </div>
-      </header>
-
-      <div className="library-filters" aria-label="Filtres de la bibliothèque">
-        <label className="library-search">
-          <span className="sr-only">Rechercher un skill</span>
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Rechercher nom, description ou déclencheur"
-          />
-        </label>
-        <label>
-          <span>Provider</span>
-          <select
-            value={provider}
-            onChange={(event) => setProvider(event.target.value as Provider | 'all')}
-          >
-            <option value="all">Tous</option>
-            <option value="claude">Claude</option>
-            <option value="codex">Codex</option>
-          </select>
-        </label>
-        <label>
-          <span>Portée</span>
-          <select
-            value={projectOnly ? 'project' : 'all'}
-            onChange={(event) => setProjectOnly(event.target.value === 'project')}
-            disabled={!project}
-          >
-            <option value="all">Toutes les sources</option>
-            {project ? <option value="project">Disponibles pour {project.name}</option> : null}
-          </select>
-        </label>
-        <span className="library-count" aria-live="polite">
-          {loading ? 'index…' : `${skills.length} résultat${skills.length === 1 ? '' : 's'}`}
-        </span>
-      </div>
-
       {error ? <p className="library-error" role="alert">{error}</p> : null}
 
       <div className="library-body">
-        <div className="skill-list" aria-label="Skills indexés">
-          {!loading && skills.length === 0 ? (
-            <div className="library-empty">
-              <strong>Aucun skill trouvé.</strong>
-              <p>Ajoutez un SKILL.md, un prompt Codex ou un AGENTS.md ; Pupitre l’indexera automatiquement.</p>
-            </div>
-          ) : skills.map((skill) => (
-            <div
-              key={skill.id}
-              className={`skill-row ${activeSkill?.id === skill.id ? 'is-selected' : ''}`}
-            >
+        <div className="skill-list-pane">
+          <div className="library-sidebar-header">
+            <h1 id="skills-library-title">Bibliothèque</h1>
+            <p>
+              {loading ? 'index…' : `${skills.length} skill${skills.length === 1 ? '' : 's'} indexé${skills.length === 1 ? '' : 's'}`}
+              {' '}<HelpLink slug="skills" />
+            </p>
+
+            <label className="library-search">
+              <span className="sr-only">Rechercher un skill</span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+                  <circle cx="7" cy="7" r="4.2" />
+                  <path d="m10.2 10.2 3 3" />
+                </g>
+              </svg>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Nom, description, déclencheur…"
+              />
+            </label>
+
+            <div className="library-pills" role="group" aria-label="Filtres de la bibliothèque">
               <button
                 type="button"
-                className="skill-row-main"
-                onClick={() => setSelectedId(skill.id)}
+                className={`library-pill ${provider === 'all' ? 'is-active' : ''}`}
+                onClick={() => setProvider('all')}
               >
-                <span className="skill-row-heading">
-                  <strong>{skill.name}</strong>
-                  <span className={`provider-mark is-${skill.provider}`}>{skill.provider}</span>
-                </span>
-                <span className="skill-row-description">{skill.description || 'Sans description.'}</span>
-                <span className="skill-row-source">{PROVENANCE_LABELS[skill.provenance]}</span>
+                Tous
               </button>
               <button
                 type="button"
-                className={`skill-favorite ${skill.favorite ? 'is-favorite' : ''}`}
-                onClick={() => void handleFavorite(skill)}
-                disabled={!project || savingFavorite}
-                aria-pressed={skill.favorite}
-                aria-label={skill.favorite ? `Retirer ${skill.name} des favoris` : `Ajouter ${skill.name} aux favoris`}
+                className={`library-pill ${provider === 'claude' ? 'is-active' : ''}`}
+                onClick={() => setProvider('claude')}
+              >
+                Claude
+              </button>
+              <button
+                type="button"
+                className={`library-pill ${provider === 'codex' ? 'is-active' : ''}`}
+                onClick={() => setProvider('codex')}
+              >
+                Codex
+              </button>
+              <button
+                type="button"
+                className={`library-pill ${projectOnly ? 'is-active' : ''}`}
+                onClick={() => setProjectOnly((current) => !current)}
+                disabled={!project}
+                title={project ? `Disponibles pour ${project.name}` : 'Sélectionnez un projet'}
+              >
+                Projet
+              </button>
+            </div>
+
+            <div className="library-header-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void handleRefresh()}
+                disabled={refreshing}
+                title="Relire immédiatement les sources locales ; le watcher garde ensuite l’index à jour."
+              >
+                {refreshing ? 'Actualisation…' : 'Actualiser'}
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => setShowComposer(true)}
+                disabled={!project}
                 title={project
-                  ? `Garder ce skill en favori pour ${project.name}`
-                  : 'Sélectionnez un projet pour gérer ses favoris'}
+                  ? 'Faire rédiger et installer un nouveau SKILL.md avec Codex Sol.'
+                  : 'Sélectionnez un projet pour donner son contexte au composer.'}
               >
-                <span aria-hidden="true">{skill.favorite ? '★' : '☆'}</span>
+                Nouveau skill
               </button>
             </div>
-          ))}
+          </div>
+
+          <div className="skill-list" aria-label="Skills indexés">
+            {!loading && skills.length === 0 ? (
+              <div className="library-empty">
+                <strong>Aucun skill trouvé.</strong>
+                <p>Ajoutez un SKILL.md, un prompt Codex ou un AGENTS.md ; Pupitre l’indexera automatiquement.</p>
+              </div>
+            ) : skills.map((skill) => {
+              const scope = SCOPE_BADGES[skill.provenance]
+              const selected = activeSkill?.id === skill.id
+              return (
+                <div key={skill.id} className={`skill-row ${selected ? 'is-selected' : ''}`}>
+                  <button
+                    type="button"
+                    className={`skill-favorite ${skill.favorite ? 'is-favorite' : ''}`}
+                    onClick={() => void handleFavorite(skill)}
+                    disabled={!project || savingFavorite}
+                    aria-pressed={skill.favorite}
+                    aria-label={skill.favorite ? `Retirer ${skill.name} des favoris` : `Ajouter ${skill.name} aux favoris`}
+                    title={project
+                      ? `Garder ce skill en favori pour ${project.name}`
+                      : 'Sélectionnez un projet pour gérer ses favoris'}
+                  >
+                    <span aria-hidden="true">{skill.favorite ? '★' : '☆'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="skill-row-main"
+                    onClick={() => setSelectedId(skill.id)}
+                  >
+                    <span className="skill-row-heading">
+                      <span className="skill-row-name">${skill.invocation}</span>
+                      <span className={`scope-badge is-${scope.kind}`}>{scope.label}</span>
+                    </span>
+                    <span className="skill-row-description">{skill.description || 'Sans description.'}</span>
+                  </button>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
-        <article className="skill-preview" aria-live="polite">
+        <article className="skill-detail" aria-live="polite">
           {activeSkill === null ? (
             <div className="library-empty">
               <strong>Sélectionnez un skill.</strong>
@@ -240,31 +270,56 @@ export function SkillsLibrary({ project }: SkillsLibraryProps) {
             <p className="skill-preview-loading">Chargement de {activeSkill.name}…</p>
           ) : (
             <>
-              <header className="skill-preview-header">
-                <div>
-                  <h2>{selectedDetail.name}</h2>
-                  <p>{PROVENANCE_LABELS[selectedDetail.provenance]}</p>
-                </div>
+              <header className="skill-detail-header">
+                <span className="skill-detail-name">${selectedDetail.invocation}</span>
+                <span className={`scope-badge is-${SCOPE_BADGES[selectedDetail.provenance].kind}`}>
+                  {SCOPE_BADGES[selectedDetail.provenance].label}
+                </span>
                 <button
                   type="button"
-                  className={`skill-favorite preview-favorite ${selectedDetail.favorite ? 'is-favorite' : ''}`}
+                  className={`skill-detail-favorite ${selectedDetail.favorite ? 'is-favorite' : ''}`}
                   onClick={() => void handleFavorite(selectedDetail)}
                   disabled={!project || savingFavorite}
                   aria-pressed={selectedDetail.favorite}
                   title={project ? `Favori pour ${project.name}` : 'Sélectionnez un projet pour gérer ses favoris'}
                 >
                   <span aria-hidden="true">{selectedDetail.favorite ? '★' : '☆'}</span>
-                  {selectedDetail.favorite ? ' Favori' : ' Favori projet'}
+                  {selectedDetail.favorite ? ' Favori' : ' Ajouter aux favoris'}
                 </button>
               </header>
+
+              <p className="skill-detail-description">{selectedDetail.description || 'Sans description.'}</p>
+
+              <div className="skill-stat-grid">
+                <div className="skill-stat">
+                  <div className="skill-stat-label">Provenance</div>
+                  <div className="skill-stat-value">{PROVENANCE_LABELS[selectedDetail.provenance]}</div>
+                </div>
+                <div className="skill-stat">
+                  <div className="skill-stat-label">Modifié</div>
+                  <div className="skill-stat-value">{formatDate(selectedDetail.modified_at)}</div>
+                </div>
+                <div className="skill-stat">
+                  <div className="skill-stat-label">Indexé</div>
+                  <div className="skill-stat-value">{formatDate(selectedDetail.indexed_at)}</div>
+                </div>
+              </div>
+
               {selectedDetail.triggers.length > 0 ? (
-                <div className="skill-triggers" aria-label="Déclencheurs indexés">
-                  {selectedDetail.triggers.map((trigger) => <span key={trigger}>{trigger}</span>)}
+                <div className="skill-detail-section">
+                  <div className="skill-section-label">Déclencheurs indexés</div>
+                  <div className="skill-triggers" aria-label="Déclencheurs indexés">
+                    {selectedDetail.triggers.map((trigger) => <span key={trigger}>{trigger}</span>)}
+                  </div>
                 </div>
               ) : null}
-              <code className="skill-path" title={selectedDetail.path}>{selectedDetail.path}</code>
-              <div className="skill-markdown">
-                <Markdown>{selectedDetail.content_md}</Markdown>
+
+              <div className="skill-detail-section">
+                <div className="skill-section-label">Source</div>
+                <code className="skill-path" title={selectedDetail.path}>{selectedDetail.path}</code>
+                <div className="skill-markdown">
+                  <Markdown>{selectedDetail.content_md}</Markdown>
+                </div>
               </div>
             </>
           )}

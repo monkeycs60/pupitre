@@ -17,6 +17,7 @@
 /* --- Panneau ------------------------------------------------------------- */
 
 .switch-modal,
+.handoff-modal,
 .review-dialog,
 .counter-dialog,
 .project-settings-dialog {
@@ -35,6 +36,10 @@
   width: min(100%, 520px);
 }
 
+.handoff-modal {
+  width: min(100%, 760px);
+}
+
 .review-dialog {
   width: min(100%, 640px);
 }
@@ -50,6 +55,7 @@
 /* --- En-tête -------------------------------------------------------------- */
 
 .switch-modal > header,
+.handoff-modal-header,
 .review-dialog .modal-header,
 .counter-dialog .modal-header,
 .project-settings-dialog .modal-header {
@@ -62,6 +68,7 @@
 }
 
 .switch-modal h2,
+.handoff-modal-header h2,
 .review-dialog .modal-header h2,
 .counter-dialog .modal-header h2,
 .project-settings-dialog .modal-header h2 {
@@ -107,6 +114,7 @@
 /* --- Corps (formulaire) --------------------------------------------------- */
 
 .switch-modal form,
+.handoff-modal-body,
 .review-dialog-form,
 .counter-dialog-form {
   min-height: 0;
@@ -294,6 +302,7 @@ input.field-mono {
 /* --- Pied d'actions -------------------------------------------------------- */
 
 .switch-modal footer,
+.handoff-modal-footer,
 .review-dialog .modal-actions,
 .counter-dialog .modal-actions,
 .project-settings-dialog .modal-actions {
@@ -307,6 +316,70 @@ input.field-mono {
 .counter-dialog .modal-actions,
 .project-settings-dialog .modal-actions {
   margin-top: var(--space-2);
+}
+
+.handoff-modal-header p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.handoff-modal-body {
+  display: grid;
+  gap: var(--space-4);
+  overflow-y: auto;
+}
+
+.handoff-modal-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.handoff-preview {
+  max-height: 320px;
+  padding: var(--space-3) var(--space-4);
+  overflow: auto;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-sm);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.handoff-preview h1,
+.handoff-preview h2,
+.handoff-preview h3 {
+  margin-top: var(--space-2);
+}
+
+.handoff-preview p,
+.handoff-preview ul {
+  margin: var(--space-1) 0;
+}
+
+.handoff-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.handoff-target-fields {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.handoff-target-fields h3 {
+  margin: 0 0 var(--space-3);
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.handoff-modal-error {
+  margin: 0 var(--space-5) var(--space-5);
 }
 
 .project-settings-body {

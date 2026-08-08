@@ -22,6 +22,7 @@ import type {
   ReviewFlag,
   Routine,
   RoutineRun,
+  SessionSummary,
   AppNotification,
   SkillDetail,
   SkillSummary,
@@ -641,9 +642,40 @@ export function handoffConversation(
   )
 }
 
+export function createHandoffConversation(
+  conversationId: string,
+  input: ModelConfigInput,
+): Promise<Conversation> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/handoff-conversation`,
+    jsonPost(input),
+  )
+}
+
 export function createDebrief(conversationId: string): Promise<Debrief> {
   return fetchJson(
     `/api/conversations/${routeId(conversationId)}/debrief`,
+    jsonPost({}),
+  )
+}
+
+export function createSessionSummary(conversationId: string): Promise<SessionSummary> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/session-summary`,
+    jsonPost({}),
+  )
+}
+
+export interface HandoffDocument {
+  debriefId: string
+  filename: string
+  contentMd: string
+  createdAt: string
+}
+
+export function createHandoffDocument(conversationId: string): Promise<HandoffDocument> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/handoff-document`,
     jsonPost({}),
   )
 }

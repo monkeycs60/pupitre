@@ -31,7 +31,7 @@ export function ContextGauge({
   mcpServers = [],
   mcpWeights = {},
   onOpenProjectSettings,
-  onHandoffSuggested,
+  onHandoff,
 }: {
   conversation: Conversation
   events: AppEvent[]
@@ -47,7 +47,7 @@ export function ContextGauge({
   onOpenProjectSettings?: () => void
   /** Serveurs MCP de l'utilisateur : nommés dans l'alerte de charge fixe. */
   mcpServers?: McpServerRef[]
-  onHandoffSuggested: () => void
+  onHandoff: () => void
 }) {
   const estimate = contextEstimate(
     events,
@@ -83,6 +83,15 @@ export function ContextGauge({
   const persistent = persistentRatio(parts, estimate.windowTokens)
   const persistentAlert = persistent >= PERSISTENT_ALERT_RATIO
 
+  // Anneau circulaire (r = 10.5 → circonférence ≈ 66) coloré selon l'état.
+  const RING_LEN = 66
+  const ringOffset = RING_LEN * (1 - Math.max(0, Math.min(100, estimate.percent)) / 100)
+  const status = estimate.nearSaturation
+    ? 'Handoff conseillé'
+    : persistentAlert
+      ? 'Charge fixe élevée'
+      : 'Sous contrôle'
+
   return (
     <div
       className={[
@@ -92,25 +101,35 @@ export function ContextGauge({
         persistentAlert ? 'is-heavy-fixed' : '',
       ].join(' ').trim()}
     >
-      <div className="context-gauge-hover">
-        <div
-          className="context-gauge-track"
-          role="progressbar"
-          aria-label="Contexte estimé"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={estimate.percent}
-          aria-describedby="context-gauge-detail"
-        >
-          <span style={{ width: `${estimate.percent}%` }} />
-        </div>
-        <span className="context-gauge-value">
-          Contexte ≈ {estimate.percent}%
-          {persistentAlert ? (
-            <span className="context-gauge-badge" title="Charge fixe élevée : voir le détail">
-              ▨ {Math.round(persistent * 100)} %
-            </span>
-          ) : null}
+      <div
+        className="context-gauge-hover"
+        role="progressbar"
+        aria-label="Contexte estimé"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={estimate.percent}
+        aria-describedby="context-gauge-detail"
+      >
+        <span className="context-gauge-ring" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 26 26">
+            <circle cx="13" cy="13" r="10.5" fill="none" stroke="var(--border)" strokeWidth="3" />
+            <circle
+              cx="13"
+              cy="13"
+              r="10.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray={RING_LEN}
+              strokeDashoffset={ringOffset}
+              transform="rotate(-90 13 13)"
+            />
+          </svg>
+        </span>
+        <span className="context-gauge-text">
+          <span className="context-gauge-value">Contexte {estimate.percent}%</span>
+          <span className="context-gauge-status">{status}</span>
         </span>
 
         <div className="context-gauge-detail" id="context-gauge-detail" role="tooltip">
@@ -170,11 +189,16 @@ export function ContextGauge({
         </div>
       </div>
 
-      {estimate.nearSaturation ? (
-        <button type="button" onClick={onHandoffSuggested}>
-          Handoff-débrief conseillé
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className="context-gauge-handoff"
+        onClick={onHandoff}
+        title={estimate.nearSaturation
+          ? 'Préparer un handoff avant la saturation du contexte'
+          : 'Préparer un handoff de la session'}
+      >
+        Passer la main
+      </button>
     </div>
   )
 }

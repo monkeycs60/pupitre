@@ -1,6 +1,7 @@
 import { EventView } from './EventView'
 import { SubtaskCard } from './SubtaskCard'
 import { DebriefCard } from './DebriefCard'
+import { SessionSummaryCard } from './SessionSummaryCard'
 import type { DebriefBlock, StreamBlock } from './groupEvents'
 import type { SubtaskStatus } from './types'
 import { TestInventoryCard } from './TestInventoryCard'
@@ -69,6 +70,8 @@ function EventStreamImpl({
           />
         ) : block.kind === 'debrief' ? (
           <DebriefCard key={block.id} block={block} onQuestion={onDebriefQuestion} />
+        ) : block.kind === 'session-summary' ? (
+          <SessionSummaryCard key={block.id} block={block} />
         ) : block.kind === 'test-inventory' ? (
           <TestInventoryCard
             key={block.id}
