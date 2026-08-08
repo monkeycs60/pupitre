@@ -65,6 +65,47 @@ test("un débrief est versionné et référencé atomiquement dans le fil", asyn
   db.close();
 });
 
+test("un résumé de session ne conserve que les changements concrets", async () => {
+  const { db, projects, conversations, conversation } = setup();
+  const firstId = conversations.appendEvent(conversation.id, {
+    type: "user-message",
+    text: "Ajoute le résumé court.",
+    images: [],
+  });
+  conversations.appendEvent(conversation.id, {
+    type: "text-final",
+    text: "Le résumé court est ajouté.",
+  });
+  const broadcasts: unknown[] = [];
+  let capturedPrompt = "";
+  const runner = new DebriefRunner(
+    new DebriefStore(db),
+    conversations,
+    projects,
+    new QuotaTracker(db),
+    (_conversationId, event) => broadcasts.push(event),
+    async (input) => {
+      capturedPrompt = input.prompt;
+      return "## Implémenté\n- Résumé court ajouté [événement #1].\n\n## À terminer\n- Vérifier l'export.";
+    },
+  );
+
+  const summary = await runner.generateSessionSummary(conversation.id);
+
+  expect(summary.event_id_from).toBe(firstId);
+  expect(summary.content_md).toContain("## Implémenté");
+  expect(capturedPrompt).toContain("résumé de session");
+  expect(capturedPrompt).toContain("Ajoute le résumé court");
+  expect(conversations.listEvents(conversation.id).at(-1)).toEqual(
+    expect.objectContaining({ type: "session-summary-ref", summaryId: summary.id }),
+  );
+  expect(broadcasts).toHaveLength(1);
+  await expect(runner.generateSessionSummary(conversation.id)).rejects.toThrow(
+    "aucun nouvel événement à résumer",
+  );
+  db.close();
+});
+
 test("la version suivante ne résume que les événements postérieurs au dernier débrief", async () => {
   const { db, projects, conversations, conversation } = setup();
   conversations.appendEvent(conversation.id, {

@@ -24,7 +24,9 @@ import type { ReviewRunner } from "./reviews";
 import { CounterAlreadyRunningError } from "./stores/reviews";
 import {
   DebriefAlreadyRunningError,
+  NoNewSessionSummaryEventsError,
   NoNewDebriefEventsError,
+  type HandoffDebriefArtifact,
   type DebriefRunner,
 } from "./debriefs";
 import { GitProjectError, type GitProjectService } from "./git";
@@ -112,6 +114,62 @@ export interface ServerDeps {
   shutdown?: () => void;
 }
 
+interface HandoffTargetConfig {
+  provider: Provider;
+  model: string;
+  effort: string | null;
+  speed: "standard" | "fast" | null;
+  orchestrator: boolean;
+}
+
+async function createContinuationFromHandoff(
+  deps: ServerDeps,
+  source: Conversation,
+  target: HandoffTargetConfig,
+  artifact: HandoffDebriefArtifact,
+): Promise<Conversation> {
+  const continuation = deps.conversations.create({
+    projectId: source.project_id,
+    provider: target.provider,
+    model: target.model,
+    effort: target.effort,
+    speed: target.speed,
+    orchestrator: target.orchestrator,
+    subagentPresetId: source.subagent_preset_id,
+    subagentEffort: source.subagent_effort,
+    continuedFrom: source.id,
+    handoffPending: true,
+    firstMessage: `Suite — ${source.title}`,
+  });
+  const seed = [
+    `Voici l'historique des débriefs de passation de la conversation ${source.title} :`,
+    "",
+    artifact.contentMd,
+    "",
+    "Prends ce contexte comme point de départ. Cite les références [événement #N]",
+    "quand elles étayent ta réponse, puis confirme brièvement la reprise.",
+  ].join("\n");
+  try {
+    const outcome = await deps.runner.runTurn(continuation.id, seed, []);
+    if (outcome.state === "error") {
+      throw new Error(outcome.error ?? "échec du provider cible");
+    }
+    if (!deps.conversations.completeHandoff(continuation.id)) {
+      throw new Error("état de passation introuvable après le premier tour");
+    }
+    const created = deps.conversations.get(continuation.id);
+    if (!created) throw new Error("conversation de passation introuvable");
+    return created;
+  } catch (error) {
+    // Le provider cible peut avoir délégué avant d'échouer. Attendre l'arrêt
+    // de ses sous-tâches empêche qu'elles réécrivent des events sous leurs ids
+    // après la transaction de nettoyage.
+    await deps.subtasks.cancelByConversation(continuation.id);
+    deps.conversations.deleteFailedContinuation(continuation.id);
+    throw error;
+  }
+}
+
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
 // canal global `quotas`.
 type WebSocketData =
@@ -172,6 +230,30 @@ function requiredString(
     throw new HttpError(400, `champ ${field} invalide`);
   }
   return value;
+}
+
+function safeFilename(value: string): string {
+  const normalized = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return normalized || "conversation";
+}
+
+function handoffDocument(title: string, contentMd: string): string {
+  return [
+    `# Handoff — ${title}`,
+    "",
+    "Ce document transfère le contexte de travail à une nouvelle session Pupitre.",
+    "Les références détaillées restent dans le projet et dans la conversation source.",
+    "",
+    "## Débrief de passation",
+    "",
+    contentMd,
+    "",
+  ].join("\n");
 }
 
 function memoryHttpError(error: unknown, fallback = "fichier mémoire inconnu"): never {
@@ -1648,6 +1730,36 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        const conversationSessionSummaryId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/session-summary$/,
+        );
+        if (request.method === "POST" && conversationSessionSummaryId !== null) {
+          if (!deps.conversations.get(conversationSessionSummaryId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          if (deps.runner.activity.isBusy(conversationSessionSummaryId)) {
+            throw new HttpError(409, "un tour est déjà en cours");
+          }
+          try {
+            return json(
+              await deps.debriefs.generateSessionSummary(conversationSessionSummaryId),
+              201,
+            );
+          } catch (error) {
+            if (
+              error instanceof DebriefAlreadyRunningError
+              || error instanceof NoNewSessionSummaryEventsError
+            ) {
+              throw new HttpError(409, error.message);
+            }
+            throw new HttpError(
+              502,
+              error instanceof Error ? error.message : "échec du résumé de session",
+            );
+          }
+        }
+
         const conversationTestInventoryId = routeId(
           pathname,
           /^\/api\/conversations\/([^/]+)\/test-inventory$/,
@@ -1711,6 +1823,37 @@ export function createServer(deps: ServerDeps) {
           return json(debrief);
         }
 
+        const conversationHandoffDocumentId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/handoff-document$/,
+        );
+        if (request.method === "POST" && conversationHandoffDocumentId !== null) {
+          const source = deps.conversations.get(conversationHandoffDocumentId);
+          if (!source) throw new HttpError(404, "conversation inconnue");
+          if (deps.runner.activity.isBusy(source.id)) {
+            throw new HttpError(409, "un tour est déjà en cours");
+          }
+          try {
+            return await deps.debriefs.withHandoff(source.id, async (artifact) => {
+              const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+              return json({
+                debriefId: artifact.latest.id,
+                filename: `handoff-${safeFilename(source.title)}-${stamp}.md`,
+                contentMd: handoffDocument(source.title, artifact.contentMd),
+                createdAt: new Date().toISOString(),
+              }, 201);
+            });
+          } catch (error) {
+            if (error instanceof DebriefAlreadyRunningError) {
+              throw new HttpError(409, error.message);
+            }
+            throw new HttpError(
+              502,
+              error instanceof Error ? error.message : "échec du document de handoff",
+            );
+          }
+        }
+
         const conversationHandoffId = routeId(
           pathname,
           /^\/api\/conversations\/([^/]+)\/handoff$/,
@@ -1735,44 +1878,12 @@ export function createServer(deps: ServerDeps) {
           const orchestrator = optionalBoolean(body, "orchestrator", true);
           try {
             return await deps.debriefs.withHandoff(source.id, async (artifact) => {
-              const continuation = deps.conversations.create({
-                projectId: source.project_id,
-                provider,
-                model,
-                effort,
-                speed,
-                orchestrator,
-                subagentPresetId: source.subagent_preset_id,
-                subagentEffort: source.subagent_effort,
-                continuedFrom: source.id,
-                handoffPending: true,
-                firstMessage: `Suite — ${source.title}`,
-              });
-              const seed = [
-                `Voici l'historique des débriefs de passation de la conversation ${source.title} :`,
-                "",
-                artifact.contentMd,
-                "",
-                "Prends ce contexte comme point de départ. Cite les références [événement #N]",
-                "quand elles étayent ta réponse, puis confirme brièvement la reprise.",
-              ].join("\n");
-              try {
-                const outcome = await deps.runner.runTurn(continuation.id, seed, []);
-                if (outcome.state === "error") {
-                  throw new Error(outcome.error ?? "échec du provider cible");
-                }
-                if (!deps.conversations.completeHandoff(continuation.id)) {
-                  throw new Error("état de passation introuvable après le premier tour");
-                }
-                return json(deps.conversations.get(continuation.id), 201);
-              } catch (error) {
-                // Le provider cible peut avoir délégué avant d'échouer. Attendre
-                // l'arrêt de ses sous-tâches empêche qu'elles réécrivent des
-                // events sous leurs ids après la transaction de nettoyage.
-                await deps.subtasks.cancelByConversation(continuation.id);
-                deps.conversations.deleteFailedContinuation(continuation.id);
-                throw error;
-              }
+              return json(await createContinuationFromHandoff(
+                deps,
+                source,
+                { provider, model, effort, speed, orchestrator },
+                artifact,
+              ), 201);
             });
           } catch (error) {
             if (error instanceof DebriefAlreadyRunningError) {
@@ -1781,6 +1892,46 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(
               502,
               error instanceof Error ? error.message : "échec du débrief de passation",
+            );
+          }
+        }
+
+        const conversationHandoffConversationId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/handoff-conversation$/,
+        );
+        if (request.method === "POST" && conversationHandoffConversationId !== null) {
+          const source = deps.conversations.get(conversationHandoffConversationId);
+          if (!source) throw new HttpError(404, "conversation inconnue");
+          if (deps.runner.activity.isBusy(source.id)) {
+            throw new HttpError(409, "un tour est déjà en cours");
+          }
+          const body = await readObject(request);
+          const provider = requiredString(body, "provider");
+          if (provider !== "claude" && provider !== "codex") {
+            throw new HttpError(400, "provider invalide");
+          }
+          const model = requiredString(body, "model");
+          const effort = optionalEffort(body, provider);
+          const speed = optionalSpeed(body, provider);
+          const orchestrator = optionalBoolean(body, "orchestrator", true);
+          try {
+            return await deps.debriefs.withHandoff(source.id, async (artifact) => json(
+              await createContinuationFromHandoff(
+                deps,
+                source,
+                { provider, model, effort, speed, orchestrator },
+                artifact,
+              ),
+              201,
+            ));
+          } catch (error) {
+            if (error instanceof DebriefAlreadyRunningError) {
+              throw new HttpError(409, error.message);
+            }
+            throw new HttpError(
+              502,
+              error instanceof Error ? error.message : "échec de la nouvelle conversation",
             );
           }
         }

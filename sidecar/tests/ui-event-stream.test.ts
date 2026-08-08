@@ -90,3 +90,25 @@ test("un debrief-ref devient un bloc éditorial autonome", () => {
     createdAt: "2026-08-04T10:00:00.000Z",
   });
 });
+
+test("un session-summary-ref devient une carte de résumé compacte", () => {
+  const [block] = groupEvents([{
+    id: 43,
+    type: "session-summary-ref",
+    summaryId: "summary-1",
+    eventIdFrom: 41,
+    eventIdTo: 42,
+    contentMd: "## Implémenté\n- Résumé court.",
+    createdAt: "2026-08-08T10:00:00.000Z",
+  }]);
+
+  expect(block).toEqual({
+    kind: "session-summary",
+    id: "session-summary-43-summary-1",
+    summaryId: "summary-1",
+    eventIdFrom: 41,
+    eventIdTo: 42,
+    contentMd: "## Implémenté\n- Résumé court.",
+    createdAt: "2026-08-08T10:00:00.000Z",
+  });
+});

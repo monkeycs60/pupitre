@@ -15,7 +15,7 @@ Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Code
 │  serveur HTTP+WS · Git · tests · media       │
 ├─────────────────────────────────────────────┤
 │  Frontend React + Vite (webview)            │
-│  chat · Gardien · Débrief · Git · Tester    │
+│  chat · Gardien · Résumé · Handoff · Tester │
 │  bibliothèque · suggestions · lightbox       │
 └─────────────────────────────────────────────┘
 ```
@@ -27,9 +27,9 @@ Les deux CLIs sont normalisés en un schéma d'événements unifié (`sidecar/sr
 - **Gardien** analyse le diff Git avec un modèle fort, ancre ses alertes sur les
   lignes concernées et demande d'acquitter les décisions une par une. Les points
   rouges peuvent recevoir automatiquement un contre-avis du provider opposé.
-- **Débrief** produit un bilan versionné depuis le dernier bilan : réalisations,
-  décisions, implications et questions ouvertes. Une passation cross-provider
-  transmet ce débrief à la conversation suivante.
+- **Résumé session** produit un bilan court des fonctionnalités et correctifs
+  implémentés, avec les éléments restant explicitement à terminer. Le **Handoff**
+  conserve le débrief complet pour transférer le travail à une nouvelle session.
 - **Git** affiche branches, commits, HEAD et worktrees, relie les commits à leur
   conversation d'origine et conserve les alertes Gardien sur les commits visés.
 - **Tester** relit le fil, propose des scopes et méthodes concrètes, puis exécute
@@ -85,7 +85,7 @@ la sidebar.
   quitte la machine pour rechercher.
 - **Ctrl+K** ouvre la palette depuis n'importe quel écran. Elle navigue vers les
   projets et conversations, interroge la recherche globale, lance workflows et
-  skills, ouvre Fleet/Routines/Bibliothèque et déclenche Tester, Débrief ou
+  skills, ouvre Fleet/Routines/Bibliothèque et déclenche Tester, Résumé session ou
   Gardien sur le fil courant.
 
 ## Coûts, mémoire et aide (M4-N)
@@ -169,7 +169,12 @@ L'UI ne comble jamais un trou par une supposition : sans pourcentage publié, el
 Depuis un fil ouvert, la modale « Changer de modèle » distingue deux opérations :
 
 - même provider : `PUT /api/conversations/:id/model` met à jour modèle, effort et vitesse sans casser la session CLI ; l'UI prévient que le cache sera perdu et estime la ré-ingestion en additionnant les événements `usage` du fil ;
-- autre provider : `POST /api/conversations/:id/handoff` génère un Débrief sans outils, l'épingle dans le fil source, crée une conversation cible reliée par `continued_from`, puis lui transmet ce bilan pour initialiser sa propre session. La sidebar matérialise le lien dans les deux sens.
+- autre provider : `POST /api/conversations/:id/handoff` génère le débrief
+  complet sans outils, l'épingle dans le fil source, crée une conversation cible
+  reliée par `continued_from`, puis lui transmet ce bilan pour initialiser sa
+  propre session. Le bouton Handoff peut aussi produire le document Markdown,
+  le copier, l'enregistrer ou créer une nouvelle conversation avec le même
+  provider. La sidebar matérialise le lien dans les deux sens.
 
 ## Prérequis
 
@@ -238,7 +243,8 @@ Protocole e2e : `e2e/basic-flow.md`.
 
 **M2 (fait)** : orchestration cross-provider (Conductor), sous-tâches, quotas des deux abonnements, presets et changement de modèle.
 
-**M3 (fait)** : Gardien, contre-avis, Débrief et passation, bouton Tester avec preuves, vue Git et durcissement du sidecar.
+**M3 (fait)** : Gardien, contre-avis, résumé de session, handoff, bouton Tester
+avec preuves, vue Git et durcissement du sidecar.
 
 **M4 (fait)** : bibliothèque de skills, suggestions et workflows, routines,
 Fleet, recherche globale et palette, coûts en tokens, mémoire, reprise terminal

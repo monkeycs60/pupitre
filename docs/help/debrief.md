@@ -1,9 +1,15 @@
-# Débrief
+# Résumé de session et handoff
 
-Un Débrief transforme la partie récente d'une conversation en bilan lisible :
-réalisations, décisions, implications et questions ouvertes. Chaque version est
-épinglée dans le fil ; la série raconte l'évolution du projet.
+Le menu **Actions** propose **Résumé session** pour obtenir un bilan court des
+changements concrets : fonctionnalités ou correctifs implémentés, puis éléments
+restant explicitement à terminer lorsqu'il y en a. Le résumé est généré depuis
+le dernier point de session et ajouté au fil sans remplacer la conversation.
 
-**Reprendre le contrôle** génère un nouveau Débrief depuis le précédent. Lors
-d'une passation vers l'autre provider, Pupitre transmet ce bilan à la nouvelle
-conversation au lieu d'inventer un résumé séparé.
+Le bouton **Handoff**, à côté de la jauge de contexte, sert à transférer le
+travail vers une nouvelle conversation. Il génère le débrief complet de
+passation, l'affiche en Markdown et permet de créer une conversation cible, de
+copier le document ou de l'enregistrer.
+
+Lors d'un changement de provider, Pupitre conserve ce même handoff complet et
+initialise la nouvelle conversation avec son contenu au lieu de repartir d'un
+résumé séparé.

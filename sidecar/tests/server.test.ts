@@ -230,7 +230,14 @@ cat "${fixture}"
     projects,
     quotas,
     events.broadcast,
-    async () => [
+    async (input) => input.prompt.includes("résumé de session")
+      ? [
+        "## Implémenté",
+        "Le résumé court est disponible [événement #1].",
+        "## À terminer",
+        "Vérifier le parcours de passation.",
+      ].join("\n\n")
+      : [
       "## Ce qui a été construit",
       "Un socle local.",
       "## Décisions et pourquoi",
@@ -241,7 +248,7 @@ cat "${fixture}"
       "Le produit reste local-first.",
       "## Points ouverts",
       "Aucun.",
-    ].join("\n\n"),
+      ].join("\n\n"),
     runner.activity,
   );
   const testers = new TesterRunner(
@@ -1494,6 +1501,60 @@ test("POST debrief versionne le bilan, le diffuse et l'expose en lecture", async
 
   const duplicate = await postJson(`/api/conversations/${conversation.id}/debrief`, {});
   expect(duplicate.status).toBe(409);
+});
+
+test("Résumé session reste court et le handoff expose un document réutilisable", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "sonnet",
+    effort: "high",
+    orchestrator: true,
+    message: "Implémentons le parcours de passation",
+    images: [],
+  });
+  const conversation = await created.json() as { id: string };
+  await waitForRunnerIdle(conversation.id);
+
+  const summaryResponse = await postJson(
+    `/api/conversations/${conversation.id}/session-summary`,
+    {},
+  );
+  expect(summaryResponse.status).toBe(201);
+  const summary = await summaryResponse.json() as { content_md: string };
+  expect(summary.content_md).toContain("## Implémenté");
+  expect(summary.content_md).not.toContain("## Décisions et pourquoi");
+
+  const documentResponse = await postJson(
+    `/api/conversations/${conversation.id}/handoff-document`,
+    {},
+  );
+  expect(documentResponse.status).toBe(201);
+  const document = await documentResponse.json() as {
+    filename: string;
+    contentMd: string;
+  };
+  expect(document.filename).toMatch(/^handoff-/);
+  expect(document.contentMd).toContain("# Handoff");
+  expect(document.contentMd).toContain("## Débrief de passation");
+
+  const continuationResponse = await postJson(
+    `/api/conversations/${conversation.id}/handoff-conversation`,
+    {
+      provider: "claude",
+      model: "sonnet",
+      effort: "high",
+      speed: null,
+      orchestrator: true,
+    },
+  );
+  expect(continuationResponse.status).toBe(201);
+  expect(await continuationResponse.json()).toEqual(expect.objectContaining({
+    continued_from: conversation.id,
+    handoff_pending: false,
+  }));
 });
 
 test("Tester inventorie les scopes puis exécute le choix avec un résultat inline", async () => {

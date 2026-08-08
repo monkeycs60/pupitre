@@ -45,6 +45,28 @@ test("le raisonnement est la génération que le texte visible n'explique pas", 
     .toBe(900 - MESURE.assistant);
 });
 
+test("les deltas ne sont pas additionnés au message final", () => {
+  const streamed = [
+    { type: "user-message" as const, text: "a", images: [] },
+    { type: "text-delta" as const, text: "b".repeat(800) },
+    { type: "text-final" as const, text: "b".repeat(800) },
+  ];
+  const parts = contextParts(streamed, 10_000);
+  expect(parts.find((part) => part.label === "Réponses de l’agent")?.tokens)
+    .toBe(MESURE.assistant);
+});
+
+test("la ventilation utilise la dernière génération, pas le cumul des snapshots", () => {
+  const withSnapshots = [
+    ...events,
+    { type: "usage" as const, inputTokens: 500, outputTokens: 900 },
+    { type: "usage" as const, inputTokens: 500, outputTokens: 100 },
+  ];
+  expect(contextParts(withSnapshots, 10_000)
+    .find((part) => part.label === "Raisonnement du modèle")?.tokens ?? 0)
+    .toBe(0);
+});
+
 test("sans surplus de génération, aucune part de raisonnement n'apparaît", () => {
   const withUsage = [
     ...events,
@@ -81,6 +103,15 @@ test("la place libre ferme l'anneau sur la fenêtre entière", () => {
 
 test("une fenêtre déjà pleine n'ajoute pas de part disponible", () => {
   expect(contextParts(events, 10_000, 10_000).some((part) => part.free)).toBe(false);
+});
+
+test("la somme reste égale au total provider quand l'estimation locale déborde", () => {
+  const parts = contextParts([
+    ...events,
+    { type: "usage" as const, inputTokens: 500, outputTokens: 900 },
+  ], 500);
+  expect(parts.reduce((sum, part) => sum + part.tokens, 0)).toBe(500);
+  expect(parts.every((part) => part.tokens >= 0)).toBe(true);
 });
 
 test("la charge fixe reste bornée par la mesure de référence", () => {

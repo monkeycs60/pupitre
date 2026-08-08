@@ -364,7 +364,11 @@ export class CodexAppServerClient {
 
     this.ready = this.request("initialize", {
       clientInfo: { name: "pupitre", title: "Pupitre", version: "0.1.0" },
-      capabilities: null,
+      // `thread/start.runtimeWorkspaceRoots` est expérimental dans le
+      // protocole app-server. Pupitre l'utilise pour borner les racines
+      // accessibles au thread : il faut donc négocier explicitement l'API
+      // expérimentale dès le handshake.
+      capabilities: { experimentalApi: true },
     }).then(() => {
       this.notify("initialized", {});
     });

@@ -45,6 +45,14 @@ export type AppEvent =
       createdAt: string;
     }
   | {
+      type: "session-summary-ref";
+      summaryId: string;
+      eventIdFrom: number;
+      eventIdTo: number;
+      contentMd: string;
+      createdAt: string;
+    }
+  | {
       type: "test-inventory-ref";
       inventoryId: string;
       scopes: TestScopeEvent[];

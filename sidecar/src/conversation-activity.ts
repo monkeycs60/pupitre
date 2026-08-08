@@ -1,6 +1,7 @@
 export type ConversationActivityKind =
   | "turn"
   | "debrief"
+  | "session-summary"
   | "handoff"
   | "model-change"
   | "test-inventory"

@@ -16,6 +16,7 @@ const MAX_EVENT_CHARS = 8_000;
 const MAX_HANDOFF_CHARS = 120_000;
 const MAX_GENERATED_DEBRIEF_CHARS = 32_000;
 const MAX_CONSOLIDATION_SOURCE_CHARS = 100_000;
+const MAX_GENERATED_SUMMARY_CHARS = 6_000;
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -33,10 +34,20 @@ export interface HandoffDebriefArtifact {
   contentMd: string;
 }
 
+export interface SessionSummary {
+  id: string;
+  conversation_id: string;
+  event_id_from: number;
+  event_id_to: number;
+  content_md: string;
+  created_at: string;
+}
+
 export type DebriefGenerator = (input: DebriefGenerationInput) => Promise<string>;
 
 export class DebriefAlreadyRunningError extends Error {}
 export class NoNewDebriefEventsError extends Error {}
+export class NoNewSessionSummaryEventsError extends Error {}
 
 export class DebriefRunner {
   private active = new Set<string>();
@@ -76,6 +87,21 @@ export class DebriefRunner {
         conversationId,
         "debrief",
         () => this.generateUnlocked(conversationId),
+      );
+    } catch (error) {
+      if (error instanceof ConversationBusyError) {
+        throw new DebriefAlreadyRunningError(error.message);
+      }
+      throw error;
+    }
+  }
+
+  async generateSessionSummary(conversationId: string): Promise<SessionSummary> {
+    try {
+      return await this.activity.runExclusive(
+        conversationId,
+        "session-summary",
+        () => this.generateSessionSummaryUnlocked(conversationId),
       );
     } catch (error) {
       if (error instanceof ConversationBusyError) {
@@ -138,6 +164,68 @@ export class DebriefRunner {
     } finally {
       this.active.delete(conversationId);
     }
+  }
+
+  private async generateSessionSummaryUnlocked(conversationId: string): Promise<SessionSummary> {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) throw new Error("conversation inconnue");
+    const project = this.projects.get(conversation.project_id);
+    if (!project) throw new Error("projet inconnu");
+
+    const events = this.conversations.listEvents(conversationId);
+    const previous = [...events]
+      .reverse()
+      .find((event) => event.type === "session-summary-ref");
+    const candidates = events
+      .filter((event) => event.id > (previous?.eventIdTo ?? 0))
+      .filter((event) => event.type !== "debrief-ref")
+      .filter((event) => event.type !== "session-summary-ref");
+    const transcriptChunks = transcriptChunksFor(candidates);
+    if (candidates.length === 0 || transcriptChunks.length === 0) {
+      throw new NoNewSessionSummaryEventsError("aucun nouvel événement à résumer");
+    }
+
+    const generation = {
+      cwd: project.path,
+      provider: conversation.provider,
+      model: conversation.model,
+      effort: conversation.effort ?? undefined,
+      speed: conversation.speed ?? undefined,
+    };
+    const partials: string[] = [];
+    for (const transcript of transcriptChunks) {
+      partials.push(await this.generateSessionSummaryValidated({
+        ...generation,
+        prompt: sessionSummaryPrompt(
+          transcript,
+          previous !== undefined,
+          transcriptChunks.length > 1,
+        ),
+      }));
+    }
+    const contentMd = partials.length === 1
+      ? partials[0]!
+      : await this.consolidateSessionSummaries(generation, partials);
+    const createdAt = new Date().toISOString();
+    const summaryId = crypto.randomUUID();
+    const event: AppEvent = {
+      type: "session-summary-ref",
+      summaryId,
+      eventIdFrom: candidates[0]!.id,
+      eventIdTo: candidates.at(-1)!.id,
+      contentMd,
+      createdAt,
+    };
+    const eventId = this.conversations.appendEvent(conversationId, event);
+    this.broadcast(conversationId, { ...event, id: eventId });
+    return {
+      id: summaryId,
+      conversation_id: conversationId,
+      event_id_from: event.eventIdFrom,
+      event_id_to: event.eventIdTo,
+      content_md: contentMd,
+      created_at: createdAt,
+    };
   }
 
   /** Le handoff réutilise la dernière version si aucun événement ne l'a périmée. */
@@ -215,6 +303,32 @@ export class DebriefRunner {
       throw new Error(`débrief trop long (${content.length} caractères)`);
     }
     return content;
+  }
+
+  private async generateSessionSummaryValidated(input: DebriefGenerationInput): Promise<string> {
+    const content = (await this.generator(input)).trim();
+    validateSessionSummary(content);
+    if (content.length > MAX_GENERATED_SUMMARY_CHARS) {
+      throw new Error(`résumé de session trop long (${content.length} caractères)`);
+    }
+    return content;
+  }
+
+  private async consolidateSessionSummaries(
+    generation: Omit<DebriefGenerationInput, "prompt">,
+    summaries: string[],
+  ): Promise<string> {
+    return this.generateSessionSummaryValidated({
+      ...generation,
+      prompt: [
+        "Fusionne les résumés de session suivants en un seul résumé très court.",
+        "Élimine les répétitions, conserve uniquement les changements concrets et n'invente aucun élément.",
+        "Retourne uniquement du Markdown avec les titres ## Implémenté et, seulement si nécessaire, ## À terminer.",
+        "Limite-toi à 8 puces au total.",
+        "",
+        summaries.join("\n\n---\n\n"),
+      ].join("\n"),
+    });
   }
 
   private async consolidateDebriefs(
@@ -349,6 +463,28 @@ function debriefPrompt(
   ].join("\n");
 }
 
+function sessionSummaryPrompt(
+  transcript: string,
+  incremental: boolean,
+  partial: boolean,
+): string {
+  return [
+    "Tu produis un résumé de session très court pour un développeur.",
+    partial
+      ? "Le segment ci-dessous est une tranche d'une longue conversation : ne retiens que les changements concrets de cette tranche."
+      : incremental
+      ? "Résume uniquement les changements depuis le dernier résumé de session."
+      : "Résume uniquement les changements concrets de cette session.",
+    "Ne liste pas les appels d'outils, les détails de raisonnement ou les décisions sans effet pratique.",
+    "N'invente aucun correctif, fichier, test ou TODO.",
+    "Retourne uniquement du Markdown avec exactement le titre ## Implémenté et, uniquement s'il reste des éléments explicitement ouverts, le titre ## À terminer.",
+    "Utilise 2 à 8 puces au total. Chaque puce doit être courte et actionnable. Cite [événement #N] seulement lorsque cela clarifie la preuve.",
+    "",
+    "SEGMENT À RÉSUMER",
+    transcript,
+  ].join("\n");
+}
+
 function validateDebrief(content: string): void {
   if (!content) throw new Error("débrief vide");
   for (const heading of [
@@ -359,6 +495,13 @@ function validateDebrief(content: string): void {
     "## Points ouverts",
   ]) {
     if (!content.includes(heading)) throw new Error(`débrief invalide : section manquante « ${heading} »`);
+  }
+}
+
+function validateSessionSummary(content: string): void {
+  if (!content) throw new Error("résumé de session vide");
+  if (!content.includes("## Implémenté")) {
+    throw new Error("résumé de session invalide : section manquante « Implémenté »");
   }
 }
 

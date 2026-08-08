@@ -86,6 +86,14 @@ test("borne par défaut les MCP utilisateur sans désactiver les plugins", async
   ]);
 });
 
+test("négocie l'API expérimentale pour les champs app-server utilisés par Pupitre", async () => {
+  const files = useFake();
+  await collect(newClient());
+
+  const initialize = sentRequests(files.log).find((request) => request.method === "initialize");
+  expect(initialize?.params.capabilities).toEqual({ experimentalApi: true });
+});
+
 test("l'ancien opt-in conserve la configuration utilisateur sans borne", async () => {
   const files = useFake();
   process.env.PUPITRE_CODEX_USER_MCPS = "1";
