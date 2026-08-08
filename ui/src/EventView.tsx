@@ -89,6 +89,28 @@ function parsedTime(value: string | undefined): number | null {
   return Number.isNaN(timestamp) ? null : timestamp
 }
 
+function basename(path: string): string {
+  const segments = path.split(/[/\\]/)
+  return segments.at(-1) || path
+}
+
+function TurnFiles({ files }: { files: Array<{ path: string; added: number; removed: number }> }) {
+  if (files.length === 0) return null
+
+  return (
+    <div className="turn-files">
+      {files.map((file) => (
+        <span className="turn-file-chip" key={file.path}>
+          <span className="turn-file-dot" aria-hidden="true" />
+          {basename(file.path)}
+          {file.added > 0 ? <span className="turn-file-added">+{file.added}</span> : null}
+          {file.removed > 0 ? <span className="turn-file-removed">-{file.removed}</span> : null}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function TurnFooter({ block }: { block: Extract<EventBlock, { kind: 'turn-footer' }> }) {
   const isRunning = block.status?.state === 'running'
   const isDone = block.status?.state === 'done'
@@ -106,6 +128,7 @@ function TurnFooter({ block }: { block: Extract<EventBlock, { kind: 'turn-footer
 
   return (
     <footer className="turn-footer">
+      {block.files ? <TurnFiles files={block.files} /> : null}
       {isError ? (
         <div className="turn-error" role="alert">
           <span className="turn-error-label">Erreur</span>{' '}

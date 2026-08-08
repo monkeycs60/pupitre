@@ -727,6 +727,41 @@
   margin: calc(-1 * var(--space-1)) 0 var(--space-5);
 }
 
+.turn-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 var(--space-2);
+}
+
+.turn-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+}
+
+.turn-file-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.turn-file-added {
+  color: var(--ok);
+}
+
+.turn-file-removed {
+  color: var(--danger);
+}
+
 .turn-meta {
   display: flex;
   align-items: center;

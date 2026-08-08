@@ -38,6 +38,7 @@ interface TurnFooterBlock {
     firstResponseAt?: string
     completedAt?: string
   }
+  files?: Array<{ path: string; added: number; removed: number }>
 }
 
 export type EventBlock =

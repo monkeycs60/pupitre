@@ -45,6 +45,58 @@ export type StreamBlock =
   | SessionSummaryBlock
   | TestInventoryBlock
 
+function lineCount(text: string): number {
+  return text.length === 0 ? 0 : text.split('\n').length
+}
+
+/** Extrait le delta de lignes (ajouts/suppressions) d'un tool call d'édition de fichier, si reconnu. */
+function fileEditFromTool(
+  toolName: string,
+  input: unknown,
+): { path: string; added: number; removed: number } | null {
+  if (input === null || typeof input !== 'object') return null
+  const record = input as Record<string, unknown>
+
+  switch (toolName) {
+    case 'Edit': {
+      const filePath = record.file_path
+      const oldString = record.old_string
+      const newString = record.new_string
+      if (typeof filePath !== 'string' || typeof oldString !== 'string' || typeof newString !== 'string') {
+        return null
+      }
+      return { path: filePath, added: lineCount(newString), removed: lineCount(oldString) }
+    }
+    case 'Write': {
+      const filePath = record.file_path
+      const content = record.content
+      if (typeof filePath !== 'string' || typeof content !== 'string') return null
+      return { path: filePath, added: lineCount(content), removed: 0 }
+    }
+    case 'MultiEdit': {
+      const filePath = record.file_path
+      const edits = record.edits
+      if (typeof filePath !== 'string' || !Array.isArray(edits)) return null
+      let added = 0
+      let removed = 0
+      for (const edit of edits) {
+        if (edit === null || typeof edit !== 'object') continue
+        const { old_string: oldString, new_string: newString } = edit as Record<string, unknown>
+        if (typeof oldString === 'string') removed += lineCount(oldString)
+        if (typeof newString === 'string') added += lineCount(newString)
+      }
+      return { path: filePath, added, removed }
+    }
+    case 'NotebookEdit': {
+      const notebookPath = record.notebook_path
+      if (typeof notebookPath !== 'string') return null
+      return { path: notebookPath, added: 0, removed: 0 }
+    }
+    default:
+      return null
+  }
+}
+
 export function guardianAckCount(events: ReadonlyArray<AppEvent>): number {
   return events.reduce(
     (count, event) => event.type === 'test-scope-result'
@@ -62,6 +114,7 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
   let assistant: Extract<EventBlock, { kind: 'assistant' }> | null = null
   let turnNumber = 0
   let turnFooter: Extract<EventBlock, { kind: 'turn-footer' }> | null = null
+  let turnFiles = new Map<string, { added: number; removed: number }>()
 
   function ensureTurnFooter() {
     turnFooter ??= { kind: 'turn-footer', id: `turn-footer-${turnNumber}` }
@@ -81,6 +134,7 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
       case 'user-message':
         flushTurnFooter()
         turnNumber += 1
+        turnFiles = new Map()
         assistant = null
         blocks.push({
           kind: 'user',
@@ -130,6 +184,15 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
         }
         tools.set(event.toolId, tool)
         blocks.push(tool)
+        const fileEdit = fileEditFromTool(event.toolName, event.input)
+        if (fileEdit !== null) {
+          const existing = turnFiles.get(fileEdit.path) ?? { added: 0, removed: 0 }
+          turnFiles.set(fileEdit.path, {
+            added: existing.added + fileEdit.added,
+            removed: existing.removed + fileEdit.removed,
+          })
+          ensureTurnFooter().files = Array.from(turnFiles, ([path, delta]) => ({ path, ...delta }))
+        }
         break
       }
       case 'tool-end': {
