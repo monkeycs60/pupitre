@@ -774,6 +774,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+.turn-xp {
+  margin-left: auto;
+  color: var(--streak);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
 /* Tour terminé : liseré et fond verts, comme une notification résolue. */
 .turn-meta-done {
   justify-content: flex-start;

@@ -5,11 +5,13 @@ import type { Attachment } from './types'
 import { mediaUrl } from './transport'
 import { useNow } from './useNow'
 import { AttachmentPreview } from './AttachmentPreview'
+import { tokenXp } from './turnXp'
 
 interface EventViewProps {
   block: EventBlock
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
+  turnXpMultiplier?: number
 }
 
 function formatPreValue(value: unknown): string {
@@ -111,7 +113,13 @@ function TurnFiles({ files }: { files: Array<{ path: string; added: number; remo
   )
 }
 
-function TurnFooter({ block }: { block: Extract<EventBlock, { kind: 'turn-footer' }> }) {
+function TurnFooter({
+  block,
+  turnXpMultiplier,
+}: {
+  block: Extract<EventBlock, { kind: 'turn-footer' }>
+  turnXpMultiplier?: number
+}) {
   const isRunning = block.status?.state === 'running'
   const isDone = block.status?.state === 'done'
   const isError = block.status?.state === 'error'
@@ -125,6 +133,9 @@ function TurnFooter({ block }: { block: Extract<EventBlock, { kind: 'turn-footer
     ? firstResponseAt - startedAt
     : null
   const totalMs = startedAt !== null && endAt !== null ? endAt - startedAt : null
+  const xp = block.usage !== undefined && turnXpMultiplier !== undefined
+    ? Math.max(1, Math.round(tokenXp(block.usage.inputTokens, block.usage.outputTokens) * turnXpMultiplier))
+    : null
 
   return (
     <footer className="turn-footer">
@@ -163,6 +174,7 @@ function TurnFooter({ block }: { block: Extract<EventBlock, { kind: 'turn-footer
             {block.usage.outputTokens.toLocaleString('fr-FR')} tokens
           </span>
         ) : null}
+        {xp !== null ? <span className="turn-xp">+{xp} XP</span> : null}
       </div>
     </footer>
   )
@@ -174,7 +186,7 @@ function TurnFooter({ block }: { block: Extract<EventBlock, { kind: 'turn-footer
  */
 export const EventView = memo(EventViewImpl)
 
-function EventViewImpl({ block, onImageOpen, onImageLoad }: EventViewProps) {
+function EventViewImpl({ block, onImageOpen, onImageLoad, turnXpMultiplier }: EventViewProps) {
   switch (block.kind) {
     case 'user':
       return (
@@ -238,7 +250,7 @@ function EventViewImpl({ block, onImageOpen, onImageLoad }: EventViewProps) {
       )
 
     case 'turn-footer': {
-      return <TurnFooter block={block} />
+      return <TurnFooter block={block} turnXpMultiplier={turnXpMultiplier} />
     }
   }
 }

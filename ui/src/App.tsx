@@ -43,6 +43,7 @@ import { ResumeCommandButton } from './ResumeCommandButton'
 import { HelpView } from './HelpView'
 import type { AppEvent, WorkspaceView } from './types'
 import { useGamification } from './useGamification'
+import { complexityMultiplier } from './turnXp'
 import { useFleet } from './useFleet'
 import { ProgressView } from './ProgressView'
 import { AppSettingsView } from './AppSettingsView'
@@ -714,6 +715,11 @@ function App() {
               onProjectUpdated={handleProjectUpdated}
               onRunningSubtasksChange={setRunningSubtasks}
               initialMessage={newConversationDraft}
+              turnXpMultiplier={complexityMultiplier(
+                (selectedConversation
+                  ? gamification.snapshot?.conversations[selectedConversation.id]?.complexity
+                  : undefined) ?? 0,
+              ) * (gamification.snapshot?.focusMultiplier ?? 1)}
             />
             {showSwitchModel && selectedConversation !== null ? (
               <SwitchModelModal

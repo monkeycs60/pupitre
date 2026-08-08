@@ -49,6 +49,8 @@ interface ChatProps {
   /** Nombre de sous-tâches en cours dans ce fil (indicateur sidebar). */
   onRunningSubtasksChange?: (count: number) => void
   initialMessage?: string
+  /** Multiplicateur XP du tour (complexité × focus), voir turnXp.ts. */
+  turnXpMultiplier?: number
 }
 
 interface LightboxImage {
@@ -104,6 +106,7 @@ export function Chat({
   onProjectUpdated,
   onRunningSubtasksChange,
   initialMessage = '',
+  turnXpMultiplier,
 }: ChatProps) {
   const draftStorageKey = `pupitre:draft:${conversation?.id ?? `new:${project.id}`}`
   const blocks = useMemo(() => groupEvents(events), [events])
@@ -290,6 +293,7 @@ export function Chat({
                     onImageLoad={scrollToBottomIfFollowing}
                     onSubtaskStatusChange={handleSubtaskStatusChange}
                     onDebriefQuestion={handleDebriefQuestion}
+                    turnXpMultiplier={turnXpMultiplier}
                   />
                 </TaskToggleContext.Provider>
               )}

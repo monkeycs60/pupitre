@@ -1355,17 +1355,19 @@
 }
 
 .context-gauge-detail {
-  position: absolute;
-  top: 100%;
-  margin-top: var(--space-2);
+  position: fixed;
+  top: 0;
   left: 0;
   z-index: 40;
-  width: 560px;
+  width: 680px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   padding: var(--space-4);
   font-family: var(--font-sans);
   /* Le panneau est survolable : on peut y promener la souris sans qu'il
-     disparaisse. Il touche la jauge (pas de `top` décalé) pour que le curseur
-     n'ait aucun vide à traverser. */
+     disparaisse. Sa position est recalée par le composant pour rester dans la
+     fenêtre, même quand le workspace coupe les débordements. */
   visibility: hidden;
   background: var(--bg-overlay);
   border: 1px solid var(--border);

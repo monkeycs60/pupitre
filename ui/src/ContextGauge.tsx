@@ -1,3 +1,4 @@
+import { useRef, useState, type CSSProperties } from 'react'
 import {
   PERSISTENT_ALERT_RATIO,
   contextEstimate,
@@ -21,6 +22,9 @@ const GROUP_LABELS: Record<ContextGroup, string> = {
 
 /** Créneaux de la palette validée : au-delà, on retombe sur une nuance. */
 const PALETTE_SLOTS = 8
+const DETAIL_WIDTH = 680
+const DETAIL_VIEWPORT_MARGIN = 12
+const DETAIL_GAP = 8
 
 export function ContextGauge({
   conversation,
@@ -49,6 +53,42 @@ export function ContextGauge({
   mcpServers?: McpServerRef[]
   onHandoff: () => void
 }) {
+  const contextGaugeHoverRef = useRef<HTMLDivElement>(null)
+  const [detailPosition, setDetailPosition] = useState<{
+    left: number
+    top: number
+    maxHeight: number
+  } | null>(null)
+
+  function positionDetail() {
+    const hoverElement = contextGaugeHoverRef.current
+    if (!hoverElement) return
+
+    const bounds = hoverElement.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const panelWidth = Math.min(
+      DETAIL_WIDTH,
+      Math.max(0, viewportWidth - DETAIL_VIEWPORT_MARGIN * 2),
+    )
+    const maxLeft = Math.max(
+      DETAIL_VIEWPORT_MARGIN,
+      viewportWidth - panelWidth - DETAIL_VIEWPORT_MARGIN,
+    )
+    const left = Math.min(
+      Math.max(DETAIL_VIEWPORT_MARGIN, bounds.left),
+      maxLeft,
+    )
+    const top = bounds.bottom + DETAIL_GAP
+
+    setDetailPosition({
+      left,
+      top,
+      maxHeight: Math.max(120, viewportHeight - top - DETAIL_VIEWPORT_MARGIN),
+    })
+  }
+
+  const detailStyle: CSSProperties = detailPosition ?? { left: -10000, top: -10000 }
   const estimate = contextEstimate(
     events,
     conversation.provider,
@@ -102,7 +142,10 @@ export function ContextGauge({
       ].join(' ').trim()}
     >
       <div
+        ref={contextGaugeHoverRef}
         className="context-gauge-hover"
+        onFocusCapture={positionDetail}
+        onMouseEnter={positionDetail}
         role="progressbar"
         aria-label="Contexte estimé"
         aria-valuemin={0}
@@ -132,7 +175,12 @@ export function ContextGauge({
           <span className="context-gauge-status">{status}</span>
         </span>
 
-        <div className="context-gauge-detail" id="context-gauge-detail" role="tooltip">
+        <div
+          className="context-gauge-detail"
+          id="context-gauge-detail"
+          role="tooltip"
+          style={detailStyle}
+        >
           <div className="context-gauge-detail-header">
             <strong>{formatCompact(estimate.usedTokens)} tokens occupés</strong>
             <span>fenêtre {formatCompact(estimate.windowTokens)}</span>

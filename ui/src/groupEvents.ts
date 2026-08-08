@@ -97,6 +97,72 @@ function fileEditFromTool(
   }
 }
 
+/**
+ * Parse un ou plusieurs blocs `apply_patch` (format Codex) trouvés dans le
+ * texte d'une commande shell. Ignore silencieusement le texte s'il ne
+ * contient aucun `*** Begin Patch` : on ne devine jamais de fichiers à partir
+ * d'une commande shell arbitraire.
+ */
+export function parseApplyPatch(command: string): Array<{ path: string; added: number; removed: number }> {
+  if (!command.includes('*** Begin Patch')) return []
+
+  const totals = new Map<string, { added: number; removed: number }>()
+  let currentPath: string | null = null
+  let inPatch = false
+
+  const bump = (path: string, added: number, removed: number) => {
+    const existing = totals.get(path) ?? { added: 0, removed: 0 }
+    totals.set(path, { added: existing.added + added, removed: existing.removed + removed })
+  }
+
+  for (const line of command.split('\n')) {
+    if (line.startsWith('*** Begin Patch')) {
+      inPatch = true
+      currentPath = null
+      continue
+    }
+    if (line.startsWith('*** End Patch')) {
+      inPatch = false
+      currentPath = null
+      continue
+    }
+    if (!inPatch) continue
+
+    const updateMatch = /^\*\*\* Update File: (.+)$/.exec(line)
+    const addMatch = /^\*\*\* Add File: (.+)$/.exec(line)
+    const deleteMatch = /^\*\*\* Delete File: (.+)$/.exec(line)
+    if (updateMatch || addMatch || deleteMatch) {
+      const path = (updateMatch ?? addMatch ?? deleteMatch)![1].trim()
+      currentPath = path
+      if (!totals.has(path)) totals.set(path, { added: 0, removed: 0 })
+      continue
+    }
+    if (line.startsWith('*** ')) {
+      // Autre marqueur (Move to, End of File, etc.) : pas un fichier suivi.
+      continue
+    }
+    if (currentPath === null) continue
+
+    if (line.startsWith('+++') || line.startsWith('---')) continue
+    if (line.startsWith('+')) bump(currentPath, 1, 0)
+    else if (line.startsWith('-')) bump(currentPath, 0, 1)
+  }
+
+  return Array.from(totals, ([path, delta]) => ({ path, ...delta }))
+}
+
+/** Codex édite via `shell` + heredoc `apply_patch` plutôt que via Edit/Write. */
+function shellApplyPatchEdits(
+  toolName: string,
+  input: unknown,
+): Array<{ path: string; added: number; removed: number }> {
+  if (toolName !== 'shell') return []
+  if (input === null || typeof input !== 'object') return []
+  const command = (input as Record<string, unknown>).command
+  if (typeof command !== 'string') return []
+  return parseApplyPatch(command)
+}
+
 export function guardianAckCount(events: ReadonlyArray<AppEvent>): number {
   return events.reduce(
     (count, event) => event.type === 'test-scope-result'
@@ -185,12 +251,15 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
         tools.set(event.toolId, tool)
         blocks.push(tool)
         const fileEdit = fileEditFromTool(event.toolName, event.input)
-        if (fileEdit !== null) {
-          const existing = turnFiles.get(fileEdit.path) ?? { added: 0, removed: 0 }
-          turnFiles.set(fileEdit.path, {
-            added: existing.added + fileEdit.added,
-            removed: existing.removed + fileEdit.removed,
-          })
+        const fileEdits = fileEdit !== null ? [fileEdit] : shellApplyPatchEdits(event.toolName, event.input)
+        if (fileEdits.length > 0) {
+          for (const edit of fileEdits) {
+            const existing = turnFiles.get(edit.path) ?? { added: 0, removed: 0 }
+            turnFiles.set(edit.path, {
+              added: existing.added + edit.added,
+              removed: existing.removed + edit.removed,
+            })
+          }
           ensureTurnFooter().files = Array.from(turnFiles, ([path, delta]) => ({ path, ...delta }))
         }
         break
