@@ -141,19 +141,10 @@ export function openDb(dir: string = dataDir()): Database {
       code_provider TEXT NULL,
       is_test_gap INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'open'
-        CHECK (status IN ('open', 'acked', 'dismissed', 'countered'))
+        CHECK (status IN ('open', 'countered', 'agent_running', 'treated', 'ignored', 'resolved'))
     );
     CREATE INDEX IF NOT EXISTS idx_review_flags_review
       ON review_flags(review_id, severity, line_start);
-    CREATE TABLE IF NOT EXISTS review_decisions (
-      id TEXT PRIMARY KEY,
-      review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
-      question TEXT NOT NULL, flag_ids TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'open'
-        CHECK (status IN ('open', 'acked', 'dismissed'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_review_decisions_review
-      ON review_decisions(review_id, id);
     CREATE TABLE IF NOT EXISTS skills (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -278,6 +269,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
   addColumn(db, "projects", "gardien_mode TEXT NOT NULL DEFAULT 'informatif'");
   addColumn(db, "projects", "auto_counter_red INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "projects", "auto_rescan INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "reviews", "code_provider TEXT NULL");
   addColumn(db, "review_flags", "counter_state TEXT NOT NULL DEFAULT 'idle'");
   addColumn(db, "review_flags", "counter_verdict TEXT NULL");
@@ -289,11 +281,22 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "review_flags", "counter_error TEXT NULL");
   addColumn(db, "review_flags", "decision TEXT NULL");
   addColumn(db, "review_flags", "code_provider TEXT NULL");
+  addColumn(db, "review_flags", "hunk_hash TEXT NULL");
+  addColumn(db, "review_flags", "subtask_id TEXT NULL");
+  addColumn(db, "review_flags", "user_message TEXT NULL");
+  addColumn(db, "reviews", "scope TEXT NOT NULL DEFAULT 'worktree'");
+  addColumn(db, "reviews", "parent_review_id TEXT NULL");
   const addedTestGap = addColumn(
     db,
     "review_flags",
     "is_test_gap INTEGER NOT NULL DEFAULT 0",
   );
+  // Les bases historiques n'ont pas encore `is_test_gap` : la reconstruction
+  // de la contrainte de statut doit donc se produire après cet ajout.
+  migrateReviewFlagStatuses(db);
+  // Migration de vocabulaire : « acquitté/écarté » devient « traité/ignoré ».
+  db.exec("UPDATE review_flags SET status = 'treated' WHERE status = 'acked'");
+  db.exec("UPDATE review_flags SET status = 'ignored' WHERE status = 'dismissed'");
   if (addedTestGap) {
     // Les flags créés avant M3-I n'avaient pas de champ structuré. Cette
     // reprise unique conserve les alertes de tests déjà visibles dans Tester.
@@ -354,6 +357,7 @@ export function openDb(dir: string = dataDir()): Database {
       WHERE provider = 'claude'
     `);
   }
+  db.exec("DROP TABLE IF EXISTS review_decisions");
   db.exec("PRAGMA foreign_keys = ON");
   return db;
 }
@@ -368,6 +372,39 @@ function addColumn(db: Database, table: string, definition: string): boolean {
     }
     return false;
   }
+}
+
+function migrateReviewFlagStatuses(db: Database): void {
+  const sql = (db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'review_flags'")
+    .get() as { sql?: string } | null)?.sql ?? "";
+  if (!sql.includes("'acked'")) return;
+  db.exec(`
+    CREATE TABLE review_flags_new (
+      id TEXT PRIMARY KEY,
+      review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+      file TEXT NOT NULL, line_start INTEGER NOT NULL, line_end INTEGER NOT NULL,
+      severity TEXT NOT NULL CHECK (severity IN ('red', 'orange', 'grey')),
+      category TEXT NOT NULL, message TEXT NOT NULL, decision TEXT NULL,
+      code_provider TEXT NULL, is_test_gap INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open', 'countered', 'agent_running', 'treated', 'ignored', 'resolved')),
+      counter_state TEXT NOT NULL DEFAULT 'idle', counter_verdict TEXT NULL,
+      counter_text TEXT NULL, counter_provider TEXT NULL, counter_model TEXT NULL,
+      counter_effort TEXT NULL, counter_subtask_id TEXT NULL, counter_error TEXT NULL,
+      hunk_hash TEXT NULL, subtask_id TEXT NULL, user_message TEXT NULL
+    );
+    INSERT INTO review_flags_new
+    SELECT id, review_id, file, line_start, line_end, severity, category, message, decision,
+      code_provider, is_test_gap,
+      CASE status WHEN 'acked' THEN 'treated' WHEN 'dismissed' THEN 'ignored' ELSE status END,
+      counter_state, counter_verdict, counter_text, counter_provider, counter_model,
+      counter_effort, counter_subtask_id, counter_error, hunk_hash, subtask_id, user_message
+    FROM review_flags;
+    DROP TABLE review_flags;
+    ALTER TABLE review_flags_new RENAME TO review_flags;
+    CREATE INDEX IF NOT EXISTS idx_review_flags_review
+      ON review_flags(review_id, severity, line_start);
+  `);
 }
 
 /**

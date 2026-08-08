@@ -4,10 +4,11 @@ import type { SubtaskRunner } from "./subtasks";
 import type { RoutineStore } from "./routines";
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
+import type { ReviewRunner } from "./reviews";
 
 export interface FleetItem {
   id: string;
-  kind: "turn" | "subtask" | "routine";
+  kind: "turn" | "subtask" | "routine" | "review";
   projectId: string;
   projectName: string;
   conversationId: string;
@@ -41,6 +42,7 @@ export function fleetSnapshot(deps: {
   conversations: ConversationStore;
   projects: ProjectStore;
   routineStore: RoutineStore;
+  reviews?: ReviewRunner;
 }): FleetItem[] {
   const items: FleetItem[] = [];
   for (const active of deps.runner.activeTurns()) {
@@ -80,6 +82,27 @@ export function fleetSnapshot(deps: {
       model: subtask.model,
       startedAt: subtask.created_at,
       lastEvent: eventLabel(deps.conversations.listEvents(subtask.id).at(-1)),
+    });
+  }
+  for (const project of deps.projects.list()) {
+    if (!deps.reviews) break;
+    const running = deps.reviews.reviewStatus(project.id)?.running;
+    if (!running) continue;
+    const review = deps.reviews.get(running.reviewId);
+    if (!review) continue;
+    const conversation = deps.conversations.get(review.conversation_id);
+    if (!conversation) continue;
+    items.push({
+      id: `review:${review.id}`,
+      kind: "review",
+      projectId: project.id,
+      projectName: project.name,
+      conversationId: conversation.id,
+      title: `Gardien · zone ${running.zoneDone}/${running.zoneTotal}`,
+      provider: review.review_provider,
+      model: review.review_model,
+      startedAt: review.created_at,
+      lastEvent: "scan en cours",
     });
   }
   return items.sort((left, right) => left.startedAt.localeCompare(right.startedAt));

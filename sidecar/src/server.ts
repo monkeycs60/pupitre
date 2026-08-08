@@ -20,7 +20,7 @@ import type { SettingsStore } from "./stores/settings";
 import type { QuotaTracker } from "./quotas";
 import type { QuotaRefresher } from "./quota-refresh";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
-import type { ReviewRunner } from "./reviews";
+import { DispatchConflictError, type ReviewRunner } from "./reviews";
 import { CounterAlreadyRunningError } from "./stores/reviews";
 import {
   DebriefAlreadyRunningError,
@@ -858,6 +858,7 @@ export function createServer(deps: ServerDeps) {
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
   const fleetSockets = new Set<ServerWebSocket<WebSocketData>>();
   let fleetTimer: ReturnType<typeof setInterval> | null = null;
+  const lastAutoRescanAt = new Map<string, number>();
   const currentFleet = () => fleetSnapshot(deps);
   const broadcastFleet = () => {
     const message = JSON.stringify(currentFleet());
@@ -873,6 +874,26 @@ export function createServer(deps: ServerDeps) {
       fleetTimer = null;
     }
   };
+  const broadcastReviewStatus = () => {
+    // Le canal Fleet porte aussi le statut des reviews : l'UI garde un unique
+    // flux temps réel pour la barre globale et le bouton Git.
+    broadcastFleet();
+    for (const project of deps.projects.list()) {
+      const status = deps.reviews.reviewStatus(project.id);
+      if (!status) continue;
+      // Le canal est global à l'application : l'id évite qu'un push provenant
+      // d'un autre projet écrase le statut actuellement affiché par le client.
+      const message = JSON.stringify({ projectId: project.id, ...status });
+      for (const socket of fleetSockets) {
+        try {
+          socket.send(message);
+        } catch {
+          fleetSockets.delete(socket);
+        }
+      }
+    }
+  };
+  deps.reviews.subscribeStatus(broadcastReviewStatus);
   deps.events.subscribe((conversationId, event) => {
     const message = JSON.stringify(event);
     for (const socket of sockets.get(conversationId) ?? []) {
@@ -880,6 +901,32 @@ export function createServer(deps: ServerDeps) {
         socket.send(message);
       } catch {
         sockets.get(conversationId)?.delete(socket);
+      }
+    }
+    if (event.type === "status" && event.state === "done") {
+      const conversation = deps.conversations.get(conversationId);
+      const project = conversation && deps.projects.get(conversation.project_id);
+      const now = Date.now();
+      const running = project && deps.reviews.reviewStatus(project.id)?.running;
+      if (project?.auto_rescan && !running && now - (lastAutoRescanAt.get(project.id) ?? 0) >= 60_000) {
+        lastAutoRescanAt.set(project.id, now);
+        const config = defaultReviewConfig(conversation!.provider);
+        try {
+          deps.reviews.start({
+            projectId: project.id,
+            conversationId: conversation!.id,
+            gitRefBase: "CONVERSATION",
+            gitRefHead: "WORKTREE",
+            provider: config.provider,
+            model: config.model,
+            effort: config.effort,
+            codeProvider: conversation!.provider,
+            scope: "worktree",
+            incremental: true,
+          });
+        } catch (error) {
+          console.error("Échec du rescan automatique", error);
+        }
       }
     }
   });
@@ -1195,22 +1242,6 @@ export function createServer(deps: ServerDeps) {
           return json(deps.projects.get(projectFilesystemScopeId));
         }
 
-        const projectGardienModeId = routeId(
-          pathname,
-          /^\/api\/projects\/([^/]+)\/gardien-mode$/,
-        );
-        if (request.method === "PUT" && projectGardienModeId !== null) {
-          if (!deps.projects.get(projectGardienModeId)) {
-            throw new HttpError(404, "projet inconnu");
-          }
-          const body = await readObject(request);
-          if (body.mode !== "informatif" && body.mode !== "bloquant") {
-            throw new HttpError(400, "mode Gardien invalide");
-          }
-          deps.projects.setGardienMode(projectGardienModeId, body.mode);
-          return json(deps.projects.get(projectGardienModeId));
-        }
-
         const projectAutoCounterId = routeId(
           pathname,
           /^\/api\/projects\/([^/]+)\/auto-counter-red$/,
@@ -1225,6 +1256,20 @@ export function createServer(deps: ServerDeps) {
           }
           deps.projects.setAutoCounterRed(projectAutoCounterId, body.enabled);
           return json(deps.projects.get(projectAutoCounterId));
+        }
+
+        const projectAutoRescanId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/auto-rescan$/,
+        );
+        if (request.method === "PUT" && projectAutoRescanId !== null) {
+          if (!deps.projects.get(projectAutoRescanId)) throw new HttpError(404, "projet inconnu");
+          const body = await readObject(request);
+          if (typeof body.enabled !== "boolean") {
+            throw new HttpError(400, "option de rescan automatique invalide");
+          }
+          deps.projects.setAutoRescan(projectAutoRescanId, body.enabled);
+          return json(deps.projects.get(projectAutoRescanId));
         }
 
         const projectPinId = routeId(
@@ -2092,6 +2137,9 @@ export function createServer(deps: ServerDeps) {
           const gitRefHead = body.gitRefHead === undefined
             ? "WORKTREE"
             : requiredString(body, "gitRefHead");
+          if (body.incremental !== undefined && typeof body.incremental !== "boolean") {
+            throw new HttpError(400, "incremental invalide");
+          }
           try {
             return json(deps.reviews.start({
               projectId: project.id,
@@ -2102,6 +2150,8 @@ export function createServer(deps: ServerDeps) {
               model: reviewModel.model,
               effort: reviewModel.effort,
               codeProvider: (rawCodeProvider as Provider | undefined) ?? conversation.provider,
+              scope: body.scope === undefined ? "worktree" : requiredString(body, "scope"),
+              incremental: body.incremental === true,
             }), 201);
           } catch (error) {
             if (error instanceof Error && error.message.includes("inconnu")) {
@@ -2122,12 +2172,12 @@ export function createServer(deps: ServerDeps) {
           return json(deps.reviews.listByProject(projectReviewsId));
         }
 
-        const projectGardienStatusId = routeId(
+        const projectReviewStatusId = routeId(
           pathname,
-          /^\/api\/projects\/([^/]+)\/gardien-status$/,
+          /^\/api\/projects\/([^/]+)\/review-status$/,
         );
-        if (request.method === "GET" && projectGardienStatusId !== null) {
-          const status = deps.reviews.gardienStatus(projectGardienStatusId);
+        if (request.method === "GET" && projectReviewStatusId !== null) {
+          const status = deps.reviews.reviewStatus(projectReviewStatusId);
           if (!status) throw new HttpError(404, "projet inconnu");
           return json(status);
         }
@@ -2182,7 +2232,8 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "PATCH" && reviewFlagId !== null) {
           const body = await readObject(request);
           if (body.status !== undefined) {
-            if (body.status !== "open" && body.status !== "acked" && body.status !== "dismissed") {
+            if (body.status !== "open" && body.status !== "agent_running" && body.status !== "treated"
+              && body.status !== "ignored" && body.status !== "resolved") {
               throw new HttpError(400, "statut de flag invalide");
             }
           }
@@ -2248,18 +2299,37 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
-        const reviewDecisionId = routeId(
+        const reviewFlagDispatchId = routeId(
           pathname,
-          /^\/api\/review-decisions\/([^/]+)$/,
+          /^\/api\/review-flags\/([^/]+)\/dispatch$/,
         );
-        if (request.method === "PATCH" && reviewDecisionId !== null) {
+        if (request.method === "POST" && reviewFlagDispatchId !== null) {
           const body = await readObject(request);
-          if (body.status !== "acked" && body.status !== "dismissed") {
-            throw new HttpError(400, "statut de décision invalide");
+          if (body.message !== undefined && typeof body.message !== "string") {
+            throw new HttpError(400, "message invalide");
           }
-          const decision = deps.reviews.setDecisionStatus(reviewDecisionId, body.status);
-          if (!decision) throw new HttpError(404, "décision inconnue");
-          return json(decision);
+          try {
+            return json(deps.reviews.dispatchFlag(reviewFlagDispatchId, body.message), 201);
+          } catch (error) {
+            if (error instanceof DispatchConflictError) throw new HttpError(409, error.message);
+            if (error instanceof Error && error.message === "flag inconnu") throw new HttpError(404, error.message);
+            throw error;
+          }
+        }
+
+        const reviewDispatchAllId = routeId(pathname, /^\/api\/reviews\/([^/]+)\/dispatch-all$/);
+        if (request.method === "POST" && reviewDispatchAllId !== null) {
+          const body = await readObject(request);
+          const severities = body.severities === undefined ? ["red", "orange"] : body.severities;
+          if (!Array.isArray(severities) || !severities.every((item) => item === "red" || item === "orange" || item === "grey")) {
+            throw new HttpError(400, "sévérités invalides");
+          }
+          try {
+            return json({ dispatched: deps.reviews.dispatchAll(reviewDispatchAllId, severities) }, 202);
+          } catch (error) {
+            if (error instanceof Error && error.message === "review inconnu") throw new HttpError(404, error.message);
+            throw error;
+          }
         }
 
         if (request.method === "POST" && pathname === "/api/subtasks") {

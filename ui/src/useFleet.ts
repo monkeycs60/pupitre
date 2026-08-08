@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { getFleet } from './api'
+import { getFleet, getReviewStatus } from './api'
 import { reconnectDelayMs } from './backoff'
 import { webSocketUrl } from './transport'
-import type { FleetItem } from './types'
+import type { FleetItem, ReviewStatusEvent, ReviewStatusSnapshot } from './types'
 
 const FLEET_HISTORY_KEY = 'pupitre.fleet-history'
 export const FLEET_HISTORY_LIMIT = 20
@@ -20,7 +20,7 @@ function isFleetItem(value: unknown): value is FleetItem {
   if (typeof value !== 'object' || value === null) return false
   const item = value as Partial<FleetItem>
   return typeof item.id === 'string'
-    && (item.kind === 'turn' || item.kind === 'subtask' || item.kind === 'routine')
+    && (item.kind === 'turn' || item.kind === 'subtask' || item.kind === 'routine' || item.kind === 'review')
     && typeof item.projectId === 'string'
     && typeof item.projectName === 'string'
     && typeof item.conversationId === 'string'
@@ -124,12 +124,14 @@ export interface FleetState {
   history: FleetHistoryItem[]
   connected: boolean
   markAsHandled: (id: string) => void
+  reviewStatus: ReviewStatusSnapshot | null
 }
 
-export function useFleet(): FleetState {
+export function useFleet(projectId?: string): FleetState {
   const [items, setItems] = useState<FleetItem[]>([])
   const [history, setHistory] = useState<FleetHistoryItem[]>(loadFleetHistory)
   const [connected, setConnected] = useState(false)
+  const [reviewStatus, setReviewStatus] = useState<ReviewStatusSnapshot | null>(null)
   const activeRef = useRef<FleetItem[]>([])
   const historyRef = useRef(history)
 
@@ -165,7 +167,12 @@ export function useFleet(): FleetState {
       current.addEventListener('message', (message) => {
         if (disposed || socket !== current) return
         try {
-          const snapshot = parseFleetSnapshot(JSON.parse(String(message.data)))
+          const payload: unknown = JSON.parse(String(message.data))
+          if (isReviewStatusEvent(payload)) {
+            if (payload.projectId === projectId) setReviewStatus(payload)
+            return
+          }
+          const snapshot = parseFleetSnapshot(payload)
           if (snapshot === null) {
             console.error('Snapshot Fleet invalide')
             return
@@ -200,6 +207,13 @@ export function useFleet(): FleetState {
       .catch((error: unknown) => {
         if (!controller.signal.aborted) console.error('Fleet indisponible', error)
       })
+    if (projectId) {
+      void getReviewStatus(projectId, controller.signal)
+        .then((status) => { if (!disposed) setReviewStatus(status) })
+        .catch(() => {})
+    } else {
+      setReviewStatus(null)
+    }
     connect()
     return () => {
       disposed = true
@@ -207,7 +221,7 @@ export function useFleet(): FleetState {
       clearTimeout(retryTimer)
       socket?.close()
     }
-  }, [])
+  }, [projectId])
 
   function markAsHandled(id: string) {
     const nextHistory = markFleetHistoryHandled(historyRef.current, id)
@@ -217,5 +231,13 @@ export function useFleet(): FleetState {
     persistFleetHistory(nextHistory)
   }
 
-  return { items, history, connected, markAsHandled }
+  return { items, history, connected, reviewStatus, markAsHandled }
+}
+
+function isReviewStatusEvent(value: unknown): value is ReviewStatusEvent {
+  if (typeof value !== 'object' || value === null) return false
+  const status = value as Partial<ReviewStatusEvent>
+  return typeof status.projectId === 'string'
+    && typeof status.openBySeverity === 'object' && status.openBySeverity !== null
+    && (status.running === null || (typeof status.running === 'object' && status.running !== null))
 }

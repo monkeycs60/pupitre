@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -10,15 +10,12 @@ import { Rail } from './Rail'
 import { Titlebar } from './Titlebar'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
-import { GuardianView } from './GuardianView'
-import { ReviewDialog } from './ReviewDialog'
-import type { Conversation, Project, Review } from './types'
+import type { Conversation, Project } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import { ContextGauge } from './ContextGauge'
 import { GitView } from './GitView'
 import {
-  getGardienStatus,
   getProjectContextProfile,
   getSettings,
   listProjectConversations,
@@ -29,13 +26,12 @@ import type { ContextProfile, McpServerRef } from './api'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import { modelLabel } from './modelOptions'
 import type { ActionFormat } from './actionHeadings'
-import { guardianAckCount } from './groupEvents'
 import { SkillsLibrary } from './SkillsLibrary'
 import { RoutinesView } from './RoutinesView'
 import { useAppNotifications } from './useAppNotifications'
 import { FleetView } from './FleetView'
 import { CommandPalette } from './CommandPalette'
-import { createSessionSummary, createTestInventory } from './api'
+import { createSessionSummary, createTestInventory, startReview } from './api'
 import type { SkillSummary } from './types'
 import { CostsView } from './CostsView'
 import { MemoryView } from './MemoryView'
@@ -87,16 +83,11 @@ function App() {
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [showHandoff, setShowHandoff] = useState(false)
-  const [showReviewDialog, setShowReviewDialog] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
   const [memoryDirty, setMemoryDirty] = useState(false)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
-  const [reviewListVersion, setReviewListVersion] = useState(0)
-  const [gardienPollVersion, setGardienPollVersion] = useState(0)
-  /** Nombre d'alertes Gardien ouvertes du projet, pour la pastille du rail. */
-  const [gardienOpenCount, setGardienOpenCount] = useState(0)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
   // conversation ouverte — la sidebar n'en affiche l'indicateur que pour elle.
@@ -124,9 +115,8 @@ function App() {
   )
   const quotas = useQuotas()
   const gamification = useGamification()
-  const fleet = useFleet()
+  const fleet = useFleet(selectedProject?.id)
   useAppNotifications()
-  const guardianAckEventCount = guardianAckCount(events)
   // Le digest est régénéré côté sidecar après un tour : on rafraîchit le titre
   // affiché sans recharger la conversation.
   const digest = lastDigest(events)
@@ -142,12 +132,9 @@ function App() {
     )
     setConversationListVersion((current) => current + 1)
   }, [digestTitle, digestSummary])
-  const effectiveReviewListVersion = reviewListVersion
-    + guardianAckEventCount
-    + gardienPollVersion
-  const handleReviewsChanged = useCallback(() => {
-    setReviewListVersion((current) => current + 1)
-  }, [])
+  const reviewOpenCount = fleet.reviewStatus
+    ? fleet.reviewStatus.openBySeverity.red + fleet.reviewStatus.openBySeverity.orange + fleet.reviewStatus.openBySeverity.grey
+    : 0
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
@@ -250,43 +237,6 @@ function App() {
     return true
   }
 
-  useEffect(() => {
-    setGardienOpenCount(0)
-    if (!selectedProject?.id) return
-    const projectId: string = selectedProject.id
-    let disposed = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let previousSignature: string | null = null
-
-    async function pollGardien() {
-      try {
-        const status = await getGardienStatus(projectId)
-        if (disposed) return
-        const signature = [
-          status.mode,
-          status.openFlagCount,
-          status.openRedCount,
-          status.pendingReviewCount,
-        ].join(':')
-        if (previousSignature !== null && signature !== previousSignature) {
-          setGardienPollVersion((current) => current + 1)
-        }
-        previousSignature = signature
-        setGardienOpenCount(status.openFlagCount ?? status.pendingReviewCount ?? 0)
-      } catch {
-        // Les vues Gardien et Sidebar conservent leur propre affichage d'erreur.
-      } finally {
-        if (!disposed) timer = setTimeout(() => void pollGardien(), 1_500)
-      }
-    }
-
-    void pollGardien()
-    return () => {
-      disposed = true
-      clearTimeout(timer)
-    }
-  }, [selectedProject?.id])
-
   function handleProjectSelect(project: Project) {
     if (!confirmLeaveMemory()) return
     if (project.id !== selectedProject?.id) {
@@ -294,7 +244,6 @@ function App() {
       setNewConversationDraft('')
       setIsCreatingConversation(false)
       setShowSwitchModel(false)
-      setShowReviewDialog(false)
       setFocusedReviewId(null)
     }
     // Cliquer un avatar de projet dans le rail ramène toujours à ses
@@ -309,7 +258,6 @@ function App() {
     setNewConversationDraft('')
     setIsCreatingConversation(false)
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
     setWorkspaceView('conversations')
   }
 
@@ -320,7 +268,6 @@ function App() {
     setNewConversationDraft('')
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
     setWorkspaceView('conversations')
   }
 
@@ -356,20 +303,11 @@ function App() {
     setConversationListVersion((current) => current + 1)
   }
 
-  function handleGuardianSelect() {
-    if (!confirmLeaveMemory()) return
-    if (selectedProject === null) return
-    setWorkspaceView('guardian')
-    setShowSwitchModel(false)
-    setShowReviewDialog(false)
-  }
-
   function handleGitSelect() {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setWorkspaceView('git')
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
   }
 
   function handleCostsSelect() {
@@ -377,34 +315,29 @@ function App() {
     if (selectedProject === null) return
     setWorkspaceView('costs')
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
   }
 
   function handleLibrarySelect() {
     if (!confirmLeaveMemory()) return
     setWorkspaceView('library')
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
   }
 
   function handleRoutinesSelect() {
     if (!confirmLeaveMemory()) return
     setWorkspaceView('routines')
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
   }
 
   function handleFleetSelect() {
     if (!confirmLeaveMemory()) return
     setWorkspaceView('fleet')
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
   }
 
   function handleMemorySelect() {
     setWorkspaceView('memory')
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
   }
 
   function handleHelpSelect(slug?: string) {
@@ -414,21 +347,18 @@ function App() {
     setWorkspaceView('help')
     window.location.hash = `help/${nextSlug}`
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
   }
 
   function handleProgressSelect() {
     if (!confirmLeaveMemory()) return
     setWorkspaceView('progress')
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
   }
 
   function handleSettingsSelect() {
     if (!confirmLeaveMemory()) return
     setWorkspaceView('settings')
     setShowSwitchModel(false)
-    setShowReviewDialog(false)
   }
 
   function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'library' | 'memory' | 'help') {
@@ -452,11 +382,20 @@ function App() {
     if (!selectedConversation) return
     setWorkspaceView('conversations')
     if (action === 'review') {
-      setShowReviewDialog(true)
+      const review = await startReview({ conversationId: selectedConversation.id, scope: 'worktree' })
+      setFocusedReviewId(review.id)
+      setWorkspaceView('git')
       return
     }
     if (action === 'test') await createTestInventory(selectedConversation.id)
     else await createSessionSummary(selectedConversation.id)
+  }
+
+  async function startWorktreeReview() {
+    if (!selectedConversation) return
+    const review = await startReview({ conversationId: selectedConversation.id, scope: 'worktree' })
+    setFocusedReviewId(review.id)
+    setWorkspaceView('git')
   }
 
   async function handleRoutineConversationSelect(projectId: string, conversationId: string) {
@@ -479,21 +418,12 @@ function App() {
     if (conversation) handleConversationSelect(conversation)
   }
 
-  function handleGitGuardianSelect(reviewId: string) {
+  function handleGitReviewSelect(reviewId: string) {
     setFocusedReviewId(reviewId)
-    setWorkspaceView('guardian')
+    setWorkspaceView('git')
   }
 
-  function handleReviewStarted(review: Review) {
-    setShowReviewDialog(false)
-    setFocusedReviewId(review.id)
-    setWorkspaceView('guardian')
-    setReviewListVersion((current) => current + 1)
-  }
-
-  const titlebarView = workspaceView === 'guardian'
-    ? 'Gardien'
-      : workspaceView === 'git'
+  const titlebarView = workspaceView === 'git'
         ? 'Git'
         : workspaceView === 'costs'
           ? 'Coûts'
@@ -532,7 +462,6 @@ function App() {
         onProjectSelect={handleProjectSelect}
         onProjectCreated={handleProjectSelect}
         workspaceView={workspaceView}
-        onGuardianSelect={handleGuardianSelect}
         onGitSelect={handleGitSelect}
         onCostsSelect={handleCostsSelect}
         onLibrarySelect={handleLibrarySelect}
@@ -542,7 +471,7 @@ function App() {
         onHelpSelect={() => handleHelpSelect()}
         onProgressSelect={handleProgressSelect}
         onSettingsSelect={handleSettingsSelect}
-        pendingReviews={gardienOpenCount}
+        pendingReviews={reviewOpenCount}
         fleetActive={fleet.items.length}
       />
       {showSidebar ? (
@@ -581,7 +510,7 @@ function App() {
       </>
       ) : null}
 
-      <section className="workspace" aria-label={workspaceView === 'guardian' ? 'Gardien' : workspaceView === 'git' ? 'Git' : workspaceView === 'costs' ? 'Coûts' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : workspaceView === 'memory' ? 'Mémoire' : workspaceView === 'help' ? 'Aide' : workspaceView === 'progress' ? 'Progression' : workspaceView === 'settings' ? 'Paramètres' : 'Conversation'}>
+      <section className="workspace" aria-label={workspaceView === 'git' ? 'Git' : workspaceView === 'costs' ? 'Coûts' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : workspaceView === 'memory' ? 'Mémoire' : workspaceView === 'help' ? 'Aide' : workspaceView === 'progress' ? 'Progression' : workspaceView === 'settings' ? 'Paramètres' : 'Conversation'}>
         {workspaceView === 'library' ? (
           <SkillsLibrary project={selectedProject} />
         ) : workspaceView === 'routines' ? (
@@ -605,21 +534,14 @@ function App() {
           <div className="empty-state">
             <p>Sélectionnez un projet pour commencer.</p>
           </div>
-        ) : workspaceView === 'guardian' ? (
-          <GuardianView
-            key={`${selectedProject.id}-${focusedReviewId ?? 'latest'}`}
-            project={selectedProject}
-            initialReviewId={focusedReviewId}
-            refreshToken={effectiveReviewListVersion}
-            onProjectUpdated={handleProjectUpdated}
-            onReviewsChanged={handleReviewsChanged}
-            onStartReview={selectedConversation ? () => setShowReviewDialog(true) : undefined}
-          />
         ) : workspaceView === 'git' ? (
           <GitView
             project={selectedProject}
+            conversation={selectedConversation}
+            focusedReviewId={focusedReviewId}
+            reviewStatus={fleet.reviewStatus}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
-            onGuardianSelect={handleGitGuardianSelect}
+            onReviewSelected={handleGitReviewSelect}
           />
         ) : workspaceView === 'costs' ? (
           <CostsView
@@ -675,9 +597,9 @@ function App() {
                   <button
                     type="button"
                     className="header-action header-action-icon"
-                    onClick={() => setShowReviewDialog(true)}
-                    title="Review Gardien : analyser le dernier diff Git avec un modèle fort"
-                    aria-label="Review Gardien"
+                    onClick={() => void startWorktreeReview()}
+                    title="Relire le diff Git avec un modèle de review"
+                    aria-label="Relire le diff"
                   >
                     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                       <path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
@@ -693,8 +615,8 @@ function App() {
                       <button type="button" role="menuitem" onClick={() => setShowSwitchModel(true)}>
                         Changer de modèle
                       </button>
-                      <button type="button" role="menuitem" onClick={() => setShowReviewDialog(true)}>
-                        Ouvrir Gardien
+                      <button type="button" role="menuitem" onClick={() => void startWorktreeReview()}>
+                        Relire le diff
                       </button>
                     </div>
                   </details>
@@ -737,15 +659,6 @@ function App() {
                 conversation={selectedConversation}
                 onClose={() => setShowHandoff(false)}
                 onCreated={handleConversationHandoff}
-              />
-            ) : null}
-            {showReviewDialog && selectedConversation !== null ? (
-              <ReviewDialog
-                key={`review-${selectedConversation.id}`}
-                conversation={selectedConversation}
-                project={selectedProject}
-                onClose={() => setShowReviewDialog(false)}
-                onStarted={handleReviewStarted}
               />
             ) : null}
           </>

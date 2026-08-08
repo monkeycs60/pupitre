@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseUnifiedDiff } from "../../ui/src/reviewDiff";
+import { flagActionDraft, optimisticFlagStatus, parseUnifiedDiff } from "../../ui/src/reviewDiff";
 import type { ReviewFlag } from "../../ui/src/types";
 
 function flag(overrides: Partial<ReviewFlag> = {}): ReviewFlag {
@@ -62,4 +62,11 @@ test("le rouge prime si plusieurs flags couvrent la même ligne", () => {
 
   expect(lines.at(-1)?.severity).toBe("red");
   expect(lines.at(-1)?.flags).toHaveLength(2);
+});
+
+test("la zone sélectionnée garde le message comme consigne modifiable et applique les statuts optimistes", () => {
+  const current = flag({ message: "Ajouter un test de régression." });
+  expect(flagActionDraft(current)).toBe("Ajouter un test de régression.");
+  expect(optimisticFlagStatus(current, "treated").status).toBe("treated");
+  expect(optimisticFlagStatus(current, "ignored").status).toBe("ignored");
 });

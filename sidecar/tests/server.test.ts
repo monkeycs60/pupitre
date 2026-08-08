@@ -770,7 +770,7 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
   ]);
 });
 
-test("le mode bloquant et l'acquittement ciblé sont exposés sans approbation globale", async () => {
+test("un flag est traité directement sans décision groupée", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());
   const conversation = new ConversationStore(current.db).create({
@@ -799,26 +799,10 @@ test("le mode bloquant et l'acquittement ciblé sont exposés sans approbation g
   }]);
   const storedReview = reviewStore.get(review.id)!;
   const flag = storedReview.flags[0]!;
-  const decision = storedReview.decisions[0]!;
-
-  const mode = await putJson(`/api/projects/${project.id}/gardien-mode`, {
-    mode: "bloquant",
-  });
-  expect(mode.status).toBe(200);
-  expect(await mode.json()).toEqual(expect.objectContaining({ gardien_mode: "bloquant" }));
-  const blocked = await fetch(`${current.baseUrl}/api/projects/${project.id}/gardien-status`);
-  expect(await blocked.json()).toEqual({
-    mode: "bloquant",
-    blocked: true,
-    openRedCount: 1,
-    openFlagCount: 1,
-    pendingReviewCount: 1,
-  });
-
   const invalidCombined = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
     method: "PATCH",
     headers: jsonHeaders(),
-    body: JSON.stringify({ status: "acked", codeProvider: "invalide" }),
+    body: JSON.stringify({ status: "treated", codeProvider: "invalide" }),
   });
   expect(invalidCombined.status).toBe(400);
   expect(reviewStore.getFlag(flag.id)).toMatchObject({
@@ -826,25 +810,13 @@ test("le mode bloquant et l'acquittement ciblé sont exposés sans approbation g
     code_provider: "codex",
   });
 
-  const acked = await fetch(`${current.baseUrl}/api/review-decisions/${decision.id}`, {
+  const treated = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
     method: "PATCH",
     headers: jsonHeaders(),
-    body: JSON.stringify({ status: "acked" }),
+    body: JSON.stringify({ status: "treated" }),
   });
-  expect(acked.status).toBe(200);
-  expect(await acked.json()).toEqual(expect.objectContaining({
-    id: decision.id,
-    status: "acked",
-    flag_ids: [flag.id],
-  }));
-  const unblocked = await fetch(`${current.baseUrl}/api/projects/${project.id}/gardien-status`);
-  expect(await unblocked.json()).toEqual({
-    mode: "bloquant",
-    blocked: false,
-    openRedCount: 0,
-    openFlagCount: 0,
-    pendingReviewCount: 0,
-  });
+  expect(treated.status).toBe(200);
+  expect(await treated.json()).toEqual(expect.objectContaining({ id: flag.id, status: "treated" }));
 });
 
 test("expose le contre-avis opposé, global ou ciblé, et l'option automatique rouge", async () => {
@@ -1057,6 +1029,51 @@ test("Fleet expose et diffuse les runs actifs", async () => {
 
   expect(await current.runner.cancelTurn(conversation.id)).toBe(true);
   await run;
+});
+
+test("le push review-status est scindé par projectId et l'ancien mode Gardien n'existe plus", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const conversation = new ConversationStore(current.db).create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const store = new ReviewStore(current.db);
+  const review = store.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  store.complete(review.id, [{
+    file: "src/risk.ts", line_start: 1, line_end: 1, severity: "red",
+    category: "données", message: "Préserve la sauvegarde.",
+  }]);
+  const flag = store.get(review.id)!.flags[0]!;
+
+  const route = await fetch(`${current.baseUrl}/api/projects/${project.id}/review-status`);
+  expect(await route.json()).toEqual({
+    openBySeverity: { red: 1, orange: 0, grey: 0 }, running: null,
+  });
+  expect((await putJson(`/api/projects/${project.id}/gardien-mode`, { mode: "bloquant" })).status).toBe(404);
+
+  const pushed = await new Promise<Record<string, unknown>>((resolve, reject) => {
+    const socket = new WebSocket(`${current!.baseUrl.replace("http", "ws")}/ws?channel=fleet`);
+    const timeout = setTimeout(() => { socket.close(); reject(new Error("timeout review-status WS")); }, 2_000);
+    socket.addEventListener("open", () => {
+      current!.reviews.updateFlag(flag.id, { status: "treated" });
+    });
+    socket.addEventListener("message", (message) => {
+      const payload = JSON.parse(String(message.data)) as Record<string, unknown>;
+      if (payload.projectId !== project.id) return;
+      clearTimeout(timeout);
+      socket.close();
+      resolve(payload);
+    });
+    socket.addEventListener("error", reject);
+  });
+  expect(pushed).toEqual({
+    projectId: project.id,
+    openBySeverity: { red: 0, orange: 0, grey: 0 },
+    running: null,
+  });
 });
 
 test("recherche les titres et messages par projet", async () => {

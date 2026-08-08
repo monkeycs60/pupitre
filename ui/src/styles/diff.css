@@ -153,3 +153,12 @@
 .diff-flag-marker.severity-orange:hover {
   color: var(--warn);
 }
+
+.diff-flag-card-row { padding: var(--space-2) var(--space-3); background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); }
+.diff-flag-card { max-width: 760px; padding: var(--space-3); background: var(--bg-raised); border: 1px solid var(--border-subtle); border-left: 2px solid var(--border-strong); border-radius: var(--r-sm); font-family: var(--font-sans); }
+.diff-flag-card.severity-red { border-left-color: var(--danger); }.diff-flag-card.severity-orange { border-left-color: var(--warn); }
+.diff-flag-card header, .diff-flag-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
+.diff-flag-card p { margin: var(--space-2) 0; color: var(--text); font-size: var(--text-base); }
+.diff-severity, .diff-test-gap { padding: 1px var(--space-1); color: var(--text); font-size: var(--text-xs); background: var(--neutral-soft); border-radius: var(--r-xs); }
+.severity-red .diff-severity { color: var(--danger); background: var(--danger-soft); }.severity-orange .diff-severity { color: var(--warn); background: var(--warn-soft); }
+.diff-test-gap { color: var(--warn); background: var(--warn-soft); }.diff-counter-opinion { margin: var(--space-2) 0; padding: var(--space-2); border-left: 1px solid var(--border-strong); }.diff-counter-opinion strong { color: var(--text-muted); font-size: var(--text-sm); }.diff-agent-message { display: grid; gap: var(--space-1); margin: var(--space-2) 0; color: var(--text-muted); font-size: var(--text-sm); }.diff-agent-message textarea { min-height: 64px; resize: vertical; }.diff-flag-state { color: var(--text-muted) !important; }.diff-flag-error { color: var(--danger) !important; }
