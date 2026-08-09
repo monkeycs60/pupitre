@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import {
   createWorkflow,
@@ -175,6 +175,7 @@ export function WorkflowDialog({
   const [orchestrator, setOrchestrator] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const initializedWorkflowIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -222,6 +223,8 @@ export function WorkflowDialog({
 
   useEffect(() => {
     if (initialWorkflow === null || skills.length === 0) return
+    if (initializedWorkflowIdRef.current === initialWorkflow.id) return
+    initializedWorkflowIdRef.current = initialWorkflow.id
     edit(initialWorkflow)
   }, [edit, initialWorkflow, skills.length])
 
