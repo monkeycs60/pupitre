@@ -43,6 +43,7 @@ import type { AppEvent, WorkspaceView } from './types'
 import { useGamification } from './useGamification'
 import { complexityMultiplier } from './turnXp'
 import { useFleet } from './useFleet'
+import { countConversationMessages } from './conversationMessageCount'
 import { ProgressView } from './ProgressView'
 import { AppSettingsView } from './AppSettingsView'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
@@ -126,6 +127,9 @@ function App() {
   const { events, connection, retryAt } = useConversationEvents(
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
+  const liveConversationMessageCount = events.length > 0
+    ? countConversationMessages(events)
+    : undefined
   const quotas = useQuotas()
   const gamification = useGamification()
   const fleet = useFleet(selectedProject?.id)
@@ -613,6 +617,7 @@ function App() {
         conversationListVersion={conversationListVersion}
         quotas={quotas}
         runningSubtasks={runningSubtasks}
+        liveConversationMessageCount={liveConversationMessageCount}
         workspaceView={workspaceView}
         onProgressSelect={handleProgressSelect}
         gamification={gamification.snapshot}

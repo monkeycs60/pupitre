@@ -123,7 +123,11 @@ function installApi(
   }
 }
 
-function renderSidebar(activeFleet: FleetItem[] = [], selectedConversation: Conversation | null = null) {
+function renderSidebar(
+  activeFleet: FleetItem[] = [],
+  selectedConversation: Conversation | null = null,
+  liveConversationMessageCount?: number,
+) {
   const onConversationSelect = mock(() => undefined)
   render(createElement(Sidebar, {
     selectedProject: project,
@@ -134,6 +138,7 @@ function renderSidebar(activeFleet: FleetItem[] = [], selectedConversation: Conv
     conversationListVersion: 0,
     quotas: { snapshot: { claude: null, codex: null } },
     runningSubtasks: 0,
+    liveConversationMessageCount,
     activeFleet,
     workspaceView: 'conversations',
     onProgressSelect: () => undefined,
@@ -253,4 +258,18 @@ test('marque comme lue la conversation ouverte quand la sidebar reçoit son dern
   const row = document.querySelector('.navigation-main')?.closest('.navigation-row')
   expect(row?.className).toContain('conv-row-state-read')
   await waitFor(() => expect(api.getReadRequestCount()).toBe(1))
+})
+
+test('affiche le compteur live de la conversation sélectionnée', async () => {
+  const conversation: Conversation = {
+    ...startedConversation,
+    id: 'conversation-live-count',
+    title: 'Conversation live',
+    message_count: 2,
+  }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation])
+  renderSidebar([], conversation, 4)
+
+  await waitFor(() => expect(document.querySelector('.navigation-main')).not.toBeNull())
+  expect(document.querySelector('.conv-row-count')?.textContent).toBe('4')
 })

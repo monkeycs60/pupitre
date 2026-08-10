@@ -41,6 +41,8 @@ interface SidebarProps {
   quotas: Quotas
   /** Sous-tâches en cours dans la conversation ouverte (cf. App). */
   runningSubtasks: number
+  /** Compteur recalculé depuis le replay/flux live de la conversation ouverte. */
+  liveConversationMessageCount?: number
   /** Snapshot Fleet global, nécessaire pour marquer les conversations non ouvertes comme live. */
   activeFleet?: FleetItem[]
   workspaceView: WorkspaceView
@@ -83,8 +85,8 @@ function conversationRowState(
   return conversation.digest_turn > (conversation.last_read_turn ?? 0) ? 'unread' : 'read'
 }
 
-function conversationMessageCount(conversation: Conversation): number {
-  return Math.max(0, conversation.message_count ?? conversation.digest_turn)
+function conversationMessageCount(conversation: Conversation, liveCount?: number): number {
+  return Math.max(0, liveCount ?? conversation.message_count ?? conversation.digest_turn)
 }
 
 function conversationPreset(conversation: Conversation, presets: Preset[]): Preset | undefined {
@@ -173,6 +175,7 @@ export function Sidebar({
   conversationListVersion,
   quotas,
   runningSubtasks,
+  liveConversationMessageCount,
   activeFleet = [],
   workspaceView,
   onProgressSelect,
@@ -551,6 +554,7 @@ export function Sidebar({
                 const preset = conversationPreset(conversation, presets)
                 const presetLabel = preset?.name ?? 'réglages libres'
                 const isFreePreset = preset === undefined
+                const messageCount = isSelected ? liveConversationMessageCount : undefined
                 return (
               <div
                 className={`navigation-row conv-row-state-${state} ${isSelected ? 'is-selected' : ''}`}
@@ -577,13 +581,13 @@ export function Sidebar({
                     <span className="conv-row-activity">
                       <span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span>
                       <span className="conv-row-activity-label">écrit la réponse</span>
-                      <span className="conv-row-count">{conversationMessageCount(conversation)}</span>
+                      <span className="conv-row-count">{conversationMessageCount(conversation, messageCount)}</span>
                     </span>
                   ) : (
                     <span className="conv-row-line2">
                       <ProviderMark provider={conversation.provider} className="conv-row-mark" />
                       <span className={`conv-row-preset ${isFreePreset ? 'is-free' : ''}`}>{presetLabel}</span>
-                      <span className="conv-row-count">{conversationMessageCount(conversation)}</span>
+                      <span className="conv-row-count">{conversationMessageCount(conversation, messageCount)}</span>
                     </span>
                   )}
                   {conversationRelation(conversation, conversations) ? (
