@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   listProjectConversations,
   listProjectWorkflows,
@@ -194,6 +194,10 @@ export function Sidebar({
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null)
+  const selectedConversationRef = useRef(selectedConversation)
+  selectedConversationRef.current = selectedConversation
+  const workspaceViewRef = useRef(workspaceView)
+  workspaceViewRef.current = workspaceView
   const now = useNow(1_000)
   const activeByConversation = new Map<string, FleetItem>()
   for (const item of activeFleet) {
@@ -220,8 +224,25 @@ export function Sidebar({
     ])
       .then(([items, loadedWorkflows]) => {
         if (!ignore) {
-          setConversations(pinnedFirst(items))
+          const currentSelectedConversation = selectedConversationRef.current
+          const selectedLoadedConversation = workspaceViewRef.current === 'conversations' && currentSelectedConversation !== null
+            ? items.find((item) => item.id === currentSelectedConversation.id)
+            : undefined
+          const shouldMarkSelectedRead = selectedLoadedConversation !== undefined
+            && selectedLoadedConversation.digest_turn > (selectedLoadedConversation.last_read_turn ?? 0)
+          const nextItems = shouldMarkSelectedRead
+            ? items.map((item) => item.id === selectedLoadedConversation.id
+              ? { ...item, last_read_turn: selectedLoadedConversation.digest_turn }
+              : item)
+            : items
+          setConversations(pinnedFirst(nextItems))
           setWorkflows(loadedWorkflows)
+          if (shouldMarkSelectedRead) {
+            void markConversationRead(
+              selectedLoadedConversation.id,
+              selectedLoadedConversation.digest_turn,
+            ).catch(() => {})
+          }
         }
       })
       .catch((loadError: unknown) => {

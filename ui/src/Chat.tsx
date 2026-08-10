@@ -119,6 +119,8 @@ export function Chat({
   const isRunning = lastStatusIsRunning(events)
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
+  const onConversationReadRef = useRef(onConversationRead)
+  onConversationReadRef.current = onConversationRead
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
   const [message, setMessage] = useState(() => readDraft(draftStorageKey) ?? initialMessage)
   const [findQuery, setFindQuery] = useState('')
@@ -256,6 +258,7 @@ export function Chat({
    */
   const handleTaskToggle = useCallback((action: TaskAction, checked: boolean) => {
     setSelectedActions((current) => toggleAction(current, action, checked))
+    onConversationReadRef.current?.()
   }, [])
 
   const suggestionText = message.trim() || previousUserText

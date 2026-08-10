@@ -95,6 +95,7 @@ function installApi(
   conversations: Conversation[] = [],
 ) {
   let runRequestCount = 0
+  let readRequestCount = 0
   const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const path = String(input)
     if (path === `/api/projects/${project.id}/conversations?scope=active`) {
@@ -102,6 +103,11 @@ function installApi(
     }
     if (path === `/api/projects/${project.id}/workflows`) {
       return Promise.resolve(jsonResponse(workflows))
+    }
+    const readMatch = path.match(/^\/api\/conversations\/([^/]+)\/read$/)
+    if (readMatch && init?.method === 'POST') {
+      readRequestCount += 1
+      return Promise.resolve(jsonResponse(conversations.find((item) => item.id === decodeURIComponent(readMatch[1]!)) ?? conversations[0] ?? startedConversation))
     }
     const match = path.match(/^\/api\/workflows\/([^/]+)\/run$/)
     if (match && init?.method === 'POST') {
@@ -113,14 +119,15 @@ function installApi(
   globalThis.fetch = fetchMock as typeof fetch
   return {
     getRunRequestCount: () => runRequestCount,
+    getReadRequestCount: () => readRequestCount,
   }
 }
 
-function renderSidebar(activeFleet: FleetItem[] = []) {
+function renderSidebar(activeFleet: FleetItem[] = [], selectedConversation: Conversation | null = null) {
   const onConversationSelect = mock(() => undefined)
   render(createElement(Sidebar, {
     selectedProject: project,
-    selectedConversation: null,
+    selectedConversation,
     onProjectSelect: () => undefined,
     onConversationSelect,
     onConversationCreate: () => undefined,
@@ -229,4 +236,21 @@ test('affiche le loading state et les réglages dans le détail d’une conversa
   expect(document.querySelectorAll('.conv-row-dots i')).toHaveLength(3)
   expect(screen.queryByText('appelle un outil')).toBeNull()
   expect(screen.getByText('effort: high · vitesse: 1.5x')).toBeTruthy()
+})
+
+test('marque comme lue la conversation ouverte quand la sidebar reçoit son dernier digest', async () => {
+  const conversation: Conversation = {
+    ...startedConversation,
+    id: 'conversation-open',
+    title: 'Conversation ouverte',
+    digest_turn: 4,
+    last_read_turn: 2,
+  }
+  const api = installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation])
+  renderSidebar([], conversation)
+
+  await waitFor(() => expect(document.querySelector('.navigation-main')).not.toBeNull())
+  const row = document.querySelector('.navigation-main')?.closest('.navigation-row')
+  expect(row?.className).toContain('conv-row-state-read')
+  await waitFor(() => expect(api.getReadRequestCount()).toBe(1))
 })
