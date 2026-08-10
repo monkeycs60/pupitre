@@ -2,6 +2,7 @@ import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
 import type { Conversation, FleetItem, Project, Workflow } from './types'
+import { formatActiveDuration } from './formatActiveDuration'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
@@ -196,6 +197,10 @@ test('empêche un second lancement tant que le premier workflow est en cours', a
   })
 })
 
+test('formate les durées actives longues en heures et minutes', () => {
+  expect(formatActiveDuration(68 * 60_000)).toBe('1 h 08')
+})
+
 test('affiche le loading state et les réglages dans le détail d’une conversation', async () => {
   const conversation: Conversation = {
     ...startedConversation,
@@ -220,7 +225,8 @@ test('affiche le loading state et les réglages dans le détail d’une conversa
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation])
   renderSidebar([activeItem])
 
-  expect(await screen.findByText('… écrit la réponse')).toBeTruthy()
+  expect(await screen.findByText('écrit la réponse')).toBeTruthy()
+  expect(document.querySelectorAll('.conv-row-dots i')).toHaveLength(3)
   expect(screen.queryByText('appelle un outil')).toBeNull()
   expect(screen.getByText('effort: high · vitesse: 1.5x')).toBeTruthy()
 })

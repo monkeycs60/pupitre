@@ -21,6 +21,7 @@ import { modelLabel } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
 import { filterWorkflows, workflowSummary } from './workflowSidebar'
 import { useNow } from './useNow'
+import { formatActiveDuration } from './formatActiveDuration'
 
 declare global {
   interface Window {
@@ -553,7 +554,8 @@ export function Sidebar({
                   </span>
                   {state === 'live' ? (
                     <span className="conv-row-activity">
-                      <span className="conv-row-activity-label">… écrit la réponse</span>
+                      <span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span>
+                      <span className="conv-row-activity-label">écrit la réponse</span>
                       <span className="conv-row-count">{conversationMessageCount(conversation)}</span>
                     </span>
                   ) : (
@@ -752,7 +754,7 @@ export function Sidebar({
                 ? Math.min(progress, xpPulse.amount / band)
                 : 0
               const stableProgress = Math.max(0, progress - pulseProgress)
-              const activeMin = Math.floor(gamification.activeMsToday / 60_000)
+              const activeTime = formatActiveDuration(gamification.activeMsToday)
               return (
                 <>
                   <span className="level-ring" aria-hidden="true">
@@ -795,7 +797,7 @@ export function Sidebar({
                       ) : null}
                     </span>
                     <span className="level-meta">
-                      {activeMin} min · aujourd'hui
+                      {activeTime} · aujourd'hui
                     </span>
                   </span>
                 </>

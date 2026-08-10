@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getCurrentWindow, type Window } from '@tauri-apps/api/window'
 import type { GamificationSnapshot } from './types'
+import { formatActiveDuration } from './formatActiveDuration'
 
 type ResizeDirection = Parameters<Window['startResizeDragging']>[0]
 
@@ -33,10 +34,7 @@ function activeLabel(snapshot: GamificationSnapshot | null | undefined): string 
   if (!snapshot) return null
   const minutes = Math.floor(snapshot.activeMsToday / 60_000)
   if (minutes < 1) return null
-  if (minutes < 60) return `${minutes} min`
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  return rest === 0 ? `${hours} h` : `${hours} h ${String(rest).padStart(2, '0')}`
+  return formatActiveDuration(snapshot.activeMsToday)
 }
 
 export function Titlebar({ crumbs, onSearch, gamification }: TitlebarProps) {
