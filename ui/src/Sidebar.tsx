@@ -592,7 +592,6 @@ export function Sidebar({
                     </span>
                   ) : null}
                 </button>
-                <span className={`conv-row-live-edge ${state === 'live' ? 'is-visible' : ''}`} aria-hidden="true"><span /></span>
                 <div className="conversation-row-actions">
                   <button
                     type="button"

@@ -435,8 +435,7 @@
 }
 
 .conv-row-edge,
-.conv-row-land,
-.conv-row-live-edge {
+.conv-row-land {
   position: absolute;
   pointer-events: none;
 }
@@ -2210,6 +2209,7 @@
 .navigation-main .conv-row-activity {
   display: flex;
   align-items: center;
+  gap: 6px;
   min-width: 0;
   margin-top: 3px;
   padding-left: 17px;
@@ -2244,34 +2244,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.conv-row-live-edge {
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 2;
-  height: 1.5px;
-  overflow: hidden;
-  opacity: 0;
-}
-
-.conv-row-live-edge.is-visible {
-  opacity: 1;
-}
-
-.conv-row-live-edge > span {
-  display: block;
-  width: 38%;
-  height: 100%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-  animation: cc-sweep 1.6s linear infinite;
-}
-
-@keyframes cc-sweep {
-  from { transform: translateX(-60%); }
-  to { transform: translateX(260%); }
 }
 
 @keyframes cc-dots {
