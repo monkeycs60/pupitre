@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { AppEvent, Provider, StoredEvent } from "../events";
 import { taskSummary, taskTitle } from "../conversation-title";
+import { messageCountIncrement } from "../message-count";
 import type { Preset, PresetPermissionMode, PresetStore } from "./presets";
 
 export interface Conversation {
@@ -332,10 +333,23 @@ export class ConversationStore {
   appendEvent(conversationId: string, event: AppEvent): number {
     const append = this.db.transaction(() => {
       const now = new Date().toISOString();
+      let assistantResponseCounted = false;
+      if (event.type === "text-final") {
+        const lastMessageEvent = this.db.query(
+          `SELECT json_extract(payload, '$.type') AS type
+           FROM events
+           WHERE conversation_id = ?
+             AND json_valid(payload)
+             AND json_extract(payload, '$.type') IN ('user-message', 'text-final')
+           ORDER BY id DESC
+           LIMIT 1`,
+        ).get(conversationId) as { type?: string } | null;
+        assistantResponseCounted = lastMessageEvent?.type === "text-final";
+      }
       const result = this.db
         .query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
         .run(conversationId, JSON.stringify(event), now);
-      const messageIncrement = event.type === "user-message" || event.type === "text-final" ? 1 : 0;
+      const messageIncrement = messageCountIncrement(event.type, assistantResponseCounted);
       this.db.query(
         `UPDATE conversations
          SET updated_at = ?, message_count = message_count + ?

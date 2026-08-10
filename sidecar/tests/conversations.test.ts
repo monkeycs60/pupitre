@@ -186,6 +186,29 @@ test("migre une base existante et la migration reste idempotente", () => {
   reopened.close();
 });
 
+test("recalcule les anciens compteurs en une réponse assistant par tour", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-message-count-"));
+  const legacyDb = openDb(dir);
+  const legacyProjectId = new ProjectStore(legacyDb).create({ name: "p", path: "/tmp/message-count" }).id;
+  const legacyConvs = new ConversationStore(legacyDb);
+  const conversation = legacyConvs.create({
+    projectId: legacyProjectId,
+    provider: "claude",
+    model: "opus",
+    firstMessage: "x",
+  });
+  legacyConvs.appendEvent(conversation.id, { type: "user-message", text: "x", images: [] });
+  legacyConvs.appendEvent(conversation.id, { type: "text-final", text: "première sortie" });
+  legacyConvs.appendEvent(conversation.id, { type: "text-final", text: "sortie finale" });
+  legacyDb.query("UPDATE conversations SET message_count = 99 WHERE id = ?").run(conversation.id);
+  legacyDb.query("DELETE FROM settings").run();
+  legacyDb.close();
+
+  const migratedDb = openDb(dir);
+  expect(new ConversationStore(migratedDb).get(conversation.id)?.message_count).toBe(2);
+  migratedDb.close();
+});
+
 test("nettoie au redémarrage uniquement les handoffs restés en attente", () => {
   const source = convs.create({
     projectId,
@@ -237,6 +260,25 @@ test("appendEvent + listEvents rejouent dans l'ordre", () => {
   convs.appendEvent(c.id, { type: "text-delta", text: "a" });
   convs.appendEvent(c.id, { type: "text-delta", text: "b" });
   expect(convs.listEvents(c.id).map((e: any) => e.text)).toEqual(["a", "b"]);
+});
+
+test("compte une seule réponse assistant par tour malgré plusieurs text-final", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  convs.appendEvent(c.id, { type: "user-message", text: "x", images: [] });
+  convs.appendEvent(c.id, { type: "text-final", text: "première partie" });
+  convs.appendEvent(c.id, {
+    type: "tool-start",
+    toolId: "outil-1",
+    toolName: "Read",
+    input: {},
+  });
+  convs.appendEvent(c.id, { type: "text-final", text: "réponse finale" });
+
+  expect(convs.get(c.id)?.message_count).toBe(2);
+
+  convs.appendEvent(c.id, { type: "user-message", text: "suite", images: [] });
+  convs.appendEvent(c.id, { type: "text-final", text: "deuxième réponse" });
+  expect(convs.get(c.id)?.message_count).toBe(4);
 });
 
 test("compacte les suites de text-delta sans déplacer les autres événements", () => {

@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { countConversationMessages } from "./message-count";
 
 export function dataDir(): string {
   return process.env.PUPITRE_DATA_DIR ?? join(homedir(), ".local/share/pupitre");
@@ -296,16 +297,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "message_count INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "last_read_turn INTEGER NOT NULL DEFAULT 0");
-  db.exec(`
-    UPDATE conversations
-    SET message_count = COALESCE((
-      SELECT COUNT(*) FROM events
-      WHERE events.conversation_id = conversations.id
-        AND json_valid(events.payload)
-        AND json_extract(events.payload, '$.type') IN ('user-message', 'text-final')
-    ), 0)
-    WHERE message_count = 0
-  `);
+  migrateConversationMessageCounts(db);
   addColumn(db, "projects", "default_preset_id TEXT NULL");
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
   addColumn(db, "projects", "gardien_mode TEXT NOT NULL DEFAULT 'informatif'");
@@ -413,6 +405,35 @@ function addColumn(db: Database, table: string, definition: string): boolean {
     }
     return false;
   }
+}
+
+const MESSAGE_COUNT_MIGRATION_KEY = "conversation-message-count-v2";
+
+function migrateConversationMessageCounts(db: Database): void {
+  const migrated = db.query("SELECT 1 FROM settings WHERE key = ?")
+    .get(MESSAGE_COUNT_MIGRATION_KEY);
+  if (migrated) return;
+
+  const conversations = db.query("SELECT id FROM conversations").all() as Array<{ id: string }>;
+  const events = db.query(
+    "SELECT payload FROM events WHERE conversation_id = ? ORDER BY id",
+  );
+  const update = db.query("UPDATE conversations SET message_count = ? WHERE id = ?");
+
+  for (const conversation of conversations) {
+    const parsedEvents: Array<{ type?: string }> = [];
+    for (const row of events.all(conversation.id) as Array<{ payload: string }>) {
+      try {
+        parsedEvents.push(JSON.parse(row.payload) as { type?: string });
+      } catch {
+        // Les événements invalides ne peuvent pas représenter un message.
+      }
+    }
+    update.run(countConversationMessages(parsedEvents), conversation.id);
+  }
+
+  db.query("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
+    .run(MESSAGE_COUNT_MIGRATION_KEY, "1");
 }
 
 function migrateDocuments(db: Database): void {
