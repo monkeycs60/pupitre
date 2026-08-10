@@ -1,7 +1,7 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
-import type { Conversation, Project, Workflow } from './types'
+import type { Conversation, FleetItem, Project, Workflow } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
@@ -91,12 +91,13 @@ function jsonResponse(body: unknown, status = 200): Response {
 function installApi(
   workflows: Workflow[],
   runRequest: (workflowId: string) => Promise<Response>,
+  conversations: Conversation[] = [],
 ) {
   let runRequestCount = 0
   const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const path = String(input)
     if (path === `/api/projects/${project.id}/conversations?scope=active`) {
-      return Promise.resolve(jsonResponse([]))
+      return Promise.resolve(jsonResponse(conversations))
     }
     if (path === `/api/projects/${project.id}/workflows`) {
       return Promise.resolve(jsonResponse(workflows))
@@ -114,7 +115,7 @@ function installApi(
   }
 }
 
-function renderSidebar() {
+function renderSidebar(activeFleet: FleetItem[] = []) {
   const onConversationSelect = mock(() => undefined)
   render(createElement(Sidebar, {
     selectedProject: project,
@@ -125,6 +126,7 @@ function renderSidebar() {
     conversationListVersion: 0,
     quotas: { snapshot: { claude: null, codex: null } },
     runningSubtasks: 0,
+    activeFleet,
     workspaceView: 'conversations',
     onProgressSelect: () => undefined,
     gamification: null,
@@ -192,4 +194,33 @@ test('empêche un second lancement tant que le premier workflow est en cours', a
   await waitFor(() => {
     expect(onConversationSelect).toHaveBeenCalledWith(startedConversation)
   })
+})
+
+test('affiche le loading state et les réglages dans le détail d’une conversation', async () => {
+  const conversation: Conversation = {
+    ...startedConversation,
+    id: 'conversation-live',
+    title: 'Panel Documents redimensionnable',
+    summary: 'Aperçu de la conversation',
+    speed: 'fast',
+    updated_at: '2026-08-08T09:05:00.000Z',
+  }
+  const activeItem: FleetItem = {
+    id: 'turn-live',
+    kind: 'turn',
+    projectId: project.id,
+    projectName: project.name,
+    conversationId: conversation.id,
+    title: conversation.title,
+    provider: conversation.provider,
+    model: conversation.model,
+    startedAt: '2026-08-08T09:05:00.000Z',
+    lastEvent: 'outil · lecture',
+  }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation])
+  renderSidebar([activeItem])
+
+  expect(await screen.findByText('… écrit la réponse')).toBeTruthy()
+  expect(screen.queryByText('appelle un outil')).toBeNull()
+  expect(screen.getByText('effort: high · vitesse: 1.5x')).toBeTruthy()
 })

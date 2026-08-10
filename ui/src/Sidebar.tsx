@@ -106,15 +106,6 @@ function elapsedConversationTime(startedAt: string | undefined, now: number): st
   return `${Math.floor(elapsedSeconds / 60)} min ${String(elapsedSeconds % 60).padStart(2, '0')}`
 }
 
-function conversationActivity(lastEvent: string | undefined): string {
-  if (!lastEvent || lastEvent === 'démarrage' || lastEvent === 'demande envoyée') return 'prépare la réponse'
-  if (lastEvent === 'réponse du modèle' || lastEvent === 'premier retour') return 'écrit la réponse'
-  if (lastEvent.startsWith('outil · ')) return 'appelle un outil'
-  if (lastEvent === 'outil terminé') return 'traite le résultat'
-  if (lastEvent === 'session ouverte') return 'ouvre la session'
-  return lastEvent
-}
-
 function relativeConversationTime(value: string): string {
   const elapsed = Math.max(0, Date.now() - Date.parse(value))
   const minutes = Math.floor(elapsed / 60_000)
@@ -562,8 +553,7 @@ export function Sidebar({
                   </span>
                   {state === 'live' ? (
                     <span className="conv-row-activity">
-                      <span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span>
-                      <span className="conv-row-activity-label">{conversationActivity(activeItem?.lastEvent)}</span>
+                      <span className="conv-row-activity-label">… écrit la réponse</span>
                       <span className="conv-row-count">{conversationMessageCount(conversation)}</span>
                     </span>
                   ) : (
@@ -639,6 +629,10 @@ export function Sidebar({
                   <strong>{conversation.title}</strong>
                   <p>{conversation.summary || conversation.title}</p>
                   <span>{conversation.provider} · {modelLabel(conversation.model)} · {relativeConversationTime(conversation.updated_at)}</span>
+                  <span className="conversation-hover-preview-config">
+                    effort: {conversation.effort ?? 'default'}
+                    {conversation.speed === 'fast' ? ' · vitesse: 1.5x' : ''}
+                  </span>
                 </div>
               </div>
                 )
