@@ -1985,12 +1985,20 @@
   animation: gauge-fill 900ms var(--ease);
 }
 
-.level-bar-sheen {
+.level-bar-xp {
   position: absolute;
-  inset: 0;
-  width: 26%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-  animation: sheen 3.6s var(--ease) infinite;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  background: var(--streak);
+  border-radius: var(--r-full);
+  transform-origin: left center;
+  animation: xp-bar-fill 450ms var(--ease) both;
+}
+
+@keyframes xp-bar-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 
 .level-meta {
@@ -2020,7 +2028,7 @@
   background: var(--streak-soft);
   border: 1px solid rgba(240, 182, 74, 0.36);
   border-radius: var(--r-full);
-  animation: xp-rise 3.4s var(--ease);
+  animation: xp-rise 5s var(--ease);
 }
 
 /* --- Conversations groupées à deux lignes (maquette redesign) ------------- */

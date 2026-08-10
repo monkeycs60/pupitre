@@ -7,6 +7,7 @@ const TICK_MS = 1_000
 const FLUSH_MS = 15_000
 const ACTIVE_STEP_MS = 10 * 60_000
 const MAX_ACTIVE_STEPS = 143
+const XP_PULSE_DURATION_MS = 5_000
 
 function localDay(value = new Date()): string {
   const year = value.getFullYear()
@@ -34,6 +35,7 @@ export function useGamification(): {
   const [xpPulse, setXpPulse] = useState<GamificationPulse | null>(null)
   const lastXp = useRef<number | null>(null)
   const pulseId = useRef(0)
+  const pulseTimeout = useRef<number | null>(null)
   const pendingByDay = useRef(new Map<string, number>())
   const flushing = useRef(false)
 
@@ -46,6 +48,11 @@ export function useGamification(): {
         if (lastXp.current !== null && next.xp > lastXp.current) {
           pulseId.current += 1
           setXpPulse({ id: pulseId.current, amount: next.xp - lastXp.current })
+          if (pulseTimeout.current !== null) window.clearTimeout(pulseTimeout.current)
+          pulseTimeout.current = window.setTimeout(() => {
+            pulseTimeout.current = null
+            setXpPulse(null)
+          }, XP_PULSE_DURATION_MS)
         }
         lastXp.current = next.xp
         setSnapshot(next)
@@ -63,6 +70,10 @@ export function useGamification(): {
       disposed = true
       window.clearInterval(poll)
       window.removeEventListener('pupitre:turn-complete', refreshOnTurnComplete)
+      if (pulseTimeout.current !== null) {
+        window.clearTimeout(pulseTimeout.current)
+        pulseTimeout.current = null
+      }
     }
   }, [])
 

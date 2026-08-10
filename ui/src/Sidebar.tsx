@@ -744,9 +744,14 @@ export function Sidebar({
           >
             {(() => {
               const ringLen = 110
-              const offset = ringLen * (1 - Math.max(0, Math.min(1, gamification.progress)))
+              const progress = Math.max(0, Math.min(1, gamification.progress))
+              const offset = ringLen * (1 - progress)
               const band = Math.max(1, gamification.nextLevelXp - gamification.levelXp)
-              const remaining = Math.max(0, Math.round(band * (1 - gamification.progress)))
+              const remaining = Math.max(0, Math.round(band * (1 - progress)))
+              const pulseProgress = xpPulse
+                ? Math.min(progress, xpPulse.amount / band)
+                : 0
+              const stableProgress = Math.max(0, progress - pulseProgress)
               const activeMin = Math.floor(gamification.activeMsToday / 60_000)
               return (
                 <>
@@ -774,8 +779,20 @@ export function Sidebar({
                       <span>{remaining.toLocaleString('fr-FR')} XP restants</span>
                     </span>
                     <span className="level-bar" aria-hidden="true">
-                      <span className="level-bar-fill" style={{ width: `${gamification.progress * 100}%` }} />
-                      <span className="level-bar-sheen" />
+                      <span
+                        className="level-bar-fill"
+                        style={{ width: `${(xpPulse ? stableProgress : progress) * 100}%` }}
+                      />
+                      {xpPulse ? (
+                        <span
+                          className="level-bar-xp"
+                          key={xpPulse.id}
+                          style={{
+                            left: `${stableProgress * 100}%`,
+                            width: `${pulseProgress * 100}%`,
+                          }}
+                        />
+                      ) : null}
                     </span>
                     <span className="level-meta">
                       {activeMin} min · aujourd'hui
