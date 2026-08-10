@@ -13,6 +13,7 @@ import { ProjectStore } from "../src/stores/projects";
 import { SubtaskRunner } from "../src/subtasks";
 import { codexAppServer } from "../src/adapters/codex-app-server";
 import { conductorMcpPath, conductorServerConfig } from "../src/conductor";
+import { pupitreMcpPath } from "../src/pupitre";
 
 let dir: string;
 let argsFile: string;
@@ -122,14 +123,18 @@ test("conversation orchestratrice claude : --mcp-config inline pointant sur le b
   });
 });
 
-test("orchestrator = false : aucun câblage conductor", async () => {
+test("orchestrator = false : Pupitre reste disponible sans câbler conductor", async () => {
   const conv = convs.create({
     projectId, provider: "claude", model: "haiku",
     orchestrator: false, firstMessage: "simple",
   });
   expect(conv.orchestrator).toBe(false);
   await runner.runTurn(conv.id, "simple", []);
-  expect(claudeArgs()).not.toContain("--mcp-config");
+  const args = claudeArgs();
+  const config = JSON.parse(args.slice(args.indexOf("{"), args.lastIndexOf("}") + 1));
+  expect(config.mcpServers.conductor).toBeUndefined();
+  expect(config.mcpServers.pupitre.args).toEqual([pupitreMcpPath()]);
+  expect(args).toContain("mcp__pupitre__publish_html_document");
 });
 
 test("conversation orchestratrice codex : mcp_servers dans la config du thread", async () => {

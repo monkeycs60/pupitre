@@ -38,10 +38,10 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   // `--mcp-config` accepte un chemin de fichier OU un JSON inline (cf.
   // `claude --help`). Sans sélection de projet, pas de `--strict-mcp-config` :
   // les serveurs MCP que l'utilisateur a configurés lui-même restent chargés.
-  if (opts.conductor || opts.mcpServers) {
+  if (opts.conductor || opts.pupitre || opts.mcpServers) {
     args.push(
       "--mcp-config",
-      claudeMcpConfigArg(opts.conductor ?? null, opts.mcpServers ?? {}),
+      claudeMcpConfigArg(opts.conductor ?? null, opts.mcpServers ?? {}, opts.pupitre ?? null),
     );
   }
   if (opts.mcpServers) {
@@ -56,6 +56,9 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
       "--allowedTools",
       "mcp__conductor__delegate,mcp__conductor__delegate_parallel,mcp__conductor__check_quotas",
     );
+  }
+  if (opts.pupitre) {
+    args.push("--allowedTools", "mcp__pupitre__publish_html_document");
   }
   if (opts.cliSessionId) args.push("-r", opts.cliSessionId);
   args.push("--", prompt);

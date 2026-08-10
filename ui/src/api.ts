@@ -34,6 +34,7 @@ import type {
   Attachment,
   FilesystemScope,
   GamificationSnapshot,
+  HtmlDocument,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -49,6 +50,7 @@ export interface CreateProjectInput {
 
 export interface CreateConversationInput {
   projectId: string
+  presetId?: string | null
   provider: Provider
   model: string
   effort?: string
@@ -254,6 +256,43 @@ function routeId(id: string): string {
 
 export function getHealth(): Promise<{ ok: true }> {
   return fetchJson('/api/health')
+}
+
+export function getHtmlDocument(id: string, signal?: AbortSignal): Promise<HtmlDocument> {
+  return fetchJson(`/api/documents/${routeId(id)}`, { signal })
+}
+
+export function listDocuments(filters: {
+  projectId?: string
+  query?: string
+  kind?: 'html' | 'pdf'
+  state?: 'active' | 'retained' | 'available'
+} = {}, signal?: AbortSignal): Promise<HtmlDocument[]> {
+  const params = new URLSearchParams()
+  if (filters.projectId) params.set('projectId', filters.projectId)
+  if (filters.query) params.set('q', filters.query)
+  if (filters.kind) params.set('kind', filters.kind)
+  if (filters.state) params.set('state', filters.state)
+  const suffix = params.size > 0 ? `?${params.toString()}` : ''
+  return fetchJson(`/api/documents${suffix}`, { signal })
+}
+
+export function createHtmlDocumentViewToken(
+  id: string,
+): Promise<{ token: string; expiresAt: string }> {
+  return fetchJson(`/api/documents/${routeId(id)}/view-token`, jsonPost({}))
+}
+
+export function retainHtmlDocument(id: string): Promise<HtmlDocument> {
+  return fetchJson(`/api/documents/${routeId(id)}/retain`, jsonPost({}))
+}
+
+export function deleteHtmlDocument(id: string): Promise<HtmlDocument> {
+  return fetchJson(`/api/documents/${routeId(id)}`, { method: 'DELETE' })
+}
+
+export function exportDocument(id: string, path: string): Promise<{ path: string; sizeBytes: number }> {
+  return fetchJson(`/api/documents/${routeId(id)}/export`, jsonPost({ path }))
 }
 
 export function getGamification(projectId?: string, signal?: AbortSignal): Promise<GamificationSnapshot> {
@@ -713,6 +752,16 @@ export function setConversationPinned(
   return fetchVoid(
     `/api/conversations/${routeId(conversationId)}/pin`,
     jsonPost({ pinned }),
+  )
+}
+
+export function markConversationRead(
+  conversationId: string,
+  lastReadTurn: number,
+): Promise<Conversation> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/read`,
+    jsonPost({ lastReadTurn }),
   )
 }
 

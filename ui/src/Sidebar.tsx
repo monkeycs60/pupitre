@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import {
   listProjectConversations,
   listProjectWorkflows,
+  listPresets,
+  markConversationRead,
   renameConversation,
   runWorkflow,
   setConversationArchived,
@@ -10,13 +12,15 @@ import {
   setConversationPermissionMode,
 } from './api'
 import { QuotaStatus } from './QuotaBar'
-import type { Conversation, GamificationSnapshot, Project, Workflow, WorkspaceView } from './types'
+import type { Conversation, FleetItem, GamificationSnapshot, Preset, Project, Workflow, WorkspaceView } from './types'
 import type { Quotas } from './useQuotas'
 import type { GamificationPulse } from './useGamification'
 import { WorkflowDialog } from './WorkflowDialog'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { modelLabel } from './modelOptions'
+import { ProviderMark } from './ProviderMark'
 import { filterWorkflows, workflowSummary } from './workflowSidebar'
+import { useNow } from './useNow'
 
 declare global {
   interface Window {
@@ -31,10 +35,13 @@ interface SidebarProps {
   onConversationSelect: (conversation: Conversation) => void
   onConversationCreate: () => void
   onConversationClosed?: () => void
+  onConversationRead?: () => void
   conversationListVersion: number
   quotas: Quotas
   /** Sous-tâches en cours dans la conversation ouverte (cf. App). */
   runningSubtasks: number
+  /** Snapshot Fleet global, nécessaire pour marquer les conversations non ouvertes comme live. */
+  activeFleet?: FleetItem[]
   workspaceView: WorkspaceView
   onProgressSelect: () => void
   gamification: GamificationSnapshot | null
@@ -65,6 +72,48 @@ function conversationRelation(
 
 type ConversationScope = 'active' | 'archived' | 'trash'
 type SidebarTab = 'conversations' | 'workflows'
+type ConversationRowState = 'live' | 'unread' | 'read'
+
+function conversationRowState(
+  conversation: Conversation,
+  activeConversationIds: Set<string>,
+): ConversationRowState {
+  if (activeConversationIds.has(conversation.id)) return 'live'
+  return conversation.digest_turn > (conversation.last_read_turn ?? 0) ? 'unread' : 'read'
+}
+
+function conversationMessageCount(conversation: Conversation): number {
+  return Math.max(0, conversation.message_count ?? conversation.digest_turn)
+}
+
+function conversationPreset(conversation: Conversation, presets: Preset[]): Preset | undefined {
+  if (conversation.preset_id !== null && conversation.preset_id !== undefined) {
+    return presets.find((preset) => preset.id === conversation.preset_id)
+  }
+  const matches = presets.filter((preset) => (
+    preset.provider === conversation.provider
+      && preset.model === conversation.model
+      && preset.effort === conversation.effort
+      && preset.speed === conversation.speed
+      && preset.orchestrator === conversation.orchestrator
+  ))
+  return matches.length === 1 ? matches[0] : undefined
+}
+
+function elapsedConversationTime(startedAt: string | undefined, now: number): string {
+  if (!startedAt) return '0 min 00'
+  const elapsedSeconds = Math.max(0, Math.floor((now - Date.parse(startedAt)) / 1_000))
+  return `${Math.floor(elapsedSeconds / 60)} min ${String(elapsedSeconds % 60).padStart(2, '0')}`
+}
+
+function conversationActivity(lastEvent: string | undefined): string {
+  if (!lastEvent || lastEvent === 'démarrage' || lastEvent === 'demande envoyée') return 'prépare la réponse'
+  if (lastEvent === 'réponse du modèle' || lastEvent === 'premier retour') return 'écrit la réponse'
+  if (lastEvent.startsWith('outil · ')) return 'appelle un outil'
+  if (lastEvent === 'outil terminé') return 'traite le résultat'
+  if (lastEvent === 'session ouverte') return 'ouvre la session'
+  return lastEvent
+}
 
 function relativeConversationTime(value: string): string {
   const elapsed = Math.max(0, Date.now() - Date.parse(value))
@@ -128,9 +177,11 @@ export function Sidebar({
   onConversationSelect,
   onConversationCreate,
   onConversationClosed,
+  onConversationRead,
   conversationListVersion,
   quotas,
   runningSubtasks,
+  activeFleet = [],
   workspaceView,
   onProgressSelect,
   gamification,
@@ -138,6 +189,7 @@ export function Sidebar({
 }: SidebarProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const [presets, setPresets] = useState<Preset[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isRunningWorkflow, setIsRunningWorkflow] = useState<string | null>(null)
   const [showWorkflowDialog, setShowWorkflowDialog] = useState(false)
@@ -150,12 +202,24 @@ export function Sidebar({
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null)
+  const now = useNow(1_000)
+  const activeByConversation = new Map<string, FleetItem>()
+  for (const item of activeFleet) {
+    if (!activeByConversation.has(item.conversationId)) activeByConversation.set(item.conversationId, item)
+  }
+  const activeConversationIds = new Set(activeByConversation.keys())
+  if (workspaceView === 'conversations' && selectedConversation !== null && runningSubtasks > 0) {
+    activeConversationIds.add(selectedConversation.id)
+  }
+  const selectedProjectId = selectedProject?.id
+
+  useEffect(() => {
+    setConversations([])
+    setWorkflows([])
+  }, [selectedProject?.id, conversationScope])
 
   useEffect(() => {
     let ignore = false
-    setConversations([])
-    setWorkflows([])
-
     if (selectedProject === null) return
 
     void Promise.all([
@@ -178,6 +242,19 @@ export function Sidebar({
   }, [selectedProject, conversationListVersion, conversationScope])
 
   useEffect(() => {
+    let ignore = false
+    if (selectedProjectId === undefined) return
+    void listPresets()
+      .then((items) => {
+        if (!ignore) setPresets(items)
+      })
+      .catch(() => {})
+    return () => {
+      ignore = true
+    }
+  }, [selectedProjectId])
+
+  useEffect(() => {
     setSidebarTab('conversations')
     setFilterText('')
     setWorkflowFilterText('')
@@ -191,6 +268,16 @@ export function Sidebar({
 
   function handleProjectSettingsUpdated(updated: Project) {
     if (selectedProject?.id === updated.id) onProjectSelect(updated)
+  }
+
+  function handleConversationSelect(conversation: Conversation) {
+    const lastReadTurn = Math.max(conversation.last_read_turn ?? 0, conversation.digest_turn)
+    const updated = { ...conversation, last_read_turn: lastReadTurn }
+    setConversations((current) => current.map((item) => item.id === conversation.id ? updated : item))
+    onConversationSelect(updated)
+    void markConversationRead(conversation.id, lastReadTurn)
+      .then(() => onConversationRead?.())
+      .catch(() => {})
   }
 
   async function handleConversationPin(conversation: Conversation) {
@@ -432,57 +519,67 @@ export function Sidebar({
                 <div className="conv-group-header">
                   <span>{group.label}</span>
                   <span className="conv-group-rule" aria-hidden="true" />
-                  <span className="conv-group-count">{group.items.length}</span>
+                  {(() => {
+                    const unread = group.items.filter((conversation) => (
+                      conversationRowState(conversation, activeConversationIds) === 'unread'
+                    )).length
+                    return (
+                      <span className={`conv-group-count ${unread > 0 ? 'is-attention' : ''}`}>
+                        {unread > 0 ? `${unread} à lire` : group.items.length}
+                      </span>
+                    )
+                  })()}
                 </div>
                 {group.items.map((conversation) => {
-                const complexity = gamification?.conversations[conversation.id]
                 const isSelected = workspaceView === 'conversations'
                   && selectedConversation?.id === conversation.id
-                const isLive = isSelected && runningSubtasks > 0
+                const activeItem = activeByConversation.get(conversation.id)
+                const state = conversationRowState(conversation, activeConversationIds)
+                const preset = conversationPreset(conversation, presets)
+                const presetLabel = preset?.name ?? 'réglages libres'
+                const isFreePreset = preset === undefined
                 return (
               <div
-                className={`navigation-row ${isSelected ? 'is-selected' : ''}`}
+                className={`navigation-row conv-row-state-${state} ${isSelected ? 'is-selected' : ''}`}
                 key={conversation.id}
               >
+                <span className={`conv-row-edge ${state === 'unread' ? 'is-visible' : ''}`} aria-hidden="true" />
+                <span className={`conv-row-land ${state === 'unread' ? 'is-visible' : ''}`} aria-hidden="true" />
                 <button
                   type="button"
                   className="navigation-main"
-                  onClick={() => onConversationSelect(conversation)}
+                  onClick={() => handleConversationSelect(conversation)}
                   aria-describedby={`conversation-preview-${conversation.id}`}
                 >
                   <span className="conv-row-line1">
-                    <span
-                      className={`conv-row-dot ${isLive ? 'is-live' : ''}`}
-                      aria-hidden="true"
-                    />
+                    <span className={`conv-row-dot is-${state}`} aria-hidden="true" />
                     <span className="conv-row-title">{conversation.title}</span>
                     <span className="conv-row-time">
-                      {shortConversationTime(conversation.updated_at)}
+                      {state === 'live'
+                        ? elapsedConversationTime(activeItem?.startedAt, now)
+                        : shortConversationTime(conversation.updated_at)}
                     </span>
                   </span>
-                  <span className="conv-row-line2">
-                    <span className={`conversation-prov is-${conversation.provider}`}>
-                      {conversation.provider.toUpperCase()}
+                  {state === 'live' ? (
+                    <span className="conv-row-activity">
+                      <span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span>
+                      <span className="conv-row-activity-label">{conversationActivity(activeItem?.lastEvent)}</span>
+                      <span className="conv-row-count">{conversationMessageCount(conversation)}</span>
                     </span>
-                    <span className="conv-row-model">
-                      {modelLabel(conversation.model)} · {conversation.effort ?? 'default'}
-                      {conversation.speed === 'fast' ? ' · rapide' : ''}
+                  ) : (
+                    <span className="conv-row-line2">
+                      <ProviderMark provider={conversation.provider} className="conv-row-mark" />
+                      <span className={`conv-row-preset ${isFreePreset ? 'is-free' : ''}`}>{presetLabel}</span>
+                      <span className="conv-row-count">{conversationMessageCount(conversation)}</span>
                     </span>
-                    {complexity ? (
-                      <span
-                        className="conversation-complexity"
-                        title={`${complexity.commits} commit(s) · ×${complexity.multiplier.toLocaleString('fr-FR')}`}
-                      >
-                        C{complexity.complexity}
-                      </span>
-                    ) : null}
-                  </span>
+                  )}
                   {conversationRelation(conversation, conversations) ? (
                     <span className="conversation-link">
                       {conversationRelation(conversation, conversations)}
                     </span>
                   ) : null}
                 </button>
+                <span className={`conv-row-live-edge ${state === 'live' ? 'is-visible' : ''}`} aria-hidden="true"><span /></span>
                 <div className="conversation-row-actions">
                   <button
                     type="button"

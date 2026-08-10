@@ -38,12 +38,27 @@ export interface TestInventoryBlock {
   createdAt: string
 }
 
+export interface HtmlDocumentBlock {
+  kind: 'html-document'
+  id: string
+  documentId: string
+  title: string
+  summary?: string
+  documentKind?: 'html' | 'pdf'
+  mimeType?: string
+  originalName?: string
+  sizeBytes: number
+  createdAt: string
+  expiresAt: string | null
+}
+
 export type StreamBlock =
   | EventBlock
   | SubtaskBlock
   | DebriefBlock
   | SessionSummaryBlock
   | TestInventoryBlock
+  | HtmlDocumentBlock
 
 function lineCount(text: string): number {
   return text.length === 0 ? 0 : text.split('\n').length
@@ -330,6 +345,25 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
           eventIdTo: event.eventIdTo,
           contentMd: event.contentMd,
           createdAt: event.createdAt,
+        })
+        break
+      case 'html-document-ref':
+      case 'document-ref':
+        assistant = null
+        blocks.push({
+          kind: 'html-document',
+          id: `html-document-${eventKey}-${event.documentId}`,
+          documentId: event.documentId,
+          title: event.title,
+          ...(event.summary === undefined ? {} : { summary: event.summary }),
+          ...(event.type === 'document-ref' ? {
+            documentKind: event.kind,
+            mimeType: event.mimeType,
+            originalName: event.originalName,
+          } : {}),
+          sizeBytes: event.sizeBytes,
+          createdAt: event.createdAt,
+          expiresAt: event.expiresAt,
         })
         break
       case 'test-inventory-ref': {

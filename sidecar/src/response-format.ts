@@ -63,6 +63,9 @@ export function actionFormatPreamble(format: ActionFormat): string {
     "aller plus loin, en liste à puces.",
     "Ces deux blocs deviennent des cases à cocher dans l'interface : une action par",
     "ligne, à l'impératif, compréhensible seule et sans renvoi à une autre ligne.",
+    "Pour présenter un audit, un brainstorming, un plan ou une approche structurée qui",
+    "deviendrait longue en Markdown, préfère créer un document HTML autonome et éphémère",
+    "dans /tmp, puis fournis son lien. Garde le Markdown pour une réponse courte.",
   ].join("\n");
 }
 

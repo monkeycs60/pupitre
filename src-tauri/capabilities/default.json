@@ -8,6 +8,17 @@
   "permissions": [
     "core:default",
     "dialog:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "http://127.0.0.1:4820/api/html-documents/**"
+        },
+        {
+          "url": "http://127.0.0.1:4820/api/documents/**"
+        }
+      ]
+    },
     "core:window:allow-minimize",
     "core:window:allow-maximize",
     "core:window:allow-unmaximize",

@@ -45,6 +45,96 @@ export const MODEL_HINTS: Record<string, string> = {
   'gpt-5.6-terra': 'polyvalent',
 }
 
+/** Un échange représentatif, utilisé uniquement pour comparer les tarifs API. */
+export const MODEL_COST_REFERENCE = {
+  inputTokens: 40_000,
+  outputTokens: 3_000,
+} as const
+
+/** Nombre de crans visibles dans les jauges du sélecteur de modèle. */
+export const MODEL_COST_TICKS = 20
+
+export type ModelCostTone = 'ok' | 'warn' | 'danger'
+
+export interface ModelPricing {
+  provider: Provider
+  model: string
+  input: number
+  output: number
+}
+
+/**
+ * Tarifs indicatifs en dollars par million de tokens, relevés le 9 août 2026.
+ * Ils ne représentent jamais une facture d'abonnement : le sélecteur les
+ * emploie seulement pour rendre le compromis coût/capacité lisible.
+ */
+export const MODEL_PRICING: readonly ModelPricing[] = [
+  { provider: 'codex', model: 'gpt-5.6-sol', input: 5, output: 30 },
+  { provider: 'codex', model: 'gpt-5.6-luna', input: 0.2, output: 1.2 },
+  { provider: 'codex', model: 'gpt-5.6-terra', input: 2, output: 12 },
+  { provider: 'claude', model: 'fable-5', input: 10, output: 50 },
+  { provider: 'claude', model: 'opus', input: 5, output: 25 },
+  { provider: 'claude', model: 'sonnet', input: 2, output: 10 },
+  { provider: 'claude', model: 'haiku', input: 1, output: 5 },
+]
+
+export function modelPricing(model: string): ModelPricing | null {
+  return MODEL_PRICING.find((pricing) => pricing.model === model) ?? null
+}
+
+/** Coût estimé d'un échange de référence, en dollars. */
+export function modelExchangeCost(model: string): number | null {
+  const pricing = modelPricing(model)
+  if (pricing === null) return null
+  return (
+    MODEL_COST_REFERENCE.inputTokens * pricing.input
+    + MODEL_COST_REFERENCE.outputTokens * pricing.output
+  ) / 1_000_000
+}
+
+function pricedCosts(): number[] {
+  return MODEL_PRICING.map((pricing) => modelExchangeCost(pricing.model) ?? 0)
+}
+
+/** Jauge linéaire, de un à vingt crans, rapportée au modèle le plus cher. */
+export function modelCostTicks(model: string): number {
+  const cost = modelExchangeCost(model)
+  const max = Math.max(...pricedCosts())
+  if (cost === null || max === 0) return 1
+  return Math.max(1, Math.min(MODEL_COST_TICKS, Math.round(cost / max * MODEL_COST_TICKS)))
+}
+
+/** Couleur liée au coût absolu, et non au modèle actuellement sélectionné. */
+export function modelCostTone(model: string): ModelCostTone {
+  const cost = modelExchangeCost(model)
+  const min = Math.min(...pricedCosts())
+  if (cost === null || min === 0) return 'warn'
+  const multiple = Math.round(cost / min)
+  if (multiple < 5) return 'ok'
+  if (multiple < 15) return 'warn'
+  return 'danger'
+}
+
+/** Compare un candidat à la sélection, sans masquer les modèles moins chers. */
+export function relativeCostLabel(candidate: string, selected: string): string {
+  const candidateCost = modelExchangeCost(candidate)
+  const selectedCost = modelExchangeCost(selected)
+  if (candidateCost === null || selectedCost === null || selectedCost === 0) return '—'
+  const ratio = candidateCost / selectedCost
+  if (ratio >= 1.5) return `×${Math.round(ratio)}`
+  if (ratio <= 0.67) return `÷${Math.round(1 / ratio)}`
+  return '×1'
+}
+
+function frenchAmount(value: number): string {
+  return (Number.isInteger(value) ? String(value) : value.toFixed(2)).replace('.', ',')
+}
+
+export function formatModelPrice(model: string): string {
+  const pricing = modelPricing(model)
+  return pricing === null ? '—' : `${frenchAmount(pricing.input)} / ${frenchAmount(pricing.output)} $`
+}
+
 /**
  * Ce que l'orchestrateur peut faire quand la délégation est autorisée.
  *

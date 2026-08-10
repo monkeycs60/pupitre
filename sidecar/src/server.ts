@@ -51,6 +51,10 @@ import {
   type MemoryStore,
 } from "./memory";
 import type { GamificationService } from "./gamification";
+import {
+  HtmlDocumentError,
+  type HtmlDocumentService,
+} from "./html-documents";
 import { FILESYSTEM_SCOPES, type FilesystemScope } from "./access";
 import { actionFormat } from "./response-format";
 import { conductorToolTokens } from "./conductor-mcp";
@@ -107,6 +111,7 @@ export interface ServerDeps {
   costs: CostStore;
   memory: MemoryStore;
   gamification?: GamificationService;
+  htmlDocuments?: HtmlDocumentService;
   /**
    * Arrêt propre du sidecar, déclenché par `POST /api/shutdown` : c'est ce qui
    * permet à un sidecar plus récent de reprendre le port (cf. claimServer).
@@ -267,6 +272,23 @@ function memoryHttpError(error: unknown, fallback = "fichier mémoire inconnu"):
     throw new HttpError(409, error.message);
   }
   throw new HttpError(404, fallback);
+}
+
+function htmlDocumentHttpError(error: unknown): never {
+  if (!(error instanceof HtmlDocumentError)) throw error;
+  switch (error.code) {
+    case "conversation-not-found":
+    case "document-not-found":
+      throw new HttpError(404, error.message);
+    case "document-unavailable":
+      throw new HttpError(410, error.message);
+    case "source-too-large":
+      throw new HttpError(413, error.message);
+    case "view-token-invalid":
+      throw new HttpError(403, error.message);
+    default:
+      throw new HttpError(400, error.message);
+  }
 }
 
 function strongReviewModel(model: string, field: string): string {
@@ -469,6 +491,26 @@ function optionalNamedPresetId(
     throw new HttpError(400, `${field} invalide`);
   }
   return value;
+}
+
+function inferPresetId(
+  input: {
+    provider: Provider
+    model: string
+    effort: string | null
+    speed: "standard" | "fast" | null
+    orchestrator: boolean
+  },
+  deps: ServerDeps,
+): string | null {
+  const matches = deps.presets.list().filter((preset) => (
+    preset.provider === input.provider
+      && preset.model === input.model
+      && preset.effort === input.effort
+      && preset.speed === input.speed
+      && preset.orchestrator === input.orchestrator
+  ));
+  return matches.length === 1 ? matches[0]!.id : null;
 }
 
 function validatePresetSubagentConfig(input: PresetInput, deps: ServerDeps): void {
@@ -1463,6 +1505,7 @@ export function createServer(deps: ServerDeps) {
             projectId: workflow.project_id,
             provider: config.provider,
             model: config.model,
+            presetId: workflow.preset_id,
             effort: config.effort,
             speed: config.speed,
             orchestrator: config.orchestrator,
@@ -1670,6 +1713,17 @@ export function createServer(deps: ServerDeps) {
           const effort = optionalEffort(body, provider as Provider);
           const speed = optionalSpeed(body, provider as Provider);
           const permissionMode = optionalPresetPermissionMode(body);
+          const requestedPresetId = optionalNamedPresetId(body, "presetId");
+          const presetId = requestedPresetId ?? inferPresetId({
+            provider: provider as Provider,
+            model,
+            effort,
+            speed,
+            orchestrator: optionalBoolean(body, "orchestrator", true),
+          }, deps);
+          if (presetId !== null && !deps.presets.get(presetId)) {
+            throw new HttpError(404, "preset inconnu");
+          }
           const { message, images, attachments } = messageWithAttachments(body, deps.media);
           // Défaut ON : une conversation peut déléguer sauf mention contraire.
           const orchestrator = optionalBoolean(body, "orchestrator", true);
@@ -1678,6 +1732,7 @@ export function createServer(deps: ServerDeps) {
             projectId,
             provider: provider as Provider,
             model,
+            presetId,
             effort,
             speed,
             permissionMode,
@@ -1746,6 +1801,26 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(400, "permission_mode manquant");
           }
           return json(deps.conversations.setPermissionMode(conversationPermissionId, permissionMode));
+        }
+
+        const conversationReadId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/read$/,
+        );
+        if (request.method === "POST" && conversationReadId !== null) {
+          if (!deps.conversations.get(conversationReadId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          const body = await readObject(request);
+          const lastReadTurn = body.lastReadTurn;
+          if (
+            typeof lastReadTurn !== "number"
+            || !Number.isInteger(lastReadTurn)
+            || lastReadTurn < 0
+          ) {
+            throw new HttpError(400, "lastReadTurn invalide");
+          }
+          return json(deps.conversations.markRead(conversationReadId, lastReadTurn));
         }
 
         const conversationDebriefId = routeId(
@@ -2080,7 +2155,8 @@ export function createServer(deps: ServerDeps) {
           if (typeof body.deleted !== "boolean") {
             throw new HttpError(400, "champ deleted invalide");
           }
-          return json(deps.conversations.setDeleted(conversationTrashId, body.deleted));
+          const updated = deps.conversations.setDeleted(conversationTrashId, body.deleted);
+          return json(updated);
         }
 
         const conversationEventsId = routeId(
@@ -2092,6 +2168,170 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(404, "conversation inconnue");
           }
           return json(deps.conversations.listEvents(conversationEventsId));
+        }
+
+        const conversationHtmlDocumentsId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/(?:html-documents|documents)$/,
+        );
+        if (request.method === "POST" && conversationHtmlDocumentsId !== null) {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents non câblés");
+          const body = await readObject(request);
+          if (typeof body.deleteSource !== "undefined" && typeof body.deleteSource !== "boolean") {
+            throw new HttpError(400, "champ deleteSource invalide");
+          }
+          if (body.summary !== undefined && body.summary !== null && typeof body.summary !== "string") {
+            throw new HttpError(400, "champ summary invalide");
+          }
+          try {
+            return json(await deps.htmlDocuments.publish(conversationHtmlDocumentsId, {
+              path: requiredString(body, "path"),
+              title: requiredString(body, "title"),
+              summary: typeof body.summary === "string" ? body.summary : null,
+              deleteSource: body.deleteSource === true,
+            }), 201);
+          } catch (error) {
+            htmlDocumentHttpError(error);
+          }
+        }
+
+        if (request.method === "GET" && pathname === "/api/documents") {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents non câblés");
+          const kind = url.searchParams.get("kind");
+          const state = url.searchParams.get("state");
+          if (kind !== null && kind !== "html" && kind !== "pdf") throw new HttpError(400, "kind invalide");
+          if (state !== null && !["active", "retained", "available"].includes(state)) throw new HttpError(400, "state invalide");
+          return json(await deps.htmlDocuments.list({
+            projectId: url.searchParams.get("projectId") ?? undefined,
+            query: url.searchParams.get("q") ?? undefined,
+            kind: (kind ?? undefined) as "html" | "pdf" | undefined,
+            state: (state ?? undefined) as "active" | "retained" | "available" | undefined,
+          }));
+        }
+
+        const htmlDocumentViewTokenId = routeId(
+          pathname,
+          /^\/api\/(?:html-documents|documents)\/([^/]+)\/view-token$/,
+        );
+        if (request.method === "POST" && htmlDocumentViewTokenId !== null) {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents HTML non câblés");
+          try {
+            return json(deps.htmlDocuments.issueViewToken(htmlDocumentViewTokenId), 201);
+          } catch (error) {
+            htmlDocumentHttpError(error);
+          }
+        }
+
+        const htmlDocumentRetainId = routeId(
+          pathname,
+          /^\/api\/(?:html-documents|documents)\/([^/]+)\/retain$/,
+        );
+        if (request.method === "POST" && htmlDocumentRetainId !== null) {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents HTML non câblés");
+          try {
+            return json(deps.htmlDocuments.retain(htmlDocumentRetainId));
+          } catch (error) {
+            htmlDocumentHttpError(error);
+          }
+        }
+
+        const documentThumbnailId = routeId(
+          pathname,
+          /^\/api\/documents\/([^/]+)\/thumbnail$/,
+        );
+        if (request.method === "GET" && documentThumbnailId !== null) {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents non câblés");
+          try {
+            const thumbnail = deps.htmlDocuments.thumbnail(documentThumbnailId);
+            const file = Bun.file(thumbnail.path);
+            if (!(await file.exists())) throw new HttpError(410, "miniature indisponible");
+            return new Response(file, {
+              headers: {
+                ...TAURI_CORS_HEADERS,
+                "content-type": thumbnail.mimeType,
+                "cache-control": "private, max-age=86400",
+                "x-content-type-options": "nosniff",
+              },
+            });
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            htmlDocumentHttpError(error);
+          }
+        }
+
+        const documentExportId = routeId(
+          pathname,
+          /^\/api\/documents\/([^/]+)\/export$/,
+        );
+        if (request.method === "POST" && documentExportId !== null) {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents non câblés");
+          const body = await readObject(request);
+          try {
+            return json(deps.htmlDocuments.exportTo(
+              documentExportId,
+              requiredString(body, "path"),
+            ));
+          } catch (error) {
+            htmlDocumentHttpError(error);
+          }
+        }
+
+        const htmlDocumentContentId = routeId(
+          pathname,
+          /^\/api\/(?:html-documents|documents)\/([^/]+)\/content$/,
+        );
+        if (request.method === "GET" && htmlDocumentContentId !== null) {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents HTML non câblés");
+          try {
+            const content = deps.htmlDocuments.content(
+              htmlDocumentContentId,
+              url.searchParams.get("token") ?? "",
+            );
+            const file = Bun.file(content.path);
+            if (!(await file.exists())) throw new HttpError(410, "contenu indisponible");
+            return new Response(file, {
+              headers: {
+                ...TAURI_CORS_HEADERS,
+                "content-type": content.kind === "html" ? "text/html; charset=utf-8" : content.mimeType,
+                "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(content.originalName)}`,
+                "cache-control": "no-store",
+                ...(content.kind === "html" ? { "content-security-policy": [
+                  "default-src 'none'",
+                  "style-src 'unsafe-inline'",
+                  "script-src 'unsafe-inline'",
+                  "img-src data: blob:",
+                  "font-src data:",
+                  "media-src data: blob:",
+                  "connect-src 'none'",
+                  "form-action 'none'",
+                  "base-uri 'none'",
+                  "object-src 'none'",
+                  "sandbox allow-scripts allow-modals",
+                ].join("; ") } : {}),
+                "referrer-policy": "no-referrer",
+                "x-content-type-options": "nosniff",
+              },
+            });
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            htmlDocumentHttpError(error);
+          }
+        }
+
+        const htmlDocumentId = routeId(pathname, /^\/api\/(?:html-documents|documents)\/([^/]+)$/);
+        if (request.method === "GET" && htmlDocumentId !== null) {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents non câblés");
+          const document = deps.htmlDocuments.get(htmlDocumentId);
+          if (!document) throw new HttpError(404, "document inconnu");
+          return json(document);
+        }
+        if (request.method === "DELETE" && htmlDocumentId !== null) {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents HTML non câblés");
+          try {
+            return json(deps.htmlDocuments.delete(htmlDocumentId));
+          } catch (error) {
+            htmlDocumentHttpError(error);
+          }
         }
 
         if (request.method === "POST" && pathname === "/api/reviews") {

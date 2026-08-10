@@ -201,17 +201,21 @@ export class ConversationRunner {
       // orchestratrice peut déléguer. Les tours de sous-tâches passent par
       // SubtaskRunner, qui ne construit JAMAIS ce champ (garde de profondeur).
       let conductor: { port: number; conversationId: string } | undefined;
+      let pupitre: { port: number; conversationId: string } | undefined;
+      const sidecarPort = this.port();
+      if (Number.isInteger(sidecarPort) && sidecarPort > 0) {
+        pupitre = { port: sidecarPort, conversationId };
+      }
       if (conv.orchestrator) {
-        const port = this.port();
-        if (!Number.isInteger(port) || port <= 0) {
+        if (!Number.isInteger(sidecarPort) || sidecarPort <= 0) {
           // Échec immédiat et lisible plutôt qu'un tour lancé vers un bridge
           // injoignable : le CLI aurait tourné, appelé `delegate`, et attendu.
-          const message = `port du sidecar indisponible (${port}) : `
+          const message = `port du sidecar indisponible (${sidecarPort}) : `
             + "impossible de câbler le bridge conductor";
           emit({ type: "status", state: "error", error: message });
           throw new Error(message);
         }
-        conductor = { port, conversationId };
+        conductor = { port: sidecarPort, conversationId };
       }
       const permissionMode = conv.permission_mode ?? project.permission_mode;
       const opts = {
@@ -234,6 +238,7 @@ export class ConversationRunner {
         attachments,
         signal: controller.signal,
         ...(conductor ? { conductor } : {}),
+        ...(pupitre ? { pupitre } : {}),
         ...(selectedMcpServers(project) ?? {}),
       };
       if (conv.provider === "claude") await runClaudeTurn(opts, emit);

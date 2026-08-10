@@ -1,0 +1,31 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+if (process.platform !== 'linux') process.exit(0)
+
+const root = join(import.meta.dir, '..')
+const applicationsDirectory = join(
+  process.env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'),
+  'applications',
+)
+const desktopFile = join(applicationsDirectory, 'fr.clementserizay.pupitre.desktop')
+
+mkdirSync(applicationsDirectory, { recursive: true })
+writeFileSync(
+  desktopFile,
+  `[Desktop Entry]
+Type=Application
+Name=Pupitre (développement)
+Comment=Espace de travail pour agents IA
+Exec=${join(root, 'target', 'debug', 'app')}
+Icon=${join(root, 'src-tauri', 'icons', 'icon.png')}
+Terminal=false
+Categories=Development;
+StartupNotify=true
+StartupWMClass=fr.clementserizay.pupitre
+X-GNOME-WMClass=fr.clementserizay.pupitre
+`,
+)
+
+console.log(`Lanceur de développement Pupitre enregistré : ${desktopFile}`)

@@ -6,6 +6,7 @@ import { createInterface } from "node:readline";
 import type { AppEvent } from "../events";
 import type { EmitFn, TurnOptions } from "./types";
 import { codexMcpConfig } from "../conductor";
+import { codexPupitreMcpServer } from "../pupitre";
 import { boundedToolOutput } from "./output";
 import { aiRoots, DEFAULT_FILESYSTEM_SCOPE } from "../access";
 
@@ -426,6 +427,9 @@ export class CodexAppServerClient {
     const conductorServers = (
       conductorConfig.mcp_servers as Record<string, Record<string, unknown>> | undefined
     ) ?? {};
+    const pupitreServers = opts.pupitre
+      ? { pupitre: codexPupitreMcpServer(opts.pupitre) }
+      : {};
     // Ajouter `mcp_servers` dans la config du thread fait repasser cette branche
     // après les overrides CLI du process. Sans recopier la politique utilisateur,
     // le conductor restaurait donc notamment le timeout Sentry de 120 secondes.
@@ -440,9 +444,10 @@ export class CodexAppServerClient {
       )
       : {};
     const threadMcpServers = {
-      ...(opts.conductor ? this.threadMcpPolicyOverrides() : {}),
+      ...(opts.conductor || opts.pupitre ? this.threadMcpPolicyOverrides() : {}),
       ...projectFilter,
       ...(opts.conductor ? conductorServers : {}),
+      ...pupitreServers,
     };
     const overrides = {
       ...(opts.effort ? { model_reasoning_effort: opts.effort } : {}),

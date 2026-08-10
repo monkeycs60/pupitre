@@ -5,6 +5,7 @@ import { SessionSummaryCard } from './SessionSummaryCard'
 import type { DebriefBlock, StreamBlock } from './groupEvents'
 import type { SubtaskStatus } from './types'
 import { TestInventoryCard } from './TestInventoryCard'
+import { HtmlDocumentCard } from './HtmlDocumentCard'
 import type { EventBlock } from './eventBlocks'
 import { memo } from 'react'
 import type { ReactNode } from 'react'
@@ -34,6 +35,7 @@ function EventStreamImpl({
   turnXpMultiplier,
 }: EventStreamProps) {
   const rendered: ReactNode[] = []
+  const newestHtmlDocumentId = blocks.findLast((item) => item.kind === 'html-document')?.id
   let index = 0
 
   while (index < blocks.length) {
@@ -80,6 +82,12 @@ function EventStreamImpl({
             block={block}
             onImageOpen={onImageOpen}
             onImageLoad={onImageLoad}
+          />
+        ) : block.kind === 'html-document' ? (
+          <HtmlDocumentCard
+            key={block.id}
+            block={block}
+            defaultOpen={block.id === newestHtmlDocumentId}
           />
         ) : (
           <EventView

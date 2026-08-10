@@ -1,4 +1,6 @@
 import { fileURLToPath } from "node:url";
+import type { PupitreTarget } from "./pupitre";
+import { pupitreServerConfig } from "./pupitre";
 
 /**
  * Câblage du bridge MCP « conductor » côté CLI.
@@ -55,10 +57,12 @@ export function conductorServerConfig(
 export function claudeMcpConfigArg(
   target: ConductorTarget | null,
   extraServers: Record<string, unknown> = {},
+  pupitre: PupitreTarget | null = null,
 ): string {
   return JSON.stringify({
     mcpServers: {
       ...(target ? { conductor: conductorServerConfig(target) } : {}),
+      ...(pupitre ? { pupitre: pupitreServerConfig(pupitre) } : {}),
       ...extraServers,
     },
   });

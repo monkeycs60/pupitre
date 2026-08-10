@@ -10,7 +10,7 @@ import { Rail } from './Rail'
 import { Titlebar } from './Titlebar'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
-import type { Conversation, Project } from './types'
+import type { Attachment, Conversation, DocumentArtifact, Project } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import { ContextGauge } from './ContextGauge'
@@ -21,10 +21,12 @@ import {
   listProjectConversations,
   listProjectMcpServers,
   listProjects,
+  markConversationRead,
 } from './api'
 import type { ContextProfile, McpServerRef } from './api'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import { modelLabel } from './modelOptions'
+import { ProviderMark } from './ProviderMark'
 import type { ActionFormat } from './actionHeadings'
 import { SkillsLibrary } from './SkillsLibrary'
 import { RoutinesView } from './RoutinesView'
@@ -44,6 +46,7 @@ import { useFleet } from './useFleet'
 import { ProgressView } from './ProgressView'
 import { AppSettingsView } from './AppSettingsView'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
+import { DocumentsView } from './DocumentsView'
 import {
   locationForSelection,
   readLastActiveLocation,
@@ -86,7 +89,9 @@ function App() {
     useState<Conversation | null>(null)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
   const [newConversationDraft, setNewConversationDraft] = useState('')
+  const [newConversationAttachments, setNewConversationAttachments] = useState<Attachment[]>([])
   const [conversationListVersion, setConversationListVersion] = useState(0)
+  const [railReadVersion, setRailReadVersion] = useState(0)
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [showHandoff, setShowHandoff] = useState(false)
@@ -130,6 +135,9 @@ function App() {
   const digest = lastDigest(events)
   const digestTitle = digest?.title
   const digestSummary = digest?.summary
+  const selectedConversationId = selectedConversation?.id
+  const selectedConversationDigestTurn = selectedConversation?.digest_turn
+  const selectedConversationLastReadTurn = selectedConversation?.last_read_turn ?? 0
   useEffect(() => {
     if (digestTitle === undefined || digestSummary === undefined) return
     setSelectedConversation((current) =>
@@ -140,6 +148,17 @@ function App() {
     )
     setConversationListVersion((current) => current + 1)
   }, [digestTitle, digestSummary])
+
+  useEffect(() => {
+    if (workspaceView !== 'conversations' || selectedConversationId === undefined || selectedConversationDigestTurn === undefined) return
+    if (selectedConversationDigestTurn <= selectedConversationLastReadTurn) return
+    setSelectedConversation((current) => current === null
+      ? current
+      : { ...current, last_read_turn: Math.max(current.last_read_turn ?? 0, selectedConversationDigestTurn) })
+    void markConversationRead(selectedConversationId, selectedConversationDigestTurn)
+      .then(() => setRailReadVersion((current) => current + 1))
+      .catch(() => {})
+  }, [workspaceView, selectedConversationId, selectedConversationDigestTurn, selectedConversationLastReadTurn])
   const reviewOpenCount = fleet.reviewStatus
     ? fleet.reviewStatus.openBySeverity.red + fleet.reviewStatus.openBySeverity.orange + fleet.reviewStatus.openBySeverity.grey
     : 0
@@ -303,6 +322,7 @@ function App() {
     if (project.id !== selectedProject?.id) {
       setSelectedConversation(null)
       setNewConversationDraft('')
+      setNewConversationAttachments([])
       setIsCreatingConversation(false)
       setShowSwitchModel(false)
       setFocusedReviewId(null)
@@ -317,6 +337,7 @@ function App() {
     if (!confirmLeaveMemory()) return
     setSelectedConversation(conversation)
     setNewConversationDraft('')
+    setNewConversationAttachments([])
     setIsCreatingConversation(false)
     setShowSwitchModel(false)
     setWorkspaceView('conversations')
@@ -327,6 +348,7 @@ function App() {
     if (selectedProject === null) return
     setSelectedConversation(null)
     setNewConversationDraft('')
+    setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
     setWorkspaceView('conversations')
@@ -338,9 +360,22 @@ function App() {
     setConversationListVersion((current) => current + 1)
   }
 
+  function handleConversationRead() {
+    if (selectedConversation === null) return
+    const lastReadTurn = selectedConversation.digest_turn
+    if (lastReadTurn <= (selectedConversation.last_read_turn ?? 0)) return
+    setSelectedConversation((current) => current === null
+      ? current
+      : { ...current, last_read_turn: Math.max(current.last_read_turn ?? 0, lastReadTurn) })
+    void markConversationRead(selectedConversation.id, lastReadTurn)
+      .then(() => setRailReadVersion((current) => current + 1))
+      .catch(() => {})
+  }
+
   function handleConversationCreated(conversation: Conversation) {
     setSelectedConversation(conversation)
     setNewConversationDraft('')
+    setNewConversationAttachments([])
     setIsCreatingConversation(false)
     setConversationListVersion((current) => current + 1)
   }
@@ -375,6 +410,18 @@ function App() {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setWorkspaceView('costs')
+    setShowSwitchModel(false)
+  }
+
+  function handleDocumentsSelect() {
+    if (!confirmLeaveMemory()) return
+    setWorkspaceView('documents')
+    setShowSwitchModel(false)
+  }
+
+  function handleConversationsSelect() {
+    if (!confirmLeaveMemory()) return
+    setWorkspaceView('conversations')
     setShowSwitchModel(false)
   }
 
@@ -422,9 +469,10 @@ function App() {
     setShowSwitchModel(false)
   }
 
-  function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'library' | 'memory' | 'help') {
+  function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'documents' | 'library' | 'memory' | 'help') {
     if (view === 'fleet') handleFleetSelect()
     else if (view === 'routines') handleRoutinesSelect()
+    else if (view === 'documents') handleDocumentsSelect()
     else if (view === 'library') handleLibrarySelect()
     else if (view === 'memory') handleMemorySelect()
     else handleHelpSelect()
@@ -435,6 +483,7 @@ function App() {
     if (!selectedProject) return
     setSelectedConversation(null)
     setNewConversationDraft(`$${skill.invocation} `)
+    setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setWorkspaceView('conversations')
   }
@@ -472,6 +521,23 @@ function App() {
     handleConversationSelect(conversation)
   }
 
+  async function handleDocumentUse(
+    projectId: string,
+    attachment: Attachment,
+    document: DocumentArtifact,
+  ) {
+    const projects = await listProjects()
+    const project = projects.find((item) => item.id === projectId)
+    if (!project) return
+    setSelectedProject(project)
+    setSelectedConversation(null)
+    setNewConversationDraft(`Utilise le document joint « ${document.title} » comme contexte pour cette nouvelle conversation.`)
+    setNewConversationAttachments([attachment])
+    setIsCreatingConversation(true)
+    setShowSwitchModel(false)
+    setWorkspaceView('conversations')
+  }
+
   async function handleGitConversationSelect(conversationId: string) {
     if (selectedProject === null) return
     const conversations = await listProjectConversations(selectedProject.id)
@@ -484,25 +550,20 @@ function App() {
     setWorkspaceView('git')
   }
 
-  const titlebarView = workspaceView === 'git'
-        ? 'Git'
-        : workspaceView === 'costs'
-          ? 'Coûts'
-      : workspaceView === 'library'
-        ? 'Bibliothèque'
-        : workspaceView === 'routines'
-          ? 'Routines'
-          : workspaceView === 'fleet'
-            ? 'Fleet'
-            : workspaceView === 'memory'
-              ? 'Mémoire'
-              : workspaceView === 'help'
-                ? 'Aide'
-                : workspaceView === 'progress'
-                  ? 'Progression'
-                  : workspaceView === 'settings'
-                    ? 'Paramètres'
-      : selectedConversation?.title ?? null
+  const titlebarView = workspaceView === 'conversations'
+    ? selectedConversation?.title ?? null
+    : {
+        git: 'Git',
+        documents: 'Documents',
+        costs: 'Coûts',
+        library: 'Skills',
+        routines: 'Routines',
+        fleet: 'Fleet',
+        memory: 'Mémoire',
+        help: 'Aide',
+        progress: 'Progression',
+        settings: 'Paramètres',
+      }[workspaceView]
 
   const showSidebar = workspaceView === 'conversations'
 
@@ -520,10 +581,13 @@ function App() {
       <Rail
         selectedProject={selectedProject}
         projectListVersion={projectListVersion}
+        conversationListVersion={conversationListVersion + railReadVersion}
         onProjectSelect={handleProjectSelect}
         onProjectCreated={handleProjectSelect}
         workspaceView={workspaceView}
+        onConversationsSelect={handleConversationsSelect}
         onGitSelect={handleGitSelect}
+        onDocumentsSelect={handleDocumentsSelect}
         onCostsSelect={handleCostsSelect}
         onLibrarySelect={handleLibrarySelect}
         onRoutinesSelect={handleRoutinesSelect}
@@ -534,6 +598,7 @@ function App() {
         onSettingsSelect={handleSettingsSelect}
         pendingReviews={reviewOpenCount}
         fleetActive={fleet.items.length}
+        activeProjectIds={[...new Set(fleet.items.map((item) => item.projectId))]}
       />
       {showSidebar ? (
       <>
@@ -544,6 +609,7 @@ function App() {
         onConversationSelect={handleConversationSelect}
         onConversationCreate={handleConversationCreate}
         onConversationClosed={handleConversationClosed}
+        onConversationRead={() => setRailReadVersion((current) => current + 1)}
         conversationListVersion={conversationListVersion}
         quotas={quotas}
         runningSubtasks={runningSubtasks}
@@ -551,6 +617,7 @@ function App() {
         onProgressSelect={handleProgressSelect}
         gamification={gamification.snapshot}
         xpPulse={gamification.xpPulse}
+        activeFleet={fleet.items}
       />
       <div
         className="sidebar-resize-handle"
@@ -571,8 +638,14 @@ function App() {
       </>
       ) : null}
 
-      <section className="workspace" aria-label={workspaceView === 'git' ? 'Git' : workspaceView === 'costs' ? 'Coûts' : workspaceView === 'library' ? 'Bibliothèque' : workspaceView === 'routines' ? 'Routines' : workspaceView === 'fleet' ? 'Fleet' : workspaceView === 'memory' ? 'Mémoire' : workspaceView === 'help' ? 'Aide' : workspaceView === 'progress' ? 'Progression' : workspaceView === 'settings' ? 'Paramètres' : 'Conversation'}>
-        {workspaceView === 'library' ? (
+      <section className="workspace" aria-label={titlebarView ?? 'Conversation'}>
+        {workspaceView === 'documents' ? (
+          <DocumentsView
+            currentProject={selectedProject}
+            onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
+            onUseInConversation={(projectId, attachment, document) => void handleDocumentUse(projectId, attachment, document)}
+          />
+        ) : workspaceView === 'library' ? (
           <SkillsLibrary project={selectedProject} />
         ) : workspaceView === 'routines' ? (
           <RoutinesView
@@ -631,9 +704,7 @@ function App() {
                 </div>
                 {selectedConversation !== null ? (
                   <p>
-                    <span className={`conversation-prov is-${selectedConversation.provider}`}>
-                      {selectedConversation.provider.toUpperCase()}
-                    </span>
+                    <ProviderMark provider={selectedConversation.provider} className="conversation-prov" />
                     {modelLabel(selectedConversation.model)} ·{' '}
                     {selectedConversation.effort ?? 'default'}
                     {selectedConversation.speed === 'fast' ? ' · rapide' : ''}
@@ -696,8 +767,10 @@ function App() {
               quotas={quotas.snapshot}
               onConversationCreated={handleConversationCreated}
               onProjectUpdated={handleProjectUpdated}
+              onConversationRead={handleConversationRead}
               onRunningSubtasksChange={setRunningSubtasks}
               initialMessage={newConversationDraft}
+              initialAttachments={newConversationAttachments}
               turnXpMultiplier={complexityMultiplier(
                 (selectedConversation
                   ? gamification.snapshot?.conversations[selectedConversation.id]?.complexity
@@ -709,6 +782,9 @@ function App() {
                 key={`switch-model-${selectedConversation.id}`}
                 conversation={selectedConversation}
                 events={events}
+                project={selectedProject}
+                quotas={quotas.snapshot}
+                onProjectUpdated={handleProjectUpdated}
                 onClose={() => setShowSwitchModel(false)}
                 onSwitched={handleConversationSwitched}
                 onHandoff={handleConversationHandoff}

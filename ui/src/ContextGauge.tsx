@@ -9,6 +9,7 @@ import { DonutChart } from './DonutChart'
 import type { ContextGroup } from './contextEstimate'
 import type { DonutSlice } from './DonutChart'
 import { formatCompact } from './formatCompact'
+import { ProviderMark } from './ProviderMark'
 import type { ContextProfile, McpServerRef } from './api'
 import type { AppEvent, Conversation } from './types'
 
@@ -221,9 +222,7 @@ export function ContextGauge({
                   const tokens = mcpWeights[server.name]?.tokens
                   return (
                     <li key={`${server.provider}:${server.name}`}>
-                      <span className={`project-mcp-badge is-${server.provider}`}>
-                        {server.provider === 'claude' ? 'CL' : 'CX'}
-                      </span>
+                      <ProviderMark provider={server.provider} className="project-mcp-badge" />
                       <span className="context-gauge-server-name">{server.name}</span>
                       <span className="context-gauge-server-cost">
                         {typeof tokens === 'number' ? formatCompact(tokens) : '—'}

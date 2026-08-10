@@ -140,7 +140,7 @@ export function SkillsLibrary({ project }: SkillsLibraryProps) {
       <div className="library-body">
         <div className="skill-list-pane">
           <div className="library-sidebar-header">
-            <h1 id="skills-library-title">Bibliothèque</h1>
+            <h1 id="skills-library-title">Skills</h1>
             <p>
               {loading ? 'index…' : `${skills.length} skill${skills.length === 1 ? '' : 's'} indexé${skills.length === 1 ? '' : 's'}`}
               {' '}<HelpLink slug="skills" />

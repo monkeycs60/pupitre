@@ -2,6 +2,7 @@ import { parseCodexLine } from "./codex-parser";
 import { spawnJsonl } from "./spawn-jsonl";
 import type { TurnOptions, EmitFn } from "./types";
 import { codexExecConfigArgs } from "../conductor";
+import { codexExecPupitreConfigArgs } from "../pupitre";
 import { aiRoots, DEFAULT_FILESYSTEM_SCOPE } from "../access";
 
 export function runCodexTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
@@ -29,6 +30,7 @@ export function runCodexTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
       ? ["--enable", "fast_mode", "-c", 'service_tier="fast"']
       : []),
     ...(opts.conductor ? codexExecConfigArgs(opts.conductor) : []),
+    ...(opts.pupitre ? codexExecPupitreConfigArgs(opts.pupitre) : []),
     ...(opts.cliSessionId || scope === "full-system" || opts.sandboxMode
       ? []
       : ["--add-dir", ...aiRoots()]),

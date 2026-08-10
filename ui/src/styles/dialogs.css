@@ -506,10 +506,8 @@ input.field-mono {
 }
 
 .project-mcp-badge {
-  padding: 0 4px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.04em;
+  width: 16px;
+  height: 16px;
   border-radius: var(--r-xs);
 }
 

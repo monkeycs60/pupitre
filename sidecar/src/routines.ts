@@ -301,6 +301,7 @@ export class RoutineScheduler {
         projectId: routine.project_id,
         provider: config.provider,
         model: config.model,
+        presetId,
         effort: config.effort,
         speed: config.speed,
         orchestrator: config.orchestrator,

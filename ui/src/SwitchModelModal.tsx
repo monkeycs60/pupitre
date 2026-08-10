@@ -4,18 +4,21 @@ import {
   handoffConversation,
   switchConversationModel,
 } from './api'
-import { PROVIDER_EFFORTS, PROVIDER_MODELS } from './modelOptions'
+import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { estimatedReingestionTokens } from './modelSwitch'
 import type {
   AppEvent,
   Conversation,
-  ConversationSpeed,
-  Provider,
+  Project,
+  QuotaSnapshot,
 } from './types'
 
 interface SwitchModelModalProps {
   conversation: Conversation
   events: AppEvent[]
+  project: Project
+  quotas: QuotaSnapshot
+  onProjectUpdated: (project: Project) => void
   onClose: () => void
   onSwitched: (conversation: Conversation) => void
   onHandoff: (conversation: Conversation) => void
@@ -28,44 +31,44 @@ function errorMessage(error: unknown): string {
 export function SwitchModelModal({
   conversation,
   events,
+  project,
+  quotas,
+  onProjectUpdated,
   onClose,
   onSwitched,
   onHandoff,
 }: SwitchModelModalProps) {
-  const [provider, setProvider] = useState<Provider>(conversation.provider)
-  const [model, setModel] = useState(conversation.model)
-  const [effort, setEffort] = useState(conversation.effort ?? 'high')
-  const [speed, setSpeed] = useState<ConversationSpeed>(
-    conversation.speed ?? 'standard',
-  )
+  const [config, setConfig] = useState<ConversationConfig>({
+    provider: conversation.provider,
+    model: conversation.model,
+    effort: conversation.effort ?? 'high',
+    speed: conversation.speed ?? 'standard',
+    permissionMode: conversation.permission_mode ?? null,
+    orchestrator: conversation.orchestrator,
+    subagentPresetId: conversation.subagent_preset_id ?? null,
+    subagentEffort: conversation.subagent_effort ?? null,
+  })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const isHandoff = provider !== conversation.provider
+  const isHandoff = config.provider !== conversation.provider
   const tokenEstimate = estimatedReingestionTokens(events)
-
-  function handleProviderChange(nextProvider: Provider) {
-    setProvider(nextProvider)
-    setModel(PROVIDER_MODELS[nextProvider][0])
-    setEffort('high')
-    setSpeed('standard')
-  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsSubmitting(true)
     setError(null)
-    const config = {
-      provider,
-      model,
-      effort,
-      speed: provider === 'codex' ? speed : null,
+    const input = {
+      provider: config.provider,
+      model: config.model,
+      effort: config.effort,
+      speed: config.provider === 'codex' ? config.speed : null,
       orchestrator: conversation.orchestrator,
     }
     try {
       if (isHandoff) {
-        onHandoff(await handoffConversation(conversation.id, config))
+        onHandoff(await handoffConversation(conversation.id, input))
       } else {
-        const result = await switchConversationModel(conversation.id, config)
+        const result = await switchConversationModel(conversation.id, input)
         onSwitched(result.conversation)
       }
     } catch (submitError: unknown) {
@@ -106,56 +109,21 @@ export function SwitchModelModal({
         </header>
 
         <form onSubmit={(event) => void handleSubmit(event)}>
-          <div className="switch-fields">
-            <label>
-              <span>Provider</span>
-              <select
-                autoFocus
-                value={provider}
-                onChange={(event) => handleProviderChange(event.target.value as Provider)}
-              >
-                <option value="claude">claude</option>
-                <option value="codex">codex</option>
-              </select>
-            </label>
-            <label>
-              <span>Modèle</span>
-              <select
-                className="field-mono"
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
-              >
-                {PROVIDER_MODELS[provider].map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Effort</span>
-              <select value={effort} onChange={(event) => setEffort(event.target.value)}>
-                {PROVIDER_EFFORTS[provider].map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-            {provider === 'codex' ? (
-              <label>
-                <span>Vitesse</span>
-                <select
-                  value={speed}
-                  onChange={(event) => setSpeed(event.target.value as ConversationSpeed)}
-                >
-                  <option value="standard">Standard</option>
-                  <option value="fast">Rapide 1,5×</option>
-                </select>
-              </label>
-            ) : null}
-          </div>
+          <ConfigPanel
+            project={project}
+            quotas={quotas}
+            config={config}
+            onConfigChange={setConfig}
+            onProjectUpdated={onProjectUpdated}
+            onError={setError}
+            applyProjectDefault={false}
+            showConversationSettings={false}
+          />
 
           {isHandoff ? (
             <p className="switch-warning">
               Pupitre générera avec <code>{conversation.model}</code> un débrief versionné, l’épinglera
-              dans ce fil, puis initialisera une conversation {provider} avec ce contexte.
+              dans ce fil, puis initialisera une conversation {config.provider} avec ce contexte.
               Les deux fils resteront liés.
             </p>
           ) : (
@@ -180,7 +148,7 @@ export function SwitchModelModal({
             <button type="submit" className="primary-button" disabled={isSubmitting}>
               {isSubmitting
                 ? isHandoff ? 'Passation…' : 'Application…'
-                : isHandoff ? `Passer à ${provider}` : 'Appliquer'}
+                : isHandoff ? `Passer à ${config.provider}` : 'Appliquer'}
             </button>
           </footer>
         </form>

@@ -12,6 +12,7 @@ import { QuotaRefresher } from "./quota-refresh";
 import { SubtaskRunner } from "./subtasks";
 import { codexAppServer } from "./adapters/codex-app-server";
 import { runConductorMcp } from "./conductor-mcp";
+import { runPupitreMcp } from "./pupitre-mcp";
 import { ReviewStore } from "./stores/reviews";
 import { ReviewRunner } from "./reviews";
 import { DebriefStore } from "./stores/debriefs";
@@ -29,8 +30,11 @@ import { SearchIndex } from "./search";
 import { CostStore } from "./costs";
 import { MemoryStore } from "./memory";
 import { GamificationService } from "./gamification";
+import { HtmlDocumentService } from "./html-documents";
 
-if (process.argv.includes("--conductor-mcp")) {
+if (process.argv.includes("--pupitre-mcp")) {
+  await runPupitreMcp();
+} else if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
 } else {
   const dir = dataDir();
@@ -39,9 +43,18 @@ if (process.argv.includes("--conductor-mcp")) {
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
   const conversations = new ConversationStore(db);
+  conversations.backfillPresetIds(presets);
   conversations.sweepPendingHandoffs();
   const media = new MediaStore(dir);
   const events = new ConversationEventBus();
+  const htmlDocuments = new HtmlDocumentService(
+    db,
+    dir,
+    conversations,
+    projects,
+    events.broadcast,
+  );
+  htmlDocuments.sweepExpired();
   const quotas = new QuotaTracker(db);
   const quotaRefresher = new QuotaRefresher(quotas);
   const reviewStore = new ReviewStore(db);
@@ -129,11 +142,17 @@ if (process.argv.includes("--conductor-mcp")) {
   // orphelins — et un vieux sidecar qui garde le port fait tourner l'UI sur du
   // code périmé.
   let stopping = false;
+  const htmlDocumentSweepTimer = setInterval(
+    () => htmlDocuments.sweepExpired(),
+    15 * 60_000,
+  );
+  htmlDocumentSweepTimer.unref?.();
   const shutdownGracefully = () => {
     if (stopping) return;
     stopping = true;
     try {
       quotaRefresher.stop();
+      clearInterval(htmlDocumentSweepTimer);
       codexAppServer.shutdown();
     } finally {
       process.exit(0);
@@ -170,6 +189,7 @@ if (process.argv.includes("--conductor-mcp")) {
     costs,
     memory,
     gamification,
+    htmlDocuments,
   }), port);
   routines.start();
 

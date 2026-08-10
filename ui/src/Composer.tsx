@@ -19,7 +19,7 @@ import {
 import { buildCreateConversationInput } from './conversationDraft'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import type { Attachment, Conversation, Project, QuotaSnapshot } from './types'
-import { PROVIDER_MODELS, modelLabel } from './modelOptions'
+import { PROVIDER_MODELS } from './modelOptions'
 import { mediaUrl } from './transport'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 
@@ -37,6 +37,7 @@ interface ComposerProps {
    *  composer, comme la maquette). Null pour une nouvelle conversation : dérivé
    *  de la config choisie. */
   providerLabel?: string | null
+  initialAttachments?: Attachment[]
 }
 
 interface UploadedAttachment {
@@ -155,9 +156,11 @@ export function Composer({
   onMessageChange,
   focusRequest,
   providerLabel = null,
+  initialAttachments = [],
 }: ComposerProps) {
   const isNewConversation = conversationId === null
   const [config, setConfig] = useState<ConversationConfig>({
+    presetId: null,
     provider: 'claude',
     model: PROVIDER_MODELS.claude[0],
     effort: 'high',
@@ -167,7 +170,9 @@ export function Composer({
     subagentPresetId: null,
     subagentEffort: null,
   })
-  const [attachments, setAttachments] = useState<UploadedAttachment[]>([])
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>(() =>
+    initialAttachments.map((attachment) => ({ id: crypto.randomUUID(), attachment })),
+  )
   const [pendingUploads, setPendingUploads] = useState(0)
   const [isDragActive, setIsDragActive] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -410,10 +415,7 @@ export function Composer({
     }
   }
 
-  const composerModel = providerLabel
-    ?? (isNewConversation
-      ? `${config.provider} · ${modelLabel(config.model)} · ${config.effort ?? 'default'}`
-      : null)
+  const composerModel = isNewConversation ? null : providerLabel
 
   return (
     <div className="composer-area">
@@ -438,18 +440,6 @@ export function Composer({
         onDragLeave={handleDragLeave}
         onDrop={(event) => void handleDrop(event)}
       >
-        {isNewConversation ? (
-          <ConfigPanel
-            project={project}
-            quotas={quotas}
-            config={config}
-            onConfigChange={setConfig}
-            onProjectUpdated={onProjectUpdated}
-            onError={setToast}
-            onReady={setConfigReady}
-          />
-        ) : null}
-
         {attachments.length > 0 || pendingUploads > 0 ? (
           <div className="composer-attachments" aria-label="Pièces jointes">
             {attachments.map(({ id, attachment }) => (
@@ -519,6 +509,17 @@ export function Composer({
 
         <div className="composer-actions">
           <div className="composer-tools">
+            {isNewConversation ? (
+              <ConfigPanel
+                project={project}
+                quotas={quotas}
+                config={config}
+                onConfigChange={setConfig}
+                onProjectUpdated={onProjectUpdated}
+                onError={setToast}
+                onReady={setConfigReady}
+              />
+            ) : null}
             <input
               ref={fileInputRef}
               className="composer-file-input"
@@ -540,20 +541,22 @@ export function Composer({
                 <path d="M9.5 4 5 8.5a2.1 2.1 0 0 0 3 3l4.5-4.5a3.5 3.5 0 0 0-5-5L3 6.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+            <button
+              type="button"
+              className="composer-skill-button"
+              onClick={() => onMessageChange(message.length > 0 ? `${message} $` : '$')}
+              disabled={isRunning || isSubmitting}
+              title="Insérer un skill ($)"
+              aria-label="Insérer un skill"
+            >
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2.5 3.5h11v9h-11z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+                <path d="m5 6 2 2-2 2M8.8 10h2.2" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Insérer un skill</span>
+            </button>
             {!isNewConversation ? (
               <>
-                <button
-                  type="button"
-                  className="composer-icon-button"
-                  onClick={() => onMessageChange(message.length > 0 ? `${message} $` : '$')}
-                  disabled={isRunning || isSubmitting}
-                  title="Insérer un skill ($)"
-                  aria-label="Insérer un skill"
-                >
-                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M8 2.5 9.6 6l3.9.4-2.9 2.6.8 3.8L8 10.9 4.6 12.8l.8-3.8L2.5 6.4 6.4 6 8 2.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
                 <button
                   type="button"
                   className="composer-icon-button"

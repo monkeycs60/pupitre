@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../ui/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "bun run --cwd ui dev",
+    "beforeDevCommand": "bun run prepare:tauri-dev && bun run --cwd ui dev",
     "beforeBuildCommand": "bun run tauri:before-build"
   },
   "app": {
@@ -27,6 +27,7 @@
       "csp": {
         "default-src": "'self'",
         "connect-src": "'self' ipc: http://ipc.localhost http://127.0.0.1:4820 ws://127.0.0.1:4820",
+        "frame-src": "'self' http://127.0.0.1:4820",
         "img-src": "'self' data: blob: http://127.0.0.1:4820",
         "style-src": "'self' 'unsafe-inline'",
         "script-src": "'self'"

@@ -53,6 +53,30 @@ export type AppEvent =
       createdAt: string;
     }
   | {
+      type: "html-document-ref";
+      documentId: string;
+      title: string;
+      summary?: string;
+      kind?: "html";
+      mimeType?: "text/html";
+      originalName?: string;
+      sizeBytes: number;
+      createdAt: string;
+      expiresAt: string | null;
+    }
+  | {
+      type: "document-ref";
+      documentId: string;
+      title: string;
+      summary?: string;
+      kind: "html" | "pdf";
+      mimeType: string;
+      originalName: string;
+      sizeBytes: number;
+      createdAt: string;
+      expiresAt: string | null;
+    }
+  | {
       type: "test-inventory-ref";
       inventoryId: string;
       scopes: TestScopeEvent[];

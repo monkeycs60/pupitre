@@ -6,6 +6,7 @@ import { mediaUrl } from './transport'
 import { useNow } from './useNow'
 import { AttachmentPreview } from './AttachmentPreview'
 import { tokenXp } from './turnXp'
+import { summarizeTurnError } from './turnError'
 
 interface EventViewProps {
   block: EventBlock
@@ -136,14 +137,25 @@ function TurnFooter({
   const xp = block.usage !== undefined && turnXpMultiplier !== undefined
     ? Math.max(1, Math.round(tokenXp(block.usage.inputTokens, block.usage.outputTokens) * turnXpMultiplier))
     : null
+  const turnError = isError
+    ? summarizeTurnError(block.status?.error ?? 'Une erreur est survenue.')
+    : null
 
   return (
     <footer className="turn-footer">
       {block.files ? <TurnFiles files={block.files} /> : null}
       {isError ? (
         <div className="turn-error" role="alert">
-          <span className="turn-error-label">Erreur</span>{' '}
-          {block.status?.error ?? 'Une erreur est survenue.'}
+          <div>
+            <span className="turn-error-label">Erreur</span>{' '}
+            {turnError?.message}
+          </div>
+          {turnError?.details ? (
+            <details className="turn-error-details">
+              <summary>Détails techniques</summary>
+              <pre>{turnError.details}</pre>
+            </details>
+          ) : null}
         </div>
       ) : null}
       <div className={`turn-meta${isDone ? ' turn-meta-done' : ''}`}>

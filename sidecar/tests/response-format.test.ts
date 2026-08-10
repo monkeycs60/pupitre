@@ -31,6 +31,12 @@ test("le premier intitulé est celui demandé à l'agent", () => {
   expect(preamble).toContain("*IDÉES*");
 });
 
+test("les livrables de réflexion longs privilégient un HTML éphémère", () => {
+  const preamble = actionFormatPreamble(DEFAULT_ACTION_FORMAT);
+  expect(preamble).toContain("document HTML autonome et éphémère");
+  expect(preamble).toContain("dans /tmp");
+});
+
 test("la consigne précède la demande utilisateur", () => {
   const prompt = withActionFormat("corrige le bug", DEFAULT_ACTION_FORMAT);
   expect(prompt.endsWith("\n\ncorrige le bug")).toBe(true);

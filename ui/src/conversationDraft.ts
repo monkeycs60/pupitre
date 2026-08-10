@@ -3,6 +3,7 @@ import type { Attachment, ConversationSpeed, PresetPermissionMode, Provider } fr
 
 interface ConversationDraft {
   projectId: string
+  presetId?: string | null
   provider: Provider
   model: string
   effort: string
@@ -22,6 +23,7 @@ export function buildCreateConversationInput(
 ): CreateConversationInput {
   return {
     projectId: draft.projectId,
+    presetId: draft.presetId ?? null,
     provider: draft.provider,
     model: draft.model,
     effort: draft.effort,

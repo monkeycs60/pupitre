@@ -15,6 +15,7 @@ import { Composer } from './Composer'
 import { modelLabel } from './modelOptions'
 import type {
   AppEvent,
+  Attachment,
   Conversation,
   Project,
   QuotaSnapshot,
@@ -46,9 +47,11 @@ interface ChatProps {
   quotas: QuotaSnapshot
   onConversationCreated: (conversation: Conversation) => void
   onProjectUpdated: (project: Project) => void
+  onConversationRead?: () => void
   /** Nombre de sous-tâches en cours dans ce fil (indicateur sidebar). */
   onRunningSubtasksChange?: (count: number) => void
   initialMessage?: string
+  initialAttachments?: Attachment[]
   /** Multiplicateur XP du tour (complexité × focus), voir turnXp.ts. */
   turnXpMultiplier?: number
 }
@@ -104,8 +107,10 @@ export function Chat({
   quotas,
   onConversationCreated,
   onProjectUpdated,
+  onConversationRead,
   onRunningSubtasksChange,
   initialMessage = '',
+  initialAttachments = [],
   turnXpMultiplier,
 }: ChatProps) {
   const draftStorageKey = `pupitre:draft:${conversation?.id ?? `new:${project.id}`}`
@@ -205,6 +210,7 @@ export function Chat({
     const distanceFromBottom =
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
     followsBottomRef.current = distanceFromBottom <= 64
+    if (followsBottomRef.current) onConversationRead?.()
   }
 
   // useCallback obligatoire : une identité instable ici casserait la
@@ -236,6 +242,7 @@ export function Chat({
   function jumpToBottom() {
     followsBottomRef.current = true
     scrollToBottomIfFollowing()
+    onConversationRead?.()
   }
 
   function handleSkillLaunch(skill: SkillSuggestion) {
@@ -313,6 +320,7 @@ export function Chat({
             providerLabel={conversation
               ? `${conversation.provider} · ${modelLabel(conversation.model)} · ${conversation.effort ?? 'default'}${conversation.speed === 'fast' ? ' · rapide' : ''}`
               : null}
+            initialAttachments={initialAttachments}
           />
         </div>
         <SkillsSuggestionsPanel

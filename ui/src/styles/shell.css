@@ -56,6 +56,11 @@ body.is-resizing-sidebar {
   user-select: none;
 }
 
+body.is-resizing-documents-list {
+  cursor: col-resize;
+  user-select: none;
+}
+
 /* --- Barre de titre (fenêtre sans décorations natives) ------------------ */
 
 .titlebar {
@@ -259,6 +264,8 @@ body.is-resizing-sidebar {
 /* --- Rail vertical (projets + navigation globale) ------------------------ */
 
 .rail {
+  position: relative;
+  z-index: 50;
   display: flex;
   grid-row: 2;
   grid-column: 1;
@@ -270,6 +277,15 @@ body.is-resizing-sidebar {
   overflow: hidden;
   background: var(--bg-rail);
   border-right: 1px solid var(--border-subtle);
+  justify-self: start;
+  width: 56px;
+  transition: width 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+
+.rail.is-label-expanded {
+  width: 188px;
+  overflow: visible;
+  box-shadow: var(--shadow-popover);
 }
 
 .rail-projects {
@@ -315,9 +331,11 @@ body.is-resizing-sidebar {
 
 .rail-avatar {
   display: grid;
+  grid-template-columns: 38px minmax(0, 0fr);
   place-items: center;
   width: 38px;
   height: 38px;
+  padding: 0;
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: var(--text-base);
@@ -326,7 +344,27 @@ body.is-resizing-sidebar {
   border: 1px solid var(--border);
   border-radius: 11px;
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease);
+  transition: width 140ms var(--ease), grid-template-columns 140ms var(--ease), gap 140ms var(--ease), padding 140ms var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.rail-project-initials {
+  min-width: 0;
+}
+
+.rail-project-label {
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 120ms var(--ease), opacity 100ms var(--ease);
 }
 
 .rail-avatar:hover {
@@ -340,9 +378,15 @@ body.is-resizing-sidebar {
   border-color: var(--accent-border);
 }
 
+.rail-avatar.is-live {
+  animation: rail-live 1.8s var(--ease) infinite;
+}
+
 .rail-add {
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
   width: 38px;
   height: 32px;
   margin-top: 2px;
@@ -356,9 +400,64 @@ body.is-resizing-sidebar {
   transition: all var(--dur-fast) var(--ease);
 }
 
+.rail-add-label {
+  max-width: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 120ms var(--ease), opacity 100ms var(--ease);
+}
+
 .rail-add:hover {
   color: var(--accent-hover);
   border-color: var(--accent-border);
+}
+
+.rail.is-label-expanded .rail-projects {
+  align-self: stretch;
+  align-items: stretch;
+  width: 100%;
+}
+
+.rail.is-label-expanded .rail-project {
+  width: 100%;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+.rail.is-label-expanded .rail-avatar {
+  grid-template-columns: 38px minmax(0, 1fr);
+  justify-items: stretch;
+  justify-content: start;
+  gap: 8px;
+  width: calc(100% - 16px);
+  margin: 0 8px;
+  padding: 0 8px;
+}
+
+.rail.is-label-expanded .rail-project-initials {
+  justify-self: center;
+}
+
+.rail.is-label-expanded .rail-project-label {
+  max-width: 132px;
+  opacity: 1;
+}
+
+.rail.is-label-expanded .rail-add {
+  justify-content: center;
+  gap: 8px;
+  width: calc(100% - 16px);
+  margin-right: 8px;
+  margin-left: 8px;
+  padding: 0 12px;
+}
+
+.rail.is-label-expanded .rail-add-label {
+  max-width: 100px;
+  opacity: 1;
 }
 
 .rail-spacer {
@@ -380,23 +479,79 @@ body.is-resizing-sidebar {
   flex: none;
 }
 
+.rail.is-label-expanded .rail-divider {
+  width: calc(100% - 16px);
+  margin-right: 8px;
+  margin-left: 8px;
+}
+
+.rail.is-label-expanded .rail-nav {
+  align-self: stretch;
+  align-items: stretch;
+  padding: 0 8px;
+}
+
+.rail-nav-divider {
+  display: none;
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+.rail.is-label-expanded .rail-nav-divider {
+  display: block;
+}
+
 .rail-nav-button {
   position: relative;
   display: grid;
-  place-items: center;
+  grid-template-columns: 16px minmax(0, 0fr);
+  align-items: center;
+  justify-content: center;
+  gap: 0;
   width: 34px;
   height: 34px;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
   color: var(--text-muted);
   background: transparent;
   border: 0;
   border-radius: 9px;
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease);
+  transition: width 140ms var(--ease), grid-template-columns 140ms var(--ease), gap 140ms var(--ease), padding 140ms var(--ease), color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
 
 .rail-nav-button svg {
   width: 16px;
   height: 16px;
+}
+
+.rail-nav-label {
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: var(--text-sm);
+  line-height: 1;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 120ms var(--ease), opacity 100ms var(--ease);
+}
+
+.rail.is-label-expanded .rail-nav-button {
+  grid-template-columns: 16px minmax(0, 1fr);
+  justify-content: start;
+  gap: 8px;
+  width: 100%;
+  padding: 0 10px;
+}
+
+.rail.is-label-expanded .rail-nav-label {
+  max-width: 132px;
+  opacity: 1;
 }
 
 .rail-nav-button:hover:not(:disabled) {
@@ -427,6 +582,43 @@ body.is-resizing-sidebar {
 .rail-badge.is-live {
   background: var(--accent);
   animation: livepulse 1.4s var(--ease) infinite;
+}
+
+.rail-badge.is-unread {
+  top: 2px;
+  right: -10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: auto;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  color: var(--bg-rail);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  background: var(--streak);
+  border: 1px solid var(--bg-rail);
+  transform: none;
+}
+
+.rail-nav-button:has(.rail-badge.is-unread) {
+  overflow: visible;
+}
+
+.rail.is-label-expanded .rail-badge.is-unread {
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+}
+
+@keyframes rail-live {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 124, 255, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(139, 124, 255, 0.18); }
 }
 
 /* --- Zone de travail ----------------------------------------------------- */
@@ -518,10 +710,25 @@ body.is-resizing-sidebar {
   font-variant-numeric: tabular-nums;
 }
 
+.provider-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+.provider-mark svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
 .conversation-prov {
-  padding: 0 5px;
+  width: 19px;
+  height: 14px;
   font-weight: 600;
-  letter-spacing: 0.04em;
   border-radius: var(--r-xs);
 }
 

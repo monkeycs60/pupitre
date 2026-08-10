@@ -112,3 +112,51 @@ test("un session-summary-ref devient une carte de résumé compacte", () => {
     createdAt: "2026-08-08T10:00:00.000Z",
   });
 });
+
+test("un html-document-ref devient un artefact autonome dans le fil", () => {
+  const [block] = groupEvents([{
+    id: 44,
+    type: "html-document-ref",
+    documentId: "document-1",
+    title: "Audit plateforme",
+    summary: "Décisions et priorités",
+    sizeBytes: 12_480,
+    createdAt: "2026-08-10T10:00:00.000Z",
+    expiresAt: "2026-08-11T10:00:00.000Z",
+  }]);
+
+  expect(block).toEqual({
+    kind: "html-document",
+    id: "html-document-44-document-1",
+    documentId: "document-1",
+    title: "Audit plateforme",
+    summary: "Décisions et priorités",
+    sizeBytes: 12_480,
+    createdAt: "2026-08-10T10:00:00.000Z",
+    expiresAt: "2026-08-11T10:00:00.000Z",
+  });
+});
+
+test("un document-ref PDF permanent conserve son format dans le fil", () => {
+  const [block] = groupEvents([{
+    id: 45,
+    type: "document-ref",
+    documentId: "document-pdf",
+    title: "Rapport",
+    kind: "pdf",
+    mimeType: "application/pdf",
+    originalName: "rapport.pdf",
+    sizeBytes: 42_000,
+    createdAt: "2026-08-10T10:00:00.000Z",
+    expiresAt: null,
+  }]);
+
+  expect(block).toMatchObject({
+    kind: "html-document",
+    documentId: "document-pdf",
+    documentKind: "pdf",
+    mimeType: "application/pdf",
+    originalName: "rapport.pdf",
+    expiresAt: null,
+  });
+});

@@ -831,6 +831,34 @@
   letter-spacing: 0.02em;
 }
 
+.turn-error-details {
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+}
+
+.turn-error-details summary {
+  width: fit-content;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.turn-error-details pre {
+  max-height: 160px;
+  padding: var(--space-2);
+  margin: var(--space-2) 0 0;
+  overflow: auto;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--bg-workspace);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+}
+
 /* --- Lightbox ------------------------------------------------------------- */
 
 .lightbox {

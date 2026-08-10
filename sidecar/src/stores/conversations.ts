@@ -1,11 +1,12 @@
 import type { Database } from "bun:sqlite";
 import type { AppEvent, Provider, StoredEvent } from "../events";
 import { taskSummary, taskTitle } from "../conversation-title";
-import type { PresetPermissionMode } from "./presets";
+import type { Preset, PresetPermissionMode, PresetStore } from "./presets";
 
 export interface Conversation {
   id: string; project_id: string; title: string; summary: string; provider: Provider;
   model: string; effort: string | null; speed: "standard" | "fast" | null;
+  preset_id: string | null;
   permission_mode: PresetPermissionMode | null;
   subagent_preset_id: string | null; subagent_effort: string | null;
   cli_session_id: string | null; pinned: boolean;
@@ -13,6 +14,7 @@ export interface Conversation {
   title_locked: boolean;
   /** Numéro de tour du dernier digest généré (0 = aucun). */
   digest_turn: number;
+  message_count: number; last_read_turn: number;
   archived: boolean; deleted_at: string | null;
   continued_from: string | null;
   handoff_pending: boolean;
@@ -24,13 +26,47 @@ export interface Conversation {
 
 const TITLE_MAX = 47;
 
+function matchesPreset(conversation: Pick<Conversation, "provider" | "model" | "effort" | "speed" | "orchestrator">, preset: Preset): boolean {
+  return conversation.provider === preset.provider
+    && conversation.model === preset.model
+    && conversation.effort === preset.effort
+    && conversation.speed === preset.speed
+    && conversation.orchestrator === preset.orchestrator;
+}
+
 export class ConversationStore {
   constructor(private db: Database) {}
+
+  /**
+   * Les versions précédentes ne persistaient pas le preset sélectionné. Quand
+   * la configuration enregistrée correspond à un seul preset, on répare cette
+   * provenance au démarrage pour que les conversations historiques retrouvent
+   * leur nom dans la sidebar.
+   */
+  backfillPresetIds(presets: Pick<PresetStore, "list">): number {
+    const candidates = presets.list();
+    const rows = this.db.query(
+      `SELECT id, project_id, provider, model, effort, speed, orchestrator
+       FROM conversations WHERE preset_id IS NULL`,
+    ).all() as Array<Omit<Pick<Conversation, "id" | "project_id" | "provider" | "model" | "effort" | "speed" | "orchestrator">, "orchestrator"> & { orchestrator: number }>;
+    let updated = 0;
+    for (const row of rows) {
+      const conversation = { ...row, orchestrator: !!row.orchestrator };
+      const matches = candidates.filter((preset) => matchesPreset(conversation, preset));
+      if (matches.length !== 1) continue;
+      this.db.query(
+        "UPDATE conversations SET preset_id = ? WHERE id = ? AND preset_id IS NULL",
+      ).run(matches[0]!.id, conversation.id);
+      updated += 1;
+    }
+    return updated;
+  }
 
   create(input: {
     projectId: string;
     provider: Provider;
     model: string;
+    presetId?: string | null;
     effort?: string | null;
     speed?: "standard" | "fast" | null;
     permissionMode?: PresetPermissionMode | null;
@@ -50,10 +86,10 @@ export class ConversationStore {
     const summary = taskSummary(input.firstMessage);
     this.db.query(
       `INSERT INTO conversations
-         (id, project_id, title, summary, provider, model, effort, speed, permission_mode, orchestrator,
+         (id, project_id, title, summary, provider, model, preset_id, effort, speed, permission_mode, orchestrator,
           subagent_preset_id, subagent_effort,
           continued_from, handoff_pending, routine_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -61,6 +97,7 @@ export class ConversationStore {
       summary,
       input.provider,
       input.model,
+      input.presetId ?? null,
       input.effort ?? null,
       input.speed ?? null,
       input.permissionMode ?? null,
@@ -91,6 +128,8 @@ export class ConversationStore {
       pinned: !!row.pinned,
       title_locked: !!row.title_locked,
       digest_turn: row.digest_turn ?? 0,
+      message_count: row.message_count ?? 0,
+      last_read_turn: row.last_read_turn ?? 0,
       orchestrator: !!row.orchestrator,
       handoff_pending: !!row.handoff_pending,
       archived: !!row.archived,
@@ -114,6 +153,8 @@ export class ConversationStore {
       pinned: !!r.pinned,
       title_locked: !!r.title_locked,
       digest_turn: r.digest_turn ?? 0,
+      message_count: r.message_count ?? 0,
+      last_read_turn: r.last_read_turn ?? 0,
       orchestrator: !!r.orchestrator,
       handoff_pending: !!r.handoff_pending,
       archived: !!r.archived,
@@ -204,6 +245,15 @@ export class ConversationStore {
     this.db.query("UPDATE conversations SET pinned = ? WHERE id = ?").run(pinned ? 1 : 0, id);
   }
 
+  markRead(id: string, lastReadTurn: number): Conversation | null {
+    this.db.query(
+      `UPDATE conversations
+       SET last_read_turn = MAX(last_read_turn, ?)
+       WHERE id = ?`,
+    ).run(lastReadTurn, id);
+    return this.get(id);
+  }
+
   /** Retire une continuation ratée et ses événements sans toucher à sa source. */
   deleteFailedContinuation(id: string): boolean {
     const remove = this.db.transaction(() => {
@@ -285,8 +335,12 @@ export class ConversationStore {
       const result = this.db
         .query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
         .run(conversationId, JSON.stringify(event), now);
-      this.db.query("UPDATE conversations SET updated_at = ? WHERE id = ?")
-        .run(now, conversationId);
+      const messageIncrement = event.type === "user-message" || event.type === "text-final" ? 1 : 0;
+      this.db.query(
+        `UPDATE conversations
+         SET updated_at = ?, message_count = message_count + ?
+         WHERE id = ?`,
+      ).run(now, messageIncrement, conversationId);
       return Number(result.lastInsertRowid);
     });
     return append();

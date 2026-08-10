@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -31,6 +31,7 @@ import { RoutineScheduler, RoutineStore } from "../src/routines";
 import { SearchIndex } from "../src/search";
 import { CostStore } from "../src/costs";
 import { MemoryStore } from "../src/memory";
+import { HtmlDocumentService } from "../src/html-documents";
 
 interface TestServer {
   baseUrl: string;
@@ -202,6 +203,13 @@ cat "${fixture}"
   const conversations = new ConversationStore(db);
   const media = new MediaStore(dir);
   const events = new ConversationEventBus();
+  const htmlDocuments = new HtmlDocumentService(
+    db,
+    dir,
+    conversations,
+    projects,
+    events.broadcast,
+  );
   const quotas = new QuotaTracker(db);
   const runner = new ConversationRunner(
     conversations,
@@ -314,6 +322,7 @@ cat "${fixture}"
     search: new SearchIndex(db),
     costs: new CostStore(db),
     memory: new MemoryStore(join(dir, "memory")),
+    htmlDocuments,
     shutdown: () => {
       shutdownCount += 1;
     },
@@ -1774,6 +1783,93 @@ test("upload media binaire puis GET redonne exactement les bytes", async () => {
   const download = await fetch(`${current.baseUrl}/media/${name}`);
   expect(download.status).toBe(200);
   expect(new Uint8Array(await download.arrayBuffer())).toEqual(bytes);
+});
+
+test("publie, isole, conserve puis supprime un document HTML via l'API", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const projectPath = mkdtempSync(join(tmpdir(), "pupitre-html-api-project-"));
+  const project = current.deps.projects.create({ name: "html-api", path: projectPath });
+  const conversation = current.deps.conversations.create({
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "Publie le document",
+  });
+  const source = join(projectPath, "audit.html");
+  writeFileSync(source, "<!doctype html><html><body><script>document.body.dataset.ready='1'</script>Audit</body></html>");
+  const ws = webSocketEventWaiter(
+    `${current.baseUrl.replace("http", "ws")}/ws?conversation=${conversation.id}`,
+    (event) => event.type === "html-document-ref",
+  );
+  await ws.opened;
+
+  const publishedResponse = await postJson(
+    `/api/conversations/${conversation.id}/html-documents`,
+    { path: source, title: "Audit HTML", summary: "Validation", deleteSource: true },
+  );
+  expect(publishedResponse.status).toBe(201);
+  const published = await publishedResponse.json() as { id: string; state: string };
+  expect(published.state).toBe("retained");
+  expect(existsSync(source)).toBe(true);
+  expect(await ws.event).toMatchObject({
+    type: "html-document-ref",
+    documentId: published.id,
+    title: "Audit HTML",
+  });
+
+  const invalid = await fetch(
+    `${current.baseUrl}/api/html-documents/${published.id}/content?token=invalide`,
+  );
+  expect(invalid.status).toBe(403);
+
+  const grantResponse = await postJson(
+    `/api/html-documents/${published.id}/view-token`,
+    {},
+  );
+  expect(grantResponse.status).toBe(201);
+  const grant = await grantResponse.json() as { token: string };
+  const content = await fetch(
+    `${current.baseUrl}/api/html-documents/${published.id}/content?token=${grant.token}`,
+  );
+  expect(content.status).toBe(200);
+  expect(content.headers.get("content-type")).toContain("text/html");
+  expect(content.headers.get("content-security-policy")).toContain("connect-src 'none'");
+  expect(content.headers.get("content-security-policy")).toContain(
+    "sandbox allow-scripts allow-modals",
+  );
+  expect(await content.text()).toContain("dataset.ready");
+
+  const search = await fetch(`${current.baseUrl}/api/documents?q=Audit`);
+  expect(await search.json()).toEqual([
+    expect.objectContaining({ id: published.id, matchCount: expect.any(Number) }),
+  ]);
+
+  const thumbnail = await fetch(`${current.baseUrl}/api/documents/${published.id}/thumbnail`);
+  expect(thumbnail.status).toBe(200);
+  expect(thumbnail.headers.get("content-type")).toMatch(/^image\/(png|svg\+xml)$/);
+  expect((await thumbnail.arrayBuffer()).byteLength).toBeGreaterThan(100);
+
+  const exportedPath = join(projectPath, "audit-export.html");
+  const exported = await postJson(`/api/documents/${published.id}/export`, {
+    path: exportedPath,
+  });
+  expect(exported.status).toBe(200);
+  expect(readFileSync(exportedPath, "utf8")).toContain("dataset.ready");
+
+  const trashed = await postJson(`/api/conversations/${conversation.id}/trash`, { deleted: true });
+  expect(trashed.status).toBe(200);
+  const afterConversationTrash = await fetch(`${current.baseUrl}/api/documents/${published.id}`);
+  expect(afterConversationTrash.status).toBe(200);
+
+  const retained = await postJson(`/api/html-documents/${published.id}/retain`, {});
+  expect(await retained.json()).toMatchObject({ state: "retained", expiresAt: null });
+  const removed = await fetch(`${current.baseUrl}/api/html-documents/${published.id}`, {
+    method: "DELETE",
+  });
+  expect(await removed.json()).toMatchObject({ state: "deleted" });
+
+  const afterDelete = await postJson(`/api/html-documents/${published.id}/view-token`, {});
+  expect(afterDelete.status).toBe(410);
 });
 
 test("refuse avec 413 une image qui dépasse la taille maximale", async () => {

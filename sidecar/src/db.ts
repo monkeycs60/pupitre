@@ -39,10 +39,13 @@ export function openDb(dir: string = dataDir()): Database {
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
       title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '',
       provider TEXT NOT NULL, model TEXT NOT NULL,
+      preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
       permission_mode TEXT NULL,
       subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
       subagent_effort TEXT NULL,
       cli_session_id TEXT, pinned INTEGER NOT NULL DEFAULT 0,
+      message_count INTEGER NOT NULL DEFAULT 0,
+      last_read_turn INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     -- conversation_id porte SOIT un id de conversation SOIT un id de subtask :
@@ -53,6 +56,30 @@ export function openDb(dir: string = dataDir()): Database {
       payload TEXT NOT NULL, created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_events_conv ON events(conversation_id, id);
+    CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NULL,
+      project_id TEXT NULL,
+      conversation_title TEXT NULL,
+      project_name TEXT NULL,
+      title TEXT NOT NULL,
+      summary TEXT NULL,
+      kind TEXT NOT NULL DEFAULT 'html',
+      mime_type TEXT NOT NULL DEFAULT 'text/html',
+      original_name TEXT NOT NULL DEFAULT 'index.html',
+      relative_path TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NULL,
+      retained_at TEXT NULL,
+      expired_at TEXT NULL,
+      deleted_at TEXT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_documents_conversation
+      ON documents(conversation_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_documents_project
+      ON documents(project_id, created_at);
     CREATE TABLE IF NOT EXISTS quota_state (
       key TEXT PRIMARY KEY, value TEXT NOT NULL
     );
@@ -246,8 +273,10 @@ export function openDb(dir: string = dataDir()): Database {
       ON gamification_awards(day, created_at);
   `);
   dropEventsForeignKey(db);
+  migrateDocuments(db);
   addColumn(db, "conversations", "effort TEXT NULL");
   addColumn(db, "conversations", "speed TEXT NULL");
+  addColumn(db, "conversations", "preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL");
   addColumn(db, "conversations", "permission_mode TEXT NULL");
   addColumn(db, "conversations", "summary TEXT NOT NULL DEFAULT ''");
   addColumn(db, "conversations", "archived INTEGER NOT NULL DEFAULT 0");
@@ -265,6 +294,18 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "title_locked INTEGER NOT NULL DEFAULT 0");
   // Nombre de tours au moment du dernier digest (0 = jamais généré).
   addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "conversations", "message_count INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "conversations", "last_read_turn INTEGER NOT NULL DEFAULT 0");
+  db.exec(`
+    UPDATE conversations
+    SET message_count = COALESCE((
+      SELECT COUNT(*) FROM events
+      WHERE events.conversation_id = conversations.id
+        AND json_valid(events.payload)
+        AND json_extract(events.payload, '$.type') IN ('user-message', 'text-final')
+    ), 0)
+    WHERE message_count = 0
+  `);
   addColumn(db, "projects", "default_preset_id TEXT NULL");
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
   addColumn(db, "projects", "gardien_mode TEXT NOT NULL DEFAULT 'informatif'");
@@ -372,6 +413,53 @@ function addColumn(db: Database, table: string, definition: string): boolean {
     }
     return false;
   }
+}
+
+function migrateDocuments(db: Database): void {
+  const legacy = db.query(
+    "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'html_documents'",
+  ).get() as { present: number } | null;
+  if (legacy) {
+    addColumn(db, "html_documents", "kind TEXT NOT NULL DEFAULT 'html'");
+    addColumn(db, "html_documents", "mime_type TEXT NOT NULL DEFAULT 'text/html'");
+    addColumn(db, "html_documents", "original_name TEXT NOT NULL DEFAULT 'index.html'");
+    db.exec(`
+      INSERT OR IGNORE INTO documents (
+        id, conversation_id, project_id, conversation_title, project_name,
+        title, summary, kind, mime_type, original_name, relative_path,
+        size_bytes, sha256, created_at, expires_at, retained_at, expired_at, deleted_at
+      )
+      SELECT d.id, d.conversation_id, c.project_id, c.title, p.name,
+        d.title, d.summary, d.kind, d.mime_type, d.original_name, d.relative_path,
+        d.size_bytes, d.sha256, d.created_at, d.expires_at, d.retained_at,
+        d.expired_at, d.deleted_at
+      FROM html_documents d
+      LEFT JOIN conversations c ON c.id = d.conversation_id
+      LEFT JOIN projects p ON p.id = c.project_id
+    `);
+  }
+
+  // À partir de cette migration, tout document encore disponible devient
+  // permanent. Les tombstones déjà expirées restent dans l'historique.
+  db.exec(`
+    UPDATE documents
+    SET retained_at = COALESCE(retained_at, created_at), expires_at = NULL
+    WHERE expired_at IS NULL AND deleted_at IS NULL
+  `);
+
+  // L'index contient sa propre copie du texte : la provenance reste donc
+  // recherchable même si la conversation ou le projet source est supprimé.
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+      document_id UNINDEXED,
+      title,
+      summary,
+      project_name,
+      conversation_title,
+      body,
+      tokenize = 'unicode61 remove_diacritics 2'
+    )
+  `);
 }
 
 function migrateReviewFlagStatuses(db: Database): void {

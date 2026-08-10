@@ -3,7 +3,7 @@ export type ConversationSpeed = 'standard' | 'fast'
 export type PresetPermissionMode =
   'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'bypassPermissions'
 export type FilesystemScope = 'project-and-ai-roots' | 'full-system'
-export type WorkspaceView = 'conversations' | 'git' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'settings'
+export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'settings'
 
 export interface Attachment {
   name: string
@@ -214,10 +214,13 @@ export interface Conversation {
   continued_from: string | null
   routine_id: string | null
   cli_session_id: string | null
+  preset_id?: string | null
   pinned: boolean
   /** Renommée à la main : le digest automatique ne l'écrase plus. */
   title_locked: boolean
   digest_turn: number
+  message_count?: number
+  last_read_turn?: number
   archived: boolean
   deleted_at: string | null
   created_at: string
@@ -529,6 +532,30 @@ export type AppEvent =
       createdAt: string
     }
   | {
+      type: 'html-document-ref'
+      documentId: string
+      title: string
+      summary?: string
+      kind?: 'html'
+      mimeType?: 'text/html'
+      originalName?: string
+      sizeBytes: number
+      createdAt: string
+      expiresAt: string | null
+    }
+  | {
+      type: 'document-ref'
+      documentId: string
+      title: string
+      summary?: string
+      kind: 'html' | 'pdf'
+      mimeType: string
+      originalName: string
+      sizeBytes: number
+      createdAt: string
+      expiresAt: string | null
+    }
+  | {
       type: 'test-inventory-ref'
       inventoryId: string
       scopes: TestScope[]
@@ -560,3 +587,30 @@ export type AppEvent =
 // Tout événement venant du sidecar (replay HTTP ou WS) porte l'id de sa ligne :
 // c'est la clé de dédup du raccord replay/live.
 export type StoredEvent = AppEvent & { id: number }
+
+export type HtmlDocumentState = 'available' | 'retained' | 'expired' | 'deleted'
+
+export interface HtmlDocument {
+  id: string
+  conversationId: string
+  conversationTitle: string | null
+  projectId: string | null
+  projectName: string | null
+  title: string
+  summary: string | null
+  kind: 'html' | 'pdf'
+  mimeType: string
+  originalName: string
+  sizeBytes: number
+  sha256: string
+  createdAt: string
+  expiresAt: string | null
+  retainedAt: string | null
+  expiredAt: string | null
+  deletedAt: string | null
+  state: HtmlDocumentState
+  searchSnippet: string | null
+  matchCount: number
+}
+
+export type DocumentArtifact = HtmlDocument

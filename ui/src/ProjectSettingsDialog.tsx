@@ -9,6 +9,7 @@ import {
 } from './api'
 import type { McpContextProbe, ProjectMcpConfig } from './api'
 import { formatCompact } from './formatCompact'
+import { ProviderMark } from './ProviderMark'
 import type { FilesystemScope, Project } from './types'
 
 interface ProjectSettingsDialogProps {
@@ -227,9 +228,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
                         disabled={saving}
                         onChange={() => toggleServer(server.name)}
                       />
-                      <span className={`project-mcp-badge is-${server.provider}`}>
-                        {server.provider === 'claude' ? 'CL' : 'CX'}
-                      </span>
+                      <ProviderMark provider={server.provider} className="project-mcp-badge" />
                       <span className="project-mcp-name">
                         {server.name}
                         {mcp.used.includes(server.name) ? (
