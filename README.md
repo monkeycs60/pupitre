@@ -195,6 +195,24 @@ bun run --cwd sidecar dev    # sidecar sur :4820
 bun run --cwd ui dev         # UI sur :5173, proxy vers le sidecar
 ```
 
+### Reprendre la main sur le sidecar pendant un chantier backend
+
+```bash
+bun run dev:sidecar          # sidecar sans --watch : redémarre quand TU le décides
+bun run dev:sidecar:watch    # redémarrage à chaque sauvegarde (l'ancien comportement)
+```
+
+Lancé alors que l'app tourne déjà, `dev:sidecar` réclame le port 4820 : il demande
+au sidecar de Tauri de s'arrêter (`POST /api/shutdown`), et Tauri ne le relance pas
+puisqu'un exit 0 est considéré comme volontaire. L'UI parle donc ensuite à *ton*
+sidecar, au premier plan, logs visibles.
+
+L'intérêt du mode sans `--watch` est le contrôle du moment : chaque redémarrage tue
+les tours en vol, y compris une conversation en cours de réponse. En `--watch`, une
+simple sauvegarde suffit à la perdre ; sans lui, on édite autant qu'on veut et on
+redémarre entre deux tours. À l'inverse, garder un vieux sidecar sur le port fait
+tourner l'UI sur du code périmé, et les correctifs semblent ne jamais s'appliquer.
+
 Données dans `~/.local/share/pupitre` (override : `PUPITRE_DATA_DIR`). Binaires CLI overridables pour tester sans quota : `PUPITRE_CLAUDE_BIN` / `PUPITRE_CODEX_BIN` (voir `sidecar/tests/fake-bins/`).
 
 Par défaut, l'app-server Codex lancé par Pupitre conserve les plugins et MCP
