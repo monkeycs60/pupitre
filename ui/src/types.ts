@@ -3,7 +3,22 @@ export type ConversationSpeed = 'standard' | 'fast'
 export type PresetPermissionMode =
   'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'bypassPermissions'
 export type FilesystemScope = 'project-and-ai-roots' | 'full-system'
-export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'settings'
+export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'settings'
+
+/** Verdict du filtre d'entrée de claude.ai sur l'user-agent de la webview,
+ *  renvoyé par `GET /api/design/access`. Voir `sidecar/src/design.ts`.
+ *
+ *  `url` est la cible réellement testée par le probe : le repli navigateur
+ *  ouvre celle-là, pas une troisième copie codée en dur dans le frontend. */
+export type DesignAccess = { url: string } & (
+  | { ok: true; status: number }
+  /** claude.ai a rejeté l'user-agent de la webview : seul le navigateur reste. */
+  | { ok: false; reason: 'ua-refused'; status: number }
+  /** claude.ai répond mais en erreur : panne côté Anthropic, pas un refus. */
+  | { ok: false; reason: 'unavailable'; status: number }
+  /** Rien n'a répondu : hors ligne, DNS, coupure réseau. */
+  | { ok: false; reason: 'unreachable'; status: null; message: string }
+)
 
 export interface Attachment {
   name: string

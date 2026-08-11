@@ -29,6 +29,7 @@ import {
   type HandoffDebriefArtifact,
   type DebriefRunner,
 } from "./debriefs";
+import { DESIGN_URL, probeDesignAccess } from "./design";
 import { GitProjectError, type GitProjectService } from "./git";
 import {
   TesterBusyError,
@@ -1004,6 +1005,16 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "GET" && pathname === "/api/health") {
           return json({ ok: true });
+        }
+
+        // Interrogé avant d'ouvrir la fenêtre Claude Design : si claude.ai
+        // refuse l'user-agent de la webview, l'interface propose le navigateur
+        // système au lieu d'afficher une fenêtre bloquée en 403.
+        if (request.method === "GET" && pathname === "/api/design/access") {
+          // L'URL voyage avec le verdict : le bouton de repli du frontend ouvre
+          // ainsi exactement la cible que le probe vient de tester, sans en
+          // garder une troisième copie codée en dur.
+          return json({ ...(await probeDesignAccess()), url: DESIGN_URL });
         }
 
         if (request.method === "GET" && pathname === "/api/gamification") {

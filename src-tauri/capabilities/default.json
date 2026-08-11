@@ -16,6 +16,12 @@
         },
         {
           "url": "http://127.0.0.1:4820/api/documents/**"
+        },
+        {
+          "url": "https://claude.ai/design/**"
+        },
+        {
+          "url": "https://claude.ai/design"
         }
       ]
     },

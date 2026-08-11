@@ -9,6 +9,25 @@ use tauri_plugin_shell::{
     ShellExt,
 };
 
+/// Étiquette de la fenêtre principale : la seule dont la fermeture arrête le
+/// sidecar. Sans cette distinction, fermer la fenêtre Claude Design couperait
+/// le backend de toute l'application.
+const MAIN_WINDOW_LABEL: &str = "main";
+
+const DESIGN_WINDOW_LABEL: &str = "design";
+
+/// Doit rester identique à `DESIGN_URL` dans `sidecar/src/design.ts`.
+const DESIGN_URL: &str = "https://claude.ai/design/";
+
+/// claude.ai refuse à l'entrée la signature d'user-agent de WebKitGTK, le
+/// moteur de webview de Tauri sur Linux. Se déclarer Safari sur macOS est la
+/// seule combinaison mesurée qui franchisse à la fois ce filtre et le challenge
+/// Cloudflare : le moteur annoncé est alors bien celui qui exécute la page.
+///
+/// Doit rester identique à `DESIGN_USER_AGENT` dans `sidecar/src/design.ts` —
+/// `sidecar/tests/design.test.ts` échoue si les deux chaînes divergent.
+const DESIGN_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15";
+
 struct SidecarProcess {
     child: Mutex<Option<CommandChild>>,
     stopping: AtomicBool,
@@ -164,6 +183,35 @@ fn supervise_sidecar(app: tauri::AppHandle) {
     });
 }
 
+/// Ouvre Claude Design dans une fenêtre native dédiée, ou ramène au premier
+/// plan celle qui existe déjà.
+///
+/// L'iframe est impossible : claude.ai envoie `X-Frame-Options: SAMEORIGIN` et
+/// `Cross-Origin-Embedder-Policy: require-corp`. Il faut donc une vraie webview,
+/// et elle ne reçoit aucune permission Tauri — `capabilities/default.json` ne
+/// liste que la fenêtre `main`, donc cette page distante n'a aucun accès IPC.
+#[tauri::command]
+fn open_design_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(DESIGN_WINDOW_LABEL) {
+        let _ = window.unminimize();
+        window.show().map_err(|error| error.to_string())?;
+        window.set_focus().map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    let url = DESIGN_URL
+        .parse::<tauri::Url>()
+        .map_err(|error| error.to_string())?;
+    tauri::WebviewWindowBuilder::new(&app, DESIGN_WINDOW_LABEL, tauri::WebviewUrl::External(url))
+        .title("Claude Design")
+        .inner_size(1280.0, 860.0)
+        .min_inner_size(900.0, 600.0)
+        .user_agent(DESIGN_USER_AGENT)
+        .build()
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -182,6 +230,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![open_design_window])
         .setup(|app| {
             #[cfg(debug_assertions)]
             app.handle().plugin(
@@ -202,7 +251,13 @@ pub fn run() {
                 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
                 let _ = window.app_handle().save_window_state(StateFlags::all());
             }
-            if matches!(event, tauri::WindowEvent::Destroyed) {
+            // Seule la fenêtre principale emporte le sidecar avec elle : depuis
+            // l'ajout de la fenêtre Claude Design, arrêter le backend sur
+            // n'importe quel `Destroyed` couperait toute l'application dès que
+            // l'utilisateur referme Design.
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && window.label() == MAIN_WINDOW_LABEL
+            {
                 stop_sidecar(window.app_handle());
             }
         })

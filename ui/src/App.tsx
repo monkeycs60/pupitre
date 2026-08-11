@@ -48,6 +48,7 @@ import { ProgressView } from './ProgressView'
 import { AppSettingsView } from './AppSettingsView'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { DocumentsView } from './DocumentsView'
+import { DesignView } from './DesignView'
 import {
   locationForSelection,
   readLastActiveLocation,
@@ -447,6 +448,12 @@ function App() {
     setShowSwitchModel(false)
   }
 
+  function handleDesignSelect() {
+    if (!confirmLeaveMemory()) return
+    setWorkspaceView('design')
+    setShowSwitchModel(false)
+  }
+
   function handleMemorySelect() {
     setWorkspaceView('memory')
     setShowSwitchModel(false)
@@ -559,6 +566,7 @@ function App() {
     : {
         git: 'Git',
         documents: 'Documents',
+        design: 'Claude Design',
         costs: 'Coûts',
         library: 'Skills',
         routines: 'Routines',
@@ -592,6 +600,7 @@ function App() {
         onConversationsSelect={handleConversationsSelect}
         onGitSelect={handleGitSelect}
         onDocumentsSelect={handleDocumentsSelect}
+        onDesignSelect={handleDesignSelect}
         onCostsSelect={handleCostsSelect}
         onLibrarySelect={handleLibrarySelect}
         onRoutinesSelect={handleRoutinesSelect}
@@ -650,6 +659,8 @@ function App() {
             onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
             onUseInConversation={(projectId, attachment, document) => void handleDocumentUse(projectId, attachment, document)}
           />
+        ) : workspaceView === 'design' ? (
+          <DesignView />
         ) : workspaceView === 'library' ? (
           <SkillsLibrary project={selectedProject} />
         ) : workspaceView === 'routines' ? (

@@ -16,6 +16,7 @@ interface RailProps {
   onConversationsSelect: () => void
   onGitSelect: () => void
   onDocumentsSelect: () => void
+  onDesignSelect: () => void
   onCostsSelect: () => void
   onLibrarySelect: () => void
   onRoutinesSelect: () => void
@@ -36,6 +37,7 @@ type NavName =
   | 'fleet'
   | 'git'
   | 'documents'
+  | 'design'
   | 'progress'
   | 'costs'
   | 'library'
@@ -64,6 +66,12 @@ const NAV_PATHS: Record<NavName, React.ReactNode> = {
     <>
       <path d="M3 2.5h6l3 3V14H3Z" />
       <path d="M9 2.5V6h3M5.5 9h4M5.5 11.5h4" />
+    </>
+  ),
+  design: (
+    <>
+      <path d="M8 2.2 2.6 13.4h10.8Z" />
+      <path d="M5.4 9.2h5.2" />
     </>
   ),
   progress: (
@@ -143,6 +151,7 @@ export function Rail({
   onConversationsSelect,
   onGitSelect,
   onDocumentsSelect,
+  onDesignSelect,
   onCostsSelect,
   onLibrarySelect,
   onRoutinesSelect,
@@ -214,6 +223,7 @@ export function Rail({
     { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive },
     { name: 'git', label: 'Git', view: 'git', onClick: onGitSelect, needsProject: true, badge: pendingReviews },
     { name: 'documents', label: 'Documents', view: 'documents', onClick: onDocumentsSelect },
+    { name: 'design', label: 'Claude Design', view: 'design', onClick: onDesignSelect },
     { name: 'progress', label: 'Progression', view: 'progress', onClick: onProgressSelect },
     { name: 'costs', label: 'Coûts & quotas', view: 'costs', onClick: onCostsSelect, needsProject: true },
     { name: 'library', label: 'Skills', view: 'library', onClick: onLibrarySelect },

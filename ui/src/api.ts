@@ -3,6 +3,7 @@ import type {
   Conversation,
   ConversationSpeed,
   Debrief,
+  DesignAccess,
   GitDiff,
   GitSnapshot,
   FleetItem,
@@ -309,6 +310,10 @@ export function addGamificationActivity(
 
 export function getFleet(signal?: AbortSignal): Promise<FleetItem[]> {
   return fetchJson('/api/fleet', { signal })
+}
+
+export function getDesignAccess(signal?: AbortSignal): Promise<DesignAccess> {
+  return fetchJson('/api/design/access', { signal })
 }
 
 export function searchGlobal(

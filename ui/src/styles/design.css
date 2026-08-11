@@ -1,0 +1,31 @@
+/* Vue Claude Design : panneau d'état de la fenêtre native embarquée.
+   La vue ne rend jamais claude.ai elle-même — l'iframe est refusée par
+   `X-Frame-Options` — elle pilote une fenêtre Tauri et porte le repli
+   navigateur quand claude.ai rejette l'user-agent de la webview. */
+
+.design-view { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.design-header { min-height: 58px; padding: var(--space-2) var(--space-5); border-bottom: 1px solid var(--border-subtle); }
+.design-header h1 { margin: 0; color: var(--text-strong); font-size: var(--text-md); font-weight: 600; }
+.design-subtitle { margin: 2px 0 0; color: var(--text-muted); font-size: var(--text-sm); }
+
+.design-body { flex: 1; min-height: 0; padding: var(--space-6) var(--space-5); overflow: auto; }
+
+.design-card { max-width: 620px; padding: var(--space-4) var(--space-5); background: var(--bg-panel); border: 1px solid var(--border-subtle); border-left: 2px solid var(--border-strong); border-radius: var(--r-md); }
+.design-card h2 { margin: 0 0 var(--space-2); color: var(--text-strong); font-size: var(--text-md); font-weight: 600; }
+.design-card p { margin: 0 0 var(--space-2); color: var(--text); font-size: var(--text-sm); line-height: 1.65; }
+.design-card p:last-of-type { margin-bottom: var(--space-4); }
+
+/* Trois issues distinctes, trois couleurs sémantiques : accès accordé, refus
+   d'user-agent (rien à réparer côté Pupitre), panne passagère de claude.ai. */
+.design-card.is-open { border-left-color: var(--ok); }
+.design-card.is-refused { border-left-color: var(--danger); background: linear-gradient(var(--danger-soft), var(--danger-soft)), var(--bg-panel); }
+.design-card.is-warning { border-left-color: var(--warn); background: linear-gradient(var(--warn-soft), var(--warn-soft)), var(--bg-panel); }
+
+.design-checking { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
+
+.design-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.design-action { min-height: 30px; padding: var(--space-1) var(--space-3); color: #111018; font-size: var(--text-sm); font-weight: 650; background: var(--accent); border: 1px solid var(--accent); border-radius: var(--r-sm); cursor: pointer; }
+.design-action:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.design-action:disabled { opacity: .55; cursor: default; }
+.design-action.is-quiet { color: var(--text-muted); background: transparent; border-color: var(--border); font-weight: 500; }
+.design-action.is-quiet:hover:not(:disabled) { color: var(--text-strong); background: var(--bg-hover); border-color: var(--border-strong); }
