@@ -16,6 +16,10 @@ const MAIN_WINDOW_LABEL: &str = "main";
 
 const DESIGN_WINDOW_LABEL: &str = "design";
 
+/// Préfixe des étiquettes des popups de connexion, qui sert aussi à les
+/// retrouver pour les fermer.
+const DESIGN_POPUP_LABEL_PREFIX: &str = "design-popup-";
+
 /// Compteur d'étiquettes des popups de connexion : Tauri refuse deux fenêtres de
 /// même étiquette, et un flux OAuth peut en ouvrir plusieurs à la suite.
 static DESIGN_POPUP_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -245,7 +249,7 @@ fn open_design_window(app: tauri::AppHandle, resume_url: Option<String>) -> Resu
     // qu'attend le flux, et Google renvoie une erreur de connexion.
     .on_new_window(move |url, features| {
         let label = format!(
-            "design-popup-{}",
+            "{DESIGN_POPUP_LABEL_PREFIX}{}",
             DESIGN_POPUP_COUNTER.fetch_add(1, Ordering::Relaxed)
         );
         let built = tauri::WebviewWindowBuilder::new(
@@ -298,6 +302,26 @@ fn resumable_design_url(candidate: Option<String>) -> Option<tauri::Url> {
     Some(url)
 }
 
+/// Ferme les popups de connexion restées vides à l'écran.
+///
+/// En fin de flux OAuth, la page appelle `window.close()`. wry y répond par un
+/// `webview.destroy()` seul : la webview disparaît, mais la fenêtre qui la
+/// contenait reste affichée, vide. Le frontend appelle donc cette commande quand
+/// la fenêtre principale a atteint une page Claude Design — signe que le flux est
+/// terminé et qu'aucune popup n'est plus en cours d'utilisation.
+///
+/// Passer par les étiquettes plutôt que par le signal `close` de WebKit évite
+/// d'ajouter `webkit2gtk` en dépendance directe, dont la version devrait suivre
+/// exactement celle de Tauri.
+#[tauri::command]
+fn close_design_popups(app: tauri::AppHandle) -> usize {
+    app.webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with(DESIGN_POPUP_LABEL_PREFIX))
+        .filter(|(_, window)| window.close().is_ok())
+        .count()
+}
+
 /// URL courante de la fenêtre Claude Design, `None` si elle n'est pas ouverte.
 ///
 /// C'est ce qui permet de détecter la redirection vers la page marketing
@@ -331,6 +355,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             open_design_window,
+            close_design_popups,
             design_webview_url
         ])
         .setup(|app| {

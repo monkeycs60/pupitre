@@ -49,6 +49,9 @@ export function DesignView() {
   /** Dernière valeur persistée, pour n'écrire que sur changement réel. */
   const savedResume = useRef<string | null>(null)
   const autoOpened = useRef(false)
+  /** Une seule salve de nettoyage par visite : la commande est idempotente, mais
+   *  la rappeler à chaque sondage serait du bruit pour rien. */
+  const popupsClosed = useRef(false)
 
   const openWindow = useCallback(async (resumeUrl: string | null) => {
     setWindowState({ kind: 'opening' })
@@ -98,6 +101,13 @@ export function DesignView() {
         if (stopped || typeof url !== 'string') return
         setNeedsLogin(needsDesignLogin(url))
         const resumable = resumableDesignUrl(url)
+        if (resumable !== null && !popupsClosed.current) {
+          // La fenêtre principale est sur une page Claude Design : le flux de
+          // connexion est terminé, donc toute popup encore ouverte n'est plus
+          // qu'un cadre vide que wry n'a pas fermé.
+          popupsClosed.current = true
+          void invoke('close_design_popups').catch(() => {})
+        }
         if (resumable !== null && resumable !== savedResume.current) {
           // Mémorisé optimistement : un échec d'écriture ne doit pas relancer la
           // tentative à chaque sondage, ce qui martèlerait le sidecar.

@@ -151,3 +151,29 @@ test('offre le repli navigateur en permanence', async () => {
   await waitFor(() => expect(openInBrowser).toHaveBeenCalled())
   expect(openInBrowser.mock.calls[0]![0]).toBe('https://claude.ai/design/')
 })
+
+test('ferme les popups vides une fois le flux de connexion terminé', async () => {
+  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  stubReachability(reachable)
+  dockedUrl = 'https://claude.ai/design/019e2189-400e-70eb-ad40-dde76b8042ad'
+
+  render(createElement(DesignView))
+
+  // wry répond au window.close() de fin d'OAuth par un webview.destroy() seul :
+  // la fenêtre reste affichée, vide, jusqu'à ce qu'on la ferme.
+  await waitFor(() => expect(commandsUsed()).toContain('close_design_popups'))
+  expect(commandsUsed().filter((command) => command === 'close_design_popups')).toHaveLength(1)
+})
+
+test('ne ferme aucune popup pendant que la connexion est en cours', async () => {
+  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  stubReachability(reachable)
+  // Page marketing : la session manque, une popup peut être en pleine
+  // authentification et la fermer casserait le flux.
+  dockedUrl = 'https://claude.com/product/design'
+
+  render(createElement(DesignView))
+
+  await screen.findByText(/pas connecté/i)
+  expect(commandsUsed()).not.toContain('close_design_popups')
+})
