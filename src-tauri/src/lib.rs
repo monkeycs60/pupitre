@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Mutex,
 };
 use std::time::Duration;
@@ -15,6 +15,10 @@ use tauri_plugin_shell::{
 const MAIN_WINDOW_LABEL: &str = "main";
 
 const DESIGN_WINDOW_LABEL: &str = "design";
+
+/// Compteur d'étiquettes des popups de connexion : Tauri refuse deux fenêtres de
+/// même étiquette, et un flux OAuth peut en ouvrir plusieurs à la suite.
+static DESIGN_POPUP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// Doit rester identique à `DESIGN_URL` dans `sidecar/src/design.ts`.
 const DESIGN_URL: &str = "https://claude.ai/design/";
@@ -221,6 +225,7 @@ fn open_design_window(app: tauri::AppHandle, resume_url: Option<String>) -> Resu
         Some(url) => url,
         None => design_url()?,
     };
+    let popup_app = app.clone();
     tauri::WebviewWindowBuilder::new(
         &app,
         DESIGN_WINDOW_LABEL,
@@ -230,6 +235,38 @@ fn open_design_window(app: tauri::AppHandle, resume_url: Option<String>) -> Resu
     .inner_size(1280.0, 860.0)
     .min_inner_size(900.0, 600.0)
     .user_agent(DESIGN_USER_AGENT)
+    // Sans ce gestionnaire, la connexion est impossible : wry ne branche le signal
+    // `create` de WebKit que si un handler existe, donc un `window.open` de
+    // claude.ai est purement ignoré et le flux OAuth échoue sans rien afficher.
+    //
+    // `window_features` est ce qui rend la popup utilisable : sur Linux il appelle
+    // `with_related_view`, qui la fait partager le processus web de la fenêtre
+    // appelante. Sans ce lien, la popup n'a ni la session ni la relation d'opener
+    // qu'attend le flux, et Google renvoie une erreur de connexion.
+    .on_new_window(move |url, features| {
+        let label = format!(
+            "design-popup-{}",
+            DESIGN_POPUP_COUNTER.fetch_add(1, Ordering::Relaxed)
+        );
+        let built = tauri::WebviewWindowBuilder::new(
+            &popup_app,
+            label,
+            tauri::WebviewUrl::External(url),
+        )
+        .window_features(features)
+        .title("Connexion à Claude")
+        // Le même user-agent que la fenêtre parente : c'est lui qui fait passer le
+        // flux, et une popup qui se déclarerait autrement serait refusée.
+        .user_agent(DESIGN_USER_AGENT)
+        .build();
+        match built {
+            Ok(window) => tauri::webview::NewWindowResponse::Create { window },
+            Err(error) => {
+                log::error!("Popup de connexion Claude Design refusée : {error}");
+                tauri::webview::NewWindowResponse::Deny
+            }
+        }
+    })
     .build()
     .map_err(|error| error.to_string())?;
     Ok(())
