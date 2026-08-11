@@ -660,7 +660,9 @@ function App() {
             onUseInConversation={(projectId, attachment, document) => void handleDocumentUse(projectId, attachment, document)}
           />
         ) : workspaceView === 'design' ? (
-          <DesignView />
+          // La webview dockée se dessine au-dessus du DOM : la palette doit la
+          // faire disparaître, sinon elle s'ouvrirait derrière.
+          <DesignView suspended={paletteOpen} />
         ) : workspaceView === 'library' ? (
           <SkillsLibrary project={selectedProject} />
         ) : workspaceView === 'routines' ? (

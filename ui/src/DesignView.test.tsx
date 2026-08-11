@@ -5,10 +5,18 @@ import type { DesignReachability } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
-const openWindow = mock(() => Promise.resolve())
-mock.module('@tauri-apps/api/core', () => ({ invoke: openWindow }))
+/** URL que la webview dockée rapporte. `null` = pas encore créée. */
+let dockedUrl: string | null = null
 
-const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
+const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+const invoke = mock((command: string, args?: Record<string, unknown>) => {
+  invoked.push({ command, args })
+  if (command === 'design_webview_url') return Promise.resolve(dockedUrl)
+  return Promise.resolve()
+})
+mock.module('@tauri-apps/api/core', () => ({ invoke }))
+
+const { cleanup, render, screen, waitFor } = await import('@testing-library/react')
 const { DesignView } = await import('./DesignView')
 
 const defaultFetch = globalThis.fetch
@@ -16,7 +24,9 @@ const defaultFetch = globalThis.fetch
 afterEach(() => {
   cleanup()
   globalThis.fetch = defaultFetch
-  openWindow.mockClear()
+  invoked.length = 0
+  invoke.mockClear()
+  dockedUrl = null
   delete (window as Record<string, unknown>).__TAURI_INTERNALS__
 })
 
@@ -31,30 +41,66 @@ function stubReachability(reachability: DesignReachability) {
   }) as unknown as typeof fetch
 }
 
-test("ouvre la fenêtre dédiée une seule fois, sans attendre d'autorisation", async () => {
+const reachable: DesignReachability = {
+  reachable: true,
+  status: 403,
+  url: 'https://claude.ai/design/',
+}
+
+function commandsUsed(): string[] {
+  return invoked.map((call) => call.command)
+}
+
+test('docke la webview sur le rectangle réservé et la masque au démontage', async () => {
   ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
-  // Le sidecar reçoit un 403 même quand la webview fonctionne : ce statut ne
-  // doit jamais empêcher l'ouverture, sinon la fenêtre est bloquée pour de bon.
-  stubReachability({ reachable: true, status: 403, url: 'https://claude.ai/design/' })
+  stubReachability(reachable)
 
-  render(createElement(DesignView))
+  const view = render(createElement(DesignView))
 
-  await waitFor(() => expect(openWindow).toHaveBeenCalledTimes(1))
-  expect(openWindow.mock.calls[0]![0]).toBe('open_design_window')
-  await screen.findByText(/Fenêtre ouverte/i)
+  await waitFor(() => expect(commandsUsed()).toContain('dock_design_webview'))
+  const dock = invoked.find((call) => call.command === 'dock_design_webview')!
+  for (const key of ['x', 'y', 'width', 'height']) {
+    expect(typeof dock.args?.[key]).toBe('number')
+  }
+
+  view.unmount()
+  // Masquer et non détruire : recréer la webview rechargerait claude.ai et
+  // ferait perdre le travail en cours dans Claude Design.
+  await waitFor(() => expect(commandsUsed()).toContain('hide_design_webview'))
+  expect(commandsUsed()).not.toContain('open_design_window')
 })
 
-test('offre en permanence le repli navigateur sur la cible testée', async () => {
-  const openInBrowser = mock(() => null)
-  window.open = openInBrowser as unknown as typeof window.open
-  stubReachability({ reachable: true, status: 200, url: 'https://claude.ai/design/' })
+test('masque la webview quand un overlay de l’application est ouvert', async () => {
+  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  stubReachability(reachable)
+
+  render(createElement(DesignView, { suspended: true }))
+
+  // Une webview est une surface de l'OS : sans ce masquage, la palette Ctrl+K
+  // s'ouvrirait derrière elle.
+  await waitFor(() => expect(commandsUsed()).toContain('hide_design_webview'))
+  expect(commandsUsed()).not.toContain('dock_design_webview')
+})
+
+test('avertit qu’il faut se reconnecter quand la webview atterrit sur la page marketing', async () => {
+  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  stubReachability(reachable)
+  dockedUrl = 'https://claude.com/product/design'
 
   render(createElement(DesignView))
 
-  await screen.findByText(/Si la fenêtre affiche une erreur/i)
-  fireEvent.click(screen.getByRole('button', { name: /navigateur/i }))
-  expect(openInBrowser).toHaveBeenCalled()
-  expect(openInBrowser.mock.calls[0]![0]).toBe('https://claude.ai/design/')
+  await screen.findByText(/pas connecté/i)
+})
+
+test('reste silencieux quand la webview est bien sur claude.ai', async () => {
+  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  stubReachability(reachable)
+  dockedUrl = 'https://claude.ai/design/'
+
+  render(createElement(DesignView))
+
+  await waitFor(() => expect(commandsUsed()).toContain('design_webview_url'))
+  expect(screen.queryByText(/pas connecté/i)).toBeNull()
 })
 
 test('signale une machine hors ligne plutôt que de blâmer la webview', async () => {

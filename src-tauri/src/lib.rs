@@ -16,6 +16,10 @@ const MAIN_WINDOW_LABEL: &str = "main";
 
 const DESIGN_WINDOW_LABEL: &str = "design";
 
+/// Webview enfant dockée dans la fenêtre principale. Étiquette distincte de la
+/// fenêtre détachée : les deux peuvent coexister sans se marcher dessus.
+const DESIGN_WEBVIEW_LABEL: &str = "design-dock";
+
 /// Doit rester identique à `DESIGN_URL` dans `sidecar/src/design.ts`.
 const DESIGN_URL: &str = "https://claude.ai/design/";
 
@@ -187,9 +191,14 @@ fn supervise_sidecar(app: tauri::AppHandle) {
 /// plan celle qui existe déjà.
 ///
 /// L'iframe est impossible : claude.ai envoie `X-Frame-Options: SAMEORIGIN` et
-/// `Cross-Origin-Embedder-Policy: require-corp`. Il faut donc une vraie webview,
-/// et elle ne reçoit aucune permission Tauri — `capabilities/default.json` ne
-/// liste que la fenêtre `main`, donc cette page distante n'a aucun accès IPC.
+/// `Cross-Origin-Embedder-Policy: require-corp`. Il faut donc une vraie webview.
+///
+/// Elle ne reçoit aucune permission Tauri, et ce n'est pas dû au filtrage par
+/// étiquette : une capability n'est retenue que si l'origine appelante matche son
+/// contexte d'exécution, et une page distante ne matche qu'un contexte `Remote`
+/// déclaré explicitement (`ipc::authority::Origin::matches`). `default.json`
+/// n'ayant pas de champ `remote`, son contexte est `Local` : claude.ai n'a donc
+/// accès à aucune commande. Y ajouter un `remote` ouvrirait l'IPC à la page.
 #[tauri::command]
 fn open_design_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(DESIGN_WINDOW_LABEL) {
@@ -212,6 +221,88 @@ fn open_design_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn design_url() -> Result<tauri::Url, String> {
+    DESIGN_URL
+        .parse::<tauri::Url>()
+        .map_err(|error| error.to_string())
+}
+
+/// Docke Claude Design dans la fenêtre principale, sur le rectangle que le
+/// frontend réserve dans sa mise en page.
+///
+/// La webview enfant est créée au premier appel puis seulement déplacée : la
+/// reconstruire à chaque redimensionnement rechargerait la page et ferait perdre
+/// le travail en cours. Une webview est une surface de l'OS, dessinée AU-DESSUS
+/// du DOM : c'est au frontend de la masquer quand il ouvre un overlay.
+///
+/// Sécurité : cette webview vit dans la fenêtre `main`, et `windows: ["main"]`
+/// de `default.json` matche bel et bien toutes les webviews de cette fenêtre.
+/// Ce qui la prive de permissions est son origine distante, qui ne matche aucune
+/// capability à contexte `Local` — voir `open_design_window` ci-dessus.
+#[tauri::command]
+fn dock_design_webview(
+    app: tauri::AppHandle,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    // Une taille nulle ou négative fait échouer la création côté WebKitGTK, et
+    // le frontend peut mesurer un rectangle vide pendant sa première frame.
+    let width = width.max(1.0);
+    let height = height.max(1.0);
+    let position = tauri::LogicalPosition::new(x, y);
+    let size = tauri::LogicalSize::new(width, height);
+
+    if let Some(webview) = app.get_webview(DESIGN_WEBVIEW_LABEL) {
+        webview
+            .set_position(position)
+            .map_err(|error| error.to_string())?;
+        webview.set_size(size).map_err(|error| error.to_string())?;
+        webview.show().map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    let window = app
+        .get_window(MAIN_WINDOW_LABEL)
+        .ok_or_else(|| "fenêtre principale introuvable".to_string())?;
+    window
+        .add_child(
+            tauri::webview::WebviewBuilder::new(
+                DESIGN_WEBVIEW_LABEL,
+                tauri::WebviewUrl::External(design_url()?),
+            )
+            .user_agent(DESIGN_USER_AGENT),
+            position,
+            size,
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+/// Masque la webview dockée sans la détruire : quitter la vue Design ou ouvrir
+/// la palette ne doit pas recharger claude.ai au retour.
+#[tauri::command]
+fn hide_design_webview(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(webview) = app.get_webview(DESIGN_WEBVIEW_LABEL) {
+        webview.hide().map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+/// URL courante de la webview dockée, `None` si elle n'existe pas encore.
+///
+/// C'est ce qui permet de détecter la redirection vers la page marketing
+/// `claude.com/product/design`, signe d'une session absente — sans accorder à
+/// claude.ai le moindre accès IPC, puisque c'est Rust qui lit, pas la page qui
+/// parle.
+#[tauri::command]
+fn design_webview_url(app: tauri::AppHandle) -> Option<String> {
+    app.get_webview(DESIGN_WEBVIEW_LABEL)
+        .and_then(|webview| webview.url().ok())
+        .map(|url| url.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -230,7 +321,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![open_design_window])
+        .invoke_handler(tauri::generate_handler![
+            open_design_window,
+            dock_design_webview,
+            hide_design_webview,
+            design_webview_url
+        ])
         .setup(|app| {
             #[cfg(debug_assertions)]
             app.handle().plugin(
