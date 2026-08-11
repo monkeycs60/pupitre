@@ -16,10 +16,6 @@ const MAIN_WINDOW_LABEL: &str = "main";
 
 const DESIGN_WINDOW_LABEL: &str = "design";
 
-/// Webview enfant dockée dans la fenêtre principale. Étiquette distincte de la
-/// fenêtre détachée : les deux peuvent coexister sans se marcher dessus.
-const DESIGN_WEBVIEW_LABEL: &str = "design-dock";
-
 /// Doit rester identique à `DESIGN_URL` dans `sidecar/src/design.ts`.
 const DESIGN_URL: &str = "https://claude.ai/design/";
 
@@ -199,8 +195,21 @@ fn supervise_sidecar(app: tauri::AppHandle) {
 /// déclaré explicitement (`ipc::authority::Origin::matches`). `default.json`
 /// n'ayant pas de champ `remote`, son contexte est `Local` : claude.ai n'a donc
 /// accès à aucune commande. Y ajouter un `remote` ouvrirait l'IPC à la page.
+///
+/// Une fenêtre séparée et non un panneau intégré, et ce n'est pas un choix
+/// esthétique : le multiwebview de Tauri ne peut pas être positionné sous Linux.
+/// `WebviewKind::WindowChild` construit la webview dans `window.default_vbox()`,
+/// une GtkBox, où wry la `pack_start` en marquant `is_in_fixed_parent = false` ;
+/// `set_bounds` n'y repositionne alors rien (hors chemin X11), et la GtkBox
+/// partage l'espace verticalement entre les deux webviews. Mesuré sur Wayland
+/// avec Tauri 2.11 et wry 0.55 : le panneau s'affichait pleine largeur sous
+/// l'interface. Y revenir demanderait de reparenter la webview dans un
+/// `GtkFixed` à la main, à travers une API que Tauri qualifie d'inachevée.
+///
+/// `resume_url` rouvre la dernière page Claude Design visitée plutôt que
+/// l'écran d'accueil, si elle franchit `resumable_design_url`.
 #[tauri::command]
-fn open_design_window(app: tauri::AppHandle) -> Result<(), String> {
+fn open_design_window(app: tauri::AppHandle, resume_url: Option<String>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(DESIGN_WINDOW_LABEL) {
         let _ = window.unminimize();
         window.show().map_err(|error| error.to_string())?;
@@ -208,16 +217,21 @@ fn open_design_window(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let url = DESIGN_URL
-        .parse::<tauri::Url>()
-        .map_err(|error| error.to_string())?;
-    tauri::WebviewWindowBuilder::new(&app, DESIGN_WINDOW_LABEL, tauri::WebviewUrl::External(url))
-        .title("Claude Design")
-        .inner_size(1280.0, 860.0)
-        .min_inner_size(900.0, 600.0)
-        .user_agent(DESIGN_USER_AGENT)
-        .build()
-        .map_err(|error| error.to_string())?;
+    let target = match resumable_design_url(resume_url) {
+        Some(url) => url,
+        None => design_url()?,
+    };
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        DESIGN_WINDOW_LABEL,
+        tauri::WebviewUrl::External(target),
+    )
+    .title("Claude Design")
+    .inner_size(1280.0, 860.0)
+    .min_inner_size(900.0, 600.0)
+    .user_agent(DESIGN_USER_AGENT)
+    .build()
+    .map_err(|error| error.to_string())?;
     Ok(())
 }
 
@@ -247,99 +261,16 @@ fn resumable_design_url(candidate: Option<String>) -> Option<tauri::Url> {
     Some(url)
 }
 
-/// Docke Claude Design dans la fenêtre principale, sur le rectangle que le
-/// frontend réserve dans sa mise en page.
-///
-/// La webview enfant est créée au premier appel puis seulement déplacée : la
-/// reconstruire à chaque redimensionnement rechargerait la page et ferait perdre
-/// le travail en cours. Une webview est une surface de l'OS, dessinée AU-DESSUS
-/// du DOM : c'est au frontend de la masquer quand il ouvre un overlay.
-///
-/// `resume_url` est la dernière page Claude Design visitée, pour rouvrir sur le
-/// projet en cours plutôt que sur l'écran d'accueil. Elle n'est consultée qu'à la
-/// création, et seulement si elle franchit `resumable_design_url`.
-///
-/// Sécurité : cette webview vit dans la fenêtre `main`, et `windows: ["main"]`
-/// de `default.json` matche bel et bien toutes les webviews de cette fenêtre.
-/// Ce qui la prive de permissions est son origine distante, qui ne matche aucune
-/// capability à contexte `Local` — voir `open_design_window` ci-dessus.
-#[tauri::command]
-fn dock_design_webview(
-    app: tauri::AppHandle,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    resume_url: Option<String>,
-) -> Result<(), String> {
-    // Une taille nulle ou négative fait échouer la création côté WebKitGTK, et
-    // le frontend peut mesurer un rectangle vide pendant sa première frame.
-    let width = width.max(1.0);
-    let height = height.max(1.0);
-    let position = tauri::LogicalPosition::new(x, y);
-    let size = tauri::LogicalSize::new(width, height);
-
-    if let Some(webview) = app.get_webview(DESIGN_WEBVIEW_LABEL) {
-        webview
-            .set_position(position)
-            .map_err(|error| error.to_string())?;
-        webview.set_size(size).map_err(|error| error.to_string())?;
-        webview.show().map_err(|error| error.to_string())?;
-        return Ok(());
-    }
-
-    let window = app
-        .get_window(MAIN_WINDOW_LABEL)
-        .ok_or_else(|| "fenêtre principale introuvable".to_string())?;
-    let target = match resumable_design_url(resume_url) {
-        Some(url) => url,
-        None => design_url()?,
-    };
-    let webview = window
-        .add_child(
-            tauri::webview::WebviewBuilder::new(
-                DESIGN_WEBVIEW_LABEL,
-                tauri::WebviewUrl::External(target),
-            )
-            .user_agent(DESIGN_USER_AGENT),
-            position,
-            size,
-        )
-        .map_err(|error| error.to_string())?;
-
-    // La géométrie est réappliquée juste après la création, et ce n'est pas
-    // redondant : `add_child` la fournit avant que le widget ne soit réalisé, et
-    // la passe d'allocation du conteneur GTK écrase alors la demande initiale.
-    // Sans ce second passage, la webview apparaît là où GTK l'a placée — collée
-    // au bord gauche, sous le rail, et décalée vers le bas.
-    webview
-        .set_position(position)
-        .map_err(|error| error.to_string())?;
-    webview.set_size(size).map_err(|error| error.to_string())?;
-    log::info!("Webview Claude Design dockée à ({x}, {y}) sur {width}x{height}");
-    Ok(())
-}
-
-/// Masque la webview dockée sans la détruire : quitter la vue Design ou ouvrir
-/// la palette ne doit pas recharger claude.ai au retour.
-#[tauri::command]
-fn hide_design_webview(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(webview) = app.get_webview(DESIGN_WEBVIEW_LABEL) {
-        webview.hide().map_err(|error| error.to_string())?;
-    }
-    Ok(())
-}
-
-/// URL courante de la webview dockée, `None` si elle n'existe pas encore.
+/// URL courante de la fenêtre Claude Design, `None` si elle n'est pas ouverte.
 ///
 /// C'est ce qui permet de détecter la redirection vers la page marketing
 /// `claude.com/product/design`, signe d'une session absente — sans accorder à
 /// claude.ai le moindre accès IPC, puisque c'est Rust qui lit, pas la page qui
-/// parle.
+/// parle. C'est aussi la source de l'URL de reprise.
 #[tauri::command]
 fn design_webview_url(app: tauri::AppHandle) -> Option<String> {
-    app.get_webview(DESIGN_WEBVIEW_LABEL)
-        .and_then(|webview| webview.url().ok())
+    app.get_webview_window(DESIGN_WINDOW_LABEL)
+        .and_then(|window| window.url().ok())
         .map(|url| url.to_string())
 }
 
@@ -363,8 +294,6 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             open_design_window,
-            dock_design_webview,
-            hide_design_webview,
             design_webview_url
         ])
         .setup(|app| {

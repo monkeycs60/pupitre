@@ -1,9 +1,9 @@
-/* Vue Claude Design : la page n'est pas rendue par le DOM mais par une webview
-   native dockée sur `.design-dock`. Cette surface de l'OS se dessine AU-DESSUS
-   du DOM, donc tout ce qui doit rester lisible (en-tête, bannières, boutons)
-   vit au-dessus d'elle dans le flux, jamais par-dessus en superposition. */
+/* Vue Claude Design : panneau de pilotage d'une fenêtre native séparée. La vue
+   ne rend jamais claude.ai elle-même — l'iframe est refusée par
+   `X-Frame-Options`, et le multiwebview de Tauri ne sait pas se positionner sous
+   Linux. Elle porte donc l'état de la fenêtre et le repli navigateur. */
 
-.design-view { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.design-view { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 
 .design-header { display: flex; align-items: center; gap: var(--space-4); min-height: 58px; padding: var(--space-2) var(--space-5); border-bottom: 1px solid var(--border-subtle); }
 .design-heading { flex: 1; min-width: 0; }
@@ -13,10 +13,22 @@
 .design-banner { margin: 0; padding: var(--space-3) var(--space-5); color: var(--text); font-size: var(--text-sm); line-height: 1.55; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); }
 .design-banner.is-warning { background: linear-gradient(var(--warn-soft), var(--warn-soft)), var(--bg-panel); border-bottom-color: var(--warn); }
 
-/* Rectangle réservé à la webview. Il ne contient rien et ne défile pas : sa
-   seule fonction est de donner une géométrie à mesurer. Le fond sombre évite
-   un flash clair avant que la webview ne se positionne dessus. */
-.design-dock { flex: 1; min-height: 0; background: var(--bg-workspace); }
+.design-card { max-width: 620px; padding: var(--space-4) var(--space-5); background: var(--bg-panel); border: 1px solid var(--border-subtle); border-left: 2px solid var(--border-strong); border-radius: var(--r-md); }
+.design-card h2 { margin: 0 0 var(--space-2); color: var(--text-strong); font-size: var(--text-md); font-weight: 600; }
+.design-card p { margin: 0; color: var(--text); font-size: var(--text-sm); line-height: 1.65; }
+
+/* Deux issues seulement : fenêtre ouverte, ou avertissement (session absente,
+   claude.ai injoignable, ouverture refusée). Le refus d'user-agent n'a pas
+   d'état dédié — il n'est pas détectable à l'avance, et c'est la carte de
+   secours qui le couvre. */
+.design-card.is-open { border-left-color: var(--ok); }
+.design-card.is-warning { border-left-color: var(--warn); background: linear-gradient(var(--warn-soft), var(--warn-soft)), var(--bg-panel); }
+
+/* Carte de secours, toujours affichée sous l'état courant : le repli ne peut pas
+   être conditionnel, aucun preflight ne sachant prédire le verdict que la fenêtre
+   obtiendra de claude.ai. */
+.design-escape { margin-top: var(--space-4); }
+.design-escape .design-actions { margin-top: var(--space-4); }
 
 .design-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .design-action { min-height: 30px; padding: var(--space-1) var(--space-3); color: #111018; font-size: var(--text-sm); font-weight: 650; background: var(--accent); border: 1px solid var(--accent); border-radius: var(--r-sm); cursor: pointer; }
@@ -24,3 +36,5 @@
 .design-action:disabled { opacity: .55; cursor: default; }
 .design-action.is-quiet { color: var(--text-muted); background: transparent; border-color: var(--border); font-weight: 500; }
 .design-action.is-quiet:hover:not(:disabled) { color: var(--text-strong); background: var(--bg-hover); border-color: var(--border-strong); }
+
+.design-body { flex: 1; min-height: 0; padding: var(--space-6) var(--space-5); overflow-y: auto; }

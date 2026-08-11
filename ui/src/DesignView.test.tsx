@@ -5,7 +5,7 @@ import type { DesignReachability } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
-/** URL que la webview dockée rapporte. `null` = pas encore créée. */
+/** URL que la fenêtre Claude Design rapporte. `null` = pas encore ouverte. */
 let dockedUrl: string | null = null
 
 const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
@@ -21,6 +21,10 @@ const { DesignView } = await import('./DesignView')
 
 const defaultFetch = globalThis.fetch
 
+/** Réglages servis par le faux sidecar, et écritures qu'il a reçues. */
+let storedSettings: Record<string, unknown> = {}
+const settingsWrites: Array<Record<string, unknown>> = []
+
 afterEach(() => {
   cleanup()
   globalThis.fetch = defaultFetch
@@ -31,10 +35,6 @@ afterEach(() => {
   settingsWrites.length = 0
   delete (window as Record<string, unknown>).__TAURI_INTERNALS__
 })
-
-/** Réglages servis par le faux sidecar, et écritures qu'il a reçues. */
-let storedSettings: Record<string, unknown> = {}
-const settingsWrites: Array<Record<string, unknown>> = []
 
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -68,38 +68,34 @@ function commandsUsed(): string[] {
   return invoked.map((call) => call.command)
 }
 
-test('docke la webview sur le rectangle réservé et la masque au démontage', async () => {
+test('ouvre la fenêtre dédiée une seule fois', async () => {
   ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  // Le sidecar reçoit un 403 même quand la fenêtre fonctionne : ce statut ne doit
+  // jamais empêcher l'ouverture, sinon la vue reste bloquée pour de bon.
   stubReachability(reachable)
 
-  const view = render(createElement(DesignView))
+  render(createElement(DesignView))
 
-  await waitFor(() => expect(commandsUsed()).toContain('dock_design_webview'))
-  const dock = invoked.find((call) => call.command === 'dock_design_webview')!
-  for (const key of ['x', 'y', 'width', 'height']) {
-    expect(typeof dock.args?.[key]).toBe('number')
-  }
-
-  view.unmount()
-  // Masquer et non détruire : recréer la webview rechargerait claude.ai et
-  // ferait perdre le travail en cours dans Claude Design.
-  await waitFor(() => expect(commandsUsed()).toContain('hide_design_webview'))
-  expect(commandsUsed()).not.toContain('open_design_window')
+  await waitFor(() => expect(commandsUsed()).toContain('open_design_window'))
+  expect(commandsUsed().filter((command) => command === 'open_design_window')).toHaveLength(1)
+  await screen.findByText(/Fenêtre ouverte/i)
 })
 
-test('masque la webview quand un overlay de l’application est ouvert', async () => {
+test('rouvre la fenêtre sur la dernière page Claude Design visitée', async () => {
   ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  storedSettings = { designLastUrl: 'https://claude.ai/design/019e2187-fb46-71f4-8546-559244c11de1' }
   stubReachability(reachable)
 
-  render(createElement(DesignView, { suspended: true }))
+  render(createElement(DesignView))
 
-  // Une webview est une surface de l'OS : sans ce masquage, la palette Ctrl+K
-  // s'ouvrirait derrière elle.
-  await waitFor(() => expect(commandsUsed()).toContain('hide_design_webview'))
-  expect(commandsUsed()).not.toContain('dock_design_webview')
+  await waitFor(() => expect(commandsUsed()).toContain('open_design_window'))
+  const open = invoked.find((call) => call.command === 'open_design_window')!
+  // L'URL n'est lue qu'à la création de la fenêtre : ouvrir avant d'avoir lu les
+  // réglages condamnerait la vue à l'écran d'accueil.
+  expect(open.args?.resumeUrl).toBe(storedSettings.designLastUrl)
 })
 
-test('avertit qu’il faut se reconnecter quand la webview atterrit sur la page marketing', async () => {
+test('avertit qu’il faut se reconnecter quand la fenêtre atterrit sur la page marketing', async () => {
   ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
   stubReachability(reachable)
   dockedUrl = 'https://claude.com/product/design'
@@ -107,51 +103,6 @@ test('avertit qu’il faut se reconnecter quand la webview atterrit sur la page 
   render(createElement(DesignView))
 
   await screen.findByText(/pas connecté/i)
-})
-
-test('reste silencieux quand la webview est bien sur claude.ai', async () => {
-  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
-  stubReachability(reachable)
-  dockedUrl = 'https://claude.ai/design/'
-
-  render(createElement(DesignView))
-
-  await waitFor(() => expect(commandsUsed()).toContain('design_webview_url'))
-  expect(screen.queryByText(/pas connecté/i)).toBeNull()
-})
-
-test('signale une machine hors ligne plutôt que de blâmer la webview', async () => {
-  stubReachability({ reachable: false, message: 'Unable to connect', url: 'https://claude.ai/design/' })
-
-  render(createElement(DesignView))
-
-  await screen.findByText(/injoignable/i)
-  expect(screen.getByText(/Unable to connect/)).toBeDefined()
-})
-
-test('rouvre la webview sur la dernière page Claude Design visitée', async () => {
-  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
-  storedSettings = { designLastUrl: 'https://claude.ai/design/019e2187-fb46-71f4-8546-559244c11de1' }
-  stubReachability(reachable)
-
-  render(createElement(DesignView))
-
-  await waitFor(() => expect(commandsUsed()).toContain('dock_design_webview'))
-  const dock = invoked.find((call) => call.command === 'dock_design_webview')!
-  // L'URL n'est lue qu'à la création de la webview : docker avant d'avoir lu les
-  // réglages ouvrirait définitivement l'écran d'accueil.
-  expect(dock.args?.resumeUrl).toBe(storedSettings.designLastUrl)
-})
-
-test('mémorise la page atteinte, et seulement si elle est saine', async () => {
-  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
-  stubReachability(reachable)
-  dockedUrl = 'https://claude.ai/design/019e2189-400e-70eb-ad40-dde76b8042ad'
-
-  render(createElement(DesignView))
-
-  await waitFor(() => expect(settingsWrites.length).toBeGreaterThan(0))
-  expect(settingsWrites[0]).toEqual({ designLastUrl: dockedUrl })
 })
 
 test('ne mémorise pas la page marketing comme cible de reprise', async () => {
@@ -164,4 +115,39 @@ test('ne mémorise pas la page marketing comme cible de reprise', async () => {
   await screen.findByText(/pas connecté/i)
   // Sinon la vue rouvrirait indéfiniment sur la page marketing.
   expect(settingsWrites).toHaveLength(0)
+})
+
+test('mémorise la page atteinte quand elle est saine', async () => {
+  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  stubReachability(reachable)
+  dockedUrl = 'https://claude.ai/design/019e2189-400e-70eb-ad40-dde76b8042ad'
+
+  render(createElement(DesignView))
+
+  await waitFor(() => expect(settingsWrites.length).toBeGreaterThan(0))
+  expect(settingsWrites[0]).toEqual({ designLastUrl: dockedUrl })
+  expect(screen.queryByText(/pas connecté/i)).toBeNull()
+})
+
+test('signale une machine hors ligne plutôt que de blâmer la fenêtre', async () => {
+  stubReachability({ reachable: false, message: 'Unable to connect', url: 'https://claude.ai/design/' })
+
+  render(createElement(DesignView))
+
+  await screen.findByText(/injoignable/i)
+  expect(screen.getByText(/Unable to connect/)).toBeDefined()
+})
+
+test('offre le repli navigateur en permanence', async () => {
+  const openInBrowser = mock(() => null)
+  window.open = openInBrowser as unknown as typeof window.open
+  stubReachability(reachable)
+
+  render(createElement(DesignView))
+
+  await screen.findByText(/Si la fenêtre affiche une erreur/i)
+  const button = await screen.findByRole('button', { name: /navigateur/i })
+  button.click()
+  await waitFor(() => expect(openInBrowser).toHaveBeenCalled())
+  expect(openInBrowser.mock.calls[0]![0]).toBe('https://claude.ai/design/')
 })

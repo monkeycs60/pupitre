@@ -7,30 +7,24 @@ import { HelpLink } from './HelpLink'
 import type { DesignReachability } from './types'
 
 /** Claude Design (claude.ai/design) n'existe que sur le web : pas d'API, pas de
- *  CLI. Pupitre l'embarque dans une webview enfant dockée sur la zone de contenu
- *  de la fenêtre principale — l'iframe est exclue, claude.ai envoyant
- *  `X-Frame-Options: SAMEORIGIN`.
+ *  CLI. Pupitre l'ouvre donc dans une fenêtre native dédiée, et cette vue en est
+ *  le panneau de pilotage — elle ne rend jamais claude.ai elle-même, l'iframe
+ *  étant refusée par `X-Frame-Options: SAMEORIGIN`.
  *
- *  Deux contraintes dictent la structure de ce composant :
+ *  Une fenêtre séparée plutôt qu'un panneau intégré, et ce n'est pas un choix
+ *  esthétique : le multiwebview de Tauri ne sait pas se positionner sous Linux.
+ *  La webview enfant est empaquetée dans la GtkBox de la fenêtre, où `set_bounds`
+ *  n'a aucun effet — elle partage alors l'espace verticalement avec l'interface.
+ *  Voir `open_design_window` dans `src-tauri/src/lib.rs`.
  *
- *  1. Une webview est une surface de l'OS, dessinée AU-DESSUS du DOM. Tout ce
- *     que l'utilisateur doit pouvoir lire — titre, bannière, boutons — vit donc
- *     hors du rectangle réservé, et la webview est masquée dès qu'un overlay de
- *     l'application s'ouvre (`suspended`).
- *  2. La fenêtre ne se charge qu'avec un user-agent qui se déclare Safari macOS,
- *     claude.ai refusant la signature de WebKitGTK. Ce filtre appartient à
- *     Anthropic et n'est pas détectable avant l'ouverture : le repli navigateur
- *     est donc permanent plutôt que conditionnel. */
+ *  Second point structurant : la fenêtre ne se charge qu'avec un user-agent qui
+ *  se déclare Safari macOS, claude.ai refusant la signature de WebKitGTK. Ce
+ *  filtre appartient à Anthropic et n'est pas détectable à l'avance, donc le
+ *  repli navigateur est permanent plutôt que conditionnel. */
 
 const DESIGN_URL_FALLBACK = 'https://claude.ai/design/'
 
 const URL_POLL_MS = 2_500
-
-interface DesignViewProps {
-  /** Vrai quand un overlay de l'application est ouvert (palette Ctrl+K…).
-   *  La webview doit alors disparaître, sinon elle le recouvre. */
-  suspended?: boolean
-}
 
 function isTauriRuntime(): boolean {
   return '__TAURI_INTERNALS__' in window || '__TAURI__' in window
@@ -40,87 +34,63 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-export function DesignView({ suspended = false }: DesignViewProps) {
-  const dockRef = useRef<HTMLDivElement | null>(null)
-  const [dockError, setDockError] = useState<string | null>(null)
+type WindowState =
+  | { kind: 'idle' }
+  | { kind: 'opening' }
+  | { kind: 'open' }
+  | { kind: 'failed'; message: string }
+
+export function DesignView() {
+  const [windowState, setWindowState] = useState<WindowState>({ kind: 'idle' })
   const [needsLogin, setNeedsLogin] = useState(false)
   const [reachability, setReachability] = useState<DesignReachability | null>(null)
   /** `undefined` : réglages pas encore lus. `null` : aucune reprise mémorisée. */
   const [resume, setResume] = useState<string | null | undefined>(undefined)
   /** Dernière valeur persistée, pour n'écrire que sur changement réel. */
   const savedResume = useRef<string | null>(null)
+  const autoOpened = useRef(false)
 
-  const syncDock = useCallback(async (resumeUrl: string | null) => {
-    const element = dockRef.current
-    if (element === null || !isTauriRuntime()) return
-    const rect = element.getBoundingClientRect()
+  const openWindow = useCallback(async (resumeUrl: string | null) => {
+    setWindowState({ kind: 'opening' })
     try {
-      await invoke('dock_design_webview', {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-        // Ignorée si la webview existe déjà : elle ne sert qu'à sa création.
-        resumeUrl,
-      })
-      setDockError(null)
+      // Ignorée si la fenêtre existe déjà : elle ne sert qu'à sa création.
+      await invoke('open_design_window', { resumeUrl })
+      setWindowState({ kind: 'open' })
     } catch (reason) {
-      setDockError(errorMessage(reason))
+      setWindowState({ kind: 'failed', message: errorMessage(reason) })
     }
   }, [])
 
-  const hideDock = useCallback(async () => {
-    if (!isTauriRuntime()) return
-    try {
-      await invoke('hide_design_webview')
-    } catch {
-      // Masquer une webview absente n'est pas une erreur à remonter.
-    }
-  }, [])
-
-  // Docke et suit la géométrie. Le ResizeObserver couvre le redimensionnement de
-  // la fenêtre comme les changements de mise en page (largeur de sidebar…), que
-  // l'événement `resize` seul manquerait.
+  // Reprise : rouvrir sur la dernière page visitée plutôt que sur l'accueil.
+  // Lue avant la première ouverture, la fenêtre ne consultant cette URL qu'à sa
+  // création.
   useEffect(() => {
-    if (suspended) {
-      void hideDock()
-      return
-    }
-    // Rien avant que la reprise ne soit connue : docker tout de suite créerait
-    // la webview sur l'écran d'accueil, et l'URL mémorisée arriverait trop tard
-    // puisqu'elle n'est lue qu'à la création.
-    if (resume === undefined) return
-    void syncDock(resume)
-    // Rattrapages différés : le widget natif est réalisé de façon asynchrone, et
-    // la passe d'allocation de GTK peut écraser la géométrie demandée à la
-    // création. Repositionner une fois le widget en place est ce qui remet la
-    // webview dans son rectangle au lieu de la laisser pleine largeur sous le
-    // rail. Sans coût visible : repositionner ne recharge pas la page.
-    const catchUps = [120, 400, 1_000].map((delay) =>
-      setTimeout(() => void syncDock(resume), delay),
-    )
-    const element = dockRef.current
-    const observer = element === null ? null : new ResizeObserver(() => void syncDock(resume))
-    if (element !== null) observer?.observe(element)
-    // La même référence de fonction pour l'ajout et le retrait : deux fermetures
-    // distinctes laisseraient l'écouteur attaché après démontage.
-    const handleResize = () => void syncDock(resume)
-    window.addEventListener('resize', handleResize)
-    return () => {
-      for (const timer of catchUps) clearTimeout(timer)
-      observer?.disconnect()
-      window.removeEventListener('resize', handleResize)
-    }
-  }, [hideDock, resume, suspended, syncDock])
+    const controller = new AbortController()
+    void getSettings(controller.signal)
+      .then((settings) => {
+        if (controller.signal.aborted) return
+        const url = resumableDesignUrl(settings.designLastUrl)
+        savedResume.current = url
+        setResume(url)
+      })
+      .catch(() => {
+        // Réglages illisibles : ouvrir l'accueil plutôt que bloquer la vue.
+        if (!controller.signal.aborted) setResume(null)
+      })
+    return () => controller.abort()
+  }, [])
 
-  // La webview survit à la sortie de la vue : la recréer rechargerait claude.ai
-  // et ferait perdre le travail en cours. On la masque seulement.
-  useEffect(() => () => void hideDock(), [hideDock])
+  useEffect(() => {
+    if (resume === undefined || autoOpened.current || !isTauriRuntime()) return
+    autoOpened.current = true
+    void openWindow(resume)
+  }, [openWindow, resume])
 
   // Détecte la redirection vers la page marketing, seul signe observable d'une
-  // session absente. C'est Rust qui lit l'URL : la page ne reçoit aucun IPC.
+  // session absente, et mémorise la page atteinte. C'est Rust qui lit l'URL de la
+  // fenêtre : la page distante ne reçoit aucun IPC.
   useEffect(() => {
-    if (!isTauriRuntime() || suspended) return
+    if (!isTauriRuntime()) return
     let stopped = false
     async function check() {
       try {
@@ -144,25 +114,6 @@ export function DesignView({ suspended = false }: DesignViewProps) {
       stopped = true
       clearInterval(timer)
     }
-  }, [suspended])
-
-  // Reprise : rouvrir sur la dernière page Claude Design visitée plutôt que sur
-  // l'écran d'accueil. Lue avant le premier dock, la webview ne consultant cette
-  // URL qu'à sa création.
-  useEffect(() => {
-    const controller = new AbortController()
-    void getSettings(controller.signal)
-      .then((settings) => {
-        if (controller.signal.aborted) return
-        const url = resumableDesignUrl(settings.designLastUrl)
-        savedResume.current = url
-        setResume(url)
-      })
-      .catch(() => {
-        // Réglages illisibles : ouvrir l'accueil plutôt que bloquer la vue.
-        if (!controller.signal.aborted) setResume(null)
-      })
-    return () => controller.abort()
   }, [])
 
   useEffect(() => {
@@ -172,28 +123,18 @@ export function DesignView({ suspended = false }: DesignViewProps) {
         if (!controller.signal.aborted) setReachability(result)
       })
       .catch(() => {
-        // Complément d'explication seulement : son échec ne change rien au dock.
+        // Complément d'explication seulement : son échec ne change rien.
       })
     return () => controller.abort()
   }, [])
 
   const designUrl = reachability?.url ?? DESIGN_URL_FALLBACK
+  const offline = reachability !== null && !reachability.reachable
 
   async function openInBrowser() {
     if (isTauriRuntime()) await openUrl(designUrl)
     else window.open(designUrl, '_blank', 'noopener,noreferrer')
   }
-
-  async function detachWindow() {
-    await hideDock()
-    try {
-      await invoke('open_design_window')
-    } catch (reason) {
-      setDockError(errorMessage(reason))
-    }
-  }
-
-  const offline = reachability !== null && !reachability.reachable
 
   return (
     <div className="design-view">
@@ -201,52 +142,80 @@ export function DesignView({ suspended = false }: DesignViewProps) {
         <div className="design-heading">
           <h1>Claude Design</h1>
           <p className="design-subtitle">
-            Intégré à la fenêtre, sur ta session claude.ai.{' '}
+            Ouvert dans une fenêtre dédiée, sur ta session claude.ai.{' '}
             <HelpLink slug="design" label="Comprendre l'intégration" />
           </p>
         </div>
-        <div className="design-actions">
-          <button
-            type="button"
-            className="design-action is-quiet"
-            onClick={() => void detachWindow()}
-            disabled={!isTauriRuntime()}
-          >
-            Détacher dans une fenêtre
-          </button>
-          <button type="button" className="design-action is-quiet" onClick={() => void openInBrowser()}>
-            Ouvrir dans le navigateur
-          </button>
-        </div>
       </header>
 
-      {offline ? (
-        <p className="design-banner is-warning">
-          claude.ai est injoignable
-          {reachability !== null && !reachability.reachable ? ` (${reachability.message})` : ''}.
-          Vérifie ta connexion : ni la webview ni le navigateur n'iront plus loin.
-        </p>
-      ) : needsLogin ? (
-        <p className="design-banner is-warning">
-          Tu n'es pas connecté : claude.ai a renvoyé la webview vers sa page
-          marketing. Connecte-toi une fois dans le panneau ci-dessous, la session
-          persistera ensuite entre les lancements.
-        </p>
-      ) : dockError !== null ? (
-        <p className="design-banner is-warning">
-          Intégration impossible : {dockError}. Utilise « Détacher dans une
-          fenêtre » ou le navigateur.
-        </p>
-      ) : !isTauriRuntime() ? (
-        <p className="design-banner">
-          La webview intégrée n'existe que dans l'application Tauri, pas dans le
-          navigateur de développement.
-        </p>
-      ) : null}
+      <div className="design-body">
+        {offline ? (
+          <section className="design-card is-warning">
+            <h2>claude.ai est injoignable</h2>
+            <p>
+              Aucune réponse de claude.ai
+              {reachability !== null && !reachability.reachable ? ` : ${reachability.message}` : ''}.
+              Ni la fenêtre ni le navigateur n'iront plus loin — c'est la connexion
+              réseau qu'il faut vérifier.
+            </p>
+          </section>
+        ) : needsLogin ? (
+          <section className="design-card is-warning">
+            <h2>Tu n'es pas connecté</h2>
+            <p>
+              claude.ai a renvoyé la fenêtre vers sa page marketing, faute de
+              session. Connecte-toi une fois dans la fenêtre Claude Design : elle a
+              son propre magasin de cookies, et la session persistera ensuite entre
+              les lancements.
+            </p>
+          </section>
+        ) : windowState.kind === 'failed' ? (
+          <section className="design-card is-warning">
+            <h2>Ouverture impossible</h2>
+            <p>{windowState.message}</p>
+          </section>
+        ) : !isTauriRuntime() ? (
+          <section className="design-card">
+            <h2>Fenêtre native indisponible</h2>
+            <p>
+              La fenêtre dédiée n'existe que dans l'application Tauri, pas dans le
+              navigateur de développement.
+            </p>
+          </section>
+        ) : (
+          <section className="design-card is-open">
+            <h2>{windowState.kind === 'opening' ? 'Ouverture…' : 'Fenêtre ouverte'}</h2>
+            <p>
+              Claude Design tourne dans une fenêtre dédiée, qui rouvre sur la
+              dernière page visitée. Sa taille et sa position sont mémorisées.
+            </p>
+          </section>
+        )}
 
-      {/* Rectangle réservé : la webview native est positionnée exactement dessus,
-          et le recouvre donc entièrement. Rien de lisible ne doit vivre ici. */}
-      <div className="design-dock" ref={dockRef} aria-hidden="true" />
+        <section className="design-card design-escape">
+          <h2>Si la fenêtre affiche une erreur</h2>
+          <p>
+            Pupitre présente à claude.ai un user-agent Safari macOS, sans quoi la
+            webview est refusée. Ce filtre appartient à Anthropic : s'il se
+            resserre, la fenêtre affichera un message d'erreur de claude.ai et il
+            n'y aura rien à réparer côté Pupitre. Ton navigateur, lui, continuera
+            de fonctionner.
+          </p>
+          <div className="design-actions">
+            <button
+              type="button"
+              className="design-action"
+              onClick={() => void openWindow(resume ?? null)}
+              disabled={windowState.kind === 'opening' || !isTauriRuntime()}
+            >
+              Rouvrir la fenêtre
+            </button>
+            <button type="button" className="design-action is-quiet" onClick={() => void openInBrowser()}>
+              Ouvrir dans le navigateur
+            </button>
+          </div>
+        </section>
+      </div>
     </div>
   )
 }
