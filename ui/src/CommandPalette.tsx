@@ -16,6 +16,7 @@ import type {
   Workflow,
   WorkspaceView,
 } from './types'
+import { useDesignPanelSuspend } from './useDesignPanelSuspend'
 
 type PaletteAction = 'test' | 'summary' | 'review'
 
@@ -68,6 +69,10 @@ export function CommandPalette({
   onViewSelect,
   onAction,
 }: CommandPaletteProps) {
+  // La palette est globale, donc elle peut s'ouvrir par-dessus le panneau Claude
+  // Design. Ce panneau est une webview, une surface de l'OS : sans ce masquage,
+  // la palette s'ouvrirait derrière lui, quel que soit son `z-index`.
+  useDesignPanelSuspend(open)
   const [query, setQuery] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])

@@ -1,9 +1,19 @@
-/* Vue Claude Design : panneau de pilotage d'une fenêtre native séparée. La vue
-   ne rend jamais claude.ai elle-même — l'iframe est refusée par
-   `X-Frame-Options`, et le multiwebview de Tauri ne sait pas se positionner sous
-   Linux. Elle porte donc l'état de la fenêtre et le repli navigateur. */
+/* Vue Claude Design. La vue ne rend jamais claude.ai elle-même — l'iframe est
+   refusée par `X-Frame-Options`. Elle réserve un emplacement, `.design-slot`,
+   qu'une webview enfant vient couvrir, et porte les replis fenêtre et navigateur.
+
+   Aucune règle ici ne peut agir sur la webview : c'est une surface de l'OS, elle
+   se dessine au-dessus du DOM. Sa géométrie vient de `set_design_panel_bounds`,
+   qui lit le rectangle de `.design-slot`. Toute mise en page de cette vue doit
+   donc laisser le slot mesurable, sans transformation ni transition sur sa
+   position — GTK ne suit pas les frames d'animation CSS. */
 
 .design-view { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* L'emplacement du panneau. Il occupe toute la zone restante : c'est son
+   rectangle qui définit la position de la webview, donc il ne doit jamais avoir
+   ni marge propre ni bordure, qui décaleraient la webview sans qu'on le voie. */
+.design-slot { position: relative; flex: 1; min-width: 0; min-height: 0; }
 
 .design-header { display: flex; align-items: center; gap: var(--space-4); min-height: 58px; padding: var(--space-2) var(--space-5); border-bottom: 1px solid var(--border-subtle); }
 .design-heading { flex: 1; min-width: 0; }
@@ -24,11 +34,12 @@
 .design-card.is-open { border-left-color: var(--ok); }
 .design-card.is-warning { border-left-color: var(--warn); background: linear-gradient(var(--warn-soft), var(--warn-soft)), var(--bg-panel); }
 
-/* Carte de secours, toujours affichée sous l'état courant : le repli ne peut pas
-   être conditionnel, aucun preflight ne sachant prédire le verdict que la fenêtre
-   obtiendra de claude.ai. */
-.design-escape { margin-top: var(--space-4); }
-.design-escape .design-actions { margin-top: var(--space-4); }
+/* Barre de secours, toujours visible sous le panneau, jamais couverte par lui :
+   le repli ne peut pas être conditionnel, aucun preflight ne sachant prédire le
+   verdict que claude.ai rendra. C'est aussi la seule sortie si le placement de la
+   webview dérape, auquel cas le reste de la vue est invisible sous elle. */
+.design-escape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-5); border-top: 1px solid var(--border-subtle); }
+.design-escape .design-subtitle { margin: 0; }
 
 .design-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .design-action { min-height: 30px; padding: var(--space-1) var(--space-3); color: #111018; font-size: var(--text-sm); font-weight: 650; background: var(--accent); border: 1px solid var(--accent); border-radius: var(--r-sm); cursor: pointer; }
@@ -37,4 +48,7 @@
 .design-action.is-quiet { color: var(--text-muted); background: transparent; border-color: var(--border); font-weight: 500; }
 .design-action.is-quiet:hover:not(:disabled) { color: var(--text-strong); background: var(--bg-hover); border-color: var(--border-strong); }
 
-.design-body { flex: 1; min-height: 0; padding: var(--space-6) var(--space-5); overflow-y: auto; }
+/* Le contenu textuel de la vue vit dans le slot, et n'est rendu que lorsque le
+   panneau ne le couvre pas. Il remplit le slot plutôt que de le dimensionner :
+   c'est le slot qui fait autorité sur la géométrie transmise à GTK. */
+.design-body { box-sizing: border-box; height: 100%; padding: var(--space-6) var(--space-5); overflow-y: auto; }

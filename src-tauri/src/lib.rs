@@ -1,3 +1,5 @@
+mod design_panel;
+
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Mutex,
@@ -204,15 +206,11 @@ fn supervise_sidecar(app: tauri::AppHandle) {
 /// n'ayant pas de champ `remote`, son contexte est `Local` : claude.ai n'a donc
 /// accès à aucune commande. Y ajouter un `remote` ouvrirait l'IPC à la page.
 ///
-/// Une fenêtre séparée et non un panneau intégré, et ce n'est pas un choix
-/// esthétique : le multiwebview de Tauri ne peut pas être positionné sous Linux.
-/// `WebviewKind::WindowChild` construit la webview dans `window.default_vbox()`,
-/// une GtkBox, où wry la `pack_start` en marquant `is_in_fixed_parent = false` ;
-/// `set_bounds` n'y repositionne alors rien (hors chemin X11), et la GtkBox
-/// partage l'espace verticalement entre les deux webviews. Mesuré sur Wayland
-/// avec Tauri 2.11 et wry 0.55 : le panneau s'affichait pleine largeur sous
-/// l'interface. Y revenir demanderait de reparenter la webview dans un
-/// `GtkFixed` à la main, à travers une API que Tauri qualifie d'inachevée.
+/// Cette fenêtre n'est plus la voie normale : le panneau intégré de
+/// `design_panel.rs` l'est. Elle reste le repli, à ne pas supprimer. Le placement
+/// du panneau repose sur un réarrangement de la hiérarchie GTK, donc sur des
+/// détails d'implémentation de Tauri et de wry ; si une montée de version le
+/// casse, cette fenêtre est ce qui garde Claude Design accessible en attendant.
 ///
 /// `resume_url` rouvre la dernière page Claude Design visitée plutôt que
 /// l'écran d'accueil, si elle franchit `resumable_design_url`.
@@ -247,33 +245,96 @@ fn open_design_window(app: tauri::AppHandle, resume_url: Option<String>) -> Resu
     // `with_related_view`, qui la fait partager le processus web de la fenêtre
     // appelante. Sans ce lien, la popup n'a ni la session ni la relation d'opener
     // qu'attend le flux, et Google renvoie une erreur de connexion.
-    .on_new_window(move |url, features| {
-        let label = format!(
-            "{DESIGN_POPUP_LABEL_PREFIX}{}",
-            DESIGN_POPUP_COUNTER.fetch_add(1, Ordering::Relaxed)
-        );
-        let built = tauri::WebviewWindowBuilder::new(
-            &popup_app,
-            label,
-            tauri::WebviewUrl::External(url),
-        )
-        .window_features(features)
-        .title("Connexion à Claude")
-        // Le même user-agent que la fenêtre parente : c'est lui qui fait passer le
-        // flux, et une popup qui se déclarerait autrement serait refusée.
-        .user_agent(DESIGN_USER_AGENT)
-        .build();
-        match built {
-            Ok(window) => tauri::webview::NewWindowResponse::Create { window },
-            Err(error) => {
-                log::error!("Popup de connexion Claude Design refusée : {error}");
-                tauri::webview::NewWindowResponse::Deny
-            }
-        }
-    })
+    .on_new_window(move |url, features| build_design_popup(&popup_app, url, features))
     .build()
     .map_err(|error| error.to_string())?;
     Ok(())
+}
+
+/// Construit la popup d'un flux de connexion Claude, pour la fenêtre séparée
+/// comme pour le panneau intégré.
+///
+/// Partagée à dessein : les deux surfaces mènent le même flux OAuth, et une
+/// divergence entre elles se paierait par un « Une erreur s'est produite lors de
+/// la connexion » impossible à relier à sa cause.
+pub(crate) fn build_design_popup<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    url: tauri::Url,
+    features: tauri::webview::NewWindowFeatures,
+) -> tauri::webview::NewWindowResponse<R> {
+    let label = format!(
+        "{DESIGN_POPUP_LABEL_PREFIX}{}",
+        DESIGN_POPUP_COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    let built =
+        tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::External(url))
+            .window_features(features)
+            .title("Connexion à Claude")
+            // Le même user-agent que la surface parente : c'est lui qui fait passer
+            // le flux, et une popup qui se déclarerait autrement serait refusée.
+            .user_agent(DESIGN_USER_AGENT)
+            .build();
+    match built {
+        Ok(window) => tauri::webview::NewWindowResponse::Create { window },
+        Err(error) => {
+            log::error!("Popup de connexion Claude Design refusée : {error}");
+            tauri::webview::NewWindowResponse::Deny
+        }
+    }
+}
+
+/// Ouvre Claude Design dans la fenêtre principale, sur la zone de contenu, le
+/// rail restant visible à sa gauche.
+///
+/// C'est la voie normale ; `open_design_window` n'est plus qu'un repli. Le
+/// placement ne vient pas de Tauri, qui ne sait pas positionner une webview
+/// enfant sous Linux, mais de `design_panel.rs` — lire son en-tête avant toute
+/// modification, la raison y est mesurée sur les sources.
+#[tauri::command]
+fn open_design_panel(app: tauri::AppHandle, resume_url: Option<String>) -> Result<(), String> {
+    let target = match resumable_design_url(resume_url) {
+        Some(url) => url,
+        None => design_url()?,
+    };
+    design_panel::open(&app, target)
+}
+
+/// Place le panneau sur la zone de contenu, en pixels logiques lus par le
+/// frontend sur l'emplacement qu'il réserve dans le DOM.
+#[tauri::command]
+fn set_design_panel_bounds(
+    app: tauri::AppHandle,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) -> Result<(), String> {
+    design_panel::set_bounds(&app, x, y, width, height)
+}
+
+/// Masque ou réaffiche le panneau.
+///
+/// À appeler à chaque ouverture de calque : la webview est une surface de l'OS,
+/// elle se dessine au-dessus du DOM, donc la palette et les modales s'ouvriraient
+/// derrière elle.
+#[tauri::command]
+fn set_design_panel_visible(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
+    design_panel::set_visible(&app, visible)
+}
+
+#[tauri::command]
+fn close_design_panel(app: tauri::AppHandle) -> Result<(), String> {
+    design_panel::close(&app)
+}
+
+/// URL courante du panneau, `None` s'il est fermé.
+///
+/// Même rôle que `design_webview_url` pour la fenêtre séparée : détecter la
+/// redirection vers la page marketing, signe d'une session absente, et alimenter
+/// l'URL de reprise. C'est Rust qui lit, la page ne reçoit aucun IPC.
+#[tauri::command]
+fn design_panel_url(app: tauri::AppHandle) -> Option<String> {
+    design_panel::url(&app)
 }
 
 fn design_url() -> Result<tauri::Url, String> {
@@ -354,6 +415,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
+            open_design_panel,
+            set_design_panel_bounds,
+            set_design_panel_visible,
+            close_design_panel,
+            design_panel_url,
             open_design_window,
             close_design_popups,
             design_webview_url

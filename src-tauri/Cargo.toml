@@ -21,13 +21,18 @@ tauri-build = { version = "2.6.3", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-# Pas de feature `unstable` : le multiwebview a été tenté pour docker Claude
-# Design dans la fenêtre principale, et il ne peut pas fonctionner sous Linux.
-# Tauri crée une webview enfant dans `window.default_vbox()`, une GtkBox, où wry
-# la `pack_start` en marquant `is_in_fixed_parent = false` ; `set_bounds` ne
-# repositionne alors rien (hors chemin X11), et la GtkBox partage l'espace
-# verticalement entre les deux webviews. Voir `open_design_window`.
-tauri = { version = "2.11.3", features = [] }
+# `unstable` donne accès à `Window::add_child`, sans quoi il n'y a pas de
+# multiwebview du tout. Il ne suffit pas : Tauri ne sait pas positionner une
+# webview enfant sous Linux, et c'est `design_panel.rs` qui reprend la géométrie
+# à la main. Lire l'en-tête de ce module avant d'y toucher.
+tauri = { version = "2.11.3", features = ["unstable"] }
+# Dépendances directes de `design_panel.rs`, qui réarrange la hiérarchie GTK que
+# Tauri expose publiquement. Les lignes mineures doivent rester celles que Tauri
+# résout déjà — `gtk 0.18.2` et `webkit2gtk 2.0.2` au lock — sinon les types ne
+# s'unifient pas et rien ne compile. C'est le point à revérifier à chaque montée
+# de version de Tauri.
+gtk = "0.18"
+webkit2gtk = "2.0"
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
