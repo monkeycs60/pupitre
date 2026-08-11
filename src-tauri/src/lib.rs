@@ -295,7 +295,7 @@ fn dock_design_webview(
         Some(url) => url,
         None => design_url()?,
     };
-    window
+    let webview = window
         .add_child(
             tauri::webview::WebviewBuilder::new(
                 DESIGN_WEBVIEW_LABEL,
@@ -306,6 +306,17 @@ fn dock_design_webview(
             size,
         )
         .map_err(|error| error.to_string())?;
+
+    // La géométrie est réappliquée juste après la création, et ce n'est pas
+    // redondant : `add_child` la fournit avant que le widget ne soit réalisé, et
+    // la passe d'allocation du conteneur GTK écrase alors la demande initiale.
+    // Sans ce second passage, la webview apparaît là où GTK l'a placée — collée
+    // au bord gauche, sous le rail, et décalée vers le bas.
+    webview
+        .set_position(position)
+        .map_err(|error| error.to_string())?;
+    webview.set_size(size).map_err(|error| error.to_string())?;
+    log::info!("Webview Claude Design dockée à ({x}, {y}) sur {width}x{height}");
     Ok(())
 }
 

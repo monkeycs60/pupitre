@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { getDesignReachability, getSettings, updateSettings } from './api'
 import { needsDesignLogin, resumableDesignUrl } from './designSession'
+import { HelpLink } from './HelpLink'
 import type { DesignReachability } from './types'
 
 /** Claude Design (claude.ai/design) n'existe que sur le web : pas d'API, pas de
@@ -90,6 +91,14 @@ export function DesignView({ suspended = false }: DesignViewProps) {
     // puisqu'elle n'est lue qu'à la création.
     if (resume === undefined) return
     void syncDock(resume)
+    // Rattrapages différés : le widget natif est réalisé de façon asynchrone, et
+    // la passe d'allocation de GTK peut écraser la géométrie demandée à la
+    // création. Repositionner une fois le widget en place est ce qui remet la
+    // webview dans son rectangle au lieu de la laisser pleine largeur sous le
+    // rail. Sans coût visible : repositionner ne recharge pas la page.
+    const catchUps = [120, 400, 1_000].map((delay) =>
+      setTimeout(() => void syncDock(resume), delay),
+    )
     const element = dockRef.current
     const observer = element === null ? null : new ResizeObserver(() => void syncDock(resume))
     if (element !== null) observer?.observe(element)
@@ -98,6 +107,7 @@ export function DesignView({ suspended = false }: DesignViewProps) {
     const handleResize = () => void syncDock(resume)
     window.addEventListener('resize', handleResize)
     return () => {
+      for (const timer of catchUps) clearTimeout(timer)
       observer?.disconnect()
       window.removeEventListener('resize', handleResize)
     }
@@ -190,7 +200,10 @@ export function DesignView({ suspended = false }: DesignViewProps) {
       <header className="design-header">
         <div className="design-heading">
           <h1>Claude Design</h1>
-          <p className="design-subtitle">Intégré à la fenêtre, sur ta session claude.ai.</p>
+          <p className="design-subtitle">
+            Intégré à la fenêtre, sur ta session claude.ai.{' '}
+            <HelpLink slug="design" label="Comprendre l'intégration" />
+          </p>
         </div>
         <div className="design-actions">
           <button
