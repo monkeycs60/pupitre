@@ -581,8 +581,15 @@ function App() {
 
   return (
     <ActionFormatContext.Provider value={actionFormat}>
+    {/* Le rail se déplie normalement par-dessus la zone de contenu, sans la
+        refluer. Impossible dans la vue Design : le panneau est une webview, une
+        surface de l'OS, et elle se dessine au-dessus du DOM, donc le rail déplié
+        passerait derrière elle et se retrouverait tronqué. On lui donne sa
+        largeur dépliée en dur dans cette vue, et il cesse de déborder. */}
     <main
-      className={`app-shell ${showSidebar ? '' : 'app-shell--no-sidebar'}`}
+      className={`app-shell ${showSidebar ? '' : 'app-shell--no-sidebar'}${
+        workspaceView === 'design' ? ' app-shell--pinned-rail' : ''
+      }`}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
       <Titlebar

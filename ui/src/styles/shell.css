@@ -288,6 +288,21 @@ body.is-resizing-documents-list {
   box-shadow: var(--shadow-popover);
 }
 
+/* Vue Claude Design. Le rail y est déplié en permanence et occupe réellement sa
+   colonne, au lieu de déborder au survol sur la zone de contenu.
+
+   Ce n'est pas une préférence visuelle. Le panneau Design est une webview, donc
+   une surface du système : elle se dessine au-dessus du DOM quel que soit
+   l'empilement CSS. Un rail qui déborderait passerait derrière elle et
+   apparaîtrait tronqué à 56 px. En lui donnant sa largeur dans la grille, il n'y
+   a plus rien à recouvrir.
+
+   Ni ombre ni transition ici : l'ombre servait à détacher un survol, et une
+   largeur animée ferait courir la webview après la transition CSS, que GTK ne
+   sait pas suivre. */
+.app-shell--pinned-rail { grid-template-columns: 188px minmax(0, 1fr); }
+.app-shell--pinned-rail .rail { width: 188px; overflow: visible; box-shadow: none; transition: none; }
+
 .rail-projects {
   display: flex;
   flex-direction: column;

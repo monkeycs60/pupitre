@@ -167,6 +167,12 @@ export function Rail({
   const [projects, setProjects] = useState<Project[]>([])
   const [unreadByProject, setUnreadByProject] = useState<Record<string, number>>({})
   const [isLabelExpanded, setIsLabelExpanded] = useState(false)
+  /** Dans la vue Claude Design, le rail reste déplié et occupe réellement sa
+   *  colonne au lieu de déborder au survol. Le panneau y est une webview, une
+   *  surface du système qui se dessine au-dessus du DOM : un rail débordant
+   *  passerait derrière elle et s'afficherait tronqué. Voir
+   *  `.app-shell--pinned-rail` dans `styles/shell.css`. */
+  const isRailPinned = workspaceView === 'design'
 
   useEffect(() => {
     let ignore = false
@@ -235,7 +241,7 @@ export function Rail({
 
   return (
     <nav
-      className={`rail${isLabelExpanded ? ' is-label-expanded' : ''}`}
+      className={`rail${isLabelExpanded || isRailPinned ? ' is-label-expanded' : ''}`}
       aria-label="Projets et navigation"
       onMouseEnter={() => setIsLabelExpanded(true)}
       onMouseLeave={() => setIsLabelExpanded(false)}
