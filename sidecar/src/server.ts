@@ -29,7 +29,7 @@ import {
   type HandoffDebriefArtifact,
   type DebriefRunner,
 } from "./debriefs";
-import { DESIGN_URL, probeDesignReachability } from "./design";
+import { DESIGN_URL, isResumableDesignUrl, probeDesignReachability } from "./design";
 import { GitProjectError, type GitProjectService } from "./git";
 import {
   TesterBusyError,
@@ -1689,6 +1689,17 @@ export function createServer(deps: ServerDeps) {
               || threshold > 86_400
             ) throw new HttpError(400, "seuil de tâche longue invalide");
             deps.settings.set("longTaskThresholdSeconds", threshold);
+            updated = true;
+          }
+          if ("designLastUrl" in body) {
+            // `null` efface la reprise et fait repartir la webview de l'accueil.
+            if (body.designLastUrl === null) {
+              deps.settings.set("designLastUrl", null);
+            } else if (!isResumableDesignUrl(body.designLastUrl)) {
+              throw new HttpError(400, "URL Claude Design invalide");
+            } else {
+              deps.settings.set("designLastUrl", body.designLastUrl);
+            }
             updated = true;
           }
           if ("filesystemScope" in body) {

@@ -21,3 +21,24 @@ export function needsDesignLogin(url: string | null | undefined): boolean {
   }
   return parsed.hostname === 'claude.com' && parsed.pathname.startsWith('/product')
 }
+
+/** L'URL si elle désigne une page Claude Design sur laquelle il est légitime de
+ *  rouvrir la webview, `null` sinon.
+ *
+ *  Sert à ne mémoriser que des cibles saines. La valeur naît d'une navigation
+ *  faite par une page distante : sans ce filtre, une redirection ferait rouvrir
+ *  la webview n'importe où, avec l'user-agent falsifié de Pupitre. La règle est
+ *  répétée dans `sidecar/src/design.ts` (avant persistance) et dans
+ *  `src-tauri/src/lib.rs` (avant navigation). */
+export function resumableDesignUrl(url: string | null | undefined): string | null {
+  if (!url || url.length > 2_048) return null
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'claude.ai') return null
+  if (parsed.pathname !== '/design' && !parsed.pathname.startsWith('/design/')) return null
+  return url
+}

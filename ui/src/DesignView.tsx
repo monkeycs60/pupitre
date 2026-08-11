@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { getDesignReachability } from './api'
-import { needsDesignLogin } from './designSession'
+import { getDesignReachability, getSettings, updateSettings } from './api'
+import { needsDesignLogin, resumableDesignUrl } from './designSession'
 import type { DesignReachability } from './types'
 
 /** Claude Design (claude.ai/design) n'existe que sur le web : pas d'API, pas de
@@ -44,8 +44,12 @@ export function DesignView({ suspended = false }: DesignViewProps) {
   const [dockError, setDockError] = useState<string | null>(null)
   const [needsLogin, setNeedsLogin] = useState(false)
   const [reachability, setReachability] = useState<DesignReachability | null>(null)
+  /** `undefined` : réglages pas encore lus. `null` : aucune reprise mémorisée. */
+  const [resume, setResume] = useState<string | null | undefined>(undefined)
+  /** Dernière valeur persistée, pour n'écrire que sur changement réel. */
+  const savedResume = useRef<string | null>(null)
 
-  const syncDock = useCallback(async () => {
+  const syncDock = useCallback(async (resumeUrl: string | null) => {
     const element = dockRef.current
     if (element === null || !isTauriRuntime()) return
     const rect = element.getBoundingClientRect()
@@ -55,6 +59,8 @@ export function DesignView({ suspended = false }: DesignViewProps) {
         y: rect.y,
         width: rect.width,
         height: rect.height,
+        // Ignorée si la webview existe déjà : elle ne sert qu'à sa création.
+        resumeUrl,
       })
       setDockError(null)
     } catch (reason) {
@@ -79,19 +85,23 @@ export function DesignView({ suspended = false }: DesignViewProps) {
       void hideDock()
       return
     }
-    void syncDock()
+    // Rien avant que la reprise ne soit connue : docker tout de suite créerait
+    // la webview sur l'écran d'accueil, et l'URL mémorisée arriverait trop tard
+    // puisqu'elle n'est lue qu'à la création.
+    if (resume === undefined) return
+    void syncDock(resume)
     const element = dockRef.current
-    const observer = element === null ? null : new ResizeObserver(() => void syncDock())
+    const observer = element === null ? null : new ResizeObserver(() => void syncDock(resume))
     if (element !== null) observer?.observe(element)
     // La même référence de fonction pour l'ajout et le retrait : deux fermetures
     // distinctes laisseraient l'écouteur attaché après démontage.
-    const handleResize = () => void syncDock()
+    const handleResize = () => void syncDock(resume)
     window.addEventListener('resize', handleResize)
     return () => {
       observer?.disconnect()
       window.removeEventListener('resize', handleResize)
     }
-  }, [hideDock, suspended, syncDock])
+  }, [hideDock, resume, suspended, syncDock])
 
   // La webview survit à la sortie de la vue : la recréer rechargerait claude.ai
   // et ferait perdre le travail en cours. On la masque seulement.
@@ -107,6 +117,13 @@ export function DesignView({ suspended = false }: DesignViewProps) {
         const url = await invoke<string | null>('design_webview_url')
         if (stopped || typeof url !== 'string') return
         setNeedsLogin(needsDesignLogin(url))
+        const resumable = resumableDesignUrl(url)
+        if (resumable !== null && resumable !== savedResume.current) {
+          // Mémorisé optimistement : un échec d'écriture ne doit pas relancer la
+          // tentative à chaque sondage, ce qui martèlerait le sidecar.
+          savedResume.current = resumable
+          void updateSettings({ designLastUrl: resumable }).catch(() => {})
+        }
       } catch {
         // URL illisible : ne rien conclure plutôt qu'alarmer à tort.
       }
@@ -118,6 +135,25 @@ export function DesignView({ suspended = false }: DesignViewProps) {
       clearInterval(timer)
     }
   }, [suspended])
+
+  // Reprise : rouvrir sur la dernière page Claude Design visitée plutôt que sur
+  // l'écran d'accueil. Lue avant le premier dock, la webview ne consultant cette
+  // URL qu'à sa création.
+  useEffect(() => {
+    const controller = new AbortController()
+    void getSettings(controller.signal)
+      .then((settings) => {
+        if (controller.signal.aborted) return
+        const url = resumableDesignUrl(settings.designLastUrl)
+        savedResume.current = url
+        setResume(url)
+      })
+      .catch(() => {
+        // Réglages illisibles : ouvrir l'accueil plutôt que bloquer la vue.
+        if (!controller.signal.aborted) setResume(null)
+      })
+    return () => controller.abort()
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()

@@ -143,6 +143,9 @@ export interface Settings {
   conductorToolTokens?: number
   /** Contexte d'un tour à vide, mesuré par « Vérifier en réel ». */
   contextBaseline?: number
+  /** Dernière page Claude Design visitée, pour rouvrir la vue dessus. `null`
+   *  efface la reprise. Le sidecar refuse toute URL hors `claude.ai/design`. */
+  designLastUrl?: string | null
 }
 
 export class ApiError extends Error {

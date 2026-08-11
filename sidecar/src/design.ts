@@ -26,6 +26,27 @@ export const DESIGN_USER_AGENT =
 
 const PROBE_TIMEOUT_MS = 8_000;
 
+/** Vrai si l'URL est une page Claude Design sur laquelle il est légitime de
+ *  rouvrir la webview.
+ *
+ *  Volontairement étroit. La valeur candidate vient d'une navigation effectuée
+ *  par une page distante, relayée par le frontend puis persistée : sans ce
+ *  filtre, une redirection ou une base modifiée pourrait faire rouvrir la
+ *  webview n'importe où, avec l'user-agent falsifié de Pupitre. La même règle
+ *  est répétée dans `src-tauri/src/lib.rs`, qui ne fait pas confiance au
+ *  frontend, et dans `ui/src/designSession.ts`. */
+export function isResumableDesignUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 2_048) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || url.hostname !== "claude.ai") return false;
+  return url.pathname === "/design" || url.pathname.startsWith("/design/");
+}
+
 export type DesignReachability =
   /** claude.ai a répondu quelque chose — y compris un 403, qui ne dit rien du
    *  sort de la vraie webview. La fenêtre a toutes ses chances. */

@@ -227,6 +227,26 @@ fn design_url() -> Result<tauri::Url, String> {
         .map_err(|error| error.to_string())
 }
 
+/// Filtre l'URL de reprise proposée par le frontend, et n'en garde que ce qui
+/// est réellement une page Claude Design.
+///
+/// Cette valeur est née d'une navigation effectuée par une page distante, a
+/// transité par le frontend et dormi en base : la faire suivre sans contrôle
+/// ouvrirait la webview n'importe où, avec l'user-agent falsifié de Pupitre.
+/// La même règle existe dans `sidecar/src/design.ts` et
+/// `ui/src/designSession.ts` ; elle est répétée ici parce que Rust est le seul
+/// point où elle est appliquée juste avant la navigation.
+fn resumable_design_url(candidate: Option<String>) -> Option<tauri::Url> {
+    let url = candidate?.parse::<tauri::Url>().ok()?;
+    if url.scheme() != "https" || url.host_str() != Some("claude.ai") {
+        return None;
+    }
+    if url.path() != "/design" && !url.path().starts_with("/design/") {
+        return None;
+    }
+    Some(url)
+}
+
 /// Docke Claude Design dans la fenêtre principale, sur le rectangle que le
 /// frontend réserve dans sa mise en page.
 ///
@@ -234,6 +254,10 @@ fn design_url() -> Result<tauri::Url, String> {
 /// reconstruire à chaque redimensionnement rechargerait la page et ferait perdre
 /// le travail en cours. Une webview est une surface de l'OS, dessinée AU-DESSUS
 /// du DOM : c'est au frontend de la masquer quand il ouvre un overlay.
+///
+/// `resume_url` est la dernière page Claude Design visitée, pour rouvrir sur le
+/// projet en cours plutôt que sur l'écran d'accueil. Elle n'est consultée qu'à la
+/// création, et seulement si elle franchit `resumable_design_url`.
 ///
 /// Sécurité : cette webview vit dans la fenêtre `main`, et `windows: ["main"]`
 /// de `default.json` matche bel et bien toutes les webviews de cette fenêtre.
@@ -246,6 +270,7 @@ fn dock_design_webview(
     y: f64,
     width: f64,
     height: f64,
+    resume_url: Option<String>,
 ) -> Result<(), String> {
     // Une taille nulle ou négative fait échouer la création côté WebKitGTK, et
     // le frontend peut mesurer un rectangle vide pendant sa première frame.
@@ -266,11 +291,15 @@ fn dock_design_webview(
     let window = app
         .get_window(MAIN_WINDOW_LABEL)
         .ok_or_else(|| "fenêtre principale introuvable".to_string())?;
+    let target = match resumable_design_url(resume_url) {
+        Some(url) => url,
+        None => design_url()?,
+    };
     window
         .add_child(
             tauri::webview::WebviewBuilder::new(
                 DESIGN_WEBVIEW_LABEL,
-                tauri::WebviewUrl::External(design_url()?),
+                tauri::WebviewUrl::External(target),
             )
             .user_agent(DESIGN_USER_AGENT),
             position,

@@ -27,17 +27,34 @@ afterEach(() => {
   invoked.length = 0
   invoke.mockClear()
   dockedUrl = null
+  storedSettings = {}
+  settingsWrites.length = 0
   delete (window as Record<string, unknown>).__TAURI_INTERNALS__
 })
 
+/** Réglages servis par le faux sidecar, et écritures qu'il a reçues. */
+let storedSettings: Record<string, unknown> = {}
+const settingsWrites: Array<Record<string, unknown>> = []
+
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
 function stubReachability(reachability: DesignReachability) {
-  globalThis.fetch = mock((input: string | URL | Request) => {
+  globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input)
-    if (!url.includes('/api/design/reachability')) throw new Error(`route inattendue : ${url}`)
-    return Promise.resolve(new Response(JSON.stringify(reachability), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    }))
+    if (url.includes('/api/design/reachability')) return json(reachability)
+    if (url.includes('/api/settings')) {
+      if ((init?.method ?? 'GET') === 'GET') return json(storedSettings)
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+      settingsWrites.push(body)
+      storedSettings = { ...storedSettings, ...body }
+      return json(storedSettings)
+    }
+    throw new Error(`route inattendue : ${url}`)
   }) as unknown as typeof fetch
 }
 
@@ -110,4 +127,41 @@ test('signale une machine hors ligne plutôt que de blâmer la webview', async (
 
   await screen.findByText(/injoignable/i)
   expect(screen.getByText(/Unable to connect/)).toBeDefined()
+})
+
+test('rouvre la webview sur la dernière page Claude Design visitée', async () => {
+  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  storedSettings = { designLastUrl: 'https://claude.ai/design/019e2187-fb46-71f4-8546-559244c11de1' }
+  stubReachability(reachable)
+
+  render(createElement(DesignView))
+
+  await waitFor(() => expect(commandsUsed()).toContain('dock_design_webview'))
+  const dock = invoked.find((call) => call.command === 'dock_design_webview')!
+  // L'URL n'est lue qu'à la création de la webview : docker avant d'avoir lu les
+  // réglages ouvrirait définitivement l'écran d'accueil.
+  expect(dock.args?.resumeUrl).toBe(storedSettings.designLastUrl)
+})
+
+test('mémorise la page atteinte, et seulement si elle est saine', async () => {
+  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  stubReachability(reachable)
+  dockedUrl = 'https://claude.ai/design/019e2189-400e-70eb-ad40-dde76b8042ad'
+
+  render(createElement(DesignView))
+
+  await waitFor(() => expect(settingsWrites.length).toBeGreaterThan(0))
+  expect(settingsWrites[0]).toEqual({ designLastUrl: dockedUrl })
+})
+
+test('ne mémorise pas la page marketing comme cible de reprise', async () => {
+  ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  stubReachability(reachable)
+  dockedUrl = 'https://claude.com/product/design'
+
+  render(createElement(DesignView))
+
+  await screen.findByText(/pas connecté/i)
+  // Sinon la vue rouvrirait indéfiniment sur la page marketing.
+  expect(settingsWrites).toHaveLength(0)
 })
