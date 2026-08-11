@@ -29,7 +29,7 @@ import {
   type HandoffDebriefArtifact,
   type DebriefRunner,
 } from "./debriefs";
-import { DESIGN_URL, probeDesignAccess } from "./design";
+import { DESIGN_URL, probeDesignReachability } from "./design";
 import { GitProjectError, type GitProjectService } from "./git";
 import {
   TesterBusyError,
@@ -1007,14 +1007,12 @@ export function createServer(deps: ServerDeps) {
           return json({ ok: true });
         }
 
-        // Interrogé avant d'ouvrir la fenêtre Claude Design : si claude.ai
-        // refuse l'user-agent de la webview, l'interface propose le navigateur
-        // système au lieu d'afficher une fenêtre bloquée en 403.
-        if (request.method === "GET" && pathname === "/api/design/access") {
-          // L'URL voyage avec le verdict : le bouton de repli du frontend ouvre
-          // ainsi exactement la cible que le probe vient de tester, sans en
-          // garder une troisième copie codée en dur.
-          return json({ ...(await probeDesignAccess()), url: DESIGN_URL });
+        // N'ouvre jamais la fenêtre et ne la bloque jamais : dit seulement si
+        // claude.ai répond, pour que la vue Design distingue « hors ligne » de
+        // « ouvre plutôt dans le navigateur ». L'URL voyage avec la réponse pour
+        // que le bouton de repli ne garde pas une copie codée en dur.
+        if (request.method === "GET" && pathname === "/api/design/reachability") {
+          return json({ ...(await probeDesignReachability()), url: DESIGN_URL });
         }
 
         if (request.method === "GET" && pathname === "/api/gamification") {

@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { DESIGN_URL, DESIGN_USER_AGENT, probeDesignAccess } from "../src/design";
+import {
+  DESIGN_URL,
+  DESIGN_USER_AGENT,
+  probeDesignReachability,
+} from "../src/design";
 
 function fakeFetch(
   responder: (input: string, init: RequestInit) => Response | Promise<Response>,
@@ -13,69 +17,50 @@ function fakeFetch(
   return { calls, impl };
 }
 
-test("interroge claude.ai avec l'user-agent Safari macOS et sans suivre les redirections", async () => {
+test("interroge claude.ai sans suivre les redirections ni lire le corps", async () => {
   const { calls, impl } = fakeFetch(() => new Response(null, { status: 200 }));
 
-  const access = await probeDesignAccess(impl);
-
-  expect(access).toEqual({ ok: true, status: 200 });
+  expect(await probeDesignReachability(impl)).toEqual({
+    reachable: true,
+    status: 200,
+  });
   expect(calls).toHaveLength(1);
   expect(calls[0]!.url).toBe(DESIGN_URL);
-  const headers = new Headers(calls[0]!.init.headers);
-  expect(headers.get("user-agent")).toBe(DESIGN_USER_AGENT);
-  // Suivre la redirection téléchargerait la page marketing pour rien : le seul
-  // fait mesuré est le verdict du filtre d'entrée de claude.ai.
   expect(calls[0]!.init.redirect).toBe("manual");
 });
 
-test("considère une redirection comme un accès accordé", async () => {
-  // Sans cookie de session, claude.ai/design/ renvoie une 302 vers la page
-  // marketing claude.com. Le filtre d'entrée a donc laissé passer la requête.
-  const { impl } = fakeFetch(() => new Response(null, { status: 302 }));
-
-  expect(await probeDesignAccess(impl)).toEqual({ ok: true, status: 302 });
-});
-
-test("signale un refus d'user-agent sur 403", async () => {
+test("compte un 403 comme joignable, pas comme un refus de la webview", async () => {
+  // Un fetch depuis le sidecar reçoit un 403 même avec l'user-agent exact de la
+  // fenêtre : Cloudflare discrimine sur l'empreinte TLS, hors de portée d'un
+  // client non-navigateur. Conclure « refusé » ici bloquerait la fenêtre en
+  // permanence alors qu'elle fonctionne — c'est le bug que ce test verrouille.
   const { impl } = fakeFetch(
     () => new Response('{"error":{"type":"forbidden"}}', { status: 403 }),
   );
 
-  expect(await probeDesignAccess(impl)).toEqual({
-    ok: false,
-    reason: "ua-refused",
+  expect(await probeDesignReachability(impl)).toEqual({
+    reachable: true,
     status: 403,
   });
 });
 
-test("distingue une panne de claude.ai d'un refus d'user-agent", async () => {
-  const { impl } = fakeFetch(() => new Response(null, { status: 503 }));
-
-  expect(await probeDesignAccess(impl)).toEqual({
-    ok: false,
-    reason: "unavailable",
-    status: 503,
-  });
-});
-
-test("signale une machine hors ligne sans la confondre avec un refus", async () => {
+test("signale une machine hors ligne", async () => {
   const { impl } = fakeFetch(() => {
     throw new TypeError("Unable to connect");
   });
 
-  const access = await probeDesignAccess(impl);
+  const reachability = await probeDesignReachability(impl);
 
-  expect(access.ok).toBe(false);
-  if (access.ok) throw new Error("accès inattendu");
-  expect(access.reason).toBe("unreachable");
-  expect(access.status).toBeNull();
+  expect(reachability.reachable).toBe(false);
+  if (reachability.reachable) throw new Error("joignabilité inattendue");
+  expect(reachability.message).toContain("Unable to connect");
 });
 
-test("la fenêtre Tauri présente exactement le même user-agent que le probe", async () => {
-  // Garde anti-dérive : si les deux chaînes divergent, le probe validerait un
-  // accès que la vraie webview se ferait refuser, et le repli ne partirait
-  // jamais. Les deux constantes vivent dans des langages différents, donc rien
-  // d'autre que ce test ne les tient ensemble.
+test("la fenêtre Tauri présente exactement le même user-agent et la même cible", async () => {
+  // Garde anti-dérive : la webview ne se charge qu'avec cet user-agent précis,
+  // et le bouton de repli doit ouvrir la même URL que la fenêtre. Les deux
+  // constantes vivent dans des langages différents, donc rien d'autre que ce
+  // test ne les tient ensemble.
   const rust = await Bun.file(
     new URL("../../src-tauri/src/lib.rs", import.meta.url),
   ).text();

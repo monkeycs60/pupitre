@@ -3,7 +3,7 @@ import type {
   Conversation,
   ConversationSpeed,
   Debrief,
-  DesignAccess,
+  DesignReachability,
   GitDiff,
   GitSnapshot,
   FleetItem,
@@ -312,8 +312,8 @@ export function getFleet(signal?: AbortSignal): Promise<FleetItem[]> {
   return fetchJson('/api/fleet', { signal })
 }
 
-export function getDesignAccess(signal?: AbortSignal): Promise<DesignAccess> {
-  return fetchJson('/api/design/access', { signal })
+export function getDesignReachability(signal?: AbortSignal): Promise<DesignReachability> {
+  return fetchJson('/api/design/reachability', { signal })
 }
 
 export function searchGlobal(

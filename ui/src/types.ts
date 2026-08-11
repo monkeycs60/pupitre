@@ -5,19 +5,15 @@ export type PresetPermissionMode =
 export type FilesystemScope = 'project-and-ai-roots' | 'full-system'
 export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'settings'
 
-/** Verdict du filtre d'entrée de claude.ai sur l'user-agent de la webview,
- *  renvoyé par `GET /api/design/access`. Voir `sidecar/src/design.ts`.
+/** Joignabilité de claude.ai, renvoyée par `GET /api/design/reachability`.
  *
- *  `url` est la cible réellement testée par le probe : le repli navigateur
- *  ouvre celle-là, pas une troisième copie codée en dur dans le frontend. */
-export type DesignAccess = { url: string } & (
-  | { ok: true; status: number }
-  /** claude.ai a rejeté l'user-agent de la webview : seul le navigateur reste. */
-  | { ok: false; reason: 'ua-refused'; status: number }
-  /** claude.ai répond mais en erreur : panne côté Anthropic, pas un refus. */
-  | { ok: false; reason: 'unavailable'; status: number }
-  /** Rien n'a répondu : hors ligne, DNS, coupure réseau. */
-  | { ok: false; reason: 'unreachable'; status: null; message: string }
+ *  Ne dit rien du verdict de la webview : un 403 côté sidecar est normal et
+ *  compte comme joignable, Cloudflare refusant tout client non-navigateur.
+ *  Voir `sidecar/src/design.ts`. `url` est la cible testée, que le bouton de
+ *  repli réutilise plutôt que d'en garder une copie codée en dur. */
+export type DesignReachability = { url: string } & (
+  | { reachable: true; status: number }
+  | { reachable: false; message: string }
 )
 
 export interface Attachment {

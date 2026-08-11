@@ -6,12 +6,15 @@
  * WebKitGTK honnête reçoit un 403 `{"error":{"type":"forbidden"}}`, et un UA
  * qui se déclare Chrome franchit le filtre mais échoue ensuite en boucle sur le
  * challenge Cloudflare, dont le JavaScript teste le moteur réel et voit WebKit.
+ * La seule combinaison qui passe les deux barrières annonce Safari sur macOS.
  *
- * La seule combinaison qui passe les deux barrières annonce Safari sur macOS :
- * le moteur promis est bien celui qui exécute la page. C'est un contournement
- * d'un filtre posé volontairement par Anthropic, donc il peut cesser de
- * fonctionner sans préavis — d'où le probe ci-dessous, qui permet à l'interface
- * de proposer le navigateur système au lieu d'afficher une fenêtre en erreur.
+ * ATTENTION — ce module ne sait PAS prédire ce que la webview obtiendra. Un
+ * `fetch` depuis le sidecar reçoit un 403 quels que soient ses en-têtes, y
+ * compris avec l'user-agent exact de la fenêtre : Cloudflare discrimine sur
+ * l'empreinte TLS et HTTP/2, qu'aucun client non-navigateur ne peut imiter.
+ * Un preflight qui conclurait « refusé » sur ce 403 bloquerait donc la fenêtre
+ * en permanence, alors qu'elle fonctionne. La seule chose mesurable ici est
+ * l'accessibilité réseau de claude.ai — c'est tout ce que la fonction rend.
  */
 
 export const DESIGN_URL = "https://claude.ai/design/";
@@ -23,46 +26,31 @@ export const DESIGN_USER_AGENT =
 
 const PROBE_TIMEOUT_MS = 8_000;
 
-export type DesignAccess =
-  | { ok: true; status: number }
-  /** Le filtre d'entrée de claude.ai a rejeté l'user-agent : le repli
-   *  navigateur est le seul chemin restant. */
-  | { ok: false; reason: "ua-refused"; status: number }
-  /** claude.ai répond, mais en erreur : panne côté Anthropic, pas un refus. */
-  | { ok: false; reason: "unavailable"; status: number }
-  /** Rien n'a répondu : machine hors ligne, DNS, coupure réseau. */
-  | { ok: false; reason: "unreachable"; status: null; message: string };
+export type DesignReachability =
+  /** claude.ai a répondu quelque chose — y compris un 403, qui ne dit rien du
+   *  sort de la vraie webview. La fenêtre a toutes ses chances. */
+  | { reachable: true; status: number }
+  /** Rien n'a répondu : hors ligne, DNS, coupure réseau. Ni la fenêtre ni le
+   *  navigateur n'afficheront Claude Design. */
+  | { reachable: false; message: string };
 
-/** Teste le verdict du filtre d'entrée de claude.ai sans ouvrir de fenêtre.
- *
- *  Aucun cookie n'est envoyé : une session absente produit une 302 vers la page
- *  marketing, ce qui suffit à prouver que l'user-agent est accepté. Seul le
- *  statut est lu, jamais le corps. */
-export async function probeDesignAccess(
+/** Vérifie que claude.ai répond, sans prétendre deviner le verdict du filtre
+ *  d'entrée pour la webview. N'ouvre rien et ne lit jamais le corps. */
+export async function probeDesignReachability(
   fetchImpl: typeof fetch = fetch,
-): Promise<DesignAccess> {
-  let response: Response;
+): Promise<DesignReachability> {
   try {
-    response = await fetchImpl(DESIGN_URL, {
+    const response = await fetchImpl(DESIGN_URL, {
       method: "GET",
       headers: { "user-agent": DESIGN_USER_AGENT },
       redirect: "manual",
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
+    return { reachable: true, status: response.status };
   } catch (error) {
     return {
-      ok: false,
-      reason: "unreachable",
-      status: null,
+      reachable: false,
       message: error instanceof Error ? error.message : String(error),
     };
   }
-
-  if (response.status === 403) {
-    return { ok: false, reason: "ua-refused", status: 403 };
-  }
-  if (response.status >= 400) {
-    return { ok: false, reason: "unavailable", status: response.status };
-  }
-  return { ok: true, status: response.status };
 }
