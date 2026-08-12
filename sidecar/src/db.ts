@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { countConversationMessages } from "./message-count";
+import { MESSAGE_COUNT_MIGRATION_KEY } from "./stores/settings";
 
 export function dataDir(): string {
   return process.env.PUPITRE_DATA_DIR ?? join(homedir(), ".local/share/pupitre");
@@ -416,7 +417,6 @@ function dropColumn(db: Database, table: string, column: string): void {
   }
 }
 
-const MESSAGE_COUNT_MIGRATION_KEY = "conversation-message-count-v2";
 
 function migrateConversationMessageCounts(db: Database): void {
   const migrated = db.query("SELECT 1 FROM settings WHERE key = ?")

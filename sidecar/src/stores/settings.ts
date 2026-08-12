@@ -1,5 +1,14 @@
 import type { Database } from "bun:sqlite";
 
+/**
+ * Repères de migration écrits par `openDb` dans la même table que les réglages
+ * utilisateur. Ils ne font pas partie du contrat exposé par `all()`, que le
+ * serveur sérialise tel quel dans sa réponse HTTP.
+ */
+export const MESSAGE_COUNT_MIGRATION_KEY = "conversation-message-count-v2";
+
+const INTERNAL_KEYS = new Set([MESSAGE_COUNT_MIGRATION_KEY]);
+
 export class SettingsStore {
   constructor(private db: Database) {}
 
@@ -22,6 +31,8 @@ export class SettingsStore {
       key: string;
       value: string;
     }>;
-    return Object.fromEntries(rows.map((row) => [row.key, JSON.parse(row.value)]));
+    return Object.fromEntries(rows
+      .filter((row) => !INTERNAL_KEYS.has(row.key))
+      .map((row) => [row.key, JSON.parse(row.value)]));
   }
 }

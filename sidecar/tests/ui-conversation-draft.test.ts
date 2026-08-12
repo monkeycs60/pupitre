@@ -16,6 +16,7 @@ test("le brouillon de conversation transmet explicitement le choix orchestrateur
     attachments: [],
   })).toEqual({
     projectId: "project-1",
+    presetId: null,
     provider: "claude",
     model: "sonnet",
     effort: "high",
