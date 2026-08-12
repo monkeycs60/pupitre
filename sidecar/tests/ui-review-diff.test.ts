@@ -88,3 +88,21 @@ test("un flag multi-lignes n'est porteur de carte que sur sa dernière ligne", (
   // le surlignage, lui, reste sur toutes les lignes du range :
   expect(lines.filter((line) => line.flags.length > 0)).toHaveLength(2);
 });
+
+test("le message d'un signalement n'est porté que par une ligne, pas répété sur le range", () => {
+  // Le marqueur affiche le message entier une fois déplié : le laisser sur
+  // toutes les lignes du range répétait le texte autant de fois.
+  const diff = [
+    "diff --git a/src/a.ts b/src/a.ts",
+    "--- a/src/a.ts",
+    "+++ b/src/a.ts",
+    "@@ -1,5 +1,5 @@",
+    "+une", "+deux", "+trois", "+quatre",
+  ].join("\n");
+  const lines = parseUnifiedDiff(diff, [flag({ file: "src/a.ts", line_start: 1, line_end: 4 })]);
+
+  // Un seul porteur de marqueur et de carte…
+  expect(lines.filter((line) => line.cardFlags.length > 0)).toHaveLength(1);
+  // …mais les quatre lignes restent surlignées.
+  expect(lines.filter((line) => line.severity !== null)).toHaveLength(4);
+});
