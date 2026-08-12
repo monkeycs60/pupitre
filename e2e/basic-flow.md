@@ -125,6 +125,10 @@ dans le vrai frontend avec `agent-browser`; les cas d'erreur, de concurrence et
 de données structurées sont complétés par les tests d'intégration Bun. Les fake
 bins M3 répondent aux prompts Gardien, Débrief et Tester de façon déterministe.
 
+> Relevé daté, conservé tel quel. Le scénario 21 s'appuyait sur le mode Gardien
+> informatif/bloquant et l'acquittement obligatoire, supprimés depuis par la
+> refonte « calque Git » : c'est le protocole de rejeu ci-dessous qui fait foi.
+
 | # | Scénario | Validation | Résultat |
 |---|---|---|---|
 | 18 | Création projet + conversation Codex | Navigateur | ✅ formulaire, conversation, streaming fake et cartes outils rendus sans appel provider réel |
@@ -155,8 +159,11 @@ Utiliser l'environnement fake M2 ci-dessus, puis :
 
 1. Créer un projet pointant vers un dépôt Git avec au moins un commit, modifier
    un fichier et ouvrir une conversation rattachée au projet.
-2. Lancer « Review Gardien », ouvrir le diff thermique, acquitter un point puis
-   demander un contre-avis. Vérifier qu'aucune validation globale n'est proposée.
+2. Lancer « Relire ce diff », suivre la progression `Zone N/M`, puis vérifier que
+   les signalements apparaissent ancrés dans le diff annoté — une seule carte par
+   signalement, même sur un range multi-lignes. Dispatcher un signalement
+   (« Envoyer un agent ») et constater la carte de sous-tâche inline, puis
+   demander un contre-avis sur un autre.
 3. Lancer « Reprendre le contrôle », questionner le débrief puis effectuer une
    passation vers l'autre provider ; la nouvelle conversation doit citer le bilan.
 4. Ouvrir l'onglet Git, sélectionner deux références et afficher leur diff ; les
@@ -164,7 +171,7 @@ Utiliser l'environnement fake M2 ci-dessus, puis :
 5. Cliquer « Tester », choisir un scope et l'exécuter ; le statut, les sorties,
    les captures et le verdict doivent mettre à jour la même carte dans le fil.
    Quitter ensuite la conversation pendant une exécution : à son terme, le badge
-   et la vue Gardien doivent refléter l'acquittement sans rouvrir le fil source.
+   et la vue Gardien doivent refléter la résolution sans rouvrir le fil source.
 
 Les équivalents déterministes se trouvent dans `tests/reviews.test.ts`,
 `tests/debriefs.test.ts`, `tests/git.test.ts`, `tests/testing.test.ts` et

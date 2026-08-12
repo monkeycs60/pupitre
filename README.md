@@ -24,9 +24,11 @@ Les deux CLIs sont normalisés en un schéma d'événements unifié (`sidecar/sr
 
 ## Contrôle des changements (M3)
 
-- **Gardien** analyse le diff Git avec un modèle fort, ancre ses alertes sur les
-  lignes concernées et demande d'acquitter les décisions une par une. Les points
-  rouges peuvent recevoir automatiquement un contre-avis du provider opposé.
+- **Gardien** analyse le diff Git avec un modèle fort et ancre ses signalements
+  sur les lignes concernées. Il surligne, l'utilisateur dirige : par signalement,
+  envoyer un agent avec une consigne, demander un contre-avis au provider opposé,
+  marquer vu ou ignorer. Les signalements rouges peuvent recevoir automatiquement
+  un contre-avis.
 - **Résumé session** produit un bilan court des fonctionnalités et correctifs
   implémentés, avec les éléments restant explicitement à terminer. Le **Handoff**
   conserve le débrief complet pour transférer le travail à une nouvelle session.
