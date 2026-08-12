@@ -20,6 +20,40 @@ export interface GitGraphRow {
   segments: GitGraphSegment[]
 }
 
+export interface GitGraphCellGeometry {
+  width: number
+  height: number
+  dot: { x: number, y: number }
+  paths: Array<{ d: string, kind: 'continuation' | 'parent' }>
+}
+
+const LANE_WIDTH = 14
+/** Doit rester égal au `min-height` de `.git-commit` (git.css) : sinon le
+ *  graphe se coupe entre deux lignes. */
+const ROW_HEIGHT = 58
+
+/** Géométrie SVG d'une ligne de graphe : point du commit et courbes sortantes. */
+export function gitGraphCellGeometry(row: GitGraphRow): GitGraphCellGeometry {
+  const x = (lane: number): number => lane * LANE_WIDTH + LANE_WIDTH / 2
+  const height = ROW_HEIGHT
+  const middle = height / 2
+  const paths = row.segments.map((segment) => segment.kind === 'continuation'
+    ? {
+        kind: segment.kind,
+        d: `M ${x(segment.from)} 0 C ${x(segment.from)} ${middle}, ${x(segment.to)} ${middle}, ${x(segment.to)} ${height}`,
+      }
+    : {
+        kind: segment.kind,
+        d: `M ${x(row.lane)} ${middle} C ${x(row.lane)} ${height}, ${x(segment.to)} ${middle}, ${x(segment.to)} ${height}`,
+      })
+  return {
+    width: row.laneCount * LANE_WIDTH,
+    height,
+    dot: { x: x(row.lane), y: middle },
+    paths,
+  }
+}
+
 export function updateGitCompareRef(
   refs: GitCompareRefs,
   target: GitCompareTarget,

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { gitRefOptions, layoutGitGraph, updateGitCompareRef } from '../../ui/src/gitGraph'
+import { gitGraphCellGeometry, gitRefOptions, layoutGitGraph, updateGitCompareRef } from '../../ui/src/gitGraph'
 import type { GitCommit, GitSnapshot } from '../../ui/src/types'
 
 function commit(sha: string, parents: string[]): GitCommit {
@@ -70,4 +70,24 @@ test('alimente la base ou la cible depuis un commit sans écraser l’autre réf
     baseRef: 'base',
     headRef: 'commit-b',
   })
+})
+
+test('place le point du commit au centre de sa lane', () => {
+  const [row] = layoutGitGraph([commit('a', ['b']), commit('b', [])])
+  const geometry = gitGraphCellGeometry(row!)
+
+  expect(geometry.dot).toEqual({ x: 7, y: 29 })
+  expect(geometry.width).toBe(14)
+})
+
+test('trace un chemin vers chaque parent d’un merge', () => {
+  const rows = layoutGitGraph([
+    commit('m', ['a', 'b']),
+    commit('a', []),
+    commit('b', []),
+  ])
+  const geometry = gitGraphCellGeometry(rows[0]!)
+
+  expect(geometry.paths.filter((path) => path.kind === 'parent')).toHaveLength(2)
+  for (const path of geometry.paths) expect(path.d.startsWith('M ')).toBe(true)
 })
