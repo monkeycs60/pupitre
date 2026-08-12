@@ -17,6 +17,15 @@
 - Dans ce cas, édite le sidecar, vérifie par `bun test` dans `sidecar/` (qui n'a besoin d'aucun sidecar vivant), et signale dans le bloc TODO que le changement exige un redémarrage pour être actif, en donnant la commande.
 - `dev:sidecar` te revient pleinement hors conversation Pupitre, dans un terminal où rien ne diffuse.
 
+## Vérifier dans le navigateur, pas seulement dans les tests
+
+- Toute affirmation sur ce que l'interface **fait** se vérifie dans l'app qui tourne avant d'être annoncée, correctif comme fonctionnalité ajoutée. Un test vert prouve qu'une fonction rend ce qu'on lui a demandé ; il ne prouve pas que l'écran est juste.
+- Vite sert le même front que l'app sur `http://localhost:5173`, avec rechargement à chaud : ouvre-le avec Claude in Chrome. Un changement d'UI n'exige **aucun redémarrage du sidecar**, donc cette vérification reste permise depuis une conversation Pupitre.
+- **Mesure dans le DOM plutôt que de juger à l'œil** : compte les éléments, lis leurs attributs, confronte-les à ce que tu affirmes. Deux bugs du graphe Git sont passés sous des captures zoomées avant d'être trouvés en comparant des coordonnées — 185 lignes sur 186 étaient coupées.
+- Prends une capture et joins-la à la réponse : elle vaut mieux que la description du résultat.
+- Lance les deux suites : `cd sidecar && bun test` ne joue pas les tests de l'UI, que `cd ui && bun test` exécute (happy-dom + testing-library).
+- Cherche la contradiction plutôt que la confirmation : compte d'éléments attendu, absence de doublon, continuité d'un tracé.
+
 ## Fin de tâche et Git
 
 - À la fin de toute tâche qui modifie le dépôt, vérifie les changements et les tests pertinents, puis crée un commit descriptif avant de rendre la main.
