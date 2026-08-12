@@ -11,8 +11,8 @@ Le rôle de review : un modèle en lecture seule qui examine un diff et produit 
 _Avoid_ : reviewer, garde, mode bloquant, Architecte (profil séparé rejeté)
 
 **Sévérité** :
-L'urgence de traitement d'un signalement, indépendante de sa nature (risque ou qualité) : Rouge = à traiter avant de pousser, Orange = mérite un traitement, Gris = cosmétique. La nature du constat est portée par la catégorie, jamais par la couleur.
-_Avoid_ : criticité, niveau de risque (la sévérité n'est pas réservée au risque)
+La gravité d'un signalement au sens « red flag », indépendante de sa nature (risque ou qualité). Rouge = ce qui ne devrait jamais apparaître dans le code : erreur de débutant, problème de performance, code dangereux ou horrible. Orange = moins grave mais aux implications potentiellement sérieuses : choix sous-optimaux, patterns douteux. Gris = correct mais améliorable. La nature du constat est portée par la catégorie, jamais par la couleur.
+_Avoid_ : criticité, niveau de risque (la sévérité n'est pas réservée au risque), urgence
 
 **Verdict d'adéquation** :
 La synthèse rendue par le Gardien en tête d'une review : le diff répond-il à la demande utilisateur qui l'a produit, entièrement ou partiellement. Ce n'est pas un signalement — il n'est ancré sur aucune ligne.
