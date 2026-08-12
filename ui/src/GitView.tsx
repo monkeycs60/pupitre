@@ -4,6 +4,7 @@ import { DiffViewer } from './DiffViewer'
 import { gitRefOptions, layoutGitGraph, updateGitCompareRef } from './gitGraph'
 import { buildFileTree } from './reviewFileTree'
 import { reviewStartInput } from './reviewLaunch'
+import { isScanRunning } from './reviewStatus'
 import { PROVIDER_EFFORTS, REVIEW_MODELS } from './modelOptions'
 import type { Conversation, GitSnapshot, Preset, Project, Provider, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
 
@@ -65,7 +66,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   }, [project.default_preset_id])
 
   useEffect(() => {
-    const scanning = reviewStatus?.running !== null
+    const scanning = isScanRunning(reviewStatus)
     if (wasScanning.current && !scanning) {
       void listProjectReviews(project.id).then((loaded) => {
         setReviews(loaded)
@@ -156,7 +157,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
 
   return <div className="git-workspace">
     <header className="git-header"><div><h1>Git · {project.name}</h1><p>{snapshot?.currentBranch ?? 'HEAD détachée'}</p></div>
-      <div className="git-review-actions"><button type="button" className="primary-button" onClick={() => void relire()} disabled={!conversation || isReviewing || reviewStatus?.running !== null}>{isReviewing ? 'Lancement…' : reviewStatus?.running ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : 'Relire ce diff'}</button><details className="git-review-settings"><summary>⚙</summary><div><label>Preset <select value={presetId} onChange={(event) => selectPreset(event.target.value)}><option value="">Configuration manuelle</option>{presets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Provider <select value={provider} onChange={(event) => { const next = event.target.value as Provider; setProvider(next); setModel(REVIEW_MODELS[next][0]) }}><option value="codex">codex</option><option value="claude">claude</option></select></label><label>Modèle <select value={model} onChange={(event) => setModel(event.target.value)}>{REVIEW_MODELS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Effort <select value={effort} onChange={(event) => setEffort(event.target.value)}>{PROVIDER_EFFORTS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>{presets.find((item) => item.id === presetId) && !presets.find((item) => item.id === presetId)?.built_in ? <label><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Mémoriser dans le preset</label> : null}</div></details></div>
+      <div className="git-review-actions"><button type="button" className="primary-button" onClick={() => void relire()} disabled={!conversation || isReviewing || isScanRunning(reviewStatus)}>{isReviewing ? 'Lancement…' : reviewStatus?.running ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : 'Relire ce diff'}</button><details className="git-review-settings"><summary>⚙</summary><div><label>Preset <select value={presetId} onChange={(event) => selectPreset(event.target.value)}><option value="">Configuration manuelle</option>{presets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Provider <select value={provider} onChange={(event) => { const next = event.target.value as Provider; setProvider(next); setModel(REVIEW_MODELS[next][0]) }}><option value="codex">codex</option><option value="claude">claude</option></select></label><label>Modèle <select value={model} onChange={(event) => setModel(event.target.value)}>{REVIEW_MODELS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Effort <select value={effort} onChange={(event) => setEffort(event.target.value)}>{PROVIDER_EFFORTS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>{presets.find((item) => item.id === presetId) && !presets.find((item) => item.id === presetId)?.built_in ? <label><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Mémoriser dans le preset</label> : null}</div></details></div>
     </header>
     {error ? <div className="git-error" role="alert">{error}</div> : null}
     <section className="git-compare" aria-label="Comparer deux références"><label>Base <select value={baseRef} onChange={(event) => updateRef('base', event.target.value)}>{refs.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Cible <select value={headRef} onChange={(event) => updateRef('head', event.target.value)}>{refs.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><button type="button" onClick={() => void compare()} disabled={!baseRef || !headRef || isComparing}>{isComparing ? 'Comparaison…' : 'Afficher le diff'}</button></section>
