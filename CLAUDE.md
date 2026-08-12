@@ -21,7 +21,16 @@ Dans ce cas, procède ainsi :
   être actif, en donnant la commande.
 
 `dev:sidecar` te revient en revanche pleinement hors conversation Pupitre — dans
-un terminal, où rien ne diffuse.
+un terminal, où rien ne diffuse. Pour savoir où tu es, remonte l'arbre des
+processus depuis ton shell : un ancêtre `target/debug/app` ou le sidecar
+lui-même signifie que tu réponds depuis Pupitre.
+
+Le binaire Tauri supervise le sidecar et le relance quand il meurt, **sauf s'il
+sort avec le code 0**, qui signifie « évincé par une instance plus récente ».
+Un `kill` manuel produisait autrefois ce code : l'app restait alors sans backend
+sans rien dire. Le sidecar sort désormais 143 sur un signal reçu, donc tuer le
+process suffit à le recharger depuis les sources — c'est le redémarrage le plus
+sûr, il ne prend jamais le port.
 
 ## Vérifier dans le navigateur, pas seulement dans les tests
 

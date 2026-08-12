@@ -23,6 +23,7 @@ import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { extname, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { MediaStore } from "./media";
+import { conversationCwd } from "./workspace";
 
 const MAX_INVENTORY_SOURCE_CHARS = 160_000;
 const MAX_EVIDENCE_CHARS = 60_000;
@@ -92,7 +93,7 @@ export class TesterRunner {
         const testingFlags = this.reviews.listTestingFlags(project.id);
         const knownFlagIds = new Set(testingFlags.map((flag) => flag.id));
         const output = await this.generator({
-          cwd: project.path,
+          cwd: conversationCwd(project, conversation),
           provider: conversation.provider,
           model: conversation.model,
           effort: conversation.effort ?? undefined,

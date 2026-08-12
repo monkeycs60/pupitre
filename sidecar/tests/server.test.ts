@@ -2009,3 +2009,71 @@ test("refuse un canal WS inconnu et exige une conversation valide sinon", async 
   const missingConversation = await fetch(`${current.baseUrl}/ws`);
   expect(missingConversation.status).toBe(404);
 });
+
+test("une conversation peut naître sur sa branche, dans un worktree dédié", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const repo = mkdtempSync(join(tmpdir(), "pupitre-srv-wt-"));
+  const git = (...args: string[]): void => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: repo });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+  };
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "git@example.test");
+  git("config", "user.name", "Git Fixture");
+  writeFileSync(join(repo, "README.md"), "base\n");
+  git("add", "README.md");
+  git("commit", "-qm", "socle");
+
+  const project = await createProject(repo);
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "bonjour",
+    branch: "ticket-7",
+  });
+  expect(created.status).toBe(201);
+  const conversation = await created.json() as { id: string; worktree_path: string | null };
+
+  // La conversation porte son worktree, hors du dépôt principal.
+  expect(conversation.worktree_path).toBeTruthy();
+  expect(conversation.worktree_path!.startsWith(repo)).toBe(false);
+  expect(existsSync(conversation.worktree_path!)).toBe(true);
+
+  // Il est listé, et protégé tant que la conversation le porte.
+  const listed = await fetch(`${current.baseUrl}/api/projects/${project.id}/worktrees`);
+  const payload = await listed.json() as { worktrees: Array<{ branch: string | null }> };
+  expect(payload.worktrees.map((item) => item.branch)).toContain("ticket-7");
+
+  const refused = await fetch(`${current.baseUrl}/api/projects/${project.id}/worktrees`, {
+    method: "DELETE",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ path: conversation.worktree_path }),
+  });
+  expect(refused.status).toBe(409);
+});
+
+test("un nom de branche qui s'évaderait du dossier géré est refusé", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const repo = mkdtempSync(join(tmpdir(), "pupitre-srv-wt-"));
+  const git = (...args: string[]): void => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: repo });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+  };
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "git@example.test");
+  git("config", "user.name", "Git Fixture");
+  writeFileSync(join(repo, "README.md"), "base\n");
+  git("add", "README.md");
+  git("commit", "-qm", "socle");
+
+  const project = await createProject(repo);
+  const refused = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "bonjour",
+    branch: "../evasion",
+  });
+  expect(refused.status).toBe(400);
+});

@@ -32,6 +32,9 @@ import { MemoryStore } from "./memory";
 import { GamificationService } from "./gamification";
 import { HtmlDocumentService } from "./html-documents";
 
+/** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
+const KILLED_EXIT_CODE = 143;
+
 if (process.argv.includes("--pupitre-mcp")) {
   await runPupitreMcp();
 } else if (process.argv.includes("--conductor-mcp")) {
@@ -147,7 +150,12 @@ if (process.argv.includes("--pupitre-mcp")) {
     15 * 60_000,
   );
   htmlDocumentSweepTimer.unref?.();
-  const shutdownGracefully = () => {
+  // Le code de sortie porte la cause de l'arrêt, parce que le superviseur Tauri
+  // en dépend : un 0 signifie « cède la place, ne me relance pas » (éviction par
+  // une instance plus récente), tout le reste vaut « je suis mort sans l'avoir
+  // demandé, relance-moi ». Sortir 0 sur un SIGTERM externe laissait l'app sans
+  // backend jusqu'au prochain lancement.
+  const shutdownGracefully = (cause: "requested" | "signal") => {
     if (stopping) return;
     stopping = true;
     try {
@@ -155,15 +163,15 @@ if (process.argv.includes("--pupitre-mcp")) {
       clearInterval(htmlDocumentSweepTimer);
       codexAppServer.shutdown();
     } finally {
-      process.exit(0);
+      process.exit(cause === "requested" ? 0 : KILLED_EXIT_CODE);
     }
   };
-  process.on("SIGTERM", shutdownGracefully);
-  process.on("SIGINT", shutdownGracefully);
+  process.on("SIGTERM", () => shutdownGracefully("signal"));
+  process.on("SIGINT", () => shutdownGracefully("signal"));
 
   server = await claimServer(() => createServer({
     port,
-    shutdown: shutdownGracefully,
+    shutdown: () => shutdownGracefully("requested"),
     projects,
     conversations,
     media,

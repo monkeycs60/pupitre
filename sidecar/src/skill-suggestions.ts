@@ -3,6 +3,7 @@ import type { QuotaTracker } from "./quotas";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 import type { SkillInventory, SkillSummary } from "./skills";
 import type { ProjectStore } from "./stores/projects";
+import { projectCwd } from "./workspace";
 
 export interface SkillSuggestion extends SkillSummary {
   score: number;
@@ -219,7 +220,7 @@ export class SkillSuggestionService {
         .slice(0, 8);
       const selectedIds = await this.resolver({
         text: trimmed,
-        cwd: project.path,
+        cwd: projectCwd(project),
         candidates,
       });
       const selected = selectedIds.flatMap((id) => {

@@ -7,6 +7,7 @@ import type { AppEvent } from "./events";
 import type { QuotaTracker } from "./quotas";
 import { skillInvocation, type SkillDetail, type SkillInventory } from "./skills";
 import type { ProjectStore } from "./stores/projects";
+import { projectCwd } from "./workspace";
 
 export type SkillInstallScope = "project" | "global";
 
@@ -142,7 +143,7 @@ export class SkillComposer {
         ].join("\n")
       : "Aucun skill-creator n'est indexé : applique le contrat de format ci-dessous.";
     const output = await this.generator({
-      cwd: project.path,
+      cwd: projectCwd(project),
       prompt: [
         "Rédige un skill agentique réutilisable pour le besoin suivant.",
         creatorContext,

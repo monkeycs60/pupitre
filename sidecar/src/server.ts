@@ -452,6 +452,15 @@ function optionalLabel(body: Record<string, unknown>): string | null {
   return value;
 }
 
+/** Chaîne facultative, vidée de ses blancs ; une chaîne vide vaut absente. */
+function optionalTrimmed(body: Record<string, unknown>, field: string): string | null {
+  const value = body[field];
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") throw new HttpError(400, `champ ${field} invalide`);
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 function optionalBoolean(
   body: Record<string, unknown>,
   field: string,
@@ -1245,6 +1254,33 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        // Worktrees : `GET` liste ceux que la fusion rend jetables, `DELETE`
+        // en retire un. La création passe par POST /api/conversations, parce
+        // qu'un worktree n'existe que pour porter une conversation.
+        const projectWorktreesId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/worktrees$/,
+        );
+        if (projectWorktreesId !== null) {
+          if (!deps.projects.get(projectWorktreesId)) throw new HttpError(404, "projet inconnu");
+          try {
+            if (request.method === "GET") {
+              return json({
+                worktrees: deps.git.snapshot(projectWorktreesId).worktrees,
+                merged: deps.git.mergedWorktrees(projectWorktreesId),
+              });
+            }
+            if (request.method === "DELETE") {
+              const body = await readObject(request);
+              deps.git.removeWorktree(projectWorktreesId, requiredString(body, "path"));
+              return json({ ok: true });
+            }
+          } catch (error) {
+            if (error instanceof GitProjectError) throw new HttpError(409, error.message);
+            throw error;
+          }
+        }
+
         const projectDefaultPresetId = routeId(
           pathname,
           /^\/api\/projects\/([^/]+)\/default-preset$/,
@@ -1748,7 +1784,22 @@ export function createServer(deps: ServerDeps) {
           // Défaut ON : une conversation peut déléguer sauf mention contraire.
           const orchestrator = optionalBoolean(body, "orchestrator", true);
           const { subagentPresetId, subagentEffort } = conversationSubagentConfig(body, deps);
+          // Une conversation peut naître sur sa propre branche : Pupitre lui
+          // crée alors un worktree, où tous ses agents travailleront (ADR 0001).
+          const branch = optionalTrimmed(body, "branch");
+          let worktreePath: string | null = null;
+          if (branch !== null) {
+            try {
+              worktreePath = deps.git.createWorktree(projectId, { branch }).path;
+            } catch (error) {
+              throw new HttpError(
+                400,
+                error instanceof Error ? error.message : "worktree impossible",
+              );
+            }
+          }
           const conversation = deps.conversations.create({
+            worktreePath,
             projectId,
             provider: provider as Provider,
             model,

@@ -14,6 +14,7 @@ import { generateDigest, shouldRefreshDigest } from "./conversation-digest";
 import { DEFAULT_ACTION_FORMAT, withActionFormat } from "./response-format";
 import { claudeServerDefinitions } from "./mcp-inventory";
 import type { ActionFormat } from "./response-format";
+import { conversationCwd } from "./workspace";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -219,7 +220,7 @@ export class ConversationRunner {
       }
       const permissionMode = conv.permission_mode ?? project.permission_mode;
       const opts = {
-        cwd: project.path,
+        cwd: conversationCwd(project, conv),
         model: conv.model,
         effort: conv.effort ?? undefined,
         speed: conv.speed ?? undefined,

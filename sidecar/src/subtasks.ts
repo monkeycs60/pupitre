@@ -8,6 +8,7 @@ import { claudeServerDefinitions } from "./mcp-inventory";
 import { runCodexTurn } from "./adapters/codex";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 import type { FilesystemScope } from "./access";
+import { conversationCwd } from "./workspace";
 
 /**
  * Nombre maximum de sous-tâches simultanées PAR conversation parente.
@@ -307,8 +308,11 @@ export class SubtaskRunner {
           Object.entries(claudeServerDefinitions(project.path))
             .filter(([name]) => project.mcp_servers!.includes(name)),
         );
+      // La sous-tâche travaille dans le worktree de sa conversation parente :
+      // un agent du Gardien doit voir la branche qu'il est chargé de corriger.
+      const parent = this.convs.get(subtask.conversation_id);
       const opts = {
-        cwd: project.path,
+        cwd: conversationCwd(project, parent),
         model: subtask.model,
         effort: subtask.effort ?? undefined,
         speed: subtask.speed ?? undefined,

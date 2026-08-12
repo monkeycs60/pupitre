@@ -10,6 +10,7 @@ import {
   ConversationActivity,
   ConversationBusyError,
 } from "./conversation-activity";
+import { conversationCwd } from "./workspace";
 
 const MAX_TRANSCRIPT_CHARS = 180_000;
 const MAX_EVENT_CHARS = 8_000;
@@ -129,7 +130,7 @@ export class DebriefRunner {
     this.active.add(conversationId);
     try {
       const generation = {
-        cwd: project.path,
+        cwd: conversationCwd(project, conversation),
         provider: conversation.provider,
         model: conversation.model,
         effort: conversation.effort ?? undefined,
@@ -186,7 +187,7 @@ export class DebriefRunner {
     }
 
     const generation = {
-      cwd: project.path,
+      cwd: conversationCwd(project, conversation),
       provider: conversation.provider,
       model: conversation.model,
       effort: conversation.effort ?? undefined,
@@ -274,7 +275,7 @@ export class DebriefRunner {
           const project = this.projects.get(conversation.project_id)!;
           const consolidated = await this.consolidateDebriefs(
             {
-              cwd: project.path,
+              cwd: conversationCwd(project, conversation),
               provider: conversation.provider,
               model: conversation.model,
               effort: conversation.effort ?? undefined,

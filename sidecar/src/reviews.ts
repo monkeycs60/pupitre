@@ -17,6 +17,7 @@ import type {
 } from "./stores/reviews";
 import { MAX_CONCURRENT_SUBTASKS, SubtaskLimitError } from "./subtasks";
 import type { SubtaskResult, SubtaskRunner } from "./subtasks";
+import { conversationCwd } from "./workspace";
 
 const DEFAULT_ZONE_CHARS = 48_000;
 const DEFAULT_DIFF_MAX_BYTES = 2 * 1024 * 1024;
@@ -118,7 +119,7 @@ export class ReviewRunner {
       parentReviewId: parent?.id ?? null,
     });
     this.progress.set(review.id, { reviewId: review.id, projectId: project.id, zoneDone: 0, zoneTotal: 0 });
-    const run = this.execute(review.id, project.path, { ...input, scope, parentReviewId: parent?.id ?? null })
+    const run = this.execute(review.id, conversationCwd(project, conversation), { ...input, scope, parentReviewId: parent?.id ?? null })
       .catch((error) => {
         this.store.fail(review.id, errorMessage(error));
         this.progress.delete(review.id);

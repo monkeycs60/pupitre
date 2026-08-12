@@ -20,6 +20,8 @@ export interface Conversation {
   continued_from: string | null;
   handoff_pending: boolean;
   routine_id: string | null;
+  /** Worktree git dédié ; null = dossier principal du projet. Voir ADR 0001. */
+  worktree_path: string | null;
   /** Reçoit le bridge MCP `conductor` (délégation de sous-tâches). */
   orchestrator: boolean;
   created_at: string; updated_at: string;
@@ -79,6 +81,8 @@ export class ConversationStore {
     /** Vrai jusqu'au statut terminal réussi du premier tour de continuation. */
     handoffPending?: boolean;
     routineId?: string | null;
+    /** Worktree déjà créé par le service Git ; null = dépôt principal. */
+    worktreePath?: string | null;
     firstMessage: string;
   }): Conversation {
     const id = crypto.randomUUID();
@@ -89,8 +93,8 @@ export class ConversationStore {
       `INSERT INTO conversations
          (id, project_id, title, summary, provider, model, preset_id, effort, speed, permission_mode, orchestrator,
           subagent_preset_id, subagent_effort,
-          continued_from, handoff_pending, routine_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          continued_from, handoff_pending, routine_id, worktree_path, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -108,6 +112,7 @@ export class ConversationStore {
       input.continuedFrom ?? null,
       input.handoffPending ? 1 : 0,
       input.routineId ?? null,
+      input.worktreePath ?? null,
       now,
       now,
     );

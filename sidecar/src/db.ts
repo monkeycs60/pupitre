@@ -291,6 +291,9 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "continued_from TEXT NULL");
   addColumn(db, "conversations", "handoff_pending INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "routine_id TEXT NULL");
+  // Worktree dédié à la conversation ; NULL = dossier principal du projet, donc
+  // le travail mono-branche ne change pas. Voir docs/adr/0001.
+  addColumn(db, "conversations", "worktree_path TEXT NULL");
   // Un renommage manuel fige le titre : la régénération automatique le respecte.
   addColumn(db, "projects", "mcp_servers TEXT NULL");
   addColumn(db, "conversations", "title_locked INTEGER NOT NULL DEFAULT 0");

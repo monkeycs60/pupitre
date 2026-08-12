@@ -139,10 +139,12 @@ fn supervise_sidecar(app: tauri::AppHandle) {
         while let Some(event) = tauri::async_runtime::block_on(events.recv()) {
             match event {
                 CommandEvent::Terminated(payload) => {
-                    // Un exit 0 est volontaire : sidecar évincé par une instance
-                    // plus récente (POST /api/shutdown) ou arrêté proprement. Le
-                    // relancer déclencherait une guerre d'éviction entre
-                    // instances ; on le laisse mort.
+                    // Le sidecar encode la cause de son arrêt dans son code de
+                    // sortie (voir KILLED_EXIT_CODE) : 0 signifie « évincé par
+                    // une instance plus récente via POST /api/shutdown », et le
+                    // relancer déclencherait une guerre d'éviction. Tout autre
+                    // code — dont 143, un SIGTERM reçu de l'extérieur — est une
+                    // mort subie : on relance, sinon l'app reste sans backend.
                     if payload.code == Some(0) {
                         log::info!("Sidecar Pupitre arrêté volontairement, pas de relance");
                         intentional_exit = true;

@@ -1,8 +1,18 @@
 import type { Database } from "bun:sqlite";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { dataDir } from "./db";
 import type { ProjectStore } from "./stores/projects";
 
 const MAX_GIT_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_COMMITS = 200;
+
+/**
+ * Un nom de branche sert de nom de dossier : tout ce qui pourrait sortir du
+ * dossier géré par Pupitre est refusé. Git accepte les `/` dans les branches,
+ * on les aplatit plutôt que de creuser une arborescence.
+ */
+const SAFE_BRANCH = /^[A-Za-z0-9._/-]+$/;
 
 export class GitProjectError extends Error {}
 
@@ -77,10 +87,90 @@ export interface GitTurnTracking {
 export class GitProjectService {
   private activeTurns = new Map<string, Set<GitTurnTracking>>();
 
+  private readonly worktreeRoot: string;
+
   constructor(
     private db: Database,
     private projects: ProjectStore,
-  ) {}
+    options: { worktreeRoot?: string } = {},
+  ) {
+    this.worktreeRoot = options.worktreeRoot ?? join(dataDir(), "worktrees");
+  }
+
+  /**
+   * Crée — ou retrouve — le worktree d'une branche, dans un dossier possédé par
+   * Pupitre. Hors du dépôt : un worktree imbriqué apparaîtrait comme des
+   * fichiers non suivis dans le dépôt principal, et polluerait chaque diff.
+   */
+  createWorktree(projectId: string, input: { branch: string }): GitWorktree {
+    const cwd = this.projectPath(projectId);
+    const branch = input.branch.trim();
+    if (!branch || !SAFE_BRANCH.test(branch) || branch.includes("..")) {
+      throw new GitProjectError(`nom de branche invalide : ${input.branch}`);
+    }
+
+    const existing = this.worktrees(cwd).find((item) => item.branch === branch);
+    if (existing) return existing;
+
+    const directory = join(this.worktreeRoot, projectId, branch.replaceAll("/", "-"));
+    if (!resolve(directory).startsWith(resolve(this.worktreeRoot))) {
+      throw new GitProjectError(`nom de branche invalide : ${input.branch}`);
+    }
+    mkdirSync(join(this.worktreeRoot, projectId), { recursive: true });
+    // Un dossier résiduel d'un worktree que git ne connaît plus ferait échouer
+    // `worktree add` sans qu'aucune conversation ne s'y rattache.
+    if (existsSync(directory)) rmSync(directory, { recursive: true, force: true });
+
+    const known = this.runGit(cwd, ["branch", "--list", branch]).trim() !== "";
+    this.runGit(cwd, known
+      ? ["worktree", "add", directory, branch]
+      : ["worktree", "add", "-b", branch, directory]);
+
+    const created = this.worktrees(cwd).find((item) => item.path === directory);
+    if (!created) throw new GitProjectError("worktree créé mais introuvable");
+    return created;
+  }
+
+  /**
+   * Retire un worktree et son dossier. Le dépôt principal et les worktrees
+   * encore portés par une conversation sont protégés : les supprimer
+   * emporterait le répertoire de travail d'agents en cours.
+   */
+  removeWorktree(projectId: string, path: string): void {
+    const cwd = this.projectPath(projectId);
+    if (resolve(path) === resolve(cwd)) {
+      throw new GitProjectError("le dépôt principal ne peut pas être retiré");
+    }
+    const holders = this.db.query(
+      "SELECT count(*) AS total FROM conversations WHERE worktree_path = ? AND deleted_at IS NULL",
+    ).get(path) as { total: number };
+    if (holders.total > 0) {
+      throw new GitProjectError(
+        `worktree encore utilisé par ${holders.total} conversation(s)`,
+      );
+    }
+    this.runGit(cwd, ["worktree", "remove", "--force", path]);
+    rmSync(path, { recursive: true, force: true });
+  }
+
+  /**
+   * Les worktrees dont la branche est entièrement fusionnée dans HEAD : leur
+   * suppression peut être proposée sans rien perdre.
+   */
+  mergedWorktrees(projectId: string): GitWorktree[] {
+    const cwd = this.projectPath(projectId);
+    const merged = new Set(
+      this.runGit(cwd, ["branch", "--merged", "HEAD", "--format=%(refname:short)"])
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+    );
+    return this.worktrees(cwd).filter((item) =>
+      resolve(item.path) !== resolve(cwd)
+      && item.branch !== null
+      && merged.has(item.branch)
+    );
+  }
 
   head(projectId: string): string | null {
     const cwd = this.projectPath(projectId);
