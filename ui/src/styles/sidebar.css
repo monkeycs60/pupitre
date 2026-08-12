@@ -14,16 +14,6 @@
   border-right: 1px solid var(--border-subtle);
 }
 
-.app-name {
-  flex: none;
-  padding: var(--space-3) var(--space-3) var(--space-2);
-  color: var(--text-strong);
-  font-size: var(--text-base);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  background: var(--bg-sidebar-header);
-}
-
 .sidebar-section {
   flex: none;
   padding: var(--space-2) var(--space-2) var(--space-3);
@@ -35,25 +25,6 @@
   min-height: 0;
   overflow-y: auto;
   background: var(--bg-panel);
-}
-
-.section-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  min-height: 28px;
-  padding: 0 var(--space-2);
-}
-
-.section-heading h2 {
-  margin: 0;
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  line-height: 1.45;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
 }
 
 .sidebar-tabs {
@@ -467,14 +438,6 @@
   animation: cc-land 900ms var(--ease) both;
 }
 
-.navigation-main .navigation-detail {
-  margin-top: 1px;
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
 .navigation-main .conversation-link {
   margin-top: 1px;
   overflow: hidden;
@@ -832,14 +795,6 @@
 
 /* --- Outils secondaires -------------------------------------------------- */
 
-.utility-dock {
-  position: relative;
-  flex: none;
-  padding: var(--space-2);
-  background: var(--bg-sidebar-header);
-  border-top: 1px solid var(--border-subtle);
-}
-
 .quota-status {
   display: grid;
   gap: 6px;
@@ -1047,305 +1002,9 @@
   color: var(--warn);
 }
 
-.utility-trigger {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: 34px;
-  padding: 4px var(--space-2);
-  color: var(--text-muted);
-  font-weight: 500;
-  text-align: left;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
-}
-
-.utility-trigger:hover,
-.utility-trigger[aria-expanded='true'] {
-  color: var(--text-strong);
-  background: var(--bg-hover);
-  border-color: var(--border);
-}
-
-.utility-trigger.is-active {
-  color: var(--text-strong);
-}
-
-.utility-current {
-  margin-left: auto;
-  overflow: hidden;
-  color: var(--accent-hover);
-  font-size: var(--text-sm);
-  font-weight: 400;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.utility-chevron {
-  flex: none;
-  margin-left: auto;
-  color: var(--text-faint);
-  transition: transform var(--dur) var(--ease);
-}
-
-.utility-current + .utility-chevron {
-  margin-left: 0;
-}
-
-.utility-trigger[aria-expanded='true'] .utility-chevron {
-  transform: rotate(180deg);
-}
-
-.utility-icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  color: var(--text-faint);
-}
-
-.utility-anchor {
-  position: relative;
-}
-
-.utility-popover {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + var(--space-1));
-  left: 0;
-  z-index: 60;
-  /* Le pied de la sidebar (niveau, quotas, bouton) occupe ~200 px : sans cette
-     marge le panneau dépassait le haut de la fenêtre et se faisait couper. */
-  max-height: calc(100vh - 220px);
-  padding: var(--space-2);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background: var(--bg-overlay);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-popover);
-  animation: utility-reveal var(--dur) var(--ease);
-}
-
 @keyframes utility-reveal {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-.utility-search,
-.utility-grid button {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  color: var(--text-muted);
-  background: transparent;
-  border: 0;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
-}
-
-.utility-search {
-  gap: var(--space-2);
-  width: 100%;
-  min-height: 34px;
-  padding: 4px var(--space-2);
-  color: var(--text);
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-}
-
-.utility-search kbd {
-  margin-left: auto;
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-
-.utility-search:hover,
-.utility-grid button:hover:not(:disabled) {
-  color: var(--text-strong);
-  background: var(--bg-hover);
-}
-
-.utility-search:hover .utility-icon,
-.utility-grid button:hover:not(:disabled) .utility-icon,
-.utility-grid button.is-selected .utility-icon {
-  color: var(--accent-hover);
-}
-
-.utility-notifications {
-  display: grid;
-  gap: 1px;
-  /* Repliée dans un <details> et bornée : une pile de notifications ne doit
-     plus repousser les outils hors de l'écran. */
-  max-height: 220px;
-  padding-top: var(--space-1);
-  overflow-y: auto;
-}
-
-.utility-badge {
-  padding: 0 5px;
-  margin-left: var(--space-2);
-  color: var(--on-accent);
-  font-size: var(--text-xs);
-  background: var(--accent);
-  border-radius: var(--r-full);
-}
-
-.utility-notifications-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 0 var(--space-2) var(--space-1);
-}
-
-.utility-notifications-heading h3 {
-  margin: 0;
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.utility-notifications-heading span,
-.utility-notifications > p {
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-
-.utility-notifications > p {
-  padding: 0 var(--space-2);
-  margin: 0;
-}
-
-.utility-notification {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  padding: 5px var(--space-2);
-  color: var(--text-muted);
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: var(--r-xs);
-  cursor: pointer;
-}
-
-.utility-notification:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.utility-notification:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.utility-notification strong,
-.utility-notification span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.utility-notification strong {
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: 500;
-}
-
-.utility-notification span {
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-
-.utility-group {
-  padding-top: var(--space-3);
-}
-
-.utility-group + .utility-group {
-  padding-top: var(--space-2);
-}
-
-.utility-group h3 {
-  margin: 0 0 var(--space-1);
-  padding: 0 var(--space-2);
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.utility-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px var(--space-1);
-}
-
-.utility-grid button {
-  gap: var(--space-2);
-  min-height: 32px;
-  padding: 4px var(--space-2);
-  text-align: left;
-}
-
-.utility-grid button span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.utility-grid button.is-selected {
-  color: var(--text-strong);
-  background: var(--bg-active);
-}
-
-.utility-grid button:disabled {
-  color: var(--text-faint);
-  cursor: default;
-  opacity: 0.55;
-}
-
-.utility-grid button strong {
-  min-width: 18px;
-  padding: 1px 5px;
-  margin-left: auto;
-  color: var(--warn);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-  background: var(--warn-soft);
-  border-radius: var(--r-full);
-}
-
-.utility-quotas {
-  margin-top: var(--space-2);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.utility-quotas summary {
-  min-height: 32px;
-  padding: 6px var(--space-2);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.utility-quotas[open] summary {
-  color: var(--text);
-}
-
-.utility-popover .quota-bar {
-  padding: var(--space-2);
-  background: transparent;
-  border-top: 0;
 }
 
 /* --- Quotas --------------------------------------------------------------- */
@@ -1794,17 +1453,6 @@
 }
 
 /* Charge fixe élevée : la jauge le signale sans attendre le survol. */
-.context-gauge.is-heavy-fixed .context-gauge-track span {
-  background: var(--warn);
-}
-
-.context-gauge-badge {
-  margin-left: var(--space-2);
-  padding: 0 5px;
-  color: var(--warn);
-  background: var(--warn-soft);
-  border-radius: var(--r-full);
-}
 
 /* --- Légende groupée de l'anneau ----------------------------------------- */
 

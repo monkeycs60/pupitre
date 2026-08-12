@@ -28,8 +28,6 @@
 
 /* Répartition par modèle */
 .cost-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: var(--space-6) 0 0; background: var(--border-subtle); border: 1px solid var(--border-subtle); border-radius: var(--r-md); overflow: hidden; }
-.cost-totals--with-delegated, .cost-totals--with-savings { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.cost-totals--with-delegated.cost-totals--with-savings { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .cost-totals div { padding: var(--space-3) var(--space-4); background: var(--bg-panel); }
 .cost-totals dt { color: var(--text-faint); font-size: var(--text-xs); }
 .cost-totals dd { margin: 1px 0 0; color: var(--text-strong); font-family: var(--font-mono); font-size: var(--text-md); font-variant-numeric: tabular-nums; }

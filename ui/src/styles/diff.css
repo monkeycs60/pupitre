@@ -1,12 +1,5 @@
 /* DiffViewer : table de diff, numéros de ligne, zones thermiques. */
 
-.review-diff {
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  background: var(--bg-input);
-}
-
 .diff-table {
   min-width: 730px;
   color: var(--text);

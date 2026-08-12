@@ -1,58 +1,8 @@
-.progress-strip {
-  position: relative;
-  display: grid;
-  gap: 5px;
-  width: 100%;
-  padding: 9px 10px 8px;
-  color: var(--text-muted);
-  text-align: left;
-  background: var(--bg-toolbar);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
-}
-
-.progress-strip:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent-border);
-}
-
-.progress-strip-heading,
-.progress-strip-meta {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.progress-strip-heading {
-  color: var(--text-strong);
-  font-size: var(--text-sm);
-}
-
-.progress-strip-heading span,
-.progress-strip-meta {
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.progress-strip-track,
-.progress-level-track,
 .complexity-track {
   display: block;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.09);
 }
-
-.progress-strip-track {
-  height: 3px;
-}
-
-.progress-strip-track > span,
-.progress-level-track > span,
 .complexity-track > span {
   display: block;
   height: 100%;
@@ -522,7 +472,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .xp-pulse { animation: none; }
-  .progress-strip-track > span,
   .progress-ring-fill,
   .progress-xp-fill,
   .progress-xp-sheen,
