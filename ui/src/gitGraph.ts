@@ -18,24 +18,43 @@ export interface GitGraphRow {
   lane: number
   laneCount: number
   segments: GitGraphSegment[]
+  /**
+   * Vrai si la lane du commit était déjà occupée au-dessus, c'est-à-dire s'il a
+   * un enfant dans la fenêtre affichée. Le rendu s'en sert pour descendre le
+   * trait du haut de la ligne jusqu'au point ; sans lui, le graphe est coupé
+   * d'une demi-ligne sous chaque commit.
+   */
+  hasIncoming: boolean
 }
 
 export interface GitGraphCellGeometry {
   width: number
-  height: number
+  /** Hauteur du repère, pas des pixels : voir `VIEWBOX_HEIGHT`. */
+  viewBoxHeight: number
+  /** `x` en pixels (jamais déformé), `y` dans le repère du viewBox. */
   dot: { x: number, y: number }
   paths: Array<{ d: string, kind: 'continuation' | 'parent' }>
 }
 
 const LANE_WIDTH = 14
-/** Doit rester égal à `--git-row-height` (styles/git.css) : sinon le graphe se
- *  coupe entre deux lignes. Un test compare les deux valeurs. */
-const ROW_HEIGHT = 58
 
-/** Géométrie SVG d'une ligne de graphe : point du commit et courbes sortantes. */
+/**
+ * La hauteur d'une ligne de commit dépend de son contenu (un sujet long, des
+ * boutons de conversation) : mesurée dans l'app, elle varie de 58 à 98 px. Le
+ * graphe est donc dessiné dans un repère vertical arbitraire, que le SVG étire
+ * à la hauteur réelle de sa ligne via `preserveAspectRatio="none"`.
+ *
+ * L'étirement est exact plutôt qu'approché : les ordonnées des courbes ne
+ * valent que 0, la moitié ou la totalité de cette hauteur, donc les mettre à
+ * l'échelle revient à les recalculer. Seul le point du commit s'ovaliserait —
+ * il est dessiné en CSS, hors du SVG.
+ */
+const VIEWBOX_HEIGHT = 100
+
+/** Géométrie d'une ligne de graphe : point du commit et courbes sortantes. */
 export function gitGraphCellGeometry(row: GitGraphRow): GitGraphCellGeometry {
   const x = (lane: number): number => lane * LANE_WIDTH + LANE_WIDTH / 2
-  const height = ROW_HEIGHT
+  const height = VIEWBOX_HEIGHT
   const middle = height / 2
   const paths = row.segments.map((segment) => segment.kind === 'continuation'
     ? {
@@ -46,9 +65,14 @@ export function gitGraphCellGeometry(row: GitGraphRow): GitGraphCellGeometry {
         kind: segment.kind,
         d: `M ${x(row.lane)} ${middle} C ${x(row.lane)} ${height}, ${x(segment.to)} ${middle}, ${x(segment.to)} ${height}`,
       })
+  // Le trait entrant : du haut de la ligne jusqu'au point. Les segments ne
+  // couvrent que ce qui sort du commit, d'où un graphe coupé sans lui.
+  if (row.hasIncoming) {
+    paths.unshift({ kind: 'parent', d: `M ${x(row.lane)} 0 L ${x(row.lane)} ${middle}` })
+  }
   return {
     width: row.laneCount * LANE_WIDTH,
-    height,
+    viewBoxHeight: height,
     dot: { x: x(row.lane), y: middle },
     paths,
   }
@@ -83,6 +107,7 @@ export function layoutGitGraph(commits: GitCommit[]): GitGraphRow[] {
   let active: string[] = []
   return commits.map((commit) => {
     let lane = active.indexOf(commit.sha)
+    const hasIncoming = lane !== -1
     if (lane === -1) {
       lane = active.length
       active.push(commit.sha)
@@ -112,6 +137,7 @@ export function layoutGitGraph(commits: GitCommit[]): GitGraphRow[] {
       lane,
       laneCount: Math.max(before.length, next.length, 1),
       segments,
+      hasIncoming,
     }
   })
 }

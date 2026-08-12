@@ -9,9 +9,8 @@
   min-height: 0;
   overflow-y: auto;
   --git-header-offset: 76px;
-  /* Hauteur d'une ligne de commit. Le graphe SVG est dessiné à cette hauteur
-     exacte par gitGraphCellGeometry : les deux sont vérifiés ensemble par
-     sidecar/tests/ui-git-graph.test.ts. */
+  /* Plancher d'une ligne de commit ; son contenu peut la faire dépasser, et le
+     graphe s'y adapte (voir VIEWBOX_HEIGHT dans gitGraph.ts). */
   --git-row-height: 58px;
   color: var(--text);
   background: var(--bg-app);
@@ -243,10 +242,20 @@
   border-bottom: 0;
 }
 
+/* Conteneur du graphe : il s'étire à la hauteur réelle de sa ligne, que le
+   contenu du commit détermine. Le SVG suit, le point reste rond. */
 .git-lanes {
+  position: relative;
   flex: none;
-  overflow: visible;
+  align-self: stretch;
   border-right: 1px solid var(--border-subtle);
+}
+
+.git-lanes svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
 /* Traits fins sur fond graphite : la lisibilité vient du contraste entre la
@@ -261,16 +270,22 @@
   stroke: var(--text-faint);
 }
 
-.git-lanes circle {
-  fill: var(--bg-raised);
-  stroke: var(--text-muted);
-  stroke-width: 1.5;
+/* Hors du SVG : l'étirement vertical de celui-ci ovaliserait le point. */
+.git-lane-dot {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: var(--r-full);
+  background: var(--bg-raised);
+  box-shadow: 0 0 0 1.5px var(--text-muted);
 }
 
 /* HEAD : seul point accentué du graphe. */
-.git-commit.is-head .git-lanes circle {
-  fill: var(--accent);
-  stroke: var(--accent);
+.git-commit.is-head .git-lane-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--accent);
 }
 
 .git-commit-copy {

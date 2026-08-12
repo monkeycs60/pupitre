@@ -78,7 +78,7 @@ test('place le point du commit au centre de sa lane', () => {
   const [row] = layoutGitGraph([commit('a', ['b']), commit('b', [])])
   const geometry = gitGraphCellGeometry(row!)
 
-  expect(geometry.dot).toEqual({ x: 7, y: 29 })
+  expect(geometry.dot).toEqual({ x: 7, y: 50 })
   expect(geometry.width).toBe(14)
 })
 
@@ -94,11 +94,59 @@ test('trace un chemin vers chaque parent d’un merge', () => {
   for (const path of geometry.paths) expect(path.d.startsWith('M ')).toBe(true)
 })
 
-test('la hauteur du graphe suit --git-row-height, sinon il se coupe entre deux lignes', () => {
-  const css = readFileSync(join(import.meta.dir, '../../ui/src/styles/git.css'), 'utf8')
-  const declared = css.match(/--git-row-height:\s*(\d+)px/)?.[1]
+test('le graphe est dessiné dans un repère étirable, pas en pixels de ligne', () => {
+  // Mesuré dans l'app : une ligne de commit fait de 58 à 98 px selon son
+  // contenu. Le repère doit donc être constant et indépendant du CSS.
+  const heights = [
+    layoutGitGraph([commit('a', [])]),
+    layoutGitGraph([commit('m', ['a', 'b']), commit('a', []), commit('b', [])]),
+  ].map((rows) => gitGraphCellGeometry(rows[0]!).viewBoxHeight)
 
-  expect(declared).toBeDefined()
-  const [row] = layoutGitGraph([commit('a', [])])
-  expect(gitGraphCellGeometry(row!).height).toBe(Number(declared))
+  expect(new Set(heights).size).toBe(1)
+  // Sans cet attribut, le SVG garderait son ratio et le graphe se couperait
+  // entre deux lignes de hauteurs différentes.
+  expect(readFileSync(join(import.meta.dir, '../../ui/src/GitView.tsx'), 'utf8'))
+    .toContain('preserveAspectRatio="none"')
+})
+
+/** Points où un tracé sort en bas (y = viewBoxHeight) / entre en haut (y = 0). */
+function edges(geometry: ReturnType<typeof gitGraphCellGeometry>) {
+  const exits = new Set<number>()
+  const entries = new Set<number>()
+  for (const path of geometry.paths) {
+    const nums = path.d.match(/-?[\d.]+/g)!.map(Number)
+    if (nums[1] === 0) entries.add(nums[0]!)
+    if (nums[nums.length - 1] === geometry.viewBoxHeight) exits.add(nums[nums.length - 2]!)
+  }
+  return { exits: [...exits].sort(), entries: [...entries].sort() }
+}
+
+test('le tracé est continu d’une ligne à la suivante', () => {
+  // Le défaut trouvé dans l'app : chaque ligne descendait de son point vers le
+  // bas, mais rien ne descendait du haut jusqu'au point — 185 ruptures sur 186.
+  const rows = layoutGitGraph([
+    commit('d', ['c']),
+    commit('c', ['b']),
+    commit('b', ['a']),
+    commit('a', []),
+  ])
+  const cells = rows.map((row) => edges(gitGraphCellGeometry(row)))
+
+  for (let index = 0; index < cells.length - 1; index += 1) {
+    expect(cells[index + 1]!.entries).toEqual(cells[index]!.exits)
+  }
+})
+
+test('le tracé reste continu à travers un merge', () => {
+  const rows = layoutGitGraph([
+    commit('m', ['a', 'b']),
+    commit('a', ['base']),
+    commit('b', ['base']),
+    commit('base', []),
+  ])
+  const cells = rows.map((row) => edges(gitGraphCellGeometry(row)))
+
+  for (let index = 0; index < cells.length - 1; index += 1) {
+    expect(cells[index + 1]!.entries).toEqual(cells[index]!.exits)
+  }
 })
