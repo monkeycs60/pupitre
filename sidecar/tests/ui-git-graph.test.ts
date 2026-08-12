@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { gitGraphCellGeometry, gitRefOptions, layoutGitGraph, updateGitCompareRef } from '../../ui/src/gitGraph'
+import { gitGraphCellGeometry, gitGraphRowLabel, gitRefOptions, layoutGitGraph, updateGitCompareRef } from '../../ui/src/gitGraph'
 import type { GitCommit, GitSnapshot } from '../../ui/src/types'
 
 function commit(sha: string, parents: string[]): GitCommit {
@@ -149,4 +149,17 @@ test('le tracé reste continu à travers un merge', () => {
   for (let index = 0; index < cells.length - 1; index += 1) {
     expect(cells[index + 1]!.entries).toEqual(cells[index]!.exits)
   }
+})
+
+test('le graphe se décrit pour qui ne le voit pas', () => {
+  const rows = layoutGitGraph([
+    commit('m', ['a', 'b']),
+    commit('a', ['base']),
+    commit('b', ['base']),
+    commit('base', []),
+  ])
+
+  expect(gitGraphRowLabel(rows[0]!)).toBe('fusion de 2 parents, voie 1 sur 2')
+  expect(gitGraphRowLabel(rows[2]!)).toBe('commit, voie 2 sur 2')
+  expect(gitGraphRowLabel(layoutGitGraph([commit('seul', [])])[0]!)).toBe('commit')
 })

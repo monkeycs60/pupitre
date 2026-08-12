@@ -51,6 +51,17 @@ const LANE_WIDTH = 14
  */
 const VIEWBOX_HEIGHT = 100
 
+/**
+ * Ce que le graphe dit visuellement, en toutes lettres : sans lui, la topologie
+ * du dépôt est réservée à qui voit le tracé.
+ */
+export function gitGraphRowLabel(row: GitGraphRow): string {
+  const parents = row.commit.parents.length
+  const nature = parents > 1 ? `fusion de ${parents} parents` : 'commit'
+  const place = row.laneCount > 1 ? `, voie ${row.lane + 1} sur ${row.laneCount}` : ''
+  return `${nature}${place}`
+}
+
 /** Géométrie d'une ligne de graphe : point du commit et courbes sortantes. */
 export function gitGraphCellGeometry(row: GitGraphRow): GitGraphCellGeometry {
   const x = (lane: number): number => lane * LANE_WIDTH + LANE_WIDTH / 2
