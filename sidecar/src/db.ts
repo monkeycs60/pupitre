@@ -300,7 +300,6 @@ export function openDb(dir: string = dataDir()): Database {
   migrateConversationMessageCounts(db);
   addColumn(db, "projects", "default_preset_id TEXT NULL");
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
-  addColumn(db, "projects", "gardien_mode TEXT NOT NULL DEFAULT 'informatif'");
   addColumn(db, "projects", "auto_counter_red INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "projects", "auto_rescan INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "reviews", "code_provider TEXT NULL");
@@ -312,7 +311,6 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "review_flags", "counter_effort TEXT NULL");
   addColumn(db, "review_flags", "counter_subtask_id TEXT NULL");
   addColumn(db, "review_flags", "counter_error TEXT NULL");
-  addColumn(db, "review_flags", "decision TEXT NULL");
   addColumn(db, "review_flags", "code_provider TEXT NULL");
   addColumn(db, "review_flags", "hunk_hash TEXT NULL");
   addColumn(db, "review_flags", "subtask_id TEXT NULL");
@@ -327,6 +325,10 @@ export function openDb(dir: string = dataDir()): Database {
   // Les bases historiques n'ont pas encore `is_test_gap` : la reconstruction
   // de la contrainte de statut doit donc se produire après cet ajout.
   migrateReviewFlagStatuses(db);
+  // Résidus de l'ancien mode Gardien informatif/bloquant, supprimé par la
+  // refonte « calque Git » — les bases historiques les portent encore.
+  dropColumn(db, "projects", "gardien_mode");
+  dropColumn(db, "review_flags", "decision");
   // Migration de vocabulaire : « acquitté/écarté » devient « traité/ignoré ».
   db.exec("UPDATE review_flags SET status = 'treated' WHERE status = 'acked'");
   db.exec("UPDATE review_flags SET status = 'ignored' WHERE status = 'dismissed'");
@@ -404,6 +406,13 @@ function addColumn(db: Database, table: string, definition: string): boolean {
       throw error;
     }
     return false;
+  }
+}
+
+function dropColumn(db: Database, table: string, column: string): void {
+  const columns = db.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (columns.some((item) => item.name === column)) {
+    db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`);
   }
 }
 
@@ -493,7 +502,7 @@ function migrateReviewFlagStatuses(db: Database): void {
       review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
       file TEXT NOT NULL, line_start INTEGER NOT NULL, line_end INTEGER NOT NULL,
       severity TEXT NOT NULL CHECK (severity IN ('red', 'orange', 'grey')),
-      category TEXT NOT NULL, message TEXT NOT NULL, decision TEXT NULL,
+      category TEXT NOT NULL, message TEXT NOT NULL,
       code_provider TEXT NULL, is_test_gap INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'open'
         CHECK (status IN ('open', 'countered', 'agent_running', 'treated', 'ignored', 'resolved')),
@@ -503,7 +512,7 @@ function migrateReviewFlagStatuses(db: Database): void {
       hunk_hash TEXT NULL, subtask_id TEXT NULL, user_message TEXT NULL
     );
     INSERT INTO review_flags_new
-    SELECT id, review_id, file, line_start, line_end, severity, category, message, decision,
+    SELECT id, review_id, file, line_start, line_end, severity, category, message,
       code_provider, is_test_gap,
       CASE status WHEN 'acked' THEN 'treated' WHEN 'dismissed' THEN 'ignored' ELSE status END,
       counter_state, counter_verdict, counter_text, counter_provider, counter_model,
