@@ -109,7 +109,7 @@ export function DiffViewer({ diff, flags = [], label, selectedFlagId, onFlagUpda
         <span className="diff-number" role="cell">{row.line.oldLine ?? ''}</span><span className="diff-number" role="cell">{row.line.newLine ?? ''}</span><code role="cell">{row.line.text || ' '}</code>
         <span className="diff-flags" role="cell">{row.line.flags.map((flag) => <button type="button" key={flag.id} className={`diff-flag-marker severity-${flag.severity}`} onClick={(event) => { event.stopPropagation(); setExpandedFlagId(activeFlagId === flag.id ? null : flag.id) }} aria-expanded={activeFlagId === flag.id}>{activeFlagId === flag.id ? flag.message : flag.category}</button>)}</span>
       </div>
-      {row.line.flags.filter((flag) => flag.id === activeFlagId).map((flag) => <div className="diff-flag-card-row" key={`card-${flag.id}`} ref={selectedFlagId === flag.id ? selectedRef : undefined}><FlagCard flag={flag} onUpdated={onFlagUpdated} /></div>)}
+      {row.line.cardFlags.filter((flag) => flag.id === activeFlagId).map((flag) => <div className="diff-flag-card-row" key={`card-${flag.id}`} ref={selectedFlagId === flag.id ? selectedRef : undefined}><FlagCard flag={flag} onUpdated={onFlagUpdated} /></div>)}
     </div>)}
   </div>
 }

@@ -9,6 +9,8 @@ export interface DiffLine {
   oldLine: number | null
   newLine: number | null
   flags: ReviewFlag[]
+  /** Flags dont cette ligne est l'ancre de carte (dernière ligne du range). */
+  cardFlags: ReviewFlag[]
   severity: ReviewSeverity | null
 }
 
@@ -37,7 +39,7 @@ export function parseUnifiedDiff(diff: string, flags: ReviewFlag[]): DiffLine[] 
   let oldCursor = 0
   let newCursor = 0
 
-  return diff.split('\n').map((text): DiffLine => {
+  const lines = diff.split('\n').map((text): DiffLine => {
     let kind: DiffLineKind = 'meta'
     let oldLine: number | null = null
     let newLine: number | null = null
@@ -79,8 +81,20 @@ export function parseUnifiedDiff(diff: string, flags: ReviewFlag[]): DiffLine[] 
       return highest
     }, null)
 
-    return { kind, text, file, oldLine, newLine, flags: matchingFlags, severity }
+    return { kind, text, file, oldLine, newLine, flags: matchingFlags, cardFlags: [], severity }
   })
+
+  // Un signalement peut matcher plusieurs lignes (côtés ancien et nouveau) :
+  // seule la dernière porte la carte, sinon elle est dupliquée à l'écran.
+  for (const flag of flags) {
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      if (lines[index]!.flags.includes(flag)) {
+        lines[index]!.cardFlags.push(flag)
+        break
+      }
+    }
+  }
+  return lines
 }
 
 function diffPath(raw: string): string | null {

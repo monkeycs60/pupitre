@@ -70,3 +70,21 @@ test("la zone sélectionnée garde le message comme consigne modifiable et appli
   expect(optimisticFlagStatus(current, "treated").status).toBe("treated");
   expect(optimisticFlagStatus(current, "ignored").status).toBe("ignored");
 });
+
+test("un flag multi-lignes n'est porteur de carte que sur sa dernière ligne", () => {
+  const diff = [
+    "diff --git a/src/a.ts b/src/a.ts",
+    "--- a/src/a.ts",
+    "+++ b/src/a.ts",
+    "@@ -1,3 +1,3 @@",
+    " contexte",
+    "+ligne un",
+    "+ligne deux",
+  ].join("\n");
+  const lines = parseUnifiedDiff(diff, [flag({ file: "src/a.ts", line_start: 2, line_end: 3 })]);
+  const carriers = lines.filter((line) => line.cardFlags.length > 0);
+  expect(carriers).toHaveLength(1);
+  expect(carriers[0]?.text).toBe("+ligne deux");
+  // le surlignage, lui, reste sur toutes les lignes du range :
+  expect(lines.filter((line) => line.flags.length > 0)).toHaveLength(2);
+});
