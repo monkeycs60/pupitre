@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { dispatchAllFlags, getProjectGit, getProjectGitDiff, getReview, listPresets, listProjectReviews, startReview, updatePreset } from './api'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { dispatchAllFlags, getProjectGit, getProjectGitDiff, getReview, listPresets, listProjectReviews, listProjectWorktrees, removeProjectWorktree, startReview, updatePreset } from './api'
 import { DiffViewer } from './DiffViewer'
 import { gitGraphCellGeometry, gitGraphRowLabel, gitRefOptions, layoutGitGraph, updateGitCompareRef } from './gitGraph'
 import { buildFileTree } from './reviewFileTree'
 import { reviewStartInput } from './reviewLaunch'
 import { isScanRunning } from './reviewStatus'
+import { isRemovable, worktreeLabel, worktreeRows } from './worktrees'
 import { PROVIDER_EFFORTS, REVIEW_MODELS } from './modelOptions'
-import type { Conversation, GitSnapshot, Preset, Project, Provider, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
+import type { Conversation, GitSnapshot, GitWorktree, Preset, Project, Provider, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
 
 interface GitViewProps {
   project: Project
@@ -34,6 +35,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   const [isDispatching, setIsDispatching] = useState(false)
   const [filter, setFilter] = useState<'all' | 'red' | 'orange' | 'treated'>('all')
   const [selectedFlagId, setSelectedFlagId] = useState<string | null>(null)
+  const [worktrees, setWorktrees] = useState<{ worktrees: GitWorktree[], merged: GitWorktree[] }>({ worktrees: [], merged: [] })
   const [presets, setPresets] = useState<Preset[]>([])
   const [presetId, setPresetId] = useState(project.default_preset_id ?? '')
   const [provider, setProvider] = useState<Provider>(conversation?.provider ?? 'codex')
@@ -53,6 +55,27 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(errorMessage(reason)) })
     return () => controller.abort()
   }, [focusedReviewId, project.id])
+
+  const refreshWorktrees = useCallback((signal?: AbortSignal) => {
+    void listProjectWorktrees(project.id, signal)
+      .then((loaded) => { if (!signal?.aborted) setWorktrees(loaded) })
+      .catch(() => {})
+  }, [project.id])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    refreshWorktrees(controller.signal)
+    return () => controller.abort()
+  }, [refreshWorktrees])
+
+  async function dropWorktree(path: string) {
+    setError(null)
+    try {
+      await removeProjectWorktree(project.id, path)
+      refreshWorktrees()
+      setSnapshot(await getProjectGit(project.id))
+    } catch (reason) { setError(errorMessage(reason)) }
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -165,6 +188,17 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
       <aside className="git-file-tree"><button type="button" className={selectedFile === null ? 'is-selected' : ''} onClick={() => { setSelectedFile(null); setSelectedFlagId(null) }}>Tous les fichiers <strong>{openFlags.length}</strong></button>{files.map((file) => <button type="button" className={selectedFile === file.path ? 'is-selected' : ''} key={file.path} onClick={() => { setSelectedFile(file.path); setSelectedFlagId(shownFlags.find((flag) => flag.file === file.path)?.id ?? null) }}><span>{file.path}</span><small>+{file.additions} −{file.deletions}</small><em className="risk-red">{file.counts.red}</em><em className="risk-orange">{file.counts.orange}</em><em className="risk-grey">{file.counts.grey}</em></button>)}</aside>
       <div className="git-overlay-diff"><header className="git-review-toolbar"><button type="button" className={filter === 'red' ? 'is-active' : ''} onClick={() => setFilter(filter === 'red' ? 'all' : 'red')}>Rouge {severityCounts.red}</button><button type="button" className={filter === 'orange' ? 'is-active' : ''} onClick={() => setFilter(filter === 'orange' ? 'all' : 'orange')}>Orange {severityCounts.orange}</button><button type="button" className={filter === 'treated' ? 'is-active' : ''} onClick={() => setFilter(filter === 'treated' ? 'all' : 'treated')}>Traitées {flags.filter((flag) => flag.status === 'treated').length}</button>{selectedReview ? <button type="button" onClick={() => void dispatchOpen()} disabled={isDispatching || openFlags.length === 0}>{isDispatching ? 'Envoi…' : `Traiter les ${openFlags.length} ouverts`}</button> : null}</header><DiffViewer diff={filteredDiff ?? ''} flags={shownFlags} selectedFlagId={selectedFlagId} label="Diff Git annoté" onFlagUpdated={updateFlag} /></div>
     </section> : <p className="git-diff-empty">Choisissez deux points ou lancez une relecture du worktree.</p>}
+    <section className="git-worktrees" aria-label="Worktrees du projet">
+      <h2>Worktrees</h2>
+      <ul className="git-worktree-list">{worktreeRows(worktrees.worktrees, worktrees.merged, conversation?.worktree_path ?? null).map((row) => <li key={row.worktree.path} className={row.current ? 'is-current' : undefined}>
+        <strong>{worktreeLabel(row.worktree)}</strong>
+        <code>{row.worktree.path}</code>
+        {row.main ? <em>dépôt principal</em> : null}
+        {row.current ? <em>conversation ouverte</em> : null}
+        {row.merged && !row.main ? <em className="is-merged">fusionnée</em> : null}
+        {isRemovable(row) ? <button type="button" onClick={() => void dropWorktree(row.worktree.path)}>Retirer</button> : null}
+      </li>)}</ul>
+    </section>
     <section className="git-history"><h2>Commits</h2>{rows.map((row, rowIndex) => { const geometry = gitGraphCellGeometry(row); return <article className={rowIndex === 0 ? 'git-commit is-head' : 'git-commit'} key={row.commit.sha}><span className="git-lanes" style={{ width: geometry.width }} role="img" aria-label={gitGraphRowLabel(row)}><svg viewBox={`0 0 ${geometry.width} ${geometry.viewBoxHeight}`} preserveAspectRatio="none">{geometry.paths.map((path, index) => <path key={index} className={path.kind === 'parent' ? 'is-parent' : undefined} d={path.d} />)}</svg><i className="git-lane-dot" style={{ left: geometry.dot.x }} /></span><div className="git-commit-copy"><strong>{row.commit.subject}</strong><code>{shortSha(row.commit.sha)}</code><div className="git-commit-links">{row.commit.conversations.map((item) => <button type="button" key={item.id} onClick={() => onConversationSelect(item.id)}>Conversation · {item.title}</button>)}{row.commit.guardian.map((review) => <button type="button" key={review.reviewId} onClick={() => { setSelectedReviewId(review.reviewId); onReviewSelected?.(review.reviewId) }}>Review · {review.red} rouge, {review.orange} orange</button>)}</div></div></article> })}</section>
   </div>
 }

@@ -224,6 +224,8 @@ export interface Conversation {
   subagent_effort?: string | null
   continued_from: string | null
   routine_id: string | null
+  /** Worktree git dédié ; null = dossier principal du projet (ADR 0001). */
+  worktree_path: string | null
   cli_session_id: string | null
   preset_id?: string | null
   pinned: boolean

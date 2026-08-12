@@ -69,6 +69,34 @@
 
 /* --- Menu d'actions du preset ---------------------------------------------- */
 
+/* --- Branche de la conversation (worktree dédié, ADR 0001) ---------------- */
+
+.config-branch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.config-branch input {
+  flex: 1;
+  min-width: 140px;
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.config-branch input:focus {
+  border-color: var(--accent-border);
+}
+
 /* --- Formulaire inline (renommer / enregistrer sous) ----------------------- */
 
 .config-inline-form {

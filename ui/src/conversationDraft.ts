@@ -12,6 +12,8 @@ interface ConversationDraft {
   orchestrator: boolean
   subagentPresetId?: string | null
   subagentEffort?: string | null
+  /** Branche saisie par l'utilisateur ; vide = travailler dans le dépôt. */
+  branch?: string | null
   message: string
   images: string[]
   attachments?: Attachment[]
@@ -32,6 +34,7 @@ export function buildCreateConversationInput(
     orchestrator: draft.orchestrator,
     subagentPresetId: draft.subagentPresetId ?? null,
     subagentEffort: draft.subagentEffort ?? null,
+    branch: draft.branch?.trim() || null,
     message: draft.message,
     images: draft.images,
     attachments: draft.attachments ?? [],

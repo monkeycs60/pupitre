@@ -79,6 +79,86 @@
 
 /* --- Bandeau branches / worktrees ---------------------------------------- */
 
+/* --- Worktrees : une conversation peut vivre sur sa propre branche -------- */
+
+.git-worktrees {
+  width: min(100% - 48px, 980px);
+  margin: var(--space-5) auto 0;
+  padding: var(--space-3);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+
+.git-worktrees h2 {
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.git-worktree-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.git-worktree-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--r-sm);
+}
+
+.git-worktree-list li.is-current {
+  background: var(--accent-soft);
+}
+
+.git-worktree-list strong {
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.git-worktree-list code {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-worktree-list em {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-style: normal;
+}
+
+.git-worktree-list em.is-merged {
+  color: var(--accent);
+}
+
+.git-worktree-list button {
+  margin-left: auto;
+  padding: 2px var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.git-worktree-list button:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 /* --- Cartes historique et comparaison ------------------------------------- */
 
 .git-history,

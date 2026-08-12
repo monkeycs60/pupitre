@@ -6,6 +6,7 @@ import type {
   DesignReachability,
   GitDiff,
   GitSnapshot,
+  GitWorktree,
   FleetItem,
   SearchResult,
   Project,
@@ -60,6 +61,8 @@ export interface CreateConversationInput {
   orchestrator: boolean
   subagentPresetId?: string | null
   subagentEffort?: string | null
+  /** Fait naître la conversation sur cette branche, dans un worktree dédié. */
+  branch?: string | null
   message: string
   images?: string[]
   attachments?: Attachment[]
@@ -829,6 +832,30 @@ export function getProjectGit(
   signal?: AbortSignal,
 ): Promise<GitSnapshot> {
   return fetchJson(`/api/projects/${routeId(projectId)}/git`, { signal })
+}
+
+export interface ProjectWorktrees {
+  worktrees: GitWorktree[]
+  /** Ceux dont la branche est fusionnée : jetables sans rien perdre. */
+  merged: GitWorktree[]
+}
+
+export function listProjectWorktrees(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<ProjectWorktrees> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/worktrees`, { signal })
+}
+
+export function removeProjectWorktree(
+  projectId: string,
+  path: string,
+): Promise<{ ok: true }> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/worktrees`, {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
 }
 
 export function getProjectGitDiff(

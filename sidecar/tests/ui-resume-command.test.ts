@@ -6,7 +6,7 @@ function conversation(provider: "claude" | "codex", sessionId: string | null): C
   return {
     id: "conversation", project_id: "project", title: "Reprise", summary: "Reprise", provider,
     model: "model", effort: null, speed: null, orchestrator: true,
-    continued_from: null, routine_id: null, cli_session_id: sessionId,
+    continued_from: null, routine_id: null, worktree_path: null, cli_session_id: sessionId,
     title_locked: false, digest_turn: 0,
     pinned: false, archived: false, deleted_at: null, created_at: "", updated_at: "",
   };

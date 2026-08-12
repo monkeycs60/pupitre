@@ -1,6 +1,6 @@
 # Le multi-branches vit dans la conversation, pas dans des projets jumeaux
 
-Status: accepted
+Status: accepted — implémenté le 2026-08-12
 
 Pour travailler plusieurs branches d'un même dépôt en parallèle (workflow « un ticket = une branche »), l'isolation est portée par la conversation : une conversation peut naître sur une branche, Pupitre crée et gère alors un worktree git dédié (`git worktree add` dans un dossier géré par Pupitre), et tous les agents de cette conversation y travaillent. Le projet reste indivisible — un dépôt = un projet, un nom, une icône ; l'atelier Git gagne un sélecteur de worktree au lieu de se dupliquer.
 

@@ -28,6 +28,8 @@ export interface ConversationConfig {
   orchestrator: boolean
   subagentPresetId: string | null
   subagentEffort: string | null
+  /** Branche sur laquelle isoler la conversation ; vide = dépôt principal. */
+  branch?: string | null
 }
 
 interface ConfigPanelProps {
@@ -275,6 +277,17 @@ export function ConfigPanel({
         onToggleDefault={toggleDefault}
         onHelp={() => { window.location.hash = '#help/presets' }}
       />
+
+      <label className="config-branch">
+        <span>Branche</span>
+        <input
+          type="text"
+          value={config.branch ?? ''}
+          placeholder="dépôt principal"
+          disabled={isBusy}
+          onChange={(event) => onConfigChange({ ...config, branch: event.target.value })}
+        />
+      </label>
 
       {action !== null ? (
         <div className="config-inline-form">
