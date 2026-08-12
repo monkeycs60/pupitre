@@ -161,22 +161,6 @@ export class ReviewStore {
     return rows.map((row) => row.commit_sha);
   }
 
-  /** Conversation ayant produit le plus récent commit visible dans cette review. */
-  linkedConversationId(projectId: string, diff: string): string | null {
-    const shas = [...diff.matchAll(/^index ([0-9a-f]+)\.\.[0-9a-f]+/gm)]
-      .map((match) => match[2])
-      .filter((sha): sha is string => Boolean(sha));
-    for (const sha of shas) {
-      const row = this.db.query(`
-        SELECT conversation_id FROM commit_links
-        WHERE project_id = ? AND commit_sha = ?
-        ORDER BY created_at DESC LIMIT 1
-      `).get(projectId, sha) as { conversation_id: string } | null;
-      if (row) return row.conversation_id;
-    }
-    return null;
-  }
-
   listTestingFlags(projectId: string): ReviewFlag[] {
     return this.listByProject(projectId).flatMap((review) => review.flags).filter((flag) => {
       if (flag.status !== "open" && flag.status !== "countered") return false;

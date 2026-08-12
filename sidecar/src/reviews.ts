@@ -195,8 +195,7 @@ export class ReviewRunner {
     }
     const review = this.store.get(flag.review_id);
     if (!review) throw new Error("review inconnue");
-    const conversationId = this.store.linkedConversationId(review.project_id, review.diff_text)
-      ?? review.conversation_id;
+    const conversationId = review.conversation_id;
     const userMessage = message?.trim() || undefined;
     const run = this.executeDispatch(review, flag, conversationId, userMessage)
       .catch(() => {})
@@ -215,8 +214,7 @@ export class ReviewRunner {
     const flags = review.flags.filter((flag) =>
       severities.includes(flag.severity) && (flag.status === "open" || flag.status === "countered"),
     );
-    const targetConversation = this.store.linkedConversationId(review.project_id, review.diff_text)
-      ?? review.conversation_id;
+    const targetConversation = review.conversation_id;
     void (async () => {
       for (let index = 0; index < flags.length; index += MAX_CONCURRENT_SUBTASKS) {
         const chunk = flags.slice(index, index + MAX_CONCURRENT_SUBTASKS);
