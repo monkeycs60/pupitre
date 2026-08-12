@@ -28,8 +28,8 @@ export interface GitGraphCellGeometry {
 }
 
 const LANE_WIDTH = 14
-/** Doit rester égal au `min-height` de `.git-commit` (git.css) : sinon le
- *  graphe se coupe entre deux lignes. */
+/** Doit rester égal à `--git-row-height` (styles/git.css) : sinon le graphe se
+ *  coupe entre deux lignes. Un test compare les deux valeurs. */
 const ROW_HEIGHT = 58
 
 /** Géométrie SVG d'une ligne de graphe : point du commit et courbes sortantes. */

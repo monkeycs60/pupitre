@@ -1,4 +1,6 @@
 import { expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { gitGraphCellGeometry, gitRefOptions, layoutGitGraph, updateGitCompareRef } from '../../ui/src/gitGraph'
 import type { GitCommit, GitSnapshot } from '../../ui/src/types'
 
@@ -90,4 +92,13 @@ test('trace un chemin vers chaque parent d’un merge', () => {
 
   expect(geometry.paths.filter((path) => path.kind === 'parent')).toHaveLength(2)
   for (const path of geometry.paths) expect(path.d.startsWith('M ')).toBe(true)
+})
+
+test('la hauteur du graphe suit --git-row-height, sinon il se coupe entre deux lignes', () => {
+  const css = readFileSync(join(import.meta.dir, '../../ui/src/styles/git.css'), 'utf8')
+  const declared = css.match(/--git-row-height:\s*(\d+)px/)?.[1]
+
+  expect(declared).toBeDefined()
+  const [row] = layoutGitGraph([commit('a', [])])
+  expect(gitGraphCellGeometry(row!).height).toBe(Number(declared))
 })

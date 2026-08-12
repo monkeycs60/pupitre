@@ -9,6 +9,10 @@
   min-height: 0;
   overflow-y: auto;
   --git-header-offset: 76px;
+  /* Hauteur d'une ligne de commit. Le graphe SVG est dessiné à cette hauteur
+     exacte par gitGraphCellGeometry : les deux sont vérifiés ensemble par
+     sidecar/tests/ui-git-graph.test.ts. */
+  --git-row-height: 58px;
   color: var(--text);
   background: var(--bg-app);
 }
@@ -231,7 +235,7 @@
 
 .git-commit {
   display: flex;
-  min-height: 58px;
+  min-height: var(--git-row-height);
   border-bottom: 1px solid var(--border-subtle);
 }
 
