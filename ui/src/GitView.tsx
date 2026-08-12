@@ -133,7 +133,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
 
   async function dispatchOpen() {
     if (!selectedReview || isDispatching || openFlags.length === 0) return
-    if (!window.confirm(`Traiter les ${openFlags.length} zones ouvertes ?`)) return
+    if (!window.confirm(`Traiter les ${openFlags.length} signalements ouverts ?`)) return
     setIsDispatching(true)
     try { await dispatchAllFlags(selectedReview.id); setReviews(await listProjectReviews(project.id)) }
     catch (reason) { setError(errorMessage(reason)) }

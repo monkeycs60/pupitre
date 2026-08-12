@@ -70,7 +70,7 @@ function FlagCard({ flag, onUpdated }: { flag: ReviewFlag, onUpdated?: (flag: Re
     finally { setIsCountering(false) }
   }
 
-  return <article className={`diff-flag-card severity-${flag.severity}`} aria-label={`Zone ${severityLabel(flag)}`}>
+  return <article className={`diff-flag-card severity-${flag.severity}`} aria-label={`Signalement ${severityLabel(flag)}`}>
     <header><span className="diff-severity">{severityLabel(flag)}</span><span>{flag.file}:{flag.line_start}</span></header>
     <p>{flag.message}</p>
     {flag.test_gap ? <span className="diff-test-gap">Manque de test</span> : null}

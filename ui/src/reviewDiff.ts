@@ -14,7 +14,7 @@ export interface DiffLine {
   severity: ReviewSeverity | null
 }
 
-/** Texte initial proposé au sous-agent pour une zone. */
+/** Texte initial proposé au sous-agent pour un signalement. */
 export function flagActionDraft(flag: ReviewFlag): string {
   return flag.message
 }
