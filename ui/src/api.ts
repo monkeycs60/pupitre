@@ -134,6 +134,7 @@ export interface StartReviewInput {
   reviewProvider?: Provider
   reviewModel?: string
   reviewEffort?: string
+  reviewSpeed?: ConversationSpeed
   codeProvider?: Provider
 }
 
@@ -643,7 +644,7 @@ export function setConversationPermissionMode(
 
 export function setConversationReviewConfig(
   id: string,
-  input: { enabled: boolean, reviewProvider: Provider, reviewModel: string, reviewEffort: string },
+  input: { enabled: boolean, reviewProvider: Provider, reviewModel: string, reviewEffort: string, reviewSpeed: ConversationSpeed },
 ): Promise<Conversation> {
   return fetchJson(`/api/conversations/${routeId(id)}/review-config`, jsonPut(input))
 }

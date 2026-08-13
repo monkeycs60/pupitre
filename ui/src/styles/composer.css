@@ -372,6 +372,11 @@
   bottom: calc(100% + 8px);
 }
 
+.preset-selector.opens-bottom .preset-selector-popovers {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
 .preset-selector-menu,
 .preset-selector-submenu {
   padding: 5px;

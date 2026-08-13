@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { dispatchAllFlags, getProjectGit, getProjectGitDiff, getReview, listPresets, listProjectReviews, listProjectWorktrees, removeProjectWorktree, startReview, updatePreset } from './api'
+import { dispatchAllFlags, getProjectGit, getProjectGitDiff, getReview, listPresets, listProjectReviews, listProjectWorktrees, removeProjectWorktree, startReview } from './api'
 import { DiffViewer } from './DiffViewer'
 import { defaultGitCompareRefs, gitGraphCellGeometry, gitGraphRowLabel, gitRefOptions, layoutGitGraph, updateGitCompareRef } from './gitGraph'
 import { buildFileTree } from './reviewFileTree'
 import { reviewStartInput } from './reviewLaunch'
 import { isScanRunning } from './reviewStatus'
 import { cleanupInvitation, disposableWorktrees, isRemovable, worktreeLabel, worktreeRows } from './worktrees'
-import { PROVIDER_EFFORTS, REVIEW_MODELS } from './modelOptions'
-import type { Conversation, GitSnapshot, GitWorktree, Preset, Project, Provider, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
+import { ReviewConfigSelector } from './ReviewConfigSelector'
+import type { ReviewSelection } from './ReviewConfigSelector'
+import type { Conversation, GitSnapshot, GitWorktree, Preset, Project, Provider, QuotaSnapshot, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
 import { BranchIcon } from './BranchIcon'
 
 interface GitViewProps {
@@ -15,6 +16,7 @@ interface GitViewProps {
   conversation: Conversation | null
   focusedReviewId?: string | null
   reviewStatus?: ReviewStatusSnapshot | null
+  quotas: QuotaSnapshot
   onConversationSelect: (conversationId: string) => void
   onReviewSelected?: (reviewId: string) => void
   onConversationBack: () => void
@@ -26,7 +28,7 @@ function shortDate(value: string): string {
   return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-export function GitView({ project, conversation, focusedReviewId = null, reviewStatus = null, onConversationSelect, onReviewSelected, onConversationBack }: GitViewProps) {
+export function GitView({ project, conversation, focusedReviewId = null, reviewStatus = null, quotas, onConversationSelect, onReviewSelected, onConversationBack }: GitViewProps) {
   const [snapshot, setSnapshot] = useState<GitSnapshot | null>(null)
   const [baseRef, setBaseRef] = useState('')
   const [headRef, setHeadRef] = useState('')
@@ -47,8 +49,9 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   const [provider, setProvider] = useState<Provider>(conversation?.provider ?? 'codex')
   const [model, setModel] = useState(conversation?.provider === 'claude' ? 'opus' : 'gpt-5.6-sol')
   const [effort, setEffort] = useState('high')
-  const [remember, setRemember] = useState(false)
+  const [speed, setSpeed] = useState<'standard' | 'fast'>('standard')
   const [historyLimit, setHistoryLimit] = useState(25)
+  const [historyScope, setHistoryScope] = useState<'branch' | 'all'>('branch')
   const wasScanning = useRef(false)
 
   useEffect(() => {
@@ -123,7 +126,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
       if (controller.signal.aborted) return
       setPresets(loaded)
       const preset = loaded.find((item) => item.id === project.default_preset_id)
-      if (preset) { setProvider(preset.review_provider); setModel(preset.review_model); setEffort(preset.review_effort) }
+      if (preset) { setProvider(preset.review_provider); setModel(preset.review_model); setEffort(preset.review_effort); setSpeed(preset.review_provider === 'codex' ? (preset.speed ?? 'standard') : 'standard') }
     }).catch(() => {})
     return () => controller.abort()
   }, [project.default_preset_id])
@@ -156,7 +159,12 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     ? filter === 'all' || flag.status === 'treated'
     : flag.severity === filter)
   const severityCounts = flags.reduce((counts, flag) => ({ ...counts, [flag.severity]: counts[flag.severity] + 1 }), { red: 0, orange: 0, grey: 0 })
-  const rows = useMemo(() => layoutGitGraph(snapshot?.commits ?? []), [snapshot])
+  const historyCommits = useMemo(() => {
+    if (!snapshot || historyScope === 'all' || !snapshot.branchCommitShas) return snapshot?.commits ?? []
+    const bySha = new Map(snapshot.commits.map((commit) => [commit.sha, commit]))
+    return snapshot.branchCommitShas.flatMap((sha) => bySha.get(sha) ?? [])
+  }, [historyScope, snapshot])
+  const rows = useMemo(() => layoutGitGraph(historyCommits), [historyCommits])
   const visibleRows = rows.slice(0, historyLimit)
   const worktreeList = useMemo(
     () => worktreeRows(worktrees.worktrees, worktrees.merged, conversation?.worktree_path ?? null),
@@ -193,9 +201,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     if (!conversation || isReviewing) return
     setIsReviewing(true); setError(null)
     try {
-      const selectedPreset = presets.find((item) => item.id === presetId)
-      if (remember && selectedPreset && !selectedPreset.built_in) await updatePreset(selectedPreset.id, { ...selectedPreset, review_provider: provider, review_model: model, review_effort: effort })
-      const review = await startReview({ ...reviewStartInput(conversation.id, diff === null ? null : { base: baseRef, head: headRef }), presetId: presetId || null, reviewProvider: provider, reviewModel: model, reviewEffort: effort })
+      const review = await startReview({ ...reviewStartInput(conversation.id, diff === null ? null : { base: baseRef, head: headRef }), presetId: presetId || null, reviewProvider: provider, reviewModel: model, reviewEffort: effort, reviewSpeed: speed })
       setReviews((current) => [review, ...current.filter((item) => item.id !== review.id)])
       setSelectedReviewId(review.id); onReviewSelected?.(review.id)
     } catch (reason) { setError(errorMessage(reason)) }
@@ -220,10 +226,12 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     setBaseRef(next.baseRef); setHeadRef(next.headRef); setDiff(null); setSelectedFile(null)
   }
 
-  function selectPreset(nextId: string) {
-    setPresetId(nextId); setRemember(false)
-    const preset = presets.find((item) => item.id === nextId)
-    if (preset) { setProvider(preset.review_provider); setModel(preset.review_model); setEffort(preset.review_effort) }
+  function selectReviewConfig(next: ReviewSelection) {
+    setPresetId(next.presetId)
+    setProvider(next.provider)
+    setModel(next.model)
+    setEffort(next.effort)
+    setSpeed(next.speed)
   }
 
   return <div className="git-workspace">
@@ -244,20 +252,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
         <span className={`git-review-mode ${conversation?.auto_review ? 'is-auto' : ''}`} title={conversation?.auto_review ? 'Cette conversation relance une review après chaque tour réussi.' : 'La review démarre uniquement quand vous la lancez.'}>
           {conversation?.auto_review ? 'Auto activée' : 'À la demande'}
         </span>
-        <details className="git-review-settings">
-          <summary title="Choisir le modèle de review">
-            <span>Review avec</span>
-            <strong>{provider === 'codex' ? 'Codex' : 'Claude'} · {model}</strong>
-            <span>{effort}</span>
-          </summary>
-          <div>
-            <label>Preset <select value={presetId} onChange={(event) => selectPreset(event.target.value)}><option value="">Configuration manuelle</option>{presets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            <label>Provider <select value={provider} onChange={(event) => { const next = event.target.value as Provider; setProvider(next); setModel(REVIEW_MODELS[next][0]) }}><option value="codex">Codex</option><option value="claude">Claude</option></select></label>
-            <label>Modèle <select value={model} onChange={(event) => setModel(event.target.value)}>{REVIEW_MODELS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-            <label>Effort <select value={effort} onChange={(event) => setEffort(event.target.value)}>{PROVIDER_EFFORTS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-            {presets.find((item) => item.id === presetId) && !presets.find((item) => item.id === presetId)?.built_in ? <label><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Mémoriser dans le preset</label> : null}
-          </div>
-        </details>
+        <ReviewConfigSelector value={{ presetId, provider, model, effort, speed }} presets={presets} quotas={quotas} busy={isReviewing} placement="bottom" onChange={selectReviewConfig} />
         <button type="button" className="primary-button" onClick={() => void relire()} disabled={!conversation || isReviewing || isScanRunning(reviewStatus)}>{isReviewing ? 'Lancement…' : reviewStatus?.running ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : 'Lancer la review'}</button>
       </div>
     </header>
@@ -292,17 +287,21 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     </section>
     <section className="git-history">
       <header className="git-history-header">
-        <div><h2>Historique</h2><span>{rows.length} commits chargés</span></div>
-        <span>{snapshot?.currentBranch ?? 'HEAD détachée'}</span>
+        <div><h2>Commits</h2><span>{historyScope === 'branch' ? `${rows.length} sur ${snapshot?.currentBranch ?? 'la branche'} depuis ${snapshot?.branchBase ?? 'sa base'}` : `${rows.length} dans tout le dépôt`}</span></div>
+        <div className="git-history-scope" role="group" aria-label="Portée de l’historique">
+          <button type="button" className={historyScope === 'branch' ? 'is-active' : ''} onClick={() => { setHistoryScope('branch'); setHistoryLimit(25) }}>Cette branche</button>
+          <button type="button" className={historyScope === 'all' ? 'is-active' : ''} onClick={() => { setHistoryScope('all'); setHistoryLimit(25) }}>Tout l’historique</button>
+        </div>
       </header>
       <div className="git-history-list">
-        {visibleRows.map((row, rowIndex) => {
+        {visibleRows.length === 0 ? <p className="git-history-empty">Aucun commit propre à <strong>{snapshot?.currentBranch ?? 'cette branche'}</strong> depuis {snapshot?.branchBase ?? 'sa base'}.</p> : null}
+        {visibleRows.map((row) => {
           const geometry = gitGraphCellGeometry(row)
           const latestReview = row.commit.guardian.at(-1)
           const reviewCount = row.commit.guardian.length
           const linkedConversation = row.commit.conversations[0]
           const issueCount = latestReview ? latestReview.red + latestReview.orange + latestReview.grey : 0
-          return <article className={rowIndex === 0 ? 'git-commit is-head' : 'git-commit'} key={row.commit.sha}>
+          return <article className={row.commit.sha === snapshot?.head ? 'git-commit is-head' : 'git-commit'} key={row.commit.sha}>
             <span className="git-lanes" style={{ width: geometry.width }} role="img" aria-label={gitGraphRowLabel(row)}><svg viewBox={`0 0 ${geometry.width} ${geometry.viewBoxHeight}`} preserveAspectRatio="none">{geometry.paths.map((path, index) => <path key={index} className={path.kind === 'parent' ? 'is-parent' : undefined} d={path.d} />)}</svg><i className="git-lane-dot" style={{ left: geometry.dot.x }} /></span>
             <div className="git-commit-copy">
               <div className="git-commit-title"><strong>{row.commit.subject}</strong><code>{shortSha(row.commit.sha)}</code></div>

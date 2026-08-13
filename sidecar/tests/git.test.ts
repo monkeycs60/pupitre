@@ -162,6 +162,8 @@ test("lit le HEAD et le diff du worktree demandé, pas ceux du dépôt principal
   expect(gitView.snapshot(projectId, worktree)).toMatchObject({
     head: branchHead,
     currentBranch: "testcs",
+    branchCommitShas: [branchHead],
+    branchBase: "main",
   });
   expect(gitView.snapshot(projectId).head).toBe(mainHead);
   expect((await gitView.diff(projectId, mainHead, branchHead, worktree)).diff)

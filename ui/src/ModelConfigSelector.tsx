@@ -42,6 +42,7 @@ export interface ModelConfigSelectorProps {
   onRestore?: () => void
   onToggleDefault?: () => void
   onHelp?: () => void
+  placement?: 'top' | 'bottom'
 }
 
 function configOf(preset: Preset): ConversationConfig {
@@ -74,7 +75,7 @@ function selectorModelLabel(model: string): string {
 }
 
 function configSummary(config: ConversationConfig): string {
-  return `${selectorModelLabel(config.model).toLowerCase()} · ${config.effort}`
+  return `${selectorModelLabel(config.model).toLowerCase()} · ${config.effort}${config.provider === 'codex' && config.speed === 'fast' ? ' · rapide' : ''}`
 }
 
 function permissionLabel(permission: PresetPermissionMode | null): string {
@@ -149,6 +150,7 @@ export function ModelConfigSelector({
   onRestore,
   onToggleDefault,
   onHelp,
+  placement = 'top',
 }: ModelConfigSelectorProps) {
   const [open, setOpen] = useState(false)
   const [submenu, setSubmenu] = useState<Submenu>(null)
@@ -240,7 +242,7 @@ export function ModelConfigSelector({
   const chipName = selectedPreset?.name ?? 'Réglages libres'
 
   return (
-    <div className="preset-selector" ref={rootRef} onKeyDown={handleKeyDown}>
+    <div className={`preset-selector opens-${placement}`} ref={rootRef} onKeyDown={handleKeyDown}>
       <button
         type="button"
         className={`preset-selector-chip${isDirty ? ' is-dirty' : ''}${selectedPreset === null ? ' is-free' : ''}`}

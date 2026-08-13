@@ -766,6 +766,7 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
         reviewProvider: "codex",
         reviewModel: "gpt-5.6-luna",
         reviewEffort: "medium",
+        reviewSpeed: "fast",
       }),
     },
   );
@@ -773,17 +774,27 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
   expect(await configured.json()).toEqual(expect.objectContaining({
     auto_review: true,
     review_model: "gpt-5.6-luna",
+    review_speed: "fast",
   }));
   const started = await postJson("/api/reviews", {
     conversationId: conversation.id,
     reviewProvider: "codex",
     reviewModel: "gpt-5.6-luna",
     reviewEffort: "high",
+    reviewSpeed: "fast",
     codeProvider: "claude",
   });
   expect(started.status).toBe(201);
   const created = await started.json() as { id: string; status: string };
   expect(created.status).toBe("running");
+  const throttled = await postJson("/api/reviews", {
+    conversationId: conversation.id,
+    reviewProvider: "codex",
+    reviewModel: "gpt-5.6-luna",
+    reviewEffort: "high",
+  });
+  expect(throttled.status).toBe(429);
+  expect(await throttled.json()).toEqual({ error: expect.stringMatching(/^Patientez \d+ s/) });
   await current.reviews.wait(created.id);
 
   const detail = await fetch(`${current.baseUrl}/api/reviews/${created.id}`);
@@ -795,6 +806,7 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
     status: "done",
     review_provider: "codex",
     review_model: "gpt-5.6-luna",
+    review_speed: "fast",
     code_provider: "claude",
     flags: [],
   }));

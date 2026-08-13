@@ -77,11 +77,13 @@ test("configure une review automatique par conversation, désactivée par défau
     provider: "codex",
     model: "gpt-5.6-luna",
     effort: "medium",
+    speed: "fast",
   })).toMatchObject({
     auto_review: true,
     review_provider: "codex",
     review_model: "gpt-5.6-luna",
     review_effort: "medium",
+    review_speed: "fast",
   });
 });
 

@@ -702,6 +702,7 @@ function App() {
             conversation={selectedConversation}
             focusedReviewId={focusedReviewId}
             reviewStatus={fleet.reviewStatus}
+            quotas={quotas.snapshot}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
             onReviewSelected={handleGitReviewSelect}
             onConversationBack={handleConversationsSelect}

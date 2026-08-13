@@ -11,6 +11,7 @@ export interface Conversation {
   permission_mode: PresetPermissionMode | null;
   auto_review: boolean;
   review_provider: Provider | null; review_model: string | null; review_effort: string | null;
+  review_speed: "standard" | "fast" | null;
   subagent_preset_id: string | null; subagent_effort: string | null;
   cli_session_id: string | null; pinned: boolean;
   /** Renommé à la main : le digest automatique ne l'écrase plus. */
@@ -129,13 +130,13 @@ export class ConversationStore {
   }
 
   setReviewConfig(id: string, input: {
-    enabled: boolean; provider: Provider; model: string; effort: string;
+    enabled: boolean; provider: Provider; model: string; effort: string; speed: "standard" | "fast";
   }): Conversation | null {
     this.db.query(
       `UPDATE conversations
-       SET auto_review = ?, review_provider = ?, review_model = ?, review_effort = ?, updated_at = ?
+       SET auto_review = ?, review_provider = ?, review_model = ?, review_effort = ?, review_speed = ?, updated_at = ?
        WHERE id = ?`,
-    ).run(input.enabled ? 1 : 0, input.provider, input.model, input.effort, new Date().toISOString(), id);
+    ).run(input.enabled ? 1 : 0, input.provider, input.model, input.effort, input.speed, new Date().toISOString(), id);
     return this.get(id);
   }
 

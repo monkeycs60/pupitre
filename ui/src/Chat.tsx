@@ -324,6 +324,7 @@ export function Chat({
                       reviewStatus={reviewStatus}
                       onConversationUpdated={onConversationUpdated}
                       onOpenCode={onOpenCode}
+                      quotas={quotas}
                     />
                   ) : null}
                 </TaskToggleContext.Provider>

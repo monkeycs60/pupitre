@@ -34,6 +34,7 @@ export interface ReviewScanInput {
   provider: Provider;
   model: string;
   effort: string;
+  speed?: "standard" | "fast";
   prompt: string;
 }
 
@@ -47,6 +48,7 @@ export interface StartReviewInput {
   provider: Provider;
   model: string;
   effort: string;
+  speed?: "standard" | "fast";
   codeProvider?: Provider;
   scope?: string;
   incremental?: boolean;
@@ -347,6 +349,7 @@ export class ReviewRunner {
         provider: input.provider,
         model: input.model,
         effort: input.effort,
+        speed: input.speed,
         prompt,
       }, zone));
       const current = this.progress.get(id);
@@ -592,6 +595,7 @@ export async function scanWithAdapters(
     cwd: input.cwd,
     model: input.model,
     effort: input.effort,
+    speed: input.speed,
     prompt: input.prompt,
     cliSessionId: null,
     // Claude ne peut pas éditer en mode plan ; Codex reçoit en plus son sandbox.

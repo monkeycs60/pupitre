@@ -47,6 +47,7 @@ export interface Review {
   review_provider: Provider;
   review_model: string;
   review_effort: string;
+  review_speed: "standard" | "fast";
   diff_text: string;
   error: string | null;
   created_at: string;
@@ -80,6 +81,7 @@ export class ReviewStore {
     provider: Provider;
     model: string;
     effort: string;
+    speed?: "standard" | "fast";
     codeProvider?: Provider;
     scope?: string;
     parentReviewId?: string | null;
@@ -89,8 +91,8 @@ export class ReviewStore {
     this.db.query(`
       INSERT INTO reviews
         (id, project_id, conversation_id, git_ref_base, git_ref_head, status,
-         review_provider, review_model, review_effort, code_provider, scope, parent_review_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?)
+         review_provider, review_model, review_effort, review_speed, code_provider, scope, parent_review_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.projectId,
@@ -100,6 +102,7 @@ export class ReviewStore {
       input.provider,
       input.model,
       input.effort,
+      input.speed ?? "standard",
       input.codeProvider ?? this.conversationProvider(input.conversationId),
       input.scope ?? "worktree",
       input.parentReviewId ?? null,

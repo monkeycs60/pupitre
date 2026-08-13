@@ -194,6 +194,7 @@ const MODELS_BY_PROVIDER = {
 const SPEEDS = ["standard", "fast"] as const;
 const DEFAULT_MEDIA_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MESSAGE_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
+const REVIEW_COOLDOWN_MS = 60_000;
 
 class HttpError extends Error {
   constructor(
@@ -728,6 +729,31 @@ function reviewModelConfig(
   };
 }
 
+function reviewSpeed(
+  body: Record<string, unknown>,
+  provider: Provider,
+  fallback: "standard" | "fast" = "standard",
+): "standard" | "fast" {
+  const value = body.reviewSpeed ?? fallback;
+  if (value !== "standard" && value !== "fast") {
+    throw new HttpError(400, "reviewSpeed invalide");
+  }
+  if (provider === "claude" && value === "fast") {
+    throw new HttpError(400, "reviewSpeed fast est réservé à Codex");
+  }
+  return value;
+}
+
+function reviewCooldownSeconds(
+  reviews: ReturnType<ReviewRunner["listByProject"]>,
+  conversationId: string,
+  now = Date.now(),
+): number {
+  const latest = reviews.find((review) => review.conversation_id === conversationId);
+  if (!latest) return 0;
+  return Math.max(0, Math.ceil((REVIEW_COOLDOWN_MS - (now - Date.parse(latest.created_at))) / 1_000));
+}
+
 function mediaMimeType(contentType: string | null, fileName: string | null): string {
   const declared = contentType?.split(";", 1)[0]?.trim().toLowerCase();
   if (declared && declared !== "application/octet-stream") return declared;
@@ -965,13 +991,15 @@ export function createServer(deps: ServerDeps) {
       const now = Date.now();
       const running = project && deps.reviews.reviewStatus(project.id)?.running;
       const autoReview = conversation?.auto_review;
-      if (autoReview && project && !running && now - (lastAutoRescanAt.get(conversationId) ?? 0) >= 60_000) {
+      const cooldown = project ? reviewCooldownSeconds(deps.reviews.listByProject(project.id), conversationId, now) : 0;
+      if (autoReview && project && !running && cooldown === 0 && now - (lastAutoRescanAt.get(conversationId) ?? 0) >= REVIEW_COOLDOWN_MS) {
         lastAutoRescanAt.set(conversationId, now);
         const defaults = defaultReviewConfig(conversation!.provider);
         const config = {
           provider: conversation!.review_provider ?? defaults.provider,
           model: conversation!.review_model ?? defaults.model,
           effort: conversation!.review_effort ?? defaults.effort,
+          speed: conversation!.review_speed ?? "standard",
         };
         try {
           deps.reviews.start({
@@ -982,6 +1010,7 @@ export function createServer(deps: ServerDeps) {
             provider: config.provider,
             model: config.model,
             effort: config.effort,
+            speed: config.speed,
             codeProvider: conversation!.provider,
             scope: "worktree",
             incremental: true,
@@ -1912,11 +1941,13 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(400, "enabled invalide");
           }
           const config = reviewModelConfig(body, defaultReviewConfig("codex"));
+          const speed = reviewSpeed(body, config.provider);
           return json(deps.conversations.setReviewConfig(conversationReviewConfigId, {
             enabled: body.enabled,
             provider: config.provider,
             model: config.model,
             effort: config.effort,
+            speed,
           }));
         }
 
@@ -2464,6 +2495,10 @@ export function createServer(deps: ServerDeps) {
           if (!conversation) throw new HttpError(404, "conversation inconnue");
           const project = deps.projects.get(conversation.project_id);
           if (!project) throw new HttpError(404, "projet inconnu");
+          const cooldown = reviewCooldownSeconds(deps.reviews.listByProject(project.id), conversationId);
+          if (cooldown > 0) {
+            throw new HttpError(429, `Patientez ${cooldown} s avant une nouvelle review.`);
+          }
 
           const requestedPresetId = body.presetId;
           if (
@@ -2486,6 +2521,11 @@ export function createServer(deps: ServerDeps) {
               }
             : defaultReviewConfig(conversation.provider);
           const reviewModel = reviewModelConfig(body, fallback);
+          const speed = reviewSpeed(
+            body,
+            reviewModel.provider,
+            reviewModel.provider === "codex" && preset?.speed === "fast" ? "fast" : "standard",
+          );
           const rawCodeProvider = body.codeProvider;
           if (
             rawCodeProvider !== undefined
@@ -2512,6 +2552,7 @@ export function createServer(deps: ServerDeps) {
               provider: reviewModel.provider,
               model: reviewModel.model,
               effort: reviewModel.effort,
+              speed,
               codeProvider: (rawCodeProvider as Provider | undefined) ?? conversation.provider,
               scope: body.scope === undefined ? "worktree" : requiredString(body, "scope"),
               incremental: body.incremental === true,

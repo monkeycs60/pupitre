@@ -812,11 +812,18 @@
 
 /* Gardien reste dans le flux : une barre d'outil, puis un résumé exploitable. */
 .conversation-review {
+  position: relative;
   margin: calc(-1 * var(--space-3)) 0 var(--space-6);
   padding: var(--space-3);
   background: color-mix(in srgb, var(--bg-panel) 72%, transparent);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-md);
+}
+
+.conversation-review.is-clear {
+  border-color: color-mix(in srgb, var(--ok), transparent 58%);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--ok), transparent 12%);
+  animation: guardian-clear-in 480ms var(--ease) both;
 }
 
 .conversation-review-head,
@@ -849,18 +856,10 @@
 
 .conversation-review-auto input { accent-color: var(--accent); }
 .conversation-review-controls { margin-top: var(--space-3); }
-.conversation-review-controls label { display: grid; gap: 3px; min-width: 112px; }
-.conversation-review-controls label > span { color: var(--text-faint); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
-.conversation-review-controls select {
-  min-height: 30px;
-  color: var(--text);
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-}
+.conversation-review-controls .review-config-selector { min-width: 0; }
+.conversation-review-controls .preset-selector-chip { height: 32px; }
 
 .conversation-review-run {
-  align-self: end;
   min-height: 30px;
   margin-left: auto;
   padding: 0 var(--space-3);
@@ -876,9 +875,50 @@
 .conversation-review-result { flex-wrap: wrap; margin-top: var(--space-3); font-size: var(--text-xs); color: var(--text-muted); }
 .conversation-review-result .is-clear { color: var(--ok); }
 .conversation-review-result .has-flags { color: var(--warn); }
+.conversation-review-result.has-error > span:first-child { color: var(--danger); }
 .conversation-review-result button { margin-left: auto; color: var(--accent); background: transparent; border: 0; cursor: pointer; }
 .review-preview-flag { flex-basis: 100%; padding-left: 28px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conversation-review-error { margin: var(--space-2) 0 0; color: var(--danger); font-size: var(--text-xs); }
+
+.conversation-review-toast {
+  position: absolute;
+  right: var(--space-3);
+  bottom: calc(100% + var(--space-2));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 360px;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  color: var(--warn);
+  font-size: var(--text-sm);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--warn);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-popover);
+}
+
+.conversation-review-toast button {
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  color: inherit;
+  font-size: var(--text-lg);
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+@keyframes guardian-clear-in {
+  from { background-color: color-mix(in srgb, var(--ok), transparent 88%); }
+  to { background-color: color-mix(in srgb, var(--bg-panel) 72%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-review.is-clear { animation: none; }
+}
 
 /* Tour terminé : liseré et fond verts, comme une notification résolue. */
 .turn-meta-done {

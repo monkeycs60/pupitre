@@ -223,6 +223,7 @@ export interface Conversation {
   review_provider?: Provider | null
   review_model?: string | null
   review_effort?: string | null
+  review_speed?: ConversationSpeed | null
   orchestrator: boolean
   subagent_preset_id?: string | null
   subagent_effort?: string | null
@@ -395,6 +396,7 @@ export interface Review {
   review_provider: Provider
   review_model: string
   review_effort: string
+  review_speed: ConversationSpeed
   diff_text: string
   error: string | null
   created_at: string
@@ -454,6 +456,8 @@ export interface GitSnapshot {
   headParents: string[]
   currentBranch: string | null
   commits: GitCommit[]
+  branchCommitShas?: string[]
+  branchBase?: string | null
   branches: GitBranch[]
   worktrees: GitWorktree[]
 }

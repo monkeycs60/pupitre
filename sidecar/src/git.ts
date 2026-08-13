@@ -55,6 +55,9 @@ export interface GitSnapshot {
   headParents: string[];
   currentBranch: string | null;
   commits: GitCommit[];
+  /** Commits propres à la branche courante depuis sa base principale. */
+  branchCommitShas: string[];
+  branchBase: string | null;
   branches: GitBranch[];
   worktrees: GitWorktree[];
 }
@@ -184,6 +187,7 @@ export class GitProjectService {
       ?.trim() || null;
     const links = this.commitLinks(projectId);
     const guardian = this.guardianByCommit(projectId, cwd);
+    const branches = this.branches(cwd);
     let commits = head ? this.parseCommits(this.runGit(cwd, [
       "log", "-z", "--all", "--topo-order",
       `--max-count=${MAX_COMMITS}`,
@@ -203,12 +207,23 @@ export class GitProjectService {
       conversations: links.get(commit.sha) ?? [],
       guardian: guardian.get(commit.sha) ?? [],
     }));
+    const baseBranch = branches.find((branch) => branch.name === "origin/master")
+      ?? branches.find((branch) => branch.name === "origin/main")
+      ?? branches.find((branch) => branch.name === "master" && branch.name !== currentBranch)
+      ?? branches.find((branch) => branch.name === "main" && branch.name !== currentBranch)
+      ?? null;
+    const branchCommitShas = head && baseBranch
+      ? this.runGit(cwd, ["rev-list", "--topo-order", `--max-count=${MAX_COMMITS}`, `${baseBranch.sha}..${head}`])
+        .split("\n").filter(Boolean)
+      : hydrated.map((commit) => commit.sha);
     return {
       head,
       headParents,
       currentBranch,
       commits: hydrated,
-      branches: this.branches(cwd),
+      branchCommitShas,
+      branchBase: baseBranch?.name ?? null,
+      branches,
       worktrees: this.worktrees(cwd),
     };
   }
