@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { countConversationMessages } from "./message-count";
-import { MESSAGE_COUNT_MIGRATION_KEY } from "./stores/settings";
+import { MESSAGE_COUNT_MIGRATION_KEY, SPEED_REVIEW_MIGRATION_KEY } from "./stores/settings";
 
 export function dataDir(): string {
   return process.env.PUPITRE_DATA_DIR ?? join(homedir(), ".local/share/pupitre");
@@ -404,6 +404,32 @@ export function openDb(dir: string = dataDir()): Database {
       SET review_provider = 'claude', review_model = 'opus', review_effort = 'high'
       WHERE provider = 'claude'
     `);
+  }
+  const speedReviewMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
+    .get(SPEED_REVIEW_MIGRATION_KEY);
+  if (!speedReviewMigrated) {
+    // L'ancien preset Vitesse utilisait Sol/high pour Gardien alors que son nom
+    // désigne le réglage Luna rapide du chat. On répare une seule fois le preset
+    // et les conversations qui avaient hérité exactement de cette valeur.
+    db.exec(`
+      UPDATE presets
+      SET review_provider = provider, review_model = model, review_effort = effort
+      WHERE id = 'builtin-speed'
+        AND review_provider = 'codex'
+        AND review_model = 'gpt-5.6-sol'
+        AND review_effort = 'high';
+
+      UPDATE conversations
+      SET review_provider = provider, review_model = model, review_effort = effort
+      WHERE provider = 'codex'
+        AND model = 'gpt-5.6-luna'
+        AND review_provider = 'codex'
+        AND review_model = 'gpt-5.6-sol'
+        AND review_effort = 'high'
+        AND review_speed = 'fast';
+    `);
+    db.query("INSERT INTO settings (key, value) VALUES (?, ?)")
+      .run(SPEED_REVIEW_MIGRATION_KEY, "1");
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
   db.exec("PRAGMA foreign_keys = ON");

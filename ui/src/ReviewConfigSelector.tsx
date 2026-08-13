@@ -20,6 +20,18 @@ interface Props {
 }
 
 export function reviewPreset(preset: Preset): Preset {
+  // « Vitesse » est un même choix dans le chat et dans Gardien : ses réglages
+  // suivent donc le preset courant, y compris après une personnalisation.
+  if (preset.id === 'builtin-speed') {
+    return {
+      ...preset,
+      speed: preset.provider === 'codex' ? (preset.speed ?? 'standard') : null,
+      orchestrator: false,
+      subagent_preset_id: null,
+      subagent_effort: null,
+      permission_mode: null,
+    }
+  }
   return {
     ...preset,
     provider: preset.review_provider,

@@ -32,6 +32,47 @@ test("seed les trois presets M2 une seule fois", () => {
     review_model: "gpt-5.6-sol",
     review_effort: "high",
   });
+  expect(presets.get("builtin-speed")).toMatchObject({
+    review_provider: "codex",
+    review_model: "gpt-5.6-luna",
+    review_effort: "low",
+  });
+});
+
+test("le preset Vitesse garde Gardien aligné après personnalisation", () => {
+  expect(presets.update("builtin-speed", {
+    name: "Vitesse",
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "xhigh",
+    speed: "fast",
+    orchestrator: true,
+  })).toMatchObject({
+    review_provider: "codex",
+    review_model: "gpt-5.6-luna",
+    review_effort: "xhigh",
+  });
+});
+
+test("migre une seule fois l'ancienne review Sol du preset Vitesse", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-speed-migration-"));
+  const legacyDb = openDb(dir);
+  const legacyPresets = new PresetStore(legacyDb);
+  legacyDb.query(`
+    UPDATE presets
+    SET effort = 'xhigh', review_model = 'gpt-5.6-sol', review_effort = 'high'
+    WHERE id = 'builtin-speed'
+  `).run();
+  legacyDb.query("DELETE FROM settings WHERE key = 'speed-review-follows-preset-v1'").run();
+  legacyDb.close();
+
+  const migratedDb = openDb(dir);
+  expect(new PresetStore(migratedDb).get("builtin-speed")).toMatchObject({
+    model: "gpt-5.6-luna",
+    effort: "xhigh",
+    review_model: "gpt-5.6-luna",
+    review_effort: "xhigh",
+  });
 });
 
 test("CRUD d'un preset personnalisé", () => {

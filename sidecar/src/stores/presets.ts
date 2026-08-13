@@ -118,8 +118,8 @@ const BUILT_INS: ReadonlyArray<BuiltInPreset> = [
     subagent_effort: null,
     permission_mode: null,
     review_provider: "codex",
-    review_model: "gpt-5.6-sol",
-    review_effort: "high",
+    review_model: "gpt-5.6-luna",
+    review_effort: "low",
   },
 ];
 
@@ -224,11 +224,13 @@ export class PresetStore {
     const permissionMode = input.permission_mode === undefined
       ? preset.permission_mode
       : normalizePresetPermissionMode(input.permission_mode);
-    const review = reviewConfig(input, {
-      provider: preset.review_provider,
-      model: preset.review_model,
-      effort: preset.review_effort,
-    });
+    const review = reviewConfig(input, id === "builtin-speed"
+      ? { provider: input.provider, model: input.model, effort: input.effort }
+      : {
+          provider: preset.review_provider,
+          model: preset.review_model,
+          effort: preset.review_effort,
+        });
     this.db.query(`
       UPDATE presets
       SET name = ?, provider = ?, model = ?, effort = ?, speed = ?,

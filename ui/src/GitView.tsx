@@ -6,7 +6,7 @@ import { buildFileTree } from './reviewFileTree'
 import { reviewStartInput } from './reviewLaunch'
 import { isScanRunning } from './reviewStatus'
 import { cleanupInvitation, disposableWorktrees, isRemovable, worktreeLabel, worktreeRows } from './worktrees'
-import { ReviewConfigSelector } from './ReviewConfigSelector'
+import { ReviewConfigSelector, reviewPreset } from './ReviewConfigSelector'
 import type { ReviewSelection } from './ReviewConfigSelector'
 import type { Conversation, GitSnapshot, GitWorktree, Preset, Project, Provider, QuotaSnapshot, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
 import { BranchIcon } from './BranchIcon'
@@ -125,8 +125,9 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     void listPresets(controller.signal).then((loaded) => {
       if (controller.signal.aborted) return
       setPresets(loaded)
-      const preset = loaded.find((item) => item.id === project.default_preset_id)
-      if (preset) { setProvider(preset.review_provider); setModel(preset.review_model); setEffort(preset.review_effort); setSpeed(preset.review_provider === 'codex' ? (preset.speed ?? 'standard') : 'standard') }
+      const source = loaded.find((item) => item.id === project.default_preset_id)
+      const preset = source ? reviewPreset(source) : null
+      if (preset) { setProvider(preset.provider); setModel(preset.model); setEffort(preset.effort ?? 'high'); setSpeed(preset.provider === 'codex' ? (preset.speed ?? 'standard') : 'standard') }
     }).catch(() => {})
     return () => controller.abort()
   }, [project.default_preset_id])

@@ -6,8 +6,9 @@ import type { Database } from "bun:sqlite";
  * serveur sérialise tel quel dans sa réponse HTTP.
  */
 export const MESSAGE_COUNT_MIGRATION_KEY = "conversation-message-count-v2";
+export const SPEED_REVIEW_MIGRATION_KEY = "speed-review-follows-preset-v1";
 
-const INTERNAL_KEYS = new Set([MESSAGE_COUNT_MIGRATION_KEY]);
+const INTERNAL_KEYS = new Set([MESSAGE_COUNT_MIGRATION_KEY, SPEED_REVIEW_MIGRATION_KEY]);
 
 export class SettingsStore {
   constructor(private db: Database) {}

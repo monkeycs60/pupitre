@@ -2,13 +2,13 @@ import { expect, test } from 'bun:test'
 import { reviewPreset } from './ReviewConfigSelector'
 import type { Preset } from './types'
 
-test('le preset Vitesse active aussi la review rapide Codex', () => {
+test('le preset Vitesse reprend exactement le modèle de conversation', () => {
   const preset: Preset = {
     id: 'builtin-speed',
     name: 'Vitesse',
     provider: 'codex',
     model: 'gpt-5.6-luna',
-    effort: 'low',
+    effort: 'xhigh',
     speed: 'fast',
     orchestrator: true,
     permission_mode: null,
@@ -22,8 +22,8 @@ test('le preset Vitesse active aussi la review rapide Codex', () => {
 
   expect(reviewPreset(preset)).toMatchObject({
     provider: 'codex',
-    model: 'gpt-5.6-sol',
-    effort: 'high',
+    model: 'gpt-5.6-luna',
+    effort: 'xhigh',
     speed: 'fast',
   })
 })
