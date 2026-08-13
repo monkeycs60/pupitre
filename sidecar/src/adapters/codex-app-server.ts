@@ -20,6 +20,8 @@ import { aiRoots, DEFAULT_FILESYSTEM_SCOPE } from "../access";
 // tests/fixtures/codex-app-server-basic.jsonl.
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+/** Ouverture d'un thread : le démarrage des serveurs MCP s'y ajoute. */
+const DEFAULT_START_TIMEOUT_MS = 180_000;
 const DEFAULT_IDLE_MS = 5 * 60_000;
 const DEFAULT_MCP_STARTUP_TIMEOUT_SEC = 5;
 
@@ -51,10 +53,20 @@ function discoverEnabledMcpNames(bin: string): string[] {
   }
 }
 
-/** Délai au-delà duquel une requête JSON-RPC sans réponse est rejetée. */
-function requestTimeoutMs(): number {
-  const raw = Number(process.env.PUPITRE_APPSERVER_TIMEOUT_MS);
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
+/**
+ * Délai au-delà duquel une requête JSON-RPC sans réponse est rejetée.
+ *
+ * L'ouverture d'un thread a son propre budget : elle démarre les serveurs MCP
+ * du thread, et a été mesurée à 32 s sur un poste réel — le tour échouait alors
+ * que codex répondait, simplement plus lentement que les requêtes ordinaires.
+ */
+export function requestTimeoutMs(method: string): number {
+  const opening = method === "thread/start" || method === "thread/resume";
+  const raw = Number(process.env[opening
+    ? "PUPITRE_APPSERVER_START_TIMEOUT_MS"
+    : "PUPITRE_APPSERVER_TIMEOUT_MS"]);
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  return opening ? DEFAULT_START_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
 }
 
 /** Durée d'inactivité hors tour avant d'arrêter le process partagé. */
@@ -502,7 +514,7 @@ export class CodexAppServerClient {
     const child = this.proc;
     if (!child) return Promise.reject(new Error("codex app-server non démarré"));
     const id = this.nextId++;
-    const timeoutMs = requestTimeoutMs();
+    const timeoutMs = requestTimeoutMs(method);
     return new Promise((resolve, reject) => {
       // Sans réponse au bout de `timeoutMs`, la requête est abandonnée : sinon
       // un app-server muet suspendrait le tour indéfiniment.

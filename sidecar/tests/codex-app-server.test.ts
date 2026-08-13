@@ -2,7 +2,7 @@ import { test, expect, afterEach } from "bun:test";
 import { dirname, join } from "node:path";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { CodexAppServerClient } from "../src/adapters/codex-app-server";
+import { CodexAppServerClient, requestTimeoutMs } from "../src/adapters/codex-app-server";
 import type { AppEvent } from "../src/events";
 import type { TurnOptions } from "../src/adapters/types";
 
@@ -599,4 +599,29 @@ test("depuis un worktree, le dépôt principal reste accessible au bac à sable"
   const start = sentRequests(files.log).find((r) => r.method === "thread/start")!;
   expect(start.params.runtimeWorkspaceRoots).toContain("/tmp/worktree");
   expect(start.params.runtimeWorkspaceRoots).toContain("/depot/principal");
+});
+
+test("l'ouverture d'un thread a un budget plus large que les autres requêtes", () => {
+  // `thread/start` démarre les serveurs MCP du thread : mesuré à 32 s sur un
+  // poste réel, soit plus que le budget d'une requête ordinaire. Le tour
+  // échouait alors que codex répondait, simplement plus lentement.
+  expect(requestTimeoutMs("thread/start")).toBeGreaterThan(requestTimeoutMs("turn/start"));
+  expect(requestTimeoutMs("thread/resume")).toBe(requestTimeoutMs("thread/start"));
+  expect(requestTimeoutMs("thread/start")).toBeGreaterThanOrEqual(120_000);
+});
+
+test("les deux budgets restent réglables par variable d'environnement", () => {
+  const previous = process.env.PUPITRE_APPSERVER_TIMEOUT_MS;
+  const previousStart = process.env.PUPITRE_APPSERVER_START_TIMEOUT_MS;
+  try {
+    process.env.PUPITRE_APPSERVER_TIMEOUT_MS = "1234";
+    process.env.PUPITRE_APPSERVER_START_TIMEOUT_MS = "5678";
+    expect(requestTimeoutMs("turn/start")).toBe(1234);
+    expect(requestTimeoutMs("thread/start")).toBe(5678);
+  } finally {
+    if (previous === undefined) delete process.env.PUPITRE_APPSERVER_TIMEOUT_MS;
+    else process.env.PUPITRE_APPSERVER_TIMEOUT_MS = previous;
+    if (previousStart === undefined) delete process.env.PUPITRE_APPSERVER_START_TIMEOUT_MS;
+    else process.env.PUPITRE_APPSERVER_START_TIMEOUT_MS = previousStart;
+  }
 });
