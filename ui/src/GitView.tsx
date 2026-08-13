@@ -72,7 +72,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   async function dropMerged() {
     const targets = disposableWorktrees(worktreeList)
     if (targets.length === 0 || isCleaning) return
-    if (!window.confirm(`Retirer ${targets.length} worktree(s) de branches fusionnées ?`)) return
+    if (!window.confirm(`Retirer ${targets.length} worktree(s) de branches fusionnées ?\n\nLes branches, elles, sont conservées : seul le dossier de travail disparaît.`)) return
     setIsCleaning(true)
     setError(null)
     try {

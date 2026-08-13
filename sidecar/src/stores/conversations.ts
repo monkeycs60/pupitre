@@ -260,6 +260,33 @@ export class ConversationStore {
     return this.get(id);
   }
 
+  /**
+   * Vide la corbeille : supprime définitivement les conversations jetées, leurs
+   * événements, leurs sous-tâches et les reviews qui en dépendent. Sans ce
+   * ménage, les événements resteraient orphelins — rien ne les relie par clé
+   * étrangère, puisque `conversation_id` désigne aussi bien une sous-tâche.
+   */
+  purgeTrashed(): number {
+    const purge = this.db.transaction(() => {
+      const doomed = this.db.query(
+        "SELECT id FROM conversations WHERE deleted_at IS NOT NULL",
+      ).all() as Array<{ id: string }>;
+      const deleteEvents = this.db.query("DELETE FROM events WHERE conversation_id = ?");
+      for (const conversation of doomed) {
+        const subtasks = this.db.query(
+          "SELECT id FROM subtasks WHERE conversation_id = ?",
+        ).all(conversation.id) as Array<{ id: string }>;
+        for (const subtask of subtasks) deleteEvents.run(subtask.id);
+        this.db.query("DELETE FROM subtasks WHERE conversation_id = ?").run(conversation.id);
+        this.db.query("DELETE FROM reviews WHERE conversation_id = ?").run(conversation.id);
+        deleteEvents.run(conversation.id);
+        this.db.query("DELETE FROM conversations WHERE id = ?").run(conversation.id);
+      }
+      return doomed.length;
+    });
+    return purge();
+  }
+
   /** Retire une continuation ratée et ses événements sans toucher à sa source. */
   deleteFailedContinuation(id: string): boolean {
     const remove = this.db.transaction(() => {

@@ -49,6 +49,7 @@ import { AppSettingsView } from './AppSettingsView'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { DocumentsView } from './DocumentsView'
 import { DesignView } from './DesignView'
+import { branchOfWorktree } from './conversationBranch'
 import {
   locationForSelection,
   readLastActiveLocation,
@@ -731,6 +732,15 @@ function App() {
                     {modelLabel(selectedConversation.model)} ·{' '}
                     {selectedConversation.effort ?? 'default'}
                     {selectedConversation.speed === 'fast' ? ' · rapide' : ''}
+                    {branchOfWorktree(selectedConversation.worktree_path) !== null ? (
+                      <span
+                        className="conversation-branch"
+                        title={`Worktree dédié : ${selectedConversation.worktree_path}`}
+                      >
+                        <span aria-hidden="true">⑂</span>
+                        {branchOfWorktree(selectedConversation.worktree_path)}
+                      </span>
+                    ) : null}
                   </p>
                 ) : null}
               </div>

@@ -312,8 +312,10 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
         }
         break
       }
-      case 'subtask-ref':
+      case 'subtask-ref': {
         assistant = null
+        const footer = ensureTurnFooter()
+        footer.subtaskCount = (footer.subtaskCount ?? 0) + 1
         blocks.push({
           kind: 'subtask',
           id: `subtask-${eventKey}-${event.subtaskId}`,
@@ -323,6 +325,7 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
           ...(event.label === undefined ? {} : { label: event.label }),
         })
         break
+      }
       case 'debrief-ref':
         assistant = null
         blocks.push({

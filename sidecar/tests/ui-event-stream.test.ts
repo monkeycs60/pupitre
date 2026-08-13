@@ -160,3 +160,29 @@ test("un document-ref PDF permanent conserve son format dans le fil", () => {
     expiresAt: null,
   });
 });
+
+test("le pied de tour compte les sous-tâches réellement lancées", () => {
+  // Un modèle peut affirmer avoir délégué sans l'avoir fait : le compte vient
+  // des événements, jamais de sa parole.
+  const blocks = groupEvents([
+    { type: "user-message", text: "délègue deux analyses", images: [] },
+    { type: "subtask-ref", subtaskId: "s1", provider: "claude", model: "sonnet" },
+    { type: "subtask-ref", subtaskId: "s2", provider: "claude", model: "sonnet" },
+    { type: "text-final", text: "c'est fait" },
+    { type: "status", state: "done" },
+  ] as never);
+
+  const footer = blocks.find((block) => block.kind === "turn-footer") as { subtaskCount?: number };
+  expect(footer?.subtaskCount).toBe(2);
+});
+
+test("un tour sans sous-tâche n'affiche aucun compte", () => {
+  const blocks = groupEvents([
+    { type: "user-message", text: "réponds", images: [] },
+    { type: "text-final", text: "j'ai délégué (mensonge)" },
+    { type: "status", state: "done" },
+  ] as never);
+
+  const footer = blocks.find((block) => block.kind === "turn-footer") as { subtaskCount?: number };
+  expect(footer?.subtaskCount).toBeUndefined();
+});

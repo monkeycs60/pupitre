@@ -420,3 +420,29 @@ test("setCliSessionId persiste pour la reprise", () => {
   convs.setCliSessionId(c.id, "abc-123");
   expect(convs.get(c.id)!.cli_session_id).toBe("abc-123");
 });
+
+test("vider la corbeille supprime les conversations jetées et tout ce qui pend après", () => {
+  const kept = convs.create({
+    projectId, provider: "codex", model: "m", firstMessage: "je reste",
+  });
+  const trashed = convs.create({
+    projectId, provider: "codex", model: "m", firstMessage: "je pars",
+  });
+  convs.appendEvent(trashed.id, { type: "text-final", text: "trace" } as never);
+  convs.setDeleted(trashed.id, true);
+
+  expect(convs.purgeTrashed()).toBe(1);
+  expect(convs.get(trashed.id)).toBeNull();
+  expect(convs.get(kept.id)).not.toBeNull();
+  // Les événements de la conversation jetée ne survivent pas à sa suppression.
+  const orphans = db.query(
+    "SELECT count(*) AS total FROM events WHERE conversation_id = ?",
+  ).get(trashed.id) as { total: number };
+  expect(orphans.total).toBe(0);
+});
+
+test("vider une corbeille vide ne supprime rien", () => {
+  convs.create({ projectId, provider: "codex", model: "m", firstMessage: "vivante" });
+
+  expect(convs.purgeTrashed()).toBe(0);
+});

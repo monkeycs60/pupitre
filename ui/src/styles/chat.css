@@ -774,6 +774,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Compte de sous-tâches : la seule mesure qui contredise un tour prétendant
+   avoir délégué. Discret, mais présent dès qu'il y a eu délégation. */
+.turn-subtasks {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
 .turn-xp {
   margin-left: auto;
   color: var(--streak);

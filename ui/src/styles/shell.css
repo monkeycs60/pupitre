@@ -740,6 +740,20 @@ body.is-resizing-documents-list {
   fill: currentColor;
 }
 
+/* Branche du worktree dans l'en-tête : présente seulement quand la
+   conversation est isolée, donc toujours porteuse d'information. */
+.conversation-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-1);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-sm);
+}
+
 .conversation-prov {
   width: 19px;
   height: 14px;

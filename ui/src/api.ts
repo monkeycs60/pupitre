@@ -796,6 +796,10 @@ export function setConversationArchived(
   )
 }
 
+export function purgeTrashedConversations(): Promise<{ purged: number }> {
+  return fetchJson('/api/conversations/trash/purge', jsonPost({}))
+}
+
 export function setConversationDeleted(
   conversationId: string,
   deleted: boolean,

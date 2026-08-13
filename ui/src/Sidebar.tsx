@@ -7,6 +7,7 @@ import {
   renameConversation,
   runWorkflow,
   setConversationArchived,
+  purgeTrashedConversations,
   setConversationDeleted,
   setConversationPinned,
   setConversationPermissionMode,
@@ -22,6 +23,7 @@ import { ProviderMark } from './ProviderMark'
 import { filterWorkflows, workflowSummary } from './workflowSidebar'
 import { useNow } from './useNow'
 import { formatActiveDuration } from './formatActiveDuration'
+import { conversationSubtitle } from './conversationBranch'
 
 declare global {
   interface Window {
@@ -374,6 +376,21 @@ export function Sidebar({
     }
   }
 
+  async function handleTrashPurge() {
+    // Suppression définitive : la conversation, ses événements et ses
+    // sous-tâches disparaissent. La confirmation le dit franchement.
+    if (!window.confirm(
+      `Supprimer définitivement ${conversations.length} conversation(s) ?\n\nLeurs messages et sous-tâches partent avec. C'est irréversible.`,
+    )) return
+    setError(null)
+    try {
+      await purgeTrashedConversations()
+      setConversations([])
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'La corbeille n’a pas pu être vidée.')
+    }
+  }
+
   async function handleTrashToggle(conversation: Conversation) {
     setError(null)
     try {
@@ -517,6 +534,12 @@ export function Sidebar({
           ))}
         </div>
 
+        {conversationScope === 'trash' && conversations.length > 0 ? (
+          <button type="button" className="trash-purge-button" onClick={() => void handleTrashPurge()}>
+            Vider la corbeille ({conversations.length})
+          </button>
+        ) : null}
+
         <div className="navigation-list">
           {selectedProject === null ? (
             <p className="list-empty">Sélectionnez un projet</p>
@@ -586,7 +609,14 @@ export function Sidebar({
                   ) : (
                     <span className="conv-row-line2">
                       <ProviderMark provider={conversation.provider} className="conv-row-mark" />
-                      <span className={`conv-row-preset ${isFreePreset ? 'is-free' : ''}`}>{presetLabel}</span>
+                      {(() => {
+                        const subtitle = conversationSubtitle(conversation, presetLabel)
+                        return subtitle.kind === 'branch'
+                          ? <span className="conv-row-branch" title={conversation.worktree_path ?? undefined}>
+                              <span aria-hidden="true">⑂</span>{subtitle.label}
+                            </span>
+                          : <span className={`conv-row-preset ${isFreePreset ? 'is-free' : ''}`}>{subtitle.label}</span>
+                      })()}
                       <span className="conv-row-count">{conversationMessageCount(conversation, messageCount)}</span>
                     </span>
                   )}

@@ -39,6 +39,12 @@ interface TurnFooterBlock {
     completedAt?: string
   }
   files?: Array<{ path: string; added: number; removed: number }>
+  /**
+   * Nombre de sous-tâches réellement lancées pendant ce tour. Absent quand il
+   * n'y en a eu aucune. Un modèle peut affirmer avoir délégué sans l'avoir
+   * fait : ce compte vient des événements, pas de sa réponse.
+   */
+  subtaskCount?: number
 }
 
 export type EventBlock =

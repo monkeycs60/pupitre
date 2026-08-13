@@ -2214,6 +2214,12 @@ export function createServer(deps: ServerDeps) {
           return json(deps.conversations.setArchived(conversationArchiveId, body.archived));
         }
 
+        // Vider la corbeille : suppression définitive, donc sur sa propre route
+        // plutôt qu'en effet de bord d'une autre.
+        if (request.method === "POST" && pathname === "/api/conversations/trash/purge") {
+          return json({ purged: deps.conversations.purgeTrashed() });
+        }
+
         const conversationTrashId = routeId(
           pathname,
           /^\/api\/conversations\/([^/]+)\/trash$/,

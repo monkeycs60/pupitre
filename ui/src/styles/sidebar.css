@@ -1820,6 +1820,40 @@
   color: var(--text-muted);
 }
 
+/* Branche du worktree : remplace le preset quand la conversation est isolée,
+   et se distingue par l'accent — c'est l'information rare, donc la notable. */
+/* Vider la corbeille : action destructrice, donc annoncée comme telle et
+   réservée à la vue qui la rend pertinente. */
+.trash-purge-button {
+  margin: 0 var(--space-3) var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  color: var(--danger);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.trash-purge-button:hover {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.conv-row-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .conv-row-preset {
   flex: 1;
   min-width: 0;

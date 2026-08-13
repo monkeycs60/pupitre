@@ -186,6 +186,11 @@ function TurnFooter({
             {block.usage.outputTokens.toLocaleString('fr-FR')} tokens
           </span>
         ) : null}
+        {block.subtaskCount !== undefined ? (
+          <span className="turn-subtasks" title="Sous-tâches réellement lancées pendant ce tour">
+            {block.subtaskCount} sous-tâche{block.subtaskCount > 1 ? 's' : ''}
+          </span>
+        ) : null}
         {xp !== null ? <span className="turn-xp">+{xp} XP</span> : null}
       </div>
     </footer>
