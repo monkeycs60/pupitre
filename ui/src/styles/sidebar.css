@@ -1854,29 +1854,13 @@
   white-space: nowrap;
 }
 
-.conv-row-preset {
-  flex: 0 1 auto;
-  max-width: 88px;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.conv-row-state-read .conv-row-preset,
 .conv-row-state-read .conv-row-mark {
   color: var(--text-faint);
 }
 
-.conv-row-preset.is-free {
-  font-style: italic;
-}
-
 .conv-row-count {
   flex: none;
+  margin-left: auto;
   min-width: 22px;
   padding: 1px 6px;
   color: var(--text-muted);

@@ -17,6 +17,7 @@ interface EventStreamProps {
   onSubtaskStatusChange?: (subtaskId: string, status: SubtaskStatus | null) => void
   onDebriefQuestion?: (block: DebriefBlock) => void
   turnXpMultiplier?: number
+  onReviewChanges?: () => void
 }
 
 /**
@@ -33,9 +34,11 @@ function EventStreamImpl({
   onSubtaskStatusChange,
   onDebriefQuestion,
   turnXpMultiplier,
+  onReviewChanges,
 }: EventStreamProps) {
   const rendered: ReactNode[] = []
   const newestHtmlDocumentId = blocks.findLast((item) => item.kind === 'html-document')?.id
+  const newestTurnFooterId = blocks.findLast((item) => item.kind === 'turn-footer')?.id
   let index = 0
 
   while (index < blocks.length) {
@@ -96,6 +99,7 @@ function EventStreamImpl({
             onImageOpen={onImageOpen}
             onImageLoad={onImageLoad}
             turnXpMultiplier={turnXpMultiplier}
+            onReviewChanges={block.id === newestTurnFooterId ? onReviewChanges : undefined}
           />
       ),
     )

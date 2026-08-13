@@ -788,6 +788,28 @@
   font-weight: 600;
 }
 
+.turn-review-action {
+  margin-left: auto;
+  padding: 2px var(--space-2);
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+
+.turn-review-action:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.turn-review-action + .turn-xp {
+  margin-left: 0;
+}
+
 /* Tour terminé : liseré et fond verts, comme une notification résolue. */
 .turn-meta-done {
   justify-content: flex-start;

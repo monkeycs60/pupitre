@@ -820,6 +820,7 @@ function App() {
                   ? gamification.snapshot?.conversations[selectedConversation.id]?.complexity
                   : undefined) ?? 0,
               ) * (gamification.snapshot?.focusMultiplier ?? 1)}
+              onReviewChanges={handleGitSelect}
             />
             {showSwitchModel && selectedConversation !== null ? (
               <SwitchModelModal

@@ -54,6 +54,7 @@ interface ChatProps {
   initialAttachments?: Attachment[]
   /** Multiplicateur XP du tour (complexité × focus), voir turnXp.ts. */
   turnXpMultiplier?: number
+  onReviewChanges?: () => void
 }
 
 interface LightboxImage {
@@ -112,6 +113,7 @@ export function Chat({
   initialMessage = '',
   initialAttachments = [],
   turnXpMultiplier,
+  onReviewChanges,
 }: ChatProps) {
   const draftStorageKey = `pupitre:draft:${conversation?.id ?? `new:${project.id}`}`
   const blocks = useMemo(() => groupEvents(events), [events])
@@ -304,6 +306,7 @@ export function Chat({
                     onSubtaskStatusChange={handleSubtaskStatusChange}
                     onDebriefQuestion={handleDebriefQuestion}
                     turnXpMultiplier={turnXpMultiplier}
+                    onReviewChanges={onReviewChanges}
                   />
                 </TaskToggleContext.Provider>
               )}

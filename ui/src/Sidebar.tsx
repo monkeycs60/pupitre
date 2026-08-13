@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import {
   listProjectConversations,
   listProjectWorkflows,
-  listPresets,
   markConversationRead,
   renameConversation,
   runWorkflow,
@@ -13,7 +12,7 @@ import {
   setConversationPermissionMode,
 } from './api'
 import { QuotaStatus } from './QuotaBar'
-import type { Conversation, FleetItem, GamificationSnapshot, Preset, Project, Workflow, WorkspaceView } from './types'
+import type { Conversation, FleetItem, GamificationSnapshot, Project, Workflow, WorkspaceView } from './types'
 import type { Quotas } from './useQuotas'
 import type { GamificationPulse } from './useGamification'
 import { WorkflowDialog } from './WorkflowDialog'
@@ -23,7 +22,7 @@ import { ProviderMark } from './ProviderMark'
 import { filterWorkflows, workflowSummary } from './workflowSidebar'
 import { useNow } from './useNow'
 import { formatActiveDuration } from './formatActiveDuration'
-import { conversationSubtitle } from './conversationBranch'
+import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 
 declare global {
@@ -90,20 +89,6 @@ function conversationRowState(
 
 function conversationMessageCount(conversation: Conversation, liveCount?: number): number {
   return Math.max(0, liveCount ?? conversation.message_count ?? conversation.digest_turn)
-}
-
-function conversationPreset(conversation: Conversation, presets: Preset[]): Preset | undefined {
-  if (conversation.preset_id !== null && conversation.preset_id !== undefined) {
-    return presets.find((preset) => preset.id === conversation.preset_id)
-  }
-  const matches = presets.filter((preset) => (
-    preset.provider === conversation.provider
-      && preset.model === conversation.model
-      && preset.effort === conversation.effort
-      && preset.speed === conversation.speed
-      && preset.orchestrator === conversation.orchestrator
-  ))
-  return matches.length === 1 ? matches[0] : undefined
 }
 
 function elapsedConversationTime(startedAt: string | undefined, now: number): string {
@@ -187,7 +172,6 @@ export function Sidebar({
 }: SidebarProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [workflows, setWorkflows] = useState<Workflow[]>([])
-  const [presets, setPresets] = useState<Preset[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isRunningWorkflow, setIsRunningWorkflow] = useState<string | null>(null)
   const [showWorkflowDialog, setShowWorkflowDialog] = useState(false)
@@ -213,8 +197,6 @@ export function Sidebar({
   if (workspaceView === 'conversations' && selectedConversation !== null && runningSubtasks > 0) {
     activeConversationIds.add(selectedConversation.id)
   }
-  const selectedProjectId = selectedProject?.id
-
   useEffect(() => {
     setConversations([])
     setWorkflows([])
@@ -259,19 +241,6 @@ export function Sidebar({
       ignore = true
     }
   }, [selectedProject, conversationListVersion, conversationScope])
-
-  useEffect(() => {
-    let ignore = false
-    if (selectedProjectId === undefined) return
-    void listPresets()
-      .then((items) => {
-        if (!ignore) setPresets(items)
-      })
-      .catch(() => {})
-    return () => {
-      ignore = true
-    }
-  }, [selectedProjectId])
 
   useEffect(() => {
     setSidebarTab('conversations')
@@ -575,9 +544,7 @@ export function Sidebar({
                   && selectedConversation?.id === conversation.id
                 const activeItem = activeByConversation.get(conversation.id)
                 const state = conversationRowState(conversation, activeConversationIds)
-                const preset = conversationPreset(conversation, presets)
-                const presetLabel = preset?.name ?? 'réglages libres'
-                const isFreePreset = preset === undefined
+                const branch = branchOfWorktree(conversation.worktree_path)
                 const messageCount = isSelected ? liveConversationMessageCount : undefined
                 return (
               <div
@@ -610,15 +577,11 @@ export function Sidebar({
                   ) : (
                     <span className="conv-row-line2">
                       <ProviderMark provider={conversation.provider} className="conv-row-mark" />
-                      {(() => {
-                        const subtitle = conversationSubtitle(conversation, presetLabel)
-                        return subtitle.kind === 'branch'
-                          ? <><span className={`conv-row-preset ${isFreePreset ? 'is-free' : ''}`}>{presetLabel}</span>
-                            <span className="conv-row-branch" title={conversation.worktree_path ?? undefined}>
-                              <BranchIcon />{subtitle.label}
-                            </span></>
-                          : <span className={`conv-row-preset ${isFreePreset ? 'is-free' : ''}`}>{subtitle.label}</span>
-                      })()}
+                      {branch !== null ? (
+                        <span className="conv-row-branch" title={`Branche du worktree : ${conversation.worktree_path}`}>
+                          <BranchIcon />{branch}
+                        </span>
+                      ) : null}
                       <span className="conv-row-count">{conversationMessageCount(conversation, messageCount)}</span>
                     </span>
                   )}

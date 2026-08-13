@@ -665,6 +665,7 @@ body.is-resizing-documents-list {
 /* --- En-tête de la vue conversation -------------------------------------- */
 
 .conversation-header {
+  position: relative;
   display: flex;
   flex: none;
   align-items: center;
@@ -755,10 +756,15 @@ body.is-resizing-documents-list {
 }
 
 .conversation-surface-tabs {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
   display: flex;
   align-items: stretch;
   align-self: stretch;
   gap: var(--space-3);
+  transform: translateX(-50%);
 }
 
 .conversation-surface-tabs button {

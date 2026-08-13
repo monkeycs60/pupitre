@@ -13,6 +13,7 @@ interface EventViewProps {
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
   turnXpMultiplier?: number
+  onReviewChanges?: () => void
 }
 
 function formatPreValue(value: unknown): string {
@@ -117,9 +118,11 @@ function TurnFiles({ files }: { files: Array<{ path: string; added: number; remo
 function TurnFooter({
   block,
   turnXpMultiplier,
+  onReviewChanges,
 }: {
   block: Extract<EventBlock, { kind: 'turn-footer' }>
   turnXpMultiplier?: number
+  onReviewChanges?: () => void
 }) {
   const isRunning = block.status?.state === 'running'
   const isDone = block.status?.state === 'done'
@@ -191,6 +194,11 @@ function TurnFooter({
             {block.subtaskCount} sous-tâche{block.subtaskCount > 1 ? 's' : ''}
           </span>
         ) : null}
+        {isDone && onReviewChanges ? (
+          <button type="button" className="turn-review-action" onClick={onReviewChanges}>
+            Relire les changements
+          </button>
+        ) : null}
         {xp !== null ? <span className="turn-xp">+{xp} XP</span> : null}
       </div>
     </footer>
@@ -203,7 +211,7 @@ function TurnFooter({
  */
 export const EventView = memo(EventViewImpl)
 
-function EventViewImpl({ block, onImageOpen, onImageLoad, turnXpMultiplier }: EventViewProps) {
+function EventViewImpl({ block, onImageOpen, onImageLoad, turnXpMultiplier, onReviewChanges }: EventViewProps) {
   switch (block.kind) {
     case 'user':
       return (
@@ -267,7 +275,7 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnXpMultiplier }: Ev
       )
 
     case 'turn-footer': {
-      return <TurnFooter block={block} turnXpMultiplier={turnXpMultiplier} />
+      return <TurnFooter block={block} turnXpMultiplier={turnXpMultiplier} onReviewChanges={onReviewChanges} />
     }
   }
 }

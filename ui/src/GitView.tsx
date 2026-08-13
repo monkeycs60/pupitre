@@ -22,6 +22,9 @@ interface GitViewProps {
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'La vue Git est indisponible.' }
 function shortSha(sha: string): string { return sha.slice(0, 8) }
+function shortDate(value: string): string {
+  return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+}
 
 export function GitView({ project, conversation, focusedReviewId = null, reviewStatus = null, onConversationSelect, onReviewSelected, onConversationBack }: GitViewProps) {
   const [snapshot, setSnapshot] = useState<GitSnapshot | null>(null)
@@ -45,6 +48,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   const [model, setModel] = useState(conversation?.provider === 'claude' ? 'opus' : 'gpt-5.6-sol')
   const [effort, setEffort] = useState('high')
   const [remember, setRemember] = useState(false)
+  const [historyLimit, setHistoryLimit] = useState(25)
   const wasScanning = useRef(false)
 
   useEffect(() => {
@@ -153,6 +157,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     : flag.severity === filter)
   const severityCounts = flags.reduce((counts, flag) => ({ ...counts, [flag.severity]: counts[flag.severity] + 1 }), { red: 0, orange: 0, grey: 0 })
   const rows = useMemo(() => layoutGitGraph(snapshot?.commits ?? []), [snapshot])
+  const visibleRows = rows.slice(0, historyLimit)
   const worktreeList = useMemo(
     () => worktreeRows(worktrees.worktrees, worktrees.merged, conversation?.worktree_path ?? null),
     [worktrees, conversation?.worktree_path],
@@ -235,7 +240,26 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
           <span>{conversation?.worktree_path ? 'worktree de la conversation' : 'dépôt principal'}</span>
         </span>
       </div>
-      <div className="git-review-actions"><button type="button" className="primary-button" onClick={() => void relire()} disabled={!conversation || isReviewing || isScanRunning(reviewStatus)}>{isReviewing ? 'Lancement…' : reviewStatus?.running ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : 'Relire ce diff'}</button><details className="git-review-settings"><summary>⚙</summary><div><label>Preset <select value={presetId} onChange={(event) => selectPreset(event.target.value)}><option value="">Configuration manuelle</option>{presets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Provider <select value={provider} onChange={(event) => { const next = event.target.value as Provider; setProvider(next); setModel(REVIEW_MODELS[next][0]) }}><option value="codex">codex</option><option value="claude">claude</option></select></label><label>Modèle <select value={model} onChange={(event) => setModel(event.target.value)}>{REVIEW_MODELS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Effort <select value={effort} onChange={(event) => setEffort(event.target.value)}>{PROVIDER_EFFORTS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>{presets.find((item) => item.id === presetId) && !presets.find((item) => item.id === presetId)?.built_in ? <label><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Mémoriser dans le preset</label> : null}</div></details></div>
+      <div className="git-review-actions">
+        <span className={`git-review-mode ${project.auto_rescan ? 'is-auto' : ''}`} title={project.auto_rescan ? 'Le projet relance aussi une review incrémentale après un tour réussi.' : 'La review démarre uniquement quand vous la lancez.'}>
+          {project.auto_rescan ? 'Auto activée' : 'À la demande'}
+        </span>
+        <details className="git-review-settings">
+          <summary title="Choisir le modèle de review">
+            <span>Review avec</span>
+            <strong>{provider === 'codex' ? 'Codex' : 'Claude'} · {model}</strong>
+            <span>{effort}</span>
+          </summary>
+          <div>
+            <label>Preset <select value={presetId} onChange={(event) => selectPreset(event.target.value)}><option value="">Configuration manuelle</option>{presets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label>Provider <select value={provider} onChange={(event) => { const next = event.target.value as Provider; setProvider(next); setModel(REVIEW_MODELS[next][0]) }}><option value="codex">Codex</option><option value="claude">Claude</option></select></label>
+            <label>Modèle <select value={model} onChange={(event) => setModel(event.target.value)}>{REVIEW_MODELS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+            <label>Effort <select value={effort} onChange={(event) => setEffort(event.target.value)}>{PROVIDER_EFFORTS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+            {presets.find((item) => item.id === presetId) && !presets.find((item) => item.id === presetId)?.built_in ? <label><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Mémoriser dans le preset</label> : null}
+          </div>
+        </details>
+        <button type="button" className="primary-button" onClick={() => void relire()} disabled={!conversation || isReviewing || isScanRunning(reviewStatus)}>{isReviewing ? 'Lancement…' : reviewStatus?.running ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : 'Lancer la review'}</button>
+      </div>
     </header>
     {error ? <div className="git-error" role="alert">{error}</div> : null}
     <section className="git-compare" aria-label="Comparer deux références">
@@ -266,6 +290,32 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
         {isRemovable(row) ? <button type="button" onClick={() => void dropWorktree(row.worktree.path)}>Retirer</button> : null}
       </li>)}</ul>
     </section>
-    <section className="git-history"><h2>Commits</h2>{rows.map((row, rowIndex) => { const geometry = gitGraphCellGeometry(row); return <article className={rowIndex === 0 ? 'git-commit is-head' : 'git-commit'} key={row.commit.sha}><span className="git-lanes" style={{ width: geometry.width }} role="img" aria-label={gitGraphRowLabel(row)}><svg viewBox={`0 0 ${geometry.width} ${geometry.viewBoxHeight}`} preserveAspectRatio="none">{geometry.paths.map((path, index) => <path key={index} className={path.kind === 'parent' ? 'is-parent' : undefined} d={path.d} />)}</svg><i className="git-lane-dot" style={{ left: geometry.dot.x }} /></span><div className="git-commit-copy"><strong>{row.commit.subject}</strong><code>{shortSha(row.commit.sha)}</code><div className="git-commit-links">{row.commit.conversations.map((item) => <button type="button" key={item.id} onClick={() => onConversationSelect(item.id)}>Conversation · {item.title}</button>)}{row.commit.guardian.map((review) => <button type="button" key={review.reviewId} onClick={() => { setSelectedReviewId(review.reviewId); onReviewSelected?.(review.reviewId) }}>Review · {review.red} rouge, {review.orange} orange</button>)}</div></div></article> })}</section>
+    <section className="git-history">
+      <header className="git-history-header">
+        <div><h2>Historique</h2><span>{rows.length} commits chargés</span></div>
+        <span>{snapshot?.currentBranch ?? 'HEAD détachée'}</span>
+      </header>
+      <div className="git-history-list">
+        {visibleRows.map((row, rowIndex) => {
+          const geometry = gitGraphCellGeometry(row)
+          const latestReview = row.commit.guardian.at(-1)
+          const reviewCount = row.commit.guardian.length
+          const linkedConversation = row.commit.conversations[0]
+          const issueCount = latestReview ? latestReview.red + latestReview.orange + latestReview.grey : 0
+          return <article className={rowIndex === 0 ? 'git-commit is-head' : 'git-commit'} key={row.commit.sha}>
+            <span className="git-lanes" style={{ width: geometry.width }} role="img" aria-label={gitGraphRowLabel(row)}><svg viewBox={`0 0 ${geometry.width} ${geometry.viewBoxHeight}`} preserveAspectRatio="none">{geometry.paths.map((path, index) => <path key={index} className={path.kind === 'parent' ? 'is-parent' : undefined} d={path.d} />)}</svg><i className="git-lane-dot" style={{ left: geometry.dot.x }} /></span>
+            <div className="git-commit-copy">
+              <div className="git-commit-title"><strong>{row.commit.subject}</strong><code>{shortSha(row.commit.sha)}</code></div>
+              <div className="git-commit-meta"><span>{row.commit.author}</span><span>{shortDate(row.commit.authoredAt)}</span>{row.commit.refs.slice(0, 2).map((ref) => <span className="git-commit-ref" key={ref}>{ref}</span>)}</div>
+              {linkedConversation || latestReview ? <div className="git-commit-links">
+                {linkedConversation ? <button type="button" onClick={() => onConversationSelect(linkedConversation.id)}>Conversation · {linkedConversation.title}{row.commit.conversations.length > 1 ? ` +${row.commit.conversations.length - 1}` : ''}</button> : null}
+                {latestReview ? <button type="button" className={issueCount > 0 ? 'has-issues' : 'is-clean'} onClick={() => { setSelectedReviewId(latestReview.reviewId); onReviewSelected?.(latestReview.reviewId) }}>{issueCount === 0 ? 'Review conforme' : `${issueCount} signalement${issueCount > 1 ? 's' : ''}`}{reviewCount > 1 ? ` · ${reviewCount} passages` : ''}</button> : null}
+              </div> : null}
+            </div>
+          </article>
+        })}
+      </div>
+      {historyLimit < rows.length ? <button type="button" className="git-history-more" onClick={() => setHistoryLimit((current) => current + 25)}>Afficher 25 commits précédents</button> : null}
+    </section>
   </div>
 }
