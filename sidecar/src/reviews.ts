@@ -4,7 +4,7 @@ import { runClaudeTurn } from "./adapters/claude";
 import { runCodexTurn } from "./adapters/codex";
 import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 import type { QuotaTracker } from "./quotas";
-import type { ConversationStore } from "./stores/conversations";
+import type { Conversation, ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
 import { defaultReviewConfig } from "./stores/presets";
 import type {
@@ -81,6 +81,23 @@ interface CapturedDiff {
   base: string;
   head: string;
   diff: string;
+}
+
+export function dispatchAgentConfig(
+  conversation: Pick<Conversation, "provider" | "model" | "effort" | "speed">,
+  provider: Provider,
+): { provider: Provider; model: string; effort: string; speed: "standard" | "fast" | null } {
+  if (conversation.provider === provider) {
+    const fallback = defaultReviewConfig(provider);
+    return {
+      provider,
+      model: conversation.model,
+      effort: conversation.effort ?? fallback.effort,
+      speed: provider === "codex" ? (conversation.speed ?? "standard") : null,
+    };
+  }
+  const fallback = defaultReviewConfig(provider);
+  return { ...fallback, speed: provider === "codex" ? "standard" : null };
 }
 
 class ReviewOutputError extends Error {}
@@ -387,14 +404,18 @@ export class ReviewRunner {
     userMessage: string | undefined,
   ): Promise<void> {
     try {
+      const conversation = this.conversations.get(conversationId);
+      if (!conversation) throw new Error("conversation inconnue");
+      const agent = dispatchAgentConfig(conversation, flag.code_provider);
       let subtask;
       for (;;) {
         try {
           subtask = this.subtasks!.start({
             conversationId,
-            provider: flag.code_provider,
-            model: review.review_model,
-            effort: review.review_effort,
+            provider: agent.provider,
+            model: agent.model,
+            effort: agent.effort,
+            speed: agent.speed,
             prompt: dispatchPrompt(flag, counterContext(review.diff_text, flag), userMessage),
             label: `Gardien · ${flag.file}:${flag.line_start}`,
             readOnly: false,

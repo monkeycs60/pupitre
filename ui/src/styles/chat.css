@@ -893,6 +893,7 @@
   animation: guardian-progress 900ms ease-in-out infinite alternate;
 }
 .review-preview-flag { flex-basis: 100%; padding-left: 28px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.review-preview-more { flex-basis: 100%; padding-left: 28px; color: var(--text-faint); }
 .conversation-review-error { margin: var(--space-2) 0 0; color: var(--danger); font-size: var(--text-xs); }
 
 .conversation-review-toast {

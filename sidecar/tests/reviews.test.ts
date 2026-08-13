@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { openDb } from "../src/db";
 import { QuotaTracker } from "../src/quotas";
 import {
+  dispatchAgentConfig,
   parseReviewOutput,
   ReviewRunner,
   splitDiffIntoZones,
@@ -27,6 +28,19 @@ let presets: PresetStore;
 let store: ReviewStore;
 let quotas: QuotaTracker;
 const previousEnv: Record<string, string | undefined> = {};
+
+test("le modèle de correction suit le provider de la conversation, pas celui du reviewer", () => {
+  expect(dispatchAgentConfig({
+    provider: "codex", model: "gpt-5.6-luna", effort: "xhigh", speed: "fast",
+  }, "codex")).toEqual({
+    provider: "codex", model: "gpt-5.6-luna", effort: "xhigh", speed: "fast",
+  });
+  expect(dispatchAgentConfig({
+    provider: "claude", model: "fable-5", effort: "max", speed: null,
+  }, "claude")).toEqual({
+    provider: "claude", model: "fable-5", effort: "max", speed: null,
+  });
+});
 
 function git(...args: string[]): string {
   const result = Bun.spawnSync(["git", ...args], { cwd: repo });
@@ -1171,11 +1185,12 @@ test("l'option projet lance automatiquement les contre-avis rouges", async () =>
 test("dispatch une zone en écriture et rouvre le flag si la sous-tâche échoue", async () => {
   const project = projects.create({ name: "dispatch", path: repo });
   const conversation = conversations.create({
-    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", effort: "xhigh",
+    speed: "fast", firstMessage: "x",
   });
   const review = store.create({
     projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
-    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+    provider: "claude", model: "opus", effort: "high",
   });
   store.setDiff(review.id, "base", "head", [
     "diff --git a/src/config.ts b/src/config.ts", "--- a/src/config.ts", "+++ b/src/config.ts",
@@ -1199,7 +1214,13 @@ test("dispatch une zone en écriture et rouvre le flag si la sous-tâche échoue
   await Bun.sleep(0);
   expect(store.getFlag(flag.id)?.status).toBe("open");
   expect(inputs[0]).toMatchObject({
-    readOnly: false, label: "Gardien · src/config.ts:1", conversationId: conversation.id,
+    readOnly: false,
+    label: "Gardien · src/config.ts:1",
+    conversationId: conversation.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "xhigh",
+    speed: "fast",
   });
   expect(inputs[0]!.prompt).toContain("Consigne de l'utilisateur : Ajoute un test.");
 });

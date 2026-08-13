@@ -180,7 +180,8 @@ export function ConversationReviewPanel({
         <div className="conversation-review-result">
           <span className={openFlags.length ? 'has-flags' : 'is-clear'}>{openFlags.length ? `${openFlags.length} signalement${openFlags.length > 1 ? 's' : ''}` : '✓ Review conforme'}</span>
           <span>{openFlags.length ? '' : 'Aucun signalement · '}{files.length} fichier{files.length > 1 ? 's' : ''} analysé{files.length > 1 ? 's' : ''}</span>
-          {openFlags.slice(0, 2).map((flag) => <span className={`review-preview-flag risk-${flag.severity}`} key={flag.id}>{flag.file}:{flag.line_start} · {flag.message}</span>)}
+          {openFlags.slice(0, 3).map((flag) => <span className={`review-preview-flag risk-${flag.severity}`} key={flag.id}>{flag.file}:{flag.line_start} · {flag.message}</span>)}
+          {openFlags.length > 3 ? <span className="review-preview-more">+{openFlags.length - 3} autre{openFlags.length > 4 ? 's' : ''} signalement{openFlags.length > 4 ? 's' : ''}</span> : null}
           <button type="button" onClick={onOpenCode}>Ouvrir le diff</button>
         </div>
       ) : <p className="conversation-review-hint">À la demande, ou automatiquement après un tour réussi · délai minimum 1 min.</p>}
