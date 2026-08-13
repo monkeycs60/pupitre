@@ -1820,8 +1820,8 @@
   color: var(--text-muted);
 }
 
-/* Branche du worktree : remplace le preset quand la conversation est isolée,
-   et se distingue par l'accent — c'est l'information rare, donc la notable. */
+/* Le preset décrit l'agent, la branche décrit son espace de travail : les deux
+   restent visibles et la branche reçoit davantage d'espace. */
 /* Vider la corbeille : action destructrice, donc annoncée comme telle et
    réservée à la vue qui la rend pertinente. */
 .trash-purge-button {
@@ -1843,7 +1843,7 @@
 .conv-row-branch {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 7px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -1855,7 +1855,8 @@
 }
 
 .conv-row-preset {
-  flex: 1;
+  flex: 0 1 auto;
+  max-width: 88px;
   min-width: 0;
   overflow: hidden;
   color: var(--text-muted);

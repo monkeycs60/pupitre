@@ -146,6 +146,30 @@ test("produit un diff entre refs validées et refuse une référence invalide", 
     .rejects.toThrow("référence Git invalide");
 });
 
+test("lit le HEAD et le diff du worktree demandé, pas ceux du dépôt principal", async () => {
+  const mainHead = git("rev-parse", "HEAD");
+  git("branch", "testcs");
+  const worktree = join(repo, "..", "testcs-tree");
+  git("worktree", "add", "-q", worktree, "testcs");
+  writeFileSync(join(worktree, "only-testcs.ts"), "export const branch = true\n");
+  const created = Bun.spawnSync(["git", "add", "."], { cwd: worktree });
+  expect(created.exitCode).toBe(0);
+  const committed = Bun.spawnSync(["git", "commit", "-qm", "testcs only"], { cwd: worktree });
+  expect(committed.exitCode).toBe(0);
+  const branchHead = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: worktree })
+    .stdout.toString().trim();
+
+  expect(gitView.snapshot(projectId, worktree)).toMatchObject({
+    head: branchHead,
+    currentBranch: "testcs",
+  });
+  expect(gitView.snapshot(projectId).head).toBe(mainHead);
+  expect((await gitView.diff(projectId, mainHead, branchHead, worktree)).diff)
+    .toContain("only-testcs.ts");
+  expect(() => gitView.snapshot(projectId, join(repo, "..", "not-a-worktree")))
+    .toThrow("worktree inconnu");
+});
+
 test("un dépôt neuf sans commit reste consultable", () => {
   const empty = join(repo, "..", "empty");
   mkdirSync(empty);

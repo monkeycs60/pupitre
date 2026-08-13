@@ -111,7 +111,7 @@ export function ConfigPanel({
   // créerait une branche jumelle au lieu de rejoindre la bonne.
   useEffect(() => {
     const controller = new AbortController()
-    void getProjectGit(project.id, controller.signal)
+    void getProjectGit(project.id, null, controller.signal)
       .then((snapshot) => { if (!controller.signal.aborted) setBranches(branchSuggestions(snapshot.branches)) })
       .catch(() => {})
     return () => controller.abort()

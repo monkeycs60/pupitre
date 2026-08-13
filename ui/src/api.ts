@@ -833,9 +833,11 @@ export function listProjectReviews(
 
 export function getProjectGit(
   projectId: string,
+  conversationId?: string | null,
   signal?: AbortSignal,
 ): Promise<GitSnapshot> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/git`, { signal })
+  const query = conversationId ? `?${new URLSearchParams({ conversationId })}` : ''
+  return fetchJson(`/api/projects/${routeId(projectId)}/git${query}`, { signal })
 }
 
 export interface ProjectWorktrees {
@@ -866,9 +868,11 @@ export function getProjectGitDiff(
   projectId: string,
   base: string,
   head: string,
+  conversationId?: string | null,
   signal?: AbortSignal,
 ): Promise<GitDiff> {
   const query = new URLSearchParams({ base, head })
+  if (conversationId) query.set('conversationId', conversationId)
   return fetchJson(
     `/api/projects/${routeId(projectId)}/git/diff?${query.toString()}`,
     { signal },

@@ -177,8 +177,8 @@ export class GitProjectService {
     return this.tryResolve(cwd, "HEAD");
   }
 
-  snapshot(projectId: string): GitSnapshot {
-    const cwd = this.projectPath(projectId);
+  snapshot(projectId: string, requestedCwd?: string | null): GitSnapshot {
+    const cwd = this.workspacePath(projectId, requestedCwd);
     const head = this.tryResolve(cwd, "HEAD");
     const currentBranch = this.optionalGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"])
       ?.trim() || null;
@@ -213,8 +213,13 @@ export class GitProjectService {
     };
   }
 
-  async diff(projectId: string, baseRef: string, headRef: string): Promise<GitDiff> {
-    const cwd = this.projectPath(projectId);
+  async diff(
+    projectId: string,
+    baseRef: string,
+    headRef: string,
+    requestedCwd?: string | null,
+  ): Promise<GitDiff> {
+    const cwd = this.workspacePath(projectId, requestedCwd);
     const base = this.resolve(cwd, baseRef);
     const head = this.resolve(cwd, headRef);
     const diff = await this.runGitLimited(cwd, [
@@ -360,6 +365,21 @@ export class GitProjectService {
     const project = this.projects.get(projectId);
     if (!project) throw new GitProjectError("projet inconnu");
     return project.path;
+  }
+
+  /**
+   * Résout le dépôt réellement montré par l'atelier Git. Un chemin fourni par
+   * le client n'est accepté que s'il correspond à un worktree enregistré par
+   * Git pour ce projet : impossible de transformer ce paramètre en accès à un
+   * dossier arbitraire.
+   */
+  private workspacePath(projectId: string, requestedCwd?: string | null): string {
+    const projectPath = this.projectPath(projectId);
+    if (!requestedCwd) return projectPath;
+    const wanted = resolve(requestedCwd);
+    const known = this.worktrees(projectPath).some((item) => resolve(item.path) === wanted);
+    if (!known) throw new GitProjectError("worktree inconnu pour ce projet");
+    return wanted;
   }
 
   private resolve(cwd: string, ref: string): string {

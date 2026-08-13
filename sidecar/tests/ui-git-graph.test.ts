@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { gitGraphCellGeometry, gitGraphRowLabel, gitRefOptions, layoutGitGraph, updateGitCompareRef } from '../../ui/src/gitGraph'
+import { defaultGitCompareRefs, gitGraphCellGeometry, gitGraphRowLabel, gitRefOptions, layoutGitGraph, updateGitCompareRef } from '../../ui/src/gitGraph'
 import type { GitCommit, GitSnapshot } from '../../ui/src/types'
 
 function commit(sha: string, parents: string[]): GitCommit {
@@ -71,6 +71,25 @@ test('alimente la base ou la cible depuis un commit sans écraser l’autre réf
   expect(updateGitCompareRef(refs, 'head', 'commit-b')).toEqual({
     baseRef: 'base',
     headRef: 'commit-b',
+  })
+})
+
+test('compare par défaut la base distante au HEAD du worktree', () => {
+  const snapshot: GitSnapshot = {
+    head: 'feature-head',
+    headParents: ['feature-parent'],
+    currentBranch: 'testcs',
+    commits: [commit('feature-head', ['feature-parent'])],
+    branches: [
+      { name: 'origin/master', fullName: 'refs/remotes/origin/master', sha: 'remote-base', current: false, remote: true },
+      { name: 'testcs', fullName: 'refs/heads/testcs', sha: 'feature-head', current: true, remote: false },
+    ],
+    worktrees: [],
+  }
+
+  expect(defaultGitCompareRefs(snapshot)).toEqual({
+    baseRef: 'remote-base',
+    headRef: 'feature-head',
   })
 })
 

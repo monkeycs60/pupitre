@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { dispatchAllFlags, getProjectGit, getProjectGitDiff, getReview, listPresets, listProjectReviews, listProjectWorktrees, removeProjectWorktree, startReview, updatePreset } from './api'
 import { DiffViewer } from './DiffViewer'
-import { gitGraphCellGeometry, gitGraphRowLabel, gitRefOptions, layoutGitGraph, updateGitCompareRef } from './gitGraph'
+import { defaultGitCompareRefs, gitGraphCellGeometry, gitGraphRowLabel, gitRefOptions, layoutGitGraph, updateGitCompareRef } from './gitGraph'
 import { buildFileTree } from './reviewFileTree'
 import { reviewStartInput } from './reviewLaunch'
 import { isScanRunning } from './reviewStatus'
 import { cleanupInvitation, disposableWorktrees, isRemovable, worktreeLabel, worktreeRows } from './worktrees'
 import { PROVIDER_EFFORTS, REVIEW_MODELS } from './modelOptions'
 import type { Conversation, GitSnapshot, GitWorktree, Preset, Project, Provider, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
+import { BranchIcon } from './BranchIcon'
 
 interface GitViewProps {
   project: Project
@@ -16,12 +17,13 @@ interface GitViewProps {
   reviewStatus?: ReviewStatusSnapshot | null
   onConversationSelect: (conversationId: string) => void
   onReviewSelected?: (reviewId: string) => void
+  onConversationBack: () => void
 }
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'La vue Git est indisponible.' }
 function shortSha(sha: string): string { return sha.slice(0, 8) }
 
-export function GitView({ project, conversation, focusedReviewId = null, reviewStatus = null, onConversationSelect, onReviewSelected }: GitViewProps) {
+export function GitView({ project, conversation, focusedReviewId = null, reviewStatus = null, onConversationSelect, onReviewSelected, onConversationBack }: GitViewProps) {
   const [snapshot, setSnapshot] = useState<GitSnapshot | null>(null)
   const [baseRef, setBaseRef] = useState('')
   const [headRef, setHeadRef] = useState('')
@@ -47,15 +49,34 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
 
   useEffect(() => {
     const controller = new AbortController()
-    void Promise.all([getProjectGit(project.id, controller.signal), listProjectReviews(project.id, controller.signal)])
+    void Promise.all([
+      getProjectGit(project.id, conversation?.id, controller.signal),
+      listProjectReviews(project.id, controller.signal),
+    ])
       .then(([git, loadedReviews]) => {
         if (controller.signal.aborted) return
-        setSnapshot(git); setBaseRef(git.headParents[0] ?? ''); setHeadRef(git.head ?? '')
-        setReviews(loadedReviews); setSelectedReviewId(focusedReviewId ?? loadedReviews[0]?.id ?? null)
+        const defaults = defaultGitCompareRefs(git)
+        setSnapshot(git); setBaseRef(defaults.baseRef); setHeadRef(defaults.headRef)
+        const conversationReviews = conversation
+          ? loadedReviews.filter((review) => review.conversation_id === conversation.id)
+          : loadedReviews
+        setReviews(loadedReviews)
+        setSelectedReviewId(focusedReviewId ?? conversationReviews[0]?.id ?? null)
+        if (defaults.baseRef && defaults.headRef) {
+          void getProjectGitDiff(
+            project.id,
+            defaults.baseRef,
+            defaults.headRef,
+            conversation?.id,
+            controller.signal,
+          ).then((loaded) => {
+            if (!controller.signal.aborted) setDiff(loaded.diff)
+          }).catch(() => {})
+        }
       })
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(errorMessage(reason)) })
     return () => controller.abort()
-  }, [focusedReviewId, project.id])
+  }, [conversation?.id, focusedReviewId, project.id])
 
   const refreshWorktrees = useCallback((signal?: AbortSignal) => {
     void listProjectWorktrees(project.id, signal)
@@ -78,7 +99,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     try {
       for (const row of targets) await removeProjectWorktree(project.id, row.worktree.path)
       refreshWorktrees()
-      setSnapshot(await getProjectGit(project.id))
+      setSnapshot(await getProjectGit(project.id, conversation?.id))
     } catch (reason) { setError(errorMessage(reason)) }
     finally { setIsCleaning(false) }
   }
@@ -88,7 +109,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     try {
       await removeProjectWorktree(project.id, path)
       refreshWorktrees()
-      setSnapshot(await getProjectGit(project.id))
+      setSnapshot(await getProjectGit(project.id, conversation?.id))
     } catch (reason) { setError(errorMessage(reason)) }
   }
 
@@ -116,7 +137,10 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
 
   const refs = useMemo(() => snapshot ? gitRefOptions(snapshot) : [], [snapshot])
   const selectedReview = reviews.find((review) => review.id === selectedReviewId) ?? null
-  const displayedDiff = selectedReview?.diff_text ?? diff
+  // Une ancienne review vide ne doit jamais masquer la comparaison courante :
+  // c'est précisément le cas « 0 signalement » qui empêchait de consulter le
+  // code alors que la branche contenait bien des changements.
+  const displayedDiff = selectedReview?.diff_text || diff
   const flags = selectedReview?.flags ?? []
   const files = useMemo(() => displayedDiff ? buildFileTree(displayedDiff, flags) : [], [displayedDiff, flags])
   const filteredDiff = useMemo(() => {
@@ -155,7 +179,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   async function compare() {
     if (!baseRef || !headRef) return
     setIsComparing(true); setError(null)
-    try { setDiff((await getProjectGitDiff(project.id, baseRef, headRef)).diff); setSelectedFile(null) }
+    try { setDiff((await getProjectGitDiff(project.id, baseRef, headRef, conversation?.id)).diff); setSelectedFile(null); setSelectedReviewId(null) }
     catch (reason) { setError(errorMessage(reason)) }
     finally { setIsComparing(false) }
   }
@@ -198,15 +222,33 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   }
 
   return <div className="git-workspace">
-    <header className="git-header"><div><h1>Git · {project.name}</h1><p>{snapshot?.currentBranch ?? 'HEAD détachée'}</p></div>
+    <header className="git-header">
+      <div className="git-context">
+        <nav className="conversation-surface-tabs" aria-label="Vue de la conversation">
+          <button type="button" onClick={onConversationBack}>Conversation</button>
+          <button type="button" className="is-active" aria-current="page">Code</button>
+        </nav>
+        <span className="git-context-separator" aria-hidden="true" />
+        <span className="git-current-branch" title={conversation?.worktree_path ?? project.path}>
+          <BranchIcon />
+          <strong>{snapshot?.currentBranch ?? 'HEAD détachée'}</strong>
+          <span>{conversation?.worktree_path ? 'worktree de la conversation' : 'dépôt principal'}</span>
+        </span>
+      </div>
       <div className="git-review-actions"><button type="button" className="primary-button" onClick={() => void relire()} disabled={!conversation || isReviewing || isScanRunning(reviewStatus)}>{isReviewing ? 'Lancement…' : reviewStatus?.running ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : 'Relire ce diff'}</button><details className="git-review-settings"><summary>⚙</summary><div><label>Preset <select value={presetId} onChange={(event) => selectPreset(event.target.value)}><option value="">Configuration manuelle</option>{presets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Provider <select value={provider} onChange={(event) => { const next = event.target.value as Provider; setProvider(next); setModel(REVIEW_MODELS[next][0]) }}><option value="codex">codex</option><option value="claude">claude</option></select></label><label>Modèle <select value={model} onChange={(event) => setModel(event.target.value)}>{REVIEW_MODELS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Effort <select value={effort} onChange={(event) => setEffort(event.target.value)}>{PROVIDER_EFFORTS[provider].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>{presets.find((item) => item.id === presetId) && !presets.find((item) => item.id === presetId)?.built_in ? <label><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Mémoriser dans le preset</label> : null}</div></details></div>
     </header>
     {error ? <div className="git-error" role="alert">{error}</div> : null}
-    <section className="git-compare" aria-label="Comparer deux références"><label>Base <select value={baseRef} onChange={(event) => updateRef('base', event.target.value)}>{refs.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Cible <select value={headRef} onChange={(event) => updateRef('head', event.target.value)}>{refs.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><button type="button" onClick={() => void compare()} disabled={!baseRef || !headRef || isComparing}>{isComparing ? 'Comparaison…' : 'Afficher le diff'}</button></section>
+    <section className="git-compare" aria-label="Comparer deux références">
+      <div className="git-compare-title"><strong>Changements</strong><span>{displayedDiff ? `${files.length} fichier${files.length === 1 ? '' : 's'}` : 'Aucun diff chargé'}</span></div>
+      <label><span>Depuis</span><select value={baseRef} onChange={(event) => updateRef('base', event.target.value)}>{refs.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <span className="git-compare-arrow" aria-hidden="true">→</span>
+      <label><span>Jusqu’à</span><select value={headRef} onChange={(event) => updateRef('head', event.target.value)}>{refs.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <button type="button" onClick={() => void compare()} disabled={!baseRef || !headRef || isComparing}>{isComparing ? 'Chargement…' : 'Actualiser'}</button>
+    </section>
     {displayedDiff ? <section className="git-overlay-layout" aria-label="Diff annoté">
       <aside className="git-file-tree"><button type="button" className={selectedFile === null ? 'is-selected' : ''} onClick={() => { setSelectedFile(null); setSelectedFlagId(null) }}>Tous les fichiers <strong>{openFlags.length}</strong></button>{files.map((file) => <button type="button" className={selectedFile === file.path ? 'is-selected' : ''} key={file.path} onClick={() => { setSelectedFile(file.path); setSelectedFlagId(shownFlags.find((flag) => flag.file === file.path)?.id ?? null) }}><span>{file.path}</span><small>+{file.additions} −{file.deletions}</small><em className="risk-red">{file.counts.red}</em><em className="risk-orange">{file.counts.orange}</em><em className="risk-grey">{file.counts.grey}</em></button>)}</aside>
       <div className="git-overlay-diff"><header className="git-review-toolbar"><button type="button" className={filter === 'red' ? 'is-active' : ''} onClick={() => setFilter(filter === 'red' ? 'all' : 'red')}>Rouge {severityCounts.red}</button><button type="button" className={filter === 'orange' ? 'is-active' : ''} onClick={() => setFilter(filter === 'orange' ? 'all' : 'orange')}>Orange {severityCounts.orange}</button><button type="button" className={filter === 'treated' ? 'is-active' : ''} onClick={() => setFilter(filter === 'treated' ? 'all' : 'treated')}>Traitées {flags.filter((flag) => flag.status === 'treated').length}</button>{selectedReview ? <button type="button" onClick={() => void dispatchOpen()} disabled={isDispatching || openFlags.length === 0}>{isDispatching ? 'Envoi…' : `Traiter les ${openFlags.length} ouverts`}</button> : null}</header><DiffViewer diff={filteredDiff ?? ''} flags={shownFlags} selectedFlagId={selectedFlagId} label="Diff Git annoté" onFlagUpdated={updateFlag} /></div>
-    </section> : <p className="git-diff-empty">Choisissez deux points ou lancez une relecture du worktree.</p>}
+    </section> : <div className="git-diff-empty"><strong>Aucun changement entre ces deux points.</strong><span>Le diff reste consultable indépendamment des signalements du Gardien.</span></div>}
     <section className="git-worktrees" aria-label="Worktrees du projet">
       <h2>Worktrees</h2>
       {cleanupInvitation(worktreeList) !== null ? <p className="git-worktree-invite" role="status">

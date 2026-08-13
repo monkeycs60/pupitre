@@ -745,13 +745,49 @@ body.is-resizing-documents-list {
 .conversation-branch {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 7px;
   margin-left: var(--space-2);
   padding: 1px var(--space-1);
   color: var(--accent);
   font-family: var(--font-mono);
   border: 1px solid var(--accent-border);
   border-radius: var(--r-sm);
+}
+
+.conversation-surface-tabs {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  gap: var(--space-3);
+}
+
+.conversation-surface-tabs button {
+  position: relative;
+  padding: 0 2px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.conversation-surface-tabs button:hover {
+  color: var(--text);
+}
+
+.conversation-surface-tabs button.is-active {
+  color: var(--text-strong);
+}
+
+.conversation-surface-tabs button.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  content: '';
+  background: var(--accent);
 }
 
 .conversation-prov {

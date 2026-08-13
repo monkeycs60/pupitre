@@ -1234,9 +1234,19 @@ export function createServer(deps: ServerDeps) {
           }
           const base = url.searchParams.get("base");
           const head = url.searchParams.get("head");
+          const conversationId = url.searchParams.get("conversationId");
+          const conversation = conversationId ? deps.conversations.get(conversationId) : null;
+          if (conversationId && (!conversation || conversation.project_id !== projectGitDiffId)) {
+            throw new HttpError(404, "conversation inconnue pour ce projet");
+          }
           if (!base || !head) throw new HttpError(400, "références Git manquantes");
           try {
-            return json(await deps.git.diff(projectGitDiffId, base, head));
+            return json(await deps.git.diff(
+              projectGitDiffId,
+              base,
+              head,
+              conversation?.worktree_path,
+            ));
           } catch (error) {
             if (error instanceof GitProjectError) throw new HttpError(400, error.message);
             throw error;
@@ -1246,8 +1256,13 @@ export function createServer(deps: ServerDeps) {
         const projectGitId = routeId(pathname, /^\/api\/projects\/([^/]+)\/git$/);
         if (request.method === "GET" && projectGitId !== null) {
           if (!deps.projects.get(projectGitId)) throw new HttpError(404, "projet inconnu");
+          const conversationId = url.searchParams.get("conversationId");
+          const conversation = conversationId ? deps.conversations.get(conversationId) : null;
+          if (conversationId && (!conversation || conversation.project_id !== projectGitId)) {
+            throw new HttpError(404, "conversation inconnue pour ce projet");
+          }
           try {
-            return json(deps.git.snapshot(projectGitId));
+            return json(deps.git.snapshot(projectGitId, conversation?.worktree_path));
           } catch (error) {
             if (error instanceof GitProjectError) throw new HttpError(400, error.message);
             throw error;

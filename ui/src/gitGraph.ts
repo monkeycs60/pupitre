@@ -114,6 +114,19 @@ export function gitRefOptions(snapshot: GitSnapshot): Array<[string, string]> {
   return [...values.entries()]
 }
 
+/** Comparaison utile à l'ouverture : branche de base distante → HEAD du
+ * worktree courant. Le parent direct n'explique qu'un commit et masquait les
+ * changements précédents d'une branche de travail. */
+export function defaultGitCompareRefs(snapshot: GitSnapshot): GitCompareRefs {
+  const remoteBase = snapshot.branches.find((branch) => (
+    branch.name === 'origin/master' || branch.name === 'origin/main'
+  ))
+  return {
+    baseRef: remoteBase?.sha ?? snapshot.headParents[0] ?? '',
+    headRef: snapshot.head ?? '',
+  }
+}
+
 export function layoutGitGraph(commits: GitCommit[]): GitGraphRow[] {
   let active: string[] = []
   return commits.map((commit) => {

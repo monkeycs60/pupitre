@@ -50,6 +50,7 @@ import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { DocumentsView } from './DocumentsView'
 import { DesignView } from './DesignView'
 import { branchOfWorktree } from './conversationBranch'
+import { BranchIcon } from './BranchIcon'
 import {
   locationForSelection,
   readLastActiveLocation,
@@ -578,7 +579,10 @@ function App() {
         settings: 'Paramètres',
       }[workspaceView]
 
+  // Git est un calque de la conversation ouverte, pas une destination qui la
+  // remplace : sa liste reste visible pour préserver le contexte de travail.
   const showSidebar = workspaceView === 'conversations'
+    || (workspaceView === 'git' && selectedConversation !== null)
 
   return (
     <ActionFormatContext.Provider value={actionFormat}>
@@ -700,6 +704,7 @@ function App() {
             reviewStatus={fleet.reviewStatus}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
             onReviewSelected={handleGitReviewSelect}
+            onConversationBack={handleConversationsSelect}
           />
         ) : workspaceView === 'costs' ? (
           <CostsView
@@ -737,13 +742,19 @@ function App() {
                         className="conversation-branch"
                         title={`Worktree dédié : ${selectedConversation.worktree_path}`}
                       >
-                        <span aria-hidden="true">⑂</span>
+                        <BranchIcon />
                         {branchOfWorktree(selectedConversation.worktree_path)}
                       </span>
                     ) : null}
                   </p>
                 ) : null}
               </div>
+              {selectedConversation !== null ? (
+                <nav className="conversation-surface-tabs" aria-label="Vue de la conversation">
+                  <button type="button" className="is-active" aria-current="page">Conversation</button>
+                  <button type="button" onClick={handleGitSelect}>Code</button>
+                </nav>
+              ) : null}
               {selectedConversation !== null ? (
                 <ContextGauge
                   conversation={selectedConversation}
@@ -762,9 +773,9 @@ function App() {
                   <button
                     type="button"
                     className="header-action header-action-icon"
-                    onClick={() => void startWorktreeReview()}
-                    title="Relire le diff Git avec un modèle de review"
-                    aria-label="Relire le diff"
+                    onClick={handleGitSelect}
+                    title="Afficher le code et les reviews"
+                    aria-label="Afficher le code"
                   >
                     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                       <path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />

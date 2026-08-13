@@ -24,6 +24,7 @@ import { filterWorkflows, workflowSummary } from './workflowSidebar'
 import { useNow } from './useNow'
 import { formatActiveDuration } from './formatActiveDuration'
 import { conversationSubtitle } from './conversationBranch'
+import { BranchIcon } from './BranchIcon'
 
 declare global {
   interface Window {
@@ -570,7 +571,7 @@ export function Sidebar({
                   })()}
                 </div>
                 {group.items.map((conversation) => {
-                const isSelected = workspaceView === 'conversations'
+                const isSelected = (workspaceView === 'conversations' || workspaceView === 'git')
                   && selectedConversation?.id === conversation.id
                 const activeItem = activeByConversation.get(conversation.id)
                 const state = conversationRowState(conversation, activeConversationIds)
@@ -612,9 +613,10 @@ export function Sidebar({
                       {(() => {
                         const subtitle = conversationSubtitle(conversation, presetLabel)
                         return subtitle.kind === 'branch'
-                          ? <span className="conv-row-branch" title={conversation.worktree_path ?? undefined}>
-                              <span aria-hidden="true">⑂</span>{subtitle.label}
-                            </span>
+                          ? <><span className={`conv-row-preset ${isFreePreset ? 'is-free' : ''}`}>{presetLabel}</span>
+                            <span className="conv-row-branch" title={conversation.worktree_path ?? undefined}>
+                              <BranchIcon />{subtitle.label}
+                            </span></>
                           : <span className={`conv-row-preset ${isFreePreset ? 'is-free' : ''}`}>{subtitle.label}</span>
                       })()}
                       <span className="conv-row-count">{conversationMessageCount(conversation, messageCount)}</span>
