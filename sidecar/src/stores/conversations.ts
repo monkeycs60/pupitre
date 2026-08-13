@@ -9,6 +9,8 @@ export interface Conversation {
   model: string; effort: string | null; speed: "standard" | "fast" | null;
   preset_id: string | null;
   permission_mode: PresetPermissionMode | null;
+  auto_review: boolean;
+  review_provider: Provider | null; review_model: string | null; review_effort: string | null;
   subagent_preset_id: string | null; subagent_effort: string | null;
   cli_session_id: string | null; pinned: boolean;
   /** Renommé à la main : le digest automatique ne l'écrase plus. */
@@ -126,12 +128,24 @@ export class ConversationStore {
     return this.get(id);
   }
 
+  setReviewConfig(id: string, input: {
+    enabled: boolean; provider: Provider; model: string; effort: string;
+  }): Conversation | null {
+    this.db.query(
+      `UPDATE conversations
+       SET auto_review = ?, review_provider = ?, review_model = ?, review_effort = ?, updated_at = ?
+       WHERE id = ?`,
+    ).run(input.enabled ? 1 : 0, input.provider, input.model, input.effort, new Date().toISOString(), id);
+    return this.get(id);
+  }
+
   get(id: string): Conversation | null {
     const row = this.db.query("SELECT * FROM conversations WHERE id = ?").get(id) as any;
     return row ? {
       ...row,
       summary: row.summary || row.title,
       pinned: !!row.pinned,
+      auto_review: !!row.auto_review,
       title_locked: !!row.title_locked,
       digest_turn: row.digest_turn ?? 0,
       message_count: row.message_count ?? 0,
@@ -157,6 +171,7 @@ export class ConversationStore {
       ...r,
       summary: r.summary || r.title,
       pinned: !!r.pinned,
+      auto_review: !!r.auto_review,
       title_locked: !!r.title_locked,
       digest_turn: r.digest_turn ?? 0,
       message_count: r.message_count ?? 0,

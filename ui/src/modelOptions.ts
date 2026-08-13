@@ -158,8 +158,5 @@ export const DELEGATION_ROUTING = {
 /** Sous-tâches simultanées par conversation parente. */
 export const MAX_CONCURRENT_SUBTASKS = 4
 
-// Les jugements Gardien n'utilisent jamais les modèles économiques.
-export const REVIEW_MODELS = {
-  claude: ['fable-5', 'opus', 'sonnet'],
-  codex: ['gpt-5.6-sol', 'gpt-5.6-terra'],
-} as const satisfies Record<Provider, readonly string[]>
+/** Gardien propose exactement le même catalogue que le chat. */
+export const REVIEW_MODELS = PROVIDER_MODELS

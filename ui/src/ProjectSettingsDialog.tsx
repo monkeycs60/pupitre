@@ -3,7 +3,6 @@ import {
   listProjectMcpServers,
   measureProjectMcpServers,
   setProjectFilesystemScope,
-  setProjectAutoRescan,
   updateProjectMcpServers,
   verifyProjectMcpCost,
 } from './api'
@@ -24,7 +23,6 @@ function errorMessage(error: unknown): string {
 
 export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSettingsDialogProps) {
   const [scope, setScope] = useState<FilesystemScope>(project.filesystem_scope)
-  const [autoRescan, setAutoRescan] = useState(project.auto_rescan)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mcp, setMcp] = useState<ProjectMcpConfig | null>(null)
@@ -116,8 +114,6 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
     setError(null)
     try {
       onUpdated(await setProjectFilesystemScope(project.id, scope))
-      const updated = await setProjectAutoRescan(project.id, autoRescan)
-      onUpdated(updated)
       if (mcp !== null) await updateProjectMcpServers(project.id, mcp.enabled)
       onClose()
     } catch (saveError: unknown) {
@@ -160,16 +156,6 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
             Ce réglage s’applique à toutes les conversations de ce projet. Les racines
             <code> ~/.claude</code> et <code> ~/.codex</code> restent toujours accessibles.
           </p>
-          <label>
-            <input
-              type="checkbox"
-              checked={autoRescan}
-              disabled={saving}
-              onChange={(event) => setAutoRescan(event.target.checked)}
-            />
-            <strong> Rescanner après chaque tour</strong>
-          </label>
-          <p>Relance une review incrémentale du worktree après la fin d’un tour, au maximum une fois par minute.</p>
           {mcp !== null && mcp.servers.length > 0 ? (
             <div className="project-mcp">
               <div className="project-mcp-heading">

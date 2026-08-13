@@ -10,3 +10,9 @@ test('exprime le coût absolu et relatif des modèles à partir des tarifs API',
   expect(options.relativeCostLabel('gpt-5.6-sol', 'gpt-5.6-luna')).toBe('×25')
   expect(options.formatModelPrice('gpt-5.6-luna')).toBe('0,20 / 1,20 $')
 })
+
+test('Gardien propose exactement les modèles disponibles dans le chat', () => {
+  expect(options.REVIEW_MODELS).toBe(options.PROVIDER_MODELS)
+  expect(options.REVIEW_MODELS.codex).toContain('gpt-5.6-luna')
+  expect(options.REVIEW_MODELS.claude).toContain('haiku')
+})

@@ -21,7 +21,9 @@ import type {
   QuotaSnapshot,
   SkillSuggestion,
   SubtaskStatus,
+  ReviewStatusSnapshot,
 } from './types'
+import { ConversationReviewPanel } from './ConversationReviewPanel'
 import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
 import { appendDebriefQuestionPrompt } from './debriefQuestion'
@@ -54,7 +56,9 @@ interface ChatProps {
   initialAttachments?: Attachment[]
   /** Multiplicateur XP du tour (complexité × focus), voir turnXp.ts. */
   turnXpMultiplier?: number
-  onReviewChanges?: () => void
+  reviewStatus: ReviewStatusSnapshot | null
+  onConversationUpdated: (conversation: Conversation) => void
+  onOpenCode: () => void
 }
 
 interface LightboxImage {
@@ -113,7 +117,9 @@ export function Chat({
   initialMessage = '',
   initialAttachments = [],
   turnXpMultiplier,
-  onReviewChanges,
+  reviewStatus,
+  onConversationUpdated,
+  onOpenCode,
 }: ChatProps) {
   const draftStorageKey = `pupitre:draft:${conversation?.id ?? `new:${project.id}`}`
   const blocks = useMemo(() => groupEvents(events), [events])
@@ -264,6 +270,9 @@ export function Chat({
   }, [])
 
   const suggestionText = message.trim() || previousUserText
+  const focusReview = useCallback(() => {
+    document.getElementById('conversation-review-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [])
 
   return (
     <>
@@ -306,8 +315,17 @@ export function Chat({
                     onSubtaskStatusChange={handleSubtaskStatusChange}
                     onDebriefQuestion={handleDebriefQuestion}
                     turnXpMultiplier={turnXpMultiplier}
-                    onReviewChanges={onReviewChanges}
+                    onReviewChanges={focusReview}
                   />
+                  {!isRunning && conversation !== null ? (
+                    <ConversationReviewPanel
+                      conversation={conversation}
+                      project={project}
+                      reviewStatus={reviewStatus}
+                      onConversationUpdated={onConversationUpdated}
+                      onOpenCode={onOpenCode}
+                    />
+                  ) : null}
                 </TaskToggleContext.Provider>
               )}
             </div>

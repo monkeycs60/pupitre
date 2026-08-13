@@ -641,6 +641,13 @@ export function setConversationPermissionMode(
   )
 }
 
+export function setConversationReviewConfig(
+  id: string,
+  input: { enabled: boolean, reviewProvider: Provider, reviewModel: string, reviewEffort: string },
+): Promise<Conversation> {
+  return fetchJson(`/api/conversations/${routeId(id)}/review-config`, jsonPut(input))
+}
+
 export function listProjectConversations(
   projectId: string,
   scope: 'active' | 'archived' | 'trash' = 'active',

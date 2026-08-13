@@ -810,6 +810,7 @@ function App() {
               project={selectedProject}
               quotas={quotas.snapshot}
               onConversationCreated={handleConversationCreated}
+              onConversationUpdated={handleConversationSwitched}
               onProjectUpdated={handleProjectUpdated}
               onConversationRead={handleConversationRead}
               onRunningSubtasksChange={setRunningSubtasks}
@@ -820,7 +821,8 @@ function App() {
                   ? gamification.snapshot?.conversations[selectedConversation.id]?.complexity
                   : undefined) ?? 0,
               ) * (gamification.snapshot?.focusMultiplier ?? 1)}
-              onReviewChanges={handleGitSelect}
+              reviewStatus={fleet.reviewStatus}
+              onOpenCode={handleGitSelect}
             />
             {showSwitchModel && selectedConversation !== null ? (
               <SwitchModelModal

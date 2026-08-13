@@ -187,6 +187,10 @@ const EFFORTS_BY_PROVIDER = {
   claude: ["low", "medium", "high", "xhigh", "max"],
   codex: ["low", "medium", "high", "xhigh"],
 } as const satisfies Record<Provider, readonly string[]>;
+const MODELS_BY_PROVIDER = {
+  claude: ["fable-5", "opus", "sonnet", "haiku"],
+  codex: ["gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra"],
+} as const satisfies Record<Provider, readonly string[]>;
 const SPEEDS = ["standard", "fast"] as const;
 const DEFAULT_MEDIA_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MESSAGE_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
@@ -292,10 +296,10 @@ function htmlDocumentHttpError(error: unknown): never {
   }
 }
 
-function strongReviewModel(model: string, field: string): string {
+function reviewModel(model: string, provider: Provider, field: string): string {
   const value = model.trim();
-  if (/haiku|luna/i.test(value)) {
-    throw new HttpError(400, `${field} doit être un modèle fort`);
+  if (!(MODELS_BY_PROVIDER[provider] as readonly string[]).includes(value)) {
+    throw new HttpError(400, `${field} invalide pour ${provider}`);
   }
   return value;
 }
@@ -625,7 +629,7 @@ function presetInput(body: Record<string, unknown>): PresetInput {
     throw new HttpError(400, "review_model invalide");
   }
   if (typeof reviewModelValue === "string") {
-    strongReviewModel(reviewModelValue, "review_model");
+    reviewModel(reviewModelValue, reviewProvider ?? provider, "review_model");
   }
   const reviewEffortValue = body.review_effort;
   if (reviewEffortValue !== undefined) {
@@ -719,7 +723,7 @@ function reviewModelConfig(
   const model = typeof rawModel === "string" ? rawModel.trim() : providerFallback.model;
   return {
     provider,
-    model: strongReviewModel(model, "reviewModel"),
+    model: reviewModel(model, provider, "reviewModel"),
     effort: typeof rawEffort === "string" ? rawEffort : providerFallback.effort,
   };
 }
@@ -960,9 +964,15 @@ export function createServer(deps: ServerDeps) {
       const project = conversation && deps.projects.get(conversation.project_id);
       const now = Date.now();
       const running = project && deps.reviews.reviewStatus(project.id)?.running;
-      if (project?.auto_rescan && !running && now - (lastAutoRescanAt.get(project.id) ?? 0) >= 60_000) {
-        lastAutoRescanAt.set(project.id, now);
-        const config = defaultReviewConfig(conversation!.provider);
+      const autoReview = conversation?.auto_review;
+      if (autoReview && project && !running && now - (lastAutoRescanAt.get(conversationId) ?? 0) >= 60_000) {
+        lastAutoRescanAt.set(conversationId, now);
+        const defaults = defaultReviewConfig(conversation!.provider);
+        const config = {
+          provider: conversation!.review_provider ?? defaults.provider,
+          model: conversation!.review_model ?? defaults.model,
+          effort: conversation!.review_effort ?? defaults.effort,
+        };
         try {
           deps.reviews.start({
             projectId: project.id,
@@ -1889,6 +1899,27 @@ export function createServer(deps: ServerDeps) {
           return json(deps.conversations.setPermissionMode(conversationPermissionId, permissionMode));
         }
 
+        const conversationReviewConfigId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/review-config$/,
+        );
+        if (request.method === "PUT" && conversationReviewConfigId !== null) {
+          if (!deps.conversations.get(conversationReviewConfigId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          const body = await readObject(request);
+          if (typeof body.enabled !== "boolean") {
+            throw new HttpError(400, "enabled invalide");
+          }
+          const config = reviewModelConfig(body, defaultReviewConfig("codex"));
+          return json(deps.conversations.setReviewConfig(conversationReviewConfigId, {
+            enabled: body.enabled,
+            provider: config.provider,
+            model: config.model,
+            effort: config.effort,
+          }));
+        }
+
         const conversationReadId = routeId(
           pathname,
           /^\/api\/conversations\/([^/]+)\/read$/,
@@ -2540,8 +2571,9 @@ export function createServer(deps: ServerDeps) {
             );
           }
           const defaults = deps.reviews.counterDefaults(review.flags[0]!.id)!;
-          const model = strongReviewModel(
+          const model = reviewModel(
             body.model === undefined ? defaults.model : requiredString(body, "model"),
+            defaults.provider,
             "model de contre-avis",
           );
           const effort = body.effort === undefined
@@ -2610,8 +2642,9 @@ export function createServer(deps: ServerDeps) {
           const defaults = defaultReviewConfig(
             codeProvider === "claude" ? "codex" : "claude",
           );
-          const model = strongReviewModel(
+          const model = reviewModel(
             body.model === undefined ? defaults.model : requiredString(body, "model"),
+            defaults.provider,
             "model de contre-avis",
           );
           const effort = body.effort === undefined

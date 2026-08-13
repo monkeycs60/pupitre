@@ -63,6 +63,28 @@ test("persiste et modifie le mode de permission d'une conversation", () => {
   expect(convs.setPermissionMode(c.id, null)?.permission_mode).toBeNull();
 });
 
+test("configure une review automatique par conversation, désactivée par défaut", () => {
+  const c = convs.create({
+    projectId,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "Relis mes changements",
+  });
+
+  expect(c.auto_review).toBe(false);
+  expect(convs.setReviewConfig(c.id, {
+    enabled: true,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "medium",
+  })).toMatchObject({
+    auto_review: true,
+    review_provider: "codex",
+    review_model: "gpt-5.6-luna",
+    review_effort: "medium",
+  });
+});
+
 test("met à jour le modèle dans le même provider et estime la ré-ingestion", () => {
   const c = convs.create({
     projectId,

@@ -219,6 +219,10 @@ export interface Conversation {
   effort: string | null
   speed: ConversationSpeed | null
   permission_mode?: PresetPermissionMode | null
+  auto_review?: boolean
+  review_provider?: Provider | null
+  review_model?: string | null
+  review_effort?: string | null
   orchestrator: boolean
   subagent_preset_id?: string | null
   subagent_effort?: string | null

@@ -756,10 +756,28 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
     model: "gpt-5.6-luna",
     firstMessage: "change la valeur",
   });
+  const configured = await fetch(
+    `${current.baseUrl}/api/conversations/${conversation.id}/review-config`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        enabled: true,
+        reviewProvider: "codex",
+        reviewModel: "gpt-5.6-luna",
+        reviewEffort: "medium",
+      }),
+    },
+  );
+  expect(configured.status).toBe(200);
+  expect(await configured.json()).toEqual(expect.objectContaining({
+    auto_review: true,
+    review_model: "gpt-5.6-luna",
+  }));
   const started = await postJson("/api/reviews", {
     conversationId: conversation.id,
     reviewProvider: "codex",
-    reviewModel: "gpt-5.6-sol",
+    reviewModel: "gpt-5.6-luna",
     reviewEffort: "high",
     codeProvider: "claude",
   });
@@ -776,7 +794,7 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
     conversation_id: conversation.id,
     status: "done",
     review_provider: "codex",
-    review_model: "gpt-5.6-sol",
+    review_model: "gpt-5.6-luna",
     code_provider: "claude",
     flags: [],
   }));

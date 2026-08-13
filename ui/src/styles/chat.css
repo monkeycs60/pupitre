@@ -810,6 +810,76 @@
   margin-left: 0;
 }
 
+/* Gardien reste dans le flux : une barre d'outil, puis un résumé exploitable. */
+.conversation-review {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-6);
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--bg-panel) 72%, transparent);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+
+.conversation-review-head,
+.conversation-review-controls,
+.conversation-review-result {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.conversation-review-head > div {
+  display: grid;
+  gap: 1px;
+}
+
+.conversation-review-head strong { color: var(--text-strong); }
+.conversation-review-head span,
+.conversation-review-hint { color: var(--text-faint); font-size: var(--text-xs); }
+.conversation-review-shield { color: var(--accent) !important; font-size: 18px !important; }
+
+.conversation-review-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.conversation-review-auto input { accent-color: var(--accent); }
+.conversation-review-controls { margin-top: var(--space-3); }
+.conversation-review-controls label { display: grid; gap: 3px; min-width: 112px; }
+.conversation-review-controls label > span { color: var(--text-faint); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.conversation-review-controls select {
+  min-height: 30px;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.conversation-review-run {
+  align-self: end;
+  min-height: 30px;
+  margin-left: auto;
+  padding: 0 var(--space-3);
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.conversation-review-run:disabled { opacity: .55; cursor: default; }
+.conversation-review-hint { margin: var(--space-2) 0 0 28px; }
+.conversation-review-result { flex-wrap: wrap; margin-top: var(--space-3); font-size: var(--text-xs); color: var(--text-muted); }
+.conversation-review-result .is-clear { color: var(--ok); }
+.conversation-review-result .has-flags { color: var(--warn); }
+.conversation-review-result button { margin-left: auto; color: var(--accent); background: transparent; border: 0; cursor: pointer; }
+.review-preview-flag { flex-basis: 100%; padding-left: 28px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conversation-review-error { margin: var(--space-2) 0 0; color: var(--danger); font-size: var(--text-xs); }
+
 /* Tour terminé : liseré et fond verts, comme une notification résolue. */
 .turn-meta-done {
   justify-content: flex-start;

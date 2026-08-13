@@ -43,6 +43,8 @@ export function openDb(dir: string = dataDir()): Database {
       provider TEXT NOT NULL, model TEXT NOT NULL,
       preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
       permission_mode TEXT NULL,
+      auto_review INTEGER NOT NULL DEFAULT 0,
+      review_provider TEXT NULL, review_model TEXT NULL, review_effort TEXT NULL,
       subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
       subagent_effort TEXT NULL,
       cli_session_id TEXT, pinned INTEGER NOT NULL DEFAULT 0,
@@ -301,6 +303,10 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "message_count INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "last_read_turn INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "conversations", "auto_review INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "conversations", "review_provider TEXT NULL");
+  addColumn(db, "conversations", "review_model TEXT NULL");
+  addColumn(db, "conversations", "review_effort TEXT NULL");
   migrateConversationMessageCounts(db);
   addColumn(db, "projects", "default_preset_id TEXT NULL");
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");

@@ -241,8 +241,8 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
         </span>
       </div>
       <div className="git-review-actions">
-        <span className={`git-review-mode ${project.auto_rescan ? 'is-auto' : ''}`} title={project.auto_rescan ? 'Le projet relance aussi une review incrémentale après un tour réussi.' : 'La review démarre uniquement quand vous la lancez.'}>
-          {project.auto_rescan ? 'Auto activée' : 'À la demande'}
+        <span className={`git-review-mode ${conversation?.auto_review ? 'is-auto' : ''}`} title={conversation?.auto_review ? 'Cette conversation relance une review après chaque tour réussi.' : 'La review démarre uniquement quand vous la lancez.'}>
+          {conversation?.auto_review ? 'Auto activée' : 'À la demande'}
         </span>
         <details className="git-review-settings">
           <summary title="Choisir le modèle de review">
