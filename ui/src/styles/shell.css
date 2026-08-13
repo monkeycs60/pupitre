@@ -913,6 +913,42 @@ body.is-resizing-documents-list {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.app-restart-status {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 10px;
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-popover);
+}
+
+.app-restart-status > span:first-child {
+  color: var(--accent);
+  font-size: var(--text-md);
+  animation: app-restart-spin 900ms linear infinite;
+}
+
+.app-restart-status.is-error > span:first-child {
+  color: var(--danger);
+  animation: none;
+}
+
+@keyframes app-restart-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-restart-status > span:first-child { animation: none; }
+}
+
 /* --- Boutons génériques du chrome ---------------------------------------- */
 
 .primary-button,

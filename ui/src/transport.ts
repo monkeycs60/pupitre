@@ -6,7 +6,7 @@ interface LocationLike {
   host: string
 }
 
-function hasTauriRuntime(): boolean {
+export function hasTauriRuntime(): boolean {
   return typeof window !== 'undefined'
     && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
 }

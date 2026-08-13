@@ -98,6 +98,38 @@ fn spawn_sidecar(
     app.shell().sidecar("pupitre-sidecar")?.spawn()
 }
 
+/// Redémarre le backend supervisé sans fermer la fenêtre principale. Le
+/// superviseur observe la terminaison non volontaire puis recrée le processus.
+#[tauri::command]
+fn restart_sidecar(app: tauri::AppHandle) -> Result<(), String> {
+    let sidecar = app.state::<SidecarProcess>();
+    if sidecar.stopping.load(Ordering::Acquire) {
+        return Err("Pupitre est en cours d’arrêt".to_string());
+    }
+    let child_slot = sidecar
+        .child
+        .lock()
+        .map_err(|_| "Sidecar indisponible".to_string())?;
+    let child = child_slot
+        .as_ref()
+        .ok_or_else(|| "Sidecar non démarré".to_string())?;
+
+    #[cfg(unix)]
+    {
+        let status = std::process::Command::new("kill")
+            .args(["-TERM", &child.pid().to_string()])
+            .status()
+            .map_err(|error| error.to_string())?;
+        if !status.success() {
+            return Err("Impossible d’arrêter le sidecar".to_string());
+        }
+    }
+    #[cfg(not(unix))]
+    child.kill().map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
 fn supervise_sidecar(app: tauri::AppHandle) {
     std::thread::spawn(move || loop {
         let state = app.state::<SidecarProcess>();
@@ -424,7 +456,8 @@ pub fn run() {
             design_panel_url,
             open_design_window,
             close_design_popups,
-            design_webview_url
+            design_webview_url,
+            restart_sidecar
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

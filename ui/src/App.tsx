@@ -51,6 +51,7 @@ import { DocumentsView } from './DocumentsView'
 import { DesignView } from './DesignView'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
+import { isAppRestartShortcut, restartApp } from './appRestart'
 import {
   locationForSelection,
   readLastActiveLocation,
@@ -127,6 +128,7 @@ function App() {
   const [mcpWeights, setMcpWeights] = useState<Record<string, { tokens: number | null }>>({})
   /** Configuration du projet ouverte depuis le diagnostic de contexte. */
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false)
+  const [restartStatus, setRestartStatus] = useState<'idle' | 'running' | 'error'>('idle')
   const { events, connection, retryAt } = useConversationEvents(
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
@@ -137,6 +139,17 @@ function App() {
   const gamification = useGamification()
   const fleet = useFleet(selectedProject?.id)
   useAppNotifications()
+
+  useEffect(() => {
+    function handleRestartShortcut(event: KeyboardEvent) {
+      if (!isAppRestartShortcut(event) || restartStatus === 'running') return
+      event.preventDefault()
+      setRestartStatus('running')
+      void restartApp().catch(() => setRestartStatus('error'))
+    }
+    window.addEventListener('keydown', handleRestartShortcut)
+    return () => window.removeEventListener('keydown', handleRestartShortcut)
+  }, [restartStatus])
   // Le digest est régénéré côté sidecar après un tour : on rafraîchit le titre
   // affiché sans recharger la conversation.
   const digest = lastDigest(events)
@@ -866,6 +879,12 @@ function App() {
           onClose={() => setProjectSettingsOpen(false)}
           onUpdated={handleProjectUpdated}
         />
+      ) : null}
+      {restartStatus !== 'idle' ? (
+        <div className={`app-restart-status ${restartStatus === 'error' ? 'is-error' : ''}`} role={restartStatus === 'error' ? 'alert' : 'status'}>
+          <span aria-hidden="true">{restartStatus === 'error' ? '×' : '↻'}</span>
+          <span>{restartStatus === 'error' ? 'Redémarrage impossible · réessaie avec Ctrl+Maj+R' : 'Redémarrage de Pupitre…'}</span>
+        </div>
       ) : null}
     </main>
     </ActionFormatContext.Provider>
