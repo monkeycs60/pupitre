@@ -10,6 +10,10 @@ import { ReviewConfigSelector, reviewPreset } from './ReviewConfigSelector'
 import type { ReviewSelection } from './ReviewConfigSelector'
 import type { Conversation, GitSnapshot, GitWorktree, Preset, Project, Provider, QuotaSnapshot, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
 import { BranchIcon } from './BranchIcon'
+import { CorrectionConfigSelector } from './CorrectionConfigSelector'
+import { readCorrectionSelection, writeCorrectionSelection } from './correctionConfig'
+import type { CorrectionSelection } from './correctionConfig'
+import { modelLabel } from './modelOptions'
 
 interface GitViewProps {
   project: Project
@@ -52,6 +56,9 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   const [speed, setSpeed] = useState<'standard' | 'fast'>('standard')
   const [historyLimit, setHistoryLimit] = useState(25)
   const [historyScope, setHistoryScope] = useState<'branch' | 'all'>('branch')
+  const [correction, setCorrection] = useState<CorrectionSelection>(() => conversation
+    ? readCorrectionSelection(conversation)
+    : { presetId: '', provider: 'codex', model: 'gpt-5.6-luna', effort: 'xhigh', speed: 'fast' })
   const wasScanning = useRef(false)
 
   useEffect(() => {
@@ -84,6 +91,10 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(errorMessage(reason)) })
     return () => controller.abort()
   }, [conversation?.id, focusedReviewId, project.id])
+
+  useEffect(() => {
+    if (conversation) setCorrection(readCorrectionSelection(conversation))
+  }, [conversation?.id])
 
   const refreshWorktrees = useCallback((signal?: AbortSignal) => {
     void listProjectWorktrees(project.id, signal)
@@ -156,6 +167,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     return displayedDiff.split(/(?=^diff --git )/m).filter((chunk) => chunk.includes(` b/${selectedFile}\n`)).join('')
   }, [displayedDiff, selectedFile])
   const openFlags = flags.filter((flag) => flag.status === 'open' || flag.status === 'countered')
+  const runningFlags = flags.filter((flag) => flag.status === 'agent_running')
   const shownFlags = flags.filter((flag) => filter === 'all' || filter === 'treated'
     ? filter === 'all' || flag.status === 'treated'
     : flag.severity === filter)
@@ -190,6 +202,18 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     return () => { disposed = true; clearInterval(timer) }
   }, [selectedReview?.id, selectedReview?.status])
 
+  useEffect(() => {
+    if (!selectedReview || runningFlags.length === 0) return
+    let disposed = false
+    const refresh = () => {
+      void getReview(selectedReview.id).then((updated) => {
+        if (!disposed) setReviews((current) => current.map((review) => review.id === updated.id ? updated : review))
+      }).catch(() => {})
+    }
+    const timer = window.setInterval(refresh, 1_500)
+    return () => { disposed = true; window.clearInterval(timer) }
+  }, [selectedReview?.id, runningFlags.length])
+
   async function compare() {
     if (!baseRef || !headRef) return
     setIsComparing(true); setError(null)
@@ -211,11 +235,23 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
 
   async function dispatchOpen() {
     if (!selectedReview || isDispatching || openFlags.length === 0) return
-    if (!window.confirm(`Traiter les ${openFlags.length} signalements ouverts ?`)) return
+    if (!window.confirm(`Lancer ${openFlags.length} agent${openFlags.length > 1 ? 's' : ''} avec ${modelLabel(correction.model)} ?\n\nUn agent distinct corrigera chaque signalement ouvert.`)) return
     setIsDispatching(true)
-    try { await dispatchAllFlags(selectedReview.id); setReviews(await listProjectReviews(project.id)) }
-    catch (reason) { setError(errorMessage(reason)) }
-    finally { setIsDispatching(false) }
+    const previous = selectedReview
+    const dispatchedIds = new Set(openFlags.map((flag) => flag.id))
+    setReviews((current) => current.map((review) => review.id !== selectedReview.id ? review : {
+      ...review,
+      flags: review.flags.map((flag) => dispatchedIds.has(flag.id) ? { ...flag, status: 'agent_running' } : flag),
+    }))
+    try {
+      await dispatchAllFlags(selectedReview.id, ['red', 'orange', 'grey'], correction)
+      const updated = await getReview(selectedReview.id)
+      setReviews((current) => current.map((review) => review.id === updated.id ? updated : review))
+    }
+    catch (reason) {
+      setReviews((current) => current.map((review) => review.id === previous.id ? previous : review))
+      setError(errorMessage(reason))
+    } finally { setIsDispatching(false) }
   }
 
   function updateFlag(updated: ReviewFlag) {
@@ -233,6 +269,11 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     setModel(next.model)
     setEffort(next.effort)
     setSpeed(next.speed)
+  }
+
+  function selectCorrectionConfig(next: CorrectionSelection) {
+    setCorrection(next)
+    if (conversation) writeCorrectionSelection(conversation.id, next)
   }
 
   return <div className="git-workspace">
@@ -253,6 +294,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
         <span className={`git-review-mode ${conversation?.auto_review ? 'is-auto' : ''}`} title={conversation?.auto_review ? 'Cette conversation relance une review après chaque tour réussi.' : 'La review démarre uniquement quand vous la lancez.'}>
           {conversation?.auto_review ? 'Auto activée' : 'À la demande'}
         </span>
+        <span className="git-config-purpose">Review</span>
         <ReviewConfigSelector value={{ presetId, provider, model, effort, speed }} presets={presets} quotas={quotas} busy={isReviewing} placement="bottom" submenuPlacement="left" onChange={selectReviewConfig} />
         <button type="button" className="primary-button" onClick={() => void relire()} disabled={!conversation || isReviewing || selectedReview?.status === 'running' || isScanRunning(reviewStatus)}>{isReviewing ? 'Lancement…' : reviewStatus?.running ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : selectedReview?.status === 'running' ? 'Analyse en cours…' : 'Lancer la review'}</button>
       </div>
@@ -267,7 +309,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     </section>
     {displayedDiff ? <section className="git-overlay-layout" aria-label="Diff annoté">
       <aside className="git-file-tree"><button type="button" className={selectedFile === null ? 'is-selected' : ''} onClick={() => { setSelectedFile(null); setSelectedFlagId(null) }}>Tous les fichiers <strong>{openFlags.length}</strong></button>{files.map((file) => <button type="button" className={selectedFile === file.path ? 'is-selected' : ''} key={file.path} onClick={() => { setSelectedFile(file.path); setSelectedFlagId(shownFlags.find((flag) => flag.file === file.path)?.id ?? null) }}><span>{file.path}</span><small>+{file.additions} −{file.deletions}</small><em className="risk-red">{file.counts.red}</em><em className="risk-orange">{file.counts.orange}</em><em className="risk-grey">{file.counts.grey}</em></button>)}</aside>
-      <div className="git-overlay-diff"><header className="git-review-toolbar"><button type="button" className={filter === 'red' ? 'is-active' : ''} onClick={() => setFilter(filter === 'red' ? 'all' : 'red')}>Rouge {severityCounts.red}</button><button type="button" className={filter === 'orange' ? 'is-active' : ''} onClick={() => setFilter(filter === 'orange' ? 'all' : 'orange')}>Orange {severityCounts.orange}</button><button type="button" className={filter === 'treated' ? 'is-active' : ''} onClick={() => setFilter(filter === 'treated' ? 'all' : 'treated')}>Traitées {flags.filter((flag) => flag.status === 'treated').length}</button>{selectedReview ? <button type="button" onClick={() => void dispatchOpen()} disabled={isDispatching || openFlags.length === 0}>{isDispatching ? 'Envoi…' : `Traiter les ${openFlags.length} ouverts`}</button> : null}</header><DiffViewer diff={filteredDiff ?? ''} flags={shownFlags} selectedFlagId={selectedFlagId} label="Diff Git annoté" onFlagUpdated={updateFlag} /></div>
+      <div className="git-overlay-diff"><header className="git-review-toolbar"><div className="git-review-filters"><button type="button" className={filter === 'red' ? 'is-active' : ''} onClick={() => setFilter(filter === 'red' ? 'all' : 'red')}>Rouge {severityCounts.red}</button><button type="button" className={filter === 'orange' ? 'is-active' : ''} onClick={() => setFilter(filter === 'orange' ? 'all' : 'orange')}>Orange {severityCounts.orange}</button><button type="button" className={filter === 'treated' ? 'is-active' : ''} onClick={() => setFilter(filter === 'treated' ? 'all' : 'treated')}>Traitées {flags.filter((flag) => flag.status === 'treated').length}</button></div>{selectedReview ? <div className="git-correction-actions"><span className="git-correction-purpose">Correction</span><CorrectionConfigSelector value={correction} presets={presets} quotas={quotas} busy={isDispatching || runningFlags.length > 0} placement="bottom" submenuPlacement="left" onChange={selectCorrectionConfig} /><button type="button" onClick={() => void dispatchOpen()} disabled={isDispatching || runningFlags.length > 0 || openFlags.length === 0}>{isDispatching ? 'Lancement…' : runningFlags.length > 0 ? `${runningFlags.length} agent${runningFlags.length > 1 ? 's' : ''} en cours` : `Corriger les ${openFlags.length} ouverts`}</button></div> : null}</header><DiffViewer diff={filteredDiff ?? ''} flags={shownFlags} selectedFlagId={selectedFlagId} label="Diff Git annoté" onFlagUpdated={updateFlag} correction={correction} /></div>
     </section> : <div className="git-diff-empty"><strong>Aucun changement entre ces deux points.</strong><span>Le diff reste consultable indépendamment des signalements du Gardien.</span></div>}
     <section className="git-worktrees" aria-label="Worktrees du projet">
       <h2>Worktrees</h2>

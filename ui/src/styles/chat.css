@@ -860,8 +860,10 @@
 }
 
 .conversation-review-auto input { accent-color: var(--accent); }
-.conversation-review-controls { margin-top: var(--space-3); }
+.conversation-review-controls { flex-wrap: wrap; margin-top: var(--space-3); }
 .conversation-review-controls .review-config-selector { min-width: 0; }
+.conversation-review-config { display: flex; align-items: center; gap: var(--space-2); }
+.conversation-review-config > span { color: var(--text-faint); font-size: var(--text-xs); }
 .conversation-review-controls .preset-selector-chip { height: 32px; }
 
 .conversation-review-run {
@@ -892,7 +894,7 @@
   border-radius: 50%;
   animation: guardian-progress 900ms ease-in-out infinite alternate;
 }
-.review-preview-flag { flex-basis: 100%; padding-left: 28px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.review-preview-flag { flex-basis: 100%; padding-left: 28px; color: var(--text-muted); line-height: 1.45; }
 .review-preview-more { flex-basis: 100%; padding-left: 28px; color: var(--text-faint); }
 .conversation-review-error { margin: var(--space-2) 0 0; color: var(--danger); font-size: var(--text-xs); }
 

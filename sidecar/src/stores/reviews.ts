@@ -71,6 +71,13 @@ export class ReviewStore {
       SET counter_state = 'error', counter_error = 'interrompu (sidecar redémarré)'
       WHERE counter_state IN ('queued', 'running')
     `).run();
+    // Comme les sous-tâches, un dispatch de correction ne survit pas au
+    // sidecar. Au redémarrage, on rend donc le signalement relançable.
+    this.db.query(`
+      UPDATE review_flags
+      SET status = 'open'
+      WHERE status = 'agent_running'
+    `).run();
   }
 
   create(input: {

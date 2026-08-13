@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getProjectGit, getReview, listPresets, listProjectReviews, setConversationReviewConfig, startReview } from './api'
 import { REVIEW_MODELS } from './modelOptions'
 import { buildFileTree } from './reviewFileTree'
@@ -6,6 +6,9 @@ import { reviewCoversHead } from './reviewFreshness'
 import { ReviewConfigSelector, reviewPreset } from './ReviewConfigSelector'
 import type { ReviewSelection } from './ReviewConfigSelector'
 import type { Conversation, Preset, Project, Provider, QuotaSnapshot, Review, ReviewStatusSnapshot } from './types'
+import { CorrectionConfigSelector } from './CorrectionConfigSelector'
+import { readCorrectionSelection, writeCorrectionSelection } from './correctionConfig'
+import type { CorrectionSelection } from './correctionConfig'
 
 interface Props {
   conversation: Conversation
@@ -14,6 +17,7 @@ interface Props {
   onConversationUpdated: (conversation: Conversation) => void
   onOpenCode: () => void
   quotas: QuotaSnapshot
+  launchRequest?: number
 }
 
 function initialProvider(conversation: Conversation): Provider {
@@ -27,6 +31,7 @@ export function ConversationReviewPanel({
   onConversationUpdated,
   onOpenCode,
   quotas,
+  launchRequest = 0,
 }: Props) {
   const initial = initialProvider(conversation)
   const [selection, setSelection] = useState<ReviewSelection>({
@@ -42,12 +47,16 @@ export function ConversationReviewPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [correction, setCorrection] = useState<CorrectionSelection>(() => readCorrectionSelection(conversation))
+  const handledLaunchRequest = useRef(launchRequest)
 
   useEffect(() => {
     const controller = new AbortController()
     void listPresets(controller.signal).then(setPresets).catch(() => {})
     return () => controller.abort()
   }, [])
+
+  useEffect(() => setCorrection(readCorrectionSelection(conversation)), [conversation.id])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -120,6 +129,7 @@ export function ConversationReviewPanel({
   }
 
   async function launch() {
+    if (busy || runningHere || Boolean(reviewStatus?.running)) return
     setBusy(true)
     setError(null)
     setToast(null)
@@ -143,6 +153,17 @@ export function ConversationReviewPanel({
     }
   }
 
+  useEffect(() => {
+    if (launchRequest === handledLaunchRequest.current) return
+    handledLaunchRequest.current = launchRequest
+    void launch()
+  }, [launchRequest])
+
+  function selectCorrection(next: CorrectionSelection) {
+    setCorrection(next)
+    writeCorrectionSelection(conversation.id, next)
+  }
+
   return (
     <section className={`conversation-review${coversCurrentHead && openFlags.length === 0 && !showingProgress ? ' is-clear' : ''}${showingProgress ? ' is-running' : ''}`} id="conversation-review-panel" aria-label="Review Gardien">
       {toast ? <div className="conversation-review-toast" role="alert"><span>{toast}</span><button type="button" onClick={() => setToast(null)} aria-label="Fermer la notification">×</button></div> : null}
@@ -155,7 +176,8 @@ export function ConversationReviewPanel({
         </label>
       </div>
       <div className="conversation-review-controls">
-        <ReviewConfigSelector value={selectorValue} presets={presets} quotas={quotas} busy={busy} onChange={(next) => { setSelection(next); void save(next) }} />
+        <div className="conversation-review-config"><span>Review</span><ReviewConfigSelector value={selectorValue} presets={presets} quotas={quotas} busy={busy} onChange={(next) => { setSelection(next); void save(next) }} /></div>
+        <div className="conversation-review-config"><span>Correction</span><CorrectionConfigSelector value={correction} presets={presets} quotas={quotas} busy={busy} onChange={selectCorrection} /></div>
         <button type="button" className="conversation-review-run" onClick={() => void launch()} disabled={busy || runningHere || Boolean(reviewStatus?.running)}>{busy ? 'Lancement…' : runningHere && reviewStatus?.running ? `Analyse ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : runningHere ? 'Analyse en cours…' : 'Relire maintenant'}</button>
       </div>
       {error ? <p className="conversation-review-error" role="alert">{error}</p> : null}

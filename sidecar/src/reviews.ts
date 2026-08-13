@@ -100,6 +100,13 @@ export function dispatchAgentConfig(
   return { ...fallback, speed: provider === "codex" ? "standard" : null };
 }
 
+export interface CorrectionAgentConfig {
+  provider: Provider;
+  model: string;
+  effort: string;
+  speed: "standard" | "fast" | null;
+}
+
 class ReviewOutputError extends Error {}
 export class DispatchConflictError extends Error {}
 
@@ -206,7 +213,7 @@ export class ReviewRunner {
     return flag;
   }
 
-  dispatchFlag(id: string, message?: string): { subtaskId: string } {
+  dispatchFlag(id: string, message?: string, agentConfig?: CorrectionAgentConfig): { subtaskId: string } {
     if (!this.subtasks) throw new Error("moteur de sous-tâches indisponible");
     const flag = this.store.getFlag(id);
     if (!flag) throw new Error("flag inconnu");
@@ -217,7 +224,7 @@ export class ReviewRunner {
     if (!review) throw new Error("review inconnue");
     const conversationId = review.conversation_id;
     const userMessage = message?.trim() || undefined;
-    const run = this.executeDispatch(review, flag, conversationId, userMessage)
+    const run = this.executeDispatch(review, flag, conversationId, userMessage, agentConfig)
       .catch(() => {})
       .finally(() => this.activeDispatches.delete(id));
     // executeDispatch starts synchronously until its first await (the subtask is
@@ -228,7 +235,11 @@ export class ReviewRunner {
     return { subtaskId: started.subtask_id };
   }
 
-  dispatchAll(reviewId: string, severities: ReviewSeverity[] = ["red", "orange"]): number {
+  dispatchAll(
+    reviewId: string,
+    severities: ReviewSeverity[] = ["red", "orange"],
+    agentConfig?: CorrectionAgentConfig,
+  ): number {
     const review = this.store.get(reviewId);
     if (!review) throw new Error("review inconnu");
     const flags = review.flags.filter((flag) =>
@@ -239,7 +250,7 @@ export class ReviewRunner {
       for (let index = 0; index < flags.length; index += MAX_CONCURRENT_SUBTASKS) {
         const chunk = flags.slice(index, index + MAX_CONCURRENT_SUBTASKS);
         await Promise.all(chunk.map(async (flag) => {
-          const run = this.executeDispatch(review, flag, targetConversation, undefined)
+          const run = this.executeDispatch(review, flag, targetConversation, undefined, agentConfig)
             .catch(() => {})
             .finally(() => this.activeDispatches.delete(flag.id));
           this.activeDispatches.set(flag.id, run);
@@ -402,11 +413,12 @@ export class ReviewRunner {
     flag: ReviewFlag,
     conversationId: string,
     userMessage: string | undefined,
+    agentConfig?: CorrectionAgentConfig,
   ): Promise<void> {
     try {
       const conversation = this.conversations.get(conversationId);
       if (!conversation) throw new Error("conversation inconnue");
-      const agent = dispatchAgentConfig(conversation, flag.code_provider);
+      const agent = agentConfig ?? dispatchAgentConfig(conversation, flag.code_provider);
       let subtask;
       for (;;) {
         try {
@@ -417,7 +429,7 @@ export class ReviewRunner {
             effort: agent.effort,
             speed: agent.speed,
             prompt: dispatchPrompt(flag, counterContext(review.diff_text, flag), userMessage),
-            label: `Gardien · ${flag.file}:${flag.line_start}`,
+            label: `Gardien · ${flag.category} · ${flag.file}:${flag.line_start}`,
             readOnly: false,
           });
           break;
@@ -433,8 +445,13 @@ export class ReviewRunner {
       const result = await this.subtasks!.waitResult(subtask.id);
       if (!result || result.status !== "done") {
         this.store.updateFlag(flag.id, { status: "open" });
-        this.notifyStatus();
+      } else {
+        // La correction a fini, mais seul un nouveau scan peut confirmer que le
+        // signalement est réellement résolu. `treated` exprime cet état sans
+        // laisser l'interface croire que l'agent tourne encore.
+        this.store.updateFlag(flag.id, { status: "treated" });
       }
+      this.notifyStatus();
     } catch (error) {
       this.store.updateFlag(flag.id, { status: "open" });
       this.notifyStatus();

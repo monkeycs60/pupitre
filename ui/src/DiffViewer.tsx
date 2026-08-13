@@ -4,6 +4,8 @@ import { dispatchFlag, setReviewFlagStatus, startFlagCounterOpinion } from './ap
 import { flagActionDraft, optimisticFlagStatus, parseUnifiedDiff } from './reviewDiff'
 import type { DiffLine } from './reviewDiff'
 import type { ReviewFlag } from './types'
+import type { CorrectionSelection } from './correctionConfig'
+import { modelLabel } from './modelOptions'
 
 interface DiffViewerProps {
   diff: string
@@ -11,6 +13,7 @@ interface DiffViewerProps {
   label: string
   selectedFlagId?: string | null
   onFlagUpdated?: (flag: ReviewFlag) => void
+  correction: CorrectionSelection
 }
 
 type DiffRow = { type: 'file'; file: string } | { type: 'line'; line: DiffLine }
@@ -37,7 +40,7 @@ function severityLabel(flag: ReviewFlag): string {
   return flag.severity === 'red' ? 'Rouge' : flag.severity === 'orange' ? 'Orange' : 'Gris'
 }
 
-function FlagCard({ flag, onUpdated }: { flag: ReviewFlag, onUpdated?: (flag: ReviewFlag) => void }) {
+function FlagCard({ flag, correction, onUpdated }: { flag: ReviewFlag, correction: CorrectionSelection, onUpdated?: (flag: ReviewFlag) => void }) {
   const [message, setMessage] = useState(() => flagActionDraft(flag))
   const [isDispatching, setIsDispatching] = useState(false)
   const [isCountering, setIsCountering] = useState(false)
@@ -54,7 +57,7 @@ function FlagCard({ flag, onUpdated }: { flag: ReviewFlag, onUpdated?: (flag: Re
   async function sendAgent() {
     setIsDispatching(true); setError(null)
     try {
-      const result = await dispatchFlag(flag.id, message)
+      const result = await dispatchFlag(flag.id, message, correction)
       onUpdated?.({ ...flag, status: 'agent_running', subtask_id: result.subtaskId, user_message: message })
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Envoi de l’agent impossible.') }
     finally { setIsDispatching(false) }
@@ -75,13 +78,13 @@ function FlagCard({ flag, onUpdated }: { flag: ReviewFlag, onUpdated?: (flag: Re
     <p>{flag.message}</p>
     {flag.test_gap ? <span className="diff-test-gap">Manque de test</span> : null}
     {flag.counter_text ? <div className="diff-counter-opinion"><strong>Contre-avis</strong><p>{flag.counter_text}</p></div> : null}
-    {flag.status === 'agent_running' ? <p className="diff-flag-state" role="status">Agent en cours…</p> : null}
-    {flag.subtask_id ? <SubtaskCard block={{ kind: 'subtask', id: flag.subtask_id, subtaskId: flag.subtask_id, provider: flag.code_provider, model: 'Agent', label: `Gardien · ${flag.file}:${flag.line_start}` }} onImageOpen={() => {}} onImageLoad={() => {}} /> : null}
+    {flag.status === 'agent_running' ? <p className="diff-flag-state" role="status">Correction en cours avec {modelLabel(correction.model)}…</p> : null}
+    {flag.subtask_id ? <SubtaskCard block={{ kind: 'subtask', id: flag.subtask_id, subtaskId: flag.subtask_id, provider: correction.provider, model: correction.model, label: `Correction · ${flag.category} · ${flag.file}:${flag.line_start}` }} onImageOpen={() => {}} onImageLoad={() => {}} /> : null}
     {flag.status === 'resolved' ? <p className="diff-flag-state">✓ Résolu par rescan</p> : null}
     {(flag.status === 'open' || flag.status === 'countered') ? <>
       <label className="diff-agent-message"><span>Consigne pour l’agent</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} /></label>
       <div className="diff-flag-actions">
-        <button type="button" className="primary-button" onClick={() => void sendAgent()} disabled={isDispatching}>{isDispatching ? 'Envoi…' : 'Envoyer un agent'}</button>
+        <button type="button" className="primary-button" onClick={() => void sendAgent()} disabled={isDispatching}>{isDispatching ? 'Envoi…' : `Corriger avec ${modelLabel(correction.model)}`}</button>
         <button type="button" className="secondary-button" onClick={() => void requestCounterOpinion()} disabled={isCountering}>{isCountering ? 'Demande…' : 'Contre-avis'}</button>
         <button type="button" onClick={() => void setStatus('treated')}>OK, vu</button>
         <button type="button" onClick={() => void setStatus('ignored')}>Ignorer</button>
@@ -91,7 +94,7 @@ function FlagCard({ flag, onUpdated }: { flag: ReviewFlag, onUpdated?: (flag: Re
   </article>
 }
 
-export function DiffViewer({ diff, flags = [], label, selectedFlagId, onFlagUpdated }: DiffViewerProps) {
+export function DiffViewer({ diff, flags = [], label, selectedFlagId, onFlagUpdated, correction }: DiffViewerProps) {
   const [expandedFlagId, setExpandedFlagId] = useState<string | null>(selectedFlagId ?? null)
   const selectedRef = useRef<HTMLDivElement | null>(null)
   const rows = useMemo(() => toRows(parseUnifiedDiff(diff, flags)), [diff, flags])
@@ -107,9 +110,9 @@ export function DiffViewer({ diff, flags = [], label, selectedFlagId, onFlagUpda
     {rows.map((row, index) => row.type === 'file' ? <div className="diff-file-header" role="row" key={`${index}-${row.file}`}><span role="cell">{row.file}</span></div> : <div key={`${index}-${row.line.text}`}>
       <div className={`diff-line is-${row.line.kind} ${row.line.severity ? `risk-${row.line.severity}` : ''}`} role="row" onClick={() => { if (row.line.flags[0]) setExpandedFlagId(row.line.flags[0].id) }}>
         <span className="diff-number" role="cell">{row.line.oldLine ?? ''}</span><span className="diff-number" role="cell">{row.line.newLine ?? ''}</span><code role="cell">{row.line.text || ' '}</code>
-        <span className="diff-flags" role="cell">{row.line.cardFlags.map((flag) => <button type="button" key={flag.id} className={`diff-flag-marker severity-${flag.severity}`} onClick={(event) => { event.stopPropagation(); setExpandedFlagId(activeFlagId === flag.id ? null : flag.id) }} aria-expanded={activeFlagId === flag.id}>{activeFlagId === flag.id ? flag.message : flag.category}</button>)}</span>
+        <span className="diff-flags" role="cell">{row.line.cardFlags.map((flag) => <button type="button" key={flag.id} className={`diff-flag-marker severity-${flag.severity}`} title={flag.message} onClick={(event) => { event.stopPropagation(); setExpandedFlagId(activeFlagId === flag.id ? null : flag.id) }} aria-expanded={activeFlagId === flag.id}>{flag.category}</button>)}</span>
       </div>
-      {row.line.cardFlags.filter((flag) => flag.id === activeFlagId).map((flag) => <div className="diff-flag-card-row" key={`card-${flag.id}`} ref={selectedFlagId === flag.id ? selectedRef : undefined}><FlagCard flag={flag} onUpdated={onFlagUpdated} /></div>)}
+      {row.line.cardFlags.filter((flag) => flag.id === activeFlagId).map((flag) => <div className="diff-flag-card-row" key={`card-${flag.id}`} ref={selectedFlagId === flag.id ? selectedRef : undefined}><FlagCard flag={flag} correction={correction} onUpdated={onFlagUpdated} /></div>)}
     </div>)}
   </div>
 }

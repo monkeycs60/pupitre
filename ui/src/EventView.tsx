@@ -190,13 +190,13 @@ function TurnFooter({
           </span>
         ) : null}
         {block.subtaskCount !== undefined ? (
-          <span className="turn-subtasks" title="Sous-tâches réellement lancées pendant ce tour">
-            {block.subtaskCount} sous-tâche{block.subtaskCount > 1 ? 's' : ''}
+          <span className="turn-subtasks" title="Agents délégués lancés depuis ce tour, un par tâche ou signalement">
+            {block.subtaskCount} agent{block.subtaskCount > 1 ? 's' : ''} délégué{block.subtaskCount > 1 ? 's' : ''}
           </span>
         ) : null}
         {isDone && onReviewChanges ? (
           <button type="button" className="turn-review-action" onClick={onReviewChanges}>
-            Relire les changements
+            Lancer le Gardien
           </button>
         ) : null}
         {xp !== null ? <span className="turn-xp">+{xp} XP</span> : null}

@@ -938,15 +938,23 @@ export function getReviewStatus(
   return fetchJson(`/api/projects/${routeId(projectId)}/review-status`, { signal })
 }
 
-export function dispatchFlag(flagId: string, message?: string): Promise<{ subtaskId: string }> {
-  return fetchJson(`/api/review-flags/${routeId(flagId)}/dispatch`, jsonPost({ message }))
+export interface CorrectionAgentInput {
+  provider: Provider
+  model: string
+  effort: string
+  speed: ConversationSpeed
+}
+
+export function dispatchFlag(flagId: string, message?: string, agent?: CorrectionAgentInput): Promise<{ subtaskId: string }> {
+  return fetchJson(`/api/review-flags/${routeId(flagId)}/dispatch`, jsonPost({ message, ...agent }))
 }
 
 export function dispatchAllFlags(
   reviewId: string,
   severities: Array<'red' | 'orange' | 'grey'> = ['red', 'orange'],
+  agent?: CorrectionAgentInput,
 ): Promise<{ dispatched: number }> {
-  return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-all`, jsonPost({ severities }))
+  return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-all`, jsonPost({ severities, ...agent }))
 }
 
 export function getSubtask(

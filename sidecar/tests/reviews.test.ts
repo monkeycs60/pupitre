@@ -1182,7 +1182,7 @@ test("l'option projet lance automatiquement les contre-avis rouges", async () =>
   });
 });
 
-test("dispatch une zone en écriture et rouvre le flag si la sous-tâche échoue", async () => {
+test("dispatch une zone avec le correcteur choisi et rouvre le flag si la sous-tâche échoue", async () => {
   const project = projects.create({ name: "dispatch", path: repo });
   const conversation = conversations.create({
     projectId: project.id, provider: "codex", model: "gpt-5.6-luna", effort: "xhigh",
@@ -1209,20 +1209,50 @@ test("dispatch une zone en écriture et rouvre le flag si la sous-tâche échoue
   };
   const runner = new ReviewRunner(store, projects, conversations, quotas, undefined, fakeSubtasks);
   const flag = store.get(review.id)!.flags[0]!;
-  expect(runner.dispatchFlag(flag.id, "Ajoute un test.")).toEqual({ subtaskId: "dispatch-1" });
+  expect(runner.dispatchFlag(flag.id, "Ajoute un test.", {
+    provider: "claude", model: "opus", effort: "high", speed: null,
+  })).toEqual({ subtaskId: "dispatch-1" });
   expect(store.getFlag(flag.id)).toMatchObject({ status: "agent_running", subtask_id: "dispatch-1", user_message: "Ajoute un test." });
   await Bun.sleep(0);
   expect(store.getFlag(flag.id)?.status).toBe("open");
   expect(inputs[0]).toMatchObject({
     readOnly: false,
-    label: "Gardien · src/config.ts:1",
+    label: "Gardien · contrat · src/config.ts:1",
     conversationId: conversation.id,
-    provider: "codex",
-    model: "gpt-5.6-luna",
-    effort: "xhigh",
-    speed: "fast",
+    provider: "claude",
+    model: "opus",
+    effort: "high",
+    speed: null,
   });
   expect(inputs[0]!.prompt).toContain("Consigne de l'utilisateur : Ajoute un test.");
+});
+
+test("un dispatch terminé passe en traité jusqu'au prochain scan", async () => {
+  const project = projects.create({ name: "dispatch-ok", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", effort: "xhigh",
+    speed: "fast", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-luna", effort: "xhigh",
+  });
+  store.complete(review.id, [{
+    file: "src/config.ts", line_start: 1, line_end: 1, severity: "orange",
+    category: "contrat", message: "Préserve le contrat public.",
+  }]);
+  const fakeSubtasks = {
+    start() { return { id: "dispatch-ok-1" } as Subtask; },
+    async waitResult(): Promise<SubtaskResult> {
+      return { status: "done", resultText: "corrigé", error: null, subtask: { id: "dispatch-ok-1" } as Subtask };
+    },
+  };
+  const runner = new ReviewRunner(store, projects, conversations, quotas, undefined, fakeSubtasks);
+  const flag = store.get(review.id)!.flags[0]!;
+  runner.dispatchFlag(flag.id);
+  expect(store.getFlag(flag.id)?.status).toBe("agent_running");
+  await Bun.sleep(0);
+  expect(store.getFlag(flag.id)?.status).toBe("treated");
 });
 
 test("un scan running orphelin est clôturé au redémarrage", () => {

@@ -142,6 +142,7 @@ export function Chat({
   const [subtaskStatuses, setSubtaskStatuses] = useState<
     Record<string, SubtaskStatus>
   >({})
+  const [reviewLaunchRequest, setReviewLaunchRequest] = useState(0)
 
   useEffect(() => {
     try {
@@ -272,6 +273,7 @@ export function Chat({
   const suggestionText = message.trim() || previousUserText
   const focusReview = useCallback(() => {
     document.getElementById('conversation-review-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    setReviewLaunchRequest((current) => current + 1)
   }, [])
 
   return (
@@ -325,6 +327,7 @@ export function Chat({
                       onConversationUpdated={onConversationUpdated}
                       onOpenCode={onOpenCode}
                       quotas={quotas}
+                      launchRequest={reviewLaunchRequest}
                     />
                   ) : null}
                 </TaskToggleContext.Provider>

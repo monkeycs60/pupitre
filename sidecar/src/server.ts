@@ -2714,8 +2714,18 @@ export function createServer(deps: ServerDeps) {
           if (body.message !== undefined && typeof body.message !== "string") {
             throw new HttpError(400, "message invalide");
           }
+          const agentConfig = body.provider === undefined ? undefined : (() => {
+            const provider = requiredString(body, "provider");
+            if (provider !== "claude" && provider !== "codex") throw new HttpError(400, "provider invalide");
+            return {
+              provider,
+              model: requiredString(body, "model"),
+              effort: optionalEffort(body, provider) ?? defaultReviewConfig(provider).effort,
+              speed: provider === "codex" ? optionalSpeed(body, provider) : null,
+            };
+          })();
           try {
-            return json(deps.reviews.dispatchFlag(reviewFlagDispatchId, body.message), 201);
+            return json(deps.reviews.dispatchFlag(reviewFlagDispatchId, body.message, agentConfig), 201);
           } catch (error) {
             if (error instanceof DispatchConflictError) throw new HttpError(409, error.message);
             if (error instanceof Error && error.message === "flag inconnu") throw new HttpError(404, error.message);
@@ -2730,8 +2740,18 @@ export function createServer(deps: ServerDeps) {
           if (!Array.isArray(severities) || !severities.every((item) => item === "red" || item === "orange" || item === "grey")) {
             throw new HttpError(400, "sévérités invalides");
           }
+          const agentConfig = body.provider === undefined ? undefined : (() => {
+            const provider = requiredString(body, "provider");
+            if (provider !== "claude" && provider !== "codex") throw new HttpError(400, "provider invalide");
+            return {
+              provider,
+              model: requiredString(body, "model"),
+              effort: optionalEffort(body, provider) ?? defaultReviewConfig(provider).effort,
+              speed: provider === "codex" ? optionalSpeed(body, provider) : null,
+            };
+          })();
           try {
-            return json({ dispatched: deps.reviews.dispatchAll(reviewDispatchAllId, severities) }, 202);
+            return json({ dispatched: deps.reviews.dispatchAll(reviewDispatchAllId, severities, agentConfig) }, 202);
           } catch (error) {
             if (error instanceof Error && error.message === "review inconnu") throw new HttpError(404, error.message);
             throw error;
