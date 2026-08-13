@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import {
   createPreset,
   deletePreset,
+  getProjectGit,
   listPresets,
   restorePreset,
   setProjectDefaultPreset,
   updatePreset,
 } from './api'
 import { ModelConfigSelector } from './ModelConfigSelector'
+import { branchSuggestions } from './worktrees'
 import type {
   ConversationSpeed,
   Preset,
@@ -92,6 +94,7 @@ export function ConfigPanel({
   applyProjectDefault = true,
   showConversationSettings = true,
 }: ConfigPanelProps) {
+  const [branches, setBranches] = useState<string[]>([])
   const [presets, setPresets] = useState<Preset[]>([])
   const [selectedPresetId, setSelectedPresetId] = useState('')
   const [action, setAction] = useState<MenuAction>(null)
@@ -103,6 +106,16 @@ export function ConfigPanel({
 
   const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? null
   const isDefault = selectedPresetId !== '' && selectedPresetId === project.default_preset_id
+
+  // Les branches existantes alimentent la complétion : une faute de frappe
+  // créerait une branche jumelle au lieu de rejoindre la bonne.
+  useEffect(() => {
+    const controller = new AbortController()
+    void getProjectGit(project.id, controller.signal)
+      .then((snapshot) => { if (!controller.signal.aborted) setBranches(branchSuggestions(snapshot.branches)) })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [project.id])
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -282,11 +295,15 @@ export function ConfigPanel({
         <span>Branche</span>
         <input
           type="text"
+          list="config-branch-options"
           value={config.branch ?? ''}
           placeholder="dépôt principal"
           disabled={isBusy}
           onChange={(event) => onConfigChange({ ...config, branch: event.target.value })}
         />
+        <datalist id="config-branch-options">
+          {branches.map((name) => <option key={name} value={name} />)}
+        </datalist>
       </label>
 
       {action !== null ? (

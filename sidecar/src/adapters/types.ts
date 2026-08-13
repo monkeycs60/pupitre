@@ -13,6 +13,13 @@ export interface TurnOptions {
   cliSessionId: string | null; // null = premier tour
   permissionMode: string;
   filesystemScope?: FilesystemScope;
+  /**
+   * Racines à ouvrir en plus de `cwd`. Une conversation qui vit dans un
+   * worktree a besoin du dépôt principal : son `.git` n'est qu'un fichier
+   * « gitdir: … » qui y renvoie, et sans lui plus aucune commande git ne
+   * fonctionne depuis le worktree.
+   */
+  extraWorkspaceRoots?: string[];
   /** Sandbox Codex ; les scans Gardien sont explicitement en lecture seule. */
   sandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
   images: string[]; // chemins absolus d'images jointes par l'utilisateur

@@ -8,7 +8,7 @@ import {
   type FSWatcher,
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { ProjectStore } from "./stores/projects";
 
 export type SkillProvider = "claude" | "codex";
@@ -403,7 +403,20 @@ export class SkillInventory {
    * le projet. Seul le fichier indexé est injecté : références, scripts et
    * assets restent volontairement hors du pont cross-provider v1.
    */
-  augmentPrompt(prompt: string, projectId: string): string {
+  /**
+   * Injecte les skills demandés par `$nom`.
+   *
+   * `from` désigne le répertoire où l'agent va travailler. Il diffère du dépôt
+   * quand la conversation vit dans un worktree : une branche qui réécrit ses
+   * propres skills doit voir sa version, pas celle indexée depuis le dépôt
+   * principal. Le fichier est relu à cet endroit, sans réindexer — l'index
+   * reste une vue du projet, il ne se démultiplie pas par branche.
+   */
+  augmentPrompt(
+    prompt: string,
+    projectId: string,
+    from?: { cwd: string; projectPath: string },
+  ): string {
     const requestedNames = unique(
       [...prompt.matchAll(/\$([\p{L}\p{N}][\p{L}\p{N}:_-]{1,80})/gu)]
         .map((match) => match[1] ?? ""),
@@ -418,7 +431,7 @@ export class SkillInventory {
 
     const contexts = resolved.map((skill) => [
       `--- SKILL ${skill.name} (${skill.provenance}) ---`,
-      skill.content_md,
+      contentSeenFrom(skill, from),
       `--- FIN SKILL ${skill.name} ---`,
     ].join("\n"));
     return [
@@ -502,5 +515,26 @@ export class SkillInventory {
         // Un dossier optionnel peut disparaître entre existsSync et fs.watch.
       }
     }
+  }
+}
+
+/**
+ * Le contenu d'un skill tel que le voit un agent qui travaille dans `from.cwd`.
+ * Hors worktree, ou pour un skill global qui ne vient pas du dépôt, c'est le
+ * contenu indexé qui sert.
+ */
+function contentSeenFrom(
+  skill: SkillDetail,
+  from?: { cwd: string; projectPath: string },
+): string {
+  if (!from || resolve(from.cwd) === resolve(from.projectPath)) return skill.content_md;
+  const relativePath = relative(resolve(from.projectPath), resolve(skill.path));
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) return skill.content_md;
+  const candidate = join(from.cwd, relativePath);
+  try {
+    return existsSync(candidate) ? readFileSync(candidate, "utf8") : skill.content_md;
+  } catch {
+    // Un worktree supprimé sous les pieds ne doit pas faire échouer le tour.
+    return skill.content_md;
   }
 }

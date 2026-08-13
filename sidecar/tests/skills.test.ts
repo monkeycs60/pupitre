@@ -224,3 +224,53 @@ test("lit les descriptions et triggers YAML multilignes", () => {
     triggers: expect.arrayContaining(["demande longue", "plusieurs lignes"]),
   });
 });
+
+test("un skill modifié dans le worktree l'emporte sur la version du dépôt", () => {
+  const { db, home, projectPath, projects } = fixture();
+  write(join(projectPath, ".claude/skills/audit/SKILL.md"), `---
+name: audit-local
+description: Audite ce projet.
+---
+# Audit du dépôt principal
+`);
+  const worktree = join(dirname(projectPath), "worktree");
+  write(join(worktree, ".claude/skills/audit/SKILL.md"), `---
+name: audit-local
+description: Audite ce projet.
+---
+# Audit réécrit sur la branche
+`);
+  const inventory = new SkillInventory(db, projects, { homeDir: home });
+  inventory.refresh();
+  const project = projects.list()[0]!;
+
+  // Sans worktree, rien ne change.
+  expect(inventory.augmentPrompt("$audit-local", project.id))
+    .toContain("# Audit du dépôt principal");
+
+  // Depuis le worktree, c'est sa version que l'agent reçoit.
+  const fromWorktree = inventory.augmentPrompt("$audit-local", project.id, {
+    cwd: worktree,
+    projectPath,
+  });
+  expect(fromWorktree).toContain("# Audit réécrit sur la branche");
+  expect(fromWorktree).not.toContain("# Audit du dépôt principal");
+});
+
+test("un skill absent du worktree garde la version du dépôt", () => {
+  const { db, home, projectPath, projects } = fixture();
+  write(join(projectPath, ".claude/skills/audit/SKILL.md"), `---
+name: audit-local
+description: Audite ce projet.
+---
+# Audit du dépôt principal
+`);
+  const worktree = join(dirname(projectPath), "worktree-vide");
+  mkdirSync(worktree, { recursive: true });
+  const inventory = new SkillInventory(db, projects, { homeDir: home });
+  inventory.refresh();
+  const project = projects.list()[0]!;
+
+  expect(inventory.augmentPrompt("$audit-local", project.id, { cwd: worktree, projectPath }))
+    .toContain("# Audit du dépôt principal");
+});

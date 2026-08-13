@@ -257,6 +257,8 @@ test("premier tour : session avec le threadId, deltas dans l'ordre, tool + usage
   expect(start.params.runtimeWorkspaceRoots).toContain("/tmp");
   expect(start.params.runtimeWorkspaceRoots).toContain("/home/clement/.claude");
   expect(start.params.runtimeWorkspaceRoots).toContain("/home/clement/.codex");
+  // Aucune racine supplémentaire n'est demandée hors worktree.
+  expect(start.params.runtimeWorkspaceRoots).toHaveLength(3);
   const turnStart = requests.find((r) => r.method === "turn/start")!;
   expect(turnStart.params).toMatchObject({ threadId: "fake-thread-0001", effort: "high" });
   expect(turnStart.params.input[0]).toEqual({ type: "text", text: "salut" });
@@ -583,4 +585,18 @@ test("handshake initialize en erreur : status error et pas de process orphelin",
   const pid = Number(readFileSync(files.pid, "utf8"));
   await Bun.sleep(200);
   expect(() => process.kill(pid, 0)).toThrow(); // ESRCH : le process a bien été tué
+});
+
+test("depuis un worktree, le dépôt principal reste accessible au bac à sable", async () => {
+  // Le `.git` d'un worktree est un fichier « gitdir: <dépôt>/.git/worktrees/… » :
+  // sans le dépôt dans les racines, toute commande git y échoue.
+  const files = useFake();
+  await collect(newClient(), {
+    cwd: "/tmp/worktree",
+    extraWorkspaceRoots: ["/depot/principal"],
+  });
+
+  const start = sentRequests(files.log).find((r) => r.method === "thread/start")!;
+  expect(start.params.runtimeWorkspaceRoots).toContain("/tmp/worktree");
+  expect(start.params.runtimeWorkspaceRoots).toContain("/depot/principal");
 });

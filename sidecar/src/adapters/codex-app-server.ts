@@ -411,7 +411,11 @@ export class CodexAppServerClient {
       // passent explicitement `read-only` et ne suivent donc pas ce défaut.
       sandbox: opts.sandboxMode ?? (fullSystem ? "danger-full-access" : "workspace-write"),
       ...(!fullSystem && this.experimentalApi
-        ? { runtimeWorkspaceRoots: [opts.cwd, ...aiRoots()] }
+        ? {
+          runtimeWorkspaceRoots: [
+            ...new Set([opts.cwd, ...(opts.extraWorkspaceRoots ?? []), ...aiRoots()]),
+          ],
+        }
         : {}),
       // null est volontaire : un thread repris conserve sinon son tier `fast`.
       serviceTier: opts.speed === "fast" ? "fast" : null,

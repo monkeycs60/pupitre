@@ -311,8 +311,12 @@ export class SubtaskRunner {
       // La sous-tâche travaille dans le worktree de sa conversation parente :
       // un agent du Gardien doit voir la branche qu'il est chargé de corriger.
       const parent = this.convs.get(subtask.conversation_id);
+      const cwd = conversationCwd(project, parent);
       const opts = {
-        cwd: conversationCwd(project, parent),
+        cwd,
+        // Même raison que pour un tour : le dépôt principal porte le `.git`
+        // réel du worktree.
+        extraWorkspaceRoots: cwd === project.path ? undefined : [project.path],
         model: subtask.model,
         effort: subtask.effort ?? undefined,
         speed: subtask.speed ?? undefined,

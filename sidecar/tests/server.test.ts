@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -222,7 +222,11 @@ cat "${fixture}"
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
-  const gitView = new GitProjectService(db, projects);
+  // Racine de worktrees confinée au dossier temporaire du test : sans elle, le
+  // service écrirait dans le vrai ~/.local/share/pupitre de l'utilisateur.
+  const gitView = new GitProjectService(db, projects, {
+    worktreeRoot: join(dir, "worktrees"),
+  });
   const reviewStore = new ReviewStore(db);
   const reviews = new ReviewRunner(
     reviewStore,
@@ -340,7 +344,11 @@ cat "${fixture}"
   };
 });
 
+/** Dépôts temporaires à retirer : sans ça, chaque exécution en laisse un. */
+const cleanups: Array<() => void> = [];
+
 afterEach(() => {
+  while (cleanups.length > 0) cleanups.pop()?.();
   current?.server.stop(true);
   current?.db.close();
   current = undefined;
@@ -2013,6 +2021,7 @@ test("refuse un canal WS inconnu et exige une conversation valide sinon", async 
 test("une conversation peut naître sur sa branche, dans un worktree dédié", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const repo = mkdtempSync(join(tmpdir(), "pupitre-srv-wt-"));
+  cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
   const git = (...args: string[]): void => {
     const result = Bun.spawnSync(["git", ...args], { cwd: repo });
     if (result.exitCode !== 0) throw new Error(result.stderr.toString());
@@ -2056,6 +2065,7 @@ test("une conversation peut naître sur sa branche, dans un worktree dédié", a
 test("un nom de branche qui s'évaderait du dossier géré est refusé", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const repo = mkdtempSync(join(tmpdir(), "pupitre-srv-wt-"));
+  cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
   const git = (...args: string[]): void => {
     const result = Bun.spawnSync(["git", ...args], { cwd: repo });
     if (result.exitCode !== 0) throw new Error(result.stderr.toString());

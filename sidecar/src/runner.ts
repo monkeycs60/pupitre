@@ -219,13 +219,20 @@ export class ConversationRunner {
         conductor = { port: sidecarPort, conversationId };
       }
       const permissionMode = conv.permission_mode ?? project.permission_mode;
+      const cwd = conversationCwd(project, conv)
       const opts = {
-        cwd: conversationCwd(project, conv),
+        cwd,
+        // Depuis un worktree, le dépôt principal doit rester lisible : le
+        // `.git` du worktree n'est qu'un renvoi vers lui.
+        extraWorkspaceRoots: cwd === project.path ? undefined : [project.path],
         model: conv.model,
         effort: conv.effort ?? undefined,
         speed: conv.speed ?? undefined,
         prompt: withActionFormat(
-          (this.skills?.augmentPrompt(prompt, project.id) ?? prompt)
+          (this.skills?.augmentPrompt(prompt, project.id, {
+            cwd: conversationCwd(project, conv),
+            projectPath: project.path,
+          }) ?? prompt)
             + attachmentPrompt(attachments, this.media),
           this.actionFormat(),
         ),

@@ -5,7 +5,7 @@ import { gitGraphCellGeometry, gitGraphRowLabel, gitRefOptions, layoutGitGraph, 
 import { buildFileTree } from './reviewFileTree'
 import { reviewStartInput } from './reviewLaunch'
 import { isScanRunning } from './reviewStatus'
-import { isRemovable, worktreeLabel, worktreeRows } from './worktrees'
+import { cleanupInvitation, disposableWorktrees, isRemovable, worktreeLabel, worktreeRows } from './worktrees'
 import { PROVIDER_EFFORTS, REVIEW_MODELS } from './modelOptions'
 import type { Conversation, GitSnapshot, GitWorktree, Preset, Project, Provider, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
 
@@ -36,6 +36,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   const [filter, setFilter] = useState<'all' | 'red' | 'orange' | 'treated'>('all')
   const [selectedFlagId, setSelectedFlagId] = useState<string | null>(null)
   const [worktrees, setWorktrees] = useState<{ worktrees: GitWorktree[], merged: GitWorktree[] }>({ worktrees: [], merged: [] })
+  const [isCleaning, setIsCleaning] = useState(false)
   const [presets, setPresets] = useState<Preset[]>([])
   const [presetId, setPresetId] = useState(project.default_preset_id ?? '')
   const [provider, setProvider] = useState<Provider>(conversation?.provider ?? 'codex')
@@ -67,6 +68,20 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     refreshWorktrees(controller.signal)
     return () => controller.abort()
   }, [refreshWorktrees])
+
+  async function dropMerged() {
+    const targets = disposableWorktrees(worktreeList)
+    if (targets.length === 0 || isCleaning) return
+    if (!window.confirm(`Retirer ${targets.length} worktree(s) de branches fusionnées ?`)) return
+    setIsCleaning(true)
+    setError(null)
+    try {
+      for (const row of targets) await removeProjectWorktree(project.id, row.worktree.path)
+      refreshWorktrees()
+      setSnapshot(await getProjectGit(project.id))
+    } catch (reason) { setError(errorMessage(reason)) }
+    finally { setIsCleaning(false) }
+  }
 
   async function dropWorktree(path: string) {
     setError(null)
@@ -114,6 +129,10 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     : flag.severity === filter)
   const severityCounts = flags.reduce((counts, flag) => ({ ...counts, [flag.severity]: counts[flag.severity] + 1 }), { red: 0, orange: 0, grey: 0 })
   const rows = useMemo(() => layoutGitGraph(snapshot?.commits ?? []), [snapshot])
+  const worktreeList = useMemo(
+    () => worktreeRows(worktrees.worktrees, worktrees.merged, conversation?.worktree_path ?? null),
+    [worktrees, conversation?.worktree_path],
+  )
 
   // Filet de sécurité lorsque le WS a été reconnecté entre la dernière zone et
   // la fin du scan : un unique intervalle existe seulement pour la review active.
@@ -190,7 +209,13 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     </section> : <p className="git-diff-empty">Choisissez deux points ou lancez une relecture du worktree.</p>}
     <section className="git-worktrees" aria-label="Worktrees du projet">
       <h2>Worktrees</h2>
-      <ul className="git-worktree-list">{worktreeRows(worktrees.worktrees, worktrees.merged, conversation?.worktree_path ?? null).map((row) => <li key={row.worktree.path} className={row.current ? 'is-current' : undefined}>
+      {cleanupInvitation(worktreeList) !== null ? <p className="git-worktree-invite" role="status">
+        <span>{cleanupInvitation(worktreeList)}</span>
+        <button type="button" onClick={() => void dropMerged()} disabled={isCleaning}>
+          {isCleaning ? 'Nettoyage…' : 'Retirer'}
+        </button>
+      </p> : null}
+      <ul className="git-worktree-list">{worktreeList.map((row) => <li key={row.worktree.path} className={row.current ? 'is-current' : undefined}>
         <strong>{worktreeLabel(row.worktree)}</strong>
         <code>{row.worktree.path}</code>
         {row.main ? <em>dépôt principal</em> : null}
