@@ -16,6 +16,7 @@ interface Props {
   quotas: QuotaSnapshot
   busy?: boolean
   placement?: 'top' | 'bottom'
+  submenuPlacement?: 'left' | 'right'
   onChange: (value: ReviewSelection) => void
 }
 
@@ -76,7 +77,7 @@ function selectionFromConfig(config: ConversationConfig, presets: Preset[]): Rev
   }
 }
 
-export function ReviewConfigSelector({ value, presets, quotas, busy, placement = 'top', onChange }: Props) {
+export function ReviewConfigSelector({ value, presets, quotas, busy, placement = 'top', submenuPlacement = 'right', onChange }: Props) {
   const reviewPresets = presets.map(reviewPreset)
   return (
     <div className="review-config-selector">
@@ -88,6 +89,7 @@ export function ReviewConfigSelector({ value, presets, quotas, busy, placement =
         isBusy={busy}
         showConversationSettings={false}
         placement={placement}
+        submenuPlacement={submenuPlacement}
         onConfigChange={(config) => onChange(selectionFromConfig(config, presets))}
         onPresetSelect={(preset) => onChange({
           presetId: preset.id,

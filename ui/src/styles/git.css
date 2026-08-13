@@ -358,6 +358,7 @@
 
 .git-history {
   overflow: hidden;
+  margin-bottom: var(--space-6);
   border-radius: var(--r-sm);
 }
 

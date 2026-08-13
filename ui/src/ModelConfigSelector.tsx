@@ -43,6 +43,7 @@ export interface ModelConfigSelectorProps {
   onToggleDefault?: () => void
   onHelp?: () => void
   placement?: 'top' | 'bottom'
+  submenuPlacement?: 'left' | 'right'
 }
 
 function configOf(preset: Preset): ConversationConfig {
@@ -151,6 +152,7 @@ export function ModelConfigSelector({
   onToggleDefault,
   onHelp,
   placement = 'top',
+  submenuPlacement = 'right',
 }: ModelConfigSelectorProps) {
   const [open, setOpen] = useState(false)
   const [submenu, setSubmenu] = useState<Submenu>(null)
@@ -242,7 +244,7 @@ export function ModelConfigSelector({
   const chipName = selectedPreset?.name ?? 'Réglages libres'
 
   return (
-    <div className={`preset-selector opens-${placement}`} ref={rootRef} onKeyDown={handleKeyDown}>
+    <div className={`preset-selector opens-${placement} submenus-${submenuPlacement}`} ref={rootRef} onKeyDown={handleKeyDown}>
       <button
         type="button"
         className={`preset-selector-chip${isDirty ? ' is-dirty' : ''}${selectedPreset === null ? ' is-free' : ''}`}

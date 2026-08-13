@@ -826,6 +826,11 @@
   animation: guardian-clear-in 480ms var(--ease) both;
 }
 
+.conversation-review.is-running {
+  border-color: var(--accent-border);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .conversation-review-head,
 .conversation-review-controls,
 .conversation-review-result {
@@ -876,7 +881,17 @@
 .conversation-review-result .is-clear { color: var(--ok); }
 .conversation-review-result .has-flags { color: var(--warn); }
 .conversation-review-result.has-error > span:first-child { color: var(--danger); }
+.conversation-review-result.is-stale > span:first-child { color: var(--warn); }
+.conversation-review-result.is-running { color: var(--text); }
 .conversation-review-result button { margin-left: auto; color: var(--accent); background: transparent; border: 0; cursor: pointer; }
+.conversation-review-progress-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: guardian-progress 900ms ease-in-out infinite alternate;
+}
 .review-preview-flag { flex-basis: 100%; padding-left: 28px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conversation-review-error { margin: var(--space-2) 0 0; color: var(--danger); font-size: var(--text-xs); }
 
@@ -916,8 +931,14 @@
   to { background-color: color-mix(in srgb, var(--bg-panel) 72%, transparent); }
 }
 
+@keyframes guardian-progress {
+  from { opacity: .35; }
+  to { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .conversation-review.is-clear { animation: none; }
+  .conversation-review-progress-dot { animation: none; }
 }
 
 /* Tour terminé : liseré et fond verts, comme une notification résolue. */

@@ -130,6 +130,23 @@ test('ancre chaque sous-menu à son réglage déclencheur', () => {
   }
 })
 
+test('peut ouvrir les sous-menus vers la gauche dans un en-tête droit', () => {
+  render(createElement(ModelConfigSelector, {
+    config,
+    presets: [],
+    selectedPresetId: '',
+    quotas: emptyQuotas,
+    submenuPlacement: 'left',
+    onConfigChange: () => undefined,
+    onPresetSelect: () => undefined,
+  }))
+
+  fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
+  fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
+
+  expect(screen.getByRole('menu', { name: 'Choisir un modèle' }).closest('.preset-selector')?.classList.contains('submenus-left')).toBe(true)
+})
+
 test('conserve le réglage d’effort des sub-agents dans le menu compact', () => {
   let nextConfig: ConversationConfig | null = null
   render(createElement(ModelConfigSelector, {

@@ -389,6 +389,11 @@
   animation: preset-selector-menu-in var(--dur-fast) var(--ease) both;
 }
 
+.preset-selector.submenus-left .preset-selector-submenu {
+  right: calc(100% + 8px);
+  left: auto;
+}
+
 .preset-selector-menu {
   width: 286px;
 }

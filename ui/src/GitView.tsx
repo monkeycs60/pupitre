@@ -253,8 +253,8 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
         <span className={`git-review-mode ${conversation?.auto_review ? 'is-auto' : ''}`} title={conversation?.auto_review ? 'Cette conversation relance une review après chaque tour réussi.' : 'La review démarre uniquement quand vous la lancez.'}>
           {conversation?.auto_review ? 'Auto activée' : 'À la demande'}
         </span>
-        <ReviewConfigSelector value={{ presetId, provider, model, effort, speed }} presets={presets} quotas={quotas} busy={isReviewing} placement="bottom" onChange={selectReviewConfig} />
-        <button type="button" className="primary-button" onClick={() => void relire()} disabled={!conversation || isReviewing || isScanRunning(reviewStatus)}>{isReviewing ? 'Lancement…' : reviewStatus?.running ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : 'Lancer la review'}</button>
+        <ReviewConfigSelector value={{ presetId, provider, model, effort, speed }} presets={presets} quotas={quotas} busy={isReviewing} placement="bottom" submenuPlacement="left" onChange={selectReviewConfig} />
+        <button type="button" className="primary-button" onClick={() => void relire()} disabled={!conversation || isReviewing || selectedReview?.status === 'running' || isScanRunning(reviewStatus)}>{isReviewing ? 'Lancement…' : reviewStatus?.running ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : selectedReview?.status === 'running' ? 'Analyse en cours…' : 'Lancer la review'}</button>
       </div>
     </header>
     {error ? <div className="git-error" role="alert">{error}</div> : null}
