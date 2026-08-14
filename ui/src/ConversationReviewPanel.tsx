@@ -111,6 +111,8 @@ export function ConversationReviewPanel({
 
   useEffect(() => setCorrection(readCorrectionSelection(conversation)), [conversation.id])
 
+  const hasRunningFlag = review?.flags.some((flag) => flag.status === 'agent_running') ?? false
+
   useEffect(() => {
     const controller = new AbortController()
     const refresh = () => {
@@ -127,14 +129,16 @@ export function ConversationReviewPanel({
         })
     }
     refresh()
-    const timer = reviewStatus?.running || review?.status === 'running' || review?.flags.some((flag) => flag.status === 'agent_running')
+    const timer = reviewStatus?.running || review?.status === 'running' || hasRunningFlag
       ? window.setInterval(refresh, 1_500)
       : null
     return () => {
       controller.abort()
       if (timer !== null) window.clearInterval(timer)
     }
-  }, [conversation.id, project.id, review?.status, review?.flags, reviewStatus?.running?.reviewId])
+  // Chaque réponse API hydrate un nouveau tableau `flags`. Dépendre du tableau
+  // relancerait cet effet à chaque réponse et créerait une boucle de requêtes.
+  }, [conversation.id, project.id, review?.status, hasRunningFlag, reviewStatus?.running?.reviewId])
 
   useEffect(() => {
     if (review?.status !== 'running') return
