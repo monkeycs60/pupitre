@@ -7,6 +7,7 @@ use std::sync::{
 use std::time::Duration;
 use tauri::webview::DownloadEvent;
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::{
     process::{CommandChild, CommandEvent},
     ShellExt,
@@ -45,6 +46,15 @@ fn handle_design_download<R: tauri::Runtime>(
             log::info!(
                 "Téléchargement Claude Design terminé : {url} vers {path:?} (succès : {success})"
             );
+            if success {
+                if let Some(path) = path {
+                    if let Err(error) = _webview.app_handle().opener().reveal_item_in_dir(path) {
+                        log::warn!(
+                            "Impossible d'ouvrir le dossier du téléchargement Claude Design : {error}"
+                        );
+                    }
+                }
+            }
         }
         _ => {}
     }
