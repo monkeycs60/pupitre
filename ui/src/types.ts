@@ -231,6 +231,8 @@ export interface Conversation {
   routine_id: string | null
   /** Worktree git dédié ; null = dossier principal du projet (ADR 0001). */
   worktree_path: string | null
+  /** Branche courante du projet au moment de la création. */
+  created_on_branch: string | null
   cli_session_id: string | null
   preset_id?: string | null
   pinned: boolean

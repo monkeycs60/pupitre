@@ -51,6 +51,7 @@ export function openDb(dir: string = dataDir()): Database {
       cli_session_id TEXT, pinned INTEGER NOT NULL DEFAULT 0,
       message_count INTEGER NOT NULL DEFAULT 0,
       last_read_turn INTEGER NOT NULL DEFAULT 0,
+      created_on_branch TEXT NULL,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     -- conversation_id porte SOIT un id de conversation SOIT un id de subtask :
@@ -309,6 +310,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "review_model TEXT NULL");
   addColumn(db, "conversations", "review_effort TEXT NULL");
   addColumn(db, "conversations", "review_speed TEXT NULL");
+  addColumn(db, "conversations", "created_on_branch TEXT NULL");
   migrateConversationMessageCounts(db);
   addColumn(db, "projects", "default_preset_id TEXT NULL");
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");

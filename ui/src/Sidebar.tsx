@@ -581,6 +581,10 @@ export function Sidebar({
                         <span className="conv-row-branch" title={`Branche du worktree : ${conversation.worktree_path}`}>
                           <BranchIcon />{branch}
                         </span>
+                      ) : conversation.created_on_branch !== null ? (
+                        <span className="conv-row-branch" title={`Branche à la création`}>
+                          <BranchIcon />{conversation.created_on_branch}
+                        </span>
                       ) : null}
                       <span className="conv-row-count">{conversationMessageCount(conversation, messageCount)}</span>
                     </span>

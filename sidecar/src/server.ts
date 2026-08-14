@@ -134,6 +134,7 @@ async function createContinuationFromHandoff(
   target: HandoffTargetConfig,
   artifact: HandoffDebriefArtifact,
 ): Promise<Conversation> {
+  const snapshot = deps.git.snapshot(source.project_id);
   const continuation = deps.conversations.create({
     projectId: source.project_id,
     provider: target.provider,
@@ -145,6 +146,7 @@ async function createContinuationFromHandoff(
     subagentEffort: source.subagent_effort,
     continuedFrom: source.id,
     handoffPending: true,
+    createdOnBranch: snapshot.currentBranch,
     firstMessage: `Suite — ${source.title}`,
   });
   const seed = [
@@ -1600,6 +1602,7 @@ export function createServer(deps: ServerDeps) {
           const message = workflow.prompt.includes(invocation)
             ? workflow.prompt
             : `${invocation}\n\n${workflow.prompt}`;
+          const snapshot = deps.git.snapshot(workflow.project_id);
           const conversation = deps.conversations.create({
             projectId: workflow.project_id,
             provider: config.provider,
@@ -1610,6 +1613,7 @@ export function createServer(deps: ServerDeps) {
             orchestrator: config.orchestrator,
             subagentPresetId: "subagent_preset_id" in config ? config.subagent_preset_id : null,
             subagentEffort: "subagent_effort" in config ? config.subagent_effort : null,
+            createdOnBranch: snapshot.currentBranch,
             firstMessage: message,
           });
           void deps.runner.runTurn(conversation.id, message, [])
@@ -1852,6 +1856,7 @@ export function createServer(deps: ServerDeps) {
               );
             }
           }
+          const snapshot = deps.git.snapshot(projectId);
           const conversation = deps.conversations.create({
             worktreePath,
             projectId,
@@ -1864,6 +1869,7 @@ export function createServer(deps: ServerDeps) {
             orchestrator,
             subagentPresetId,
             subagentEffort,
+            createdOnBranch: snapshot.currentBranch,
             firstMessage: message.trim() || "Image jointe",
           });
           void deps.runner.runTurn(conversation.id, message, images, attachments)
