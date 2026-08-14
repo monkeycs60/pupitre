@@ -19,6 +19,7 @@ interface GitViewProps {
   project: Project
   conversation: Conversation | null
   focusedReviewId?: string | null
+  focusedFlagId?: string | null
   reviewStatus?: ReviewStatusSnapshot | null
   quotas: QuotaSnapshot
   onConversationSelect: (conversationId: string) => void
@@ -32,7 +33,7 @@ function shortDate(value: string): string {
   return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-export function GitView({ project, conversation, focusedReviewId = null, reviewStatus = null, quotas, onConversationSelect, onReviewSelected, onConversationBack }: GitViewProps) {
+export function GitView({ project, conversation, focusedReviewId = null, focusedFlagId = null, reviewStatus = null, quotas, onConversationSelect, onReviewSelected, onConversationBack }: GitViewProps) {
   const [snapshot, setSnapshot] = useState<GitSnapshot | null>(null)
   const [baseRef, setBaseRef] = useState('')
   const [headRef, setHeadRef] = useState('')
@@ -45,7 +46,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   const [isReviewing, setIsReviewing] = useState(false)
   const [isDispatching, setIsDispatching] = useState(false)
   const [filter, setFilter] = useState<'all' | 'red' | 'orange' | 'treated'>('all')
-  const [selectedFlagId, setSelectedFlagId] = useState<string | null>(null)
+  const [selectedFlagId, setSelectedFlagId] = useState<string | null>(focusedFlagId)
   const [worktrees, setWorktrees] = useState<{ worktrees: GitWorktree[], merged: GitWorktree[] }>({ worktrees: [], merged: [] })
   const [isCleaning, setIsCleaning] = useState(false)
   const [presets, setPresets] = useState<Preset[]>([])
@@ -161,6 +162,12 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   // code alors que la branche contenait bien des changements.
   const displayedDiff = selectedReview?.diff_text || diff
   const flags = selectedReview?.flags ?? []
+  const focusedFlag = focusedFlagId ? selectedReview?.flags.find((flag) => flag.id === focusedFlagId) : undefined
+  useEffect(() => {
+    if (!focusedFlag) return
+    setSelectedFile(focusedFlag.file)
+    setSelectedFlagId(focusedFlag.id)
+  }, [focusedFlag])
   const files = useMemo(() => displayedDiff ? buildFileTree(displayedDiff, flags) : [], [displayedDiff, flags])
   const filteredDiff = useMemo(() => {
     if (!displayedDiff || selectedFile === null) return displayedDiff

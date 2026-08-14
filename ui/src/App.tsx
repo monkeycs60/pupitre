@@ -105,6 +105,7 @@ function App() {
   const [memoryDirty, setMemoryDirty] = useState(false)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
   const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
+  const [focusedFlagId, setFocusedFlagId] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const [locationRestored, setLocationRestored] = useState(false)
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
@@ -419,9 +420,11 @@ function App() {
     setConversationListVersion((current) => current + 1)
   }
 
-  function handleGitSelect() {
+  function handleGitSelect(flagId?: string) {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
+    setFocusedReviewId(null)
+    setFocusedFlagId(flagId ?? null)
     setWorkspaceView('git')
     setShowSwitchModel(false)
   }
@@ -573,6 +576,7 @@ function App() {
 
   function handleGitReviewSelect(reviewId: string) {
     setFocusedReviewId(reviewId)
+    setFocusedFlagId(null)
     setWorkspaceView('git')
   }
 
@@ -714,6 +718,7 @@ function App() {
             project={selectedProject}
             conversation={selectedConversation}
             focusedReviewId={focusedReviewId}
+            focusedFlagId={focusedFlagId}
             reviewStatus={fleet.reviewStatus}
             quotas={quotas.snapshot}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
@@ -766,7 +771,7 @@ function App() {
               {selectedConversation !== null ? (
                 <nav className="conversation-surface-tabs" aria-label="Vue de la conversation">
                   <button type="button" className="is-active" aria-current="page">Conversation</button>
-                  <button type="button" onClick={handleGitSelect}>Code</button>
+                  <button type="button" onClick={() => handleGitSelect()}>Code</button>
                 </nav>
               ) : null}
               {selectedConversation !== null ? (
@@ -787,7 +792,7 @@ function App() {
                   <button
                     type="button"
                     className="header-action header-action-icon"
-                    onClick={handleGitSelect}
+                    onClick={() => handleGitSelect()}
                     title="Afficher le code et les reviews"
                     aria-label="Afficher le code"
                   >

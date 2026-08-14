@@ -58,7 +58,7 @@ interface ChatProps {
   turnXpMultiplier?: number
   reviewStatus: ReviewStatusSnapshot | null
   onConversationUpdated: (conversation: Conversation) => void
-  onOpenCode: () => void
+  onOpenCode: (flagId?: string) => void
 }
 
 interface LightboxImage {

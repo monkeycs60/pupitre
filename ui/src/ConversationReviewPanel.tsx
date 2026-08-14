@@ -15,7 +15,7 @@ interface Props {
   project: Project
   reviewStatus: ReviewStatusSnapshot | null
   onConversationUpdated: (conversation: Conversation) => void
-  onOpenCode: () => void
+  onOpenCode: (flagId?: string) => void
   quotas: QuotaSnapshot
   launchRequest?: number
 }
@@ -52,7 +52,7 @@ function FindingPreview({
   onAcknowledge,
 }: {
   flag: ReviewFlag
-  onOpenCode: () => void
+  onOpenCode: (flagId?: string) => void
   onCorrect: () => void
   onAcknowledge: () => void
 }) {
@@ -66,7 +66,7 @@ function FindingPreview({
         </div>
         <p>{flag.message}</p>
         <div className="guardian-finding-actions">
-          <button type="button" className="is-link" onClick={onOpenCode}>Voir dans le diff</button>
+          <button type="button" className="is-link" onClick={() => onOpenCode(flag.id)}>Voir dans le diff</button>
           <button type="button" onClick={onCorrect} disabled={flag.status === 'agent_running'}>{flag.status === 'agent_running' ? 'Correction…' : 'Corriger'}</button>
           <button type="button" onClick={onAcknowledge}>OK, vu</button>
         </div>
@@ -326,7 +326,7 @@ export function ConversationReviewPanel({
       {expanded && openFlags.length > 0 ? (
         <div className={`guardian-findings is-${variant}`} id="guardian-findings">
           {visibleFlags.map((flag) => <FindingPreview key={flag.id} flag={flag} onOpenCode={onOpenCode} onCorrect={() => void correct(flag)} onAcknowledge={() => void acknowledge(flag)} />)}
-          {openFlags.length > visibleFlags.length ? <button type="button" className="guardian-findings-more" onClick={onOpenCode}>+ {openFlags.length - visibleFlags.length} autre{openFlags.length - visibleFlags.length > 1 ? 's' : ''} — ouvrir dans Code</button> : null}
+          {openFlags.length > visibleFlags.length ? <button type="button" className="guardian-findings-more" onClick={() => onOpenCode()}>+ {openFlags.length - visibleFlags.length} autre{openFlags.length - visibleFlags.length > 1 ? 's' : ''} — ouvrir dans Code</button> : null}
         </div>
       ) : null}
       {error ? <p className="conversation-review-error" role="alert">{error}</p> : null}
