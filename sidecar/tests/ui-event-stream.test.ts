@@ -69,6 +69,24 @@ test("les clés restent uniques quand un outil réutilise son id sur plusieurs t
   expect(new Set(ids).size).toBe(ids.length);
 });
 
+test("une précision orientée reste dans le tour courant et sépare les réponses", () => {
+  const blocks = groupEvents([
+    { id: 1, type: "user-message", text: "commence", images: [] },
+    { id: 2, type: "status", state: "running" },
+    { id: 3, type: "text-delta", text: "Première direction" },
+    { id: 4, type: "user-message", text: "avec cette capture", images: ["capture.png"], steering: true },
+    { id: 5, type: "text-delta", text: "Direction corrigée" },
+    { id: 6, type: "status", state: "done" },
+  ]);
+
+  expect(blocks.filter((block) => block.kind === "user")).toEqual([
+    expect.objectContaining({ text: "commence" }),
+    expect.objectContaining({ text: "avec cette capture", steering: true }),
+  ]);
+  expect(blocks.filter((block) => block.kind === "assistant")).toHaveLength(2);
+  expect(blocks.filter((block) => block.kind === "turn-footer")).toHaveLength(1);
+});
+
 test("un debrief-ref devient un bloc éditorial autonome", () => {
   const [block] = groupEvents([{
     id: 42,

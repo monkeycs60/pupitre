@@ -15,6 +15,7 @@ import { DEFAULT_ACTION_FORMAT, withActionFormat } from "./response-format";
 import { claudeServerDefinitions } from "./mcp-inventory";
 import type { ActionFormat } from "./response-format";
 import { conversationCwd } from "./workspace";
+import type { SteerFn } from "./adapters/types";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -23,6 +24,8 @@ interface ActiveTurn {
   done: Promise<void>;
   finish: () => void;
   startedAt: string;
+  steerReady: Promise<SteerFn> | null;
+  persistSteer: (event: Extract<AppEvent, { type: "user-message" }>) => void;
 }
 
 function attachmentPrompt(
@@ -121,6 +124,51 @@ export class ConversationRunner {
     return true;
   }
 
+  /**
+   * Ajoute une précision au tour Codex actif. Renvoie false si le provider ne
+   * sait pas orienter ce tour ou si celui-ci s'est terminé pendant la requête.
+   */
+  async steerTurn(
+    conversationId: string,
+    prompt: string,
+    imageNames: string[],
+    attachments: MediaAttachment[] = [],
+  ): Promise<boolean> {
+    const active = this.active.get(conversationId);
+    if (!active?.steerReady) return false;
+
+    const steer = await Promise.race([
+      active.steerReady,
+      active.done.then(() => null),
+    ]);
+    if (!steer) return false;
+
+    const conv = this.convs.get(conversationId);
+    const project = conv ? this.projects.get(conv.project_id) : null;
+    if (!conv || !project) return false;
+    const augmented = this.skills?.augmentPrompt(prompt, project.id, {
+      cwd: conversationCwd(project, conv),
+      projectPath: project.path,
+    }) ?? prompt;
+    const accepted = await steer({
+      prompt: augmented + attachmentPrompt(attachments, this.media),
+      images: imageNames.map((name) => this.media.absolutePath(name)),
+    });
+    if (!accepted) {
+      await active.done;
+      return false;
+    }
+
+    active.persistSteer({
+      type: "user-message",
+      text: prompt,
+      images: imageNames,
+      ...(attachments.length > 0 ? { attachments } : {}),
+      steering: true,
+    });
+    return true;
+  }
+
   async runTurn(
     conversationId: string,
     prompt: string,
@@ -143,7 +191,12 @@ export class ConversationRunner {
     const done = new Promise<void>((resolve) => {
       finish = resolve;
     });
-    this.active.set(conversationId, { controller, done, finish, startedAt });
+    const supportsSteer = conv.provider === "codex"
+      && process.env.PUPITRE_CODEX_MODE !== "exec";
+    let acceptSteer: ((steer: SteerFn) => void) | null = null;
+    const steerReady = supportsSteer
+      ? new Promise<SteerFn>((resolve) => { acceptSteer = resolve; })
+      : null;
     let outcome: TurnOutcome = {
       state: "error",
       error: "le provider n'a pas publié de statut terminal",
@@ -158,6 +211,15 @@ export class ConversationRunner {
       const id = this.convs.appendEvent(conversationId, event);
       this.broadcast(conversationId, { ...event, id });
     };
+
+    this.active.set(conversationId, {
+      controller,
+      done,
+      finish,
+      startedAt,
+      steerReady,
+      persistSteer: persist,
+    });
 
     const emit = (event: AppEvent) => {
       if (
@@ -248,6 +310,7 @@ export class ConversationRunner {
         ...(conductor ? { conductor } : {}),
         ...(pupitre ? { pupitre } : {}),
         ...(selectedMcpServers(project) ?? {}),
+        ...(supportsSteer && acceptSteer ? { registerSteer: acceptSteer } : {}),
       };
       if (conv.provider === "claude") await runClaudeTurn(opts, emit);
       // Codex passe par l'app-server (vrais deltas, quotas natifs) ; le chemin

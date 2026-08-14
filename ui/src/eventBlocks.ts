@@ -6,6 +6,7 @@ interface UserBlock {
   text: string
   images: string[]
   attachments: Attachment[]
+  steering?: boolean
 }
 
 interface AssistantBlock {

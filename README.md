@@ -42,7 +42,9 @@ Les deux CLIs sont normalisés en un schéma d'événements unifié (`sidecar/sr
 Les opérations longues d'une conversation partagent un verrou explicite. Au
 redémarrage, les reviews, sous-tâches et scopes interrompus sont clôturés, et une
 continuation de passation restée incomplète est retirée plutôt que laissée dans
-la sidebar.
+la sidebar. Exception contrôlée : pendant un tour Codex app-server, le composeur
+reste ouvert et les précisions — captures comprises — sont injectées dans le tour
+actif par `turn/steer`, puis conservées comme telles dans l'historique.
 
 ## Bibliothèque de skills (M4-K)
 

@@ -46,6 +46,20 @@ export interface TurnOptions {
    * pas dans cette liste. Absent = aucun filtre.
    */
   mcpAllowed?: string[];
+  /**
+   * Appelé par un adaptateur capable d'accepter des précisions pendant le tour.
+   * Le runner conserve cette fonction sans exposer au serveur HTTP les ids ou
+   * le protocole propres au provider.
+   */
+  registerSteer?: (steer: SteerFn) => void;
 }
 
 export type EmitFn = (event: AppEvent) => void;
+
+export interface SteerInput {
+  prompt: string;
+  images: string[];
+}
+
+/** `false` signifie que le tour s'est terminé avant d'accepter le message. */
+export type SteerFn = (input: SteerInput) => Promise<boolean>;

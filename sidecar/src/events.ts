@@ -7,6 +7,8 @@ export type AppEvent =
       images: string[];
       /** Fichiers joints non-image (et images pour les anciens clients). */
       attachments?: MediaAttachment[];
+      /** Précision injectée dans le tour actif, pas début d'un nouveau tour. */
+      steering?: boolean;
     }
   | { type: "text-delta"; text: string }
   | { type: "text-final"; text: string }

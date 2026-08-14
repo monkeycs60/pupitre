@@ -65,6 +65,7 @@ function pad(n: number): string {
 // multiplexage (deux conversations en parallèle sur le même process).
 let threadCounter = 0;
 let turnCounter = 0;
+let steerRejected = false;
 
 function retarget(
   params: Record<string, unknown>,
@@ -147,6 +148,14 @@ lines.on("line", (line) => {
     }
     case "turn/interrupt":
       send({ jsonrpc: "2.0", id, result: {} });
+      return;
+    case "turn/steer":
+      if (process.env.FAKE_APP_SERVER_REJECT_FIRST_STEER === "1" && !steerRejected) {
+        steerRejected = true;
+        send({ jsonrpc: "2.0", id, error: { code: -32000, message: "tour pas encore actif" } });
+        return;
+      }
+      send({ jsonrpc: "2.0", id, result: { turnId: params?.expectedTurnId } });
       return;
     default:
       send({ jsonrpc: "2.0", id, result: {} });

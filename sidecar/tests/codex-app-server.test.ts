@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { CodexAppServerClient, requestTimeoutMs } from "../src/adapters/codex-app-server";
 import type { AppEvent } from "../src/events";
 import type { TurnOptions } from "../src/adapters/types";
+import type { SteerFn } from "../src/adapters/types";
 
 const FAKE = join(import.meta.dir, "fake-bins/fake-codex-app-server");
 
@@ -67,6 +68,7 @@ afterEach(() => {
   delete process.env.FAKE_APP_SERVER_INIT_ERROR;
   delete process.env.FAKE_APP_SERVER_REJECT_CAPABILITIES;
   delete process.env.FAKE_APP_SERVER_CHILD_PID;
+  delete process.env.FAKE_APP_SERVER_REJECT_FIRST_STEER;
   delete process.env.PUPITRE_APPSERVER_TIMEOUT_MS;
   delete process.env.PUPITRE_APPSERVER_IDLE_MS;
   delete process.env.PUPITRE_CODEX_USER_MCPS;
@@ -280,6 +282,59 @@ test("images jointes : passées en localImage dans l'input du tour", async () =>
 
   const turnStart = sentRequests(files.log).find((r) => r.method === "turn/start")!;
   expect(turnStart.params.input[1]).toEqual({ type: "localImage", path: "/tmp/une.png" });
+});
+
+test("turn/steer ajoute texte et image au tour actif avec son expectedTurnId", async () => {
+  const files = useFake();
+  process.env.FAKE_APP_SERVER_HANG = "1";
+  const controller = new AbortController();
+  let steer: SteerFn | null = null;
+  const client = newClient();
+  const turn = client.runTurn(turnOptions({
+    signal: controller.signal,
+    registerSteer: (registered) => { steer = registered; },
+  }), () => {});
+
+  const deadline = Date.now() + 2_000;
+  while (steer === null && Date.now() < deadline) await Bun.sleep(10);
+  expect(steer).not.toBeNull();
+  expect(await steer!({ prompt: "regarde plutôt ceci", images: ["/tmp/capture.png"] }))
+    .toBe(true);
+
+  const request = sentRequests(files.log).find((item) => item.method === "turn/steer")!;
+  expect(request.params).toEqual({
+    threadId: "fake-thread-0001",
+    expectedTurnId: "fake-turn-0001",
+    input: [
+      { type: "text", text: "regarde plutôt ceci" },
+      { type: "localImage", path: "/tmp/capture.png" },
+    ],
+  });
+
+  controller.abort();
+  await turn;
+});
+
+test("turn/steer rejoué après le rejet transitoire du démarrage", async () => {
+  const files = useFake();
+  process.env.FAKE_APP_SERVER_HANG = "1";
+  process.env.FAKE_APP_SERVER_REJECT_FIRST_STEER = "1";
+  const controller = new AbortController();
+  let steer: SteerFn | null = null;
+  const client = newClient();
+  const turn = client.runTurn(turnOptions({
+    signal: controller.signal,
+    registerSteer: (registered) => { steer = registered; },
+  }), () => {});
+
+  const deadline = Date.now() + 2_000;
+  while (steer === null && Date.now() < deadline) await Bun.sleep(10);
+  expect(await steer!({ prompt: "précision immédiate", images: [] })).toBe(true);
+  expect(sentRequests(files.log).filter((item) => item.method === "turn/steer"))
+    .toHaveLength(2);
+
+  controller.abort();
+  await turn;
 });
 
 test("un cliSessionId présent déclenche thread/resume, pas thread/start", async () => {

@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import type { AppEvent } from "../events";
-import type { EmitFn, TurnOptions } from "./types";
+import type { EmitFn, SteerInput, TurnOptions } from "./types";
 import { codexMcpConfig } from "../conductor";
 import { codexPupitreMcpServer } from "../pupitre";
 import { boundedToolOutput } from "./output";
@@ -227,6 +227,9 @@ export class CodexAppServerClient {
         serviceTier: opts.speed === "fast" ? "fast" : null,
       });
       ctx.turnId = (started?.turn as { id?: string } | undefined)?.id ?? null;
+      if (ctx.turnId && opts.registerSteer) {
+        opts.registerSteer((input) => this.steerActiveTurn(ctx, input));
+      }
       // Une annulation peut arriver pendant que turn/start attend sa réponse :
       // le tour existe alors côté app-server, mais son id n'est connu qu'ici.
       if (abortRequested || opts.signal?.aborted) interruptStartedTurn();
@@ -236,6 +239,36 @@ export class CodexAppServerClient {
     } finally {
       opts.signal?.removeEventListener("abort", abort);
       this.turns.delete(threadId);
+    }
+  }
+
+  private async steerActiveTurn(ctx: TurnContext, input: SteerInput): Promise<boolean> {
+    const turnId = ctx.turnId;
+    if (!turnId || ctx.isSettled) return false;
+    const params = {
+      threadId: ctx.threadId,
+      expectedTurnId: turnId,
+      input: [
+        { type: "text", text: input.prompt },
+        ...input.images.map((path) => ({ type: "localImage", path })),
+      ],
+    };
+    try {
+      const result = await this.request("turn/steer", params);
+      return (result as { turnId?: unknown } | null)?.turnId === turnId;
+    } catch (error) {
+      // La fin du tour et le POST utilisateur peuvent se croiser. Dans ce cas
+      // le runner transformera sans perte le message en tour suivant.
+      if (ctx.isSettled) return false;
+      // Juste après `turn/start`, certaines versions de l'app-server répondent
+      // avant d'avoir publié le tour dans leur registre actif. Un rejet JSON-RPC
+      // immédiat est rejouable sans doublon ; un timeout ne l'est jamais, car la
+      // première requête a pu être acceptée sans que sa réponse nous parvienne.
+      if (String(error).includes("timeout turn/steer")) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 75));
+      if (ctx.isSettled) return false;
+      const retried = await this.request("turn/steer", params);
+      return (retried as { turnId?: unknown } | null)?.turnId === turnId;
     }
   }
 

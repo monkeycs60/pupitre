@@ -127,6 +127,14 @@
   border-radius: 12px 12px 4px 12px;
 }
 
+.message-steering-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+}
+
 .assistant-message {
   width: 100%;
   color: var(--text);

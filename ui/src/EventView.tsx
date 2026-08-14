@@ -217,6 +217,7 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnXpMultiplier, onRe
       return (
         <article className="message-row message-row-user">
           <div className="message-bubble user-message">
+            {block.steering ? <span className="message-steering-label">Ajouté au tour en cours</span> : null}
             {block.text ? <p>{block.text}</p> : null}
             <ImageGallery
               images={block.images}

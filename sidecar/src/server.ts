@@ -2220,12 +2220,29 @@ export function createServer(deps: ServerDeps) {
           }
           const body = await readObject(request);
           const { message, images, attachments } = messageWithAttachments(body, deps.media);
+          if (deps.runner.isRunning(messageConversationId)) {
+            let steered: boolean;
+            try {
+              steered = await deps.runner.steerTurn(
+                messageConversationId,
+                message,
+                images,
+                attachments,
+              );
+            } catch (error) {
+              throw new HttpError(
+                409,
+                error instanceof Error ? error.message : "orientation du tour impossible",
+              );
+            }
+            if (steered) return json({ delivery: "steered" }, 202);
+          }
           if (deps.runner.activity.isBusy(messageConversationId)) {
             throw new HttpError(409, "un tour est déjà en cours");
           }
           void deps.runner.runTurn(messageConversationId, message, images, attachments)
             .catch((error) => console.error("Échec du tour", error));
-          return empty(202);
+          return json({ delivery: "started" }, 202);
         }
 
         const cancelConversationId = routeId(

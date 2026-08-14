@@ -237,9 +237,11 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
       case 'session':
         break
       case 'user-message':
-        flushTurnFooter()
-        turnNumber += 1
-        turnFiles = new Map()
+        if (!event.steering) {
+          flushTurnFooter()
+          turnNumber += 1
+          turnFiles = new Map()
+        }
         assistant = null
         blocks.push({
           kind: 'user',
@@ -247,6 +249,7 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
           text: event.text,
           images: event.images,
           attachments: event.attachments ?? [],
+          ...(event.steering ? { steering: true } : {}),
         })
         break
       case 'text-delta':

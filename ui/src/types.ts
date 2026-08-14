@@ -508,7 +508,7 @@ export type AppEvent =
   // Titre et résumé régénérés après un tour : met la sidebar à jour, ne s'affiche
   // pas dans le fil.
   | { type: 'conversation-digest'; title: string; summary: string }
-  | { type: 'user-message'; text: string; images: string[]; attachments?: Attachment[] }
+  | { type: 'user-message'; text: string; images: string[]; attachments?: Attachment[]; steering?: boolean }
   | { type: 'text-delta'; text: string }
   | { type: 'text-final'; text: string }
   | { type: 'tool-start'; toolId: string; toolName: string; input: unknown }

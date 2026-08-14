@@ -283,6 +283,40 @@ test("provider codex par défaut : passe par l'app-server et persiste le threadI
   }
 });
 
+test("oriente un tour Codex actif et persiste la précision dans le même tour", async () => {
+  const previousCodexBin = process.env.PUPITRE_CODEX_BIN;
+  process.env.PUPITRE_CODEX_BIN = join(import.meta.dir, "fake-bins/fake-codex-app-server");
+  process.env.FAKE_APP_SERVER_HANG = "1";
+  const conversation = convs.create({
+    projectId,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "commence",
+  });
+  const turn = runner.runTurn(conversation.id, "commence", []);
+
+  try {
+    const deadline = Date.now() + 2_000;
+    while (convs.get(conversation.id)?.cli_session_id === null && Date.now() < deadline) {
+      await Bun.sleep(10);
+    }
+    expect(await runner.steerTurn(conversation.id, "j'ai oublié ce point", []))
+      .toBe(true);
+    expect(convs.listEvents(conversation.id)).toContainEqual(expect.objectContaining({
+      type: "user-message",
+      text: "j'ai oublié ce point",
+      steering: true,
+    }));
+  } finally {
+    await runner.cancelTurn(conversation.id);
+    await turn;
+    codexAppServer.shutdown();
+    delete process.env.FAKE_APP_SERVER_HANG;
+    if (previousCodexBin === undefined) delete process.env.PUPITRE_CODEX_BIN;
+    else process.env.PUPITRE_CODEX_BIN = previousCodexBin;
+  }
+});
+
 test("deux tours simultanés sur la même conversation → le second est refusé", async () => {
   const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "x" });
   const firstTurn = runner.runTurn(c.id, "a", []);

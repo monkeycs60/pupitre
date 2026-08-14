@@ -18,7 +18,7 @@ import {
 } from './api'
 import { buildCreateConversationInput } from './conversationDraft'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
-import type { Attachment, Conversation, Project, QuotaSnapshot } from './types'
+import type { Attachment, Conversation, Project, Provider, QuotaSnapshot } from './types'
 import { PROVIDER_MODELS } from './modelOptions'
 import { mediaUrl } from './transport'
 import { invoke } from '@tauri-apps/api/core'
@@ -38,6 +38,7 @@ interface ComposerProps {
    *  composer, comme la maquette). Null pour une nouvelle conversation : dérivé
    *  de la config choisie. */
   providerLabel?: string | null
+  provider?: Provider | null
   initialAttachments?: Attachment[]
 }
 
@@ -181,6 +182,7 @@ export function Composer({
   onMessageChange,
   focusRequest,
   providerLabel = null,
+  provider = null,
   initialAttachments = [],
 }: ComposerProps) {
   const isNewConversation = conversationId === null
@@ -208,15 +210,16 @@ export function Composer({
   const [toast, setToast] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importPathsRef = useRef<(paths: string[]) => void>(() => {})
+  const canSteer = conversationId !== null && isRunning && provider === 'codex'
   const canSubmit =
     (message.trim().length > 0 || attachments.length > 0) &&
     pendingUploads === 0 &&
     !isSubmitting &&
-    !isRunning &&
+    (!isRunning || canSteer) &&
     configReady
 
   async function importFiles(files: File[]) {
-    if (files.length === 0 || isRunning) return
+    if (files.length === 0 || (isRunning && !canSteer)) return
 
     setToast(null)
     setPendingUploads((current) => current + files.length)
@@ -240,7 +243,7 @@ export function Composer({
   }
 
   async function importPaths(paths: string[]) {
-    if (paths.length === 0 || isRunning) return
+    if (paths.length === 0 || (isRunning && !canSteer)) return
 
     setToast(null)
     setPendingUploads((current) => current + paths.length)
@@ -276,13 +279,13 @@ export function Composer({
   }
 
   function handleDragEnter(event: DragEvent<HTMLFormElement>) {
-    if (isRunning || filesFromTransfer(event.dataTransfer).length === 0) return
+    if ((isRunning && !canSteer) || filesFromTransfer(event.dataTransfer).length === 0) return
     event.preventDefault()
     setIsDragActive(true)
   }
 
   function handleDragOver(event: DragEvent<HTMLFormElement>) {
-    if (isRunning || filesFromTransfer(event.dataTransfer).length === 0) return
+    if ((isRunning && !canSteer) || filesFromTransfer(event.dataTransfer).length === 0) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'copy'
     setIsDragActive(true)
@@ -297,7 +300,7 @@ export function Composer({
   async function handleDrop(event: DragEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsDragActive(false)
-    if (isRunning) return
+    if (isRunning && !canSteer) return
 
     const droppedFiles = Array.from(event.dataTransfer.files)
     await importFiles(droppedFiles)
@@ -512,13 +515,13 @@ export function Composer({
             onChange={(event) => onMessageChange(event.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={(event) => void handlePaste(event)}
-            placeholder={isRunning ? 'tour en cours…' : ''}
+            placeholder={isRunning ? (canSteer ? 'Ajoute une précision au tour en cours…' : 'tour en cours…') : ''}
             aria-label="Message"
             rows={3}
-            disabled={isRunning}
+            disabled={isRunning && !canSteer}
             autoFocus={isNewConversation || focusRequest > 0}
           />
-          {message === '' && !isRunning ? (
+          {message === '' && (!isRunning || canSteer) ? (
             <div className="composer-placeholder" aria-hidden="true">
               Écris ton message, ou <span className="composer-ph-key">/</span> pour une action,{' '}
               <span className="composer-ph-key">$</span> pour un skill
@@ -558,7 +561,7 @@ export function Composer({
               type="button"
               className="composer-icon-button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isRunning || pendingUploads > 0 || isSubmitting}
+              disabled={(isRunning && !canSteer) || pendingUploads > 0 || isSubmitting}
               title="Joindre une ou plusieurs pièces jointes"
               aria-label="Joindre"
             >
@@ -570,7 +573,7 @@ export function Composer({
               type="button"
               className="composer-skill-button"
               onClick={() => onMessageChange(message.length > 0 ? `${message} $` : '$')}
-              disabled={isRunning || isSubmitting}
+              disabled={(isRunning && !canSteer) || isSubmitting}
               title="Insérer un skill ($)"
               aria-label="Insérer un skill"
             >
@@ -637,7 +640,7 @@ export function Composer({
                 ? isNewConversation
                   ? 'Création…'
                   : 'Envoi…'
-                : 'Envoyer'}
+                : canSteer ? 'Orienter' : 'Envoyer'}
               {!isSubmitting ? <kbd aria-hidden="true">⏎</kbd> : null}
             </button>
           </div>
