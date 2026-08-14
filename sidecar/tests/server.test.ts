@@ -810,7 +810,7 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
     reviewEffort: "high",
   });
   expect(throttled.status).toBe(429);
-  expect(await throttled.json()).toEqual({ error: expect.stringMatching(/^Patientez \d+ s/) });
+  expect(await throttled.json()).toEqual({ error: expect.stringMatching(/^Patientez (?:9|10) s/) });
   await current.reviews.wait(created.id);
 
   const detail = await fetch(`${current.baseUrl}/api/reviews/${created.id}`);

@@ -196,7 +196,7 @@ const MODELS_BY_PROVIDER = {
 const SPEEDS = ["standard", "fast"] as const;
 const DEFAULT_MEDIA_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MESSAGE_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
-const REVIEW_COOLDOWN_MS = 60_000;
+const REVIEW_COOLDOWN_MS = 10_000;
 
 class HttpError extends Error {
   constructor(
