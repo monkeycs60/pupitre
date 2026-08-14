@@ -178,8 +178,9 @@ beforeEach(() => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-server-"));
   const fakeClaude = join(dir, "fake-claude");
   const fixture = join(import.meta.dir, "fixtures/claude-basic.jsonl");
-  writeFileSync(fakeClaude, `#!/usr/bin/env bash
-case "$*" in
+writeFileSync(fakeClaude, `#!/usr/bin/env bash
+IFS= read -r initial
+case "$initial" in
   *DECONNECTE_WS*) sleep 0.5 ;;
   *CONCURRENT_SAME*) sleep 0.3 ;;
   *ATTENDS_WS*) sleep 0.2 ;;
@@ -1662,7 +1663,7 @@ test("Tester inventorie les scopes puis exécute le choix avec un résultat inli
   });
 });
 
-test("un tour actif répond 409, puis cancel l'annule et déverrouille la conversation", async () => {
+test("un tour Claude actif accepte une précision, puis cancel le déverrouille", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());
   const created = await postJson("/api/conversations", {
@@ -1674,11 +1675,12 @@ test("un tour actif répond 409, puis cancel l'annule et déverrouille la conver
   expect(created.status).toBe(201);
   const conversation = await created.json() as { id: string };
 
-  const conflict = await postJson(
+  const steered = await postJson(
     `/api/conversations/${conversation.id}/messages`,
     { message: "deuxième" },
   );
-  expect(conflict.status).toBe(409);
+  expect(steered.status).toBe(202);
+  expect(await steered.json()).toEqual({ delivery: "steered" });
 
   const cancelled = await postJson(
     `/api/conversations/${conversation.id}/cancel`,
@@ -1710,7 +1712,7 @@ test("un tour actif répond 409, puis cancel l'annule et déverrouille la conver
   await unlockedWaiter.event;
 });
 
-test("deux POST messages quasi simultanés ne peuvent pas répondre tous deux 202", async () => {
+test("deux POST Claude quasi simultanés démarrent puis orientent le même tour", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());
   const created = await postJson("/api/conversations", {
@@ -1728,7 +1730,9 @@ test("deux POST messages quasi simultanés ne peuvent pas répondre tous deux 20
     postJson(path, { message: "CONCURRENT_SAME second" }),
   ]);
 
-  expect(responses.map((response) => response.status).sort()).toEqual([202, 409]);
+  expect(responses.map((response) => response.status)).toEqual([202, 202]);
+  expect(await Promise.all(responses.map((response) => response.json())))
+    .toEqual(expect.arrayContaining([{ delivery: "started" }, { delivery: "steered" }]));
   await waitForRunnerIdle(conversation.id);
 });
 

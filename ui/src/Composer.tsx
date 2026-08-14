@@ -210,7 +210,9 @@ export function Composer({
   const [toast, setToast] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importPathsRef = useRef<(paths: string[]) => void>(() => {})
-  const canSteer = conversationId !== null && isRunning && provider === 'codex'
+  const canSteer = conversationId !== null
+    && isRunning
+    && (provider === 'codex' || provider === 'claude')
   const canSubmit =
     (message.trim().length > 0 || attachments.length > 0) &&
     pendingUploads === 0 &&

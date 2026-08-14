@@ -102,7 +102,8 @@ beforeEach(() => {
   // Le prompt BLOQUE fait patienter le faux CLI jusqu'au fichier de libération :
   // c'est ce qui permet de tenir N sous-tâches en vol en même temps.
   writeFileSync(fakeClaude, `#!/usr/bin/env bash
-case "$*" in
+IFS= read -r initial
+case "$initial" in
   *BLOQUE*) while [ ! -f "${releaseFile}" ]; do sleep 0.02; done ;;
 esac
 cat "${fixture}"

@@ -6,11 +6,20 @@ import { aiRoots } from "../access";
 
 export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   const bin = process.env.PUPITRE_CLAUDE_BIN ?? "claude";
-  // M1 : les images utilisateur sont référencées par chemin dans le prompt.
-  // (Claude Code lit les fichiers image du disque via son outil Read.)
-  const prompt = opts.images.length
-    ? `${opts.prompt}\n\n[Images jointes: ${opts.images.join(", ")}]`
-    : opts.prompt;
+  const userMessage = (prompt: string, images: string[]) => ({
+    type: "user",
+    message: {
+      role: "user",
+      // Le protocole stream-json de Claude Code est textuel. Les images sont
+      // donc référencées par chemin et Claude les lit avec son outil Read.
+      content: [{
+        type: "text",
+        text: images.length
+          ? `${prompt}\n\n[Images jointes: ${images.join(", ")}]`
+          : prompt,
+      }],
+    },
+  });
   const permissionMode = opts.permissionMode === "default" ? "auto" : opts.permissionMode;
   const accessDirs = opts.filesystemScope === "full-system" ? ["/"] : aiRoots();
   // `--add-dir` élargit la racine visible, mais ne suffit pas pour les fichiers
@@ -26,7 +35,8 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     "Bash(bun test:*)",
   ];
   const args = [
-    "-p", "--output-format", "stream-json", "--include-partial-messages",
+    "-p", "--input-format", "stream-json", "--output-format", "stream-json",
+    "--include-partial-messages",
     "--verbose", "--model", opts.model, "--permission-mode", permissionMode,
     // Le cwd reste le projet, mais les instructions globales et la mémoire
     // sont aussi des surfaces de travail légitimes pour Pupitre.
@@ -61,7 +71,6 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     args.push("--allowedTools", "mcp__pupitre__publish_html_document");
   }
   if (opts.cliSessionId) args.push("-r", opts.cliSessionId);
-  args.push("--", prompt);
 
   return spawnJsonl({
     bin,
@@ -70,5 +79,11 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     parseLine: parseClaudeLine,
     emit,
     signal: opts.signal,
+    streamingInput: {
+      initialLine: JSON.stringify(userMessage(opts.prompt, opts.images)),
+      registerWrite: (writeLine) => opts.registerSteer?.(async (input) => writeLine(
+        JSON.stringify(userMessage(input.prompt, input.images)),
+      )),
+    },
   });
 }

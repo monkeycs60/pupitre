@@ -10,6 +10,11 @@ interface SpawnJsonlOptions {
   parseLine: (line: string) => AppEvent[];
   emit: EmitFn;
   signal?: AbortSignal;
+  /** Garde stdin ouvert afin qu'un provider accepte des messages en vol. */
+  streamingInput?: {
+    initialLine: string;
+    registerWrite: (writeLine: (line: string) => Promise<boolean>) => void;
+  };
 }
 
 export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
@@ -23,12 +28,28 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
 
     const child = spawn(opts.bin, opts.args, {
       cwd: opts.cwd,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [opts.streamingInput ? "pipe" : "ignore", "pipe", "pipe"],
     });
     let sawTerminal = false;
     let settled = false;
     let aborted = false;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
+
+    if (opts.streamingInput && child.stdin) {
+      // Les writes Node sont ordonnés : le premier prompt sera toujours reçu
+      // avant une éventuelle précision envoyée immédiatement après le spawn.
+      child.stdin.write(opts.streamingInput.initialLine + "\n");
+      opts.streamingInput.registerWrite((line) => new Promise((resolve) => {
+        if (settled || sawTerminal || child.stdin.destroyed) {
+          resolve(false);
+          return;
+        }
+        child.stdin.write(line + "\n", (error) => resolve(error == null));
+      }));
+      // Une fermeture précoce du process peut aussi faire échouer stdin ;
+      // l'événement `error` du child publiera le statut terminal.
+      child.stdin.on("error", () => {});
+    }
 
     const settle = () => {
       if (settled) return;
@@ -65,7 +86,10 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
         return;
       }
       for (const event of events) {
-        if (event.type === "status") sawTerminal = true;
+        if (event.type === "status") {
+          sawTerminal = true;
+          child.stdin?.end();
+        }
         opts.emit(event);
       }
     });

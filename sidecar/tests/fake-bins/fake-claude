@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
 # Rejoue la fixture ; enregistre les args reçus pour les assertions.
 echo "$@" > "${FAKE_CLAUDE_ARGS_FILE:-/dev/null}"
+IFS= read -r initial
+if [[ -n "${FAKE_CLAUDE_STDIN_FILE:-}" ]]; then
+  printf '%s\n' "$initial" > "$FAKE_CLAUDE_STDIN_FILE"
+fi
+if [[ "${FAKE_CLAUDE_HANG:-}" == "1" ]]; then
+  IFS= read -r steering
+  printf '%s\n' "$steering" > "${FAKE_CLAUDE_STEER_FILE:-/dev/null}"
+fi
 cat "$(dirname "$0")/../fixtures/claude-basic.jsonl"

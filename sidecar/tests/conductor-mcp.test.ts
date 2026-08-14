@@ -106,7 +106,8 @@ beforeEach(() => {
   // Le prompt BLOQUE tient le faux CLI en vie jusqu'au fichier de libération :
   // c'est ce qui permet de tester l'annulation d'une sous-tâche en vol.
   writeFileSync(fakeClaude, `#!/usr/bin/env bash
-case "$*" in
+IFS= read -r initial
+case "$initial" in
   *BLOQUE*) while [ ! -f "${releaseFile}" ]; do sleep 0.02; done ;;
 esac
 cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"

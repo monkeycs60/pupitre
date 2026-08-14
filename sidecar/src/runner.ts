@@ -124,10 +124,7 @@ export class ConversationRunner {
     return true;
   }
 
-  /**
-   * Ajoute une précision au tour Codex actif. Renvoie false si le provider ne
-   * sait pas orienter ce tour ou si celui-ci s'est terminé pendant la requête.
-   */
+  /** Ajoute une précision au tour provider actif, s'il l'accepte encore. */
   async steerTurn(
     conversationId: string,
     prompt: string,
@@ -191,8 +188,8 @@ export class ConversationRunner {
     const done = new Promise<void>((resolve) => {
       finish = resolve;
     });
-    const supportsSteer = conv.provider === "codex"
-      && process.env.PUPITRE_CODEX_MODE !== "exec";
+    const supportsSteer = conv.provider === "claude"
+      || (conv.provider === "codex" && process.env.PUPITRE_CODEX_MODE !== "exec");
     let acceptSteer: ((steer: SteerFn) => void) | null = null;
     const steerReady = supportsSteer
       ? new Promise<SteerFn>((resolve) => { acceptSteer = resolve; })

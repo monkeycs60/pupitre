@@ -17,6 +17,7 @@ import { pupitreMcpPath } from "../src/pupitre";
 
 let dir: string;
 let argsFile: string;
+let stdinFile: string;
 let appServerLog: string;
 let convs: ConversationStore;
 let projects: ProjectStore;
@@ -36,16 +37,20 @@ beforeEach(() => {
   for (const key of ENV_KEYS) previousEnv[key] = process.env[key];
   dir = mkdtempSync(join(tmpdir(), "pupitre-conductor-wiring-"));
   argsFile = join(dir, "args");
+  stdinFile = join(dir, "stdin");
   appServerLog = join(dir, "app-server.log");
   // fake-claude n'écrit qu'une ligne : les args d'un tour de sous-tâche
   // écraseraient ceux du parent. On appende à la place.
   const fakeClaude = join(dir, "fake-claude");
-  writeFileSync(fakeClaude, `#!/usr/bin/env bash
+writeFileSync(fakeClaude, `#!/usr/bin/env bash
 echo "$@" >> "${argsFile}"
+IFS= read -r input
+printf '%s\n' "$input" >> "${stdinFile}"
 cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
 `);
   chmodSync(fakeClaude, 0o755);
   writeFileSync(argsFile, "");
+  writeFileSync(stdinFile, "");
 
   process.env.PUPITRE_CLAUDE_BIN = fakeClaude;
   process.env.PUPITRE_CODEX_BIN = join(import.meta.dir, "fake-bins/fake-codex-app-server");
@@ -182,7 +187,7 @@ test("port du sidecar non résolu : le tour orchestrateur échoue explicitement"
   });
   await broken.runTurn(plain.id, "simple", []);
   // La consigne de format précède la demande ; c'est bien le CLI qui a tourné.
-  expect(claudeArgs()).toContain("simple");
+  expect(readFileSync(stdinFile, "utf8")).toContain("simple");
 });
 
 test("garde de profondeur : un tour de sous-tâche ne reçoit jamais le conductor", async () => {
@@ -203,7 +208,7 @@ test("garde de profondeur : un tour de sous-tâche ne reçoit jamais le conducto
   const turns = claudeArgs().trim().split("\n")
     .filter((line) => line.includes("--permission-mode"));
   expect(turns).toHaveLength(2);
-  expect(turns[1]).toContain("-- sous-tâche");
+  expect(readFileSync(stdinFile, "utf8")).toContain("sous-tâche");
   expect(turns[1]).not.toContain("--mcp-config");
 });
 

@@ -210,7 +210,9 @@ test("injecte un prompt Codex invoqué dans un tour Claude sans altérer le mess
     skills,
   );
   const argsFile = join(dataDir, "bridge-args");
+  const stdinFile = join(dataDir, "bridge-stdin");
   process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  process.env.FAKE_CLAUDE_STDIN_FILE = stdinFile;
   const conversation = convs.create({
     projectId,
     provider: "claude",
@@ -220,13 +222,14 @@ test("injecte un prompt Codex invoqué dans un tour Claude sans altérer le mess
 
   try {
     await bridgedRunner.runTurn(conversation.id, "$review vérifie", []);
-    expect(readFileSync(argsFile, "utf8")).toContain("Inspecte les régressions.");
+    expect(readFileSync(stdinFile, "utf8")).toContain("Inspecte les régressions.");
     expect(convs.listEvents(conversation.id)[0]).toMatchObject({
       type: "user-message",
       text: "$review vérifie",
     });
   } finally {
     delete process.env.FAKE_CLAUDE_ARGS_FILE;
+    delete process.env.FAKE_CLAUDE_STDIN_FILE;
   }
 });
 
@@ -314,6 +317,34 @@ test("oriente un tour Codex actif et persiste la précision dans le même tour",
     delete process.env.FAKE_APP_SERVER_HANG;
     if (previousCodexBin === undefined) delete process.env.PUPITRE_CODEX_BIN;
     else process.env.PUPITRE_CODEX_BIN = previousCodexBin;
+  }
+});
+
+test("oriente un tour Claude actif et persiste la précision dans le même tour", async () => {
+  const steerFile = join(dataDir, "claude-steer");
+  process.env.FAKE_CLAUDE_HANG = "1";
+  process.env.FAKE_CLAUDE_STEER_FILE = steerFile;
+  const conversation = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "commence",
+  });
+  const turn = runner.runTurn(conversation.id, "commence", []);
+
+  try {
+    expect(await runner.steerTurn(conversation.id, "j'ai oublié ce point", []))
+      .toBe(true);
+    await turn;
+    expect(readFileSync(steerFile, "utf8")).toContain("j'ai oublié ce point");
+    expect(convs.listEvents(conversation.id)).toContainEqual(expect.objectContaining({
+      type: "user-message",
+      text: "j'ai oublié ce point",
+      steering: true,
+    }));
+  } finally {
+    delete process.env.FAKE_CLAUDE_HANG;
+    delete process.env.FAKE_CLAUDE_STEER_FILE;
   }
 });
 
