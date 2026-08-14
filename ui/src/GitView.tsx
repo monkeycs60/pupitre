@@ -171,7 +171,11 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
   const shownFlags = flags.filter((flag) => filter === 'all' || filter === 'treated'
     ? filter === 'all' || flag.status === 'treated'
     : flag.severity === filter)
-  const severityCounts = flags.reduce((counts, flag) => ({ ...counts, [flag.severity]: counts[flag.severity] + 1 }), { red: 0, orange: 0, grey: 0 })
+  const severityCounts = flags.reduce((counts, flag) => {
+    if (['treated', 'ignored', 'resolved'].includes(flag.status)) return counts
+    return { ...counts, [flag.severity]: counts[flag.severity] + 1 }
+  }, { red: 0, orange: 0, grey: 0 })
+  const treatedCount = flags.filter((flag) => flag.status === 'treated').length
   const historyCommits = useMemo(() => {
     if (!snapshot || historyScope === 'all' || !snapshot.branchCommitShas) return snapshot?.commits ?? []
     const bySha = new Map(snapshot.commits.map((commit) => [commit.sha, commit]))
@@ -263,6 +267,38 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     setBaseRef(next.baseRef); setHeadRef(next.headRef); setDiff(null); setSelectedFile(null)
   }
 
+  function goToFinding(direction = 1) {
+    const navigableFlags = shownFlags.filter((flag) => filter === 'treated'
+      ? flag.status === 'treated'
+      : !['treated', 'ignored', 'resolved'].includes(flag.status))
+    if (navigableFlags.length === 0) return
+    const currentIndex = navigableFlags.findIndex((flag) => flag.id === selectedFlagId)
+    const next = navigableFlags[(currentIndex + direction + navigableFlags.length) % navigableFlags.length]
+    if (!next) return
+    setSelectedFile(next.file)
+    setSelectedFlagId(next.id)
+  }
+
+  useEffect(() => {
+    function handleFindingKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null
+      if (target?.matches('input, textarea, select, [contenteditable="true"]')) return
+      if (event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey) return
+      event.preventDefault()
+      const navigableFlags = shownFlags.filter((flag) => filter === 'treated'
+        ? flag.status === 'treated'
+        : !['treated', 'ignored', 'resolved'].includes(flag.status))
+      if (navigableFlags.length === 0) return
+      const currentIndex = navigableFlags.findIndex((flag) => flag.id === selectedFlagId)
+      const next = navigableFlags[(currentIndex + (event.shiftKey ? -1 : 1) + navigableFlags.length) % navigableFlags.length]
+      if (!next) return
+      setSelectedFile(next.file)
+      setSelectedFlagId(next.id)
+    }
+    window.addEventListener('keydown', handleFindingKey)
+    return () => window.removeEventListener('keydown', handleFindingKey)
+  }, [filter, selectedFlagId, shownFlags])
+
   function selectReviewConfig(next: ReviewSelection) {
     setPresetId(next.presetId)
     setProvider(next.provider)
@@ -309,7 +345,7 @@ export function GitView({ project, conversation, focusedReviewId = null, reviewS
     </section>
     {displayedDiff ? <section className="git-overlay-layout" aria-label="Diff annoté">
       <aside className="git-file-tree"><button type="button" className={selectedFile === null ? 'is-selected' : ''} onClick={() => { setSelectedFile(null); setSelectedFlagId(null) }}>Tous les fichiers <strong>{openFlags.length}</strong></button>{files.map((file) => <button type="button" className={selectedFile === file.path ? 'is-selected' : ''} key={file.path} onClick={() => { setSelectedFile(file.path); setSelectedFlagId(shownFlags.find((flag) => flag.file === file.path)?.id ?? null) }}><span>{file.path}</span><small>+{file.additions} −{file.deletions}</small><em className="risk-red">{file.counts.red}</em><em className="risk-orange">{file.counts.orange}</em><em className="risk-grey">{file.counts.grey}</em></button>)}</aside>
-      <div className="git-overlay-diff"><header className="git-review-toolbar"><div className="git-review-filters"><button type="button" className={filter === 'red' ? 'is-active' : ''} onClick={() => setFilter(filter === 'red' ? 'all' : 'red')}>Rouge {severityCounts.red}</button><button type="button" className={filter === 'orange' ? 'is-active' : ''} onClick={() => setFilter(filter === 'orange' ? 'all' : 'orange')}>Orange {severityCounts.orange}</button><button type="button" className={filter === 'treated' ? 'is-active' : ''} onClick={() => setFilter(filter === 'treated' ? 'all' : 'treated')}>Traitées {flags.filter((flag) => flag.status === 'treated').length}</button></div>{selectedReview ? <div className="git-correction-actions"><span className="git-correction-purpose">Correction</span><CorrectionConfigSelector value={correction} presets={presets} quotas={quotas} busy={isDispatching || runningFlags.length > 0} placement="bottom" submenuPlacement="left" onChange={selectCorrectionConfig} /><button type="button" onClick={() => void dispatchOpen()} disabled={isDispatching || runningFlags.length > 0 || openFlags.length === 0}>{isDispatching ? 'Lancement…' : runningFlags.length > 0 ? `${runningFlags.length} agent${runningFlags.length > 1 ? 's' : ''} en cours` : `Corriger les ${openFlags.length} ouverts`}</button></div> : null}</header><DiffViewer diff={filteredDiff ?? ''} flags={shownFlags} selectedFlagId={selectedFlagId} label="Diff Git annoté" onFlagUpdated={updateFlag} correction={correction} /></div>
+      <div className="git-overlay-diff"><header className="git-review-toolbar"><div className="git-review-filters" role="group" aria-label="Filtrer les signalements"><button type="button" className={`git-review-filter risk-red${filter === 'red' ? ' is-active' : ''}`} onClick={() => setFilter(filter === 'red' ? 'all' : 'red')}><i />Rouge <b>{severityCounts.red}</b></button><button type="button" className={`git-review-filter risk-orange${filter === 'orange' ? ' is-active' : ''}`} onClick={() => setFilter(filter === 'orange' ? 'all' : 'orange')}><i />Orange <b>{severityCounts.orange}</b></button><button type="button" className={`git-review-filter is-treated${filter === 'treated' ? ' is-active' : ''}`} onClick={() => setFilter(filter === 'treated' ? 'all' : 'treated')}><span aria-hidden="true">✓</span> Traitées <b>{treatedCount}</b></button></div><div className="git-review-toolbar-actions">{selectedReview && flags.length > 0 ? <button type="button" className="git-next-finding" onClick={() => goToFinding()}>Signalement suivant <kbd>⏎</kbd></button> : null}{selectedReview ? <div className="git-correction-actions"><span className="git-correction-purpose">Correction</span><CorrectionConfigSelector value={correction} presets={presets} quotas={quotas} busy={isDispatching || runningFlags.length > 0} placement="bottom" submenuPlacement="left" onChange={selectCorrectionConfig} /><button type="button" onClick={() => void dispatchOpen()} disabled={isDispatching || runningFlags.length > 0 || openFlags.length === 0}>{isDispatching ? 'Lancement…' : runningFlags.length > 0 ? `${runningFlags.length} agent${runningFlags.length > 1 ? 's' : ''} en cours` : `Corriger les ${openFlags.length} ouverts`}</button></div> : null}</div></header><DiffViewer diff={filteredDiff ?? ''} flags={shownFlags} selectedFlagId={selectedFlagId} label="Diff Git annoté" onFlagUpdated={updateFlag} correction={correction} /></div>
     </section> : <div className="git-diff-empty"><strong>Aucun changement entre ces deux points.</strong><span>Le diff reste consultable indépendamment des signalements du Gardien.</span></div>}
     <section className="git-worktrees" aria-label="Worktrees du projet">
       <h2>Worktrees</h2>

@@ -1,7 +1,7 @@
 /* DiffViewer : table de diff, numéros de ligne, zones thermiques. */
 
 .diff-table {
-  min-width: 730px;
+  min-width: 620px;
   color: var(--text);
   font-family: var(--font-mono);
   font-size: var(--text-code);
@@ -13,7 +13,10 @@
   position: sticky;
   z-index: 2;
   top: 0;
-  padding: var(--space-1) var(--space-3);
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 10px 14px;
   overflow: hidden;
   color: var(--text-strong);
   font-size: var(--text-sm);
@@ -28,15 +31,16 @@
    des colonnes reste stable, ligne colorée ou non. */
 .diff-line {
   display: grid;
-  grid-template-columns: 46px 46px minmax(320px, 1fr) minmax(112px, 260px);
+  grid-template-columns: 52px 3px 16px minmax(320px, 1fr);
   min-height: 20px;
-  border-left: 2px solid transparent;
 }
 
 .diff-line > code {
   display: block;
   min-width: 0;
   padding: 2px var(--space-2);
+  padding-right: 14px;
+  padding-left: 4px;
   overflow: hidden;
   color: inherit;
   font: inherit;
@@ -44,22 +48,26 @@
 }
 
 .diff-number {
-  padding: 2px var(--space-2) 2px var(--space-1);
+  padding: 2px 12px 2px 4px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   text-align: right;
   user-select: none;
-  border-right: 1px solid var(--border-subtle);
 }
+
+.diff-rail { width: 3px; background: transparent; }
+.diff-rail.risk-grey { background: var(--border-strong); }
+.diff-rail.risk-orange { background: var(--streak); }
+.diff-rail.risk-red { background: var(--danger); }
+.diff-sign { color: var(--text-faint); text-align: center; user-select: none; }
+.diff-sign.is-addition { color: var(--ok); }.diff-sign.is-deletion { color: var(--danger); }
 
 .diff-line.is-addition {
   background-color: var(--ok-soft);
-  border-left-color: var(--ok);
 }
 
 .diff-line.is-deletion {
   background-color: var(--danger-soft);
-  border-left-color: var(--danger);
 }
 
 .diff-line.is-hunk {
@@ -76,83 +84,33 @@
    liseré ajout/suppression. */
 .diff-line.risk-grey {
   background-image: linear-gradient(var(--neutral-soft), var(--neutral-soft));
-  box-shadow: inset 3px 0 var(--border-strong);
 }
 
 .diff-line.risk-orange {
   background-image: linear-gradient(var(--warn-soft), var(--warn-soft));
-  box-shadow: inset 3px 0 var(--warn);
 }
 
 .diff-line.risk-red {
   background-image: linear-gradient(var(--danger-soft), var(--danger-soft));
-  box-shadow: inset 3px 0 var(--danger);
 }
 
-/* --- Colonne des flags ancrés --------------------------------------------- */
+/* --- Carte de signalement dans le flux ----------------------------------- */
 
-.diff-flags {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
-  min-width: 0;
-  padding: 2px var(--space-1);
-  overflow: visible;
-  border-left: 1px solid var(--border-subtle);
-}
-
-.diff-flag-marker {
-  width: 100%;
-  max-width: 100%;
-  padding: 1px 6px;
-  overflow: visible;
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  line-height: 1.45;
-  text-align: left;
-  white-space: normal;
-  background: var(--neutral-soft);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
-}
-
-.diff-flag-marker:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-
-.diff-flag-marker[aria-expanded="true"] {
-  overflow: visible;
-  white-space: normal;
-}
-
-.diff-flag-marker.severity-red {
-  color: var(--danger);
-  background: var(--danger-soft);
-}
-
-.diff-flag-marker.severity-red:hover {
-  color: var(--danger);
-}
-
-.diff-flag-marker.severity-orange {
-  color: var(--warn);
-  background: var(--warn-soft);
-}
-
-.diff-flag-marker.severity-orange:hover {
-  color: var(--warn);
-}
-
-.diff-flag-card-row { padding: var(--space-2) var(--space-3); background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); }
-.diff-flag-card { max-width: 760px; padding: var(--space-3); background: var(--bg-raised); border: 1px solid var(--border-subtle); border-left: 2px solid var(--border-strong); border-radius: var(--r-sm); font-family: var(--font-sans); }
-.diff-flag-card.severity-red { border-left-color: var(--danger); }.diff-flag-card.severity-orange { border-left-color: var(--warn); }
-.diff-flag-card header, .diff-flag-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
-.diff-flag-card p { margin: var(--space-2) 0; color: var(--text); font-size: var(--text-base); }
-.diff-severity, .diff-test-gap { padding: 1px var(--space-1); color: var(--text); font-size: var(--text-xs); background: var(--neutral-soft); border-radius: var(--r-xs); }
-.severity-red .diff-severity { color: var(--danger); background: var(--danger-soft); }.severity-orange .diff-severity { color: var(--warn); background: var(--warn-soft); }
-.diff-test-gap { color: var(--warn); background: var(--warn-soft); }.diff-counter-opinion { margin: var(--space-2) 0; padding: var(--space-2); border-left: 1px solid var(--border-strong); }.diff-counter-opinion strong { color: var(--text-muted); font-size: var(--text-sm); }.diff-agent-message { display: grid; gap: var(--space-1); margin: var(--space-2) 0; color: var(--text-muted); font-size: var(--text-sm); }.diff-agent-message textarea { min-height: 64px; resize: vertical; }.diff-flag-state { color: var(--text-muted) !important; }.diff-flag-error { color: var(--danger) !important; }
+.diff-flag-card-row { display: grid; grid-template-columns: 52px 3px 16px minmax(0, 1fr); background: color-mix(in srgb, var(--streak) 6%, transparent); border-bottom: 1px solid var(--border-subtle); }
+.diff-card-rail { grid-column: 2; width: 3px; }.diff-card-rail.risk-grey { background: var(--border-strong); }.diff-card-rail.risk-orange { background: var(--streak); }.diff-card-rail.risk-red { background: var(--danger); }
+.diff-flag-card-content { grid-column: 4; min-width: 0; padding: 10px 16px 14px 18px; }
+.diff-flag-card { max-width: 820px; padding: 13px 15px; background: var(--bg-raised); border: 1px solid color-mix(in srgb, var(--streak) 32%, transparent); border-radius: 9px; box-shadow: var(--shadow-popover); font-family: var(--font-sans); }
+.diff-flag-card.severity-red { border-color: color-mix(in srgb, var(--danger) 32%, transparent); }
+.diff-flag-card header, .diff-flag-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; color: var(--text-muted); font-size: var(--text-sm); }
+.diff-flag-card header { min-width: 0; }
+.diff-severity { display: inline-flex; flex: none; align-items: center; gap: 5px; padding: 1px 8px; color: var(--streak); font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .03em; background: var(--streak-soft); border-radius: var(--r-full); }
+.diff-severity i { width: 5px; height: 5px; border-radius: var(--r-full); background: currentColor; }
+.severity-red .diff-severity { color: var(--danger); background: var(--danger-soft); }.severity-grey .diff-severity { color: var(--text-faint); background: var(--neutral-soft); }
+.diff-theme { flex: none; max-width: min(56ch, 100%); padding: 1px 7px; overflow: hidden; color: var(--text-muted); font-family: var(--font-mono); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; background: var(--neutral-soft); border-radius: var(--r-xs); }
+.diff-flag-meta { margin-left: auto; color: var(--text-faint); font-family: var(--font-mono); font-size: 10.5px; }
+.diff-flag-message { max-width: 820px; margin: 9px 0; color: var(--text-strong) !important; font-family: var(--font-sans); font-size: var(--text-base) !important; line-height: 1.6; text-wrap: pretty; }
+.diff-test-gap { display: inline-block; padding: 1px var(--space-1); color: var(--streak); font-size: var(--text-xs); background: var(--streak-soft); border-radius: var(--r-xs); }
+.diff-counter-opinion { margin: var(--space-2) 0; padding: var(--space-2); border-left: 1px solid var(--border-strong); }.diff-counter-opinion strong { color: var(--text-muted); font-size: var(--text-sm); }.diff-counter-opinion p { margin: var(--space-1) 0 0; }
+.diff-agent-message { display: grid; gap: var(--space-1); margin: var(--space-2) 0; color: var(--text-muted); font-size: var(--text-sm); }.diff-agent-message textarea { min-height: 52px; resize: vertical; }
+.diff-flag-actions-spacer { flex: 1; }.diff-flag-actions button { min-height: 28px; }.diff-flag-actions .primary-button { padding: 0 12px; }.diff-flag-actions .secondary-button { padding: 0 11px; }.diff-agent-note-toggle, .diff-quiet-action { padding: 0; color: var(--text-faint); font-family: var(--font-sans); font-size: var(--text-sm); background: transparent; border: 0; cursor: pointer; }.diff-agent-note-toggle:hover, .diff-quiet-action:hover { color: var(--text-strong); }.diff-quiet-action { color: var(--text-faint); }
+.diff-flag-state { color: var(--text-muted) !important; }.diff-flag-error { color: var(--danger) !important; }
