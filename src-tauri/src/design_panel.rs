@@ -91,6 +91,9 @@ pub fn open(app: &tauri::AppHandle, target: tauri::Url) -> Result<(), String> {
         tauri::WebviewUrl::External(target),
     )
     .user_agent(DESIGN_USER_AGENT)
+    // WebKitGTK désactive l'accès clipboard des pages par défaut. Claude Design
+    // intercepte le paste pour transformer une capture système en pièce jointe.
+    .enable_clipboard_access()
     // Même raison que pour la fenêtre séparée : wry ne branche le signal `create`
     // de WebKit que si un gestionnaire existe, donc sans lui un `window.open` de
     // claude.ai est ignoré et le flux OAuth échoue sans rien afficher. Et

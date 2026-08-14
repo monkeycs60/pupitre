@@ -340,6 +340,7 @@ fn open_design_window(app: tauri::AppHandle, resume_url: Option<String>) -> Resu
     .inner_size(1280.0, 860.0)
     .min_inner_size(900.0, 600.0)
     .user_agent(DESIGN_USER_AGENT)
+    .enable_clipboard_access()
     // Sans ce gestionnaire, la connexion est impossible : wry ne branche le signal
     // `create` de WebKit que si un handler existe, donc un `window.open` de
     // claude.ai est purement ignoré et le flux OAuth échoue sans rien afficher.
@@ -376,6 +377,7 @@ pub(crate) fn build_design_popup<R: tauri::Runtime>(
             // Le même user-agent que la surface parente : c'est lui qui fait passer
             // le flux, et une popup qui se déclarerait autrement serait refusée.
             .user_agent(DESIGN_USER_AGENT)
+            .enable_clipboard_access()
             .build();
     match built {
         Ok(window) => tauri::webview::NewWindowResponse::Create { window },
