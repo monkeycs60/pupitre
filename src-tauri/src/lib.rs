@@ -38,6 +38,66 @@ const DESIGN_URL: &str = "https://claude.ai/design/";
 /// `sidecar/tests/design.test.ts` échoue si les deux chaînes divergent.
 const DESIGN_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15";
 
+/// WebKitGTK peut livrer un événement `paste` vide pour une image pourtant
+/// présente dans le presse-papiers système. Claude Design écoute cet événement
+/// pour créer sa pièce jointe, il faut donc lui fournir un second événement avec
+/// le `File` récupéré par l'Async Clipboard API.
+const DESIGN_CLIPBOARD_SCRIPT: &str = r#"
+(() => {
+  if (location.hostname !== 'claude.ai' || window.__pupitreClipboardBridge) return;
+  window.__pupitreClipboardBridge = true;
+
+  window.addEventListener('paste', (event) => {
+    const types = Array.from(event.clipboardData?.types ?? []);
+    const hasImageType = types.some((type) => type.startsWith('image/'));
+    if (hasImageType) return;
+
+    // Un événement sans type est le symptôme WebKitGTK recherché. Ne bloquer
+    // un collage texte que si le navigateur n'a rien exposé du tout.
+    if (types.length > 0) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    void (async () => {
+      if (typeof navigator.clipboard?.read !== 'function') return;
+
+      try {
+        const clipboardItems = await navigator.clipboard.read();
+        let imageBlob = null;
+        let imageType = '';
+        for (const item of clipboardItems) {
+          const type = item.types.find((candidate) => candidate.startsWith('image/'));
+          if (!type) continue;
+          imageBlob = await item.getType(type);
+          imageType = type;
+          break;
+        }
+        if (!imageBlob) return;
+
+        const extension = imageType === 'image/jpeg'
+          ? 'jpg'
+          : imageType.split('/')[1] || 'png';
+        const file = new File([imageBlob], `capture.${extension}`, { type: imageType });
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        const target = event.target instanceof EventTarget
+          ? event.target
+          : document.activeElement || document.body;
+        target.dispatchEvent(new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: transfer,
+          composed: true,
+        }));
+      } catch {
+        // Le collage texte et le bouton d'ajout natif restent disponibles si
+        // l'Async Clipboard API est refusée par le moteur ou la page.
+      }
+    })();
+  }, true);
+})();
+"#;
+
 #[derive(serde::Serialize)]
 struct ClipboardImage {
     mime_type: String,
@@ -341,6 +401,7 @@ fn open_design_window(app: tauri::AppHandle, resume_url: Option<String>) -> Resu
     .min_inner_size(900.0, 600.0)
     .user_agent(DESIGN_USER_AGENT)
     .enable_clipboard_access()
+    .initialization_script(DESIGN_CLIPBOARD_SCRIPT)
     // Sans ce gestionnaire, la connexion est impossible : wry ne branche le signal
     // `create` de WebKit que si un handler existe, donc un `window.open` de
     // claude.ai est purement ignoré et le flux OAuth échoue sans rien afficher.
@@ -378,6 +439,7 @@ pub(crate) fn build_design_popup<R: tauri::Runtime>(
             // le flux, et une popup qui se déclarerait autrement serait refusée.
             .user_agent(DESIGN_USER_AGENT)
             .enable_clipboard_access()
+            .initialization_script(DESIGN_CLIPBOARD_SCRIPT)
             .build();
     match built {
         Ok(window) => tauri::webview::NewWindowResponse::Create { window },
