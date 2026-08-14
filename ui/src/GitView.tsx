@@ -11,7 +11,7 @@ import type { ReviewSelection } from './ReviewConfigSelector'
 import type { Conversation, GitSnapshot, GitWorktree, Preset, Project, Provider, QuotaSnapshot, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
 import { BranchIcon } from './BranchIcon'
 import { CorrectionConfigSelector } from './CorrectionConfigSelector'
-import { readCorrectionSelection, writeCorrectionSelection } from './correctionConfig'
+import { correctionSelectionFromPreset, readCorrectionSelection, writeCorrectionSelection } from './correctionConfig'
 import type { CorrectionSelection } from './correctionConfig'
 import { modelLabel } from './modelOptions'
 
@@ -50,7 +50,9 @@ export function GitView({ project, conversation, focusedReviewId = null, focused
   const [worktrees, setWorktrees] = useState<{ worktrees: GitWorktree[], merged: GitWorktree[] }>({ worktrees: [], merged: [] })
   const [isCleaning, setIsCleaning] = useState(false)
   const [presets, setPresets] = useState<Preset[]>([])
-  const [presetId, setPresetId] = useState(project.default_preset_id ?? '')
+  const [presetId, setPresetId] = useState(project.default_review_preset_id === undefined
+    ? project.default_preset_id ?? ''
+    : project.default_review_preset_id ?? '')
   const [provider, setProvider] = useState<Provider>(conversation?.provider ?? 'codex')
   const [model, setModel] = useState(conversation?.provider === 'claude' ? 'opus' : 'gpt-5.6-sol')
   const [effort, setEffort] = useState('high')
@@ -97,6 +99,17 @@ export function GitView({ project, conversation, focusedReviewId = null, focused
     if (conversation) setCorrection(readCorrectionSelection(conversation))
   }, [conversation?.id])
 
+  useEffect(() => {
+    const defaultCorrectionPresetId = project.default_correction_preset_id === undefined
+      ? project.default_preset_id
+      : project.default_correction_preset_id
+    const defaultPreset = presets.find((preset) => preset.id === defaultCorrectionPresetId)
+    if (!defaultPreset) return
+    setCorrection(conversation
+      ? readCorrectionSelection(conversation, window.localStorage, correctionSelectionFromPreset(defaultPreset))
+      : correctionSelectionFromPreset(defaultPreset))
+  }, [conversation, presets, project.default_correction_preset_id, project.default_preset_id])
+
   const refreshWorktrees = useCallback((signal?: AbortSignal) => {
     void listProjectWorktrees(project.id, signal)
       .then((loaded) => { if (!signal?.aborted) setWorktrees(loaded) })
@@ -137,12 +150,16 @@ export function GitView({ project, conversation, focusedReviewId = null, focused
     void listPresets(controller.signal).then((loaded) => {
       if (controller.signal.aborted) return
       setPresets(loaded)
-      const source = loaded.find((item) => item.id === project.default_preset_id)
+      const defaultReviewPresetId = project.default_review_preset_id === undefined
+        ? project.default_preset_id
+        : project.default_review_preset_id
+      const source = loaded.find((item) => item.id === defaultReviewPresetId)
       const preset = source ? reviewPreset(source) : null
+      setPresetId(preset?.id ?? '')
       if (preset) { setProvider(preset.provider); setModel(preset.model); setEffort(preset.effort ?? 'high'); setSpeed(preset.provider === 'codex' ? (preset.speed ?? 'standard') : 'standard') }
     }).catch(() => {})
     return () => controller.abort()
-  }, [project.default_preset_id])
+  }, [project.default_preset_id, project.default_review_preset_id])
 
   useEffect(() => {
     const scanning = isScanRunning(reviewStatus)

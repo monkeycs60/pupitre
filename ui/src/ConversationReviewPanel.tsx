@@ -6,7 +6,7 @@ import { reviewCoversHead } from './reviewFreshness'
 import { reviewPreset } from './ReviewConfigSelector'
 import type { ReviewSelection } from './ReviewConfigSelector'
 import type { Conversation, Preset, Project, Provider, QuotaSnapshot, Review, ReviewFlag, ReviewStatusSnapshot } from './types'
-import { readCorrectionSelection, writeCorrectionSelection } from './correctionConfig'
+import { correctionSelectionFromPreset, readCorrectionSelection, writeCorrectionSelection } from './correctionConfig'
 import type { CorrectionSelection } from './correctionConfig'
 import { GuardianSettingsPopover } from './GuardianSettingsPopover'
 
@@ -33,12 +33,28 @@ function targetLabel(path: string | null): string {
   return path.split(/[\\/]/).at(-1) || path
 }
 
+function projectDefaultPresetId(project: Project, kind: 'review' | 'correction'): string | null {
+  const value = kind === 'review' ? project.default_review_preset_id : project.default_correction_preset_id
+  return value === undefined ? project.default_preset_id : value
+}
+
+function reviewSelectionFromPreset(preset: Preset): ReviewSelection {
+  const config = reviewPreset(preset)
+  return {
+    presetId: preset.id,
+    provider: config.provider,
+    model: config.model,
+    effort: config.effort ?? 'high',
+    speed: config.provider === 'codex' ? (config.speed ?? 'standard') : 'standard',
+  }
+}
+
 function GuardianShield() {
   return <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true"><path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" /></svg>
 }
 
 function GuardianGear() {
-  return <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2.1" /><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1" /></svg>
+  return <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6.3 1.9.4 1.4a5 5 0 0 1 2.6 0l.4-1.4 1.8.7-.5 1.4a5 5 0 0 1 1.8 1.8l1.4-.5.7 1.8-1.4.4a5 5 0 0 1 0 2.6l1.4.4-.7 1.8-1.4-.5a5 5 0 0 1-1.8 1.8l.5 1.4-1.8.7-.4-1.4a5 5 0 0 1-2.6 0l-.4 1.4-1.8-.7.5-1.4a5 5 0 0 1-1.8-1.8l-1.4.5-.7-1.8 1.4-.4a5 5 0 0 1 0-2.6l-1.4-.4.7-1.8 1.4.5a5 5 0 0 1 1.8-1.8L4.5 2.6l1.8-.7Z" /><circle cx="8" cy="8" r="1.7" /></svg>
 }
 
 function GuardianChevron({ expanded }: { expanded: boolean }) {
@@ -108,6 +124,28 @@ export function ConversationReviewPanel({
     void listPresets(controller.signal).then(setPresets).catch(() => {})
     return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    const reviewPresetId = projectDefaultPresetId(project, 'review')
+    const reviewDefault = presets.find((preset) => preset.id === reviewPresetId)
+    const hasConversationReview = Boolean(
+      conversation.review_provider
+      || conversation.review_model
+      || conversation.review_effort
+      || conversation.review_speed,
+    )
+    if (reviewDefault && !hasConversationReview) setSelection(reviewSelectionFromPreset(reviewDefault))
+
+    const correctionPresetId = projectDefaultPresetId(project, 'correction')
+    const correctionDefault = presets.find((preset) => preset.id === correctionPresetId)
+    if (correctionDefault) {
+      setCorrection(readCorrectionSelection(
+        conversation,
+        window.localStorage,
+        correctionSelectionFromPreset(correctionDefault),
+      ))
+    }
+  }, [conversation, presets, project])
 
   useEffect(() => setCorrection(readCorrectionSelection(conversation)), [conversation.id])
 

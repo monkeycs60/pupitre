@@ -298,7 +298,13 @@ export class PresetStore {
     if (!preset) return false;
     if (preset.built_in) throw new Error("preset intégré non supprimable");
     const transaction = this.db.transaction(() => {
-      this.db.query("UPDATE projects SET default_preset_id = NULL WHERE default_preset_id = ?").run(id);
+      this.db.query(
+        `UPDATE projects
+         SET default_preset_id = CASE WHEN default_preset_id = ? THEN NULL ELSE default_preset_id END,
+             default_review_preset_id = CASE WHEN default_review_preset_id = ? THEN NULL ELSE default_review_preset_id END,
+             default_correction_preset_id = CASE WHEN default_correction_preset_id = ? THEN NULL ELSE default_correction_preset_id END
+         WHERE default_preset_id = ? OR default_review_preset_id = ? OR default_correction_preset_id = ?`,
+      ).run(id, id, id, id, id, id);
       this.db.query("DELETE FROM presets WHERE id = ?").run(id);
     });
     transaction();

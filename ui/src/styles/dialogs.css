@@ -389,6 +389,27 @@ input.field-mono {
   margin: 0;
 }
 
+.project-settings-defaults {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.project-settings-section-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.project-settings-section-heading strong {
+  color: var(--text-strong);
+}
+
+.project-settings-section-heading span {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
 /* --- Sélection des serveurs MCP par projet -------------------------------- */
 
 .project-mcp {

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import {
   listProjectMcpServers,
+  listPresets,
   measureProjectMcpServers,
+  setProjectDefaultCorrectionPreset,
+  setProjectDefaultReviewPreset,
   setProjectFilesystemScope,
   updateProjectMcpServers,
   verifyProjectMcpCost,
@@ -9,7 +12,7 @@ import {
 import type { McpContextProbe, ProjectMcpConfig } from './api'
 import { formatCompact } from './formatCompact'
 import { ProviderMark } from './ProviderMark'
-import type { FilesystemScope, Project } from './types'
+import type { FilesystemScope, Preset, Project } from './types'
 
 interface ProjectSettingsDialogProps {
   project: Project
@@ -21,14 +24,33 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible d’enregistrer le projet.'
 }
 
+function projectPresetId(value: string | null | undefined, legacy: string | null): string {
+  return value === undefined ? legacy ?? '' : value ?? ''
+}
+
+function presetLabel(preset: Preset, kind: 'review' | 'correction'): string {
+  const model = kind === 'review' ? preset.review_model : preset.model
+  const effort = kind === 'review' ? preset.review_effort : (preset.effort ?? '—')
+  return `${preset.name} · ${model} · ${effort}`
+}
+
 export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSettingsDialogProps) {
   const [scope, setScope] = useState<FilesystemScope>(project.filesystem_scope)
+  const [presets, setPresets] = useState<Preset[]>([])
+  const [reviewPresetId, setReviewPresetId] = useState(() => projectPresetId(project.default_review_preset_id, project.default_preset_id))
+  const [correctionPresetId, setCorrectionPresetId] = useState(() => projectPresetId(project.default_correction_preset_id, project.default_preset_id))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mcp, setMcp] = useState<ProjectMcpConfig | null>(null)
   const [measuring, setMeasuring] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [probe, setProbe] = useState<McpContextProbe | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void listPresets(controller.signal).then(setPresets).catch(() => {})
+    return () => controller.abort()
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -113,8 +135,11 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
     setSaving(true)
     setError(null)
     try {
-      onUpdated(await setProjectFilesystemScope(project.id, scope))
+      let updated = await setProjectFilesystemScope(project.id, scope)
+      updated = await setProjectDefaultReviewPreset(project.id, reviewPresetId || null)
+      updated = await setProjectDefaultCorrectionPreset(project.id, correctionPresetId || null)
       if (mcp !== null) await updateProjectMcpServers(project.id, mcp.enabled)
+      onUpdated(updated)
       onClose()
     } catch (saveError: unknown) {
       setError(errorMessage(saveError))
@@ -140,6 +165,36 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
           <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">×</button>
         </header>
         <div className="project-settings-body">
+          <section className="project-settings-defaults" aria-labelledby="project-gardien-defaults-title">
+            <div className="project-settings-section-heading">
+              <strong id="project-gardien-defaults-title">Defaults du Gardien</strong>
+              <span>Chaque conversation peut ensuite les remplacer.</span>
+            </div>
+            <label htmlFor="project-review-preset">
+              <strong>Preset de review</strong>
+              <select
+                id="project-review-preset"
+                value={reviewPresetId}
+                disabled={saving}
+                onChange={(event) => setReviewPresetId(event.target.value)}
+              >
+                <option value="">Automatique · modèle de la conversation</option>
+                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset, 'review')}</option>)}
+              </select>
+            </label>
+            <label htmlFor="project-correction-preset">
+              <strong>Preset de correction</strong>
+              <select
+                id="project-correction-preset"
+                value={correctionPresetId}
+                disabled={saving}
+                onChange={(event) => setCorrectionPresetId(event.target.value)}
+              >
+                <option value="">Automatique · modèle de la conversation</option>
+                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset, 'correction')}</option>)}
+              </select>
+            </label>
+          </section>
           <label htmlFor="project-filesystem-scope">
             <strong>Accès filesystem</strong>
             <select

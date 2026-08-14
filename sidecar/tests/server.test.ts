@@ -692,6 +692,21 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     permission_mode: "bypassPermissions",
   }));
 
+  const selectedReview = await putJson(`/api/projects/${project.id}/default-review-preset`, {
+    presetId: preset.id,
+  });
+  expect(selectedReview.status).toBe(200);
+  expect(await selectedReview.json()).toEqual(expect.objectContaining({
+    default_review_preset_id: preset.id,
+  }));
+  const selectedCorrection = await putJson(`/api/projects/${project.id}/default-correction-preset`, {
+    presetId: preset.id,
+  });
+  expect(selectedCorrection.status).toBe(200);
+  expect(await selectedCorrection.json()).toEqual(expect.objectContaining({
+    default_correction_preset_id: preset.id,
+  }));
+
   const editedBuiltIn = await putJson(`/api/presets/${builtIns[0]!.id}`, {
     name: "Éco maison",
     provider: "claude",

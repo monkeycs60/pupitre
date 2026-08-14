@@ -1,4 +1,4 @@
-import type { Conversation, ConversationSpeed, Provider } from './types'
+import type { Conversation, ConversationSpeed, Preset, Provider } from './types'
 
 export interface CorrectionSelection {
   presetId: string
@@ -22,11 +22,21 @@ export function defaultCorrectionSelection(conversation: Conversation): Correcti
   }
 }
 
+export function correctionSelectionFromPreset(preset: Preset): CorrectionSelection {
+  return {
+    presetId: preset.id,
+    provider: preset.provider,
+    model: preset.model,
+    effort: preset.effort ?? 'high',
+    speed: preset.provider === 'codex' ? (preset.speed ?? 'standard') : 'standard',
+  }
+}
+
 export function readCorrectionSelection(
   conversation: Conversation,
   storage: Pick<Storage, 'getItem'> = window.localStorage,
+  fallback: CorrectionSelection = defaultCorrectionSelection(conversation),
 ): CorrectionSelection {
-  const fallback = defaultCorrectionSelection(conversation)
   try {
     const parsed = JSON.parse(storage.getItem(storageKey(conversation.id)) ?? 'null') as Partial<CorrectionSelection> | null
     if (!parsed || (parsed.provider !== 'codex' && parsed.provider !== 'claude')) return fallback

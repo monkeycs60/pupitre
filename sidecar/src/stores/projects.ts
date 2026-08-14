@@ -5,6 +5,8 @@ export interface Project {
   id: string; name: string; path: string;
   permission_mode: string; pinned: boolean; created_at: string;
   default_preset_id: string | null;
+  default_review_preset_id: string | null;
+  default_correction_preset_id: string | null;
   filesystem_scope: FilesystemScope;
   auto_counter_red: boolean;
   auto_rescan: boolean;
@@ -72,6 +74,14 @@ export class ProjectStore {
 
   setDefaultPreset(id: string, presetId: string | null): void {
     this.db.query("UPDATE projects SET default_preset_id = ? WHERE id = ?").run(presetId, id);
+  }
+
+  setDefaultReviewPreset(id: string, presetId: string | null): void {
+    this.db.query("UPDATE projects SET default_review_preset_id = ? WHERE id = ?").run(presetId, id);
+  }
+
+  setDefaultCorrectionPreset(id: string, presetId: string | null): void {
+    this.db.query("UPDATE projects SET default_correction_preset_id = ? WHERE id = ?").run(presetId, id);
   }
 
   /** Applique une permission explicite portée par le preset par défaut. */

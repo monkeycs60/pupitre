@@ -22,7 +22,9 @@ export function openDb(dir: string = dataDir()): Database {
       id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL UNIQUE,
       permission_mode TEXT NOT NULL DEFAULT 'acceptEdits',
       filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots',
-      pinned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+      pinned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+      default_review_preset_id TEXT NULL,
+      default_correction_preset_id TEXT NULL
     );
     CREATE TABLE IF NOT EXISTS presets (
       id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -313,6 +315,21 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "created_on_branch TEXT NULL");
   migrateConversationMessageCounts(db);
   addColumn(db, "projects", "default_preset_id TEXT NULL");
+  const addedDefaultReviewPreset = addColumn(db, "projects", "default_review_preset_id TEXT NULL");
+  const addedDefaultCorrectionPreset = addColumn(db, "projects", "default_correction_preset_id TEXT NULL");
+  if (addedDefaultReviewPreset || addedDefaultCorrectionPreset) {
+    // Les anciens projets utilisaient le preset conversationnel comme défaut
+    // du Gardien ; le recopier conserve leur comportement tout en séparant
+    // désormais les trois usages dans les réglages.
+    db.exec(`
+      UPDATE projects
+      SET default_review_preset_id = default_preset_id
+      WHERE default_review_preset_id IS NULL AND default_preset_id IS NOT NULL;
+      UPDATE projects
+      SET default_correction_preset_id = default_preset_id
+      WHERE default_correction_preset_id IS NULL AND default_preset_id IS NOT NULL;
+    `);
+  }
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
   addColumn(db, "projects", "auto_counter_red INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "projects", "auto_rescan INTEGER NOT NULL DEFAULT 0");

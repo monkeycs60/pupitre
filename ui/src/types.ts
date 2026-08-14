@@ -186,6 +186,8 @@ export interface Project {
   pinned: boolean
   created_at: string
   default_preset_id: string | null
+  default_review_preset_id?: string | null
+  default_correction_preset_id?: string | null
   auto_counter_red: boolean
   auto_rescan: boolean
 }

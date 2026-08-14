@@ -996,12 +996,27 @@ export function createServer(deps: ServerDeps) {
       const cooldown = project ? reviewCooldownSeconds(deps.reviews.listByProject(project.id), conversationId, now) : 0;
       if (autoReview && project && !running && cooldown === 0 && now - (lastAutoRescanAt.get(conversationId) ?? 0) >= REVIEW_COOLDOWN_MS) {
         lastAutoRescanAt.set(conversationId, now);
-        const defaults = defaultReviewConfig(conversation!.provider);
+        const defaultReviewPreset = project.default_review_preset_id
+          ? deps.presets.get(project.default_review_preset_id)
+          : null;
+        const defaults = defaultReviewPreset
+          ? {
+              provider: defaultReviewPreset.review_provider,
+              model: defaultReviewPreset.review_model,
+              effort: defaultReviewPreset.review_effort,
+              speed: defaultReviewPreset.review_provider === "codex" && defaultReviewPreset.speed === "fast"
+                ? "fast" as const
+                : "standard" as const,
+            }
+          : {
+              ...defaultReviewConfig(conversation!.provider),
+              speed: "standard" as const,
+            };
         const config = {
           provider: conversation!.review_provider ?? defaults.provider,
           model: conversation!.review_model ?? defaults.model,
           effort: conversation!.review_effort ?? defaults.effort,
-          speed: conversation!.review_speed ?? "standard",
+          speed: conversation!.review_speed ?? defaults.speed,
         };
         try {
           deps.reviews.start({
@@ -1364,6 +1379,46 @@ export function createServer(deps: ServerDeps) {
             deps.projects.setPermissionMode(projectDefaultPresetId, preset.permission_mode);
           }
           return json(deps.projects.get(projectDefaultPresetId));
+        }
+
+        const projectDefaultReviewPresetId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/default-review-preset$/,
+        );
+        if (request.method === "PUT" && projectDefaultReviewPresetId !== null) {
+          if (!deps.projects.get(projectDefaultReviewPresetId)) {
+            throw new HttpError(404, "projet inconnu");
+          }
+          const body = await readObject(request);
+          const presetId = body.presetId;
+          if (presetId !== null && typeof presetId !== "string") {
+            throw new HttpError(400, "champ presetId invalide");
+          }
+          if (typeof presetId === "string" && !deps.presets.get(presetId)) {
+            throw new HttpError(404, "preset inconnu");
+          }
+          deps.projects.setDefaultReviewPreset(projectDefaultReviewPresetId, presetId as string | null);
+          return json(deps.projects.get(projectDefaultReviewPresetId));
+        }
+
+        const projectDefaultCorrectionPresetId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/default-correction-preset$/,
+        );
+        if (request.method === "PUT" && projectDefaultCorrectionPresetId !== null) {
+          if (!deps.projects.get(projectDefaultCorrectionPresetId)) {
+            throw new HttpError(404, "projet inconnu");
+          }
+          const body = await readObject(request);
+          const presetId = body.presetId;
+          if (presetId !== null && typeof presetId !== "string") {
+            throw new HttpError(400, "champ presetId invalide");
+          }
+          if (typeof presetId === "string" && !deps.presets.get(presetId)) {
+            throw new HttpError(404, "preset inconnu");
+          }
+          deps.projects.setDefaultCorrectionPreset(projectDefaultCorrectionPresetId, presetId as string | null);
+          return json(deps.projects.get(projectDefaultCorrectionPresetId));
         }
 
         const projectFilesystemScopeId = routeId(
@@ -2533,7 +2588,7 @@ export function createServer(deps: ServerDeps) {
           }
           const presetId = typeof requestedPresetId === "string"
             ? requestedPresetId
-            : project.default_preset_id;
+            : project.default_review_preset_id;
           const preset = presetId ? deps.presets.get(presetId) : null;
           if (presetId && !preset) throw new HttpError(404, "preset inconnu");
           const fallback = preset

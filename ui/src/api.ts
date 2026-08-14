@@ -500,6 +500,26 @@ export function setProjectDefaultPreset(
   )
 }
 
+export function setProjectDefaultReviewPreset(
+  id: string,
+  presetId: string | null,
+): Promise<Project> {
+  return fetchJson(
+    `/api/projects/${routeId(id)}/default-review-preset`,
+    jsonPut({ presetId }),
+  )
+}
+
+export function setProjectDefaultCorrectionPreset(
+  id: string,
+  presetId: string | null,
+): Promise<Project> {
+  return fetchJson(
+    `/api/projects/${routeId(id)}/default-correction-preset`,
+    jsonPut({ presetId }),
+  )
+}
+
 export function setProjectFilesystemScope(
   id: string,
   scope: FilesystemScope,
