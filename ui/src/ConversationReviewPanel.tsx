@@ -192,7 +192,11 @@ export function ConversationReviewPanel({
 
   const files = useMemo(() => review ? buildFileTree(review.diff_text, review.flags) : [], [review])
   const openFlags = review?.flags.filter((flag) => !CLOSED_FLAG_STATUSES.has(flag.status)) ?? []
-  const runningHere = reviewStatus?.running?.reviewId === review?.id || review?.status === 'running'
+  // Le statut Fleet est global au projet et peut arriver après l'état terminal
+  // de cette review. La carte doit donc suivre sa review courante pour sortir
+  // du loading, même si le WebSocket conserve momentanément un ancien running.
+  const runningHere = review?.status === 'running'
+  const runningElsewhere = Boolean(reviewStatus?.running && reviewStatus.running.reviewId !== review?.id)
   const showingProgress = busy || runningHere
   const coversCurrentHead = reviewCoversHead(review, currentHead)
   const hasCurrentResult = review?.status === 'done' && coversCurrentHead
@@ -243,7 +247,7 @@ export function ConversationReviewPanel({
   }
 
   async function launch() {
-    if (busy || runningHere || Boolean(reviewStatus?.running)) return
+    if (busy || runningHere || runningElsewhere) return
     setBusy(true)
     setError(null)
     setToast(null)
@@ -345,7 +349,7 @@ export function ConversationReviewPanel({
           <span className="guardian-line-chip"><i />{openFlags.filter((flag) => flag.severity === 'red').length > 0 ? `${openFlags.filter((flag) => flag.severity === 'red').length} rouge` : ''}{openFlags.filter((flag) => flag.severity === 'red').length > 0 && openFlags.filter((flag) => flag.severity === 'orange').length > 0 ? ' · ' : ''}{openFlags.filter((flag) => flag.severity === 'orange').length > 0 ? `${openFlags.filter((flag) => flag.severity === 'orange').length} orange` : ''}{openFlags.every((flag) => flag.severity === 'grey') ? `${openFlags.length} gris` : ''}</span>
         ) : null}
         <span className="guardian-line-meta">{meta}</span>
-        <button type="button" className={`guardian-line-action${variant === 'block' ? ' is-primary' : ''}`} onClick={() => variant === 'block' ? void correctAll() : void launch()} disabled={variant === 'running' || busy || Boolean(reviewStatus?.running && !runningHere)}>{busy && variant !== 'block' ? 'Lancement…' : actionLabel}</button>
+        <button type="button" className={`guardian-line-action${variant === 'block' ? ' is-primary' : ''}`} onClick={() => variant === 'block' ? void correctAll() : void launch()} disabled={variant === 'running' || busy || runningElsewhere}>{busy && variant !== 'block' ? 'Lancement…' : actionLabel}</button>
         <div className="guardian-line-tools">
           <button type="button" className="guardian-line-icon" aria-label="Réglages du Gardien" aria-expanded={settingsOpen} aria-controls="guardian-settings-popover" onClick={() => setSettingsOpen((current) => !current)}><GuardianGear /></button>
           {openFlags.length > 0 ? <button type="button" className="guardian-line-icon guardian-line-chevron" aria-label={expanded ? 'Replier les signalements' : 'Déplier les signalements'} aria-expanded={expanded} aria-controls="guardian-findings" onClick={() => setExpanded((current) => !current)}><GuardianChevron expanded={expanded} /></button> : null}
