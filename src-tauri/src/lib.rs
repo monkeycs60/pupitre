@@ -38,6 +38,75 @@ const DESIGN_URL: &str = "https://claude.ai/design/";
 /// `sidecar/tests/design.test.ts` échoue si les deux chaînes divergent.
 const DESIGN_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15";
 
+#[derive(serde::Serialize)]
+struct ClipboardImage {
+    mime_type: String,
+    data: Vec<u8>,
+}
+
+#[cfg(target_os = "linux")]
+fn read_clipboard_command(program: &str, args: &[&str]) -> Option<Vec<u8>> {
+    let output = std::process::Command::new(program)
+        .args(args)
+        .output()
+        .ok()?;
+    if !output.status.success() || output.stdout.is_empty() {
+        return None;
+    }
+    Some(output.stdout)
+}
+
+#[cfg(target_os = "linux")]
+fn read_linux_clipboard_image() -> Option<ClipboardImage> {
+    // Claude Design and the main window are two separate WebViews. WebKitGTK
+    // does not consistently expose an image copied by the child WebView to the
+    // parent's ClipboardEvent, so read the shared desktop clipboard as a
+    // fallback. Keep the format list small: these are accepted by the media
+    // upload endpoint and cover screenshots from the supported desktop tools.
+    const IMAGE_TYPES: [&str; 3] = ["image/png", "image/jpeg", "image/webp"];
+
+    for mime_type in IMAGE_TYPES {
+        if let Some(data) =
+            read_clipboard_command("wl-paste", &["--no-newline", "--type", mime_type])
+        {
+            return Some(ClipboardImage {
+                mime_type: mime_type.to_string(),
+                data,
+            });
+        }
+    }
+
+    // X11 remains a valid fallback when the app is launched through XWayland
+    // or on an X11 session without wl-clipboard installed.
+    for mime_type in IMAGE_TYPES {
+        if let Some(data) = read_clipboard_command(
+            "xclip",
+            &["-selection", "clipboard", "-target", mime_type, "-out"],
+        ) {
+            return Some(ClipboardImage {
+                mime_type: mime_type.to_string(),
+                data,
+            });
+        }
+    }
+
+    None
+}
+
+#[tauri::command]
+fn read_clipboard_image() -> Result<Option<ClipboardImage>, String> {
+    #[cfg(target_os = "linux")]
+    {
+        return Ok(read_linux_clipboard_image());
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        // The browser Clipboard API remains the first path on other platforms.
+        Ok(None)
+    }
+}
+
 struct SidecarProcess {
     child: Mutex<Option<CommandChild>>,
     stopping: AtomicBool,
@@ -457,7 +526,8 @@ pub fn run() {
             open_design_window,
             close_design_popups,
             design_webview_url,
-            restart_sidecar
+            restart_sidecar,
+            read_clipboard_image
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

@@ -21,6 +21,7 @@ import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import type { Attachment, Conversation, Project, QuotaSnapshot } from './types'
 import { PROVIDER_MODELS } from './modelOptions'
 import { mediaUrl } from './transport'
+import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 
 interface ComposerProps {
@@ -117,28 +118,52 @@ function imageExtensionFromMime(mime: string): string {
   }
 }
 
-async function readClipboardImages(): Promise<File[]> {
-  if (typeof navigator.clipboard?.read !== 'function') return []
+interface NativeClipboardImage {
+  mime_type: string
+  data: number[]
+}
+
+async function readNativeClipboardImages(): Promise<File[]> {
+  if (!hasTauriRuntime()) return []
 
   try {
-    const clipboardItems = await navigator.clipboard.read()
-    const files: File[] = []
-    for (const item of clipboardItems) {
-      const mime = item.types.find((type) => type.startsWith('image/'))
-      if (mime === undefined) continue
-      const blob = await item.getType(mime)
-      files.push(new File(
-        [blob],
-        `capture-${crypto.randomUUID()}.${imageExtensionFromMime(mime)}`,
-        { type: mime },
-      ))
-    }
-    return files
+    const image = await invoke<NativeClipboardImage | null>('read_clipboard_image')
+    if (image === null || image.data.length === 0) return []
+
+    return [new File(
+      [new Uint8Array(image.data)],
+      `capture-${crypto.randomUUID()}.${imageExtensionFromMime(image.mime_type)}`,
+      { type: image.mime_type },
+    )]
   } catch {
-    // La WebView peut refuser la lecture du presse-papiers sans permission.
-    // Dans ce cas, le collage texte doit continuer à fonctionner normalement.
+    // Le runtime peut ne pas avoir de lecteur de presse-papiers natif installé.
     return []
   }
+}
+
+async function readClipboardImages(): Promise<File[]> {
+  if (typeof navigator.clipboard?.read === 'function') {
+    try {
+      const clipboardItems = await navigator.clipboard.read()
+      const files: File[] = []
+      for (const item of clipboardItems) {
+        const mime = item.types.find((type) => type.startsWith('image/'))
+        if (mime === undefined) continue
+        const blob = await item.getType(mime)
+        files.push(new File(
+          [blob],
+          `capture-${crypto.randomUUID()}.${imageExtensionFromMime(mime)}`,
+          { type: mime },
+        ))
+      }
+      if (files.length > 0) return files
+    } catch {
+      // La WebView peut refuser la lecture du presse-papiers sans permission.
+      // Le lecteur natif prend le relais dans ce cas.
+    }
+  }
+
+  return readNativeClipboardImages()
 }
 
 function errorMessage(error: unknown): string {
@@ -240,7 +265,7 @@ export function Composer({
 
   async function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     const hasImageItem = Array.from(event.clipboardData.items)
-      .some((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .some((item) => item.type.startsWith('image/'))
     const imageFiles = imageFilesFromTransfer(event.clipboardData)
     if (hasImageItem) event.preventDefault()
     const clipboardImages = imageFiles.length > 0 ? imageFiles : await readClipboardImages()
