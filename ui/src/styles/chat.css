@@ -902,16 +902,23 @@
 .guardian-line-dots i:nth-child(2) { animation-delay: .18s; }
 .guardian-line-dots i:nth-child(3) { animation-delay: .36s; }
 
-.guardian-settings-popover { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 20; display: grid; gap: 12px; width: 320px; padding: 13px 14px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-popover); }
-.guardian-settings-field { display: grid; gap: 6px; }
+.guardian-settings-popover { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 20; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; width: min(320px, calc(100vw - 24px)); max-width: calc(100vw - 24px); box-sizing: border-box; padding: 13px 14px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-popover); }
+.guardian-settings-field { display: grid; min-width: 0; gap: 6px; }
 .guardian-settings-label { color: var(--text-faint); font-size: var(--text-xs); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
-.guardian-settings-popover .preset-selector { display: block; min-width: 0; }
-.guardian-settings-popover .preset-selector-chip { width: 100%; height: 30px; }
+.guardian-settings-field > :not(.guardian-settings-label) { min-width: 0; }
+.guardian-settings-popover .preset-selector { display: block; min-width: 0; max-width: 100%; }
+.guardian-settings-popover .preset-selector-chip { width: 100%; max-width: 100%; height: 30px; }
+.guardian-settings-popover .preset-selector-chip-name { min-width: min-content; max-width: 40%; }
+.guardian-settings-popover .preset-selector-chip-summary { min-width: 0; overflow: hidden; flex: 1 1 auto; text-overflow: ellipsis; }
 .guardian-settings-divider { height: 1px; background: var(--border-subtle); }
 .guardian-settings-toggle { display: flex; align-items: center; gap: 9px; color: var(--text); font-size: 12.5px; cursor: pointer; }
 .guardian-settings-toggle input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
 .guardian-settings-target { margin: 0; color: var(--text-faint); font-size: 11.5px; line-height: 1.5; }
 .guardian-settings-target code { font-family: var(--font-mono); }
+
+@media (max-width: 760px) {
+  .guardian-settings-popover { right: calc(100% + 8px); }
+}
 
 .guardian-findings { overflow: hidden; background: color-mix(in srgb, var(--bg-panel) 90%, transparent); border: 1px solid var(--border-subtle); border-top: 0; border-radius: 0 0 var(--r-md) var(--r-md); }
 .guardian-finding { display: flex; align-items: flex-start; gap: 10px; padding: 11px 12px; border-top: 1px solid var(--border-subtle); }
