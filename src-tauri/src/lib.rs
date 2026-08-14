@@ -5,6 +5,7 @@ use std::sync::{
     Mutex,
 };
 use std::time::Duration;
+use tauri::webview::DownloadEvent;
 use tauri::Manager;
 use tauri_plugin_shell::{
     process::{CommandChild, CommandEvent},
@@ -25,6 +26,31 @@ const DESIGN_POPUP_LABEL_PREFIX: &str = "design-popup-";
 /// Compteur d'étiquettes des popups de connexion : Tauri refuse deux fenêtres de
 /// même étiquette, et un flux OAuth peut en ouvrir plusieurs à la suite.
 static DESIGN_POPUP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+/// Les webviews Claude n'ont pas de navigateur hôte pour prendre en charge le
+/// signal de téléchargement. Le hook Tauri conserve le nom proposé par Claude
+/// et laisse Wry choisir le dossier `Downloads` de l'utilisateur.
+fn handle_design_download<R: tauri::Runtime>(
+    _webview: tauri::Webview<R>,
+    event: DownloadEvent<'_>,
+) -> bool {
+    match event {
+        DownloadEvent::Requested { url, destination } => {
+            log::info!(
+                "Téléchargement Claude Design demandé : {url} vers {}",
+                destination.display()
+            );
+        }
+        DownloadEvent::Finished { url, path, success } => {
+            log::info!(
+                "Téléchargement Claude Design terminé : {url} vers {path:?} (succès : {success})"
+            );
+        }
+        _ => {}
+    }
+
+    true
+}
 
 /// Doit rester identique à `DESIGN_URL` dans `sidecar/src/design.ts`.
 const DESIGN_URL: &str = "https://claude.ai/design/";
@@ -402,6 +428,7 @@ fn open_design_window(app: tauri::AppHandle, resume_url: Option<String>) -> Resu
     .user_agent(DESIGN_USER_AGENT)
     .enable_clipboard_access()
     .initialization_script(DESIGN_CLIPBOARD_SCRIPT)
+    .on_download(handle_design_download)
     // Sans ce gestionnaire, la connexion est impossible : wry ne branche le signal
     // `create` de WebKit que si un handler existe, donc un `window.open` de
     // claude.ai est purement ignoré et le flux OAuth échoue sans rien afficher.
@@ -431,16 +458,16 @@ pub(crate) fn build_design_popup<R: tauri::Runtime>(
         "{DESIGN_POPUP_LABEL_PREFIX}{}",
         DESIGN_POPUP_COUNTER.fetch_add(1, Ordering::Relaxed)
     );
-    let built =
-        tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::External(url))
-            .window_features(features)
-            .title("Connexion à Claude")
-            // Le même user-agent que la surface parente : c'est lui qui fait passer
-            // le flux, et une popup qui se déclarerait autrement serait refusée.
-            .user_agent(DESIGN_USER_AGENT)
-            .enable_clipboard_access()
-            .initialization_script(DESIGN_CLIPBOARD_SCRIPT)
-            .build();
+    let built = tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::External(url))
+        .window_features(features)
+        .title("Connexion à Claude")
+        // Le même user-agent que la surface parente : c'est lui qui fait passer
+        // le flux, et une popup qui se déclarerait autrement serait refusée.
+        .user_agent(DESIGN_USER_AGENT)
+        .enable_clipboard_access()
+        .initialization_script(DESIGN_CLIPBOARD_SCRIPT)
+        .on_download(handle_design_download)
+        .build();
     match built {
         Ok(window) => tauri::webview::NewWindowResponse::Create { window },
         Err(error) => {
