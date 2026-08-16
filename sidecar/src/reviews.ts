@@ -98,6 +98,8 @@ export class DispatchConflictError extends Error {}
 export class ReviewRunner {
   private active = new Map<string, Promise<void>>();
   private activeDispatches = new Map<string, Promise<void>>();
+  /** reviewId → corrections en vol : déclenche le rescan quand elle retombe à 0. */
+  private pendingDispatches = new Map<string, number>();
   private progress = new Map<string, ReviewProgress>();
   private statusListeners = new Set<ReviewStatusListener>();
   private scanner: ReviewScanner;
@@ -203,6 +205,7 @@ export class ReviewRunner {
     if (!review) throw new Error("review inconnue");
     const conversationId = review.conversation_id;
     const userMessage = message?.trim() || undefined;
+    this.trackDispatch(review.id, 1);
     const run = this.executeDispatch(review, flag, conversationId, userMessage, agentConfig)
       .catch(() => {})
       .finally(() => this.activeDispatches.delete(id));
@@ -225,6 +228,7 @@ export class ReviewRunner {
       severities.includes(flag.severity) && flag.status === "open",
     );
     const targetConversation = review.conversation_id;
+    this.trackDispatch(review.id, flags.length);
     void (async () => {
       for (let index = 0; index < flags.length; index += MAX_CONCURRENT_SUBTASKS) {
         const chunk = flags.slice(index, index + MAX_CONCURRENT_SUBTASKS);
@@ -238,6 +242,34 @@ export class ReviewRunner {
       }
     })();
     return flags.length;
+  }
+
+  private trackDispatch(reviewId: string, delta: number): number {
+    const next = (this.pendingDispatches.get(reviewId) ?? 0) + delta;
+    if (next <= 0) this.pendingDispatches.delete(reviewId); else this.pendingDispatches.set(reviewId, next);
+    return next;
+  }
+
+  private rescanAfterCorrections(review: Review): void {
+    const runningHere = [...this.progress.values()].some((item) => item.projectId === review.project_id);
+    if (runningHere) return;
+    try {
+      this.start({
+        projectId: review.project_id,
+        conversationId: review.conversation_id,
+        gitRefBase: CONVERSATION_BASE_REF,
+        gitRefHead: WORKTREE_HEAD_REF,
+        provider: review.review_provider,
+        model: review.review_model,
+        effort: review.review_effort,
+        speed: review.review_speed,
+        codeProvider: review.code_provider,
+        scope: "worktree",
+        incremental: true,
+      });
+    } catch (error) {
+      console.error("Rescan après corrections impossible", error);
+    }
   }
 
   private notifyStatus(): void {
@@ -368,6 +400,8 @@ export class ReviewRunner {
       this.store.updateFlag(flag.id, { status: "open" });
       this.notifyStatus();
       throw error;
+    } finally {
+      if (this.trackDispatch(review.id, -1) === 0) this.rescanAfterCorrections(review);
     }
   }
 

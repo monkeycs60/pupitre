@@ -868,6 +868,11 @@ test("dispatch utilise le preset de correction du projet", async () => {
     model: "opus",
   });
   await current.subtasks.waitResult(subtaskId);
+  // La fin de la correction relance une review incrémentale (tâche 3) : sans
+  // l'attendre, son exécution continue en tâche de fond après la fermeture
+  // de la base par `afterEach` et casse le test suivant.
+  const rescan = current.reviews.listByProject(project.id).find((item) => item.id !== review.id);
+  if (rescan) await current.reviews.wait(rescan.id);
 });
 
 test("un flag est traité directement sans décision groupée", async () => {

@@ -11,6 +11,7 @@ import {
   ReviewRunner,
   splitDiffIntoZones,
   hunkHashFor,
+  type CorrectionAgentConfig,
 } from "../src/reviews";
 import { ConversationStore } from "../src/stores/conversations";
 import { PresetStore } from "../src/stores/presets";
@@ -45,6 +46,16 @@ function git(...args: string[]): string {
   const result = Bun.spawnSync(["git", ...args], { cwd: repo });
   if (result.exitCode !== 0) throw new Error(result.stderr.toString());
   return result.stdout.toString().trim();
+}
+
+/**
+ * La fin d'un dispatch relance toujours une review incrémentale (tâche 3).
+ * Sans l'attendre explicitement, son `execute()` continue en tâche de fond
+ * après la fin du test et peut écrire sur la base fermée par `afterEach`.
+ */
+async function settleRescan(runner: ReviewRunner, projectId: string, originalReviewId: string): Promise<void> {
+  const rescan = runner.listByProject(projectId).find((item) => item.id !== originalReviewId);
+  if (rescan) await runner.wait(rescan.id);
 }
 
 beforeEach(() => {
@@ -971,6 +982,7 @@ test("dispatch une zone avec le correcteur choisi et rouvre le flag si la sous-t
     speed: null,
   });
   expect(inputs[0]!.prompt).toContain("Consigne de l'utilisateur : Ajoute un test.");
+  await settleRescan(runner, project.id, review.id);
 });
 
 test("un dispatch terminé passe en traité jusqu'au prochain scan", async () => {
@@ -1001,6 +1013,86 @@ test("un dispatch terminé passe en traité jusqu'au prochain scan", async () =>
   expect(store.getFlag(flag.id)?.status).toBe("agent_running");
   await Bun.sleep(0);
   expect(store.getFlag(flag.id)?.status).toBe("treated");
+  await settleRescan(runner, project.id, review.id);
+});
+
+test("la fin de la dernière correction relance une review incrémentale", async () => {
+  const project = projects.create({ name: "rescan-all", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  store.complete(review.id, [
+    { file: "src/a.ts", line_start: 1, line_end: 1, severity: "red", category: "données", message: "Risque A." },
+    { file: "src/b.ts", line_start: 1, line_end: 1, severity: "orange", category: "contrat", message: "Risque B." },
+  ]);
+  const fakeSubtasks = {
+    start() { return { id: crypto.randomUUID() } as Subtask; },
+    async waitResult(id: string): Promise<SubtaskResult> {
+      return { status: "done", resultText: "corrigé", error: null, subtask: { id } as Subtask };
+    },
+  };
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => '{"flags":[]}', fakeSubtasks);
+  const config: CorrectionAgentConfig = {
+    provider: "codex", model: "gpt-5.6-luna", effort: "xhigh", speed: "fast",
+  };
+  runner.dispatchAll(review.id, ["red", "orange"], config);
+  await Bun.sleep(50); // laisser les deux dispatches finir
+  const reviews = runner.listByProject(project.id);
+  expect(reviews.length).toBe(2);
+  const rescan = reviews.find((item) => item.id !== review.id)!;
+  expect(rescan.parent_review_id).toBe(review.id);
+  expect(rescan.scope).toBe("worktree");
+  expect(rescan.review_model).toBe(review.review_model);
+  await runner.wait(rescan.id);
+});
+
+test("une correction isolée ne relance qu'une fois tous les dispatches finis", async () => {
+  const project = projects.create({ name: "rescan-pending", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  store.complete(review.id, [
+    { file: "src/a.ts", line_start: 1, line_end: 1, severity: "red", category: "données", message: "Risque A." },
+    { file: "src/b.ts", line_start: 1, line_end: 1, severity: "orange", category: "contrat", message: "Risque B." },
+  ]);
+  const flags = store.get(review.id)!.flags;
+  const flagA = flags.find((flag) => flag.file === "src/a.ts")!;
+  const flagB = flags.find((flag) => flag.file === "src/b.ts")!;
+
+  let resolveB!: () => void;
+  const bDone = new Promise<void>((resolve) => { resolveB = resolve; });
+  const fakeSubtasks = {
+    start(input: SubtaskInput) {
+      return { id: input.label?.includes("src/a.ts") ? "sub-a" : "sub-b" } as Subtask;
+    },
+    async waitResult(id: string): Promise<SubtaskResult> {
+      if (id === "sub-b") await bDone;
+      return { status: "done", resultText: "corrigé", error: null, subtask: { id } as Subtask };
+    },
+  };
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => '{"flags":[]}', fakeSubtasks);
+  const config: CorrectionAgentConfig = {
+    provider: "codex", model: "gpt-5.6-luna", effort: "xhigh", speed: "fast",
+  };
+  runner.dispatchFlag(flagA.id, undefined, config);
+  runner.dispatchFlag(flagB.id, undefined, config);
+  await Bun.sleep(20);
+  expect(runner.listByProject(project.id).length).toBe(1);
+
+  resolveB();
+  await Bun.sleep(50);
+  const reviews = runner.listByProject(project.id);
+  expect(reviews.length).toBe(2);
+  const rescan = reviews.find((item) => item.id !== review.id)!;
+  await runner.wait(rescan.id);
 });
 
 test("un scan running orphelin est clôturé au redémarrage", () => {
