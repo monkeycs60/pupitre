@@ -12,6 +12,12 @@ interface MuseumPiece {
   code: string
 }
 
+interface MuseumSample {
+  name: string
+  score: number
+  id: number
+}
+
 const MUSEUM_PIECES: MuseumPiece[] = [
   {
     id: 'inline-style',
@@ -60,22 +66,35 @@ const MUSEUM_PIECES: MuseumPiece[] = [
   },
 ]
 
-const STARTER_SAMPLES = [
-  { name: 'Kevin from frontend', score: 7 },
-  { name: 'Le stagiaire invisible', score: 14 },
-  { name: 'Un ticket Jira', score: 22 },
+const STARTER_SAMPLES: MuseumSample[] = [
+  { name: 'Kevin from frontend', score: 7, id: 1 },
+  { name: 'Le stagiaire invisible', score: 14, id: 2 },
+  { name: 'Un ticket Jira', score: 22, id: 3 },
 ]
 
-let globalShameLog: string[] = []
+interface MuseumState {
+  shame: number
+  samples: MuseumSample[]
+  globalShameLog: string[]
+  lastIncident: string
+}
+
+function createInitialMuseumState(): MuseumState {
+  return {
+    shame: 12,
+    samples: STARTER_SAMPLES.map((sample) => ({ ...sample })),
+    globalShameLog: [],
+    lastIncident: 'Aucun incident déclaré.',
+  }
+}
 
 export function BadPracticesMuseum() {
   const [activeFilter, setActiveFilter] = useState<MuseumFilter>('all')
   const [selectedPiece, setSelectedPiece] = useState(0)
   const [visitorName, setVisitorName] = useState('')
-  const [shame, setShame] = useState(12)
-  const [samples, setSamples] = useState<any[]>(STARTER_SAMPLES)
+  const [museumState, setMuseumState] = useState<MuseumState>(createInitialMuseumState)
   const [isEverythingOpen, setIsEverythingOpen] = useState(false)
-  const [lastIncident, setLastIncident] = useState('Aucun incident déclaré.')
+  const { shame, samples, globalShameLog, lastIncident } = museumState
 
   const visiblePieces = activeFilter === 'all'
     ? MUSEUM_PIECES
@@ -85,16 +104,20 @@ export function BadPracticesMuseum() {
   const visitorLabel = visitorName || 'visiteur anonyme'
 
   function registerIncident() {
-    const newSample: any = {
-      name: visitorLabel,
-      score: shame + 1,
-      id: Math.random(),
-    }
-    samples.push(newSample)
-    setSamples([...samples])
-    setShame(shame + 1)
-    globalShameLog.push(visitorLabel)
-    setLastIncident(`Incident #${globalShameLog.length} enregistré pour ${visitorLabel}.`)
+    setMuseumState((current) => {
+      const nextShame = current.shame + 1
+      const nextGlobalShameLog = [...current.globalShameLog, visitorLabel]
+
+      return {
+        shame: nextShame,
+        samples: [
+          ...current.samples,
+          { name: visitorLabel, score: nextShame, id: Math.random() },
+        ],
+        globalShameLog: nextGlobalShameLog,
+        lastIncident: `Incident #${nextGlobalShameLog.length} enregistré pour ${visitorLabel}.`,
+      }
+    })
   }
 
   function filterPieces(filter: MuseumFilter) {
@@ -103,17 +126,20 @@ export function BadPracticesMuseum() {
   }
 
   function repaintBehindReact() {
-    const target = document.querySelector('.bad-practices-output')
-    if (target) {
-      target.innerHTML = `<strong>Le DOM a parlé</strong> à ${new Date().toLocaleTimeString('fr-FR')}.`
-    }
+    setMuseumState((current) => ({
+      ...current,
+      lastIncident: `Le DOM a parlé à ${new Date().toLocaleTimeString('fr-FR')}.`,
+    }))
   }
 
   function clearEvidence() {
-    globalShameLog = []
-    setSamples([])
-    setShame(0)
-    setLastIncident('Les preuves ont été supprimées sans confirmation.')
+    setMuseumState((current) => ({
+      ...current,
+      samples: [],
+      shame: 0,
+      globalShameLog: [],
+      lastIncident: 'Les preuves ont été supprimées sans confirmation.',
+    }))
   }
 
   return (
