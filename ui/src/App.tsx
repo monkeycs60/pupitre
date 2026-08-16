@@ -49,6 +49,7 @@ import { AppSettingsView } from './AppSettingsView'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { DocumentsView } from './DocumentsView'
 import { DesignView } from './DesignView'
+import { BadPracticesMuseum } from './BadPracticesMuseum'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { SurfaceSwitch } from './SurfaceSwitch'
@@ -496,6 +497,12 @@ function App() {
     setShowSwitchModel(false)
   }
 
+  function handleChaosSelect() {
+    if (!confirmLeaveMemory()) return
+    setWorkspaceView('chaos')
+    setShowSwitchModel(false)
+  }
+
   function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'documents' | 'library' | 'memory' | 'help') {
     if (view === 'fleet') handleFleetSelect()
     else if (view === 'routines') handleRoutinesSelect()
@@ -584,6 +591,7 @@ function App() {
         help: 'Aide',
         progress: 'Progression',
         settings: 'Paramètres',
+        chaos: 'Chaos',
       }[workspaceView]
 
   // Git est un calque de la conversation ouverte, pas une destination qui la
@@ -628,6 +636,7 @@ function App() {
         onHelpSelect={() => handleHelpSelect()}
         onProgressSelect={handleProgressSelect}
         onSettingsSelect={handleSettingsSelect}
+        onChaosSelect={handleChaosSelect}
         pendingReviews={reviewOpenCount}
         fleetActive={fleet.items.length}
         activeProjectIds={[...new Set(fleet.items.map((item) => item.projectId))]}
@@ -699,6 +708,8 @@ function App() {
           <ProgressView snapshot={gamification.snapshot} />
         ) : workspaceView === 'settings' ? (
           <AppSettingsView />
+        ) : workspaceView === 'chaos' ? (
+          <BadPracticesMuseum />
         ) : selectedProject === null ? (
           <div className="empty-state">
             <p>Sélectionnez un projet pour commencer.</p>

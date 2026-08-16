@@ -25,6 +25,7 @@ interface RailProps {
   onHelpSelect: () => void
   onProgressSelect: () => void
   onSettingsSelect: () => void
+  onChaosSelect: () => void
   pendingReviews?: number
   /** Runs actifs (tours + sub-agents + routines), pour la pastille Fleet. */
   fleetActive?: number
@@ -45,6 +46,7 @@ type NavName =
   | 'routines'
   | 'help'
   | 'settings'
+  | 'chaos'
 
 const NAV_PATHS: Record<NavName, React.ReactNode> = {
   conversations: (
@@ -112,6 +114,12 @@ const NAV_PATHS: Record<NavName, React.ReactNode> = {
       <path d="M6.5 2h3l.5 2a4.5 4.5 0 0 1 1.3.8l1.9-.7 1.5 2.6-1.5 1.3a5 5 0 0 1 0 1.6l1.5 1.3-1.5 2.6-1.9-.7a4.5 4.5 0 0 1-1.3.8l-.5 2h-3l-.5-2a4.5 4.5 0 0 1-1.3-.8l-1.9.7-1.5-2.6 1.5-1.3a5 5 0 0 1 0-1.6L1.3 6.7l1.5-2.6 1.9.7A4.5 4.5 0 0 1 6 4l.5-2Z" />
     </>
   ),
+  chaos: (
+    <>
+      <path d="M2.5 3.5h11v9h-11Z" />
+      <path d="m4.5 6 2 2-2 2M8 10h3.5" />
+    </>
+  ),
 }
 
 function RailIcon({ name }: { name: NavName }) {
@@ -160,6 +168,7 @@ export function Rail({
   onHelpSelect,
   onProgressSelect,
   onSettingsSelect,
+  onChaosSelect,
   pendingReviews = 0,
   fleetActive = 0,
   activeProjectIds = [],
@@ -237,6 +246,7 @@ export function Rail({
     { name: 'routines', label: 'Routines', view: 'routines', onClick: onRoutinesSelect },
     { name: 'help', label: 'Aide', view: 'help', onClick: onHelpSelect },
     { name: 'settings', label: 'Réglages', view: 'settings', onClick: onSettingsSelect },
+    { name: 'chaos', label: 'Chaos', view: 'chaos', onClick: onChaosSelect },
   ]
 
   return (
