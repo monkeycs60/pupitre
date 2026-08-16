@@ -25,15 +25,15 @@ Les deux CLIs sont normalisés en un schéma d'événements unifié (`sidecar/sr
 ## Contrôle des changements (M3)
 
 - **Gardien** analyse le diff Git avec un modèle fort et ancre ses signalements
-  sur les lignes concernées. Il surligne, l'utilisateur dirige : par signalement,
-  envoyer un agent avec une consigne, demander un contre-avis au provider opposé,
-  marquer vu ou ignorer. Les signalements rouges peuvent recevoir automatiquement
-  un contre-avis.
+  sur les lignes concernées, inline dans l'onglet Changements. Il surligne,
+  l'utilisateur dirige : par signalement, envoyer un agent avec une consigne,
+  marquer vu ou ignorer. Une fois toutes les corrections en cours terminées,
+  la relecture repart automatiquement, en incrémental.
 - **Résumé session** produit un bilan court des fonctionnalités et correctifs
   implémentés, avec les éléments restant explicitement à terminer. Le **Handoff**
   conserve le débrief complet pour transférer le travail à une nouvelle session.
 - **Git** affiche branches, commits, HEAD et worktrees, relie les commits à leur
-  conversation d'origine et conserve les alertes Gardien sur les commits visés.
+  conversation d'origine ; Historique des commits avec review par commit.
 - **Tester** relit le fil, propose des scopes et méthodes concrètes, puis exécute
   le choix en sous-tâche. Sorties bornées tête/fin, captures navigateur, preuves
   et verdict restent inline ; un succès acquitte atomiquement les alertes
@@ -267,8 +267,8 @@ Protocole e2e : `e2e/basic-flow.md`.
 
 **M2 (fait)** : orchestration cross-provider (Conductor), sous-tâches, quotas des deux abonnements, presets et changement de modèle.
 
-**M3 (fait)** : Gardien, contre-avis, résumé de session, handoff, bouton Tester
-avec preuves, vue Git et durcissement du sidecar.
+**M3 (fait)** : Gardien, résumé de session, handoff, bouton Tester avec
+preuves, vue Git et durcissement du sidecar.
 
 **M4 (fait)** : bibliothèque de skills, suggestions et workflows, routines,
 Fleet, recherche globale et palette, coûts en tokens, mémoire, reprise terminal

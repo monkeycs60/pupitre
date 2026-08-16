@@ -30,10 +30,6 @@ _Avoid_ : chunk, segment
 Un constat unitaire du Gardien, ancré sur des lignes du diff : sévérité (Rouge, Orange, Gris), catégorie, message, éventuel manque de test.
 _Avoid_ : zone (surcharge historique de l'UI), flag (réservé au code), finding
 
-**Contre-avis** :
-Un second avis en lecture seule rendu sur un signalement par le provider opposé : confirmé, écarté ou nuancé.
-_Avoid_ : second opinion, arbitrage
-
 **Dispatch** :
 L'envoi d'un agent en écriture chargé de traiter un signalement, avec une consigne éditable par l'utilisateur.
 _Avoid_ : assignation, délégation
@@ -56,10 +52,13 @@ _Avoid_ : corrigé (rien ne prouve la correction), fermé
 L'identité unique d'un dépôt dans Pupitre — un nom, une icône, un seul projet par dépôt. Le travail multi-branches vit *à l'intérieur* du projet, jamais sous forme de projets jumeaux.
 _Avoid_ : projet-ticket, projet-worktree
 
-**Carte de review** :
-L'event du fil de conversation qui résume une review terminée et permet le triage des signalements sans quitter la conversation.
-_Avoid_ : notification de review, résumé de scan
+**Ligne Gardien** :
+La ligne d'état du fil de conversation : statut de la dernière review et
+bouton pour ouvrir la vue Code. Plus de triage des signalements dans le fil.
+_Avoid_ : carte de review, notification de review, résumé de scan
 
 **Atelier Git** :
-La vue Git du rail : diff complet avec signalements ancrés, comparaisons Base/Cible, traitement en masse, historique commits ↔ conversations. Surface d'inspection, pas de triage quotidien.
+La vue Code du rail, deux onglets : Changements (diff de la conversation,
+signalements ancrés inline, actions Corriger/OK vu/Ignorer, commit) et
+Historique (commits de la branche, review par commit).
 _Avoid_ : vue Git (acceptable), guichet
