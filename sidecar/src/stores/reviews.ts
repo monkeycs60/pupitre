@@ -274,6 +274,18 @@ export class ReviewStore {
       this.db.query(`
         UPDATE reviews SET status = 'done', error = NULL, updated_at = ? WHERE id = ?
       `).run(new Date().toISOString(), id);
+      // Une review du worktree remplace les précédentes de la conversation :
+      // ce qui y restait ouvert n'a plus de surface où être traité, et
+      // fausserait le compteur du rail. Les reviews par commit restent
+      // indépendantes.
+      this.db.query(`
+        UPDATE review_flags SET status = 'resolved'
+        WHERE status = 'open' AND review_id IN (
+          SELECT id FROM reviews
+          WHERE conversation_id = ? AND scope = 'worktree' AND id != ? AND status = 'done'
+            AND 'worktree' = (SELECT scope FROM reviews WHERE id = ?)
+        )
+      `).run(review.conversation_id, id, id);
     });
     complete();
   }

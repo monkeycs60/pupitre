@@ -853,6 +853,31 @@ test("scan incrémental : un hunk intact conserve son flag sans nouveau scan", a
   expect(completed?.flags[0]).toMatchObject({ status: "open", message: "Le secret est journalisé." });
 });
 
+test("une nouvelle review remplace la précédente : ses signalements encore ouverts passent résolus", async () => {
+  writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
+  git("add", ".");
+  git("commit", "-qm", "head remplacé");
+  const project = projects.create({ name: "remplacement", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => JSON.stringify({ flags: [{
+    file: "src/config.ts", line_start: 1, line_end: 1, severity: "red",
+    category: "secret", message: "Le secret est journalisé.",
+  }] }));
+  const input = {
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "HEAD^", gitRefHead: "HEAD",
+    provider: "codex" as const, model: "gpt-5.6-sol", effort: "high",
+  };
+  const first = runner.start(input);
+  await runner.wait(first.id);
+  const second = runner.start(input);
+  await runner.wait(second.id);
+  expect(store.get(first.id)!.flags.map((flag) => flag.status)).toEqual(["resolved"]);
+  expect(store.get(second.id)!.flags.map((flag) => flag.status)).toEqual(["open"]);
+  expect(store.reviewStatus(project.id).openBySeverity.red).toBe(1);
+});
+
 test("scan incrémental : un hunk modifié après dispatch devient resolved sans re-signalement", async () => {
   const base = git("rev-parse", "HEAD");
   writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");
