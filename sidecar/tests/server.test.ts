@@ -817,6 +817,51 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
   ]);
 });
 
+test("GET /api/conversations/:id/diff rend le même diff que la review worktree", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const repo = mkdtempSync(join(tmpdir(), "pupitre-review-diff-"));
+  const runGit = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: repo });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+  };
+  runGit("init", "-q");
+  runGit("config", "user.email", "api@example.test");
+  runGit("config", "user.name", "API Fixture");
+  mkdirSync(join(repo, "src"));
+  writeFileSync(join(repo, "src/value.ts"), "export const value = 1\n");
+  runGit("add", ".");
+  runGit("commit", "-qm", "base");
+  writeFileSync(join(repo, "src/value.ts"), "export const value = 2\n");
+
+  const project = await createProject(repo);
+  const conversation = new ConversationStore(current.db).create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "change la valeur",
+  });
+
+  const missing = await fetch(`${current.baseUrl}/api/conversations/inconnue/diff`);
+  expect(missing.status).toBe(404);
+
+  const diffResponse = await fetch(`${current.baseUrl}/api/conversations/${conversation.id}/diff`);
+  expect(diffResponse.status).toBe(200);
+  const diffBody = await diffResponse.json() as { base: string; head: string; diff: string };
+  expect(diffBody.diff).toContain("src/value.ts");
+
+  const started = await postJson("/api/reviews", { conversationId: conversation.id });
+  expect(started.status).toBe(201);
+  const created = await started.json() as { id: string };
+  await current.reviews.wait(created.id);
+  const detail = await fetch(`${current.baseUrl}/api/reviews/${created.id}`);
+  const review = await detail.json() as { git_ref_base: string; git_ref_head: string; diff_text: string };
+  expect(diffBody).toEqual({
+    base: review.git_ref_base,
+    head: review.git_ref_head,
+    diff: review.diff_text,
+  });
+});
+
 test("un corps avec reviewModel est refusé 400", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());

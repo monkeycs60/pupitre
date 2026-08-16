@@ -2378,6 +2378,27 @@ export function createServer(deps: ServerDeps) {
           return json(deps.conversations.listEvents(conversationEventsId));
         }
 
+        const conversationDiffId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/diff$/,
+        );
+        if (request.method === "GET" && conversationDiffId !== null) {
+          if (!deps.conversations.get(conversationDiffId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          try {
+            return json(await deps.reviews.conversationDiff(conversationDiffId));
+          } catch (error) {
+            if (
+              error instanceof Error
+              && (error.message.includes("trop volumineux") || error.message.includes("HEAD a changé"))
+            ) {
+              throw new HttpError(400, error.message);
+            }
+            throw error;
+          }
+        }
+
         const conversationHtmlDocumentsId = routeId(
           pathname,
           /^\/api\/conversations\/([^/]+)\/(?:html-documents|documents)$/,

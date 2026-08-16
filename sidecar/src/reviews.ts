@@ -62,7 +62,7 @@ export interface ReviewProgress {
 
 type ReviewStatusListener = () => void;
 
-interface CapturedDiff {
+export interface CapturedDiff {
   base: string;
   head: string;
   diff: string;
@@ -281,6 +281,20 @@ export class ReviewRunner {
     return this.store.get(id);
   }
 
+  /** Le diff exact que lirait un scan worktree, sans en lancer un. */
+  async conversationDiff(conversationId: string): Promise<CapturedDiff> {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) throw new Error("conversation inconnue");
+    const project = this.projects.get(conversation.project_id);
+    if (!project) throw new Error("projet inconnu");
+    const maxBytes = positiveEnv("PUPITRE_REVIEW_DIFF_MAX_BYTES", DEFAULT_DIFF_MAX_BYTES);
+    return this.captureWorktree(conversationCwd(project, conversation), {
+      projectId: project.id,
+      conversationId,
+      gitRefBase: CONVERSATION_BASE_REF,
+    }, maxBytes);
+  }
+
   private async execute(
     id: string,
     cwd: string,
@@ -419,7 +433,7 @@ export class ReviewRunner {
   // la review serait archivée sous un commit qu'elle n'a jamais lu.
   private async captureWorktree(
     cwd: string,
-    input: StartReviewInput,
+    input: Pick<StartReviewInput, "gitRefBase" | "projectId" | "conversationId">,
     maxBytes: number,
   ): Promise<CapturedDiff> {
     for (let attempt = 0; attempt < WORKTREE_CAPTURE_ATTEMPTS; attempt += 1) {
@@ -453,7 +467,7 @@ export class ReviewRunner {
 
   private async resolveBase(
     cwd: string,
-    input: StartReviewInput,
+    input: Pick<StartReviewInput, "gitRefBase" | "projectId" | "conversationId">,
     head: string,
   ): Promise<string> {
     return input.gitRefBase === CONVERSATION_BASE_REF
