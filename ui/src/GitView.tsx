@@ -9,7 +9,7 @@ import {
   startReview,
 } from './api'
 import { DiffViewer } from './DiffViewer'
-import { diffForPath } from './reviewDiff'
+import { diffForPath, parseUnifiedDiff } from './reviewDiff'
 import { buildFileTree } from './reviewFileTree'
 import { isScanRunning } from './reviewStatus'
 import { SurfaceSwitch } from './SurfaceSwitch'
@@ -101,12 +101,25 @@ interface ChangesTabProps {
   onRefresh: () => void
 }
 
+/** Les signalements dans l'ordre où leurs cartes apparaissent dans le diff rendu. */
+function flagsInDiffOrder(diff: string, flags: ReviewFlag[]): ReviewFlag[] {
+  return parseUnifiedDiff(diff, flags).flatMap((line) => line.cardFlags)
+}
+
 function ChangesTab({ project, conversation, live, review, reviewStatus, focusedFlagId, onFlagUpdated, onRefresh }: ChangesTabProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [commitMessage, setCommitMessage] = useState('')
   const [filter, setFilter] = useState<'open' | 'all'>('open')
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [scanPending, setScanPending] = useState(false)
+  const [activeFlagId, setActiveFlagId] = useState<string | null>(focusedFlagId)
+
+  useEffect(() => { setActiveFlagId(focusedFlagId) }, [focusedFlagId])
+  // La demande de relecture est confirmée par le canal Fleet (running) ou par
+  // l'arrivée d'une nouvelle review ; l'un ou l'autre suffit à lever l'attente.
+  useEffect(() => { if (isScanRunning(reviewStatus)) setScanPending(false) }, [reviewStatus])
+  useEffect(() => { setScanPending(false) }, [review?.id, review?.updated_at])
 
   const diff = review?.diff_text ?? live?.diff ?? ''
   const flags = review?.flags ?? []
@@ -116,13 +129,25 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
   const visibleFlags = filter === 'open' ? openFlags : flags
   const scopedDiff = diffForPath(diff, selectedFile)
   const stale = review !== null && live !== null && review.diff_text !== live.diff
+  const scanning = scanPending || isScanRunning(reviewStatus)
+  const navigableFlags = useMemo(() => flagsInDiffOrder(scopedDiff, visibleFlags), [scopedDiff, visibleFlags])
+  const activeIndex = navigableFlags.findIndex((flag) => flag.id === activeFlagId)
+
+  function goToFlag(step: 1 | -1) {
+    if (navigableFlags.length === 0) return
+    const next = activeIndex === -1
+      ? (step === 1 ? 0 : navigableFlags.length - 1)
+      : (activeIndex + step + navigableFlags.length) % navigableFlags.length
+    setActiveFlagId(navigableFlags[next]!.id)
+  }
 
   async function relire() {
-    if (busy || isScanRunning(reviewStatus)) return
-    setBusy(true); setError(null)
+    if (busy || scanning) return
+    setBusy(true); setError(null); setScanPending(true)
     try {
       await startReview({ conversationId: conversation.id, scope: 'worktree' })
     } catch (reason) {
+      setScanPending(false)
       setError(errorMessage(reason))
     } finally {
       setBusy(false)
@@ -135,6 +160,9 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
     setBusy(true); setError(null)
     try {
       await dispatchAllFlags(review.id, ['red', 'orange', 'grey'])
+      for (const flag of openFlags) {
+        if (flag.status === 'open') onFlagUpdated({ ...flag, status: 'agent_running' })
+      }
       onRefresh()
     } catch (reason) {
       setError(errorMessage(reason))
@@ -157,9 +185,12 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
     }
   }
 
-  const relireLabel = isScanRunning(reviewStatus) && reviewStatus?.running
-    ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}`
-    : 'Relire'
+  const running = reviewStatus?.running ?? null
+  const progressLabel = running && running.zoneTotal > 0
+    ? `Le Gardien relit · zone ${running.zoneDone}/${running.zoneTotal}`
+    : 'Le Gardien prépare la relecture'
+  const progressRatio = running && running.zoneTotal > 0 ? running.zoneDone / running.zoneTotal : 0
+  const correctingCount = flags.filter((flag) => flag.status === 'agent_running').length
 
   return <section className="changes-tab">
     <aside className="changes-sidebar">
@@ -178,16 +209,35 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
     </aside>
     <div className="changes-main">
       <header className="changes-toolbar">
-        <button type="button" onClick={() => void relire()} disabled={busy || isScanRunning(reviewStatus)}>{relireLabel}</button>
-        <button type="button" onClick={() => void correctOpen()} disabled={busy || openFlags.length === 0}>Corriger les {openFlags.length} ouverts</button>
+        <button type="button" onClick={() => void relire()} disabled={busy || scanning}>{scanning ? 'Relecture…' : 'Relire'}</button>
+        <button type="button" onClick={() => void correctOpen()} disabled={busy || scanning || openFlags.length === 0}>{busy ? 'Lancement…' : `Corriger les ${openFlags.length} ouverts`}</button>
+        {navigableFlags.length > 0 ? (
+          <div className="changes-nav" role="group" aria-label="Naviguer entre les signalements">
+            <button type="button" onClick={() => goToFlag(-1)} aria-label="Signalement précédent">‹</button>
+            <span>{activeIndex === -1 ? '–' : activeIndex + 1} / {navigableFlags.length}</span>
+            <button type="button" onClick={() => goToFlag(1)} aria-label="Signalement suivant">›</button>
+          </div>
+        ) : null}
         <div className="changes-filter" role="group" aria-label="Filtrer les signalements">
           <button type="button" className={filter === 'open' ? 'is-active' : ''} onClick={() => setFilter('open')}>Ouverts</button>
           <button type="button" className={filter === 'all' ? 'is-active' : ''} onClick={() => setFilter('all')}>Tous</button>
         </div>
       </header>
+      {scanning ? (
+        <div className="changes-progress" role="status" aria-live="polite">
+          <span className="changes-progress-dots" aria-hidden="true"><i /><i /><i /></span>
+          <span>{progressLabel}</span>
+          <span className="changes-progress-bar" aria-hidden="true"><i style={{ width: `${Math.round(progressRatio * 100)}%` }} /></span>
+        </div>
+      ) : correctingCount > 0 ? (
+        <div className="changes-progress" role="status" aria-live="polite">
+          <span className="changes-progress-dots" aria-hidden="true"><i /><i /><i /></span>
+          <span>{correctingCount} correction{correctingCount > 1 ? 's' : ''} en cours — le Gardien relira à la fin</span>
+        </div>
+      ) : null}
       {error ? <p className="code-error" role="alert">{error}</p> : null}
       {scopedDiff
-        ? <DiffViewer diff={scopedDiff} flags={visibleFlags} label="Diff de la conversation" selectedFlagId={focusedFlagId} onFlagUpdated={onFlagUpdated} />
+        ? <div className={`changes-diff${scanning ? ' is-scanning' : ''}`}><DiffViewer diff={scopedDiff} flags={visibleFlags} label="Diff de la conversation" selectedFlagId={activeFlagId} onFlagUpdated={onFlagUpdated} /></div>
         : <p className="changes-empty">Rien à afficher pour cette sélection.</p>}
     </div>
   </section>
@@ -324,7 +374,11 @@ export function GitView({ project, conversation, focusedFlagId = null, reviewSta
     wasScanRunning.current = running
   }, [reviewStatus, refresh])
 
-  const review = conversation ? reviews.find((item) => item.conversation_id === conversation.id && item.scope === 'worktree') ?? null : null
+  // Pendant une relecture, la review en cours n'a pas encore de signalements :
+  // on continue d'afficher la dernière terminée jusqu'à ce qu'elle la remplace.
+  const review = conversation
+    ? reviews.find((item) => item.conversation_id === conversation.id && item.scope === 'worktree' && item.status !== 'running') ?? null
+    : null
   const hasRunningFlag = review?.flags.some((flag) => flag.status === 'agent_running') ?? false
 
   useEffect(() => {
