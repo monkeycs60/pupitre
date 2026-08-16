@@ -331,18 +331,9 @@ export function openDb(dir: string = dataDir()): Database {
     `);
   }
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
-  addColumn(db, "projects", "auto_counter_red INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "projects", "auto_rescan INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "reviews", "code_provider TEXT NULL");
   addColumn(db, "reviews", "review_speed TEXT NOT NULL DEFAULT 'standard'");
-  addColumn(db, "review_flags", "counter_state TEXT NOT NULL DEFAULT 'idle'");
-  addColumn(db, "review_flags", "counter_verdict TEXT NULL");
-  addColumn(db, "review_flags", "counter_text TEXT NULL");
-  addColumn(db, "review_flags", "counter_provider TEXT NULL");
-  addColumn(db, "review_flags", "counter_model TEXT NULL");
-  addColumn(db, "review_flags", "counter_effort TEXT NULL");
-  addColumn(db, "review_flags", "counter_subtask_id TEXT NULL");
-  addColumn(db, "review_flags", "counter_error TEXT NULL");
   addColumn(db, "review_flags", "code_provider TEXT NULL");
   addColumn(db, "review_flags", "hunk_hash TEXT NULL");
   addColumn(db, "review_flags", "subtask_id TEXT NULL");
@@ -361,6 +352,18 @@ export function openDb(dir: string = dataDir()): Database {
   // refonte « calque Git » — les bases historiques les portent encore.
   dropColumn(db, "projects", "gardien_mode");
   dropColumn(db, "review_flags", "decision");
+  // Résidu du contre-avis, jamais utilisé (M3-J) — les bases historiques
+  // portent encore ces colonnes et l'option projet.
+  db.exec("UPDATE review_flags SET status = 'open' WHERE status = 'countered'");
+  dropColumn(db, "review_flags", "counter_state");
+  dropColumn(db, "review_flags", "counter_verdict");
+  dropColumn(db, "review_flags", "counter_text");
+  dropColumn(db, "review_flags", "counter_provider");
+  dropColumn(db, "review_flags", "counter_model");
+  dropColumn(db, "review_flags", "counter_effort");
+  dropColumn(db, "review_flags", "counter_subtask_id");
+  dropColumn(db, "review_flags", "counter_error");
+  dropColumn(db, "projects", "auto_counter_red");
   // Migration de vocabulaire : « acquitté/écarté » devient « traité/ignoré ».
   db.exec("UPDATE review_flags SET status = 'treated' WHERE status = 'acked'");
   db.exec("UPDATE review_flags SET status = 'ignored' WHERE status = 'dismissed'");

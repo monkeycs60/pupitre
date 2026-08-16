@@ -16,6 +16,17 @@ test("une base neuve ne porte plus decision ni gardien_mode", () => {
   db.close();
 });
 
+test("le contre-avis et auto_counter_red ne laissent aucune colonne", () => {
+  const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-db-")));
+  const flagColumns = columns(db, "review_flags");
+  for (const name of ["counter_state", "counter_verdict", "counter_text", "counter_provider", "counter_model", "counter_effort", "counter_subtask_id", "counter_error"]) {
+    expect(flagColumns).not.toContain(name);
+  }
+  const projectColumns = columns(db, "projects");
+  expect(projectColumns).not.toContain("auto_counter_red");
+  db.close();
+});
+
 test("une base historique voit ses colonnes résiduelles purgées à l'ouverture", () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-db-"));
   const first = openDb(dir);

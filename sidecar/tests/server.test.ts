@@ -862,12 +862,18 @@ test("un flag est traité directement sans décision groupée", async () => {
   }]);
   const storedReview = reviewStore.get(review.id)!;
   const flag = storedReview.flags[0]!;
-  const invalidCombined = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
+  const invalidStatus = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
     method: "PATCH",
     headers: jsonHeaders(),
-    body: JSON.stringify({ status: "treated", codeProvider: "invalide" }),
+    body: JSON.stringify({ status: "invalide" }),
   });
-  expect(invalidCombined.status).toBe(400);
+  expect(invalidStatus.status).toBe(400);
+  const noStatus = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
+    method: "PATCH",
+    headers: jsonHeaders(),
+    body: JSON.stringify({}),
+  });
+  expect(noStatus.status).toBe(400);
   expect(reviewStore.getFlag(flag.id)).toMatchObject({
     status: "open",
     code_provider: "codex",
@@ -880,90 +886,6 @@ test("un flag est traité directement sans décision groupée", async () => {
   });
   expect(treated.status).toBe(200);
   expect(await treated.json()).toEqual(expect.objectContaining({ id: flag.id, status: "treated" }));
-});
-
-test("expose le contre-avis opposé, global ou ciblé, et l'option automatique rouge", async () => {
-  if (!current) throw new Error("serveur de test non démarré");
-  const project = await createProject(tmpdir());
-  const conversation = new ConversationStore(current.db).create({
-    projectId: project.id,
-    provider: "codex",
-    model: "gpt-5.6-luna",
-    firstMessage: "écris le risque",
-  });
-  const reviewStore = new ReviewStore(current.db);
-  const review = reviewStore.create({
-    projectId: project.id,
-    conversationId: conversation.id,
-    gitRefBase: "base",
-    gitRefHead: "head",
-    provider: "codex",
-    model: "gpt-5.6-sol",
-    effort: "high",
-  });
-  reviewStore.complete(review.id, [{
-    file: "src/danger.ts",
-    line_start: 4,
-    line_end: 4,
-    severity: "red",
-    category: "perte de données",
-    message: "La suppression doit conserver une sauvegarde.",
-  }]);
-  const flag = reviewStore.get(review.id)!.flags[0]!;
-
-  const automatic = await putJson(`/api/projects/${project.id}/auto-counter-red`, {
-    enabled: true,
-  });
-  expect(automatic.status).toBe(200);
-  expect(await automatic.json()).toEqual(expect.objectContaining({ auto_counter_red: true }));
-
-  const cheap = await postJson(`/api/review-flags/${flag.id}/counter-opinion`, {
-    model: "haiku",
-    effort: "high",
-    codeProvider: "claude",
-  });
-  expect(cheap.status).toBe(400);
-  expect(reviewStore.getFlag(flag.id)?.code_provider).toBe("codex");
-
-  const all = await postJson(`/api/reviews/${review.id}/counter-opinions`, {
-    model: "opus",
-    effort: "high",
-  });
-  expect(all.status).toBe(202);
-  expect(await all.json()).toEqual([
-    expect.objectContaining({
-      id: flag.id,
-      counter_provider: "claude",
-      counter_model: "opus",
-      counter_state: "queued",
-    }),
-  ]);
-  const duplicate = await postJson(`/api/review-flags/${flag.id}/counter-opinion`, {
-    model: "opus",
-    effort: "high",
-  });
-  expect(duplicate.status).toBe(409);
-  await current.reviews.waitCounter(flag.id);
-
-  const author = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
-    method: "PATCH",
-    headers: jsonHeaders(),
-    body: JSON.stringify({ codeProvider: "claude" }),
-  });
-  expect(author.status).toBe(200);
-  expect(await author.json()).toEqual(expect.objectContaining({
-    id: flag.id,
-    code_provider: "claude",
-  }));
-  const targeted = await postJson(`/api/review-flags/${flag.id}/counter-opinion`, {
-    model: "gpt-5.6-sol",
-    effort: "high",
-  });
-  expect(targeted.status).toBe(202);
-  expect(await targeted.json()).toEqual([
-    expect.objectContaining({ id: flag.id, counter_provider: "codex" }),
-  ]);
-  await current.reviews.waitCounter(flag.id);
 });
 
 test("la création d'un preset invalide conserve son erreur de validation", async () => {

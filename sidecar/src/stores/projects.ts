@@ -8,7 +8,6 @@ export interface Project {
   default_review_preset_id: string | null;
   default_correction_preset_id: string | null;
   filesystem_scope: FilesystemScope;
-  auto_counter_red: boolean;
   auto_rescan: boolean;
   /**
    * Serveurs MCP autorisés pour ce projet, par nom. `null` = aucun filtre, on
@@ -46,7 +45,6 @@ export class ProjectStore {
       ? {
         ...row,
         pinned: !!row.pinned,
-        auto_counter_red: !!row.auto_counter_red,
         auto_rescan: !!row.auto_rescan,
         filesystem_scope: normalizeFilesystemScope(row.filesystem_scope),
         mcp_servers: parseMcpServers(row.mcp_servers),
@@ -61,7 +59,6 @@ export class ProjectStore {
     return rows.map((r) => ({
       ...r,
       pinned: !!r.pinned,
-      auto_counter_red: !!r.auto_counter_red,
       auto_rescan: !!r.auto_rescan,
       filesystem_scope: normalizeFilesystemScope(r.filesystem_scope),
       mcp_servers: parseMcpServers(r.mcp_servers),
@@ -98,11 +95,6 @@ export class ProjectStore {
   setMcpServers(id: string, servers: string[] | null): void {
     this.db.query("UPDATE projects SET mcp_servers = ? WHERE id = ?")
       .run(servers === null ? null : JSON.stringify(servers), id);
-  }
-
-  setAutoCounterRed(id: string, enabled: boolean): void {
-    this.db.query("UPDATE projects SET auto_counter_red = ? WHERE id = ?")
-      .run(enabled ? 1 : 0, id);
   }
 
   setAutoRescan(id: string, enabled: boolean): void {

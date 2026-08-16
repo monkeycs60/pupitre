@@ -21,7 +21,6 @@ import type { QuotaTracker } from "./quotas";
 import type { QuotaRefresher } from "./quota-refresh";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
 import { DispatchConflictError, type ReviewRunner } from "./reviews";
-import { CounterAlreadyRunningError } from "./stores/reviews";
 import {
   DebriefAlreadyRunningError,
   NoNewSessionSummaryEventsError,
@@ -1522,22 +1521,6 @@ export function createServer(deps: ServerDeps) {
           return json(deps.projects.get(projectFilesystemScopeId));
         }
 
-        const projectAutoCounterId = routeId(
-          pathname,
-          /^\/api\/projects\/([^/]+)\/auto-counter-red$/,
-        );
-        if (request.method === "PUT" && projectAutoCounterId !== null) {
-          if (!deps.projects.get(projectAutoCounterId)) {
-            throw new HttpError(404, "projet inconnu");
-          }
-          const body = await readObject(request);
-          if (typeof body.enabled !== "boolean") {
-            throw new HttpError(400, "option de contre-avis automatique invalide");
-          }
-          deps.projects.setAutoCounterRed(projectAutoCounterId, body.enabled);
-          return json(deps.projects.get(projectAutoCounterId));
-        }
-
         const projectAutoRescanId = routeId(
           pathname,
           /^\/api\/projects\/([^/]+)\/auto-rescan$/,
@@ -2753,46 +2736,6 @@ export function createServer(deps: ServerDeps) {
           return json(review);
         }
 
-        const reviewCountersId = routeId(
-          pathname,
-          /^\/api\/reviews\/([^/]+)\/counter-opinions$/,
-        );
-        if (request.method === "POST" && reviewCountersId !== null) {
-          const review = deps.reviews.get(reviewCountersId);
-          if (!review) throw new HttpError(404, "review inconnue");
-          if (review.flags.length === 0) throw new HttpError(400, "aucun flag à contre-expertiser");
-          const body = await readObject(request);
-          const isMixedProvider = new Set(
-            review.flags.map((flag) => flag.code_provider),
-          ).size > 1;
-          if (isMixedProvider && (body.model !== undefined || body.effort !== undefined)) {
-            throw new HttpError(
-              400,
-              "une review multi-provider utilise le modèle fort de chaque provider opposé",
-            );
-          }
-          const defaults = deps.reviews.counterDefaults(review.flags[0]!.id)!;
-          const model = reviewModel(
-            body.model === undefined ? defaults.model : requiredString(body, "model"),
-            defaults.provider,
-            "model de contre-avis",
-          );
-          const effort = body.effort === undefined
-            ? defaults.effort
-            : optionalEffort(body, defaults.provider);
-          try {
-            return json(deps.reviews.startCounterOpinions(
-              review.flags.map((flag) => flag.id),
-              isMixedProvider ? {} : { model, effort: effort ?? defaults.effort },
-            ), 202);
-          } catch (error) {
-            if (error instanceof CounterAlreadyRunningError) {
-              throw new HttpError(409, error.message);
-            }
-            throw error;
-          }
-        }
-
         const reviewFlagId = routeId(pathname, /^\/api\/review-flags\/([^/]+)$/);
         if (request.method === "PATCH" && reviewFlagId !== null) {
           const body = await readObject(request);
@@ -2802,67 +2745,12 @@ export function createServer(deps: ServerDeps) {
               throw new HttpError(400, "statut de flag invalide");
             }
           }
-          if (body.codeProvider !== undefined) {
-            if (body.codeProvider !== "claude" && body.codeProvider !== "codex") {
-              throw new HttpError(400, "codeProvider invalide");
-            }
-          }
-          if (body.status === undefined && body.codeProvider === undefined) {
+          if (body.status === undefined) {
             throw new HttpError(400, "aucune modification de flag demandée");
           }
-          try {
-            const flag = deps.reviews.updateFlag(reviewFlagId, {
-              status: body.status,
-              codeProvider: body.codeProvider,
-            });
-            if (!flag) throw new HttpError(404, "flag inconnu");
-            return json(flag);
-          } catch (error) {
-            if (error instanceof CounterAlreadyRunningError) {
-              throw new HttpError(409, error.message);
-            }
-            throw error;
-          }
-        }
-        const reviewFlagCounterId = routeId(
-          pathname,
-          /^\/api\/review-flags\/([^/]+)\/counter-opinion$/,
-        );
-        if (request.method === "POST" && reviewFlagCounterId !== null) {
-          const body = await readObject(request);
-          const flag = deps.reviews.getFlag(reviewFlagCounterId);
+          const flag = deps.reviews.updateFlag(reviewFlagId, { status: body.status });
           if (!flag) throw new HttpError(404, "flag inconnu");
-          if (
-            body.codeProvider !== undefined
-            && body.codeProvider !== "claude"
-            && body.codeProvider !== "codex"
-          ) {
-            throw new HttpError(400, "codeProvider invalide");
-          }
-          const codeProvider = (body.codeProvider ?? flag.code_provider) as Provider;
-          const defaults = defaultReviewConfig(
-            codeProvider === "claude" ? "codex" : "claude",
-          );
-          const model = reviewModel(
-            body.model === undefined ? defaults.model : requiredString(body, "model"),
-            defaults.provider,
-            "model de contre-avis",
-          );
-          const effort = body.effort === undefined
-            ? defaults.effort
-            : optionalEffort(body, defaults.provider);
-          try {
-            return json(deps.reviews.startCounterOpinions([reviewFlagCounterId], {
-              model,
-              effort: effort ?? defaults.effort,
-              codeProvider,
-            }), 202);
-          } catch (error) {
-            if (error instanceof CounterAlreadyRunningError) {
-              throw new HttpError(409, error.message);
-            }
-            throw error;
-          }
+          return json(flag);
         }
 
         const reviewFlagDispatchId = routeId(

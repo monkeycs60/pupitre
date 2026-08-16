@@ -8,7 +8,6 @@ import type { Conversation, ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
 import { defaultReviewConfig } from "./stores/presets";
 import type {
-  CounterVerdict,
   Review,
   ReviewFlag,
   ReviewFlagInput,
@@ -16,7 +15,7 @@ import type {
   ReviewStore,
 } from "./stores/reviews";
 import { MAX_CONCURRENT_SUBTASKS, SubtaskLimitError } from "./subtasks";
-import type { SubtaskResult, SubtaskRunner } from "./subtasks";
+import type { SubtaskRunner } from "./subtasks";
 import { conversationCwd } from "./workspace";
 
 const DEFAULT_ZONE_CHARS = 48_000;
@@ -53,20 +52,6 @@ export interface StartReviewInput {
   scope?: string;
   incremental?: boolean;
 }
-
-export interface CounterOpinionConfig {
-  model?: string;
-  effort?: string;
-  codeProvider?: Provider;
-}
-
-export interface CounterOpinionDefaults {
-  provider: Provider;
-  model: string;
-  effort: string;
-}
-
-type CounterSubtasks = Pick<SubtaskRunner, "start" | "waitResult">;
 
 export interface ReviewProgress {
   reviewId: string;
@@ -112,7 +97,6 @@ export class DispatchConflictError extends Error {}
 
 export class ReviewRunner {
   private active = new Map<string, Promise<void>>();
-  private activeCounters = new Map<string, Promise<void>>();
   private activeDispatches = new Map<string, Promise<void>>();
   private progress = new Map<string, ReviewProgress>();
   private statusListeners = new Set<ReviewStatusListener>();
@@ -124,7 +108,7 @@ export class ReviewRunner {
     private conversations: ConversationStore,
     private quotas: QuotaTracker,
     scanner?: ReviewScanner,
-    private subtasks?: CounterSubtasks,
+    private subtasks?: Pick<SubtaskRunner, "start" | "waitResult">,
   ) {
     this.scanner = scanner ?? ((input) => scanWithAdapters(input, this.quotas));
   }
@@ -194,15 +178,10 @@ export class ReviewRunner {
     return flag;
   }
 
-  setFlagCodeProvider(id: string, provider: Provider) {
-    return this.store.setFlagCodeProvider(id, provider);
-  }
-
   updateFlag(
     id: string,
     input: {
       status?: "open" | "agent_running" | "treated" | "ignored" | "resolved";
-      codeProvider?: Provider;
       hunkHash?: string | null;
       subtaskId?: string | null;
       userMessage?: string | null;
@@ -217,7 +196,7 @@ export class ReviewRunner {
     if (!this.subtasks) throw new Error("moteur de sous-tâches indisponible");
     const flag = this.store.getFlag(id);
     if (!flag) throw new Error("flag inconnu");
-    if (flag.status !== "open" && flag.status !== "countered") {
+    if (flag.status !== "open") {
       throw new DispatchConflictError("ce flag ne peut pas être dispatché dans son état actuel");
     }
     const review = this.store.get(flag.review_id);
@@ -243,7 +222,7 @@ export class ReviewRunner {
     const review = this.store.get(reviewId);
     if (!review) throw new Error("review inconnu");
     const flags = review.flags.filter((flag) =>
-      severities.includes(flag.severity) && (flag.status === "open" || flag.status === "countered"),
+      severities.includes(flag.severity) && flag.status === "open",
     );
     const targetConversation = review.conversation_id;
     void (async () => {
@@ -263,64 +242,6 @@ export class ReviewRunner {
 
   private notifyStatus(): void {
     for (const listener of this.statusListeners) listener();
-  }
-
-  counterDefaults(flagId: string): CounterOpinionDefaults | null {
-    const flag = this.store.getFlag(flagId);
-    if (!flag) return null;
-    return defaultReviewConfig(oppositeProvider(flag.code_provider));
-  }
-
-  startCounterOpinions(
-    flagIds: string[],
-    config: CounterOpinionConfig = {},
-  ): ReviewFlag[] {
-    if (!this.subtasks) throw new Error("moteur de sous-tâches indisponible");
-    const uniqueIds = [...new Set(flagIds)];
-    if (uniqueIds.length === 0) throw new Error("aucun flag à contre-expertiser");
-    const flags = uniqueIds.map((id) => {
-      const flag = this.store.getFlag(id);
-      if (!flag) throw new Error("flag inconnu");
-      return flag;
-    });
-    const reviewIds = new Set(flags.map((flag) => flag.review_id));
-    if (reviewIds.size !== 1) throw new Error("les flags doivent appartenir à la même review");
-    const review = this.store.get(flags[0]!.review_id);
-    if (!review) throw new Error("review inconnue");
-    if (config.codeProvider && flags.length !== 1) {
-      throw new Error("l'auteur ne peut être précisé que pour un contre-avis ciblé");
-    }
-    const effectiveFlags = flags.map((flag) => ({
-      ...flag,
-      code_provider: config.codeProvider ?? flag.code_provider,
-    }));
-    const targetProviders = new Set(
-      effectiveFlags.map((flag) => oppositeProvider(flag.code_provider)),
-    );
-    if (targetProviders.size > 1 && (config.model || config.effort)) {
-      throw new Error("une review multi-provider utilise les modèles forts par défaut de chaque point");
-    }
-    const queued = this.store.queueCounters(effectiveFlags.map((flag) => {
-      const defaults = defaultReviewConfig(oppositeProvider(flag.code_provider));
-      return {
-        id: flag.id,
-        provider: defaults.provider,
-        model: config.model?.trim() || defaults.model,
-        effort: config.effort?.trim() || defaults.effort,
-        codeProvider: flag.code_provider,
-      };
-    }));
-    const run = this.executeCounterBatch(review, queued)
-      .finally(() => {
-        for (const flag of queued) this.activeCounters.delete(flag.id);
-      });
-    for (const flag of queued) this.activeCounters.set(flag.id, run);
-    return queued;
-  }
-
-  async waitCounter(flagId: string): Promise<ReviewFlag | null> {
-    await this.activeCounters.get(flagId);
-    return this.store.getFlag(flagId);
   }
 
   async wait(id: string): Promise<Review | null> {
@@ -397,13 +318,6 @@ export class ReviewRunner {
     );
     this.store.copyFlags(id, resolvedWithoutResignal);
     this.markResolved(id, resolvedWithoutResignal);
-    const project = this.projects.get(input.projectId);
-    if (project?.auto_counter_red && this.subtasks) {
-      const redIds = this.store.get(id)?.flags
-        .filter((flag) => flag.severity === "red")
-        .map((flag) => flag.id) ?? [];
-      if (redIds.length > 0) this.startCounterOpinions(redIds);
-    }
     this.progress.delete(id);
     this.notifyStatus();
   }
@@ -541,45 +455,6 @@ export class ReviewRunner {
     }
   }
 
-  private async executeCounterBatch(review: Review, flags: ReviewFlag[]): Promise<void> {
-    for (let index = 0; index < flags.length; index += MAX_CONCURRENT_SUBTASKS) {
-      const chunk = flags.slice(index, index + MAX_CONCURRENT_SUBTASKS);
-      await Promise.all(chunk.map((flag) => this.executeCounter(review, flag)));
-    }
-  }
-
-  private async executeCounter(review: Review, flag: ReviewFlag): Promise<void> {
-    try {
-      let subtask;
-      for (;;) {
-        try {
-          subtask = this.subtasks!.start({
-            conversationId: review.conversation_id,
-            provider: flag.counter_provider!,
-            model: flag.counter_model!,
-            effort: flag.counter_effort,
-            prompt: counterOpinionPrompt(review, flag),
-            label: `Contre-avis · ${flag.file}:${flag.line_start}`,
-            readOnly: true,
-          });
-          break;
-        } catch (error) {
-          if (!(error instanceof SubtaskLimitError)) throw error;
-          await Bun.sleep(100);
-        }
-      }
-      this.store.beginCounter(flag.id, subtask.id);
-      const result = await this.subtasks!.waitResult(subtask.id);
-      if (!result || result.status !== "done") {
-        throw new Error(counterResultError(result));
-      }
-      const opinion = parseCounterOpinionOutput(result.resultText);
-      this.store.completeCounter(flag.id, opinion.verdict, opinion.text);
-    } catch (error) {
-      this.store.failCounter(flag.id, errorMessage(error));
-    }
-  }
-
   private async scanZone(input: ReviewScanInput, diff: string): Promise<ReviewFlagInput[]> {
     let response = await this.scanner(input);
     try {
@@ -594,24 +469,6 @@ export class ReviewRunner {
     }
   }
 
-}
-
-export function parseCounterOpinionOutput(output: string): {
-  verdict: CounterVerdict;
-  text: string;
-} {
-  const parsed = parseJsonObject(output);
-  if (
-    parsed.verdict !== "confirmed"
-    && parsed.verdict !== "dismissed"
-    && parsed.verdict !== "nuanced"
-  ) {
-    throw new ReviewOutputError("verdict de contre-avis invalide");
-  }
-  return {
-    verdict: parsed.verdict,
-    text: nonEmptyString(parsed.text, "texte du contre-avis"),
-  };
 }
 
 export async function scanWithAdapters(
@@ -1023,33 +880,6 @@ function formatRetryPrompt(original: string, response: string, reason: string): 
   ].join("\n");
 }
 
-
-function oppositeProvider(provider: Provider): Provider {
-  return provider === "claude" ? "codex" : "claude";
-}
-
-function counterResultError(result: SubtaskResult | null): string {
-  if (!result) return "sous-tâche de contre-avis introuvable";
-  return result.error || `contre-avis terminé avec le statut ${result.status}`;
-}
-
-function counterOpinionPrompt(review: Review, flag: ReviewFlag): string {
-  return [
-    "Tu rends un contre-avis de code indépendant. Ton objectif est la certitude,",
-    "pas la chasse au faux positif ni la contradiction systématique.",
-    `Le code de ce point a été écrit par ${flag.code_provider}. Rejuge uniquement ce signal :`,
-    `Fichier : ${flag.file}:${flag.line_start}-${flag.line_end}`,
-    `Sévérité initiale : ${flag.severity}`,
-    `Catégorie : ${flag.category}`,
-    `Signal : ${flag.message}`,
-    "Confirme, infirme ou nuance le risque à partir du diff ci-dessous.",
-    "N'utilise aucun outil d'écriture et ne modifie aucun fichier.",
-    "Réponds UNIQUEMENT par ce JSON :",
-    '{"verdict":"confirmed|dismissed|nuanced","text":"Explication concrète et concise."}',
-    "",
-    counterContext(review.diff_text, flag),
-  ].join("\n");
-}
 
 function dispatchPrompt(flag: ReviewFlag, context: string, userMessage: string | undefined): string {
   return [
