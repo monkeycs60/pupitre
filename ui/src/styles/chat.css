@@ -863,7 +863,9 @@
   animation: g-sweep 1.6s var(--ease) infinite;
 }
 
-.guardian-line.is-idle { background: transparent; border-color: var(--border); }
+.guardian-line.is-idle,
+.guardian-line.is-stale { background: transparent; border-color: var(--border); }
+.guardian-line.is-stale .guardian-line-meta { color: var(--streak); }
 .guardian-line.is-running { color: var(--accent-hover); background: color-mix(in srgb, var(--accent) 8%, transparent); border-color: var(--accent-border); }
 .guardian-line.is-clean { color: var(--ok); background: color-mix(in srgb, var(--ok) 6%, transparent); border-color: color-mix(in srgb, var(--ok) 22%, transparent); }
 .guardian-line.is-warn { color: var(--streak); background: color-mix(in srgb, var(--streak) 5%, transparent); border-color: color-mix(in srgb, var(--streak) 28%, transparent); }

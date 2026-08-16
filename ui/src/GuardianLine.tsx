@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { listProjectReviews } from './api'
+import { getConversationDiff, listProjectReviews } from './api'
 import { isScanRunning } from './reviewStatus'
 import type { Conversation, Project, Review, ReviewStatusSnapshot } from './types'
 
@@ -11,16 +11,17 @@ interface GuardianLineProps {
   onRelire: () => void
 }
 
-type Variant = 'idle' | 'running' | 'clean' | 'warn' | 'block'
+type Variant = 'idle' | 'running' | 'clean' | 'warn' | 'block' | 'stale'
 
 function GuardianShield() {
   return <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true"><path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" /></svg>
 }
 
-function variantFor(review: Review | null, running: boolean): Variant {
+function variantFor(review: Review | null, running: boolean, stale: boolean): Variant {
   if (running) return 'running'
   if (!review) return 'idle'
   if (review.status === 'error') return 'block'
+  if (stale) return 'stale'
   const open = review.flags.filter((flag) => flag.status === 'open' || flag.status === 'agent_running')
   if (open.length === 0) return 'clean'
   return open.some((flag) => flag.severity === 'red') ? 'block' : 'warn'
@@ -39,25 +40,38 @@ function findingsSummary(review: Review): string {
     .join(' · ')
 }
 
-function stateLabel(review: Review | null): string {
+function stateLabel(review: Review | null, stale: boolean): string {
   if (!review) return 'pas encore relu'
   if (review.status === 'error') return 'relecture interrompue'
+  if (stale) return 'modifié depuis la relecture — à relire'
   return findingsSummary(review)
 }
 
 export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, onRelire }: GuardianLineProps) {
   const [review, setReview] = useState<Review | null>(null)
+  const [liveDiff, setLiveDiff] = useState<string | null>(null)
   const running = isScanRunning(reviewStatus)
   const wasRunning = useRef(running)
 
   const loadReview = useCallback((signal?: AbortSignal) => {
-    void listProjectReviews(project.id, signal)
-      .then((reviews) => {
+    void Promise.all([listProjectReviews(project.id, signal), getConversationDiff(conversation.id, signal)])
+      .then(([reviews, live]) => {
         if (signal?.aborted) return
-        setReview(reviews.find((item) => item.conversation_id === conversation.id && item.scope === 'worktree') ?? null)
+        setReview(reviews.find((item) => item.conversation_id === conversation.id && item.scope === 'worktree' && item.status !== 'running') ?? null)
+        setLiveDiff(live.diff)
       })
       .catch(() => {})
   }, [project.id, conversation.id])
+
+  useEffect(() => {
+    function onVisible() { if (document.visibilityState === 'visible') loadReview() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+  }, [loadReview])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -70,10 +84,13 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
     wasRunning.current = running
   }, [running, loadReview])
 
+  // Un commit ou une écriture après la relecture rend le verdict caduc : la
+  // ligne ne doit pas rester verte sur un diff que le Gardien n'a pas lu.
+  const stale = review !== null && review.status === 'done' && liveDiff !== null && review.diff_text !== liveDiff
   const label = running && reviewStatus?.running
     ? `relit · zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}`
-    : stateLabel(review)
-  const variant = variantFor(review, running)
+    : stateLabel(review, stale)
+  const variant = variantFor(review, running, stale)
 
   return <div className={`guardian-line is-${variant}`} id="guardian-line" role="group" aria-label="Gardien">
     <span className="guardian-line-status" aria-hidden="true">

@@ -133,6 +133,17 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
   const navigableFlags = useMemo(() => flagsInDiffOrder(scopedDiff, visibleFlags), [scopedDiff, visibleFlags])
   const activeIndex = navigableFlags.findIndex((flag) => flag.id === activeFlagId)
 
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (event.target instanceof HTMLElement && event.target.matches('input, textarea, select, [contenteditable="true"]')) return
+      if (event.key === 'j') { event.preventDefault(); goToFlag(1) }
+      else if (event.key === 'k') { event.preventDefault(); goToFlag(-1) }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  })
+
   function goToFlag(step: 1 | -1) {
     if (navigableFlags.length === 0) return
     const next = activeIndex === -1
@@ -213,9 +224,9 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
         <button type="button" onClick={() => void correctOpen()} disabled={busy || scanning || openFlags.length === 0}>{busy ? 'Lancement…' : `Corriger les ${openFlags.length} ouverts`}</button>
         {navigableFlags.length > 0 ? (
           <div className="changes-nav" role="group" aria-label="Naviguer entre les signalements">
-            <button type="button" onClick={() => goToFlag(-1)} aria-label="Signalement précédent">‹</button>
+            <button type="button" onClick={() => goToFlag(-1)} aria-label="Signalement précédent" title="Signalement précédent (k)">‹</button>
             <span>{activeIndex === -1 ? '–' : activeIndex + 1} / {navigableFlags.length}</span>
-            <button type="button" onClick={() => goToFlag(1)} aria-label="Signalement suivant">›</button>
+            <button type="button" onClick={() => goToFlag(1)} aria-label="Signalement suivant" title="Signalement suivant (j)">›</button>
           </div>
         ) : null}
         <div className="changes-filter" role="group" aria-label="Filtrer les signalements">
