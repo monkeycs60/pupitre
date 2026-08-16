@@ -15,6 +15,10 @@ corrections en cours terminées, Gardien relit automatiquement le worktree —
 en incrémental : seuls les hunks changés sont rescannés, les autres recopient
 leurs signalements.
 
+Un signalement suit le cycle ouvert → agent en cours → traité (corrigé, à
+confirmer par la relecture) ; ignoré s'il est écarté ; résolu quand une
+relecture ne le retrouve plus sur un code modifié.
+
 Le modèle utilisé se règle dans **Réglages du projet** : un preset pour la
 review, un autre pour la correction.
 
