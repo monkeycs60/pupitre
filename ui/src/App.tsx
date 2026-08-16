@@ -51,6 +51,7 @@ import { DocumentsView } from './DocumentsView'
 import { DesignView } from './DesignView'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
+import { SurfaceSwitch } from './SurfaceSwitch'
 import { isAppRestartShortcut, restartApp } from './appRestart'
 import {
   locationForSelection,
@@ -769,10 +770,11 @@ function App() {
                 ) : null}
               </div>
               {selectedConversation !== null ? (
-                <nav className="conversation-surface-tabs" aria-label="Vue de la conversation">
-                  <button type="button" className="is-active" aria-current="page">Conversation</button>
-                  <button type="button" onClick={() => handleGitSelect()}>Code</button>
-                </nav>
+                <SurfaceSwitch
+                  active="conversation"
+                  onConversation={handleConversationsSelect}
+                  onCode={() => handleGitSelect()}
+                />
               ) : null}
               {selectedConversation !== null ? (
                 <ContextGauge

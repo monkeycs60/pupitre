@@ -670,8 +670,10 @@ body.is-resizing-documents-list {
   flex: none;
   align-items: center;
   gap: var(--space-4);
-  min-height: 48px;
-  padding: var(--space-2) var(--space-5);
+  height: 56px;
+  min-height: 56px;
+  padding: 0 var(--space-4);
+  box-sizing: border-box;
   background: var(--bg-toolbar);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -755,22 +757,46 @@ body.is-resizing-documents-list {
   border-radius: var(--r-sm);
 }
 
-.conversation-surface-tabs {
+.surface-switch {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: 50%;
   left: 50%;
   display: flex;
-  align-items: stretch;
-  align-self: stretch;
-  gap: var(--space-3);
-  transform: translateX(-50%);
+  padding: 3px;
+  background: #191b20;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  transform: translate(-50%, -50%);
 }
 
-.conversation-surface-tabs button {
+.surface-switch-thumb {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  bottom: 3px;
+  left: calc(50% + 0px);
+  background: var(--bg-raised);
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  transition: left var(--dur-fast) var(--ease), right var(--dur-fast) var(--ease);
+}
+
+.surface-switch.is-conversation .surface-switch-thumb {
+  right: calc(50% + 0px);
+  left: 3px;
+}
+
+.surface-switch button {
   position: relative;
-  padding: 0 2px;
-  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 104px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-faint);
   font-size: var(--text-sm);
   font-weight: 500;
   background: transparent;
@@ -778,22 +804,23 @@ body.is-resizing-documents-list {
   cursor: pointer;
 }
 
-.conversation-surface-tabs button:hover {
+.surface-switch button:hover {
   color: var(--text);
 }
 
-.conversation-surface-tabs button.is-active {
+.surface-switch button.is-active {
   color: var(--text-strong);
+  font-weight: 600;
 }
 
-.conversation-surface-tabs button.is-active::after {
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
-  content: '';
-  background: var(--accent);
+.surface-switch-badge {
+  padding: 0 5px;
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  background: var(--warn-soft);
+  border-radius: var(--r-xs);
 }
 
 .conversation-prov {

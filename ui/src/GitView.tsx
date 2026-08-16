@@ -17,6 +17,7 @@ import { ReviewConfigSelector, reviewPreset } from './ReviewConfigSelector'
 import type { ReviewSelection } from './ReviewConfigSelector'
 import { readCorrectionSelection, writeCorrectionSelection } from './correctionConfig'
 import type { CorrectionSelection } from './correctionConfig'
+import { SurfaceSwitch } from './SurfaceSwitch'
 import type {
   Conversation,
   GitCommit,
@@ -97,14 +98,6 @@ function scopeTag(scope: Scope): { label: string, className: string } {
 }
 function scopeTitle(scope: Scope, branch: string | null): string { return scope === 'dirty' ? 'Non commité' : scope === 'commits' ? `Commits de ${branch ?? 'la branche'}` : scope === 'tree' ? 'Arborescence' : scope === 'master' ? 'origin/master' : 'Branches et worktrees' }
 function statusFile(path: string, dirtyFiles: GitDirtyFile[]): GitDirtyFile | undefined { return dirtyFiles.find((file) => file.path === path) }
-
-function CodeSwitch({ dirtyCount, onConversationBack }: { dirtyCount: number, onConversationBack: () => void }) {
-  return <div className="code-switch" role="tablist" aria-label="Surface de travail">
-    <span className="code-switch-thumb" aria-hidden="true" />
-    <button type="button" role="tab" aria-selected={false} onClick={onConversationBack}>Conversation</button>
-    <button type="button" role="tab" aria-selected className="is-active">Code{dirtyCount > 0 ? <span className="code-switch-badge">{dirtyCount}</span> : null}</button>
-  </div>
-}
 
 function CodeRail({ scope, snapshot, onScopeChange }: { scope: Scope, snapshot: GitSnapshot | null, onScopeChange: (scope: Scope) => void }) {
   const dirtyCount = snapshot?.dirtyFiles?.length ?? 0
@@ -228,7 +221,7 @@ export function GitView({ project, conversation, focusedReviewId = null, focused
   const fallbackSnapshot: GitSnapshot = { branches: [], commits: [], worktrees: [], head: null, headParents: [], currentBranch: null }
 
   return <div className="git-workspace code-workspace">
-    <header className="code-header"><div className="code-header-title"><strong>{conversation?.title ?? project.name}</strong><span>{snapshot?.currentBranch ?? 'HEAD détachée'} · worktree de cette conversation</span></div><CodeSwitch dirtyCount={dirtyFiles.length} onConversationBack={onConversationBack} /><div className="code-header-actions"><button type="button" onClick={() => { setOverlay('quick-open'); setOverlayQuery('') }}>Aller à un fichier <kbd>⌘P</kbd></button><button type="button" onClick={() => { setOverlay('search'); setOverlayQuery('') }}>Rechercher <kbd>⇧⌘F</kbd></button></div></header>
+    <header className="code-header"><div className="code-header-title"><strong>{conversation?.title ?? project.name}</strong><span>{snapshot?.currentBranch ?? 'HEAD détachée'} · worktree de cette conversation</span></div><SurfaceSwitch active="code" dirtyCount={dirtyFiles.length} onConversation={onConversationBack} onCode={() => {}} /><div className="code-header-actions"><button type="button" onClick={() => { setOverlay('quick-open'); setOverlayQuery('') }}>Aller à un fichier <kbd>⌘P</kbd></button><button type="button" onClick={() => { setOverlay('search'); setOverlayQuery('') }}>Rechercher <kbd>⇧⌘F</kbd></button></div></header>
     {error ? <div className="git-error" role="alert">{error}</div> : null}
     <div className="code-layout"><CodeRail scope={scope} snapshot={snapshot} onScopeChange={changeScope} /><main className="code-main" aria-label="Vue Code">
       <header className="code-panel-header"><div><h1>{scopeTitle(scope, snapshot?.currentBranch ?? null)}</h1><span className={`code-scope-tag ${tag.className}`}>{tag.label}</span><code>{scope === 'dirty' ? `${dirtyFiles.length} fichier${dirtyFiles.length > 1 ? 's' : ''}` : scope === 'commits' ? `${branchCommits.length} commit${branchCommits.length > 1 ? 's' : ''}` : 'lecture Git'}</code></div>{scope === 'commits' ? <div className="code-review-tools"><span>{reviewStatus?.running ? `Zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}` : 'Review par commit'}</span><ReviewConfigSelector value={{ presetId, provider, model, effort, speed }} presets={presets} quotas={quotas} busy={reviewBusy || isScanRunning(reviewStatus)} placement="bottom" submenuPlacement="left" onChange={selectReviewConfig} /></div> : null}</header>
