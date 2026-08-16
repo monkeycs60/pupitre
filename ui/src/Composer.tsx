@@ -523,7 +523,7 @@ export function Composer({
             disabled={isRunning && !canSteer}
             autoFocus={isNewConversation || focusRequest > 0}
           />
-          {message === '' && (!isRunning || canSteer) ? (
+          {message === '' && !isRunning ? (
             <div className="composer-placeholder" aria-hidden="true">
               Écris ton message, ou <span className="composer-ph-key">/</span> pour une action,{' '}
               <span className="composer-ph-key">$</span> pour un skill
