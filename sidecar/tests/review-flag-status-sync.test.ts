@@ -14,7 +14,6 @@ const read = (path: string): string => readFileSync(join(root, path), "utf8");
 /** Libellé utilisateur attendu dans l'aide, pour chaque statut du type. */
 const HELP_LABELS: Record<string, string> = {
   open: "ouvert",
-  countered: "contre-avisé",
   agent_running: "agent en cours",
   treated: "traité",
   ignored: "ignoré",
@@ -30,13 +29,23 @@ function typeStatuses(): string[] {
 
 test("les contraintes SQLite couvrent exactement les statuts du type", () => {
   const expected = typeStatuses();
+  // `status TEXT NOT NULL DEFAULT 'open'` n'apparaît que pour la colonne de
+  // review_flags : ça isole ses CHECK sans dépendre d'un statut particulier.
   const checks = [...read("sidecar/src/db.ts")
-    .matchAll(/CHECK \(status IN \(([^)]*'countered'[^)]*)\)\)/g)]
+    .matchAll(/status TEXT NOT NULL DEFAULT 'open'\s*CHECK \(status IN \(([^)]*)\)\)/g)]
     .map((match) => [...match[1]!.matchAll(/'([a-z_]+)'/g)].map((item) => item[1]!));
 
-  // Le schéma initial et la table de reconstruction doivent tous deux suivre.
+  // Le schéma d'une base neuve et la table de reconstruction historique.
   expect(checks.length).toBeGreaterThanOrEqual(2);
-  for (const check of checks) expect([...check].sort()).toEqual([...expected].sort());
+  // La base neuve suit exactement le type courant.
+  expect([...checks[0]!].sort()).toEqual([...expected].sort());
+  // Les reconstructions historiques restent un sur-ensemble : SQLite ne sait
+  // pas resserrer un CHECK existant, et une base en cours de migration peut
+  // encore porter un statut retiré du type (ex. 'countered') le temps qu'une
+  // migration suivante le neutralise.
+  for (const check of checks.slice(1)) {
+    for (const status of expected) expect(check).toContain(status);
+  }
 });
 
 test("l'aide décrit chaque statut du cycle de vie", () => {

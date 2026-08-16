@@ -6,9 +6,7 @@ function flag(overrides: Partial<ReviewFlag>): ReviewFlag {
   return {
     id: "flag", review_id: "review", file: "src/a.ts", line_start: 1, line_end: 1,
     severity: "orange", category: "risk", message: "message", status: "open",
-    code_provider: "codex", counter_state: "idle", counter_verdict: null,
-    counter_text: null, counter_provider: null, counter_model: null,
-    counter_effort: null, counter_subtask_id: null, counter_error: null,
+    code_provider: "codex",
     ...overrides,
   };
 }
@@ -23,7 +21,7 @@ test("construit les fichiers dans l'ordre du diff et compte ajouts, suppressions
   const tree = buildFileTree(diff, [
     flag({ id: "red", severity: "red" }),
     flag({ id: "grey", severity: "grey", file: "src/b.ts", status: "resolved" }),
-    flag({ id: "orange", severity: "orange", file: "src/b.ts", status: "countered" }),
+    flag({ id: "orange", severity: "orange", file: "src/b.ts", status: "open" }),
   ]);
 
   expect(tree).toEqual([

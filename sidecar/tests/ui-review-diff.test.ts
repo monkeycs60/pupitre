@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { flagActionDraft, optimisticFlagStatus, parseUnifiedDiff } from "../../ui/src/reviewDiff";
+import { diffForPath, flagActionDraft, optimisticFlagStatus, parseUnifiedDiff } from "../../ui/src/reviewDiff";
 import type { ReviewFlag } from "../../ui/src/types";
 
 function flag(overrides: Partial<ReviewFlag> = {}): ReviewFlag {
@@ -14,14 +14,6 @@ function flag(overrides: Partial<ReviewFlag> = {}): ReviewFlag {
     message: "Vérifie le consommateur.",
     status: "open",
     code_provider: "codex",
-    counter_state: "idle",
-    counter_verdict: null,
-    counter_text: null,
-    counter_provider: null,
-    counter_model: null,
-    counter_effort: null,
-    counter_subtask_id: null,
-    counter_error: null,
     ...overrides,
   };
 }
@@ -105,4 +97,30 @@ test("le message d'un signalement n'est porté que par une ligne, pas répété 
   expect(lines.filter((line) => line.cardFlags.length > 0)).toHaveLength(1);
   // …mais les quatre lignes restent surlignées.
   expect(lines.filter((line) => line.severity !== null)).toHaveLength(4);
+});
+
+test("diffForPath restreint le diff aux chunks du fichier demandé", () => {
+  const diff = [
+    "diff --git a/src/a.ts b/src/a.ts",
+    "--- a/src/a.ts",
+    "+++ b/src/a.ts",
+    "@@ -1 +1 @@",
+    "-old-a",
+    "+new-a",
+    "diff --git a/src/b.ts b/src/b.ts",
+    "--- a/src/b.ts",
+    "+++ b/src/b.ts",
+    "@@ -1 +1 @@",
+    "-old-b",
+    "+new-b",
+  ].join("\n");
+
+  const restricted = diffForPath(diff, "src/b.ts");
+  expect(restricted).toContain("src/b.ts");
+  expect(restricted).not.toContain("src/a.ts");
+});
+
+test("diffForPath sans chemin rend le diff complet", () => {
+  const diff = "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new";
+  expect(diffForPath(diff, null)).toBe(diff);
 });

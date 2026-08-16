@@ -5,10 +5,8 @@ import type {
   Debrief,
   DesignReachability,
   GitDiff,
-  GitFileContent,
   GitCommitResult,
   GitSnapshot,
-  GitWorktree,
   FleetItem,
   SearchResult,
   Project,
@@ -132,12 +130,7 @@ export interface StartReviewInput {
   scope?: 'worktree' | 'comparison'
   gitRefBase?: string
   gitRefHead?: string
-  presetId?: string | null
-  reviewProvider?: Provider
-  reviewModel?: string
-  reviewEffort?: string
-  reviewSpeed?: ConversationSpeed
-  codeProvider?: Provider
+  incremental?: boolean
 }
 
 export interface Settings {
@@ -532,13 +525,6 @@ export function setProjectFilesystemScope(
   )
 }
 
-export function setProjectAutoCounterRed(
-  id: string,
-  enabled: boolean,
-): Promise<Project> {
-  return fetchJson(`/api/projects/${routeId(id)}/auto-counter-red`, jsonPut({ enabled }))
-}
-
 export function setProjectAutoRescan(
   id: string,
   enabled: boolean,
@@ -662,13 +648,6 @@ export function setConversationPermissionMode(
     `/api/conversations/${routeId(id)}/permission-mode`,
     jsonPut({ permission_mode: permissionMode }),
   )
-}
-
-export function setConversationReviewConfig(
-  id: string,
-  input: { enabled: boolean, reviewProvider: Provider, reviewModel: string, reviewEffort: string, reviewSpeed: ConversationSpeed },
-): Promise<Conversation> {
-  return fetchJson(`/api/conversations/${routeId(id)}/review-config`, jsonPut(input))
 }
 
 export function listProjectConversations(
@@ -850,6 +829,14 @@ export function getConversationEvents(
   )
 }
 
+/** Le diff exact que lit le Gardien pour scanner cette conversation. */
+export function getConversationDiff(
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<GitDiff> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/diff`, { signal })
+}
+
 export function startReview(input: StartReviewInput): Promise<Review> {
   return fetchJson('/api/reviews', jsonPost(input))
 }
@@ -870,30 +857,6 @@ export function getProjectGit(
   return fetchJson(`/api/projects/${routeId(projectId)}/git${query}`, { signal })
 }
 
-export interface ProjectWorktrees {
-  worktrees: GitWorktree[]
-  /** Ceux dont la branche est fusionnée : jetables sans rien perdre. */
-  merged: GitWorktree[]
-}
-
-export function listProjectWorktrees(
-  projectId: string,
-  signal?: AbortSignal,
-): Promise<ProjectWorktrees> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/worktrees`, { signal })
-}
-
-export function removeProjectWorktree(
-  projectId: string,
-  path: string,
-): Promise<{ ok: true }> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/worktrees`, {
-    method: 'DELETE',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path }),
-  })
-}
-
 export function getProjectGitDiff(
   projectId: string,
   base: string,
@@ -905,33 +868,6 @@ export function getProjectGitDiff(
   if (conversationId) query.set('conversationId', conversationId)
   return fetchJson(
     `/api/projects/${routeId(projectId)}/git/diff?${query.toString()}`,
-    { signal },
-  )
-}
-
-export function getProjectWorkingTreeDiff(
-  projectId: string,
-  conversationId?: string | null,
-  signal?: AbortSignal,
-): Promise<GitDiff> {
-  const query = conversationId ? `?${new URLSearchParams({ conversationId })}` : ''
-  return fetchJson(
-    `/api/projects/${routeId(projectId)}/git/working-tree-diff${query}`,
-    { signal },
-  )
-}
-
-export function getProjectGitFile(
-  projectId: string,
-  path: string,
-  ref: string,
-  conversationId?: string | null,
-  signal?: AbortSignal,
-): Promise<GitFileContent> {
-  const query = new URLSearchParams({ path, ref })
-  if (conversationId) query.set('conversationId', conversationId)
-  return fetchJson(
-    `/api/projects/${routeId(projectId)}/git/file?${query.toString()}`,
     { signal },
   )
 }
@@ -957,39 +893,6 @@ export function setReviewFlagStatus(
   return fetchJson(`/api/review-flags/${routeId(flagId)}`, jsonPatch({ status }))
 }
 
-export function setReviewFlagCodeProvider(
-  flagId: string,
-  codeProvider: Provider,
-): Promise<ReviewFlag> {
-  return fetchJson(
-    `/api/review-flags/${routeId(flagId)}`,
-    jsonPatch({ codeProvider }),
-  )
-}
-
-export function startFlagCounterOpinion(
-  flagId: string,
-  model: string,
-  effort: string,
-  codeProvider: Provider,
-): Promise<ReviewFlag[]> {
-  return fetchJson(
-    `/api/review-flags/${routeId(flagId)}/counter-opinion`,
-    jsonPost({ model, effort, codeProvider }),
-  )
-}
-
-export function startReviewCounterOpinions(
-  reviewId: string,
-  model?: string,
-  effort?: string,
-): Promise<ReviewFlag[]> {
-  return fetchJson(
-    `/api/reviews/${routeId(reviewId)}/counter-opinions`,
-    jsonPost(model && effort ? { model, effort } : {}),
-  )
-}
-
 export function getReviewStatus(
   projectId: string,
   signal?: AbortSignal,
@@ -997,23 +900,15 @@ export function getReviewStatus(
   return fetchJson(`/api/projects/${routeId(projectId)}/review-status`, { signal })
 }
 
-export interface CorrectionAgentInput {
-  provider: Provider
-  model: string
-  effort: string
-  speed: ConversationSpeed
-}
-
-export function dispatchFlag(flagId: string, message?: string, agent?: CorrectionAgentInput): Promise<{ subtaskId: string }> {
-  return fetchJson(`/api/review-flags/${routeId(flagId)}/dispatch`, jsonPost({ message, ...agent }))
+export function dispatchFlag(flagId: string, message?: string): Promise<{ subtaskId: string }> {
+  return fetchJson(`/api/review-flags/${routeId(flagId)}/dispatch`, jsonPost({ message }))
 }
 
 export function dispatchAllFlags(
   reviewId: string,
   severities: Array<'red' | 'orange' | 'grey'> = ['red', 'orange'],
-  agent?: CorrectionAgentInput,
 ): Promise<{ dispatched: number }> {
-  return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-all`, jsonPost({ severities, ...agent }))
+  return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-all`, jsonPost({ severities }))
 }
 
 export function getSubtask(

@@ -97,6 +97,15 @@ export function parseUnifiedDiff(diff: string, flags: ReviewFlag[]): DiffLine[] 
   return lines
 }
 
+/** Restreint un diff multi-fichiers aux chunks touchant `path`. */
+export function diffForPath(diff: string, path: string | null): string {
+  if (!path) return diff
+  return diff
+    .split(/(?=^diff --git )/m)
+    .filter((chunk) => chunk.includes(` b/${path}\n`) || chunk.includes(` b/${path}`))
+    .join('')
+}
+
 function diffPath(raw: string): string | null {
   const path = raw.trim()
   if (path === '/dev/null') return null

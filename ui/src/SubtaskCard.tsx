@@ -135,8 +135,8 @@ export function SubtaskCard({
   const failure = subtaskFailure(status, events, snapshot?.error ?? null)
 
   const badge = [
-    block.provider,
-    block.model,
+    subtask?.provider ?? block.provider,
+    subtask?.model ?? block.model,
     subtask?.effort ?? null,
     subtask?.speed === 'fast' ? 'rapide' : null,
   ]

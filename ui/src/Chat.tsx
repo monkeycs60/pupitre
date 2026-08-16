@@ -13,6 +13,7 @@ import { retryCountdownSeconds } from './backoff'
 import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
 import { modelLabel } from './modelOptions'
+import { startReview } from './api'
 import type {
   AppEvent,
   Attachment,
@@ -23,7 +24,7 @@ import type {
   SubtaskStatus,
   ReviewStatusSnapshot,
 } from './types'
-import { ConversationReviewPanel } from './ConversationReviewPanel'
+import { GuardianLine } from './GuardianLine'
 import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
 import { appendDebriefQuestionPrompt } from './debriefQuestion'
@@ -57,7 +58,6 @@ interface ChatProps {
   /** Multiplicateur XP du tour (complexité × focus), voir turnXp.ts. */
   turnXpMultiplier?: number
   reviewStatus: ReviewStatusSnapshot | null
-  onConversationUpdated: (conversation: Conversation) => void
   onOpenCode: (flagId?: string) => void
 }
 
@@ -118,7 +118,6 @@ export function Chat({
   initialAttachments = [],
   turnXpMultiplier,
   reviewStatus,
-  onConversationUpdated,
   onOpenCode,
 }: ChatProps) {
   const draftStorageKey = `pupitre:draft:${conversation?.id ?? `new:${project.id}`}`
@@ -142,7 +141,6 @@ export function Chat({
   const [subtaskStatuses, setSubtaskStatuses] = useState<
     Record<string, SubtaskStatus>
   >({})
-  const [reviewLaunchRequest, setReviewLaunchRequest] = useState(0)
 
   useEffect(() => {
     try {
@@ -271,10 +269,14 @@ export function Chat({
   }, [])
 
   const suggestionText = message.trim() || previousUserText
+  const relire = useCallback(() => {
+    if (!conversation) return
+    void startReview({ conversationId: conversation.id, scope: 'worktree' }).catch(() => {})
+  }, [conversation])
   const focusReview = useCallback(() => {
-    document.getElementById('conversation-review-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    setReviewLaunchRequest((current) => current + 1)
-  }, [])
+    document.getElementById('guardian-line')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    relire()
+  }, [relire])
 
   return (
     <>
@@ -320,14 +322,12 @@ export function Chat({
                     onReviewChanges={focusReview}
                   />
                   {!isRunning && conversation !== null ? (
-                    <ConversationReviewPanel
+                    <GuardianLine
                       conversation={conversation}
                       project={project}
                       reviewStatus={reviewStatus}
-                      onConversationUpdated={onConversationUpdated}
                       onOpenCode={onOpenCode}
-                      quotas={quotas}
-                      launchRequest={reviewLaunchRequest}
+                      onRelire={relire}
                     />
                   ) : null}
                 </TaskToggleContext.Provider>

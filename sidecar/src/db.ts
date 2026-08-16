@@ -173,7 +173,7 @@ export function openDb(dir: string = dataDir()): Database {
       code_provider TEXT NULL,
       is_test_gap INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'open'
-        CHECK (status IN ('open', 'countered', 'agent_running', 'treated', 'ignored', 'resolved'))
+        CHECK (status IN ('open', 'agent_running', 'treated', 'ignored', 'resolved'))
     );
     CREATE INDEX IF NOT EXISTS idx_review_flags_review
       ON review_flags(review_id, severity, line_start);
@@ -541,6 +541,10 @@ function migrateDocuments(db: Database): void {
   `);
 }
 
+// Le CHECK reconstruit ici garde 'countered' volontairement : sur une base
+// qui passe encore par cette étape, des lignes peuvent porter ce statut — il
+// n'est neutralisé en 'open' que par la migration suivante (voir plus bas
+// dans migrate(), juste avant les dropColumn de counter_*).
 function migrateReviewFlagStatuses(db: Database): void {
   const sql = (db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'review_flags'")
     .get() as { sql?: string } | null)?.sql ?? "";

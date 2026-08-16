@@ -19,7 +19,6 @@
 .switch-modal,
 .handoff-modal,
 .review-dialog,
-.counter-dialog,
 .project-settings-dialog {
   display: flex;
   flex-direction: column;
@@ -44,10 +43,6 @@
   width: min(100%, 640px);
 }
 
-.counter-dialog {
-  width: min(100%, 590px);
-}
-
 .project-settings-dialog {
   width: min(100%, 520px);
 }
@@ -57,7 +52,6 @@
 .switch-modal > header,
 .handoff-modal-header,
 .review-dialog .modal-header,
-.counter-dialog .modal-header,
 .project-settings-dialog .modal-header {
   display: flex;
   flex: none;
@@ -70,7 +64,6 @@
 .switch-modal h2,
 .handoff-modal-header h2,
 .review-dialog .modal-header h2,
-.counter-dialog .modal-header h2,
 .project-settings-dialog .modal-header h2 {
   margin: 0;
   color: var(--text-strong);
@@ -81,7 +74,6 @@
 }
 
 .review-dialog .modal-header p,
-.counter-dialog .modal-header p,
 .project-settings-dialog .modal-header p {
   margin: 2px 0 0;
   color: var(--text-muted);
@@ -115,15 +107,13 @@
 
 .switch-modal form,
 .handoff-modal-body,
-.review-dialog-form,
-.counter-dialog-form {
+.review-dialog-form {
   min-height: 0;
   padding: var(--space-4) var(--space-5) var(--space-5);
   overflow-y: auto;
 }
 
-.review-dialog-form,
-.counter-dialog-form {
+.review-dialog-form {
   display: grid;
   gap: var(--space-4);
 }
@@ -136,15 +126,8 @@
   gap: var(--space-3);
 }
 
-.counter-dialog-grid {
-  display: grid;
-  grid-template-columns: 0.8fr 1.4fr 0.8fr;
-  gap: var(--space-3);
-}
-
 .switch-fields label,
-.review-dialog-form label,
-.counter-dialog-grid label {
+.review-dialog-form label {
   display: grid;
   gap: var(--space-1);
   color: var(--text-muted);
@@ -154,9 +137,7 @@
 
 .switch-fields select,
 .review-dialog-form select,
-.review-dialog-form input:not([type="checkbox"]),
-.counter-dialog-grid select,
-.counter-dialog-grid input {
+.review-dialog-form input:not([type="checkbox"]) {
   width: 100%;
   min-width: 0;
   min-height: 32px;
@@ -171,9 +152,7 @@
 
 .switch-fields select:focus-visible,
 .review-dialog-form select:focus-visible,
-.review-dialog-form input:not([type="checkbox"]):focus-visible,
-.counter-dialog-grid select:focus-visible,
-.counter-dialog-grid input:focus-visible {
+.review-dialog-form input:not([type="checkbox"]):focus-visible {
   border-color: var(--accent-border);
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-soft);
@@ -185,11 +164,6 @@ select.field-mono,
 input.field-mono {
   font-family: var(--font-mono);
   font-size: var(--text-code);
-}
-
-.counter-dialog-grid input[readonly] {
-  color: var(--text-muted);
-  background: var(--bg-raised);
 }
 
 /* --- Notes et alertes ------------------------------------------------------ */
@@ -215,9 +189,7 @@ input.field-mono {
   font-size: var(--text-code);
 }
 
-.review-dialog-note,
-.counter-dialog-note,
-.counter-dialog-scope {
+.review-dialog-note {
   padding: var(--space-2) var(--space-3);
   margin: 0;
   color: var(--text-muted);
@@ -226,44 +198,6 @@ input.field-mono {
   background: var(--neutral-soft);
   border-left: 2px solid var(--border-strong);
   border-radius: 0 var(--r-sm) var(--r-sm) 0;
-}
-
-.counter-dialog-scope {
-  font-variant-numeric: tabular-nums;
-}
-
-/* Point de review cité : liseré à la couleur de la sévérité, toujours
-   accompagné du texte du flag (jamais la couleur seule). */
-.counter-dialog-flag {
-  padding: var(--space-2) var(--space-3);
-  margin: 0;
-  color: var(--text);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-  background: var(--neutral-soft);
-  border-left: 2px solid var(--border-strong);
-  border-radius: 0 var(--r-sm) var(--r-sm) 0;
-}
-
-.counter-dialog-flag.severity-orange {
-  background: var(--warn-soft);
-  border-left-color: var(--warn);
-}
-
-.counter-dialog-flag.severity-red {
-  background: var(--danger-soft);
-  border-left-color: var(--danger);
-}
-
-.counter-dialog-flag > span {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.counter-dialog-flag p {
-  margin: 2px 0 0;
 }
 
 .modal-error {
@@ -272,8 +206,7 @@ input.field-mono {
   font-size: var(--text-sm);
 }
 
-.review-dialog .modal-error,
-.counter-dialog .modal-error {
+.review-dialog .modal-error {
   margin: 0;
 }
 
@@ -282,7 +215,6 @@ input.field-mono {
 .switch-modal footer,
 .handoff-modal-footer,
 .review-dialog .modal-actions,
-.counter-dialog .modal-actions,
 .project-settings-dialog .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -291,7 +223,6 @@ input.field-mono {
 }
 
 .review-dialog .modal-actions,
-.counter-dialog .modal-actions,
 .project-settings-dialog .modal-actions {
   margin-top: var(--space-2);
 }

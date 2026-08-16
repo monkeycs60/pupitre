@@ -188,7 +188,6 @@ export interface Project {
   default_preset_id: string | null
   default_review_preset_id?: string | null
   default_correction_preset_id?: string | null
-  auto_counter_red: boolean
   auto_rescan: boolean
 }
 
@@ -221,11 +220,6 @@ export interface Conversation {
   effort: string | null
   speed: ConversationSpeed | null
   permission_mode?: PresetPermissionMode | null
-  auto_review?: boolean
-  review_provider?: Provider | null
-  review_model?: string | null
-  review_effort?: string | null
-  review_speed?: ConversationSpeed | null
   orchestrator: boolean
   subagent_preset_id?: string | null
   subagent_effort?: string | null
@@ -361,9 +355,7 @@ export interface SubtaskResult {
 
 export type ReviewStatus = 'running' | 'done' | 'error'
 export type ReviewSeverity = 'red' | 'orange' | 'grey'
-export type ReviewFlagStatus = 'open' | 'countered' | 'agent_running' | 'treated' | 'ignored' | 'resolved'
-export type CounterState = 'idle' | 'queued' | 'running' | 'done' | 'error'
-export type CounterVerdict = 'confirmed' | 'dismissed' | 'nuanced'
+export type ReviewFlagStatus = 'open' | 'agent_running' | 'treated' | 'ignored' | 'resolved'
 
 export interface ReviewFlag {
   id: string
@@ -380,14 +372,6 @@ export interface ReviewFlag {
   subtask_id?: string | null
   user_message?: string | null
   code_provider: Provider
-  counter_state: CounterState
-  counter_verdict: CounterVerdict | null
-  counter_text: string | null
-  counter_provider: Provider | null
-  counter_model: string | null
-  counter_effort: string | null
-  counter_subtask_id: string | null
-  counter_error: string | null
 }
 
 export interface Review {

@@ -105,7 +105,6 @@ function App() {
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
   const [memoryDirty, setMemoryDirty] = useState(false)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
-  const [focusedReviewId, setFocusedReviewId] = useState<string | null>(null)
   const [focusedFlagId, setFocusedFlagId] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const [locationRestored, setLocationRestored] = useState(false)
@@ -347,7 +346,6 @@ function App() {
       setNewConversationAttachments([])
       setIsCreatingConversation(false)
       setShowSwitchModel(false)
-      setFocusedReviewId(null)
     }
     // Cliquer un avatar de projet dans le rail ramène toujours à ses
     // conversations, même si le projet était déjà sélectionné.
@@ -424,7 +422,6 @@ function App() {
   function handleGitSelect(flagId?: string) {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
-    setFocusedReviewId(null)
     setFocusedFlagId(flagId ?? null)
     setWorkspaceView('git')
     setShowSwitchModel(false)
@@ -520,22 +517,20 @@ function App() {
 
   async function handlePaletteAction(action: 'test' | 'summary' | 'review') {
     if (!selectedConversation) return
-    setWorkspaceView('conversations')
     if (action === 'review') {
-      const review = await startReview({ conversationId: selectedConversation.id, scope: 'worktree' })
-      setFocusedReviewId(review.id)
-      setWorkspaceView('git')
+      await startReview({ conversationId: selectedConversation.id, scope: 'worktree' })
+      handleGitSelect()
       return
     }
+    setWorkspaceView('conversations')
     if (action === 'test') await createTestInventory(selectedConversation.id)
     else await createSessionSummary(selectedConversation.id)
   }
 
   async function startWorktreeReview() {
     if (!selectedConversation) return
-    const review = await startReview({ conversationId: selectedConversation.id, scope: 'worktree' })
-    setFocusedReviewId(review.id)
-    setWorkspaceView('git')
+    await startReview({ conversationId: selectedConversation.id, scope: 'worktree' })
+    handleGitSelect()
   }
 
   async function handleRoutineConversationSelect(projectId: string, conversationId: string) {
@@ -573,12 +568,6 @@ function App() {
     const conversations = await listProjectConversations(selectedProject.id)
     const conversation = conversations.find((item) => item.id === conversationId)
     if (conversation) handleConversationSelect(conversation)
-  }
-
-  function handleGitReviewSelect(reviewId: string) {
-    setFocusedReviewId(reviewId)
-    setFocusedFlagId(null)
-    setWorkspaceView('git')
   }
 
   const titlebarView = workspaceView === 'conversations'
@@ -718,12 +707,8 @@ function App() {
           <GitView
             project={selectedProject}
             conversation={selectedConversation}
-            focusedReviewId={focusedReviewId}
             focusedFlagId={focusedFlagId}
             reviewStatus={fleet.reviewStatus}
-            quotas={quotas.snapshot}
-            onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
-            onReviewSelected={handleGitReviewSelect}
             onConversationBack={handleConversationsSelect}
           />
         ) : workspaceView === 'costs' ? (
@@ -831,7 +816,6 @@ function App() {
               project={selectedProject}
               quotas={quotas.snapshot}
               onConversationCreated={handleConversationCreated}
-              onConversationUpdated={handleConversationSwitched}
               onProjectUpdated={handleProjectUpdated}
               onConversationRead={handleConversationRead}
               onRunningSubtasksChange={setRunningSubtasks}
