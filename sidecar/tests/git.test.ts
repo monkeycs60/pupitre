@@ -276,3 +276,33 @@ test("détecte seulement les nouveaux commits quand HEAD avance", () => {
   expect(gitView.commitsBetween(projectId, before, gitView.head(projectId)!))
     .toEqual([first, second]);
 });
+
+test("expose le worktree vivant et commit seulement les fichiers sélectionnés", async () => {
+  writeFileSync(join(repo, "tracked.ts"), "export const tracked = true\n");
+  writeFileSync(join(repo, "untracked.ts"), "export const untracked = true\n");
+
+  const snapshot = gitView.snapshot(projectId);
+  expect(snapshot.dirtyFiles).toEqual(expect.arrayContaining([
+    expect.objectContaining({ path: "tracked.ts", status: "?" }),
+    expect.objectContaining({ path: "untracked.ts", status: "?" }),
+  ]));
+  expect(snapshot.filePaths).toEqual(expect.arrayContaining(["tracked.ts", "untracked.ts"]));
+
+  const diff = await gitView.workingTreeDiff(projectId);
+  expect(diff.diff).toContain("untracked.ts");
+  expect(gitView.file(projectId, "untracked.ts", "worktree")).toMatchObject({
+    path: "untracked.ts",
+    content: "export const untracked = true\n",
+    readonly: false,
+  });
+
+  const committed = gitView.commit(projectId, null, ["untracked.ts"], "ajoute le fichier", conversationId);
+  expect(committed.paths).toEqual(["untracked.ts"]);
+  expect(git("show", "--format=%s", "--no-patch", committed.sha)).toBe("ajoute le fichier");
+  expect(gitView.snapshot(projectId).dirtyFiles).toEqual([
+    expect.objectContaining({ path: "tracked.ts", status: "?" }),
+  ]);
+  expect(gitView.snapshot(projectId).commits[0]?.conversations).toEqual([
+    expect.objectContaining({ id: conversationId }),
+  ]);
+});

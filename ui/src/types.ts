@@ -455,6 +455,27 @@ export interface GitWorktree {
   bare: boolean
 }
 
+export type GitFileStatus = 'M' | 'A' | 'D' | '?'
+
+export interface GitDirtyFile {
+  path: string
+  status: GitFileStatus
+  added: number
+  removed: number
+  staged: boolean
+}
+
+export interface GitIncomingCommit {
+  sha: string
+  subject: string
+  author: string
+  authoredAt: string
+}
+
+export interface GitConflictPath {
+  path: string
+}
+
 export interface GitSnapshot {
   head: string | null
   headParents: string[]
@@ -464,12 +485,32 @@ export interface GitSnapshot {
   branchBase?: string | null
   branches: GitBranch[]
   worktrees: GitWorktree[]
+  dirtyFiles?: GitDirtyFile[]
+  filePaths?: string[]
+  ahead?: number
+  behind?: number
+  incoming?: GitIncomingCommit[]
+  conflicts?: GitConflictPath[]
 }
 
 export interface GitDiff {
   base: string
   head: string
   diff: string
+}
+
+export interface GitFileContent {
+  path: string
+  ref: string
+  content: string
+  sha: string | null
+  readonly: boolean
+}
+
+export interface GitCommitResult {
+  sha: string
+  message: string
+  paths: string[]
 }
 
 export type TestScopeStatus = 'pending' | 'running' | 'passed' | 'failed'

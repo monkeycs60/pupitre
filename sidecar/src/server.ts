@@ -1309,6 +1309,88 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        const projectGitWorkingTreeDiffId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/git\/working-tree-diff$/,
+        );
+        if (request.method === "GET" && projectGitWorkingTreeDiffId !== null) {
+          if (!deps.projects.get(projectGitWorkingTreeDiffId)) {
+            throw new HttpError(404, "projet inconnu");
+          }
+          const conversationId = url.searchParams.get("conversationId");
+          const conversation = conversationId ? deps.conversations.get(conversationId) : null;
+          if (conversationId && (!conversation || conversation.project_id !== projectGitWorkingTreeDiffId)) {
+            throw new HttpError(404, "conversation inconnue pour ce projet");
+          }
+          try {
+            return json(await deps.git.workingTreeDiff(
+              projectGitWorkingTreeDiffId,
+              conversation?.worktree_path,
+            ));
+          } catch (error) {
+            if (error instanceof GitProjectError) throw new HttpError(400, error.message);
+            throw error;
+          }
+        }
+
+        const projectGitFileId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/git\/file$/,
+        );
+        if (request.method === "GET" && projectGitFileId !== null) {
+          if (!deps.projects.get(projectGitFileId)) throw new HttpError(404, "projet inconnu");
+          const path = url.searchParams.get("path");
+          const ref = url.searchParams.get("ref") ?? "worktree";
+          const conversationId = url.searchParams.get("conversationId");
+          const conversation = conversationId ? deps.conversations.get(conversationId) : null;
+          if (conversationId && (!conversation || conversation.project_id !== projectGitFileId)) {
+            throw new HttpError(404, "conversation inconnue pour ce projet");
+          }
+          if (!path) throw new HttpError(400, "chemin de fichier manquant");
+          try {
+            return json(deps.git.file(
+              projectGitFileId,
+              path,
+              ref,
+              conversation?.worktree_path,
+            ));
+          } catch (error) {
+            if (error instanceof GitProjectError) throw new HttpError(400, error.message);
+            throw error;
+          }
+        }
+
+        const projectGitCommitId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/git\/commit$/,
+        );
+        if (request.method === "POST" && projectGitCommitId !== null) {
+          if (!deps.projects.get(projectGitCommitId)) throw new HttpError(404, "projet inconnu");
+          const body = await readObject(request);
+          const conversationId = requiredString(body, "conversationId");
+          const conversation = deps.conversations.get(conversationId);
+          if (!conversation || conversation.project_id !== projectGitCommitId) {
+            throw new HttpError(404, "conversation inconnue pour ce projet");
+          }
+          const paths = body.paths;
+          if (!Array.isArray(paths) || paths.some((path) => typeof path !== "string")) {
+            throw new HttpError(400, "fichiers sélectionnés invalides");
+          }
+          const message = requiredString(body, "message");
+          try {
+            return json(deps.git.commit(
+              projectGitCommitId,
+              conversation.worktree_path,
+              paths as string[],
+              message,
+              conversationId,
+            ), 201);
+          } catch (error) {
+            if (error instanceof GitProjectError) throw new HttpError(409, error.message);
+            throw error;
+          }
+        }
+
         const projectGitId = routeId(pathname, /^\/api\/projects\/([^/]+)\/git$/);
         if (request.method === "GET" && projectGitId !== null) {
           if (!deps.projects.get(projectGitId)) throw new HttpError(404, "projet inconnu");

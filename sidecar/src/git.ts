@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { dataDir } from "./db";
 import type { ProjectStore } from "./stores/projects";
 
@@ -50,6 +50,27 @@ export interface GitWorktree {
   bare: boolean;
 }
 
+export type GitFileStatus = "M" | "A" | "D" | "?";
+
+export interface GitDirtyFile {
+  path: string;
+  status: GitFileStatus;
+  added: number;
+  removed: number;
+  staged: boolean;
+}
+
+export interface GitIncomingCommit {
+  sha: string;
+  subject: string;
+  author: string;
+  authoredAt: string;
+}
+
+export interface GitConflictPath {
+  path: string;
+}
+
 export interface GitSnapshot {
   head: string | null;
   headParents: string[];
@@ -60,12 +81,32 @@ export interface GitSnapshot {
   branchBase: string | null;
   branches: GitBranch[];
   worktrees: GitWorktree[];
+  dirtyFiles: GitDirtyFile[];
+  filePaths: string[];
+  ahead: number;
+  behind: number;
+  incoming: GitIncomingCommit[];
+  conflicts: GitConflictPath[];
 }
 
 export interface GitDiff {
   base: string;
   head: string;
   diff: string;
+}
+
+export interface GitFileContent {
+  path: string;
+  ref: string;
+  content: string;
+  sha: string | null;
+  readonly: boolean;
+}
+
+export interface GitCommitResult {
+  sha: string;
+  message: string;
+  paths: string[];
 }
 
 export interface GitLinkedCommit {
@@ -182,6 +223,24 @@ export class GitProjectService {
 
   snapshot(projectId: string, requestedCwd?: string | null): GitSnapshot {
     const cwd = this.workspacePath(projectId, requestedCwd);
+    if (!this.isGitRepository(cwd)) {
+      return {
+        head: null,
+        headParents: [],
+        currentBranch: null,
+        commits: [],
+        branchCommitShas: [],
+        branchBase: null,
+        branches: [],
+        worktrees: [],
+        dirtyFiles: [],
+        filePaths: [],
+        ahead: 0,
+        behind: 0,
+        incoming: [],
+        conflicts: [],
+      };
+    }
     const head = this.tryResolve(cwd, "HEAD");
     const currentBranch = this.optionalGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"])
       ?.trim() || null;
@@ -216,6 +275,13 @@ export class GitProjectService {
       ? this.runGit(cwd, ["rev-list", "--topo-order", `--max-count=${MAX_COMMITS}`, `${baseBranch.sha}..${head}`])
         .split("\n").filter(Boolean)
       : hydrated.map((commit) => commit.sha);
+    const dirtyFiles = this.dirtyFiles(cwd);
+    const filePaths = this.filePaths(cwd);
+    const divergence = baseBranch && head
+      ? this.revListCounts(cwd, baseBranch.name, head)
+      : { ahead: 0, behind: 0 };
+    const incoming = baseBranch && head ? this.incomingCommits(cwd, baseBranch.name, head) : [];
+    const conflicts = baseBranch && head ? this.conflicts(cwd, baseBranch.name, head) : [];
     return {
       head,
       headParents,
@@ -225,7 +291,66 @@ export class GitProjectService {
       branchBase: baseBranch?.name ?? null,
       branches,
       worktrees: this.worktrees(cwd),
+      dirtyFiles,
+      filePaths,
+      ...divergence,
+      incoming,
+      conflicts,
     };
+  }
+
+  async workingTreeDiff(projectId: string, requestedCwd?: string | null): Promise<GitDiff> {
+    const cwd = this.workspacePath(projectId, requestedCwd);
+    const head = this.tryResolve(cwd, "HEAD");
+    return {
+      base: head ?? "EMPTY_TREE",
+      head: head ?? "WORKTREE",
+      diff: await this.worktreeDiff(cwd, head),
+    };
+  }
+
+  file(
+    projectId: string,
+    path: string,
+    ref: string,
+    requestedCwd?: string | null,
+  ): GitFileContent {
+    const cwd = this.workspacePath(projectId, requestedCwd);
+    const safePath = this.safePath(cwd, path);
+    const normalizedRef = ref.trim() || "worktree";
+    if (normalizedRef === "worktree" || normalizedRef === "WORKTREE") {
+      const absolute = join(cwd, safePath);
+      if (!existsSync(absolute) || !statSync(absolute).isFile()) {
+        throw new GitProjectError(`fichier introuvable : ${safePath}`);
+      }
+      const content = readFileSync(absolute, "utf8");
+      if (Buffer.byteLength(content) > MAX_GIT_OUTPUT_BYTES) {
+        throw new GitProjectError("fichier trop volumineux");
+      }
+      return { path: safePath, ref: "worktree", content, sha: null, readonly: false };
+    }
+    const sha = this.resolve(cwd, normalizedRef);
+    const content = this.runGit(cwd, ["show", `${sha}:${safePath}`]);
+    return { path: safePath, ref: normalizedRef, content, sha, readonly: true };
+  }
+
+  commit(
+    projectId: string,
+    requestedCwd: string | null | undefined,
+    paths: string[],
+    message: string,
+    conversationId?: string | null,
+  ): GitCommitResult {
+    const cwd = this.workspacePath(projectId, requestedCwd);
+    const safePaths = [...new Set(paths.map((path) => this.safePath(cwd, path)))];
+    if (safePaths.length === 0) throw new GitProjectError("aucun fichier sélectionné");
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage) throw new GitProjectError("message de commit vide");
+    this.runGit(cwd, ["add", "--", ...safePaths]);
+    this.runGit(cwd, ["commit", "--only", "-m", trimmedMessage, "--", ...safePaths]);
+    const sha = this.resolve(cwd, "HEAD");
+    if (conversationId) this.recordCommitLinks(projectId, conversationId, [sha]);
+    return { sha, message: trimmedMessage, paths: safePaths };
   }
 
   async diff(
@@ -433,7 +558,7 @@ export class GitProjectService {
     return result.stdout.toString();
   }
 
-  private async runGitLimited(cwd: string, args: string[]): Promise<string> {
+  private async runGitLimited(cwd: string, args: string[], acceptedExitCodes = [0]): Promise<string> {
     const child = Bun.spawn(["git", ...args], {
       cwd,
       stdout: "pipe",
@@ -462,7 +587,7 @@ export class GitProjectService {
     }
     const [exitCode, stderr] = await Promise.all([child.exited, stderrPromise]);
     if (exceeded) throw new GitProjectError("sortie Git trop volumineuse");
-    if (exitCode !== 0) {
+    if (!acceptedExitCodes.includes(exitCode)) {
       throw new GitProjectError(stderr.trim() || "commande Git impossible");
     }
     const output = new Uint8Array(total);
@@ -474,12 +599,113 @@ export class GitProjectService {
     return new TextDecoder().decode(output);
   }
 
+  private dirtyFiles(cwd: string): GitDirtyFile[] {
+    const status = this.runGit(cwd, ["status", "--porcelain=v2", "-z", "--untracked-files=normal"]);
+    const additions = this.numstat(cwd, false);
+    const stagedAdditions = this.numstat(cwd, true);
+    return status.split("\0").filter(Boolean).flatMap((entry) => {
+      const fields = entry.split(" ");
+      const kind = entry[0];
+      const xy = fields[1] ?? "..";
+      const path = kind === "?" ? entry.slice(2) : kind === "2" ? fields.slice(9).join(" ") : fields.slice(8).join(" ");
+      if (!path) return [];
+      const statusCode: GitFileStatus = kind === "?"
+        ? "?"
+        : xy.includes("D") ? "D"
+          : xy.includes("A") ? "A"
+            : "M";
+      const current = additions.get(path) ?? { added: 0, removed: 0 };
+      const staged = stagedAdditions.get(path) ?? { added: 0, removed: 0 };
+      return [{
+        path,
+        status: statusCode,
+        added: current.added + staged.added,
+        removed: current.removed + staged.removed,
+        staged: kind !== "?" && xy[0] !== ".",
+      }];
+    });
+  }
+
+  private numstat(cwd: string, cached: boolean): Map<string, { added: number; removed: number }> {
+    const output = this.runGit(cwd, ["diff", ...(cached ? ["--cached"] : []), "--numstat", "--"]);
+    const result = new Map<string, { added: number; removed: number }>();
+    for (const line of output.split("\n")) {
+      const [rawAdded, rawRemoved, ...rawPath] = line.split("\t");
+      const path = rawPath.join("\t");
+      if (!path) continue;
+      result.set(path, {
+        added: /^\d+$/.test(rawAdded ?? "") ? Number(rawAdded) : 0,
+        removed: /^\d+$/.test(rawRemoved ?? "") ? Number(rawRemoved) : 0,
+      });
+    }
+    return result;
+  }
+
+  private filePaths(cwd: string): string[] {
+    return this.runGit(cwd, ["ls-files", "-co", "--exclude-standard", "-z"])
+      .split("\0").filter(Boolean).sort((left, right) => left.localeCompare(right));
+  }
+
+  private revListCounts(cwd: string, base: string, head: string): { ahead: number; behind: number } {
+    const [behind = "0", ahead = "0"] = this.runGit(cwd, ["rev-list", "--left-right", "--count", `${base}...${head}`]).trim().split(/\s+/);
+    return { ahead: Number(ahead) || 0, behind: Number(behind) || 0 };
+  }
+
+  private incomingCommits(cwd: string, base: string, head: string): GitIncomingCommit[] {
+    const output = this.optionalGit(cwd, [
+      "log", "--max-count=30", "--date=iso-strict", "--format=%H%x00%an%x00%aI%x00%s", `${head}..${base}`,
+    ]) ?? "";
+    const fields = output.split("\0").filter(Boolean);
+    const commits: GitIncomingCommit[] = [];
+    for (let index = 0; index + 3 < fields.length; index += 4) {
+      const [sha = "", author = "", authoredAt = "", subject = ""] = fields.slice(index, index + 4);
+      if (sha) commits.push({ sha, subject, author, authoredAt });
+    }
+    return commits;
+  }
+
+  private conflicts(cwd: string, base: string, head: string): GitConflictPath[] {
+    const changedHere = new Set((this.optionalGit(cwd, ["diff", "--name-only", `${base}...${head}`]) ?? "").split("\n").filter(Boolean));
+    const changedThere = (this.optionalGit(cwd, ["diff", "--name-only", `${head}..${base}`]) ?? "").split("\n").filter(Boolean);
+    return changedThere.filter((path) => changedHere.has(path)).map((path) => ({ path }));
+  }
+
+  private async worktreeDiff(cwd: string, head: string | null): Promise<string> {
+    const tracked = head
+      ? await this.runGitLimited(cwd, ["diff", "--no-ext-diff", "--unified=3", "--find-renames", head, "--"])
+      : "";
+    const untracked = (await this.runGitLimited(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]))
+      .split("\0").filter(Boolean);
+    const parts = tracked ? [tracked] : [];
+    for (const path of untracked) {
+      const patch = await this.runGitLimited(cwd, [
+        "diff", "--no-index", "--no-ext-diff", "--unified=3", "--", "/dev/null", path,
+      ], [0, 1]);
+      if (patch) parts.push(patch);
+    }
+    return parts.join("\n");
+  }
+
+  private safePath(cwd: string, path: string): string {
+    const normalized = path.trim();
+    const absolute = resolve(cwd, normalized);
+    const rel = relative(resolve(cwd), absolute);
+    if (!normalized || rel.startsWith("..") || rel.includes("\0") || resolve(cwd, rel) !== absolute) {
+      throw new GitProjectError(`chemin de fichier invalide : ${path}`);
+    }
+    return rel;
+  }
+
   private optionalGit(cwd: string, args: string[]): string | null {
     try {
       return this.runGit(cwd, args);
     } catch {
       return null;
     }
+  }
+
+  private isGitRepository(cwd: string): boolean {
+    return this.optionalGit(cwd, ["rev-parse", "--is-inside-work-tree"])?.trim() === "true";
   }
 
   private isReachableFromRemote(cwd: string, sha: string): boolean {

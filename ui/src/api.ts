@@ -5,6 +5,8 @@ import type {
   Debrief,
   DesignReachability,
   GitDiff,
+  GitFileContent,
+  GitCommitResult,
   GitSnapshot,
   GitWorktree,
   FleetItem,
@@ -904,6 +906,43 @@ export function getProjectGitDiff(
   return fetchJson(
     `/api/projects/${routeId(projectId)}/git/diff?${query.toString()}`,
     { signal },
+  )
+}
+
+export function getProjectWorkingTreeDiff(
+  projectId: string,
+  conversationId?: string | null,
+  signal?: AbortSignal,
+): Promise<GitDiff> {
+  const query = conversationId ? `?${new URLSearchParams({ conversationId })}` : ''
+  return fetchJson(
+    `/api/projects/${routeId(projectId)}/git/working-tree-diff${query}`,
+    { signal },
+  )
+}
+
+export function getProjectGitFile(
+  projectId: string,
+  path: string,
+  ref: string,
+  conversationId?: string | null,
+  signal?: AbortSignal,
+): Promise<GitFileContent> {
+  const query = new URLSearchParams({ path, ref })
+  if (conversationId) query.set('conversationId', conversationId)
+  return fetchJson(
+    `/api/projects/${routeId(projectId)}/git/file?${query.toString()}`,
+    { signal },
+  )
+}
+
+export function commitProjectGit(
+  projectId: string,
+  input: { conversationId: string, paths: string[], message: string },
+): Promise<GitCommitResult> {
+  return fetchJson(
+    `/api/projects/${routeId(projectId)}/git/commit`,
+    jsonPost(input),
   )
 }
 

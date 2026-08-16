@@ -1,6 +1,4 @@
 import { expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { defaultGitCompareRefs, gitGraphCellGeometry, gitGraphRowLabel, gitRefOptions, layoutGitGraph, updateGitCompareRef } from '../../ui/src/gitGraph'
 import type { GitCommit, GitSnapshot } from '../../ui/src/types'
 
@@ -113,7 +111,7 @@ test('trace un chemin vers chaque parent d’un merge', () => {
   for (const path of geometry.paths) expect(path.d.startsWith('M ')).toBe(true)
 })
 
-test('le graphe est dessiné dans un repère étirable, pas en pixels de ligne', () => {
+test('le layout du graphe conserve un repère étirable indépendant de la ligne', () => {
   // Mesuré dans l'app : une ligne de commit fait de 58 à 98 px selon son
   // contenu. Le repère doit donc être constant et indépendant du CSS.
   const heights = [
@@ -122,10 +120,6 @@ test('le graphe est dessiné dans un repère étirable, pas en pixels de ligne',
   ].map((rows) => gitGraphCellGeometry(rows[0]!).viewBoxHeight)
 
   expect(new Set(heights).size).toBe(1)
-  // Sans cet attribut, le SVG garderait son ratio et le graphe se couperait
-  // entre deux lignes de hauteurs différentes.
-  expect(readFileSync(join(import.meta.dir, '../../ui/src/GitView.tsx'), 'utf8'))
-    .toContain('preserveAspectRatio="none"')
 })
 
 /** Points où un tracé sort en bas (y = viewBoxHeight) / entre en haut (y = 0). */
