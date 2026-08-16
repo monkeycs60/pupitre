@@ -27,6 +27,15 @@ test("le contre-avis et auto_counter_red ne laissent aucune colonne", () => {
   db.close();
 });
 
+test("la review et le rescan par conversation ne laissent aucune colonne", () => {
+  const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-db-")));
+  const conversationColumns = columns(db, "conversations");
+  for (const name of ["auto_review", "review_provider", "review_model", "review_effort", "review_speed"]) {
+    expect(conversationColumns).not.toContain(name);
+  }
+  db.close();
+});
+
 test("une base historique voit ses colonnes résiduelles purgées à l'ouverture", () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-db-"));
   const first = openDb(dir);

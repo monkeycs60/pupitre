@@ -20,7 +20,7 @@ import type { SettingsStore } from "./stores/settings";
 import type { QuotaTracker } from "./quotas";
 import type { QuotaRefresher } from "./quota-refresh";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
-import { DispatchConflictError, type ReviewRunner } from "./reviews";
+import { dispatchAgentConfig, DispatchConflictError, type CorrectionAgentConfig, type ReviewRunner } from "./reviews";
 import {
   DebriefAlreadyRunningError,
   NoNewSessionSummaryEventsError,
@@ -698,51 +698,36 @@ function requiredPinned(body: Record<string, unknown>): boolean {
   return body.pinned;
 }
 
-function reviewModelConfig(
-  body: Record<string, unknown>,
-  fallback: { provider: Provider; model: string; effort: string },
-): { provider: Provider; model: string; effort: string } {
-  const rawProvider = body.reviewProvider;
-  if (rawProvider !== undefined && rawProvider !== "claude" && rawProvider !== "codex") {
-    throw new HttpError(400, "reviewProvider invalide");
-  }
-  const provider = (rawProvider as Provider | undefined) ?? fallback.provider;
-  const providerFallback = provider === fallback.provider
-    ? fallback
-    : defaultReviewConfig(provider);
-  const rawModel = body.reviewModel;
-  if (rawModel !== undefined && (typeof rawModel !== "string" || rawModel.trim() === "")) {
-    throw new HttpError(400, "reviewModel invalide");
-  }
-  const rawEffort = body.reviewEffort;
-  if (
-    rawEffort !== undefined
-    && (typeof rawEffort !== "string"
-      || !(EFFORTS_BY_PROVIDER[provider] as readonly string[]).includes(rawEffort))
-  ) {
-    throw new HttpError(400, `reviewEffort invalide pour ${provider}`);
-  }
-  const model = typeof rawModel === "string" ? rawModel.trim() : providerFallback.model;
+function resolveReviewConfig(
+  project: { default_review_preset_id: string | null; default_preset_id: string | null },
+  conversation: { provider: Provider },
+  presets: PresetStore,
+): { provider: Provider; model: string; effort: string; speed: "standard" | "fast" } {
+  const presetId = project.default_review_preset_id ?? project.default_preset_id;
+  const preset = presetId ? presets.get(presetId) : null;
+  if (!preset) return { ...defaultReviewConfig(conversation.provider), speed: "standard" };
   return {
-    provider,
-    model: reviewModel(model, provider, "reviewModel"),
-    effort: typeof rawEffort === "string" ? rawEffort : providerFallback.effort,
+    provider: preset.review_provider,
+    model: preset.review_model,
+    effort: preset.review_effort,
+    speed: preset.review_provider === "codex" && preset.speed === "fast" ? "fast" : "standard",
   };
 }
 
-function reviewSpeed(
-  body: Record<string, unknown>,
-  provider: Provider,
-  fallback: "standard" | "fast" = "standard",
-): "standard" | "fast" {
-  const value = body.reviewSpeed ?? fallback;
-  if (value !== "standard" && value !== "fast") {
-    throw new HttpError(400, "reviewSpeed invalide");
-  }
-  if (provider === "claude" && value === "fast") {
-    throw new HttpError(400, "reviewSpeed fast est réservé à Codex");
-  }
-  return value;
+function resolveCorrectionConfig(
+  project: { default_correction_preset_id: string | null },
+  conversation: Conversation,
+  codeProvider: Provider,
+  presets: PresetStore,
+): CorrectionAgentConfig {
+  const preset = project.default_correction_preset_id ? presets.get(project.default_correction_preset_id) : null;
+  if (!preset) return dispatchAgentConfig(conversation, codeProvider);
+  return {
+    provider: preset.provider,
+    model: preset.model,
+    effort: preset.effort ?? defaultReviewConfig(preset.provider).effort,
+    speed: preset.provider === "codex" ? (preset.speed ?? "standard") : null,
+  };
 }
 
 function reviewCooldownSeconds(
@@ -941,7 +926,6 @@ export function createServer(deps: ServerDeps) {
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
   const fleetSockets = new Set<ServerWebSocket<WebSocketData>>();
   let fleetTimer: ReturnType<typeof setInterval> | null = null;
-  const lastAutoRescanAt = new Map<string, number>();
   const currentFleet = () => fleetSnapshot(deps);
   const broadcastFleet = () => {
     const message = JSON.stringify(currentFleet());
@@ -984,56 +968,6 @@ export function createServer(deps: ServerDeps) {
         socket.send(message);
       } catch {
         sockets.get(conversationId)?.delete(socket);
-      }
-    }
-    if (event.type === "status" && event.state === "done") {
-      const conversation = deps.conversations.get(conversationId);
-      const project = conversation && deps.projects.get(conversation.project_id);
-      const now = Date.now();
-      const running = project && deps.reviews.reviewStatus(project.id)?.running;
-      const autoReview = conversation?.auto_review;
-      const cooldown = project ? reviewCooldownSeconds(deps.reviews.listByProject(project.id), conversationId, now) : 0;
-      if (autoReview && project && !running && cooldown === 0 && now - (lastAutoRescanAt.get(conversationId) ?? 0) >= REVIEW_COOLDOWN_MS) {
-        lastAutoRescanAt.set(conversationId, now);
-        const defaultReviewPreset = project.default_review_preset_id
-          ? deps.presets.get(project.default_review_preset_id)
-          : null;
-        const defaults = defaultReviewPreset
-          ? {
-              provider: defaultReviewPreset.review_provider,
-              model: defaultReviewPreset.review_model,
-              effort: defaultReviewPreset.review_effort,
-              speed: defaultReviewPreset.review_provider === "codex" && defaultReviewPreset.speed === "fast"
-                ? "fast" as const
-                : "standard" as const,
-            }
-          : {
-              ...defaultReviewConfig(conversation!.provider),
-              speed: "standard" as const,
-            };
-        const config = {
-          provider: conversation!.review_provider ?? defaults.provider,
-          model: conversation!.review_model ?? defaults.model,
-          effort: conversation!.review_effort ?? defaults.effort,
-          speed: conversation!.review_speed ?? defaults.speed,
-        };
-        try {
-          deps.reviews.start({
-            projectId: project.id,
-            conversationId: conversation!.id,
-            gitRefBase: "CONVERSATION",
-            gitRefHead: "WORKTREE",
-            provider: config.provider,
-            model: config.model,
-            effort: config.effort,
-            speed: config.speed,
-            codeProvider: conversation!.provider,
-            scope: "worktree",
-            incremental: true,
-          });
-        } catch (error) {
-          console.error("Échec du rescan automatique", error);
-        }
       }
     }
   });
@@ -2054,29 +1988,6 @@ export function createServer(deps: ServerDeps) {
           return json(deps.conversations.setPermissionMode(conversationPermissionId, permissionMode));
         }
 
-        const conversationReviewConfigId = routeId(
-          pathname,
-          /^\/api\/conversations\/([^/]+)\/review-config$/,
-        );
-        if (request.method === "PUT" && conversationReviewConfigId !== null) {
-          if (!deps.conversations.get(conversationReviewConfigId)) {
-            throw new HttpError(404, "conversation inconnue");
-          }
-          const body = await readObject(request);
-          if (typeof body.enabled !== "boolean") {
-            throw new HttpError(400, "enabled invalide");
-          }
-          const config = reviewModelConfig(body, defaultReviewConfig("codex"));
-          const speed = reviewSpeed(body, config.provider);
-          return json(deps.conversations.setReviewConfig(conversationReviewConfigId, {
-            enabled: body.enabled,
-            provider: config.provider,
-            model: config.model,
-            effort: config.effort,
-            speed,
-          }));
-        }
-
         const conversationReadId = routeId(
           pathname,
           /^\/api\/conversations\/([^/]+)\/read$/,
@@ -2642,41 +2553,12 @@ export function createServer(deps: ServerDeps) {
           if (cooldown > 0) {
             throw new HttpError(429, `Patientez ${cooldown} s avant une nouvelle review.`);
           }
-
-          const requestedPresetId = body.presetId;
-          if (
-            requestedPresetId !== undefined
-            && requestedPresetId !== null
-            && typeof requestedPresetId !== "string"
-          ) {
-            throw new HttpError(400, "presetId invalide");
+          for (const field of ["reviewProvider", "reviewModel", "reviewEffort", "reviewSpeed", "presetId", "codeProvider"]) {
+            if (body[field] !== undefined) {
+              throw new HttpError(400, "configuration de review portée par le projet");
+            }
           }
-          const presetId = typeof requestedPresetId === "string"
-            ? requestedPresetId
-            : project.default_review_preset_id;
-          const preset = presetId ? deps.presets.get(presetId) : null;
-          if (presetId && !preset) throw new HttpError(404, "preset inconnu");
-          const fallback = preset
-            ? {
-                provider: preset.review_provider,
-                model: preset.review_model,
-                effort: preset.review_effort,
-              }
-            : defaultReviewConfig(conversation.provider);
-          const reviewModel = reviewModelConfig(body, fallback);
-          const speed = reviewSpeed(
-            body,
-            reviewModel.provider,
-            reviewModel.provider === "codex" && preset?.speed === "fast" ? "fast" : "standard",
-          );
-          const rawCodeProvider = body.codeProvider;
-          if (
-            rawCodeProvider !== undefined
-            && rawCodeProvider !== "claude"
-            && rawCodeProvider !== "codex"
-          ) {
-            throw new HttpError(400, "codeProvider invalide");
-          }
+          const scope = body.scope === undefined ? "worktree" : requiredString(body, "scope");
           const gitRefBase = body.gitRefBase === undefined
             ? "CONVERSATION"
             : requiredString(body, "gitRefBase");
@@ -2686,19 +2568,23 @@ export function createServer(deps: ServerDeps) {
           if (body.incremental !== undefined && typeof body.incremental !== "boolean") {
             throw new HttpError(400, "incremental invalide");
           }
+          const incremental = body.incremental === undefined
+            ? scope === "worktree"
+            : body.incremental;
+          const config = resolveReviewConfig(project, conversation, deps.presets);
           try {
             return json(deps.reviews.start({
               projectId: project.id,
               conversationId,
               gitRefBase,
               gitRefHead,
-              provider: reviewModel.provider,
-              model: reviewModel.model,
-              effort: reviewModel.effort,
-              speed,
-              codeProvider: (rawCodeProvider as Provider | undefined) ?? conversation.provider,
-              scope: body.scope === undefined ? "worktree" : requiredString(body, "scope"),
-              incremental: body.incremental === true,
+              provider: config.provider,
+              model: config.model,
+              effort: config.effort,
+              speed: config.speed,
+              codeProvider: conversation.provider,
+              scope,
+              incremental,
             }), 201);
           } catch (error) {
             if (error instanceof Error && error.message.includes("inconnu")) {
@@ -2762,16 +2648,15 @@ export function createServer(deps: ServerDeps) {
           if (body.message !== undefined && typeof body.message !== "string") {
             throw new HttpError(400, "message invalide");
           }
-          const agentConfig = body.provider === undefined ? undefined : (() => {
-            const provider = requiredString(body, "provider");
-            if (provider !== "claude" && provider !== "codex") throw new HttpError(400, "provider invalide");
-            return {
-              provider,
-              model: requiredString(body, "model"),
-              effort: optionalEffort(body, provider) ?? defaultReviewConfig(provider).effort,
-              speed: provider === "codex" ? optionalSpeed(body, provider) : null,
-            };
-          })();
+          const flag = deps.reviews.getFlag(reviewFlagDispatchId);
+          if (!flag) throw new HttpError(404, "flag inconnu");
+          const review = deps.reviews.get(flag.review_id);
+          if (!review) throw new HttpError(404, "review inconnue");
+          const conversation = deps.conversations.get(review.conversation_id);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const project = deps.projects.get(conversation.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const agentConfig = resolveCorrectionConfig(project, conversation, flag.code_provider, deps.presets);
           try {
             return json(deps.reviews.dispatchFlag(reviewFlagDispatchId, body.message, agentConfig), 201);
           } catch (error) {
@@ -2788,16 +2673,13 @@ export function createServer(deps: ServerDeps) {
           if (!Array.isArray(severities) || !severities.every((item) => item === "red" || item === "orange" || item === "grey")) {
             throw new HttpError(400, "sévérités invalides");
           }
-          const agentConfig = body.provider === undefined ? undefined : (() => {
-            const provider = requiredString(body, "provider");
-            if (provider !== "claude" && provider !== "codex") throw new HttpError(400, "provider invalide");
-            return {
-              provider,
-              model: requiredString(body, "model"),
-              effort: optionalEffort(body, provider) ?? defaultReviewConfig(provider).effort,
-              speed: provider === "codex" ? optionalSpeed(body, provider) : null,
-            };
-          })();
+          const review = deps.reviews.get(reviewDispatchAllId);
+          if (!review) throw new HttpError(404, "review inconnu");
+          const conversation = deps.conversations.get(review.conversation_id);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const project = deps.projects.get(conversation.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const agentConfig = resolveCorrectionConfig(project, conversation, review.code_provider, deps.presets);
           try {
             return json({ dispatched: deps.reviews.dispatchAll(reviewDispatchAllId, severities, agentConfig) }, 202);
           } catch (error) {

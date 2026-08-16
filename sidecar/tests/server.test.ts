@@ -766,49 +766,33 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
   runGit("commit", "-qm", "head");
 
   const project = await createProject(repo);
+  const preset = await postJson("/api/presets", {
+    name: "Revue projet",
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "high",
+    speed: "standard",
+    orchestrator: true,
+    review_provider: "codex",
+    review_model: "gpt-5.6-luna",
+    review_effort: "medium",
+  });
+  expect(preset.status).toBe(201);
+  const { id: presetId } = await preset.json() as { id: string };
+  const linked = await putJson(`/api/projects/${project.id}/default-review-preset`, { presetId });
+  expect(linked.status).toBe(200);
+
   const conversation = new ConversationStore(current.db).create({
     projectId: project.id,
     provider: "codex",
     model: "gpt-5.6-luna",
     firstMessage: "change la valeur",
   });
-  const configured = await fetch(
-    `${current.baseUrl}/api/conversations/${conversation.id}/review-config`,
-    {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        enabled: true,
-        reviewProvider: "codex",
-        reviewModel: "gpt-5.6-luna",
-        reviewEffort: "medium",
-        reviewSpeed: "fast",
-      }),
-    },
-  );
-  expect(configured.status).toBe(200);
-  expect(await configured.json()).toEqual(expect.objectContaining({
-    auto_review: true,
-    review_model: "gpt-5.6-luna",
-    review_speed: "fast",
-  }));
-  const started = await postJson("/api/reviews", {
-    conversationId: conversation.id,
-    reviewProvider: "codex",
-    reviewModel: "gpt-5.6-luna",
-    reviewEffort: "high",
-    reviewSpeed: "fast",
-    codeProvider: "claude",
-  });
+  const started = await postJson("/api/reviews", { conversationId: conversation.id });
   expect(started.status).toBe(201);
   const created = await started.json() as { id: string; status: string };
   expect(created.status).toBe("running");
-  const throttled = await postJson("/api/reviews", {
-    conversationId: conversation.id,
-    reviewProvider: "codex",
-    reviewModel: "gpt-5.6-luna",
-    reviewEffort: "high",
-  });
+  const throttled = await postJson("/api/reviews", { conversationId: conversation.id });
   expect(throttled.status).toBe(429);
   expect(await throttled.json()).toEqual({ error: expect.stringMatching(/^Patientez (?:9|10) s/) });
   await current.reviews.wait(created.id);
@@ -822,8 +806,8 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
     status: "done",
     review_provider: "codex",
     review_model: "gpt-5.6-luna",
-    review_speed: "fast",
-    code_provider: "claude",
+    review_effort: "medium",
+    code_provider: "codex",
     flags: [],
   }));
   const list = await fetch(`${current.baseUrl}/api/projects/${project.id}/reviews`);
@@ -831,6 +815,59 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
   expect(await list.json()).toEqual([
     expect.objectContaining({ id: created.id, status: "done" }),
   ]);
+});
+
+test("un corps avec reviewModel est refusé 400", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const conversation = new ConversationStore(current.db).create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const rejected = await postJson("/api/reviews", {
+    conversationId: conversation.id,
+    reviewModel: "gpt-5.6-sol",
+  });
+  expect(rejected.status).toBe(400);
+});
+
+test("dispatch utilise le preset de correction du projet", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const preset = await postJson("/api/presets", {
+    name: "Correction projet",
+    provider: "claude",
+    model: "opus",
+    effort: "high",
+    speed: null,
+    orchestrator: true,
+  });
+  expect(preset.status).toBe(201);
+  const { id: presetId } = await preset.json() as { id: string };
+  const linked = await putJson(`/api/projects/${project.id}/default-correction-preset`, { presetId });
+  expect(linked.status).toBe(200);
+
+  const conversation = new ConversationStore(current.db).create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "risque",
+  });
+  const reviewStore = new ReviewStore(current.db);
+  const review = reviewStore.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  reviewStore.complete(review.id, [{
+    file: "src/danger.ts", line_start: 4, line_end: 4, severity: "red",
+    category: "perte de données", message: "La suppression doit conserver une sauvegarde.",
+  }]);
+  const flag = reviewStore.get(review.id)!.flags[0]!;
+
+  const dispatched = await postJson(`/api/review-flags/${flag.id}/dispatch`, {});
+  expect(dispatched.status).toBe(201);
+  const { subtaskId } = await dispatched.json() as { subtaskId: string };
+  expect(current.subtasks.get(subtaskId)).toMatchObject({
+    provider: "claude",
+    model: "opus",
+  });
+  await current.subtasks.waitResult(subtaskId);
 });
 
 test("un flag est traité directement sans décision groupée", async () => {

@@ -995,7 +995,9 @@ test("un dispatch terminé passe en traité jusqu'au prochain scan", async () =>
   };
   const runner = new ReviewRunner(store, projects, conversations, quotas, undefined, fakeSubtasks);
   const flag = store.get(review.id)!.flags[0]!;
-  runner.dispatchFlag(flag.id);
+  runner.dispatchFlag(flag.id, undefined, {
+    provider: "codex", model: "gpt-5.6-luna", effort: "xhigh", speed: "fast",
+  });
   expect(store.getFlag(flag.id)?.status).toBe("agent_running");
   await Bun.sleep(0);
   expect(store.getFlag(flag.id)?.status).toBe("treated");

@@ -45,9 +45,6 @@ export function openDb(dir: string = dataDir()): Database {
       provider TEXT NOT NULL, model TEXT NOT NULL,
       preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
       permission_mode TEXT NULL,
-      auto_review INTEGER NOT NULL DEFAULT 0,
-      review_provider TEXT NULL, review_model TEXT NULL, review_effort TEXT NULL,
-      review_speed TEXT NULL,
       subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
       subagent_effort TEXT NULL,
       cli_session_id TEXT, pinned INTEGER NOT NULL DEFAULT 0,
@@ -307,11 +304,6 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "message_count INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "last_read_turn INTEGER NOT NULL DEFAULT 0");
-  addColumn(db, "conversations", "auto_review INTEGER NOT NULL DEFAULT 0");
-  addColumn(db, "conversations", "review_provider TEXT NULL");
-  addColumn(db, "conversations", "review_model TEXT NULL");
-  addColumn(db, "conversations", "review_effort TEXT NULL");
-  addColumn(db, "conversations", "review_speed TEXT NULL");
   addColumn(db, "conversations", "created_on_branch TEXT NULL");
   migrateConversationMessageCounts(db);
   addColumn(db, "projects", "default_preset_id TEXT NULL");
@@ -364,6 +356,13 @@ export function openDb(dir: string = dataDir()): Database {
   dropColumn(db, "review_flags", "counter_subtask_id");
   dropColumn(db, "review_flags", "counter_error");
   dropColumn(db, "projects", "auto_counter_red");
+  // Résidu de la review et du rescan automatique par conversation, remplacés
+  // par les presets de review/correction du projet, résolus côté serveur.
+  dropColumn(db, "conversations", "auto_review");
+  dropColumn(db, "conversations", "review_provider");
+  dropColumn(db, "conversations", "review_model");
+  dropColumn(db, "conversations", "review_effort");
+  dropColumn(db, "conversations", "review_speed");
   // Migration de vocabulaire : « acquitté/écarté » devient « traité/ignoré ».
   db.exec("UPDATE review_flags SET status = 'treated' WHERE status = 'acked'");
   db.exec("UPDATE review_flags SET status = 'ignored' WHERE status = 'dismissed'");
@@ -431,8 +430,7 @@ export function openDb(dir: string = dataDir()): Database {
     .get(SPEED_REVIEW_MIGRATION_KEY);
   if (!speedReviewMigrated) {
     // L'ancien preset Vitesse utilisait Sol/high pour Gardien alors que son nom
-    // désigne le réglage Luna rapide du chat. On répare une seule fois le preset
-    // et les conversations qui avaient hérité exactement de cette valeur.
+    // désigne le réglage Luna rapide du chat. On répare une seule fois le preset.
     db.exec(`
       UPDATE presets
       SET review_provider = provider, review_model = model, review_effort = effort
@@ -440,15 +438,6 @@ export function openDb(dir: string = dataDir()): Database {
         AND review_provider = 'codex'
         AND review_model = 'gpt-5.6-sol'
         AND review_effort = 'high';
-
-      UPDATE conversations
-      SET review_provider = provider, review_model = model, review_effort = effort
-      WHERE provider = 'codex'
-        AND model = 'gpt-5.6-luna'
-        AND review_provider = 'codex'
-        AND review_model = 'gpt-5.6-sol'
-        AND review_effort = 'high'
-        AND review_speed = 'fast';
     `);
     db.query("INSERT INTO settings (key, value) VALUES (?, ?)")
       .run(SPEED_REVIEW_MIGRATION_KEY, "1");

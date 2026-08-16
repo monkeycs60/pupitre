@@ -192,7 +192,7 @@ export class ReviewRunner {
     return flag;
   }
 
-  dispatchFlag(id: string, message?: string, agentConfig?: CorrectionAgentConfig): { subtaskId: string } {
+  dispatchFlag(id: string, message: string | undefined, agentConfig: CorrectionAgentConfig): { subtaskId: string } {
     if (!this.subtasks) throw new Error("moteur de sous-tâches indisponible");
     const flag = this.store.getFlag(id);
     if (!flag) throw new Error("flag inconnu");
@@ -216,8 +216,8 @@ export class ReviewRunner {
 
   dispatchAll(
     reviewId: string,
-    severities: ReviewSeverity[] = ["red", "orange"],
-    agentConfig?: CorrectionAgentConfig,
+    severities: ReviewSeverity[],
+    agentConfig: CorrectionAgentConfig,
   ): number {
     const review = this.store.get(reviewId);
     if (!review) throw new Error("review inconnu");
@@ -327,21 +327,19 @@ export class ReviewRunner {
     flag: ReviewFlag,
     conversationId: string,
     userMessage: string | undefined,
-    agentConfig?: CorrectionAgentConfig,
+    agentConfig: CorrectionAgentConfig,
   ): Promise<void> {
     try {
-      const conversation = this.conversations.get(conversationId);
-      if (!conversation) throw new Error("conversation inconnue");
-      const agent = agentConfig ?? dispatchAgentConfig(conversation, flag.code_provider);
+      if (!this.conversations.get(conversationId)) throw new Error("conversation inconnue");
       let subtask;
       for (;;) {
         try {
           subtask = this.subtasks!.start({
             conversationId,
-            provider: agent.provider,
-            model: agent.model,
-            effort: agent.effort,
-            speed: agent.speed,
+            provider: agentConfig.provider,
+            model: agentConfig.model,
+            effort: agentConfig.effort,
+            speed: agentConfig.speed,
             prompt: dispatchPrompt(flag, counterContext(review.diff_text, flag), userMessage),
             label: `Gardien · ${flag.category} · ${flag.file}:${flag.line_start}`,
             readOnly: false,
