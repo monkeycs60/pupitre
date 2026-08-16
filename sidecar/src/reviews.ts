@@ -481,6 +481,18 @@ export class ReviewRunner {
     conversationId: string,
     head: string,
   ): Promise<string> {
+    // Sur un worktree dédié (ADR 0001), les liens commit ↔ conversation ne
+    // suffisent pas : un commit fait pendant le tour n'est lié qu'à sa fin. Le
+    // point de divergence avec le dépôt principal couvre toute la branche.
+    const project = this.projects.get(projectId);
+    const conversation = this.conversations.get(conversationId);
+    if (project && conversation?.worktree_path && conversation.worktree_path !== project.path) {
+      const mainHead = await resolveGitRef(project.path, "HEAD").catch(() => null);
+      if (mainHead && mainHead !== head) {
+        const fork = (await git(cwd, ["merge-base", mainHead, head]).catch(() => "")).trim();
+        if (fork && fork !== head) return fork;
+      }
+    }
     const linked = this.store.linkedCommitShas(projectId, conversationId);
     const reachable: string[] = [];
     for (const sha of linked) {

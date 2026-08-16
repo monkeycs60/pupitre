@@ -412,6 +412,39 @@ test("la portée conversation couvre plusieurs commits et tout le worktree", asy
   expect(completed!.diff_text).toContain("src/untracked.ts");
 });
 
+test("sur un worktree dédié, la portée conversation part du point de divergence avec le dépôt principal", async () => {
+  const project = projects.create({ name: "worktree", path: repo });
+  const worktree = join(dir, "wt-feature");
+  git("worktree", "add", "-q", "-b", "feature", worktree);
+  const conversation = conversations.create({
+    projectId: project.id,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    firstMessage: "travaille sur la branche",
+    worktreePath: worktree,
+  });
+  // Commit fait par l'agent, sans lien enregistré (tour encore en cours).
+  writeFileSync(join(worktree, "src/feature.ts"), "export const feature = 1\n");
+  Bun.spawnSync(["git", "add", "."], { cwd: worktree });
+  Bun.spawnSync(["git", "commit", "-qm", "feature"], { cwd: worktree });
+  writeFileSync(join(worktree, "src/wip.ts"), "export const wip = true\n");
+
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => '{"flags":[]}');
+  const review = runner.start({
+    projectId: project.id,
+    conversationId: conversation.id,
+    gitRefBase: "CONVERSATION",
+    gitRefHead: "WORKTREE",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+  });
+  const completed = await runner.wait(review.id);
+  expect(completed).toMatchObject({ status: "done", git_ref_base: git("rev-parse", "HEAD") });
+  expect(completed!.diff_text).toContain("src/feature.ts");
+  expect(completed!.diff_text).toContain("src/wip.ts");
+});
+
 // Place devant `git` un script qui commite dans le dépôt juste avant de déléguer
 // un `git diff` au vrai binaire : la fenêtre entre la lecture de HEAD et la
 // capture du diff worktree devient reproductible.
