@@ -79,7 +79,7 @@ const review: Review = {
   })),
 }
 
-test('un diff modifié depuis la relecture prime sur le rouge ouvert', async () => {
+test('un diff modifié depuis la relecture signale la péremption', async () => {
   globalThis.fetch = mock(async (input: RequestInfo | URL) => {
     const url = String(input)
     if (url.endsWith('/reviews')) return Response.json([review])
@@ -95,12 +95,76 @@ test('un diff modifié depuis la relecture prime sur le rouge ouvert', async () 
     onRelire: () => undefined,
   }))
 
-  await screen.findByText('modifié depuis la relecture — à relire')
-  const line = screen.getByRole('group', { name: 'Gardien' })
-  expect(line.className).toContain('is-stale')
-  expect(line.className).not.toContain('is-block')
-  // La correction reste offerte : le verdict est caduc, pas les erreurs déjà trouvées.
-  expect(screen.getByRole('button', { name: 'Corriger les 2 erreurs' })).toBeTruthy()
+  const button = await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })
+  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('modifié depuis la relecture'))
+  // Le bouton reste visible pour dire ce qui est en jeu, mais inerte : dispatcher
+  // signalerait des flags calculés sur un diff que le Gardien n'a plus lu.
+  expect((button as HTMLButtonElement).disabled).toBe(true)
+})
+
+test('affiche la review même quand le diff live échoue', async () => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/reviews')) return Response.json([review])
+    if (url.endsWith('/diff')) return Response.json({ error: 'worktree absent' }, { status: 500 })
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+
+  render(createElement(GuardianLine, {
+    conversation,
+    project,
+    reviewStatus: null,
+    onOpenCode: () => undefined,
+    onRelire: () => undefined,
+  }))
+
+  expect(await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })).toBeDefined()
+  expect(screen.getByText('2 rouges')).toBeDefined()
+})
+
+test('un rouge ouvert garde la priorité visuelle sur un diff périmé', async () => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/reviews')) return Response.json([review])
+    if (url.endsWith('/diff')) return Response.json({ diff: 'diff modifié depuis', files: [] })
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+
+  render(createElement(GuardianLine, {
+    conversation,
+    project,
+    reviewStatus: null,
+    onOpenCode: () => undefined,
+    onRelire: () => undefined,
+  }))
+
+  const line = await waitFor(() => {
+    const node = document.getElementById('guardian-line')
+    expect(node?.className).toContain('is-block')
+    return node
+  })
+  expect(line?.className).not.toContain('is-stale')
+  expect(line?.textContent).toContain('2 rouges')
+  expect(line?.textContent).toContain('modifié depuis la relecture')
+})
+
+test('sans flag ouvert, un diff périmé rend la ligne neutre', async () => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/reviews')) return Response.json([{ ...review, flags: [] }])
+    if (url.endsWith('/diff')) return Response.json({ diff: 'diff modifié depuis', files: [] })
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+
+  render(createElement(GuardianLine, {
+    conversation,
+    project,
+    reviewStatus: null,
+    onOpenCode: () => undefined,
+    onRelire: () => undefined,
+  }))
+
+  await waitFor(() => expect(document.getElementById('guardian-line')?.className).toContain('is-stale'))
 })
 
 test('propose et lance directement toutes les corrections ouvertes', async () => {
@@ -131,4 +195,32 @@ test('propose et lance directement toutes les corrections ouvertes', async () =>
   expect(dispatch?.init?.method).toBe('POST')
   expect(JSON.parse(String(dispatch?.init?.body))).toEqual({ severities: ['red', 'orange', 'grey'] })
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Corriger les 2 erreurs' })).toBeNull())
+})
+
+test('refuse de corriger quand le diff a bougé depuis la relecture', async () => {
+  const requests: string[] = []
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    requests.push(url)
+    if (url.endsWith('/reviews')) return Response.json([review])
+    if (url.endsWith('/diff')) return Response.json({ diff: 'diff modifié', files: [] })
+    if (url.endsWith('/dispatch-all')) return Response.json({ dispatched: 2 }, { status: 202 })
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+  window.confirm = mock(() => true)
+
+  render(createElement(GuardianLine, {
+    conversation,
+    project,
+    reviewStatus: null,
+    onOpenCode: () => undefined,
+    onRelire: () => undefined,
+  }))
+
+  const button = await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })
+  expect((button as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(button)
+
+  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('modifié depuis la relecture'))
+  expect(requests.some((url) => url.endsWith('/dispatch-all'))).toBe(false)
 })

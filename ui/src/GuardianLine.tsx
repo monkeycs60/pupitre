@@ -17,19 +17,25 @@ function GuardianShield() {
   return <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true"><path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" /></svg>
 }
 
+function openFlagsOf(review: Review) {
+  return review.flags.filter((flag) => flag.status === 'open' || flag.status === 'agent_running')
+}
+
 function variantFor(review: Review | null, running: boolean, stale: boolean): Variant {
   if (running) return 'running'
   if (!review) return 'idle'
   if (review.status === 'error') return 'block'
+  const open = openFlagsOf(review)
+  // Un signalement rouge encore ouvert reste vrai même si le diff a bougé :
+  // le neutre de `stale` ne doit pas l'effacer de l'écran.
+  if (open.some((flag) => flag.severity === 'red')) return 'block'
   if (stale) return 'stale'
-  const open = review.flags.filter((flag) => flag.status === 'open' || flag.status === 'agent_running')
-  if (open.length === 0) return 'clean'
-  return open.some((flag) => flag.severity === 'red') ? 'block' : 'warn'
+  return open.length === 0 ? 'clean' : 'warn'
 }
 
 /** Compte des flags encore ouverts, un mot par sévérité non nulle. */
 function findingsSummary(review: Review): string {
-  const open = review.flags.filter((flag) => flag.status === 'open' || flag.status === 'agent_running')
+  const open = openFlagsOf(review)
   if (open.length === 0) return 'rien à signaler'
   const bySeverity = (severity: 'red' | 'orange' | 'grey', word: string) => {
     const count = open.filter((flag) => flag.severity === severity).length
@@ -43,8 +49,9 @@ function findingsSummary(review: Review): string {
 function stateLabel(review: Review | null, stale: boolean): string {
   if (!review) return 'pas encore relu'
   if (review.status === 'error') return 'relecture interrompue'
-  if (stale) return 'modifié depuis la relecture — à relire'
-  return findingsSummary(review)
+  if (!stale) return findingsSummary(review)
+  if (openFlagsOf(review).length === 0) return 'modifié depuis la relecture — à relire'
+  return `${findingsSummary(review)} · modifié depuis la relecture`
 }
 
 export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, onRelire }: GuardianLineProps) {
