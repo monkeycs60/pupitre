@@ -3,11 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { countConversationMessages } from "./message-count";
-import {
-  CUSTOM_REVIEW_MIGRATION_KEY,
-  MESSAGE_COUNT_MIGRATION_KEY,
-  SPEED_REVIEW_MIGRATION_KEY,
-} from "./stores/settings";
+import { MESSAGE_COUNT_MIGRATION_KEY, SPEED_REVIEW_MIGRATION_KEY } from "./stores/settings";
 
 export function dataDir(): string {
   return process.env.PUPITRE_DATA_DIR ?? join(homedir(), ".local/share/pupitre");
@@ -420,14 +416,33 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "presets", "review_effort TEXT NOT NULL DEFAULT 'high'");
   addColumn(db, "presets", "subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL");
   addColumn(db, "presets", "subagent_effort TEXT NULL");
+  // Marqueur d'héritage : sans lui, une configuration de review égale aux
+  // anciens defaults est indiscernable d'un choix délibéré identique.
+  const addedReviewExplicit = addColumn(
+    db,
+    "presets",
+    "review_explicit INTEGER NOT NULL DEFAULT 0",
+  );
+  if (addedReviewExplicit && !addedReviewProvider) {
+    // La base porte déjà des reviews saisies sans marqueur : on les déclare
+    // explicites, faute de pouvoir les distinguer d'un héritage. Préserver un
+    // héritage coûte un réglage à refaire ; écraser un choix le perd.
+    db.exec("UPDATE presets SET review_explicit = 1");
+  }
   if (addedReviewProvider) {
-    // Lors du passage M2 → M3, un preset Claude hérite du reviewer fort Claude.
-    // Cette correction ne tourne qu'à l'ajout de colonne et ne peut donc pas
-    // écraser un choix utilisateur lors des démarrages suivants.
+    // Lors du passage M2 → M3, aucune review n'a encore pu être choisie : tout
+    // ce qui existe est un héritage, donc alignable sans risque. Un preset
+    // Claude hérite du reviewer fort Claude, un preset personnalisé de sa
+    // propre configuration.
     db.exec(`
       UPDATE presets
       SET review_provider = 'claude', review_model = 'opus', review_effort = 'high'
       WHERE provider = 'claude'
+    `);
+    db.exec(`
+      UPDATE presets
+      SET review_provider = provider, review_model = model, review_effort = effort
+      WHERE built_in = 0 AND effort IS NOT NULL
     `);
   }
   const speedReviewMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
@@ -445,22 +460,6 @@ export function openDb(dir: string = dataDir()): Database {
     `);
     db.query("INSERT INTO settings (key, value) VALUES (?, ?)")
       .run(SPEED_REVIEW_MIGRATION_KEY, "1");
-  }
-  const customReviewMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
-    .get(CUSTOM_REVIEW_MIGRATION_KEY);
-  if (!customReviewMigrated) {
-    db.exec(`
-      UPDATE presets
-      SET review_provider = provider, review_model = model, review_effort = effort
-      WHERE built_in = 0
-        AND effort IS NOT NULL
-        AND (
-          (review_provider = 'codex' AND review_model = 'gpt-5.6-sol' AND review_effort = 'high')
-          OR (review_provider = 'claude' AND review_model = 'opus' AND review_effort = 'high')
-        );
-    `);
-    db.query("INSERT INTO settings (key, value) VALUES (?, ?)")
-      .run(CUSTOM_REVIEW_MIGRATION_KEY, "1");
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
   db.exec("PRAGMA foreign_keys = ON");

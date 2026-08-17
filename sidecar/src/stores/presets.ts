@@ -58,6 +58,11 @@ export interface Preset extends Omit<PresetInput, "permission_mode" | "review_pr
   review_model: string;
   review_effort: string;
   /**
+   * La configuration de review a été choisie, pas héritée du preset. Les
+   * migrations s'interdisent de réécrire une review explicite.
+   */
+  review_explicit: boolean;
+  /**
    * Un preset livré avec Pupitre. Le drapeau n'interdit plus l'édition : il dit
    * seulement que le preset a des valeurs d'origine restaurables (`restore`) et
    * qu'il ne peut pas être supprimé — la liste garde toujours ses trois repères.
@@ -193,9 +198,9 @@ export class PresetStore {
       INSERT INTO presets
         (id, name, provider, model, effort, speed, orchestrator,
          subagent_preset_id, subagent_effort,
-         permission_mode, review_provider, review_model, review_effort,
+         permission_mode, review_provider, review_model, review_effort, review_explicit,
          built_in, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `).run(
       id,
       input.name,
@@ -210,6 +215,7 @@ export class PresetStore {
       review.provider,
       review.model,
       review.effort,
+      hasExplicitReview(input) ? 1 : 0,
       now,
       now,
     );
@@ -244,7 +250,7 @@ export class PresetStore {
       SET name = ?, provider = ?, model = ?, effort = ?, speed = ?,
           orchestrator = ?, subagent_preset_id = ?, subagent_effort = ?,
           permission_mode = ?, review_provider = ?, review_model = ?,
-          review_effort = ?, updated_at = ?
+          review_effort = ?, review_explicit = ?, updated_at = ?
       WHERE id = ?
     `).run(
       input.name,
@@ -259,6 +265,7 @@ export class PresetStore {
       review.provider,
       review.model,
       review.effort,
+      hasExplicitReview(input) || preset.review_explicit ? 1 : 0,
       new Date().toISOString(),
       id,
     );
@@ -280,7 +287,7 @@ export class PresetStore {
       SET name = ?, provider = ?, model = ?, effort = ?, speed = ?,
           orchestrator = ?, subagent_preset_id = ?, subagent_effort = ?,
           permission_mode = ?, review_provider = ?, review_model = ?,
-          review_effort = ?, updated_at = ?
+          review_effort = ?, review_explicit = 0, updated_at = ?
       WHERE id = ?
     `).run(
       original.name,
@@ -323,6 +330,7 @@ export class PresetStore {
     return {
       ...row,
       orchestrator: !!row.orchestrator,
+      review_explicit: !!row.review_explicit,
       built_in: !!row.built_in,
       permission_mode: normalizePresetPermissionMode(row.permission_mode),
     };
@@ -346,6 +354,12 @@ export function defaultReviewConfig(provider: Provider): ReviewModelConfig {
   return provider === "claude"
     ? { provider, model: "opus", effort: "high" }
     : { provider, model: "gpt-5.6-sol", effort: "high" };
+}
+
+function hasExplicitReview(input: PresetInput): boolean {
+  return input.review_provider !== undefined
+    || input.review_model !== undefined
+    || input.review_effort !== undefined;
 }
 
 function reviewConfig(input: PresetInput, fallback: ReviewModelConfig): ReviewModelConfig {

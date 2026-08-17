@@ -120,7 +120,7 @@ test("un preset personnalisé utilise sa configuration pour la review", () => {
   });
 });
 
-test("migre les reviews implicites des presets personnalisés sans écraser une review explicite", () => {
+test("aligne la review des presets personnalisés d'une base sans colonne de review", () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-custom-review-migration-"));
   const legacyDb = openDb(dir);
   new PresetStore(legacyDb);
@@ -131,11 +131,11 @@ test("migre les reviews implicites des presets personnalisés sans écraser une 
        built_in, created_at, updated_at)
     VALUES
       ('implicit', 'Opus low', 'claude', 'opus', 'low', NULL, 1,
-       NULL, 'claude', 'opus', 'high', 0, 'now', 'now'),
-      ('explicit', 'Luna relue par Sol', 'codex', 'gpt-5.6-luna', 'low', 'standard', 1,
-       NULL, 'codex', 'gpt-5.6-sol', 'medium', 0, 'now', 'now')
+       NULL, 'claude', 'opus', 'high', 0, 'now', 'now')
   `).run();
-  legacyDb.query("DELETE FROM settings WHERE key = 'custom-review-follows-preset-v1'").run();
+  for (const column of ["review_explicit", "review_provider", "review_model", "review_effort"]) {
+    legacyDb.exec(`ALTER TABLE presets DROP COLUMN ${column}`);
+  }
   legacyDb.close();
 
   const migrated = new PresetStore(openDb(dir));
@@ -143,11 +143,68 @@ test("migre les reviews implicites des presets personnalisés sans écraser une 
     review_provider: "claude",
     review_model: "opus",
     review_effort: "low",
+    review_explicit: false,
   });
-  expect(migrated.get("explicit")).toMatchObject({
+});
+
+test("préserve une review déjà saisie quand la base n'a pas encore de marqueur d'héritage", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-ambiguous-review-"));
+  const legacyDb = openDb(dir);
+  new PresetStore(legacyDb);
+  legacyDb.query(`
+    INSERT INTO presets
+      (id, name, provider, model, effort, speed, orchestrator,
+       permission_mode, review_provider, review_model, review_effort,
+       built_in, created_at, updated_at)
+    VALUES
+      ('choisi', 'Luna relue par Sol', 'codex', 'gpt-5.6-luna', 'low', 'standard', 1,
+       NULL, 'codex', 'gpt-5.6-sol', 'high', 0, 'now', 'now')
+  `).run();
+  legacyDb.exec("ALTER TABLE presets DROP COLUMN review_explicit");
+  legacyDb.close();
+
+  const migrated = new PresetStore(openDb(dir));
+  expect(migrated.get("choisi")).toMatchObject({
+    review_provider: "codex",
     review_model: "gpt-5.6-sol",
-    review_effort: "medium",
+    review_effort: "high",
+    review_explicit: true,
   });
+});
+
+test("une review choisie est marquée explicite, une review héritée ne l'est pas", () => {
+  const inherited = presets.create({
+    name: "Hérité",
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "low",
+    speed: "standard",
+    orchestrator: true,
+  });
+  expect(inherited.review_explicit).toBe(false);
+
+  const chosen = presets.create({
+    name: "Choisi",
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "low",
+    speed: "standard",
+    orchestrator: true,
+    review_provider: "codex",
+    review_model: "gpt-5.6-sol",
+    review_effort: "high",
+  });
+  expect(chosen.review_explicit).toBe(true);
+
+  const renamed = presets.update(chosen.id, {
+    name: "Toujours choisi",
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "low",
+    speed: "standard",
+    orchestrator: true,
+  });
+  expect(renamed?.review_explicit).toBe(true);
 });
 
 test("la permission d'un preset est optionnelle, canonique et persistante", () => {
