@@ -878,6 +878,28 @@ test("une nouvelle review remplace la précédente : ses signalements encore ouv
   expect(store.reviewStatus(project.id).openBySeverity.red).toBe(1);
 });
 
+test("deux scans worktree qui terminent à l'envers : c'est l'ordre de lancement qui tranche", () => {
+  const project = projects.create({ name: "désordre", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const input = {
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex" as const, model: "gpt-5.6-sol", effort: "high",
+  };
+  const older = store.create(input);
+  const newer = store.create(input);
+  const flag = {
+    file: "src/config.ts", line_start: 1, line_end: 1, severity: "red" as const,
+    category: "secret", message: "Le secret est journalisé.",
+  };
+  store.complete(newer.id, [flag]);
+  store.complete(older.id, [flag]);
+  expect(store.get(older.id)!.flags.map((f) => f.status)).toEqual(["resolved"]);
+  expect(store.get(newer.id)!.flags.map((f) => f.status)).toEqual(["open"]);
+  expect(store.reviewStatus(project.id).openBySeverity.red).toBe(1);
+});
+
 test("scan incrémental : un hunk modifié après dispatch devient resolved sans re-signalement", async () => {
   const base = git("rev-parse", "HEAD");
   writeFileSync(join(repo, "src/config.ts"), "console.log(process.env.SECRET)\n");

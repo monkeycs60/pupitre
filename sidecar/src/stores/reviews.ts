@@ -244,8 +244,13 @@ export class ReviewStore {
   complete(id: string, flags: Array<ReviewFlagInput & { hunk_hash?: string | null }>): void {
     const complete = this.db.transaction(() => {
       const review = this.db.query(
-        "SELECT code_provider, conversation_id FROM reviews WHERE id = ?",
-      ).get(id) as { code_provider: Provider | null; conversation_id: string } | null;
+        "SELECT code_provider, conversation_id, scope, rowid AS seq FROM reviews WHERE id = ?",
+      ).get(id) as {
+        code_provider: Provider | null;
+        conversation_id: string;
+        scope: string;
+        seq: number;
+      } | null;
       if (!review) throw new Error("review inconnue");
       const defaultCodeProvider = review.code_provider
         ?? this.conversationProvider(review.conversation_id);
@@ -278,14 +283,29 @@ export class ReviewStore {
       // ce qui y restait ouvert n'a plus de surface où être traité, et
       // fausserait le compteur du rail. Les reviews par commit restent
       // indépendantes.
-      this.db.query(`
-        UPDATE review_flags SET status = 'resolved'
-        WHERE status = 'open' AND review_id IN (
-          SELECT id FROM reviews
-          WHERE conversation_id = ? AND scope = 'worktree' AND id != ? AND status = 'done'
-            AND 'worktree' = (SELECT scope FROM reviews WHERE id = ?)
-        )
-      `).run(review.conversation_id, id, id);
+      if (review.scope === "worktree") {
+        // L'ordre de lancement (rowid) tranche, pas l'ordre d'arrivée : deux
+        // scans concurrents peuvent terminer à l'envers, et la review la plus
+        // ancienne ne doit alors ni écraser la plus récente ni survivre à elle.
+        const newerDone = this.db.query(`
+          SELECT 1 FROM reviews
+          WHERE conversation_id = ? AND scope = 'worktree' AND status = 'done' AND rowid > ?
+          LIMIT 1
+        `).get(review.conversation_id, review.seq);
+        if (newerDone) {
+          this.db.query(
+            "UPDATE review_flags SET status = 'resolved' WHERE status = 'open' AND review_id = ?",
+          ).run(id);
+        } else {
+          this.db.query(`
+            UPDATE review_flags SET status = 'resolved'
+            WHERE status = 'open' AND review_id IN (
+              SELECT id FROM reviews
+              WHERE conversation_id = ? AND scope = 'worktree' AND status = 'done' AND rowid < ?
+            )
+          `).run(review.conversation_id, review.seq);
+        }
+      }
     });
     complete();
   }
