@@ -167,11 +167,42 @@ test('sans flag ouvert, un diff périmé rend la ligne neutre', async () => {
   await waitFor(() => expect(document.getElementById('guardian-line')?.className).toContain('is-stale'))
 })
 
-test('propose et lance directement toutes les corrections ouvertes', async () => {
+test('propose par défaut une seule correction groupée', async () => {
   const requests: Array<{ url: string, init?: RequestInit }> = []
   globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     requests.push({ url, init })
+    if (url.endsWith('/reviews')) return Response.json([review])
+    if (url.endsWith('/diff')) return Response.json({ diff: 'diff', files: [] })
+    if (url.endsWith('/dispatch-grouped')) return Response.json({ dispatched: 2, subtaskId: 'group-1' }, { status: 202 })
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+  window.confirm = mock(() => true)
+
+  render(createElement(GuardianLine, {
+    conversation,
+    project,
+    reviewStatus: null,
+    onOpenCode: () => undefined,
+    onRelire: () => undefined,
+  }))
+
+  const button = await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })
+  expect((screen.getByRole('combobox', { name: 'Mode de correction' }) as HTMLSelectElement).value).toBe('grouped')
+  fireEvent.click(button)
+
+  await waitFor(() => expect(requests.some(({ url }) => url.endsWith('/reviews/review-1/dispatch-grouped'))).toBe(true))
+  const dispatch = requests.find(({ url }) => url.endsWith('/reviews/review-1/dispatch-grouped'))
+  expect(dispatch?.init?.method).toBe('POST')
+  expect(JSON.parse(String(dispatch?.init?.body))).toEqual({ severities: ['red', 'orange', 'grey'] })
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Corriger les 2 erreurs' })).toBeNull())
+})
+
+test('permet de lancer un agent distinct par erreur', async () => {
+  const requests: string[] = []
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    requests.push(url)
     if (url.endsWith('/reviews')) return Response.json([review])
     if (url.endsWith('/diff')) return Response.json({ diff: 'diff', files: [] })
     if (url.endsWith('/dispatch-all')) return Response.json({ dispatched: 2 }, { status: 202 })
@@ -187,14 +218,12 @@ test('propose et lance directement toutes les corrections ouvertes', async () =>
     onRelire: () => undefined,
   }))
 
-  const button = await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })
-  fireEvent.click(button)
+  const mode = await screen.findByRole('combobox', { name: 'Mode de correction' })
+  fireEvent.change(mode, { target: { value: 'individual' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Corriger les 2 erreurs' }))
 
-  await waitFor(() => expect(requests.some(({ url }) => url.endsWith('/reviews/review-1/dispatch-all'))).toBe(true))
-  const dispatch = requests.find(({ url }) => url.endsWith('/reviews/review-1/dispatch-all'))
-  expect(dispatch?.init?.method).toBe('POST')
-  expect(JSON.parse(String(dispatch?.init?.body))).toEqual({ severities: ['red', 'orange', 'grey'] })
-  await waitFor(() => expect(screen.queryByRole('button', { name: 'Corriger les 2 erreurs' })).toBeNull())
+  await waitFor(() => expect(requests.some((url) => url.endsWith('/reviews/review-1/dispatch-all'))).toBe(true))
+  expect(requests.some((url) => url.endsWith('/dispatch-grouped'))).toBe(false)
 })
 
 test('refuse de corriger quand le diff a bougé depuis la relecture', async () => {

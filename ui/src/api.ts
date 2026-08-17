@@ -911,6 +911,13 @@ export function dispatchAllFlags(
   return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-all`, jsonPost({ severities }))
 }
 
+export function dispatchGroupedFlags(
+  reviewId: string,
+  severities: Array<'red' | 'orange' | 'grey'> = ['red', 'orange'],
+): Promise<{ subtaskId: string, dispatched: number }> {
+  return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-grouped`, jsonPost({ severities }))
+}
+
 export function getSubtask(
   subtaskId: string,
   signal?: AbortSignal,

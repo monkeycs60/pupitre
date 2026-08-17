@@ -244,6 +244,31 @@ export class ReviewRunner {
     return flags.length;
   }
 
+  dispatchGrouped(
+    reviewId: string,
+    severities: ReviewSeverity[],
+    agentConfig: CorrectionAgentConfig,
+  ): { subtaskId: string; dispatched: number } {
+    if (!this.subtasks) throw new Error("moteur de sous-tâches indisponible");
+    const review = this.store.get(reviewId);
+    if (!review) throw new Error("review inconnu");
+    const flags = review.flags.filter((flag) =>
+      severities.includes(flag.severity) && flag.status === "open",
+    );
+    if (flags.length === 0) {
+      throw new DispatchConflictError("aucun flag ouvert à corriger");
+    }
+    const dispatchKey = `group:${review.id}`;
+    this.trackDispatch(review.id, 1);
+    const run = this.executeGroupedDispatch(review, flags, review.conversation_id, agentConfig)
+      .catch(() => {})
+      .finally(() => this.activeDispatches.delete(dispatchKey));
+    const started = this.store.getFlag(flags[0]!.id);
+    if (!started?.subtask_id) throw new Error("échec du lancement de la sous-tâche");
+    this.activeDispatches.set(dispatchKey, run);
+    return { subtaskId: started.subtask_id, dispatched: flags.length };
+  }
+
   private trackDispatch(reviewId: string, delta: number): number {
     const next = (this.pendingDispatches.get(reviewId) ?? 0) + delta;
     if (next <= 0) this.pendingDispatches.delete(reviewId); else this.pendingDispatches.set(reviewId, next);
@@ -412,6 +437,50 @@ export class ReviewRunner {
       this.notifyStatus();
     } catch (error) {
       this.store.updateFlag(flag.id, { status: "open" });
+      this.notifyStatus();
+      throw error;
+    } finally {
+      if (this.trackDispatch(review.id, -1) === 0) this.rescanAfterCorrections(review);
+    }
+  }
+
+  private async executeGroupedDispatch(
+    review: Review,
+    flags: ReviewFlag[],
+    conversationId: string,
+    agentConfig: CorrectionAgentConfig,
+  ): Promise<void> {
+    try {
+      if (!this.conversations.get(conversationId)) throw new Error("conversation inconnue");
+      let subtask;
+      for (;;) {
+        try {
+          subtask = this.subtasks!.start({
+            conversationId,
+            provider: agentConfig.provider,
+            model: agentConfig.model,
+            effort: agentConfig.effort,
+            speed: agentConfig.speed,
+            prompt: groupedDispatchPrompt(flags, review.diff_text),
+            label: `Gardien · correction groupée · ${flags.length} signalements`,
+            readOnly: false,
+          });
+          break;
+        } catch (error) {
+          if (!(error instanceof SubtaskLimitError)) throw error;
+          await Bun.sleep(100);
+        }
+      }
+      for (const flag of flags) {
+        this.store.updateFlag(flag.id, { status: "agent_running", subtaskId: subtask.id });
+      }
+      this.notifyStatus();
+      const result = await this.subtasks!.waitResult(subtask.id);
+      const status = result?.status === "done" ? "treated" : "open";
+      for (const flag of flags) this.store.updateFlag(flag.id, { status });
+      this.notifyStatus();
+    } catch (error) {
+      for (const flag of flags) this.store.updateFlag(flag.id, { status: "open" });
       this.notifyStatus();
       throw error;
     } finally {
@@ -948,6 +1017,22 @@ function dispatchPrompt(flag: ReviewFlag, context: string, userMessage: string |
     context,
     "\nTraite ce point directement dans le code. Modifie les fichiers nécessaires,",
     "ajoute ou adapte les tests, et termine par un résumé d'une ligne de ce que tu as changé.",
+  ].join("\n");
+}
+
+function groupedDispatchPrompt(flags: ReviewFlag[], diff: string): string {
+  const findings = flags.map((flag, index) => [
+    `${index + 1}. [${flag.severity}] ${flag.file}:${flag.line_start}-${flag.line_end} · ${flag.category}`,
+    flag.message,
+  ].join("\n")).join("\n\n");
+  const contexts = [...new Set(flags.map((flag) => counterContext(diff, flag)))].join("\n\n");
+  return [
+    `Le Gardien a signalé ${flags.length} risques à corriger dans une seule intervention :`,
+    findings,
+    "\nZones concernées du diff :",
+    contexts,
+    "\nTraite tous les points directement dans le code. Modifie les fichiers nécessaires,",
+    "ajoute ou adapte les tests, puis termine par un résumé concis des changements.",
   ].join("\n");
 }
 

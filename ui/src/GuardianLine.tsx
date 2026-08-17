@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { dispatchAllFlags, getConversationDiff, listProjectReviews } from './api'
+import { dispatchAllFlags, dispatchGroupedFlags, getConversationDiff, listProjectReviews } from './api'
 import { isScanRunning } from './reviewStatus'
 import type { Conversation, Project, Review, ReviewStatusSnapshot } from './types'
 
@@ -12,6 +12,7 @@ interface GuardianLineProps {
 }
 
 type Variant = 'idle' | 'running' | 'clean' | 'warn' | 'block' | 'stale'
+type CorrectionMode = 'grouped' | 'individual'
 
 function GuardianShield() {
   return <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true"><path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" /></svg>
@@ -58,6 +59,7 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
   const [review, setReview] = useState<Review | null>(null)
   const [liveDiff, setLiveDiff] = useState<string | null>(null)
   const [correcting, setCorrecting] = useState(false)
+  const [correctionMode, setCorrectionMode] = useState<CorrectionMode>('grouped')
   const [correctionError, setCorrectionError] = useState<string | null>(null)
   const running = isScanRunning(reviewStatus)
   const wasRunning = useRef(running)
@@ -111,11 +113,18 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
 
   async function correctOpenFlags() {
     if (!review || openFlags.length === 0 || correcting || stale) return
-    if (!window.confirm(`Lancer ${openFlags.length} correction${openFlags.length > 1 ? 's' : ''} ?`)) return
+    const confirmation = correctionMode === 'grouped'
+      ? `Lancer une correction groupée pour ${openFlags.length} erreur${openFlags.length > 1 ? 's' : ''} avec un seul agent ?`
+      : `Lancer ${openFlags.length} agents, un par erreur ?`
+    if (!window.confirm(confirmation)) return
     setCorrecting(true)
     setCorrectionError(null)
     try {
-      await dispatchAllFlags(review.id, ['red', 'orange', 'grey'])
+      if (correctionMode === 'grouped') {
+        await dispatchGroupedFlags(review.id, ['red', 'orange', 'grey'])
+      } else {
+        await dispatchAllFlags(review.id, ['red', 'orange', 'grey'])
+      }
       const dispatchedIds = new Set(openFlags.map((flag) => flag.id))
       setReview((current) => current === null ? null : {
         ...current,
@@ -138,15 +147,30 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
     <span className="guardian-line-meta" title={correctionError ?? undefined}>{correctionError ?? label}</span>
     <button type="button" className="guardian-line-action" onClick={onRelire} disabled={running}>Relire</button>
     {openFlags.length > 0 ? (
-      <button
-        type="button"
-        className="guardian-line-action"
-        onClick={() => void correctOpenFlags()}
-        disabled={running || correcting || stale}
-        title={stale ? 'Le diff a changé depuis la relecture : relance une relecture avant de corriger.' : undefined}
-      >
-        {correcting ? 'Lancement…' : openFlags.length === 1 ? 'Corriger l’erreur' : `Corriger les ${openFlags.length} erreurs`}
-      </button>
+      <div className="guardian-line-correction">
+        <button
+          type="button"
+          className="guardian-line-action guardian-line-correction-button"
+          onClick={() => void correctOpenFlags()}
+          disabled={running || correcting || stale}
+          title={stale ? 'Le diff a changé depuis la relecture : relance une relecture avant de corriger.' : undefined}
+        >
+          {correcting ? 'Lancement…' : openFlags.length === 1 ? 'Corriger l’erreur' : `Corriger les ${openFlags.length} erreurs`}
+        </button>
+        {openFlags.length > 1 ? (
+          <select
+            className="guardian-line-correction-mode"
+            aria-label="Mode de correction"
+            value={correctionMode}
+            onChange={(event) => setCorrectionMode(event.target.value as CorrectionMode)}
+            disabled={running || correcting || stale}
+            title="Correction groupée : un seul agent. Une par erreur : un agent par signalement."
+          >
+            <option value="grouped">En une fois · 1 agent</option>
+            <option value="individual">Une par erreur · {openFlags.length} agents</option>
+          </select>
+        ) : null}
+      </div>
     ) : null}
     <button type="button" className="guardian-line-action" onClick={() => onOpenCode()}>Ouvrir le code</button>
   </div>

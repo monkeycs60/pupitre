@@ -1096,6 +1096,53 @@ test("un dispatch terminé passe en traité jusqu'au prochain scan", async () =>
   await settleRescan(runner, project.id, review.id);
 });
 
+test("groupe plusieurs signalements dans une seule sous-tâche", async () => {
+  const project = projects.create({ name: "dispatch-grouped", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  store.setDiff(review.id, "base", "head", [
+    "diff --git a/src/a.ts b/src/a.ts", "--- a/src/a.ts", "+++ b/src/a.ts", "@@ -1 +1 @@", "-a", "+b",
+    "diff --git a/src/b.ts b/src/b.ts", "--- a/src/b.ts", "+++ b/src/b.ts", "@@ -1 +1 @@", "-c", "+d",
+  ].join("\n"));
+  store.complete(review.id, [
+    { file: "src/a.ts", line_start: 1, line_end: 1, severity: "red", category: "données", message: "Risque A." },
+    { file: "src/b.ts", line_start: 1, line_end: 1, severity: "orange", category: "contrat", message: "Risque B." },
+  ]);
+  const inputs: SubtaskInput[] = [];
+  let finish!: () => void;
+  const done = new Promise<void>((resolve) => { finish = resolve; });
+  const fakeSubtasks = {
+    start(input: SubtaskInput) { inputs.push(input); return { id: "group-1" } as Subtask; },
+    async waitResult(): Promise<SubtaskResult> {
+      await done;
+      return { status: "done", resultText: "corrigé", error: null, subtask: { id: "group-1" } as Subtask };
+    },
+  };
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => '{"flags":[]}', fakeSubtasks);
+  expect(runner.dispatchGrouped(review.id, ["red", "orange"], {
+    provider: "codex", model: "gpt-5.6-luna", effort: "high", speed: "standard",
+  })).toEqual({ subtaskId: "group-1", dispatched: 2 });
+  expect(inputs).toHaveLength(1);
+  expect(inputs[0]).toMatchObject({
+    label: "Gardien · correction groupée · 2 signalements",
+    conversationId: conversation.id,
+    readOnly: false,
+  });
+  expect(inputs[0]!.prompt).toContain("Risque A.");
+  expect(inputs[0]!.prompt).toContain("Risque B.");
+  expect(store.get(review.id)!.flags.every((flag) => flag.status === "agent_running" && flag.subtask_id === "group-1")).toBe(true);
+
+  finish();
+  await Bun.sleep(0);
+  expect(store.get(review.id)!.flags.every((flag) => flag.status === "treated")).toBe(true);
+  await settleRescan(runner, project.id, review.id);
+});
+
 test("la fin de la dernière correction relance une review incrémentale", async () => {
   const project = projects.create({ name: "rescan-all", path: repo });
   const conversation = conversations.create({

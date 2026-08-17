@@ -2709,6 +2709,29 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        const reviewDispatchGroupedId = routeId(pathname, /^\/api\/reviews\/([^/]+)\/dispatch-grouped$/);
+        if (request.method === "POST" && reviewDispatchGroupedId !== null) {
+          const body = await readObject(request);
+          const severities = body.severities === undefined ? ["red", "orange"] : body.severities;
+          if (!Array.isArray(severities) || !severities.every((item) => item === "red" || item === "orange" || item === "grey")) {
+            throw new HttpError(400, "sévérités invalides");
+          }
+          const review = deps.reviews.get(reviewDispatchGroupedId);
+          if (!review) throw new HttpError(404, "review inconnu");
+          const conversation = deps.conversations.get(review.conversation_id);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const project = deps.projects.get(conversation.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const agentConfig = resolveCorrectionConfig(project, conversation, review.code_provider, deps.presets);
+          try {
+            return json(deps.reviews.dispatchGrouped(reviewDispatchGroupedId, severities, agentConfig), 202);
+          } catch (error) {
+            if (error instanceof DispatchConflictError) throw new HttpError(409, error.message);
+            if (error instanceof Error && error.message === "review inconnu") throw new HttpError(404, error.message);
+            throw error;
+          }
+        }
+
         if (request.method === "POST" && pathname === "/api/subtasks") {
           const body = await readObject(request);
           const conversationId = requiredString(body, "conversationId");
