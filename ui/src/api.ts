@@ -907,14 +907,14 @@ export function dispatchFlag(flagId: string, message?: string): Promise<{ subtas
 export function dispatchAllFlags(
   reviewId: string,
   severities: Array<'red' | 'orange' | 'grey'> = ['red', 'orange'],
-): Promise<{ dispatched: number }> {
+): Promise<{ dispatched: number, flagIds: string[] }> {
   return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-all`, jsonPost({ severities }))
 }
 
 export function dispatchGroupedFlags(
   reviewId: string,
   severities: Array<'red' | 'orange' | 'grey'> = ['red', 'orange'],
-): Promise<{ subtaskId: string, dispatched: number }> {
+): Promise<{ subtaskId: string, dispatched: number, flagIds: string[] }> {
   return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-grouped`, jsonPost({ severities }))
 }
 

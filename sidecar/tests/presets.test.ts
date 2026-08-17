@@ -147,6 +147,33 @@ test("aligne la review des presets personnalisés d'une base sans colonne de rev
   });
 });
 
+test("aligne aussi un preset personnalisé dont l'effort est NULL", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-null-effort-migration-"));
+  const legacyDb = openDb(dir);
+  new PresetStore(legacyDb);
+  legacyDb.query(`
+    INSERT INTO presets
+      (id, name, provider, model, effort, speed, orchestrator,
+       permission_mode, review_provider, review_model, review_effort,
+       built_in, created_at, updated_at)
+    VALUES
+      ('sans-effort', 'Luna', 'codex', 'gpt-5.6-luna', NULL, NULL, 1,
+       NULL, 'codex', 'gpt-5.6-sol', 'high', 0, 'now', 'now')
+  `).run();
+  for (const column of ["review_explicit", "review_provider", "review_model", "review_effort"]) {
+    legacyDb.exec(`ALTER TABLE presets DROP COLUMN ${column}`);
+  }
+  legacyDb.close();
+
+  const migrated = new PresetStore(openDb(dir));
+  expect(migrated.get("sans-effort")).toMatchObject({
+    review_provider: "codex",
+    review_model: "gpt-5.6-luna",
+    review_effort: "high",
+    review_explicit: false,
+  });
+});
+
 test("préserve une review déjà saisie quand la base n'a pas encore de marqueur d'héritage", () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-ambiguous-review-"));
   const legacyDb = openDb(dir);

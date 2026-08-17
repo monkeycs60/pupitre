@@ -13,6 +13,10 @@ interface GuardianLineProps {
 
 type Variant = 'idle' | 'running' | 'clean' | 'warn' | 'block' | 'stale'
 type CorrectionMode = 'grouped' | 'individual'
+type DiffState =
+  | { status: 'pending' }
+  | { status: 'error' }
+  | { status: 'ready', diff: string }
 
 function GuardianShield() {
   return <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true"><path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" /></svg>
@@ -57,35 +61,46 @@ function stateLabel(review: Review | null, stale: boolean): string {
 
 export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, onRelire }: GuardianLineProps) {
   const [review, setReview] = useState<Review | null>(null)
-  const [liveDiff, setLiveDiff] = useState<string | null>(null)
+  const [liveDiff, setLiveDiff] = useState<DiffState>({ status: 'pending' })
   const [correcting, setCorrecting] = useState(false)
   const [correctionMode, setCorrectionMode] = useState<CorrectionMode>('grouped')
   const [correctionError, setCorrectionError] = useState<string | null>(null)
   const running = isScanRunning(reviewStatus)
   const wasRunning = useRef(running)
+  // Focus et visibilité peuvent relancer un chargement pendant qu'un autre
+  // vole encore : sans numéro d'ordre, la réponse la plus lente gagne.
+  const loadSeq = useRef(0)
 
   // Les deux appels sont indépendants : un diff en échec ne doit pas masquer
   // une review disponible, et inversement.
   const loadReview = useCallback((signal?: AbortSignal) => {
+    loadSeq.current += 1
+    const seq = loadSeq.current
+    const outdated = () => signal?.aborted === true || seq !== loadSeq.current
     void listProjectReviews(project.id, signal)
       .then((reviews) => {
-        if (signal?.aborted) return
+        if (outdated()) return
         setReview(reviews.find((item) => item.conversation_id === conversation.id && item.scope === 'worktree' && item.status !== 'running') ?? null)
       })
       .catch(() => {})
     void getConversationDiff(conversation.id, signal)
       .then((live) => {
-        if (signal?.aborted) return
-        setLiveDiff(live.diff)
+        if (outdated()) return
+        setLiveDiff({ status: 'ready', diff: live.diff })
       })
-      .catch(() => {})
+      .catch(() => {
+        if (outdated()) return
+        setLiveDiff({ status: 'error' })
+      })
   }, [project.id, conversation.id])
 
   useEffect(() => {
-    function onVisible() { if (document.visibilityState === 'visible') loadReview() }
+    const controller = new AbortController()
+    function onVisible() { if (document.visibilityState === 'visible') loadReview(controller.signal) }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
     return () => {
+      controller.abort()
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
@@ -103,8 +118,11 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
   }, [running, loadReview])
 
   // Un commit ou une écriture après la relecture rend le verdict caduc : la
-  // ligne ne doit pas rester verte sur un diff que le Gardien n'a pas lu.
-  const stale = review !== null && review.status === 'done' && liveDiff !== null && review.diff_text !== liveDiff
+  // ligne ne doit pas rester verte sur un diff que le Gardien n'a pas lu. Un
+  // diff qu'on n'a pas pu lire ne prouve rien non plus — donc caduc aussi.
+  const stale = review !== null && review.status === 'done' && (
+    liveDiff.status === 'error' || (liveDiff.status === 'ready' && review.diff_text !== liveDiff.diff)
+  )
   const label = running && reviewStatus?.running
     ? `relit · zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}`
     : stateLabel(review, stale)
@@ -113,19 +131,24 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
 
   async function correctOpenFlags() {
     if (!review || openFlags.length === 0 || correcting) return
-    const confirmation = correctionMode === 'grouped'
+    const scope = correctionMode === 'grouped'
       ? `Lancer une correction groupée pour ${openFlags.length} erreur${openFlags.length > 1 ? 's' : ''} avec un seul agent ?`
       : `Lancer ${openFlags.length} agents, un par erreur ?`
+    // Le diff a bougé depuis la relecture : les signalements peuvent porter sur
+    // du code qui n'existe plus. On le dit avant de lâcher un agent dessus.
+    const confirmation = stale
+      ? `Le code a changé depuis la relecture : ces signalements peuvent être périmés.\n\n${scope}`
+      : scope
     if (!window.confirm(confirmation)) return
     setCorrecting(true)
     setCorrectionError(null)
     try {
-      if (correctionMode === 'grouped') {
-        await dispatchGroupedFlags(review.id, ['red', 'orange', 'grey'])
-      } else {
-        await dispatchAllFlags(review.id, ['red', 'orange', 'grey'])
-      }
-      const dispatchedIds = new Set(openFlags.map((flag) => flag.id))
+      const { flagIds } = correctionMode === 'grouped'
+        ? await dispatchGroupedFlags(review.id, ['red', 'orange', 'grey'])
+        : await dispatchAllFlags(review.id, ['red', 'orange', 'grey'])
+      // Le serveur seul sait ce qu'il a pris : un flag laissé de côté doit
+      // rester visiblement ouvert.
+      const dispatchedIds = new Set(flagIds)
       setReview((current) => current === null ? null : {
         ...current,
         flags: current.flags.map((flag) => dispatchedIds.has(flag.id)

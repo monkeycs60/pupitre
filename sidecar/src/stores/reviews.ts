@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Provider } from "../events";
+import { diffHunkHashes } from "../review-hunks";
 
 export type ReviewStatus = "running" | "done" | "error";
 export type ReviewSeverity = "red" | "orange" | "grey";
@@ -243,12 +244,15 @@ export class ReviewStore {
 
   complete(id: string, flags: Array<ReviewFlagInput & { hunk_hash?: string | null }>): void {
     const complete = this.db.transaction(() => {
-      const review = this.db.query(
-        "SELECT code_provider, conversation_id, scope, rowid AS seq FROM reviews WHERE id = ?",
-      ).get(id) as {
+      const review = this.db.query(`
+        SELECT code_provider, conversation_id, scope, parent_review_id, diff_text, rowid AS seq
+        FROM reviews WHERE id = ?
+      `).get(id) as {
         code_provider: Provider | null;
         conversation_id: string;
         scope: string;
+        parent_review_id: string | null;
+        diff_text: string | null;
         seq: number;
       } | null;
       if (!review) throw new Error("review inconnue");
@@ -293,21 +297,47 @@ export class ReviewStore {
           LIMIT 1
         `).get(review.conversation_id, review.seq);
         if (newerDone) {
-          this.db.query(
-            "UPDATE review_flags SET status = 'resolved' WHERE status = 'open' AND review_id = ?",
-          ).run(id);
-        } else {
           this.db.query(`
             UPDATE review_flags SET status = 'resolved'
-            WHERE status = 'open' AND review_id IN (
-              SELECT id FROM reviews
-              WHERE conversation_id = ? AND scope = 'worktree' AND status = 'done' AND rowid < ?
-            )
-          `).run(review.conversation_id, review.seq);
+            WHERE status IN ('open', 'agent_running') AND review_id = ?
+          `).run(id);
+        } else {
+          this.resolveSuperseded(id, review);
         }
       }
     });
     complete();
+  }
+
+  /**
+   * Referme les signalements des reviews worktree antérieures, mais seulement
+   * ceux dont la disparition est établie : un scan incrémental ne relit pas les
+   * hunks inchangés, donc son silence sur eux ne vaut pas quitus. Un scan
+   * complet (sans parent) a lu tout le diff : ce qu'il ne resignale pas a bien
+   * disparu.
+   */
+  private resolveSuperseded(
+    id: string,
+    review: { conversation_id: string; parent_review_id: string | null; diff_text: string | null; seq: number },
+  ): void {
+    const stale = this.db.query(`
+      SELECT f.id AS id, f.hunk_hash AS hunk_hash FROM review_flags f
+      JOIN reviews r ON r.id = f.review_id
+      WHERE f.status IN ('open', 'agent_running')
+        AND r.conversation_id = ? AND r.scope = 'worktree' AND r.status = 'done' AND r.rowid < ?
+    `).all(review.conversation_id, review.seq) as Array<{ id: string; hunk_hash: string | null }>;
+    if (stale.length === 0) return;
+    const fullScan = review.parent_review_id === null;
+    const signalled = new Set((this.db.query(
+      "SELECT hunk_hash FROM review_flags WHERE review_id = ? AND hunk_hash IS NOT NULL",
+    ).all(id) as Array<{ hunk_hash: string }>).map((row) => row.hunk_hash));
+    const stillInDiff = diffHunkHashes(review.diff_text ?? "");
+    const resolve = this.db.query("UPDATE review_flags SET status = 'resolved' WHERE id = ?");
+    for (const flag of stale) {
+      const superseded = flag.hunk_hash !== null && signalled.has(flag.hunk_hash);
+      const disappeared = flag.hunk_hash !== null && !stillInDiff.has(flag.hunk_hash);
+      if (fullScan || superseded || disappeared) resolve.run(flag.id);
+    }
   }
 
   fail(id: string, error: string): void {

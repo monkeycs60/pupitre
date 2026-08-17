@@ -2702,7 +2702,7 @@ export function createServer(deps: ServerDeps) {
           if (!project) throw new HttpError(404, "projet inconnu");
           const agentConfig = resolveCorrectionConfig(project, conversation, review.code_provider, deps.presets);
           try {
-            return json({ dispatched: deps.reviews.dispatchAll(reviewDispatchAllId, severities, agentConfig) }, 202);
+            return json(deps.reviews.dispatchAll(reviewDispatchAllId, severities, agentConfig), 202);
           } catch (error) {
             if (error instanceof Error && error.message === "review inconnu") throw new HttpError(404, error.message);
             throw error;
@@ -2724,7 +2724,7 @@ export function createServer(deps: ServerDeps) {
           if (!project) throw new HttpError(404, "projet inconnu");
           const agentConfig = resolveCorrectionConfig(project, conversation, review.code_provider, deps.presets);
           try {
-            return json(deps.reviews.dispatchGrouped(reviewDispatchGroupedId, severities, agentConfig), 202);
+            return json(await deps.reviews.dispatchGrouped(reviewDispatchGroupedId, severities, agentConfig), 202);
           } catch (error) {
             if (error instanceof DispatchConflictError) throw new HttpError(409, error.message);
             if (error instanceof Error && error.message === "review inconnu") throw new HttpError(404, error.message);

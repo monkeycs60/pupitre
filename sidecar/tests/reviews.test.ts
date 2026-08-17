@@ -17,6 +17,7 @@ import { ConversationStore } from "../src/stores/conversations";
 import { PresetStore } from "../src/stores/presets";
 import { ProjectStore } from "../src/stores/projects";
 import { ReviewStore } from "../src/stores/reviews";
+import { SubtaskLimitError } from "../src/subtasks";
 import type { Subtask, SubtaskInput, SubtaskResult } from "../src/subtasks";
 
 let dir: string;
@@ -878,6 +879,66 @@ test("une nouvelle review remplace la précédente : ses signalements encore ouv
   expect(store.reviewStatus(project.id).openBySeverity.red).toBe(1);
 });
 
+test("un scan incrémental ne referme pas un signalement dont il n'a pas relu le hunk", () => {
+  const project = projects.create({ name: "incrémental-prudent", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const input = {
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex" as const, model: "gpt-5.6-sol", effort: "high",
+  };
+  const diff = [
+    "diff --git a/src/a.ts b/src/a.ts", "--- a/src/a.ts", "+++ b/src/a.ts", "@@ -1 +1 @@", "-a", "+b", "",
+  ].join("\n");
+  const flag = {
+    file: "src/a.ts", line_start: 1, line_end: 1, severity: "red" as const,
+    category: "secret", message: "Le secret est journalisé.",
+  };
+  const first = store.create(input);
+  store.setDiff(first.id, "base", "head", diff);
+  store.complete(first.id, [{ ...flag, hunk_hash: hunkHashFor(diff, "src/a.ts", 1) }]);
+
+  // Le hunk est toujours dans le diff et le scan incrémental ne l'a pas relu :
+  // son silence ne prouve rien.
+  const second = store.create({ ...input, parentReviewId: first.id });
+  store.setDiff(second.id, "base", "head", diff);
+  store.complete(second.id, []);
+  expect(store.get(first.id)!.flags.map((item) => item.status)).toEqual(["open"]);
+
+  // Un scan complet, lui, a tout relu : le silence vaut disparition.
+  const third = store.create(input);
+  store.setDiff(third.id, "base", "head", diff);
+  store.complete(third.id, []);
+  expect(store.get(first.id)!.flags.map((item) => item.status)).toEqual(["resolved"]);
+});
+
+test("un scan incrémental referme les signalements dont le hunk a disparu du diff", () => {
+  const project = projects.create({ name: "incrémental-disparu", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const input = {
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex" as const, model: "gpt-5.6-sol", effort: "high",
+  };
+  const diff = [
+    "diff --git a/src/a.ts b/src/a.ts", "--- a/src/a.ts", "+++ b/src/a.ts", "@@ -1 +1 @@", "-a", "+b", "",
+  ].join("\n");
+  const corrected = diff.replace("+b", "+corrigé");
+  const first = store.create(input);
+  store.setDiff(first.id, "base", "head", diff);
+  store.complete(first.id, [{
+    file: "src/a.ts", line_start: 1, line_end: 1, severity: "red",
+    category: "secret", message: "Le secret est journalisé.",
+    hunk_hash: hunkHashFor(diff, "src/a.ts", 1),
+  }]);
+  const second = store.create({ ...input, parentReviewId: first.id });
+  store.setDiff(second.id, "base", "head", corrected);
+  store.complete(second.id, []);
+  expect(store.get(first.id)!.flags.map((item) => item.status)).toEqual(["resolved"]);
+});
+
 test("deux scans worktree qui terminent à l'envers : c'est l'ordre de lancement qui tranche", () => {
   const project = projects.create({ name: "désordre", path: repo });
   const conversation = conversations.create({
@@ -1124,9 +1185,10 @@ test("groupe plusieurs signalements dans une seule sous-tâche", async () => {
     },
   };
   const runner = new ReviewRunner(store, projects, conversations, quotas, async () => '{"flags":[]}', fakeSubtasks);
-  expect(runner.dispatchGrouped(review.id, ["red", "orange"], {
+  const flagIds = store.get(review.id)!.flags.map((flag) => flag.id);
+  expect(await runner.dispatchGrouped(review.id, ["red", "orange"], {
     provider: "codex", model: "gpt-5.6-luna", effort: "high", speed: "standard",
-  })).toEqual({ subtaskId: "group-1", dispatched: 2 });
+  })).toEqual({ subtaskId: "group-1", dispatched: 2, flagIds });
   expect(inputs).toHaveLength(1);
   expect(inputs[0]).toMatchObject({
     label: "Gardien · correction groupée · 2 signalements",
@@ -1141,6 +1203,64 @@ test("groupe plusieurs signalements dans une seule sous-tâche", async () => {
   await Bun.sleep(0);
   expect(store.get(review.id)!.flags.every((flag) => flag.status === "treated")).toBe(true);
   await settleRescan(runner, project.id, review.id);
+});
+
+test("une correction groupée n'annonce rien tant que la sous-tâche n'a pas démarré", async () => {
+  const project = projects.create({ name: "dispatch-grouped-attente", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  store.complete(review.id, [
+    { file: "src/a.ts", line_start: 1, line_end: 1, severity: "red", category: "données", message: "Risque A." },
+  ]);
+  let attempts = 0;
+  const fakeSubtasks = {
+    start() {
+      attempts += 1;
+      if (attempts < 3) throw new SubtaskLimitError("trop de sous-tâches");
+      return { id: "group-attente" } as Subtask;
+    },
+    async waitResult(): Promise<SubtaskResult> {
+      return { status: "done", resultText: "corrigé", error: null, subtask: { id: "group-attente" } as Subtask };
+    },
+  };
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => '{"flags":[]}', fakeSubtasks);
+  const result = await runner.dispatchGrouped(review.id, ["red"], {
+    provider: "codex", model: "gpt-5.6-luna", effort: "high", speed: "standard",
+  });
+  expect(attempts).toBe(3);
+  expect(result.subtaskId).toBe("group-attente");
+  expect(store.get(review.id)!.flags[0]).toMatchObject({ subtask_id: "group-attente" });
+  await Bun.sleep(10);
+  await settleRescan(runner, project.id, review.id);
+});
+
+test("une correction groupée qui échoue au démarrage laisse les signalements ouverts", async () => {
+  const project = projects.create({ name: "dispatch-grouped-échec", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  store.complete(review.id, [
+    { file: "src/a.ts", line_start: 1, line_end: 1, severity: "red", category: "données", message: "Risque A." },
+  ]);
+  const fakeSubtasks = {
+    start(): Subtask { throw new Error("agent indisponible"); },
+    async waitResult(): Promise<SubtaskResult> { throw new Error("jamais"); },
+  };
+  const runner = new ReviewRunner(store, projects, conversations, quotas, async () => '{"flags":[]}', fakeSubtasks);
+  await expect(runner.dispatchGrouped(review.id, ["red"], {
+    provider: "codex", model: "gpt-5.6-luna", effort: "high", speed: "standard",
+  })).rejects.toThrow("agent indisponible");
+  expect(store.get(review.id)!.flags[0]!.status).toBe("open");
+  expect(runner.listByProject(project.id).length).toBe(1);
 });
 
 test("la fin de la dernière correction relance une review incrémentale", async () => {

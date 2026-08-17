@@ -114,6 +114,7 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [scanPending, setScanPending] = useState(false)
   const [activeFlagId, setActiveFlagId] = useState<string | null>(focusedFlagId)
+  const rootRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => { setActiveFlagId(focusedFlagId) }, [focusedFlagId])
   // La demande de relecture est confirmée par le canal Fleet (running) ou par
@@ -133,16 +134,26 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
   const navigableFlags = useMemo(() => flagsInDiffOrder(scopedDiff, visibleFlags), [scopedDiff, visibleFlags])
   const activeIndex = navigableFlags.findIndex((flag) => flag.id === activeFlagId)
 
+  // Le raccourci n'est pas global : il ne vaut que dans la vue Code, et jamais
+  // pendant qu'un contrôle, une saisie ou un overlay a la main.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'j' && event.key !== 'k') return
       if (event.metaKey || event.ctrlKey || event.altKey) return
-      if (event.target instanceof HTMLElement && event.target.matches('input, textarea, select, [contenteditable="true"]')) return
-      if (event.key === 'j') { event.preventDefault(); goToFlag(1) }
-      else if (event.key === 'k') { event.preventDefault(); goToFlag(-1) }
+      const root = rootRef.current
+      if (!root || document.querySelector('dialog[open], [role="dialog"], [role="menu"]')) return
+      const target = event.target
+      if (!(target instanceof HTMLElement)) return
+      if (target.closest('input, textarea, select, button, a, [contenteditable="true"]')) return
+      // `document.body` : personne n'a le focus, la vue Code est la seule à
+      // pouvoir répondre.
+      if (target !== document.body && !root.contains(target)) return
+      event.preventDefault()
+      goToFlag(event.key === 'j' ? 1 : -1)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  })
+  }, [navigableFlags, activeIndex])
 
   function goToFlag(step: 1 | -1) {
     if (navigableFlags.length === 0) return
@@ -170,9 +181,12 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
     if (!window.confirm(`Lancer ${openFlags.length} correction${openFlags.length > 1 ? 's' : ''} ?`)) return
     setBusy(true); setError(null)
     try {
-      await dispatchAllFlags(review.id, ['red', 'orange', 'grey'])
+      const { flagIds } = await dispatchAllFlags(review.id, ['red', 'orange', 'grey'])
+      // Seuls les signalements que le serveur a réellement pris en charge
+      // basculent : l'optimisme sur les autres masquerait un dispatch partiel.
+      const dispatched = new Set(flagIds)
       for (const flag of openFlags) {
-        if (flag.status === 'open') onFlagUpdated({ ...flag, status: 'agent_running' })
+        if (dispatched.has(flag.id)) onFlagUpdated({ ...flag, status: 'agent_running' })
       }
       onRefresh()
     } catch (reason) {
@@ -203,7 +217,7 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
   const progressRatio = running && running.zoneTotal > 0 ? running.zoneDone / running.zoneTotal : 0
   const correctingCount = flags.filter((flag) => flag.status === 'agent_running').length
 
-  return <section className="changes-tab">
+  return <section className="changes-tab" ref={rootRef}>
     <aside className="changes-sidebar">
       {stale ? <p className="changes-banner">Le worktree a changé depuis la relecture — <button type="button" onClick={() => void relire()}>Relire</button></p> : null}
       {!review && !stale ? <p className="changes-banner">Pas encore relu — <button type="button" onClick={() => void relire()}>Relire</button></p> : null}

@@ -23,6 +23,9 @@ const DEFAULT_DIFF_MAX_BYTES = 2 * 1024 * 1024;
 const CONVERSATION_BASE_REF = "CONVERSATION";
 const WORKTREE_HEAD_REF = "WORKTREE";
 const WORKTREE_CAPTURE_ATTEMPTS = 3;
+// Au-delà, mieux vaut un 409 explicite qu'une requête qui pend sur la file des
+// sous-tâches.
+const GROUPED_DISPATCH_WAIT_MS = 30_000;
 // `core.quotePath` est actif par défaut : sans lui, Git rend `données.ts` sous
 // forme échappée en octal et plus aucun flag du modèle ne s'y ancre.
 const GIT_GLOBAL_ARGS = ["-c", "core.quotePath=false"];
@@ -221,7 +224,7 @@ export class ReviewRunner {
     reviewId: string,
     severities: ReviewSeverity[],
     agentConfig: CorrectionAgentConfig,
-  ): number {
+  ): { dispatched: number; flagIds: string[] } {
     const review = this.store.get(reviewId);
     if (!review) throw new Error("review inconnu");
     const flags = review.flags.filter((flag) =>
@@ -241,32 +244,43 @@ export class ReviewRunner {
         }));
       }
     })();
-    return flags.length;
+    return { dispatched: flags.length, flagIds: flags.map((flag) => flag.id) };
   }
 
-  dispatchGrouped(
+  async dispatchGrouped(
     reviewId: string,
     severities: ReviewSeverity[],
     agentConfig: CorrectionAgentConfig,
-  ): { subtaskId: string; dispatched: number } {
+  ): Promise<{ subtaskId: string; dispatched: number; flagIds: string[] }> {
     if (!this.subtasks) throw new Error("moteur de sous-tâches indisponible");
     const review = this.store.get(reviewId);
     if (!review) throw new Error("review inconnu");
+    const conversationId = review.conversation_id;
+    if (!this.conversations.get(conversationId)) throw new Error("conversation inconnue");
     const flags = review.flags.filter((flag) =>
       severities.includes(flag.severity) && flag.status === "open",
     );
     if (flags.length === 0) {
       throw new DispatchConflictError("aucun flag ouvert à corriger");
     }
+    // Le démarrage est attendu avant la réponse : une boucle d'attente laissée
+    // en arrière-plan lancerait une correction que l'appelant croit refusée.
+    const subtask = await this.startGroupedSubtask(review, flags, conversationId, agentConfig);
+    for (const flag of flags) {
+      this.store.updateFlag(flag.id, { status: "agent_running", subtaskId: subtask.id });
+    }
+    this.notifyStatus();
     const dispatchKey = `group:${review.id}`;
     this.trackDispatch(review.id, 1);
-    const run = this.executeGroupedDispatch(review, flags, review.conversation_id, agentConfig)
-      .catch(() => {})
+    const run = this.awaitGroupedDispatch(review, flags, subtask.id)
+      .catch((error) => {
+        // La réponse 202 est déjà partie : l'échec n'a plus d'autre surface que
+        // le journal et le retour des flags à `open`.
+        console.error("Correction groupée du Gardien interrompue", error);
+      })
       .finally(() => this.activeDispatches.delete(dispatchKey));
-    const started = this.store.getFlag(flags[0]!.id);
-    if (!started?.subtask_id) throw new Error("échec du lancement de la sous-tâche");
     this.activeDispatches.set(dispatchKey, run);
-    return { subtaskId: started.subtask_id, dispatched: flags.length };
+    return { subtaskId: subtask.id, dispatched: flags.length, flagIds: flags.map((flag) => flag.id) };
   }
 
   private trackDispatch(reviewId: string, delta: number): number {
@@ -444,38 +458,42 @@ export class ReviewRunner {
     }
   }
 
-  private async executeGroupedDispatch(
+  private async startGroupedSubtask(
     review: Review,
     flags: ReviewFlag[],
     conversationId: string,
     agentConfig: CorrectionAgentConfig,
+  ): Promise<{ id: string }> {
+    const deadline = Date.now() + GROUPED_DISPATCH_WAIT_MS;
+    for (;;) {
+      try {
+        return this.subtasks!.start({
+          conversationId,
+          provider: agentConfig.provider,
+          model: agentConfig.model,
+          effort: agentConfig.effort,
+          speed: agentConfig.speed,
+          prompt: groupedDispatchPrompt(flags, review.diff_text),
+          label: `Gardien · correction groupée · ${flags.length} signalements`,
+          readOnly: false,
+        });
+      } catch (error) {
+        if (!(error instanceof SubtaskLimitError)) throw error;
+        if (Date.now() >= deadline) {
+          throw new DispatchConflictError("trop de sous-tâches en cours : réessaie dans un instant");
+        }
+        await Bun.sleep(100);
+      }
+    }
+  }
+
+  private async awaitGroupedDispatch(
+    review: Review,
+    flags: ReviewFlag[],
+    subtaskId: string,
   ): Promise<void> {
     try {
-      if (!this.conversations.get(conversationId)) throw new Error("conversation inconnue");
-      let subtask;
-      for (;;) {
-        try {
-          subtask = this.subtasks!.start({
-            conversationId,
-            provider: agentConfig.provider,
-            model: agentConfig.model,
-            effort: agentConfig.effort,
-            speed: agentConfig.speed,
-            prompt: groupedDispatchPrompt(flags, review.diff_text),
-            label: `Gardien · correction groupée · ${flags.length} signalements`,
-            readOnly: false,
-          });
-          break;
-        } catch (error) {
-          if (!(error instanceof SubtaskLimitError)) throw error;
-          await Bun.sleep(100);
-        }
-      }
-      for (const flag of flags) {
-        this.store.updateFlag(flag.id, { status: "agent_running", subtaskId: subtask.id });
-      }
-      this.notifyStatus();
-      const result = await this.subtasks!.waitResult(subtask.id);
+      const result = await this.subtasks!.waitResult(subtaskId);
       const status = result?.status === "done" ? "treated" : "open";
       for (const flag of flags) this.store.updateFlag(flag.id, { status });
       this.notifyStatus();

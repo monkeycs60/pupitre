@@ -439,10 +439,15 @@ export function openDb(dir: string = dataDir()): Database {
       SET review_provider = 'claude', review_model = 'opus', review_effort = 'high'
       WHERE provider = 'claude'
     `);
+    // `effort` peut être NULL sur un preset personnalisé : le laisser de côté
+    // abandonnerait son reviewer aux anciens defaults Codex. On retombe alors
+    // sur l'effort par défaut du provider.
     db.exec(`
       UPDATE presets
-      SET review_provider = provider, review_model = model, review_effort = effort
-      WHERE built_in = 0 AND effort IS NOT NULL
+      SET review_provider = provider,
+          review_model = model,
+          review_effort = COALESCE(effort, 'high')
+      WHERE built_in = 0
     `);
   }
   const speedReviewMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
