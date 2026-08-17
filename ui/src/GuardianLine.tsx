@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getConversationDiff, listProjectReviews } from './api'
+import { dispatchAllFlags, getConversationDiff, listProjectReviews } from './api'
 import { isScanRunning } from './reviewStatus'
 import type { Conversation, Project, Review, ReviewStatusSnapshot } from './types'
 
@@ -50,6 +50,8 @@ function stateLabel(review: Review | null, stale: boolean): string {
 export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, onRelire }: GuardianLineProps) {
   const [review, setReview] = useState<Review | null>(null)
   const [liveDiff, setLiveDiff] = useState<string | null>(null)
+  const [correcting, setCorrecting] = useState(false)
+  const [correctionError, setCorrectionError] = useState<string | null>(null)
   const running = isScanRunning(reviewStatus)
   const wasRunning = useRef(running)
 
@@ -91,14 +93,41 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
     ? `relit · zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}`
     : stateLabel(review, stale)
   const variant = variantFor(review, running, stale)
+  const openFlags = review?.flags.filter((flag) => flag.status === 'open') ?? []
+
+  async function correctOpenFlags() {
+    if (!review || openFlags.length === 0 || correcting) return
+    if (!window.confirm(`Lancer ${openFlags.length} correction${openFlags.length > 1 ? 's' : ''} ?`)) return
+    setCorrecting(true)
+    setCorrectionError(null)
+    try {
+      await dispatchAllFlags(review.id, ['red', 'orange', 'grey'])
+      const dispatchedIds = new Set(openFlags.map((flag) => flag.id))
+      setReview((current) => current === null ? null : {
+        ...current,
+        flags: current.flags.map((flag) => dispatchedIds.has(flag.id)
+          ? { ...flag, status: 'agent_running' }
+          : flag),
+      })
+    } catch (reason) {
+      setCorrectionError(reason instanceof Error ? reason.message : 'Impossible de lancer les corrections')
+    } finally {
+      setCorrecting(false)
+    }
+  }
 
   return <div className={`guardian-line is-${variant}`} id="guardian-line" role="group" aria-label="Gardien">
     <span className="guardian-line-status" aria-hidden="true">
       {running ? <span className="guardian-line-dots"><i /><i /><i /></span> : <GuardianShield />}
     </span>
     <strong className="guardian-line-title">Gardien</strong>
-    <span className="guardian-line-meta">{label}</span>
+    <span className="guardian-line-meta" title={correctionError ?? undefined}>{correctionError ?? label}</span>
     <button type="button" className="guardian-line-action" onClick={onRelire} disabled={running}>Relire</button>
+    {openFlags.length > 0 ? (
+      <button type="button" className="guardian-line-action" onClick={() => void correctOpenFlags()} disabled={running || correcting}>
+        {correcting ? 'Lancement…' : openFlags.length === 1 ? 'Corriger l’erreur' : `Corriger les ${openFlags.length} erreurs`}
+      </button>
+    ) : null}
     <button type="button" className="guardian-line-action" onClick={() => onOpenCode()}>Ouvrir le code</button>
   </div>
 }

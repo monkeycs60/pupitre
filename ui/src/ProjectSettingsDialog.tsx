@@ -168,7 +168,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
           <section className="project-settings-defaults" aria-labelledby="project-gardien-defaults-title">
             <div className="project-settings-section-heading">
               <strong id="project-gardien-defaults-title">Defaults du Gardien</strong>
-              <span>Chaque conversation peut ensuite les remplacer.</span>
+              <span>Appliqués au prochain lancement, y compris dans les conversations en cours.</span>
             </div>
             <label htmlFor="project-review-preset">
               <strong>Preset de review</strong>
