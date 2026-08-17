@@ -55,11 +55,18 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
   const running = isScanRunning(reviewStatus)
   const wasRunning = useRef(running)
 
+  // Les deux appels sont indépendants : un diff en échec ne doit pas masquer
+  // une review disponible, et inversement.
   const loadReview = useCallback((signal?: AbortSignal) => {
-    void Promise.all([listProjectReviews(project.id, signal), getConversationDiff(conversation.id, signal)])
-      .then(([reviews, live]) => {
+    void listProjectReviews(project.id, signal)
+      .then((reviews) => {
         if (signal?.aborted) return
         setReview(reviews.find((item) => item.conversation_id === conversation.id && item.scope === 'worktree' && item.status !== 'running') ?? null)
+      })
+      .catch(() => {})
+    void getConversationDiff(conversation.id, signal)
+      .then((live) => {
+        if (signal?.aborted) return
         setLiveDiff(live.diff)
       })
       .catch(() => {})
@@ -96,7 +103,7 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
   const openFlags = review?.flags.filter((flag) => flag.status === 'open') ?? []
 
   async function correctOpenFlags() {
-    if (!review || openFlags.length === 0 || correcting) return
+    if (!review || openFlags.length === 0 || correcting || stale) return
     if (!window.confirm(`Lancer ${openFlags.length} correction${openFlags.length > 1 ? 's' : ''} ?`)) return
     setCorrecting(true)
     setCorrectionError(null)
@@ -124,7 +131,13 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
     <span className="guardian-line-meta" title={correctionError ?? undefined}>{correctionError ?? label}</span>
     <button type="button" className="guardian-line-action" onClick={onRelire} disabled={running}>Relire</button>
     {openFlags.length > 0 ? (
-      <button type="button" className="guardian-line-action" onClick={() => void correctOpenFlags()} disabled={running || correcting}>
+      <button
+        type="button"
+        className="guardian-line-action"
+        onClick={() => void correctOpenFlags()}
+        disabled={running || correcting || stale}
+        title={stale ? 'Le diff a changé depuis la relecture : relance une relecture avant de corriger.' : undefined}
+      >
         {correcting ? 'Lancement…' : openFlags.length === 1 ? 'Corriger l’erreur' : `Corriger les ${openFlags.length} erreurs`}
       </button>
     ) : null}

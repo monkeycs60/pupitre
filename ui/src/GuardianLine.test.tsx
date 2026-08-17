@@ -79,6 +79,30 @@ const review: Review = {
   })),
 }
 
+test('un diff modifié depuis la relecture prime sur le rouge ouvert', async () => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/reviews')) return Response.json([review])
+    if (url.endsWith('/diff')) return Response.json({ diff: 'diff modifié', files: [] })
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+
+  render(createElement(GuardianLine, {
+    conversation,
+    project,
+    reviewStatus: null,
+    onOpenCode: () => undefined,
+    onRelire: () => undefined,
+  }))
+
+  await screen.findByText('modifié depuis la relecture — à relire')
+  const line = screen.getByRole('group', { name: 'Gardien' })
+  expect(line.className).toContain('is-stale')
+  expect(line.className).not.toContain('is-block')
+  // La correction reste offerte : le verdict est caduc, pas les erreurs déjà trouvées.
+  expect(screen.getByRole('button', { name: 'Corriger les 2 erreurs' })).toBeTruthy()
+})
+
 test('propose et lance directement toutes les corrections ouvertes', async () => {
   const requests: Array<{ url: string, init?: RequestInit }> = []
   globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
