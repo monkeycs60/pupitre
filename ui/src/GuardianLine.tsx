@@ -51,8 +51,8 @@ function stateLabel(review: Review | null, stale: boolean): string {
   if (!review) return 'pas encore relu'
   if (review.status === 'error') return 'relecture interrompue'
   if (!stale) return findingsSummary(review)
-  if (openFlagsOf(review).length === 0) return 'modifié depuis la relecture — à relire'
-  return `${findingsSummary(review)} · modifié depuis la relecture`
+  if (openFlagsOf(review).length === 0) return 'à relire'
+  return `${findingsSummary(review)} · à relire`
 }
 
 export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, onRelire }: GuardianLineProps) {
@@ -144,18 +144,19 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
       {running ? <span className="guardian-line-dots"><i /><i /><i /></span> : <GuardianShield />}
     </span>
     <strong className="guardian-line-title">Gardien</strong>
-    <span className="guardian-line-meta" title={correctionError ?? undefined}>{correctionError ?? label}</span>
+    <span className="guardian-line-meta" title={correctionError ?? (stale ? 'Le diff a changé depuis la relecture.' : undefined)}>{correctionError ?? label}</span>
     <button type="button" className="guardian-line-action" onClick={onRelire} disabled={running}>Relire</button>
     {openFlags.length > 0 ? (
       <div className="guardian-line-correction">
         <button
           type="button"
           className="guardian-line-action guardian-line-correction-button"
+          aria-label={openFlags.length === 1 ? 'Corriger l’erreur' : `Corriger les ${openFlags.length} erreurs`}
           onClick={() => void correctOpenFlags()}
           disabled={running || correcting || stale}
           title={stale ? 'Le diff a changé depuis la relecture : relance une relecture avant de corriger.' : undefined}
         >
-          {correcting ? 'Lancement…' : openFlags.length === 1 ? 'Corriger l’erreur' : `Corriger les ${openFlags.length} erreurs`}
+          {correcting ? 'Lancement…' : 'Corriger'}
         </button>
         {openFlags.length > 1 ? (
           <select
@@ -163,11 +164,11 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
             aria-label="Mode de correction"
             value={correctionMode}
             onChange={(event) => setCorrectionMode(event.target.value as CorrectionMode)}
-            disabled={running || correcting || stale}
+            disabled={running || correcting}
             title="Correction groupée : un seul agent. Une par erreur : un agent par signalement."
           >
-            <option value="grouped">En une fois · 1 agent</option>
-            <option value="individual">Une par erreur · {openFlags.length} agents</option>
+            <option value="grouped">Ensemble · 1 agent</option>
+            <option value="individual">Séparément · {openFlags.length} agents</option>
           </select>
         ) : null}
       </div>

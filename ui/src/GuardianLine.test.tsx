@@ -96,10 +96,14 @@ test('un diff modifié depuis la relecture signale la péremption', async () => 
   }))
 
   const button = await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })
-  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('modifié depuis la relecture'))
+  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('à relire'))
   // Le bouton reste visible pour dire ce qui est en jeu, mais inerte : dispatcher
   // signalerait des flags calculés sur un diff que le Gardien n'a plus lu.
   expect((button as HTMLButtonElement).disabled).toBe(true)
+  const mode = screen.getByRole('combobox', { name: 'Mode de correction' }) as HTMLSelectElement
+  expect(mode.disabled).toBe(false)
+  fireEvent.change(mode, { target: { value: 'individual' } })
+  expect(mode.value).toBe('individual')
 })
 
 test('affiche la review même quand le diff live échoue', async () => {
@@ -145,7 +149,7 @@ test('un rouge ouvert garde la priorité visuelle sur un diff périmé', async (
   })
   expect(line?.className).not.toContain('is-stale')
   expect(line?.textContent).toContain('2 rouges')
-  expect(line?.textContent).toContain('modifié depuis la relecture')
+  expect(line?.textContent).toContain('à relire')
 })
 
 test('sans flag ouvert, un diff périmé rend la ligne neutre', async () => {
@@ -250,6 +254,6 @@ test('refuse de corriger quand le diff a bougé depuis la relecture', async () =
   expect((button as HTMLButtonElement).disabled).toBe(true)
   fireEvent.click(button)
 
-  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('modifié depuis la relecture'))
+  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('à relire'))
   expect(requests.some((url) => url.endsWith('/dispatch-all'))).toBe(false)
 })
