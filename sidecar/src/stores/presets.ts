@@ -183,7 +183,11 @@ export class PresetStore {
   create(input: PresetInput): Preset {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    const review = reviewConfig(input, defaultReviewConfig(input.provider));
+    const review = reviewConfig(input, {
+      provider: input.provider,
+      model: input.model,
+      effort: input.effort ?? defaultReviewConfig(input.provider).effort,
+    });
     const permissionMode = normalizePresetPermissionMode(input.permission_mode);
     this.db.query(`
       INSERT INTO presets
@@ -225,7 +229,11 @@ export class PresetStore {
       ? preset.permission_mode
       : normalizePresetPermissionMode(input.permission_mode);
     const review = reviewConfig(input, id === "builtin-speed"
-      ? { provider: input.provider, model: input.model, effort: input.effort }
+      ? {
+          provider: input.provider,
+          model: input.model,
+          effort: input.effort ?? defaultReviewConfig(input.provider).effort,
+        }
       : {
           provider: preset.review_provider,
           model: preset.review_model,

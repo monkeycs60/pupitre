@@ -104,6 +104,52 @@ test("CRUD d'un preset personnalisé", () => {
   expect(presets.get(created.id)).toBeNull();
 });
 
+test("un preset personnalisé utilise sa configuration pour la review", () => {
+  const created = presets.create({
+    name: "Sol medium",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "medium",
+    speed: "standard",
+    orchestrator: true,
+  });
+  expect(created).toMatchObject({
+    review_provider: "codex",
+    review_model: "gpt-5.6-sol",
+    review_effort: "medium",
+  });
+});
+
+test("migre les reviews implicites des presets personnalisés sans écraser une review explicite", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-custom-review-migration-"));
+  const legacyDb = openDb(dir);
+  new PresetStore(legacyDb);
+  legacyDb.query(`
+    INSERT INTO presets
+      (id, name, provider, model, effort, speed, orchestrator,
+       permission_mode, review_provider, review_model, review_effort,
+       built_in, created_at, updated_at)
+    VALUES
+      ('implicit', 'Opus low', 'claude', 'opus', 'low', NULL, 1,
+       NULL, 'claude', 'opus', 'high', 0, 'now', 'now'),
+      ('explicit', 'Luna relue par Sol', 'codex', 'gpt-5.6-luna', 'low', 'standard', 1,
+       NULL, 'codex', 'gpt-5.6-sol', 'medium', 0, 'now', 'now')
+  `).run();
+  legacyDb.query("DELETE FROM settings WHERE key = 'custom-review-follows-preset-v1'").run();
+  legacyDb.close();
+
+  const migrated = new PresetStore(openDb(dir));
+  expect(migrated.get("implicit")).toMatchObject({
+    review_provider: "claude",
+    review_model: "opus",
+    review_effort: "low",
+  });
+  expect(migrated.get("explicit")).toMatchObject({
+    review_model: "gpt-5.6-sol",
+    review_effort: "medium",
+  });
+});
+
 test("la permission d'un preset est optionnelle, canonique et persistante", () => {
   const inherited = presets.create({
     name: "Hérité",

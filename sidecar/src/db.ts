@@ -3,7 +3,11 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { countConversationMessages } from "./message-count";
-import { MESSAGE_COUNT_MIGRATION_KEY, SPEED_REVIEW_MIGRATION_KEY } from "./stores/settings";
+import {
+  CUSTOM_REVIEW_MIGRATION_KEY,
+  MESSAGE_COUNT_MIGRATION_KEY,
+  SPEED_REVIEW_MIGRATION_KEY,
+} from "./stores/settings";
 
 export function dataDir(): string {
   return process.env.PUPITRE_DATA_DIR ?? join(homedir(), ".local/share/pupitre");
@@ -441,6 +445,22 @@ export function openDb(dir: string = dataDir()): Database {
     `);
     db.query("INSERT INTO settings (key, value) VALUES (?, ?)")
       .run(SPEED_REVIEW_MIGRATION_KEY, "1");
+  }
+  const customReviewMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
+    .get(CUSTOM_REVIEW_MIGRATION_KEY);
+  if (!customReviewMigrated) {
+    db.exec(`
+      UPDATE presets
+      SET review_provider = provider, review_model = model, review_effort = effort
+      WHERE built_in = 0
+        AND effort IS NOT NULL
+        AND (
+          (review_provider = 'codex' AND review_model = 'gpt-5.6-sol' AND review_effort = 'high')
+          OR (review_provider = 'claude' AND review_model = 'opus' AND review_effort = 'high')
+        );
+    `);
+    db.query("INSERT INTO settings (key, value) VALUES (?, ?)")
+      .run(CUSTOM_REVIEW_MIGRATION_KEY, "1");
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
   db.exec("PRAGMA foreign_keys = ON");

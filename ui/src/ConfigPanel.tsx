@@ -187,6 +187,11 @@ export function ConfigPanel({
         subagent_preset_id: config.subagentPresetId,
         subagent_effort: config.subagentEffort,
         permission_mode: config.permissionMode,
+        ...(!selectedPreset.built_in ? {
+          review_provider: config.provider,
+          review_model: config.model,
+          review_effort: config.effort,
+        } : {}),
       })
       replace(updated)
       if (isDefault) onProjectUpdated(await setProjectDefaultPreset(project.id, updated.id))
@@ -207,6 +212,9 @@ export function ConfigPanel({
         subagent_preset_id: config.subagentPresetId,
         subagent_effort: config.subagentEffort,
         permission_mode: config.permissionMode,
+        review_provider: config.provider,
+        review_model: config.model,
+        review_effort: config.effort,
       })
       setPresets((current) => [...current, created])
       setSelectedPresetId(created.id)
