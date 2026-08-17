@@ -148,15 +148,6 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
     <button type="button" className="guardian-line-action" onClick={onRelire} disabled={running}>Relire</button>
     {openFlags.length > 0 ? (
       <div className="guardian-line-correction">
-        <button
-          type="button"
-          className="guardian-line-action guardian-line-correction-button"
-          aria-label={openFlags.length === 1 ? 'Corriger l’erreur' : `Corriger les ${openFlags.length} erreurs`}
-          onClick={() => void correctOpenFlags()}
-          disabled={running || correcting}
-        >
-          {correcting ? 'Lancement…' : 'Corriger'}
-        </button>
         {openFlags.length > 1 ? (
           <select
             className="guardian-line-correction-mode"
@@ -170,6 +161,15 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
             <option value="individual">Séparément · {openFlags.length} agents</option>
           </select>
         ) : null}
+        <button
+          type="button"
+          className="guardian-line-action guardian-line-correction-button"
+          aria-label={openFlags.length === 1 ? 'Corriger l’erreur' : `Corriger les ${openFlags.length} erreurs`}
+          onClick={() => void correctOpenFlags()}
+          disabled={running || correcting}
+        >
+          {correcting ? 'Lancement…' : 'Corriger'}
+        </button>
       </div>
     ) : null}
     <button type="button" className="guardian-line-action" onClick={() => onOpenCode()}>Ouvrir le code</button>

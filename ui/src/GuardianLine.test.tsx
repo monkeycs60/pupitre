@@ -190,7 +190,9 @@ test('propose par défaut une seule correction groupée', async () => {
   }))
 
   const button = await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })
-  expect((screen.getByRole('combobox', { name: 'Mode de correction' }) as HTMLSelectElement).value).toBe('grouped')
+  const mode = screen.getByRole('combobox', { name: 'Mode de correction' }) as HTMLSelectElement
+  expect(mode.value).toBe('grouped')
+  expect(mode.nextElementSibling).toBe(button)
   fireEvent.click(button)
 
   await waitFor(() => expect(requests.some(({ url }) => url.endsWith('/reviews/review-1/dispatch-grouped'))).toBe(true))
