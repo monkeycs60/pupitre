@@ -112,7 +112,7 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
   const openFlags = review?.flags.filter((flag) => flag.status === 'open') ?? []
 
   async function correctOpenFlags() {
-    if (!review || openFlags.length === 0 || correcting || stale) return
+    if (!review || openFlags.length === 0 || correcting) return
     const confirmation = correctionMode === 'grouped'
       ? `Lancer une correction groupée pour ${openFlags.length} erreur${openFlags.length > 1 ? 's' : ''} avec un seul agent ?`
       : `Lancer ${openFlags.length} agents, un par erreur ?`
@@ -153,8 +153,7 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
           className="guardian-line-action guardian-line-correction-button"
           aria-label={openFlags.length === 1 ? 'Corriger l’erreur' : `Corriger les ${openFlags.length} erreurs`}
           onClick={() => void correctOpenFlags()}
-          disabled={running || correcting || stale}
-          title={stale ? 'Le diff a changé depuis la relecture : relance une relecture avant de corriger.' : undefined}
+          disabled={running || correcting}
         >
           {correcting ? 'Lancement…' : 'Corriger'}
         </button>
