@@ -257,17 +257,26 @@ export class ReviewRunner {
     if (!review) throw new Error("review inconnu");
     const conversationId = review.conversation_id;
     if (!this.conversations.get(conversationId)) throw new Error("conversation inconnue");
-    const flags = review.flags.filter((flag) =>
-      severities.includes(flag.severity) && flag.status === "open",
-    );
+    // La réservation précède le démarrage : entre la sélection et le passage à
+    // `agent_running`, un second appel groupé retiendrait sinon les mêmes
+    // signalements et lâcherait deux agents sur les mêmes fichiers.
+    const flags = this.store.reserveOpenFlags(reviewId, severities);
     if (flags.length === 0) {
       throw new DispatchConflictError("aucun flag ouvert à corriger");
     }
+    this.notifyStatus();
     // Le démarrage est attendu avant la réponse : une boucle d'attente laissée
     // en arrière-plan lancerait une correction que l'appelant croit refusée.
-    const subtask = await this.startGroupedSubtask(review, flags, conversationId, agentConfig);
+    let subtask: { id: string };
+    try {
+      subtask = await this.startGroupedSubtask(review, flags, conversationId, agentConfig);
+    } catch (error) {
+      this.store.releaseFlags(flags.map((flag) => flag.id));
+      this.notifyStatus();
+      throw error;
+    }
     for (const flag of flags) {
-      this.store.updateFlag(flag.id, { status: "agent_running", subtaskId: subtask.id });
+      this.store.updateFlag(flag.id, { subtaskId: subtask.id });
     }
     this.notifyStatus();
     const dispatchKey = `group:${review.id}`;

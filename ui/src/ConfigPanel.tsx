@@ -207,9 +207,6 @@ export function ConfigPanel({
         subagent_preset_id: config.subagentPresetId,
         subagent_effort: config.subagentEffort,
         permission_mode: config.permissionMode,
-        review_provider: config.provider,
-        review_model: config.model,
-        review_effort: config.effort,
       })
       setPresets((current) => [...current, created])
       setSelectedPresetId(created.id)

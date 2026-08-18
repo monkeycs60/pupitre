@@ -208,6 +208,44 @@ export class ReviewStore {
   }
 
 
+  /**
+   * Réserve d'un seul geste les signalements ouverts d'une review. Deux
+   * corrections groupées concurrentes ne peuvent donc pas retenir le même
+   * signalement et lâcher deux agents sur les mêmes fichiers.
+   */
+  reserveOpenFlags(reviewId: string, severities: ReviewSeverity[]): ReviewFlag[] {
+    if (severities.length === 0) return [];
+    const reserve = this.db.transaction(() => {
+      const placeholders = severities.map(() => "?").join(", ");
+      const rows = this.db.query(`
+        SELECT id FROM review_flags
+        WHERE review_id = ? AND status = 'open' AND severity IN (${placeholders})
+        ORDER BY CASE severity WHEN 'red' THEN 0 WHEN 'orange' THEN 1 ELSE 2 END,
+                 file ASC, line_start ASC
+      `).all(reviewId, ...severities) as Array<{ id: string }>;
+      const update = this.db.query(
+        "UPDATE review_flags SET status = 'agent_running' WHERE id = ? AND status = 'open'",
+      );
+      const reserved: ReviewFlag[] = [];
+      for (const row of rows) {
+        if (update.run(row.id).changes !== 1) continue;
+        reserved.push(this.getFlag(row.id)!);
+      }
+      return reserved;
+    });
+    return reserve();
+  }
+
+  releaseFlags(ids: string[]): void {
+    const release = this.db.transaction(() => {
+      const update = this.db.query(
+        "UPDATE review_flags SET status = 'open', subtask_id = NULL WHERE id = ? AND status = 'agent_running'",
+      );
+      for (const id of ids) update.run(id);
+    });
+    release();
+  }
+
   getFlag(id: string): ReviewFlag | null {
     const row = this.db.query(`
       SELECT f.*, COALESCE(f.code_provider, r.code_provider, c.provider) AS code_provider
@@ -297,9 +335,12 @@ export class ReviewStore {
           LIMIT 1
         `).get(review.conversation_id, review.seq);
         if (newerDone) {
+          // `agent_running` reste intouché : une sous-tâche qui écrit encore
+          // dans le dépôt réécrira le statut de son signalement après coup, et
+          // le résoudre ici le ressusciterait `open` à son échec.
           this.db.query(`
             UPDATE review_flags SET status = 'resolved'
-            WHERE status IN ('open', 'agent_running') AND review_id = ?
+            WHERE status = 'open' AND review_id = ?
           `).run(id);
         } else {
           this.resolveSuperseded(id, review);
@@ -323,7 +364,7 @@ export class ReviewStore {
     const stale = this.db.query(`
       SELECT f.id AS id, f.hunk_hash AS hunk_hash FROM review_flags f
       JOIN reviews r ON r.id = f.review_id
-      WHERE f.status IN ('open', 'agent_running')
+      WHERE f.status = 'open'
         AND r.conversation_id = ? AND r.scope = 'worktree' AND r.status = 'done' AND r.rowid < ?
     `).all(review.conversation_id, review.seq) as Array<{ id: string; hunk_hash: string | null }>;
     if (stale.length === 0) return;

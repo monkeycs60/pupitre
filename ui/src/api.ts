@@ -904,18 +904,33 @@ export function dispatchFlag(flagId: string, message?: string): Promise<{ subtas
   return fetchJson(`/api/review-flags/${routeId(flagId)}/dispatch`, jsonPost({ message }))
 }
 
-export function dispatchAllFlags(
+// Un serveur plus ancien ne renvoie que `dispatched` : sans liste, on n'invente
+// aucun identifiant — l'appel a réussi, c'est le rafraîchissement qui dira quels
+// signalements sont partis.
+function dispatchedFlagIds(payload: { flagIds?: unknown }): string[] {
+  return Array.isArray(payload.flagIds) ? payload.flagIds.filter((id) => typeof id === 'string') : []
+}
+
+export async function dispatchAllFlags(
   reviewId: string,
   severities: Array<'red' | 'orange' | 'grey'> = ['red', 'orange'],
 ): Promise<{ dispatched: number, flagIds: string[] }> {
-  return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-all`, jsonPost({ severities }))
+  const payload = await fetchJson<{ dispatched: number, flagIds?: unknown }>(
+    `/api/reviews/${routeId(reviewId)}/dispatch-all`,
+    jsonPost({ severities }),
+  )
+  return { dispatched: payload.dispatched, flagIds: dispatchedFlagIds(payload) }
 }
 
-export function dispatchGroupedFlags(
+export async function dispatchGroupedFlags(
   reviewId: string,
   severities: Array<'red' | 'orange' | 'grey'> = ['red', 'orange'],
 ): Promise<{ subtaskId: string, dispatched: number, flagIds: string[] }> {
-  return fetchJson(`/api/reviews/${routeId(reviewId)}/dispatch-grouped`, jsonPost({ severities }))
+  const payload = await fetchJson<{ subtaskId: string, dispatched: number, flagIds?: unknown }>(
+    `/api/reviews/${routeId(reviewId)}/dispatch-grouped`,
+    jsonPost({ severities }),
+  )
+  return { subtaskId: payload.subtaskId, dispatched: payload.dispatched, flagIds: dispatchedFlagIds(payload) }
 }
 
 export function getSubtask(

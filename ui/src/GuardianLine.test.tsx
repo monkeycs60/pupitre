@@ -195,6 +195,35 @@ test('sans flag ouvert, un diff périmé rend la ligne neutre', async () => {
   await waitFor(() => expect(document.getElementById('guardian-line')?.className).toContain('is-stale'))
 })
 
+test('tant que le diff live n’est pas chargé, une review sans flag ne passe pas au vert', async () => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/reviews')) return Response.json([{ ...review, flags: [] }])
+    // Le diff ne répond jamais : la comparaison n'a pas eu lieu.
+    if (url.endsWith('/diff')) return new Promise<Response>(() => {})
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+
+  render(createElement(GuardianLine, {
+    conversation,
+    project,
+    reviewStatus: null,
+    onOpenCode: () => undefined,
+    onRelire: () => undefined,
+  }))
+
+  const line = await waitFor(() => {
+    const node = document.getElementById('guardian-line')
+    expect(node?.className).toContain('is-stale')
+    return node
+  })
+  expect(line?.className).not.toContain('is-clean')
+  // Rien ne prouve encore la péremption : on n'annonce pas « à relire ».
+  expect(line?.textContent).toContain('rien à signaler')
+  expect(line?.textContent).not.toContain('✓ relu')
+  expect(line?.textContent).not.toContain('à relire')
+})
+
 test('propose par défaut une seule correction groupée', async () => {
   const requests: Array<{ url: string, init?: RequestInit }> = []
   globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {

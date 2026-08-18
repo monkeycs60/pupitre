@@ -920,6 +920,63 @@ test("dispatch utilise le preset de correction du projet", async () => {
   if (rescan) await current.reviews.wait(rescan.id);
 });
 
+test("POST /api/reviews/:id/dispatch-grouped valide, répond 202 puis 409", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const conversation = new ConversationStore(current.db).create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "risque",
+  });
+  const reviewStore = new ReviewStore(current.db);
+  const review = reviewStore.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  reviewStore.complete(review.id, [
+    {
+      file: "src/danger.ts", line_start: 4, line_end: 4, severity: "red",
+      category: "perte de données", message: "La suppression doit conserver une sauvegarde.",
+    },
+    {
+      file: "src/contrat.ts", line_start: 2, line_end: 2, severity: "orange",
+      category: "contrat", message: "Le contrat public change sans préavis.",
+    },
+  ]);
+  const flagIds = reviewStore.get(review.id)!.flags.map((flag) => flag.id);
+
+  const invalid = await postJson(`/api/reviews/${review.id}/dispatch-grouped`, { severities: ["rouge"] });
+  expect(invalid.status).toBe(400);
+  const unknown = await postJson("/api/reviews/inconnu/dispatch-grouped", {});
+  expect(unknown.status).toBe(404);
+
+  const dispatched = await postJson(`/api/reviews/${review.id}/dispatch-grouped`, {
+    severities: ["red", "orange"],
+  });
+  expect(dispatched.status).toBe(202);
+  const body = await dispatched.json() as { subtaskId: string; dispatched: number; flagIds: string[] };
+  expect(body.dispatched).toBe(2);
+  expect(body.flagIds.sort()).toEqual([...flagIds].sort());
+  expect(typeof body.subtaskId).toBe("string");
+  expect(reviewStore.get(review.id)!.flags.every((flag) => flag.status === "agent_running")).toBe(true);
+
+  // Une review sans flag ouvert de la sévérité demandée : le conflit doit se
+  // lire en 409, pas en 500.
+  const other = reviewStore.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  reviewStore.complete(other.id, [{
+    file: "src/style.ts", line_start: 1, line_end: 1, severity: "grey",
+    category: "style", message: "Nom peu parlant.",
+  }]);
+  const conflict = await postJson(`/api/reviews/${other.id}/dispatch-grouped`, { severities: ["red"] });
+  expect(conflict.status).toBe(409);
+
+  await current.subtasks.waitResult(body.subtaskId);
+  await Bun.sleep(10);
+  const rescan = current.reviews.listByProject(project.id).find((item) => item.id !== review.id);
+  if (rescan) await current.reviews.wait(rescan.id);
+});
+
 test("un flag est traité directement sans décision groupée", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());

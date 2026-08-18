@@ -234,12 +234,15 @@ export class PresetStore {
     const permissionMode = input.permission_mode === undefined
       ? preset.permission_mode
       : normalizePresetPermissionMode(input.permission_mode);
-    const review = reviewConfig(input, id === "builtin-speed"
-      ? {
-          provider: input.provider,
-          model: input.model,
-          effort: input.effort ?? defaultReviewConfig(input.provider).effort,
-        }
+    // Une review héritée suit la configuration principale : figer l'ancien
+    // relecteur ferait diverger le preset de ce que l'utilisateur y voit.
+    const inherited = {
+      provider: input.provider,
+      model: input.model,
+      effort: input.effort ?? defaultReviewConfig(input.provider).effort,
+    };
+    const review = reviewConfig(input, id === "builtin-speed" || !preset.review_explicit
+      ? inherited
       : {
           provider: preset.review_provider,
           model: preset.review_model,

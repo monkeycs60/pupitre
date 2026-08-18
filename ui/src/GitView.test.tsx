@@ -148,3 +148,40 @@ test('j et k ne bougent rien depuis un élément hors de la vue Code', async () 
   expect(counter()).toBe('– / 2')
   outside.remove()
 })
+
+test('un dispatch partiel ne fait passer en correction que les signalements retenus', async () => {
+  let reviewCalls = 0
+  const dispatched: string[] = []
+  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.includes('/dispatch-all')) {
+      dispatched.push(String(init?.body))
+      return Response.json({ dispatched: 1, flagIds: ['flag-1'] }, { status: 202 })
+    }
+    if (url.includes('/git?') || url.endsWith('/git')) {
+      return Response.json({ branch: 'master', commits: [], branchCommitShas: [], ahead: 0, behind: 0 })
+    }
+    if (url.endsWith('/diff')) return Response.json({ diff, files: ['src/a.ts'] })
+    if (url.endsWith('/reviews')) {
+      reviewCalls += 1
+      // Le rafraîchissement qui suit le dispatch est laissé en suspens : sans
+      // ça, la liste rejouée écraserait l'état qu'on veut observer.
+      if (reviewCalls > 1) return new Promise<Response>(() => {})
+      return Response.json([review])
+    }
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+  const confirm = window.confirm
+  window.confirm = () => true
+  try {
+    await renderChanges()
+    fireEvent.click(screen.getByRole('button', { name: 'Corriger les 2 ouverts' }))
+    await waitFor(() => expect(dispatched.length).toBe(1))
+    const progress = () => document.querySelector('.changes-progress')?.textContent ?? ''
+    await waitFor(() => expect(progress()).toContain('1 correction en cours'))
+    expect(progress()).not.toContain('2 corrections')
+    expect(document.querySelectorAll('.diff-flag-state').length).toBe(1)
+  } finally {
+    window.confirm = confirm
+  }
+})

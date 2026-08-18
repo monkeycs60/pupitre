@@ -120,6 +120,55 @@ test("un preset personnalisé utilise sa configuration pour la review", () => {
   });
 });
 
+test("une review héritée suit le nouveau modèle, une review choisie ne bouge pas", () => {
+  const inherited = presets.create({
+    name: "Hérité",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+    speed: "standard",
+    orchestrator: true,
+  });
+  expect(inherited.review_explicit).toBe(false);
+  expect(presets.update(inherited.id, {
+    name: "Hérité",
+    provider: "claude",
+    model: "opus",
+    effort: "medium",
+    speed: "standard",
+    orchestrator: true,
+  })).toMatchObject({
+    review_provider: "claude",
+    review_model: "opus",
+    review_effort: "medium",
+  });
+
+  const chosen = presets.create({
+    name: "Relecteur choisi",
+    provider: "codex",
+    model: "gpt-5.6-sol",
+    effort: "high",
+    speed: "standard",
+    orchestrator: true,
+    review_provider: "claude",
+    review_model: "opus",
+    review_effort: "high",
+  });
+  expect(chosen.review_explicit).toBe(true);
+  expect(presets.update(chosen.id, {
+    name: "Relecteur choisi",
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "low",
+    speed: "fast",
+    orchestrator: true,
+  })).toMatchObject({
+    review_provider: "claude",
+    review_model: "opus",
+    review_effort: "high",
+  });
+});
+
 test("aligne la review des presets personnalisés d'une base sans colonne de review", () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-custom-review-migration-"));
   const legacyDb = openDb(dir);

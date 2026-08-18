@@ -879,6 +879,53 @@ test("une nouvelle review remplace la précédente : ses signalements encore ouv
   expect(store.reviewStatus(project.id).openBySeverity.red).toBe(1);
 });
 
+test("une nouvelle review laisse ouverts les signalements dont l'agent tourne encore", () => {
+  const project = projects.create({ name: "supersession-agent", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const input = {
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex" as const, model: "gpt-5.6-sol", effort: "high",
+  };
+  const first = store.create(input);
+  store.complete(first.id, [{
+    file: "src/a.ts", line_start: 1, line_end: 1, severity: "red",
+    category: "données", message: "Risque A.",
+  }]);
+  const flag = store.get(first.id)!.flags[0]!;
+  store.updateFlag(flag.id, { status: "agent_running", subtaskId: "group-1" });
+
+  const second = store.create(input);
+  store.complete(second.id, []);
+  // La sous-tâche écrit encore : la refermer ici la laisserait réécrire un
+  // statut sur une review périmée.
+  expect(store.getFlag(flag.id)?.status).toBe("agent_running");
+});
+
+test("la réservation groupée ne remet jamais deux fois le même signalement", () => {
+  const project = projects.create({ name: "réservation", path: repo });
+  const conversation = conversations.create({
+    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
+  });
+  const review = store.create({
+    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
+    provider: "codex", model: "gpt-5.6-sol", effort: "high",
+  });
+  store.complete(review.id, [
+    { file: "src/a.ts", line_start: 1, line_end: 1, severity: "red", category: "données", message: "Risque A." },
+    { file: "src/b.ts", line_start: 1, line_end: 1, severity: "grey", category: "style", message: "Détail." },
+  ]);
+  const first = store.reserveOpenFlags(review.id, ["red", "orange"]);
+  expect(first.map((flag) => flag.file)).toEqual(["src/a.ts"]);
+  expect(first[0]!.status).toBe("agent_running");
+  expect(store.reserveOpenFlags(review.id, ["red", "orange"])).toEqual([]);
+
+  store.releaseFlags(first.map((flag) => flag.id));
+  expect(store.getFlag(first[0]!.id)?.status).toBe("open");
+  expect(store.reserveOpenFlags(review.id, ["red", "orange"]).length).toBe(1);
+});
+
 test("un scan incrémental ne referme pas un signalement dont il n'a pas relu le hunk", () => {
   const project = projects.create({ name: "incrémental-prudent", path: repo });
   const conversation = conversations.create({

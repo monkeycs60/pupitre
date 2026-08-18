@@ -26,7 +26,7 @@ function openFlagsOf(review: Review) {
   return review.flags.filter((flag) => flag.status === 'open' || flag.status === 'agent_running')
 }
 
-function variantFor(review: Review | null, running: boolean, stale: boolean): Variant {
+function variantFor(review: Review | null, running: boolean, unverified: boolean): Variant {
   if (running) return 'running'
   if (!review) return 'idle'
   if (review.status === 'error') return 'block'
@@ -34,7 +34,7 @@ function variantFor(review: Review | null, running: boolean, stale: boolean): Va
   // Un signalement rouge encore ouvert reste vrai même si le diff a bougé :
   // le neutre de `stale` ne doit pas l'effacer de l'écran.
   if (open.some((flag) => flag.severity === 'red')) return 'block'
-  if (stale) return 'stale'
+  if (unverified) return 'stale'
   return open.length === 0 ? 'clean' : 'warn'
 }
 
@@ -51,10 +51,12 @@ function findingsSummary(review: Review): string {
     .join(' · ')
 }
 
-function stateLabel(review: Review | null, stale: boolean, reviewedCurrentDiff: boolean): string {
+function stateLabel(review: Review | null, verified: boolean, diffChanged: boolean): string {
   if (!review) return 'pas encore relu'
   if (review.status === 'error') return 'relecture interrompue'
-  if (!stale) return `${reviewedCurrentDiff ? '✓ relu · ' : ''}${findingsSummary(review)}`
+  if (verified) return `✓ relu · ${findingsSummary(review)}`
+  // Diff pas encore lu : ni quitus, ni péremption annoncée.
+  if (!diffChanged) return findingsSummary(review)
   if (openFlagsOf(review).length === 0) return 'à relire'
   return `${findingsSummary(review)} · à relire`
 }
@@ -119,17 +121,17 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
 
   // Un commit ou une écriture après la relecture rend le verdict caduc : la
   // ligne ne doit pas rester verte sur un diff que le Gardien n'a pas lu. Un
-  // diff qu'on n'a pas pu lire ne prouve rien non plus — donc caduc aussi.
-  const stale = review !== null && review.status === 'done' && (
-    liveDiff.status === 'error' || (liveDiff.status === 'ready' && review.diff_text !== liveDiff.diff)
-  )
+  // diff qu'on n'a pas pu lire ne prouve rien non plus — pas plus qu'un diff
+  // qu'on n'a pas encore chargé : le vert n'est mérité qu'après comparaison.
   const reviewedCurrentDiff = review?.status === 'done'
     && liveDiff.status === 'ready'
     && review.diff_text === liveDiff.diff
+  const unverified = review !== null && review.status === 'done' && !reviewedCurrentDiff
+  const diffChanged = unverified && liveDiff.status !== 'pending'
   const label = running && reviewStatus?.running
     ? `relit · zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}`
-    : stateLabel(review, stale, reviewedCurrentDiff)
-  const variant = variantFor(review, running, stale)
+    : stateLabel(review, reviewedCurrentDiff, diffChanged)
+  const variant = variantFor(review, running, unverified)
   const openFlags = review?.flags.filter((flag) => flag.status === 'open') ?? []
 
   async function correctOpenFlags() {
@@ -139,7 +141,7 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
       : `Lancer ${openFlags.length} agents, un par erreur ?`
     // Le diff a bougé depuis la relecture : les signalements peuvent porter sur
     // du code qui n'existe plus. On le dit avant de lâcher un agent dessus.
-    const confirmation = stale
+    const confirmation = diffChanged
       ? `Le code a changé depuis la relecture : ces signalements peuvent être périmés.\n\n${scope}`
       : scope
     if (!window.confirm(confirmation)) return
@@ -170,7 +172,7 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
       {running ? <span className="guardian-line-dots"><i /><i /><i /></span> : <GuardianShield />}
     </span>
     <strong className="guardian-line-title">Gardien</strong>
-    <span className="guardian-line-meta" title={correctionError ?? (stale ? 'Le diff a changé depuis la relecture.' : reviewedCurrentDiff ? 'Déjà relu à ce stade précis.' : undefined)}>{correctionError ?? label}</span>
+    <span className="guardian-line-meta" title={correctionError ?? (diffChanged ? 'Le diff a changé depuis la relecture.' : reviewedCurrentDiff ? 'Déjà relu à ce stade précis.' : undefined)}>{correctionError ?? label}</span>
     <button type="button" className="guardian-line-action" onClick={onRelire} disabled={running}>Relire</button>
     {openFlags.length > 0 ? (
       <div className="guardian-line-correction">

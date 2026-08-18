@@ -106,6 +106,23 @@ function flagsInDiffOrder(diff: string, flags: ReviewFlag[]): ReviewFlag[] {
   return parseUnifiedDiff(diff, flags).flatMap((line) => line.cardFlags)
 }
 
+/**
+ * Un overlay démonté ou masqué ne capte plus rien : bloquer les raccourcis sur
+ * sa seule présence dans le DOM les rendrait morts pour le reste de la session.
+ */
+function hasOpenOverlay(): boolean {
+  const overlays = document.querySelectorAll('dialog[open], [role="dialog"], [role="menu"]')
+  for (const overlay of overlays) {
+    if (!(overlay instanceof HTMLElement)) continue
+    if (overlay.hidden || overlay.getAttribute('aria-hidden') === 'true') continue
+    if (overlay instanceof HTMLDialogElement && !overlay.open) continue
+    // `checkVisibility` attrape le `display:none` hérité d'un ancêtre ; absent
+    // de certains DOM, où le rendu conditionnel suffit déjà.
+    if (typeof overlay.checkVisibility !== 'function' || overlay.checkVisibility()) return true
+  }
+  return false
+}
+
 function ChangesTab({ project, conversation, live, review, reviewStatus, focusedFlagId, onFlagUpdated, onRefresh }: ChangesTabProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -141,7 +158,7 @@ function ChangesTab({ project, conversation, live, review, reviewStatus, focused
       if (event.key !== 'j' && event.key !== 'k') return
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const root = rootRef.current
-      if (!root || document.querySelector('dialog[open], [role="dialog"], [role="menu"]')) return
+      if (!root || hasOpenOverlay()) return
       const target = event.target
       if (!(target instanceof HTMLElement)) return
       if (target.closest('input, textarea, select, button, a, [contenteditable="true"]')) return
