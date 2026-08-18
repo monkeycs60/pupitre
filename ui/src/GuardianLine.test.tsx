@@ -79,6 +79,30 @@ const review: Review = {
   })),
 }
 
+test('signale une relecture du diff exact sans empêcher de relire', async () => {
+  let relireCount = 0
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/reviews')) return Response.json([review])
+    if (url.endsWith('/diff')) return Response.json({ diff: 'diff', files: [] })
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+
+  render(createElement(GuardianLine, {
+    conversation,
+    project,
+    reviewStatus: null,
+    onOpenCode: () => undefined,
+    onRelire: () => { relireCount += 1 },
+  }))
+
+  const line = document.getElementById('guardian-line')
+  await waitFor(() => expect(line?.textContent).toContain('✓ relu · 2 rouges'))
+  expect(line?.querySelector('.guardian-line-meta')?.getAttribute('title')).toBe('Déjà relu à ce stade précis.')
+  fireEvent.click(screen.getByRole('button', { name: 'Relire' }))
+  expect(relireCount).toBe(1)
+})
+
 test('un diff modifié depuis la relecture signale la péremption', async () => {
   globalThis.fetch = mock(async (input: RequestInfo | URL) => {
     const url = String(input)
@@ -97,6 +121,7 @@ test('un diff modifié depuis la relecture signale la péremption', async () => 
 
   const button = await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })
   await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('à relire'))
+  expect(document.getElementById('guardian-line')?.textContent).not.toContain('✓ relu')
   expect((button as HTMLButtonElement).disabled).toBe(false)
   const mode = screen.getByRole('combobox', { name: 'Mode de correction' }) as HTMLSelectElement
   expect(mode.disabled).toBe(false)

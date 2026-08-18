@@ -51,10 +51,10 @@ function findingsSummary(review: Review): string {
     .join(' · ')
 }
 
-function stateLabel(review: Review | null, stale: boolean): string {
+function stateLabel(review: Review | null, stale: boolean, reviewedCurrentDiff: boolean): string {
   if (!review) return 'pas encore relu'
   if (review.status === 'error') return 'relecture interrompue'
-  if (!stale) return findingsSummary(review)
+  if (!stale) return `${reviewedCurrentDiff ? '✓ relu · ' : ''}${findingsSummary(review)}`
   if (openFlagsOf(review).length === 0) return 'à relire'
   return `${findingsSummary(review)} · à relire`
 }
@@ -123,9 +123,12 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
   const stale = review !== null && review.status === 'done' && (
     liveDiff.status === 'error' || (liveDiff.status === 'ready' && review.diff_text !== liveDiff.diff)
   )
+  const reviewedCurrentDiff = review?.status === 'done'
+    && liveDiff.status === 'ready'
+    && review.diff_text === liveDiff.diff
   const label = running && reviewStatus?.running
     ? `relit · zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}`
-    : stateLabel(review, stale)
+    : stateLabel(review, stale, reviewedCurrentDiff)
   const variant = variantFor(review, running, stale)
   const openFlags = review?.flags.filter((flag) => flag.status === 'open') ?? []
 
@@ -167,7 +170,7 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
       {running ? <span className="guardian-line-dots"><i /><i /><i /></span> : <GuardianShield />}
     </span>
     <strong className="guardian-line-title">Gardien</strong>
-    <span className="guardian-line-meta" title={correctionError ?? (stale ? 'Le diff a changé depuis la relecture.' : undefined)}>{correctionError ?? label}</span>
+    <span className="guardian-line-meta" title={correctionError ?? (stale ? 'Le diff a changé depuis la relecture.' : reviewedCurrentDiff ? 'Déjà relu à ce stade précis.' : undefined)}>{correctionError ?? label}</span>
     <button type="button" className="guardian-line-action" onClick={onRelire} disabled={running}>Relire</button>
     {openFlags.length > 0 ? (
       <div className="guardian-line-correction">
