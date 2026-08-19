@@ -26,6 +26,13 @@ function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}\n[tronqué]`;
 }
 
+function clipToBudget(text: string, max: number): string {
+  const marker = "\n[tronqué]";
+  if (text.length <= max) return text;
+  if (max <= marker.length) return text.slice(0, max);
+  return `${text.slice(0, max - marker.length)}${marker}`;
+}
+
 function ticketSourceLabel(source: TicketSource): string {
   if (source === "clickup") return "ClickUp";
   if (source === "notion") return "Notion";
@@ -100,11 +107,12 @@ export function composeTicketBrief(input: TicketBriefInput): string {
     }
   }
 
-  parts.push(
+  const consigne = [
     "## Consigne",
     "Prends ce contexte comme point de départ. Pour creuser une conversation précédente, appelle l'outil",
     "`read_sibling_conversation` avec son id plutôt que de deviner. Confirme brièvement la reprise, puis traite la demande ci-dessous.",
-  );
+  ].join("\n");
 
-  return clip(parts.join("\n"), MAX_BRIEF_CHARS);
+  const contextBudget = MAX_BRIEF_CHARS - consigne.length - 2;
+  return `${clipToBudget(parts.join("\n"), contextBudget)}\n\n${consigne}`;
 }

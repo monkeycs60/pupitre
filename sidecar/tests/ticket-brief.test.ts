@@ -58,7 +58,7 @@ test("tronque les débriefs trop longs sans dépasser la borne", () => {
       debrief: "x".repeat(MAX_BRIEF_CHARS * 2),
     }],
   });
-  expect(brief.length).toBeLessThanOrEqual(MAX_BRIEF_CHARS + 200);
+  expect(brief.length).toBeLessThanOrEqual(MAX_BRIEF_CHARS);
   expect(brief).toContain("[tronqué]");
 });
 
@@ -71,4 +71,32 @@ test("sans ClickUp ni conversations sœurs, les sections absentes ne sont pas é
   });
   expect(brief).not.toContain("## Notes");
   expect(brief).not.toContain("## Conversations précédentes");
+});
+
+test("préserve la consigne quand les sections cumulatives dépassent le budget", () => {
+  const brief = composeTicketBrief({
+    ...base,
+    notes: Array.from({ length: 400 }, () => ({
+      body: "note".repeat(20),
+      created_at: "2026-08-19T10:00:00Z",
+    })),
+    clickup: {
+      description: "desc",
+      comments: Array.from({ length: 50 }, () => ({
+        author: "A",
+        text: "comment".repeat(80),
+        at: "2026-08-19T10:00:00Z",
+      })),
+    },
+    siblings: Array.from({ length: 5 }, (_, i) => ({
+      id: `c${i}`,
+      title: "titre",
+      summary: "resume",
+      debrief: "x".repeat(3_000),
+    })),
+  });
+
+  expect(brief.length).toBeLessThanOrEqual(MAX_BRIEF_CHARS);
+  expect(brief).toContain("## Consigne");
+  expect(brief).toContain("read_sibling_conversation");
 });
