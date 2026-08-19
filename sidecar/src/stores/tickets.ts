@@ -69,6 +69,10 @@ export const STALE_TICKET_DAYS = 14;
 export class TicketStore {
   constructor(private db: Database) {}
 
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
+  }
+
   get(id: string): Ticket | null {
     const row = this.db.query("SELECT * FROM tickets WHERE id = ?").get(id) as Record<string, unknown> | null;
     return row ? hydrateTicket(row) : null;
