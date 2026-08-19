@@ -5,6 +5,7 @@ import type {
   Debrief,
   DesignReachability,
   DashboardPayload,
+  DashboardIntegration,
   GitDiff,
   GitCommitResult,
   GitSnapshot,
@@ -660,7 +661,7 @@ export function refreshProjectDashboard(projectId: string): Promise<void> {
 export function listProjectIntegrations(
   projectId: string,
   signal?: AbortSignal,
-): Promise<ProjectIntegration[]> {
+): Promise<DashboardIntegration[]> {
   return fetchJson(`/api/projects/${routeId(projectId)}/integrations`, { signal })
 }
 

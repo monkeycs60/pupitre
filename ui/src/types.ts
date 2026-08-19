@@ -262,6 +262,16 @@ export interface ProjectIntegration {
   updated_at: string
 }
 
+export interface DashboardIntegration {
+  id: string
+  type: IntegrationType
+  status: IntegrationStatus
+  last_ok_at: string | null
+  last_error: string | null
+  branch_pattern: string | null
+  config: Record<string, unknown>
+}
+
 export type TicketSource = 'clickup' | 'notion' | 'git'
 export type TicketRefKind = 'branch' | 'mr' | 'pipeline' | 'deployment' | 'sentry_issue'
 
@@ -335,7 +345,7 @@ export interface ReviewRequest {
 export interface DashboardPayload {
   projectId: string
   refreshedAt: string
-  integrations: ProjectIntegration[]
+  integrations: DashboardIntegration[]
   tickets: TicketRow[]
   environments: EnvironmentState[]
   toReview: ReviewRequest[]
