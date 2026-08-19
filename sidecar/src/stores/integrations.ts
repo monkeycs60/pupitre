@@ -93,6 +93,16 @@ export class IntegrationStore {
     `).run(now, snapshot === undefined ? null : JSON.stringify(snapshot), now, id);
   }
 
+  markUnconfigured(id: string): void {
+    this.db.query(`
+      UPDATE project_integrations
+         SET status = 'non configurée',
+             last_error = NULL,
+             updated_at = ?
+       WHERE id = ?
+    `).run(new Date().toISOString(), id);
+  }
+
   markError(id: string, status: Exclude<IntegrationStatus, "ok" | "non configurée">, error: string): void {
     this.db.query(`
       UPDATE project_integrations

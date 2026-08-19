@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { compileBranchPattern, extractTicketKey } from "../ticket-key";
-import { ClickUpAuthError, ClickUpClient, type ClickUpTask } from "./clickup";
-import { GitLabAuthError, GitLabClient, readGlabToken, type GitLabMergeRequest } from "./gitlab";
+import { ClickUpAuthError, type ClickUpTask } from "./clickup";
+import { GitLabAuthError, type GitLabMergeRequest } from "./gitlab";
 import type { ConversationStore } from "../stores/conversations";
 import type { IntegrationStore, ProjectIntegration } from "../stores/integrations";
 import type { ProjectStore } from "../stores/projects";
@@ -47,18 +47,44 @@ export interface RefresherStores {
   projects: ProjectStore;
 }
 
-type ClickUpHandle = Pick<ClickUpClient, "me" | "assignedTasks" | "taskContext">;
-type GitLabHandle = Pick<
-  GitLabClient,
-  "me" | "projectId" | "openMergeRequests" | "mergeRequest" | "latestPipeline" | "environmentByName" | "lastDeployment"
->;
+type ClickUpContext = { description: string; comments: Array<{ author: string; text: string; at: string }> };
+
+export interface ClickUpHandle {
+  me(): Promise<number>;
+  assignedTasks(input: { teamId: string; listIds: string[]; userId: number }): Promise<ClickUpTask[]>;
+  taskContext(taskId: string): Promise<ClickUpContext>;
+}
+
+export interface GitLabHandle {
+  me(): Promise<{ id: number; username: string }>;
+  projectId(path: string): Promise<number>;
+  openMergeRequests(projectId: number): Promise<GitLabMergeRequest[]>;
+  mergeRequest(projectId: number, iid: number): Promise<GitLabMergeRequest>;
+  latestPipeline(projectId: number, iid: number): Promise<{
+    id: number;
+    status: string;
+    url: string;
+    updatedAt: string;
+    ref: string;
+    sha: string;
+  } | null>;
+  environmentByName(projectId: number, name: string): Promise<{ id: number; name: string } | null>;
+  lastDeployment(projectId: number, environmentId: number): Promise<{
+    ref: string;
+    mergeRequestIid: number | null;
+    sha: string;
+    status: string;
+    createdAt: string;
+    user: string;
+    job: string | null;
+    jobUrl: string | null;
+  } | null>;
+}
 
 export interface RefresherDeps {
   clickUpClient?: (integration: ProjectIntegration) => ClickUpHandle | null;
   gitLabClient?: (integration: ProjectIntegration) => GitLabHandle | null;
   branchOfWorktree?: (path: string) => string | null;
-  clickUpToken?: () => string | null;
-  gitLabToken?: (host: string) => string | null;
 }
 
 type Listener = (projectId: string) => void;
@@ -147,10 +173,10 @@ export class IntegrationsRefresher {
   private async run(projectId: string): Promise<void> {
     const items = this.stores.integrations.listByProject(projectId);
     const pattern = compiledPattern(items);
-    await Promise.all([
-      ...items.map((item) => this.refreshOne(item, pattern).catch(() => {})),
-      Promise.resolve().then(() => this.refreshGitSource(projectId, pattern)),
-    ]);
+    for (const item of orderIntegrations(items)) {
+      await this.refreshOne(item, pattern);
+    }
+    this.refreshGitSource(projectId, pattern);
     this.stores.tickets.archiveStale(projectId);
     for (const listener of this.listeners) {
       listener(projectId);
@@ -172,14 +198,15 @@ export class IntegrationsRefresher {
   }
 
   private clickUp(item: ProjectIntegration): ClickUpHandle | null {
-    if (this.deps.clickUpClient) return this.deps.clickUpClient(item);
-    const token = this.deps.clickUpToken?.() ?? process.env.CLICKUP_API_TOKEN ?? null;
-    return token ? new ClickUpClient(token) : null;
+    return this.deps.clickUpClient?.(item) ?? null;
   }
 
   private async refreshClickUp(item: ProjectIntegration): Promise<void> {
     const client = this.clickUp(item);
-    if (!client) return;
+    if (!client) {
+      this.stores.integrations.markUnconfigured(item.id);
+      return;
+    }
     const config = item.config as unknown as ClickUpConfig;
     const userId = await client.me();
     const tasks = await client.assignedTasks({
@@ -214,15 +241,15 @@ export class IntegrationsRefresher {
   }
 
   private gitLab(item: ProjectIntegration): GitLabHandle | null {
-    if (this.deps.gitLabClient) return this.deps.gitLabClient(item);
-    const host = String((item.config as Record<string, unknown>).host ?? "");
-    const token = this.deps.gitLabToken?.(host) ?? readGlabToken(host);
-    return host && token ? new GitLabClient({ host, token }) : null;
+    return this.deps.gitLabClient?.(item) ?? null;
   }
 
   private async refreshGitLab(item: ProjectIntegration, pattern: RegExp | null): Promise<void> {
     const client = this.gitLab(item);
-    if (!client) return;
+    if (!client) {
+      this.stores.integrations.markUnconfigured(item.id);
+      return;
+    }
     const config = item.config as unknown as GitLabConfig;
     const me = await client.me();
     const environments: EnvironmentState[] = [];
@@ -405,6 +432,17 @@ export class IntegrationsRefresher {
 function compiledPattern(items: ProjectIntegration[]): RegExp | null {
   const pattern = items.find((item) => item.branch_pattern)?.branch_pattern ?? null;
   return pattern ? compileBranchPattern(pattern) : null;
+}
+
+function orderIntegrations(items: ProjectIntegration[]): ProjectIntegration[] {
+  const rank: Record<ProjectIntegration["type"], number> = {
+    clickup: 0,
+    gitlab: 1,
+    github: 2,
+    notion: 3,
+    sentry: 4,
+  };
+  return [...items].sort((left, right) => rank[left.type] - rank[right.type]);
 }
 
 function defaultBranchOfWorktree(path: string): string | null {

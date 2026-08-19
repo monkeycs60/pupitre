@@ -30,6 +30,19 @@ const task: ClickUpTask = {
   labels: ["BackOffice"],
 };
 
+const reviewTask: ClickUpTask = {
+  id: "86caw5zzz",
+  key: "TECH-24868",
+  title: "Facture",
+  status: "open",
+  statusColor: "#22aa66",
+  url: "https://app.clickup.com/t/86caw5zzz",
+  updatedAt: "2026-08-19T00:00:00.000Z",
+  list: "Features",
+  priority: "high",
+  labels: ["Billing"],
+};
+
 const mine: GitLabMergeRequest = {
   iid: 1862,
   title: "TECH-24657 / Leviers",
@@ -178,6 +191,29 @@ test("rapproche tâche ClickUp, MR, pipeline et déploiement sur la clé du tick
   expect(notified).toEqual([projectId]);
 });
 
+test("séquence ClickUp avant GitLab pour rattacher dès le premier refresh une MR non mienne à un ticket ClickUp", async () => {
+  const refresher = makeRefresher({
+    clickUpClient: () => ({
+      ...fakeClickUp([task, reviewTask]),
+      assignedTasks: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        return [task, reviewTask];
+      },
+    }) as any,
+  });
+
+  await refresher.refreshProject(projectId);
+
+  const linked = tickets.listByProject(projectId).find((row) => row.key === "TECH-24868");
+  expect(linked?.source).toBe("clickup");
+  expect(linked?.refs.find((ref) => ref.kind === "mr")?.ref).toBe("reactor!1868");
+  expect(integrations.find(projectId, "gitlab")?.snapshot.toReview).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ iid: 1868, author: "louis.quellier" }),
+    ]),
+  );
+});
+
 test("une source en 401 passe à reconfigurer et n'efface rien ; l'autre continue", async () => {
   await makeRefresher().refreshProject(projectId);
 
@@ -217,10 +253,34 @@ test("une panne réseau passe en dégradée et garde les données", async () => 
   expect(gitlab?.snapshot.environments).toHaveLength(2);
 });
 
-test("une intégration sans token reste non configurée", async () => {
+test("une intégration sans client reste non configurée", async () => {
   const refresher = makeRefresher({ clickUpClient: () => null });
   await refresher.refreshProject(projectId);
   expect(integrations.find(projectId, "clickup")?.status).toBe("non configurée");
+});
+
+test("clickup passe de ok à non configurée sans effacer snapshot ni tickets", async () => {
+  await makeRefresher().refreshProject(projectId);
+
+  const refresher = makeRefresher({ clickUpClient: () => null });
+  await refresher.refreshProject(projectId);
+
+  const clickup = integrations.find(projectId, "clickup");
+  expect(clickup?.status).toBe("non configurée");
+  expect(clickup?.snapshot).toEqual({ userId: 82632460, tasks: 1 });
+  expect(tickets.listByProject(projectId).find((row) => row.key === "TECH-24657")?.status).toBe("in progress");
+});
+
+test("gitlab passe de ok à non configurée sans effacer snapshot ni tickets", async () => {
+  await makeRefresher().refreshProject(projectId);
+
+  const refresher = makeRefresher({ gitLabClient: () => null });
+  await refresher.refreshProject(projectId);
+
+  const gitlab = integrations.find(projectId, "gitlab");
+  expect(gitlab?.status).toBe("non configurée");
+  expect(gitlab?.snapshot.environments).toHaveLength(2);
+  expect(tickets.listByProject(projectId).find((row) => row.key === "TECH-23903")?.source).toBe("git");
 });
 
 test("les conversations sur worktree créent des tickets git et se relient", async () => {
