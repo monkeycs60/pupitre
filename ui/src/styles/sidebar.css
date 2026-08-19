@@ -447,6 +447,13 @@
   white-space: nowrap;
 }
 
+.conv-row-ticket {
+  flex: none;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
 .pin-button {
   width: 24px;
   height: 24px;

@@ -276,3 +276,42 @@ test('affiche le compteur live de la conversation sélectionnée', async () => {
   await waitFor(() => expect(document.querySelector('.navigation-main')).not.toBeNull())
   expect(document.querySelector('.conv-row-count')?.textContent).toBe('4')
 })
+
+test('regroupe les conversations par ticket avant la récence', async () => {
+  const ticketYesterday: Conversation = {
+    ...startedConversation,
+    id: 'conversation-ticket-1',
+    title: 'Ticket hier',
+    ticket_id: 'ticket-1',
+    ticket_key: 'TECH-1',
+    worktree_path: '/workspace/pupitre/.worktrees/feature/TECH-1',
+    updated_at: '2026-08-18T09:00:00.000Z',
+  }
+  const ticketToday: Conversation = {
+    ...startedConversation,
+    id: 'conversation-ticket-2',
+    title: 'Ticket aujourd’hui',
+    ticket_id: 'ticket-1',
+    ticket_key: 'TECH-1',
+    worktree_path: '/workspace/pupitre/.worktrees/feature/TECH-1-fix',
+    updated_at: '2026-08-19T09:00:00.000Z',
+  }
+  const recentUnticketed: Conversation = {
+    ...startedConversation,
+    id: 'conversation-no-ticket',
+    title: 'Sans ticket',
+    updated_at: '2026-08-19T08:00:00.000Z',
+  }
+  installApi(
+    [],
+    () => Promise.reject(new Error('aucun lancement attendu')),
+    [ticketYesterday, ticketToday, recentUnticketed],
+  )
+  renderSidebar()
+
+  await waitFor(() => expect(document.querySelectorAll('.conv-group-header').length).toBe(2))
+  const headers = [...document.querySelectorAll('.conv-group-header > span:first-child')].map((element) => element.textContent)
+  expect(headers[0]).toBe('TECH-1 · 2')
+  expect(headers).toContain("Aujourd'hui")
+  expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(2)
+})

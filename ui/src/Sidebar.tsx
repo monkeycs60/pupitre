@@ -128,7 +128,7 @@ type ConversationGroup = { key: string; label: string; items: Conversation[] }
 
 /** Regroupe les conversations par récence (épinglées d'abord), comme la
  *  maquette : Épinglées / Aujourd'hui / Cette semaine / Plus ancien. */
-function groupConversations(items: Conversation[]): ConversationGroup[] {
+function groupConversationsByRecency(items: Conversation[]): ConversationGroup[] {
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
   const todayMs = startOfToday.getTime()
@@ -150,6 +150,30 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
     else groups[3]!.items.push(conversation)
   }
   return groups.filter((group) => group.items.length > 0)
+}
+
+function groupConversations(items: Conversation[]): ConversationGroup[] {
+  const conversationsByTicket = new Map<string, Conversation[]>()
+  const withoutTicket: Conversation[] = []
+  for (const conversation of items) {
+    if (conversation.ticket_key) {
+      const grouped = conversationsByTicket.get(conversation.ticket_key) ?? []
+      grouped.push(conversation)
+      conversationsByTicket.set(conversation.ticket_key, grouped)
+      continue
+    }
+    withoutTicket.push(conversation)
+  }
+  const ticketGroups = [...conversationsByTicket.entries()]
+    .map(([ticketKey, groupedConversations]) => ({
+      key: `ticket-${ticketKey}`,
+      label: `${ticketKey} · ${groupedConversations.length}`,
+      items: groupedConversations,
+      latestUpdatedAt: Math.max(...groupedConversations.map((conversation) => Date.parse(conversation.updated_at))),
+    }))
+    .sort((left, right) => right.latestUpdatedAt - left.latestUpdatedAt)
+    .map(({ latestUpdatedAt: _latestUpdatedAt, ...group }) => group)
+  return [...ticketGroups, ...groupConversationsByRecency(withoutTicket)]
 }
 
 export function Sidebar({
@@ -577,6 +601,9 @@ export function Sidebar({
                   ) : (
                     <span className="conv-row-line2">
                       <ProviderMark provider={conversation.provider} className="conv-row-mark" />
+                      {conversation.ticket_key ? (
+                        <span className="conv-row-ticket">{conversation.ticket_key}</span>
+                      ) : null}
                       {branch !== null ? (
                         <span className="conv-row-branch" title={`Branche du worktree : ${conversation.worktree_path}`}>
                           <BranchIcon />{branch}
