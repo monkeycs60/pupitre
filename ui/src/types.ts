@@ -3,7 +3,7 @@ export type ConversationSpeed = 'standard' | 'fast'
 export type PresetPermissionMode =
   'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'bypassPermissions'
 export type FilesystemScope = 'project-and-ai-roots' | 'full-system'
-export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'settings'
+export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'dashboard' | 'settings'
 
 /** Joignabilité de claude.ai, renvoyée par `GET /api/design/reachability`.
  *
@@ -244,6 +244,101 @@ export interface Conversation {
   created_at: string
   updated_at: string
   gamification?: GamificationConversation
+}
+
+export type IntegrationType = 'clickup' | 'gitlab' | 'github' | 'notion' | 'sentry'
+export type IntegrationStatus = 'ok' | 'dégradée' | 'hors ligne' | 'non configurée' | 'à reconfigurer'
+
+export interface ProjectIntegration {
+  id: string
+  project_id: string
+  type: IntegrationType
+  config: Record<string, unknown>
+  branch_pattern: string | null
+  status: IntegrationStatus
+  last_ok_at: string | null
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type TicketSource = 'clickup' | 'notion' | 'git'
+export type TicketRefKind = 'branch' | 'mr' | 'pipeline' | 'deployment' | 'sentry_issue'
+
+export interface TicketRef {
+  id: string
+  ticket_id: string
+  kind: TicketRefKind
+  ref: string
+  payload: Record<string, unknown>
+  seen_at: string
+}
+
+export interface TicketNote {
+  id: string
+  ticket_id: string
+  body: string
+  created_at: string
+}
+
+export interface TicketConversationSummary {
+  id: string
+  title: string
+  summary: string
+  provider: Provider
+  updated_at: string
+  worktree_path: string | null
+}
+
+export interface TicketRow {
+  id: string
+  project_id: string
+  key: string
+  source: TicketSource
+  title: string
+  status: string
+  external_url: string | null
+  payload: Record<string, unknown>
+  last_seen_at: string
+  archived_at: string | null
+  created_at: string
+  updated_at: string
+  refs: TicketRef[]
+  conversations: TicketConversationSummary[]
+  notes_count: number
+}
+
+export interface EnvironmentState {
+  project: string
+  name: string
+  missing?: boolean
+  branch: string | null
+  key: string | null
+  mergeRequestIid: number | null
+  user: string | null
+  deployedAt: string | null
+  status: string | null
+  jobUrl: string | null
+}
+
+export interface ReviewRequest {
+  project: string
+  iid: number
+  title: string
+  sourceBranch: string
+  url: string
+  updatedAt: string
+  author: string
+  draft: boolean
+}
+
+export interface DashboardPayload {
+  projectId: string
+  refreshedAt: string
+  integrations: ProjectIntegration[]
+  tickets: TicketRow[]
+  environments: EnvironmentState[]
+  toReview: ReviewRequest[]
 }
 
 export interface GamificationConversation {
