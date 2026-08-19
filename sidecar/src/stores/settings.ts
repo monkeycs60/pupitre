@@ -7,6 +7,7 @@ import type { Database } from "bun:sqlite";
  */
 export const MESSAGE_COUNT_MIGRATION_KEY = "conversation-message-count-v2";
 export const SPEED_REVIEW_MIGRATION_KEY = "speed-review-follows-preset-v1";
+export const INTEGRATION_TOKENS_KEY = "integrationTokens";
 
 const INTERNAL_KEYS = new Set([
   MESSAGE_COUNT_MIGRATION_KEY,

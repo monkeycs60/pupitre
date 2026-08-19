@@ -37,6 +37,9 @@ import { DebriefStore } from "../src/stores/debriefs";
 import { SearchIndex } from "../src/search";
 import { CostStore } from "../src/costs";
 import { MemoryStore } from "../src/memory";
+import { IntegrationStore } from "../src/stores/integrations";
+import { IntegrationsRefresher } from "../src/integrations/refresher";
+import { TicketStore } from "../src/stores/tickets";
 import { stubQuotaRefresher } from "./stub-quota-refresher";
 
 const BRIDGE_ENV_KEYS = ["PUPITRE_CLAUDE_BIN", "PUPITRE_CODEX_BIN", "PUPITRE_CODEX_MODE"];
@@ -158,6 +161,12 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
   const routines = new RoutineScheduler(
     routineStore, workflows, presets, projects, conversations, runner, notifications,
   );
+  const integrations = new IntegrationStore(db);
+  const tickets = new TicketStore(db);
+  const integrationsRefresher = new IntegrationsRefresher(
+    { integrations, tickets, conversations, projects },
+    { clickUpClient: () => null, gitLabClient: () => null },
+  );
   server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas,
     quotaRefresher: stubQuotaRefresher(quotas),
@@ -165,6 +174,7 @@ cat "${join(import.meta.dir, "fixtures/claude-basic.jsonl")}"
     reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer, workflows,
     notifications, routineStore, routines, search: new SearchIndex(db), costs: new CostStore(db),
     memory: new MemoryStore(join(dir, "memory")),
+    integrations, tickets, integrationsRefresher,
   });
   parentId = conversations.create({
     projectId: project.id, provider: "claude", model: "opus", firstMessage: "orchestre",

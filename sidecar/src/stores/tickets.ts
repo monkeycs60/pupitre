@@ -218,8 +218,13 @@ export class TicketStore {
     ).all(ticketId) as TicketNote[];
   }
 
-  deleteNote(id: string): boolean {
-    return this.db.query("DELETE FROM ticket_notes WHERE id = ?").run(id).changes > 0;
+  deleteNote(id: string): { id: string; ticket_id: string } | null {
+    const existing = this.db.query(
+      "SELECT id, ticket_id FROM ticket_notes WHERE id = ?",
+    ).get(id) as { id: string; ticket_id: string } | null;
+    if (!existing) return null;
+    this.db.query("DELETE FROM ticket_notes WHERE id = ?").run(id);
+    return existing;
   }
 
   linkConversation(conversationId: string, ticketId: string | null): void {
