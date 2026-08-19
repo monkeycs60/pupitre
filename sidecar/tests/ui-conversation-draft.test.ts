@@ -26,6 +26,7 @@ test("le brouillon de conversation transmet explicitement le choix orchestrateur
     subagentPresetId: null,
     subagentEffort: null,
     branch: null,
+    ticketId: null,
     message: "travaille seul",
     images: [],
     attachments: [],
@@ -52,4 +53,25 @@ test("le brouillon transmet la branche choisie, et rien quand il n'y en a pas", 
   // Un champ vide ou absent vaut « travaille dans le dépôt principal ».
   expect(buildCreateConversationInput({ ...base, branch: "  " }).branch).toBeNull();
   expect(buildCreateConversationInput(base).branch).toBeNull();
+});
+
+test("le brouillon transmet ticketId et nettoie la branche", () => {
+  const input = buildCreateConversationInput({
+    projectId: "project-1",
+    provider: "claude",
+    model: "sonnet",
+    effort: "high",
+    speed: "standard",
+    orchestrator: true,
+    subagentPresetId: null,
+    subagentEffort: null,
+    branch: " feature/TECH-1 ",
+    ticketId: "ticket-1",
+    message: "ouvre le ticket",
+    images: [],
+    attachments: [],
+  });
+
+  expect(input.branch).toBe("feature/TECH-1");
+  expect(input.ticketId).toBe("ticket-1");
 });

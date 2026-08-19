@@ -136,3 +136,63 @@ test("écraser un preset personnalisé laisse intacte sa configuration de relect
   expect(bodies[0]).not.toHaveProperty('review_model')
   expect(bodies[0]).not.toHaveProperty('review_effort')
 })
+
+test("appliquer le preset par défaut du projet ne perd pas la branche ni le ticket", async () => {
+  const changes: ConversationConfig[] = []
+  globalThis.fetch = mock((input: string | URL) => {
+    const url = String(input)
+    if (url.endsWith('/git')) {
+      return Promise.resolve(new Response(JSON.stringify({
+        branches: [],
+        worktrees: [],
+        commits: [],
+        currentBranch: 'develop',
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+    return Promise.resolve(new Response(JSON.stringify([{
+      id: 'preset-1',
+      name: 'Éco',
+      provider: 'claude',
+      model: 'claude-haiku-4-5-20251001',
+      effort: 'low',
+      speed: 'standard',
+      permission_mode: null,
+      orchestrator: true,
+      subagent_preset_id: null,
+      subagent_effort: null,
+      review_provider: 'codex',
+      review_model: 'gpt-5.6-sol',
+      review_effort: 'high',
+      built_in: true,
+      created_at: '2026-08-09T00:00:00.000Z',
+      updated_at: '2026-08-09T00:00:00.000Z',
+    }]), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }))
+  }) as unknown as typeof fetch
+
+  render(createElement(ConfigPanel, {
+    project: { ...project, default_preset_id: 'preset-1' },
+    quotas,
+    config: {
+      ...initialConfig,
+      branch: 'feature/TECH-1',
+      ticketKey: 'TECH-1',
+    },
+    onConfigChange: (next: ConversationConfig) => changes.push(next),
+    onProjectUpdated: () => undefined,
+    onError: () => undefined,
+    applyProjectDefault: true,
+  }))
+
+  await waitFor(() => expect(changes.length).toBeGreaterThan(0))
+  expect(changes.at(-1)).toEqual(expect.objectContaining({
+    presetId: 'preset-1',
+    branch: 'feature/TECH-1',
+    ticketKey: 'TECH-1',
+  }))
+})

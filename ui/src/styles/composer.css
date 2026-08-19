@@ -98,6 +98,11 @@
   border-color: var(--accent-border);
 }
 
+.config-ticket {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
 /* --- Formulaire inline (renommer / enregistrer sous) ----------------------- */
 
 .config-inline-form {

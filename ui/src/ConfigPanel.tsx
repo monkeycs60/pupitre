@@ -32,6 +32,7 @@ export interface ConversationConfig {
   subagentEffort: string | null
   /** Branche sur laquelle isoler la conversation ; vide = dépôt principal. */
   branch?: string | null
+  ticketKey?: string | null
 }
 
 interface ConfigPanelProps {
@@ -65,6 +66,14 @@ function configOf(preset: Preset): ConversationConfig {
     orchestrator: preset.orchestrator,
     subagentPresetId: preset.subagent_preset_id ?? null,
     subagentEffort: preset.subagent_effort ?? null,
+  }
+}
+
+function keepBranch(next: ConversationConfig, current: ConversationConfig): ConversationConfig {
+  return {
+    ...next,
+    branch: current.branch ?? null,
+    ticketKey: current.ticketKey ?? null,
   }
 }
 
@@ -128,7 +137,7 @@ export function ConfigPanel({
         const projectDefault = loaded.find((preset) => preset.id === project.default_preset_id)
         if (applyProjectDefault && projectDefault) {
           setSelectedPresetId(projectDefault.id)
-          onConfigChange(configOf(projectDefault))
+          onConfigChange(keepBranch(configOf(projectDefault), configRef.current))
           return
         }
         const matchingPreset = loaded.find((preset) => sameConfig(configRef.current, configOf(preset)))
@@ -155,7 +164,7 @@ export function ConfigPanel({
 
   function selectPreset(preset: Preset) {
     setSelectedPresetId(preset.id)
-    onConfigChange(configOf(preset))
+    onConfigChange(keepBranch(configOf(preset), configRef.current))
   }
 
   function replace(updated: Preset) {
@@ -240,7 +249,7 @@ export function ConfigPanel({
     void run(async () => {
       const restored = await restorePreset(selectedPreset.id)
       replace(restored)
-      onConfigChange(configOf(restored))
+      onConfigChange(keepBranch(configOf(restored), configRef.current))
     })
   }
 
@@ -283,7 +292,7 @@ export function ConfigPanel({
         onPresetSelect={selectPreset}
         onSaveAs={() => openAction('save-as')}
         onOverwrite={applyToPreset}
-        onRevert={() => selectedPreset && onConfigChange(configOf(selectedPreset))}
+        onRevert={() => selectedPreset && onConfigChange(keepBranch(configOf(selectedPreset), configRef.current))}
         onRename={() => openAction('rename')}
         onDelete={remove}
         onRestore={restore}
@@ -304,6 +313,7 @@ export function ConfigPanel({
         <datalist id="config-branch-options">
           {branches.map((name) => <option key={name} value={name} />)}
         </datalist>
+        {config.ticketKey ? <small className="config-ticket">Ticket {config.ticketKey}</small> : null}
       </label>
 
       {action !== null ? (

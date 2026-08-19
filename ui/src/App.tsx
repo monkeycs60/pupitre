@@ -95,6 +95,11 @@ function App() {
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
+  const [conversationSeed, setConversationSeed] = useState<{
+    ticketId: string
+    ticketKey: string
+    branch: string | null
+  } | null>(null)
   const [newConversationDraft, setNewConversationDraft] = useState('')
   const [newConversationAttachments, setNewConversationAttachments] = useState<Attachment[]>([])
   const [conversationListVersion, setConversationListVersion] = useState(0)
@@ -343,6 +348,7 @@ function App() {
     if (!confirmLeaveMemory()) return
     if (project.id !== selectedProject?.id) {
       setSelectedConversation(null)
+      setConversationSeed(null)
       setNewConversationDraft('')
       setNewConversationAttachments([])
       setIsCreatingConversation(false)
@@ -357,6 +363,7 @@ function App() {
   function handleConversationSelect(conversation: Conversation) {
     if (!confirmLeaveMemory()) return
     setSelectedConversation(conversation)
+    setConversationSeed(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
     setIsCreatingConversation(false)
@@ -368,6 +375,19 @@ function App() {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setSelectedConversation(null)
+    setConversationSeed(null)
+    setNewConversationDraft('')
+    setNewConversationAttachments([])
+    setIsCreatingConversation(true)
+    setShowSwitchModel(false)
+    setWorkspaceView('conversations')
+  }
+
+  function handleStartFromTicket(seed: { ticketId: string; branch: string | null; ticketKey: string }) {
+    if (!confirmLeaveMemory()) return
+    if (selectedProject === null) return
+    setConversationSeed(seed)
+    setSelectedConversation(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
@@ -377,6 +397,7 @@ function App() {
 
   function handleConversationClosed() {
     setSelectedConversation(null)
+    setConversationSeed(null)
     setIsCreatingConversation(false)
     setConversationListVersion((current) => current + 1)
   }
@@ -395,6 +416,7 @@ function App() {
 
   function handleConversationCreated(conversation: Conversation) {
     setSelectedConversation(conversation)
+    setConversationSeed(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
     setIsCreatingConversation(false)
@@ -518,6 +540,7 @@ function App() {
     if (!confirmLeaveMemory()) return
     if (!selectedProject) return
     setSelectedConversation(null)
+    setConversationSeed(null)
     setNewConversationDraft(`$${skill.invocation} `)
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
@@ -565,6 +588,7 @@ function App() {
     if (!project) return
     setSelectedProject(project)
     setSelectedConversation(null)
+    setConversationSeed(null)
     setNewConversationDraft(`Utilise le document joint « ${document.title} » comme contexte pour cette nouvelle conversation.`)
     setNewConversationAttachments([attachment])
     setIsCreatingConversation(true)
@@ -718,7 +742,7 @@ function App() {
           <DashboardView
             project={selectedProject}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
-            onStartConversation={() => {}}
+            onStartConversation={handleStartFromTicket}
             onOpenSettings={() => setProjectSettingsOpen(true)}
           />
         ) : workspaceView === 'git' ? (
@@ -825,7 +849,7 @@ function App() {
             </header>
             <Chat
               key={selectedConversation === null
-                ? `chat-new-${selectedProject.id}-${newConversationDraft}`
+                ? `chat-new-${selectedProject.id}-${conversationSeed?.ticketId ?? ''}-${newConversationDraft}`
                 : `chat-${selectedConversation.id}`}
               events={selectedConversation === null ? [] : events}
               connection={connection}
@@ -839,6 +863,10 @@ function App() {
               onRunningSubtasksChange={setRunningSubtasks}
               initialMessage={newConversationDraft}
               initialAttachments={newConversationAttachments}
+              initialConfig={conversationSeed
+                ? { branch: conversationSeed.branch, ticketKey: conversationSeed.ticketKey }
+                : undefined}
+              ticketId={conversationSeed?.ticketId ?? null}
               turnXpMultiplier={complexityMultiplier(
                 (selectedConversation
                   ? gamification.snapshot?.conversations[selectedConversation.id]?.complexity

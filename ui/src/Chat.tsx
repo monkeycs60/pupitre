@@ -12,6 +12,7 @@ import { groupEvents } from './groupEvents'
 import { retryCountdownSeconds } from './backoff'
 import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
+import type { ConversationConfig } from './ConfigPanel'
 import { modelLabel } from './modelOptions'
 import { startReview } from './api'
 import type {
@@ -55,6 +56,8 @@ interface ChatProps {
   onRunningSubtasksChange?: (count: number) => void
   initialMessage?: string
   initialAttachments?: Attachment[]
+  initialConfig?: Partial<ConversationConfig>
+  ticketId?: string | null
   /** Multiplicateur XP du tour (complexité × focus), voir turnXp.ts. */
   turnXpMultiplier?: number
   reviewStatus: ReviewStatusSnapshot | null
@@ -116,6 +119,8 @@ export function Chat({
   onRunningSubtasksChange,
   initialMessage = '',
   initialAttachments = [],
+  initialConfig,
+  ticketId = null,
   turnXpMultiplier,
   reviewStatus,
   onOpenCode,
@@ -349,7 +354,9 @@ export function Chat({
               ? `${conversation.provider} · ${modelLabel(conversation.model)} · ${conversation.effort ?? 'default'}${conversation.speed === 'fast' ? ' · rapide' : ''}`
               : null}
             provider={conversation?.provider ?? null}
+            initialConfig={initialConfig}
             initialAttachments={initialAttachments}
+            ticketId={ticketId}
           />
         </div>
         <SkillsSuggestionsPanel
