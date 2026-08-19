@@ -1,12 +1,14 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
+import { readFileSync } from 'node:fs'
 import type { DashboardPayload, Project } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
-const { cleanup, fireEvent, render, screen } = await import('@testing-library/react')
+const { act, cleanup, fireEvent, render, screen } = await import('@testing-library/react')
 const { DashboardView } = await import('./DashboardView')
+const dashboardCss = readFileSync(new URL('./styles/dashboard.css', import.meta.url), 'utf8')
 
 const defaultFetch = globalThis.fetch
 const DefaultSocket = globalThis.WebSocket
@@ -81,7 +83,9 @@ const withGitlab: DashboardPayload = {
 }
 
 function mount(payload: DashboardPayload, onStart = mock(() => {})) {
-  globalThis.fetch = mock(async () => Response.json(payload)) as typeof fetch
+  globalThis.fetch = mock(async (input) => (
+    String(input).includes('/notes') ? Response.json([]) : Response.json(payload)
+  )) as typeof fetch
   globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
   render(createElement(DashboardView, {
     project,
@@ -121,4 +125,47 @@ test('un ticket sans conversation propose Démarrer', async () => {
   mount({ ...withGitlab, tickets: [{ ...ticket, conversations: [] }] })
 
   expect(await screen.findByRole('button', { name: 'Démarrer' })).toBeTruthy()
+})
+
+test('sépare les pastilles des cellules statut et branche et garde les colonnes scrollables', async () => {
+  mount(withGitlab)
+
+  await screen.findByText('TECH-24657')
+
+  const statusCell = document.querySelector('.dashboard-status')
+  const branchCell = document.querySelector('.dashboard-branch')
+  expect(statusCell?.querySelector('.dashboard-status-dot')).not.toBeNull()
+  expect(branchCell?.classList.contains('dashboard-status-dot')).toBe(false)
+
+  expect(dashboardCss).toMatch(/\.dashboard-status,\s*\.dashboard-branch\s*\{[\s\S]*?display:\s*inline-flex/)
+  expect(dashboardCss).toMatch(/\.dashboard-status-dot\s*\{[\s\S]*?width:\s*8px;[\s\S]*?height:\s*8px;/)
+  expect(dashboardCss).toMatch(/\.dashboard-scroll\s*\{[\s\S]*?overflow-x:\s*auto;[\s\S]*?overflow-y:\s*auto/)
+  expect(dashboardCss).toMatch(/\.dashboard-table\s*\{[\s\S]*?overflow:\s*visible/)
+})
+
+test('expose l’état et la cible des disclosures Conversations et Notes', async () => {
+  mount(withGitlab)
+
+  await screen.findByText('TECH-24657')
+
+  const conversationsButton = screen.getByRole('button', { name: 'Conversations (1)' })
+  expect(conversationsButton.getAttribute('aria-expanded')).toBe('false')
+  expect(conversationsButton.getAttribute('aria-controls')).toBe('ticket-t1-conversations')
+
+  fireEvent.click(conversationsButton)
+
+  expect(conversationsButton.getAttribute('aria-expanded')).toBe('true')
+  expect(document.getElementById('ticket-t1-conversations')).not.toBeNull()
+
+  const notesButton = screen.getByRole('button', { name: 'Notes pour TECH-24657 (0)' })
+  expect(notesButton.getAttribute('aria-expanded')).toBe('false')
+  expect(notesButton.getAttribute('aria-controls')).toBe('ticket-t1-notes')
+
+  await act(async () => {
+    fireEvent.click(notesButton)
+    await Promise.resolve()
+  })
+
+  expect(notesButton.getAttribute('aria-expanded')).toBe('true')
+  expect(document.getElementById('ticket-t1-notes')).not.toBeNull()
 })

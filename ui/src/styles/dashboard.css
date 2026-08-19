@@ -11,8 +11,10 @@
 
 .dashboard-scroll {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   padding: var(--space-7) var(--space-8) var(--space-8);
+  overflow-x: auto;
   overflow-y: auto;
 }
 
@@ -114,7 +116,7 @@
   background: color-mix(in srgb, var(--bg-panel) 78%, transparent);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-lg);
-  overflow: hidden;
+  overflow: visible;
   backdrop-filter: blur(14px);
 }
 
@@ -170,8 +172,15 @@
 }
 
 .dashboard-status,
-.dashboard-branch,
-.dashboard-status i {
+.dashboard-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.dashboard-status-dot {
+  flex: none;
   width: 8px;
   height: 8px;
   border-radius: var(--r-full);

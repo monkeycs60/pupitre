@@ -218,6 +218,7 @@ export function DashboardView({
 
                       <span className="dashboard-status">
                         <i
+                          className="dashboard-status-dot"
                           aria-hidden="true"
                           style={{ background: textValue(ticket.payload.statusColor) ?? 'var(--text-faint)' }}
                         />
@@ -260,6 +261,9 @@ export function DashboardView({
                             <button
                               type="button"
                               className="text-button"
+                              aria-label={`Conversations (${ticket.conversations.length})`}
+                              aria-expanded={Boolean(openConversations[ticket.id])}
+                              aria-controls={`ticket-${ticket.id}-conversations`}
                               onClick={() => setOpenConversations((current) => ({
                                 ...current,
                                 [ticket.id]: !current[ticket.id],
@@ -268,7 +272,7 @@ export function DashboardView({
                               {ticket.conversations.length}
                             </button>
                             {openConversations[ticket.id] ? (
-                              <ul className="dashboard-conversation-list">
+                              <ul id={`ticket-${ticket.id}-conversations`} className="dashboard-conversation-list">
                                 {ticket.conversations.map((conversation) => (
                                   <li key={conversation.id}>
                                     <button
@@ -303,6 +307,9 @@ export function DashboardView({
                         <button
                           type="button"
                           className="text-button"
+                          aria-label={`Notes pour ${ticket.key} (${notesCount})`}
+                          aria-expanded={openNotesTicketId === ticket.id}
+                          aria-controls={`ticket-${ticket.id}-notes`}
                           onClick={() => void handleToggleNotes(ticket)}
                         >
                           Notes ({notesCount})
@@ -311,7 +318,7 @@ export function DashboardView({
                     </div>
 
                     {openNotesTicketId === ticket.id ? (
-                      <div className="dashboard-notes">
+                      <div id={`ticket-${ticket.id}-notes`} className="dashboard-notes">
                         <div className="dashboard-notes-list">
                           {notes.length === 0 ? (
                             <p className="dashboard-notes-empty">Aucune note pour ce ticket.</p>
