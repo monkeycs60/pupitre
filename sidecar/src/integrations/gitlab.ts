@@ -3,6 +3,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const REQUEST_TIMEOUT_MS = 15_000;
+const HOSTS_INDENT = 0;
+const HOST_INDENT = 2;
+const HOST_PROPERTY_INDENT = 4;
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -83,6 +86,10 @@ function hostNameOf(input: string): string | null {
   }
 }
 
+function indentationOf(line: string): number {
+  return line.length - line.trimStart().length;
+}
+
 export function readGlabToken(host: string, home = homedir()): string | null {
   const hostname = hostNameOf(host);
   if (!hostname) return null;
@@ -97,27 +104,37 @@ export function readGlabToken(host: string, home = homedir()): string | null {
   let insideHosts = false;
   let currentHost: string | null = null;
   for (const line of content.split(/\r?\n/u)) {
-    if (line.trim() === "hosts:") {
+    if (line.trim() === "") continue;
+
+    const indentation = indentationOf(line);
+    const trimmed = line.trim();
+
+    if (indentation === HOSTS_INDENT && trimmed === "hosts:") {
       insideHosts = true;
       currentHost = null;
       continue;
     }
     if (!insideHosts) continue;
 
-    const hostMatch = line.match(/^ {2,}([^:\s]+):\s*$/u);
+    if (indentation === HOSTS_INDENT) {
+      insideHosts = false;
+      currentHost = null;
+      continue;
+    }
+
+    const hostMatch = indentation === HOST_INDENT
+      ? line.match(/^ {2}([^:\s]+):\s*$/u)
+      : null;
     if (hostMatch) {
       currentHost = hostMatch[1] ?? null;
       continue;
     }
 
-    const tokenMatch = line.match(/^\s+token:\s*(\S+)\s*$/u);
+    const tokenMatch = indentation === HOST_PROPERTY_INDENT
+      ? line.match(/^ {4}token:\s*(\S+)\s*$/u)
+      : null;
     if (tokenMatch && currentHost === hostname) {
       return tokenMatch[1] ?? null;
-    }
-
-    if (line !== "" && !line.startsWith(" ")) {
-      insideHosts = false;
-      currentHost = null;
     }
   }
 

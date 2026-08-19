@@ -30,6 +30,22 @@ test("lit le token glab pour un hôte donné", () => {
   expect(readGlabToken("https://absent.example", home)).toBeNull();
 });
 
+test("ignore un token caché dans un sous-bloc YAML imbriqué", () => {
+  const home = mkdtempSync(join(tmpdir(), "pupitre-glab-nested-"));
+  mkdirSync(join(home, ".config/glab-cli"), { recursive: true });
+  writeFileSync(join(home, ".config/glab-cli/config.yml"), [
+    "hosts:",
+    "  gitlab.com:",
+    "    aliases:",
+    "      git.kaizen-hosting.com:",
+    "        token: glpat-leak",
+    "    token: glpat-other",
+    "",
+  ].join("\n"));
+
+  expect(readGlabToken("https://git.kaizen-hosting.com", home)).toBeNull();
+});
+
 test("parse une MR de la liste", () => {
   const mr = parseMergeRequest({
     iid: 1862,
@@ -93,12 +109,16 @@ test("parse un déploiement d'environnement", () => {
 test("le client envoie PRIVATE-TOKEN, résout un projet par chemin et lit MR, pipelines et environnements", async () => {
   const calls: string[] = [];
   const client = new GitLabClient({ host: "https://git.example", token: "glpat-x" }, async (input, init) => {
-    const url = String(input);
-    calls.push(url);
+    const url = new URL(String(input));
+    calls.push(url.toString());
     expect((init?.headers as Record<string, string>)["PRIVATE-TOKEN"]).toBe("glpat-x");
-    if (url.endsWith("/user")) return Response.json({ id: 123, username: "clement.serizay" });
-    if (url.endsWith("/projects/Affilae%2Fsymfony")) return Response.json({ id: 187, path_with_namespace: "Affilae/symfony" });
-    if (url.includes("/merge_requests?")) {
+    if (url.pathname === "/api/v4/user" && url.search === "") return Response.json({ id: 123, username: "clement.serizay" });
+    if (url.pathname === "/api/v4/projects/Affilae%2Fsymfony" && url.search === "") {
+      return Response.json({ id: 187, path_with_namespace: "Affilae/symfony" });
+    }
+    if (url.pathname === "/api/v4/projects/187/merge_requests" && url.searchParams.get("state") === "opened"
+      && url.searchParams.get("scope") === "all" && url.searchParams.get("per_page") === "50"
+      && [...url.searchParams.keys()].sort().join(",") === "per_page,scope,state") {
       return Response.json([{
         iid: 1862,
         title: "TECH-24657 / Replace content types",
@@ -116,16 +136,22 @@ test("le client envoie PRIVATE-TOKEN, résout un projet par chemin et lit MR, pi
         assignees: [],
       }]);
     }
-    if (url.includes("/merge_requests/1862/pipelines")) {
+    if (url.pathname === "/api/v4/projects/187/merge_requests/1862/pipelines"
+      && url.searchParams.get("per_page") === "1"
+      && [...url.searchParams.keys()].join(",") === "per_page") {
       return Response.json([{ id: 119728, status: "manual", web_url: "https://git/p/119728", updated_at: "2026-08-19T10:00:00Z", ref: "feature/TECH-24657", sha: "abc" }]);
     }
-    if (url.includes("/environments?")) {
+    if (url.pathname === "/api/v4/projects/187/environments"
+      && url.searchParams.get("search") === "preprod"
+      && url.searchParams.get("states") === "available"
+      && url.searchParams.get("per_page") === "50"
+      && [...url.searchParams.keys()].sort().join(",") === "per_page,search,states") {
       return Response.json([
         { id: 283, name: "preprod", state: "available" },
         { id: 999, name: "preprod-old", state: "available" },
       ]);
     }
-    if (url.endsWith("/environments/283")) {
+    if (url.pathname === "/api/v4/projects/187/environments/283" && url.search === "") {
       return Response.json({
         id: 283,
         name: "preprod",
@@ -139,7 +165,7 @@ test("le client envoie PRIVATE-TOKEN, résout un projet par chemin et lit MR, pi
         },
       });
     }
-    if (url.endsWith("/merge_requests/1815")) {
+    if (url.pathname === "/api/v4/projects/187/merge_requests/1815" && url.search === "") {
       return Response.json({
         iid: 1815,
         title: "t",
@@ -185,6 +211,9 @@ test("le client envoie PRIVATE-TOKEN, résout un projet par chemin et lit MR, pi
     jobUrl: "u",
   });
   expect((await client.mergeRequest(187, 1815)).sourceBranch).toBe("feature/TECH-23903");
+  expect(calls).toContain("https://git.example/api/v4/projects/187/merge_requests?state=opened&scope=all&per_page=50");
+  expect(calls).toContain("https://git.example/api/v4/projects/187/merge_requests/1862/pipelines?per_page=1");
+  expect(calls).toContain("https://git.example/api/v4/projects/187/merge_requests/1815");
   expect(calls).toContain("https://git.example/api/v4/projects/187/environments?search=preprod&states=available&per_page=50");
 });
 
