@@ -89,8 +89,10 @@ test("read_sibling_conversation relaie le brief en texte", async () => {
     port: 0,
     hostname: "127.0.0.1",
     fetch(request) {
-      const { pathname } = new URL(request.url);
+      const url = new URL(request.url);
+      const { pathname } = url;
       expect(pathname).toBe("/api/conversations/conversation-1/brief");
+      expect(url.searchParams.get("source")).toBe("parent-1");
       return Response.json({
         id: "conversation-1",
         title: "Reprise TECH-7",

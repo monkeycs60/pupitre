@@ -116,7 +116,10 @@ export function createPupitreServer(): McpServer {
     },
   }, async (args: { conversation_id: string }) => {
     try {
-      const response = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(args.conversation_id)}/brief`);
+      const source = conversationId();
+      const url = new URL(`${baseUrl()}/api/conversations/${encodeURIComponent(args.conversation_id)}/brief`);
+      url.searchParams.set("source", source);
+      const response = await fetch(url);
       if (!response.ok) throw new Error(await errorMessage(response));
       const brief = await response.json() as ConversationBrief;
       return text(renderConversationBrief(brief));

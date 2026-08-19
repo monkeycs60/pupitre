@@ -397,6 +397,45 @@ test("GET /api/conversations/:id/brief rend titre, résumé, dernier débrief et
   expect(brief.exchanges.at(-1)).toEqual({ role: "assistant", text: "Salut, voici le plan." });
 });
 
+test("GET /api/conversations/:id/brief refuse une cible hors du ticket courant", async () => {
+  const sourceProject = await createProject("/tmp/brief-source");
+  const targetProject = await createProject("/tmp/brief-target");
+  const sourceTicket = current!.deps.tickets.upsert(sourceProject.id, {
+    key: "TECH-8",
+    source: "git",
+    title: "Source",
+    status: "",
+    externalUrl: null,
+  });
+  const targetTicket = current!.deps.tickets.upsert(targetProject.id, {
+    key: "TECH-9",
+    source: "git",
+    title: "Cible",
+    status: "",
+    externalUrl: null,
+  });
+  const source = current!.deps.conversations.create({
+    projectId: sourceProject.id,
+    provider: "claude",
+    model: "m",
+    ticketId: sourceTicket.id,
+    firstMessage: "Source",
+  });
+  const target = current!.deps.conversations.create({
+    projectId: targetProject.id,
+    provider: "claude",
+    model: "m",
+    ticketId: targetTicket.id,
+    firstMessage: "Cible",
+  });
+
+  const response = await fetch(
+    `${current!.baseUrl}/api/conversations/${target.id}/brief?source=${source.id}`,
+  );
+  expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({ error: "conversation sœur inaccessible" });
+});
+
 test("POST /api/conversations avec ticketId relie la conversation, prend la branche du ticket et injecte le brief", async () => {
   const repoPath = mkdtempSync(join(tmpdir(), "pupitre-dashboard-ticket-"));
   runGit(repoPath, "init", "-q", "-b", "main");

@@ -2314,6 +2314,19 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "GET" && conversationBriefId !== null) {
           const conversation = deps.conversations.get(conversationBriefId);
           if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const sourceId = url.searchParams.get("source");
+          if (sourceId !== null) {
+            const source = deps.conversations.get(sourceId);
+            if (!source) throw new HttpError(404, "conversation source inconnue");
+            if (
+              source.id === conversation.id
+              || source.project_id !== conversation.project_id
+              || source.ticket_id === null
+              || source.ticket_id !== conversation.ticket_id
+            ) {
+              throw new HttpError(403, "conversation sœur inaccessible");
+            }
+          }
           const exchanges = deps.conversations.listEvents(conversation.id)
             .flatMap((event) => {
               if (event.type === "user-message") {
