@@ -1,0 +1,37 @@
+{
+  "tasks": [
+    {
+      "id": "86caw5afd",
+      "custom_id": "TECH-24657",
+      "name": "[Feature] - Ajout de la sélection des leviers",
+      "status": { "status": "in progress", "color": "#4466ff", "type": "custom", "orderindex": 11 },
+      "url": "https://app.clickup.com/t/86caw5afd",
+      "date_updated": "1786716751258",
+      "list": { "id": "900500195250", "name": "Features" },
+      "priority": { "priority": "normal", "color": "#6fddff" },
+      "assignees": [{ "id": 82632460, "username": "Clément Serizay" }],
+      "custom_fields": [
+        {
+          "id": "1f116001-08d8-46a1-9858-c49dc7487cc3",
+          "name": "🖥 ️ Service",
+          "type": "labels",
+          "type_config": { "options": [{ "id": "2dbab653-ee34-4bf9-8101-9b18ee6b0ccf", "label": "API" }, { "id": "7c027756-5a09-4b1c-8fe1-dfbd7c8f797c", "label": "BackOffice" }] },
+          "value": ["7c027756-5a09-4b1c-8fe1-dfbd7c8f797c"]
+        }
+      ]
+    },
+    {
+      "id": "86cb0000x",
+      "custom_id": null,
+      "name": "Tâche sans custom id",
+      "status": { "status": "Open", "color": "#d3d3d3", "type": "open", "orderindex": 0 },
+      "url": "https://app.clickup.com/t/86cb0000x",
+      "date_updated": "1786716751000",
+      "list": { "id": "900100168537", "name": "Bugs" },
+      "priority": null,
+      "assignees": [],
+      "custom_fields": []
+    }
+  ],
+  "last_page": true
+}
