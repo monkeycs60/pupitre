@@ -35,6 +35,7 @@ import { latestUserText, withSkillInvocation } from './skillSuggestionDraft'
 import { TaskToggleContext } from './taskToggle'
 import type { TaskAction } from './taskToggle'
 import { toggleAction, withTaskActions } from './taskDraft'
+import { newConversationDraftStorageKey } from './conversationDraft'
 
 declare global {
   interface Window {
@@ -125,7 +126,9 @@ export function Chat({
   reviewStatus,
   onOpenCode,
 }: ChatProps) {
-  const draftStorageKey = `pupitre:draft:${conversation?.id ?? `new:${project.id}`}`
+  const draftStorageKey = conversation === null
+    ? newConversationDraftStorageKey(project.id, ticketId)
+    : `pupitre:draft:${conversation.id}`
   const blocks = useMemo(() => groupEvents(events), [events])
   const previousUserText = useMemo(() => latestUserText(events), [events])
   const isRunning = lastStatusIsRunning(events)
