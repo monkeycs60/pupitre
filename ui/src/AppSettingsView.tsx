@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getSettings, updateSettings } from './api'
+import { getSettings, updateIntegrationTokens, updateSettings } from './api'
 import type { FilesystemScope } from './types'
 import { DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
@@ -25,6 +25,16 @@ export function AppSettingsView() {
   const [followUpDraft, setFollowUpDraft] = useState(
     DEFAULT_ACTION_FORMAT.followUpHeadings.join(', '),
   )
+  const [tokenSaving, setTokenSaving] = useState(false)
+  const [tokenSaved, setTokenSaved] = useState(false)
+  const [integrationTokens, setIntegrationTokens] = useState<Record<'clickup' | 'gitlab', boolean>>({
+    clickup: false,
+    gitlab: false,
+  })
+  const [tokenDrafts, setTokenDrafts] = useState<Record<'clickup' | 'gitlab', string>>({
+    clickup: '',
+    gitlab: '',
+  })
 
   useEffect(() => {
     let ignore = false
@@ -36,6 +46,10 @@ export function AppSettingsView() {
         setFormat(stored)
         setTodoDraft(stored.todoHeadings.join(', '))
         setFollowUpDraft(stored.followUpHeadings.join(', '))
+        setIntegrationTokens({
+          clickup: settings.integrationTokens?.clickup === true,
+          gitlab: settings.integrationTokens?.gitlab === true,
+        })
       })
       .catch((loadError: unknown) => {
         if (!ignore) setError(errorMessage(loadError))
@@ -89,6 +103,44 @@ export function AppSettingsView() {
       setError(errorMessage(saveError))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleTokenSave(name: 'clickup' | 'gitlab') {
+    setTokenSaving(true)
+    setTokenSaved(false)
+    setError(null)
+    try {
+      const settings = await updateIntegrationTokens({ [name]: tokenDrafts[name].trim() || undefined })
+      setIntegrationTokens({
+        clickup: settings.integrationTokens?.clickup === true,
+        gitlab: settings.integrationTokens?.gitlab === true,
+      })
+      setTokenDrafts((current) => ({ ...current, [name]: '' }))
+      setTokenSaved(true)
+    } catch (saveError: unknown) {
+      setError(errorMessage(saveError))
+    } finally {
+      setTokenSaving(false)
+    }
+  }
+
+  async function handleTokenClear(name: 'clickup' | 'gitlab') {
+    setTokenSaving(true)
+    setTokenSaved(false)
+    setError(null)
+    try {
+      const settings = await updateIntegrationTokens({ [name]: null })
+      setIntegrationTokens({
+        clickup: settings.integrationTokens?.clickup === true,
+        gitlab: settings.integrationTokens?.gitlab === true,
+      })
+      setTokenDrafts((current) => ({ ...current, [name]: '' }))
+      setTokenSaved(true)
+    } catch (saveError: unknown) {
+      setError(errorMessage(saveError))
+    } finally {
+      setTokenSaving(false)
     }
   }
 
@@ -172,6 +224,101 @@ export function AppSettingsView() {
           Séparés par des virgules. Le premier intitulé est celui demandé à l’agent, les
           suivants restent reconnus à l’affichage. Une liste vide rétablit les défauts.
         </p>
+      </div>
+
+      <div className="settings-card">
+        <div>
+          <h2>Tokens d’intégration</h2>
+          <p>
+            Les valeurs restent écrites côté sidecar. L’interface n’affiche ensuite
+            qu’un statut « défini » ou « non défini ».
+          </p>
+        </div>
+
+        <div className="settings-token-list">
+          <div className="settings-token-row">
+            <div className="settings-token-heading">
+              <strong>ClickUp</strong>
+              <span aria-label="Statut token ClickUp">
+                {integrationTokens.clickup ? 'défini' : 'non défini'}
+              </span>
+            </div>
+            <label className="settings-select-label" htmlFor="app-clickup-token">
+              Token ClickUp
+              <input
+                id="app-clickup-token"
+                type="password"
+                value={tokenDrafts.clickup}
+                disabled={loading || tokenSaving}
+                onChange={(event) => setTokenDrafts((current) => ({
+                  ...current,
+                  clickup: event.target.value,
+                }))}
+              />
+            </label>
+            <div className="settings-token-actions">
+              <button
+                type="button"
+                className="primary-button"
+                disabled={loading || tokenSaving}
+                onClick={() => void handleTokenSave('clickup')}
+              >
+                Enregistrer les tokens
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={loading || tokenSaving}
+                onClick={() => void handleTokenClear('clickup')}
+              >
+                Effacer le token ClickUp
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-token-row">
+            <div className="settings-token-heading">
+              <strong>GitLab</strong>
+              <span aria-label="Statut token GitLab">
+                {integrationTokens.gitlab ? 'défini' : 'non défini'}
+              </span>
+            </div>
+            <label className="settings-select-label" htmlFor="app-gitlab-token">
+              Token GitLab (optionnel si glab est connecté)
+              <input
+                id="app-gitlab-token"
+                type="password"
+                value={tokenDrafts.gitlab}
+                disabled={loading || tokenSaving}
+                onChange={(event) => setTokenDrafts((current) => ({
+                  ...current,
+                  gitlab: event.target.value,
+                }))}
+              />
+            </label>
+            <div className="settings-token-actions">
+              <button
+                type="button"
+                className="primary-button"
+                disabled={loading || tokenSaving}
+                onClick={() => void handleTokenSave('gitlab')}
+              >
+                Enregistrer le token GitLab
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={loading || tokenSaving}
+                onClick={() => void handleTokenClear('gitlab')}
+              >
+                Effacer le token GitLab
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {tokenSaved ? <p className="settings-success" role="status">Tokens enregistrés.</p> : null}
+        {error ? <p className="modal-error" role="alert">{error}</p> : null}
       </div>
     </section>
   )
