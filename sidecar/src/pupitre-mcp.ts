@@ -31,6 +31,24 @@ function text(value: string, isError = false) {
   return { content: [{ type: "text" as const, text: value }], ...(isError ? { isError } : {}) };
 }
 
+interface ConversationBrief {
+  title: string;
+  summary: string;
+  debrief: string | null;
+  exchanges: Array<{ role: string; text: string }>;
+}
+
+function renderConversationBrief(brief: ConversationBrief): string {
+  const lines = [`# ${brief.title}`, ""];
+  if (brief.summary.trim()) lines.push(brief.summary, "");
+  if (brief.debrief) lines.push("## Dernier débrief", brief.debrief, "");
+  lines.push("## Derniers échanges");
+  for (const exchange of brief.exchanges) {
+    lines.push(`**${exchange.role}** : ${exchange.text}`, "");
+  }
+  return lines.join("\n").trim();
+}
+
 const DESCRIPTION =
   "Publie dans le fil Pupitre un document HTML autonome ou un PDF que tu as créé. "
   + "Utilise cet outil pour livrer un plan, un audit, un brainstorming, une approche "
@@ -90,6 +108,22 @@ export function createPupitreServer(): McpServer {
     description: DESCRIPTION,
     inputSchema,
   }, publish);
+  server.registerTool("read_sibling_conversation", {
+    title: "Lire une conversation Pupitre liée",
+    description: "Rend le titre, le résumé, le dernier débrief et les derniers échanges d’une autre conversation Pupitre liée au ticket courant.",
+    inputSchema: {
+      conversation_id: z.string().describe("Id de la conversation à lire."),
+    },
+  }, async (args: { conversation_id: string }) => {
+    try {
+      const response = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(args.conversation_id)}/brief`);
+      if (!response.ok) throw new Error(await errorMessage(response));
+      const brief = await response.json() as ConversationBrief;
+      return text(renderConversationBrief(brief));
+    } catch (error) {
+      return text(`Lecture impossible : ${error instanceof Error ? error.message : String(error)}`, true);
+    }
+  });
   return server;
 }
 

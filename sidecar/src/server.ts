@@ -2307,6 +2307,34 @@ export function createServer(deps: ServerDeps) {
           pathname,
           /^\/api\/conversations\/([^/]+)\/debriefs$/,
         );
+        const conversationBriefId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/brief$/,
+        );
+        if (request.method === "GET" && conversationBriefId !== null) {
+          const conversation = deps.conversations.get(conversationBriefId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const exchanges = deps.conversations.listEvents(conversation.id)
+            .flatMap((event) => {
+              if (event.type === "user-message") {
+                return [{ role: "user" as const, text: event.text.slice(0, 2_000) }];
+              }
+              if (event.type === "text-final") {
+                return [{ role: "assistant" as const, text: event.text.slice(0, 2_000) }];
+              }
+              return [];
+            })
+            .slice(-12);
+          return json({
+            id: conversation.id,
+            title: conversation.title,
+            summary: conversation.summary,
+            provider: conversation.provider,
+            updated_at: conversation.updated_at,
+            debrief: deps.debriefs.latest(conversation.id)?.content_md ?? null,
+            exchanges,
+          });
+        }
         if (request.method === "GET" && conversationDebriefsId !== null) {
           if (!deps.conversations.get(conversationDebriefsId)) {
             throw new HttpError(404, "conversation inconnue");

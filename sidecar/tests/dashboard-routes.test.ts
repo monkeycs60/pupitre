@@ -356,6 +356,47 @@ test("dashboard : tickets, notes, refresh et canal WS", async () => {
   await waiter.event;
 });
 
+test("GET /api/conversations/:id/brief rend titre, résumé, dernier débrief et derniers échanges", async () => {
+  const project = await createProject("/tmp/brief-1");
+  const conversation = current!.deps.conversations.create({
+    projectId: project.id,
+    provider: "claude",
+    model: "m",
+    firstMessage: "Bonjour",
+  });
+  current!.deps.conversations.updateDigest(conversation.id, {
+    title: "Reprise tableau de bord",
+    summary: "Résumé utile",
+  }, 1);
+  current!.deps.conversations.appendEvent(conversation.id, {
+    type: "user-message",
+    text: "Bonjour",
+    images: [],
+  });
+  current!.deps.conversations.appendEvent(conversation.id, {
+    type: "text-final",
+    text: "Salut, voici le plan.",
+  });
+
+  const response = await fetch(`${current!.baseUrl}/api/conversations/${conversation.id}/brief`);
+  expect(response.status).toBe(200);
+
+  const brief = await response.json() as {
+    id: string;
+    title: string;
+    summary: string;
+    debrief: string | null;
+    exchanges: Array<{ role: string; text: string }>;
+  };
+  expect(brief).toEqual(expect.objectContaining({
+    id: conversation.id,
+    title: "Reprise tableau de bord",
+    summary: "Résumé utile",
+    debrief: null,
+  }));
+  expect(brief.exchanges.at(-1)).toEqual({ role: "assistant", text: "Salut, voici le plan." });
+});
+
 test("POST /api/conversations avec ticketId relie la conversation, prend la branche du ticket et injecte le brief", async () => {
   const repoPath = mkdtempSync(join(tmpdir(), "pupitre-dashboard-ticket-"));
   runGit(repoPath, "init", "-q", "-b", "main");

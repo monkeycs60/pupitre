@@ -68,7 +68,10 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     );
   }
   if (opts.pupitre) {
-    args.push("--allowedTools", "mcp__pupitre__publish_html_document");
+    args.push(
+      "--allowedTools",
+      "mcp__pupitre__publish_document,mcp__pupitre__publish_html_document,mcp__pupitre__read_sibling_conversation",
+    );
   }
   if (opts.cliSessionId) args.push("-r", opts.cliSessionId);
 

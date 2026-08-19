@@ -87,6 +87,25 @@ test("tour suivant : ajoute -r <sessionId>", async () => {
   expect(readFileSync(argsFile, "utf8")).toContain("-r abc-123");
 });
 
+test("conversation Pupitre : Claude autorise les outils MCP du brief et des documents", async () => {
+  const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
+  process.env.PUPITRE_CLAUDE_BIN = FAKE;
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  await collect({
+    cwd: "/tmp",
+    model: "opus",
+    prompt: "lis le brief",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+    pupitre: { port: 4820, conversationId: "conversation-1" },
+  });
+
+  expect(readFileSync(argsFile, "utf8")).toContain(
+    "--allowedTools mcp__pupitre__publish_document,mcp__pupitre__publish_html_document,mcp__pupitre__read_sibling_conversation",
+  );
+});
+
 test("un prompt ressemblant à une option passe par stdin", async () => {
   const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
   const stdinFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "stdin");
