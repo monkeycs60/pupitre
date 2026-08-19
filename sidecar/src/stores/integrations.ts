@@ -51,7 +51,12 @@ export class IntegrationStore {
   }
 
   upsert(projectId: string, type: IntegrationType, input: IntegrationInput): ProjectIntegration {
-    if (input.branchPattern) compileBranchPattern(input.branchPattern);
+    if (input.branchPattern !== undefined && input.branchPattern !== null) {
+      if (input.branchPattern === "") {
+        throw new Error("branchPattern vide");
+      }
+      compileBranchPattern(input.branchPattern);
+    }
 
     const now = new Date().toISOString();
     const existing = this.find(projectId, type);

@@ -33,6 +33,10 @@ test("refuse un motif de branche invalide", () => {
   expect(() => store.upsert(projectId, "clickup", { config: {}, branchPattern: "(" })).toThrow();
 });
 
+test("refuse aussi un motif de branche vide", () => {
+  expect(() => store.upsert(projectId, "clickup", { config: {}, branchPattern: "" })).toThrow();
+});
+
 test("statut, erreur et snapshot", () => {
   const item = store.upsert(projectId, "clickup", { config: { teamId: "1", listIds: [] } });
   store.markOk(item.id, { tasks: 3 });
