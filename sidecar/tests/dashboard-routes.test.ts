@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -45,6 +45,8 @@ interface TestServer {
 let current: TestServer | undefined;
 let previousClaudeBin: string | undefined;
 let previousCodexBin: string | undefined;
+let previousClaudeStdinFile: string | undefined;
+let previousPromptLog: string | undefined;
 
 function jsonHeaders(): HeadersInit {
   return { "content-type": "application/json" };
@@ -73,6 +75,23 @@ async function createProject(path: string): Promise<{ id: string }> {
   const response = await postJson("/api/projects", { name: "test", path });
   expect(response.status).toBe(201);
   return response.json();
+}
+
+function runGit(cwd: string, ...args: string[]): string {
+  const result = Bun.spawnSync(["git", ...args], { cwd });
+  if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+  return result.stdout.toString().trim();
+}
+
+async function waitForRunnerIdle(conversationId: string): Promise<void> {
+  if (!current) throw new Error("serveur de test non démarré");
+  const deadline = Date.now() + 3_000;
+  while (current.deps.runner.isRunning(conversationId) && Date.now() < deadline) {
+    await Bun.sleep(20);
+  }
+  if (current.deps.runner.isRunning(conversationId)) {
+    throw new Error("timeout runner actif");
+  }
 }
 
 function webSocketEventWaiter(
@@ -109,13 +128,11 @@ function webSocketEventWaiter(
 beforeEach(() => {
   current = undefined;
   const dir = mkdtempSync(join(tmpdir(), "pupitre-dashboard-"));
-  const fakeClaude = join(dir, "fake-claude");
-  const fixture = join(import.meta.dir, "fixtures/claude-basic.jsonl");
-  writeFileSync(fakeClaude, `#!/usr/bin/env bash\ncat "${fixture}"\n`);
-  chmodSync(fakeClaude, 0o755);
   previousClaudeBin = process.env.PUPITRE_CLAUDE_BIN;
   previousCodexBin = process.env.PUPITRE_CODEX_BIN;
-  process.env.PUPITRE_CLAUDE_BIN = fakeClaude;
+  previousClaudeStdinFile = process.env.FAKE_CLAUDE_STDIN_FILE;
+  previousPromptLog = process.env.PUPITRE_FAKE_PROMPT_LOG;
+  process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude");
   process.env.PUPITRE_CODEX_BIN = join(import.meta.dir, "fake-bins/fake-codex");
 
   const db = openDb(dir);
@@ -251,6 +268,10 @@ afterEach(() => {
   else process.env.PUPITRE_CLAUDE_BIN = previousClaudeBin;
   if (previousCodexBin === undefined) delete process.env.PUPITRE_CODEX_BIN;
   else process.env.PUPITRE_CODEX_BIN = previousCodexBin;
+  if (previousClaudeStdinFile === undefined) delete process.env.FAKE_CLAUDE_STDIN_FILE;
+  else process.env.FAKE_CLAUDE_STDIN_FILE = previousClaudeStdinFile;
+  if (previousPromptLog === undefined) delete process.env.PUPITRE_FAKE_PROMPT_LOG;
+  else process.env.PUPITRE_FAKE_PROMPT_LOG = previousPromptLog;
 });
 
 test("CRUD des intégrations d'un projet et validation du motif", async () => {
@@ -333,4 +354,55 @@ test("dashboard : tickets, notes, refresh et canal WS", async () => {
   const refresh = await postJson(`/api/projects/${project.id}/dashboard/refresh`, {});
   expect(refresh.status).toBe(202);
   await waiter.event;
+});
+
+test("POST /api/conversations avec ticketId relie la conversation, prend la branche du ticket et injecte le brief", async () => {
+  const repoPath = mkdtempSync(join(tmpdir(), "pupitre-dashboard-ticket-"));
+  runGit(repoPath, "init", "-q", "-b", "main");
+  runGit(repoPath, "config", "user.email", "api@example.test");
+  runGit(repoPath, "config", "user.name", "API Git");
+  writeFileSync(join(repoPath, "README.md"), "base\n");
+  runGit(repoPath, "add", "README.md");
+  runGit(repoPath, "commit", "-qm", "base");
+
+  const project = await createProject(repoPath);
+  const ticket = current!.deps.tickets.upsert(project.id, {
+    key: "TECH-7",
+    source: "git",
+    title: "b",
+    status: "",
+    externalUrl: null,
+  });
+  current!.deps.tickets.upsertRef(ticket.id, {
+    kind: "branch",
+    ref: "feature/TECH-7",
+    payload: {},
+  });
+  const fakeClaudePromptLog = join(repoPath, "fake-claude-stdin.log");
+  process.env.PUPITRE_FAKE_PROMPT_LOG = fakeClaudePromptLog;
+
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "claude-fable-5",
+    message: "On reprend",
+    ticketId: ticket.id,
+  });
+  expect(created.status).toBe(201);
+
+  const conversation = await created.json() as {
+    id: string;
+    ticket_id: string | null;
+    worktree_path: string | null;
+  };
+  expect(conversation.ticket_id).toBe(ticket.id);
+  expect(conversation.worktree_path).toContain("feature-TECH-7");
+
+  await waitForRunnerIdle(conversation.id);
+
+  const events = current!.deps.conversations.listEvents(conversation.id);
+  const userMessage = events.find((event) => event.type === "user-message");
+  expect(userMessage).toMatchObject({ type: "user-message", text: "On reprend" });
+  const sent = readFileSync(fakeClaudePromptLog, "utf8");
+  expect(sent).toContain("# Reprise du ticket TECH-7");
 });

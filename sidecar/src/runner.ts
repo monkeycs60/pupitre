@@ -171,6 +171,7 @@ export class ConversationRunner {
     prompt: string,
     imageNames: string[],
     attachments: MediaAttachment[] = [],
+    options: { preamble?: string } = {},
   ): Promise<TurnOutcome> {
     const conv = this.convs.get(conversationId);
     if (!conv) throw new Error("conversation inconnue");
@@ -279,6 +280,12 @@ export class ConversationRunner {
       }
       const permissionMode = conv.permission_mode ?? project.permission_mode;
       const cwd = conversationCwd(project, conv)
+      const providerPrompt = (options.preamble ? `${options.preamble}\n\n---\n\n` : "")
+        + (this.skills?.augmentPrompt(prompt, project.id, {
+          cwd: conversationCwd(project, conv),
+          projectPath: project.path,
+        }) ?? prompt)
+        + attachmentPrompt(attachments, this.media);
       const opts = {
         cwd,
         // Depuis un worktree, le dépôt principal doit rester lisible : le
@@ -287,14 +294,7 @@ export class ConversationRunner {
         model: conv.model,
         effort: conv.effort ?? undefined,
         speed: conv.speed ?? undefined,
-        prompt: withActionFormat(
-          (this.skills?.augmentPrompt(prompt, project.id, {
-            cwd: conversationCwd(project, conv),
-            projectPath: project.path,
-          }) ?? prompt)
-            + attachmentPrompt(attachments, this.media),
-          this.actionFormat(),
-        ),
+        prompt: withActionFormat(providerPrompt, this.actionFormat()),
         cliSessionId: conv.cli_session_id,
         permissionMode,
         filesystemScope: project.filesystem_scope,

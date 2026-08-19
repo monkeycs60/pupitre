@@ -59,6 +59,7 @@ import { FILESYSTEM_SCOPES, type FilesystemScope } from "./access";
 import { actionFormat } from "./response-format";
 import { conductorToolTokens } from "./conductor-mcp";
 import { dashboardPayload } from "./dashboard";
+import { composeTicketBrief } from "./ticket-brief";
 import {
   claudeServerDefinitions,
   codexServerDefinitions,
@@ -70,8 +71,9 @@ import { verifyMcpContextCost } from "./mcp-verify";
 import { instructionsTokens } from "./context-profile";
 import type { McpServerWeight } from "./mcp-probe";
 import type { IntegrationsRefresher } from "./integrations/refresher";
+import { compileBranchPattern, extractTicketKey } from "./ticket-key";
 import type { IntegrationStore, IntegrationType } from "./stores/integrations";
-import type { TicketStore } from "./stores/tickets";
+import type { Ticket, TicketStore } from "./stores/tickets";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -132,6 +134,30 @@ interface HandoffTargetConfig {
   effort: string | null;
   speed: "standard" | "fast" | null;
   orchestrator: boolean;
+}
+
+async function ticketBriefFor(
+  deps: ServerDeps,
+  ticket: Ticket,
+  excludeConversationId: string,
+): Promise<string> {
+  const siblings = deps.tickets.conversationsByTicket(ticket.id)
+    .filter((item) => item.id !== excludeConversationId)
+    .slice(0, 5)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      summary: item.summary,
+      debrief: deps.debriefs.latest(item.id)?.content_md ?? null,
+    }));
+  return composeTicketBrief({
+    ticket,
+    branches: deps.tickets.branchesOf(ticket.id),
+    refs: deps.tickets.refsByTicket(ticket.id),
+    notes: deps.tickets.notesByTicket(ticket.id),
+    clickup: await deps.integrationsRefresher.clickUpContext(ticket.project_id, ticket.key),
+    siblings,
+  });
 }
 
 async function createContinuationFromHandoff(
@@ -2043,10 +2069,23 @@ export function createServer(deps: ServerDeps) {
           // Une conversation peut naître sur sa propre branche : Pupitre lui
           // crée alors un worktree, où tous ses agents travailleront (ADR 0001).
           const branch = optionalTrimmed(body, "branch");
+          const ticketId = optionalTrimmed(body, "ticketId");
+          let ticket = ticketId ? deps.tickets.get(ticketId) : null;
+          if (ticketId && (!ticket || ticket.project_id !== projectId)) {
+            throw new HttpError(404, "ticket inconnu");
+          }
+          let effectiveBranch = branch ?? (ticket ? deps.tickets.branchesOf(ticket.id)[0] ?? null : null);
+          if (!ticket && effectiveBranch) {
+            const patternSource = deps.integrations.listByProject(projectId)
+              .find((integration) => integration.branch_pattern)?.branch_pattern ?? null;
+            const pattern = patternSource ? compileBranchPattern(patternSource) : null;
+            const key = extractTicketKey(effectiveBranch, pattern);
+            ticket = key ? deps.tickets.findByKey(projectId, key) : null;
+          }
           let worktreePath: string | null = null;
-          if (branch !== null) {
+          if (effectiveBranch !== null) {
             try {
-              worktreePath = deps.git.createWorktree(projectId, { branch }).path;
+              worktreePath = deps.git.createWorktree(projectId, { branch: effectiveBranch }).path;
             } catch (error) {
               throw new HttpError(
                 400,
@@ -2068,9 +2107,19 @@ export function createServer(deps: ServerDeps) {
             subagentPresetId,
             subagentEffort,
             createdOnBranch: snapshot.currentBranch,
+            ticketId: ticket?.id ?? null,
             firstMessage: message.trim() || "Image jointe",
           });
-          void deps.runner.runTurn(conversation.id, message, images, attachments)
+          const preamble = ticket
+            ? await ticketBriefFor(deps, ticket, conversation.id)
+            : undefined;
+          void deps.runner.runTurn(
+            conversation.id,
+            message,
+            images,
+            attachments,
+            preamble ? { preamble } : {},
+          )
             .catch((error) => console.error("Échec du tour", error));
           return json(conversation, 201);
         }
