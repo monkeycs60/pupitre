@@ -229,6 +229,8 @@ export interface Conversation {
   worktree_path: string | null
   /** Branche courante du projet au moment de la création. */
   created_on_branch: string | null
+  ticket_id: string | null
+  ticket_key?: string | null
   cli_session_id: string | null
   preset_id?: string | null
   pinned: boolean
