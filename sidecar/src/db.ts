@@ -108,6 +108,54 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_debriefs_conv
       ON debriefs(conversation_id, created_at, id);
+    CREATE TABLE IF NOT EXISTS project_integrations (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      type TEXT NOT NULL CHECK (type IN ('clickup', 'gitlab', 'github', 'notion', 'sentry')),
+      config_json TEXT NOT NULL DEFAULT '{}',
+      branch_pattern TEXT NULL,
+      status TEXT NOT NULL DEFAULT 'non configurée'
+        CHECK (status IN ('ok', 'dégradée', 'hors ligne', 'non configurée', 'à reconfigurer')),
+      last_ok_at TEXT NULL,
+      last_error TEXT NULL,
+      snapshot_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (project_id, type)
+    );
+    CREATE TABLE IF NOT EXISTS tickets (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      key TEXT NOT NULL,
+      source TEXT NOT NULL CHECK (source IN ('clickup', 'notion', 'git')),
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT '',
+      external_url TEXT NULL,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      last_seen_at TEXT NOT NULL DEFAULT '',
+      archived_at TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (project_id, key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tickets_project ON tickets(project_id, archived_at, updated_at);
+    CREATE TABLE IF NOT EXISTS ticket_refs (
+      id TEXT PRIMARY KEY,
+      ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('branch', 'mr', 'pipeline', 'deployment', 'sentry_issue')),
+      ref TEXT NOT NULL,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      seen_at TEXT NOT NULL,
+      UNIQUE (ticket_id, kind, ref)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticket_refs_ticket ON ticket_refs(ticket_id, kind);
+    CREATE TABLE IF NOT EXISTS ticket_notes (
+      id TEXT PRIMARY KEY,
+      ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticket_notes_ticket ON ticket_notes(ticket_id, created_at);
     CREATE TABLE IF NOT EXISTS commit_links (
       commit_sha TEXT NOT NULL,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -302,6 +350,8 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "title_locked INTEGER NOT NULL DEFAULT 0");
   // Nombre de tours au moment du dernier digest (0 = jamais généré).
   addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "conversations", "ticket_id TEXT NULL REFERENCES tickets(id) ON DELETE SET NULL");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_conversations_ticket ON conversations(ticket_id)");
   addColumn(db, "conversations", "message_count INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "last_read_turn INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "created_on_branch TEXT NULL");
