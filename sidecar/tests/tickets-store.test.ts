@@ -113,6 +113,38 @@ test("archive les tickets non vus depuis 14 jours, réveille ceux revus", () => 
   expect(tickets.get(old.id)?.archived_at).toBeNull();
 });
 
+test("touchSeen réactive un ticket déjà archivé", () => {
+  const ticket = tickets.upsert(projectId, {
+    key: "TECH-4B",
+    source: "git",
+    title: "b",
+    status: "",
+    externalUrl: null,
+  });
+
+  tickets.touchSeen(ticket.id, "2026-01-01T00:00:00.000Z");
+  expect(tickets.archiveStale(projectId, new Date("2026-01-20T00:00:00.000Z"))).toBe(1);
+  expect(tickets.get(ticket.id)?.archived_at).not.toBeNull();
+
+  tickets.touchSeen(ticket.id, "2026-01-21T00:00:00.000Z");
+  expect(tickets.get(ticket.id)?.archived_at).toBeNull();
+  expect(tickets.get(ticket.id)?.last_seen_at).toBe("2026-01-21T00:00:00.000Z");
+});
+
+test("archiveStale archive aussi un ticket vu exactement il y a 14 jours", () => {
+  const ticket = tickets.upsert(projectId, {
+    key: "TECH-4C",
+    source: "git",
+    title: "b",
+    status: "",
+    externalUrl: null,
+  });
+
+  tickets.touchSeen(ticket.id, "2026-01-18T00:00:00.000Z");
+  expect(tickets.archiveStale(projectId, new Date("2026-02-01T00:00:00.000Z"))).toBe(1);
+  expect(tickets.get(ticket.id)?.archived_at).toBe("2026-02-01T00:00:00.000Z");
+});
+
 test("notes et liaison de conversation", () => {
   const ticket = tickets.upsert(projectId, {
     key: "TECH-5",

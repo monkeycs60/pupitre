@@ -144,7 +144,9 @@ export class TicketStore {
   }
 
   touchSeen(id: string, at = new Date().toISOString()): void {
-    this.db.query("UPDATE tickets SET last_seen_at = ? WHERE id = ?").run(at, id);
+    this.db.query(
+      "UPDATE tickets SET last_seen_at = ?, archived_at = NULL, updated_at = ? WHERE id = ?",
+    ).run(at, at, id);
   }
 
   archiveStale(projectId: string, now: Date = new Date()): number {
@@ -156,7 +158,7 @@ export class TicketStore {
              updated_at = ?
        WHERE project_id = ?
          AND archived_at IS NULL
-         AND last_seen_at < ?
+         AND last_seen_at <= ?
     `).run(archivedAt, archivedAt, projectId, cutoff).changes;
   }
 
