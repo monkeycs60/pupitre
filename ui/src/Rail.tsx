@@ -14,6 +14,7 @@ interface RailProps {
   onProjectCreated: (project: Project) => void
   workspaceView: WorkspaceView
   onConversationsSelect: () => void
+  onDashboardSelect: () => void
   onGitSelect: () => void
   onDocumentsSelect: () => void
   onDesignSelect: () => void
@@ -35,6 +36,7 @@ interface RailProps {
 type NavName =
   | 'conversations'
   | 'fleet'
+  | 'dashboard'
   | 'git'
   | 'documents'
   | 'design'
@@ -54,6 +56,7 @@ const NAV_PATHS: Record<NavName, React.ReactNode> = {
     </>
   ),
   fleet: <path d="M2 8h3l1.5-4L9 12l1.5-4H14" />,
+  dashboard: <path d="M2 3h5v5H2zM9 3h5v3H9zM9 8h5v5H9zM2 10h5v3H2z" />,
   git: (
     <>
       <circle cx="5" cy="4" r="1.5" />
@@ -149,6 +152,7 @@ export function Rail({
   onProjectCreated,
   workspaceView,
   onConversationsSelect,
+  onDashboardSelect,
   onGitSelect,
   onDocumentsSelect,
   onDesignSelect,
@@ -227,6 +231,7 @@ export function Rail({
       badge: selectedProject ? unreadByProject[selectedProject.id] ?? 0 : 0,
     },
     { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive },
+    { name: 'dashboard', label: 'Tableau de bord', view: 'dashboard', onClick: onDashboardSelect, needsProject: true },
     { name: 'git', label: 'Git', view: 'git', onClick: onGitSelect, needsProject: true, badge: pendingReviews },
     { name: 'documents', label: 'Documents', view: 'documents', onClick: onDocumentsSelect },
     { name: 'design', label: 'Claude Design', view: 'design', onClick: onDesignSelect },

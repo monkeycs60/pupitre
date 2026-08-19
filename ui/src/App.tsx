@@ -49,6 +49,7 @@ import { AppSettingsView } from './AppSettingsView'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { DocumentsView } from './DocumentsView'
 import { DesignView } from './DesignView'
+import { DashboardView } from './DashboardView'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { SurfaceSwitch } from './SurfaceSwitch'
@@ -434,6 +435,13 @@ function App() {
     setShowSwitchModel(false)
   }
 
+  function handleDashboardSelect() {
+    if (!confirmLeaveMemory()) return
+    if (selectedProject === null) return
+    setWorkspaceView('dashboard')
+    setShowSwitchModel(false)
+  }
+
   function handleDocumentsSelect() {
     if (!confirmLeaveMemory()) return
     setWorkspaceView('documents')
@@ -496,8 +504,9 @@ function App() {
     setShowSwitchModel(false)
   }
 
-  function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'documents' | 'library' | 'memory' | 'help') {
-    if (view === 'fleet') handleFleetSelect()
+  function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'documents' | 'library' | 'memory' | 'help' | 'dashboard') {
+    if (view === 'dashboard') handleDashboardSelect()
+    else if (view === 'fleet') handleFleetSelect()
     else if (view === 'routines') handleRoutinesSelect()
     else if (view === 'documents') handleDocumentsSelect()
     else if (view === 'library') handleLibrarySelect()
@@ -576,6 +585,7 @@ function App() {
         git: 'Git',
         documents: 'Documents',
         design: 'Claude Design',
+        dashboard: 'Tableau de bord',
         costs: 'Coûts',
         library: 'Skills',
         routines: 'Routines',
@@ -617,6 +627,7 @@ function App() {
         onProjectCreated={handleProjectSelect}
         workspaceView={workspaceView}
         onConversationsSelect={handleConversationsSelect}
+        onDashboardSelect={handleDashboardSelect}
         onGitSelect={handleGitSelect}
         onDocumentsSelect={handleDocumentsSelect}
         onDesignSelect={handleDesignSelect}
@@ -703,6 +714,13 @@ function App() {
           <div className="empty-state">
             <p>Sélectionnez un projet pour commencer.</p>
           </div>
+        ) : workspaceView === 'dashboard' ? (
+          <DashboardView
+            project={selectedProject}
+            onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
+            onStartConversation={() => {}}
+            onOpenSettings={() => setProjectSettingsOpen(true)}
+          />
         ) : workspaceView === 'git' ? (
           <GitView
             project={selectedProject}
