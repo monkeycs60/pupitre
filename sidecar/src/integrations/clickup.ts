@@ -1,4 +1,5 @@
 const BASE_URL = "https://api.clickup.com/api/v2";
+const MAX_TASK_DESCRIPTION_CHARS = 2000;
 
 export class ClickUpHttpError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -115,7 +116,8 @@ export class ClickUpClient {
 
   async assignedTasks(input: { teamId: string; listIds: string[]; userId: number }): Promise<ClickUpTask[]> {
     const tasks: ClickUpTask[] = [];
-    for (let page = 0; page < 100; page += 1) {
+    let page = 0;
+    while (true) {
       const params = new URLSearchParams();
       params.set("include_closed", "false");
       params.set("subtasks", "true");
@@ -129,6 +131,7 @@ export class ClickUpClient {
       tasks.push(...parseClickUpTasks(payload));
 
       if (payload.last_page !== false) break;
+      page += 1;
     }
     return tasks;
   }
@@ -141,7 +144,7 @@ export class ClickUpClient {
 
     const commentList = Array.isArray(comments.comments) ? comments.comments.slice(0, maxComments) : [];
     return {
-      description: toStringValue(task.description),
+      description: toStringValue(task.description).slice(0, MAX_TASK_DESCRIPTION_CHARS),
       comments: commentList.map((comment) => {
         const typedComment = comment as {
           user?: { username?: unknown };

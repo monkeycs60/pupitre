@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ClickUpClient, parseClickUpTasks, ClickUpAuthError } from "../src/integrations/clickup";
+import { ClickUpClient, ClickUpAuthError, ClickUpHttpError, parseClickUpTasks } from "../src/integrations/clickup";
 
 const fixture = JSON.parse(readFileSync(join(import.meta.dir, "fixtures/clickup-tasks.json"), "utf8"));
 
@@ -42,9 +42,48 @@ test("le client pagine jusqu'à last_page et envoie le token en Authorization", 
   expect(calls[1]).toContain("list_ids%5B%5D=900500195250");
 });
 
+test("assignedTasks continue au-delà de 100 pages jusqu'à last_page", async () => {
+  const pages: number[] = [];
+  const fetchImpl: typeof fetch = async (input) => {
+    const url = String(input);
+    const page = Number(new URL(url).searchParams.get("page"));
+    pages.push(page);
+    return Response.json({
+      tasks: [{ id: `task-${page}`, custom_id: null, name: `Task ${page}`, status: { status: "Open" }, url: `https://app.clickup.com/t/task-${page}`, date_updated: "1", list: null, priority: null, custom_fields: [] }],
+      last_page: page >= 100,
+    });
+  };
+  const client = new ClickUpClient("pk_test", fetchImpl);
+  const tasks = await client.assignedTasks({ teamId: "20556900", listIds: [], userId: 42 });
+  expect(tasks).toHaveLength(101);
+  expect(pages).toHaveLength(101);
+  expect(pages.at(-1)).toBe(100);
+});
+
+test("taskContext tronque la description à 2000 caractères", async () => {
+  const client = new ClickUpClient("pk", async (input) => {
+    const url = String(input);
+    if (url.endsWith("/comment")) return Response.json({ comments: [] });
+    return Response.json({ id: "86caw5afd", description: "x".repeat(2500) });
+  });
+  const context = await client.taskContext("86caw5afd");
+  expect(context.description).toHaveLength(2000);
+  expect(context.description).toBe("x".repeat(2000));
+});
+
 test("401 devient une ClickUpAuthError", async () => {
   const client = new ClickUpClient("bad", async () => new Response("{}", { status: 401 }));
   await expect(client.me()).rejects.toBeInstanceOf(ClickUpAuthError);
+});
+
+test("403 devient une ClickUpAuthError", async () => {
+  const client = new ClickUpClient("bad", async () => new Response("{}", { status: 403 }));
+  await expect(client.me()).rejects.toBeInstanceOf(ClickUpAuthError);
+});
+
+test("un HTTP non-auth devient une ClickUpHttpError", async () => {
+  const client = new ClickUpClient("bad", async () => new Response("{}", { status: 500 }));
+  await expect(client.me()).rejects.toBeInstanceOf(ClickUpHttpError);
 });
 
 test("contexte d'une tâche : description et commentaires récents", async () => {
