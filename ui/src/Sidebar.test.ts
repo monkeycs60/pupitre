@@ -278,6 +278,8 @@ test('affiche le compteur live de la conversation sélectionnée', async () => {
 })
 
 test('regroupe les conversations par ticket avant la récence', async () => {
+  const todayAtNine = new Date()
+  todayAtNine.setHours(9, 0, 0, 0)
   const ticketYesterday: Conversation = {
     ...startedConversation,
     id: 'conversation-ticket-1',
@@ -300,7 +302,7 @@ test('regroupe les conversations par ticket avant la récence', async () => {
     ...startedConversation,
     id: 'conversation-no-ticket',
     title: 'Sans ticket',
-    updated_at: '2026-08-19T08:00:00.000Z',
+    updated_at: todayAtNine.toISOString(),
   }
   installApi(
     [],

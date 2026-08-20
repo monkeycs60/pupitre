@@ -271,23 +271,22 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
       for (const type of ['clickup', 'gitlab'] as const) {
         const form = integrations[type]
         if (form.enabled) {
-          const config = type === 'clickup'
-            ? {
-                teamId: form.teamId.trim(),
-                listIds: form.listIds.split(',').map((item) => item.trim()).filter(Boolean),
-              }
-            : {
-                host: form.host.trim(),
-                projects: form.projects
-                  .map((item) => ({
-                    path: item.path.trim(),
-                    label: item.label.trim() || item.path.trim(),
-                    environments: item.environments.split(',').map((value) => value.trim()).filter(Boolean),
-                  }))
-                  .filter((item) => item.path.length > 0),
-              }
           await saveProjectIntegration(project.id, type, {
-            config,
+            config: type === 'clickup'
+              ? {
+                  teamId: integrations.clickup.teamId.trim(),
+                  listIds: integrations.clickup.listIds.split(',').map((item) => item.trim()).filter(Boolean),
+                }
+              : {
+                  host: integrations.gitlab.host.trim(),
+                  projects: integrations.gitlab.projects
+                    .map((item) => ({
+                      path: item.path.trim(),
+                      label: item.label.trim() || item.path.trim(),
+                      environments: item.environments.split(',').map((value) => value.trim()).filter(Boolean),
+                    }))
+                    .filter((item) => item.path.length > 0),
+                },
             branchPattern: integrations.branchPattern.trim() || null,
           })
         } else if (form.existed) {

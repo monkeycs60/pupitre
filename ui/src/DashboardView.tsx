@@ -3,7 +3,6 @@ import { BranchIcon } from './BranchIcon'
 import { createTicketNote, listTicketNotes, refreshProjectDashboard } from './api'
 import type {
   DashboardIntegration,
-  EnvironmentState,
   Project,
   ReviewRequest,
   TicketConversationSummary,
