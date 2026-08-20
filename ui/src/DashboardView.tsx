@@ -213,6 +213,16 @@ export function DashboardView({
                       <span className="dashboard-ticket">
                         <strong className="dashboard-key">{ticket.key}</strong>
                         <small>{ticket.title}</small>
+                        {externalUrl ? (
+                          <a
+                            className="dashboard-ticket-link"
+                            href={externalUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            ClickUp ↗
+                          </a>
+                        ) : null}
                       </span>
 
                       <span className="dashboard-status">
@@ -235,7 +245,12 @@ export function DashboardView({
 
                       <span className="dashboard-link">
                         {mergeRequest && mergeRequestUrl ? (
-                          <a href={mergeRequestUrl} target="_blank" rel="noreferrer">
+                          <a
+                            href={mergeRequestUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`MR ${mergeRequest.ref}`}
+                          >
                             <span>{mergeRequest.ref}</span>
                             <small>{mrLabel(mergeRequest)}</small>
                           </a>
@@ -302,7 +317,6 @@ export function DashboardView({
                         >
                           {ticket.conversations.length === 0 ? 'Démarrer' : 'Reprendre'}
                         </button>
-                        {externalUrl ? <a href={externalUrl} target="_blank" rel="noreferrer">Ouvrir</a> : null}
                         <button
                           type="button"
                           className="text-button"

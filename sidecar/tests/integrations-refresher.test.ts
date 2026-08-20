@@ -85,6 +85,7 @@ function fakeGitLab() {
       ...mine,
       iid: 1815,
       sourceBranch: "feature/TECH-23903",
+      url: "https://git/x/1815",
       state: "merged",
     }),
     latestPipeline: async () => ({
@@ -170,6 +171,13 @@ test("rapproche tâche ClickUp, MR, pipeline et déploiement sur la clé du tick
   expect(deployed?.source).toBe("git");
   expect(deployed?.refs.find((ref) => ref.kind === "deployment")?.payload).toEqual(
     expect.objectContaining({ environment: "preprod", user: "theo.micaletti" }),
+  );
+  expect(deployed?.refs.find((ref) => ref.kind === "mr")?.payload).toEqual(
+    expect.objectContaining({
+      iid: 1815,
+      state: "merged",
+      url: "https://git/x/1815",
+    }),
   );
   expect(rows.find((row) => row.key === "TECH-24868")).toBeUndefined();
 

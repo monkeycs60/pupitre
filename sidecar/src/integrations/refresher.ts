@@ -310,21 +310,7 @@ export class IntegrationsRefresher {
           this.stores.tickets.upsertRef(ticket.id, {
             kind: "mr",
             ref: `${projectConfig.label}!${mr.iid}`,
-            payload: {
-              iid: mr.iid,
-              project: projectConfig.label,
-              title: mr.title,
-              state: mr.state,
-              url: mr.url,
-              draft: mr.draft,
-              hasConflicts: mr.hasConflicts,
-              mergeStatus: mr.mergeStatus,
-              labels: mr.labels,
-              author: mr.author,
-              reviewers: mr.reviewers,
-              targetBranch: mr.targetBranch,
-              updatedAt: mr.updatedAt,
-            },
+            payload: mergeRequestPayload(mr, projectConfig.label),
           });
           if (pipeline) {
             this.stores.tickets.upsertRef(ticket.id, {
@@ -356,11 +342,13 @@ export class IntegrationsRefresher {
 
         const deployment = await client.lastDeployment(gitLabProjectId, environment.id);
         let branch: string | null = deployment?.ref ?? null;
+        let deploymentMergeRequest: GitLabMergeRequest | null = null;
         if (deployment?.mergeRequestIid) {
           const cacheKey = `${gitLabProjectId}:${deployment.mergeRequestIid}`;
           const mr = this.mergeRequestCache.get(cacheKey)
             ?? await client.mergeRequest(gitLabProjectId, deployment.mergeRequestIid);
           this.mergeRequestCache.set(cacheKey, mr);
+          deploymentMergeRequest = mr;
           branch = mr.sourceBranch;
         }
 
@@ -383,7 +371,7 @@ export class IntegrationsRefresher {
             const ticket = this.stores.tickets.upsert(item.project_id, {
               key,
               source: "git",
-              title: branch,
+              title: deploymentMergeRequest?.title ?? branch,
               status: "",
               externalUrl: null,
             });
@@ -404,6 +392,13 @@ export class IntegrationsRefresher {
                 jobUrl: state.jobUrl,
               },
             });
+            if (deploymentMergeRequest) {
+              this.stores.tickets.upsertRef(ticket.id, {
+                kind: "mr",
+                ref: `${projectConfig.label}!${deploymentMergeRequest.iid}`,
+                payload: mergeRequestPayload(deploymentMergeRequest, projectConfig.label),
+              });
+            }
           });
         }
       }
@@ -449,6 +444,24 @@ export class IntegrationsRefresher {
 function compiledPattern(items: ProjectIntegration[]): RegExp | null {
   const pattern = items.find((item) => item.branch_pattern)?.branch_pattern ?? null;
   return pattern ? compileBranchPattern(pattern) : null;
+}
+
+function mergeRequestPayload(mr: GitLabMergeRequest, project: string): Record<string, unknown> {
+  return {
+    iid: mr.iid,
+    project,
+    title: mr.title,
+    state: mr.state,
+    url: mr.url,
+    draft: mr.draft,
+    hasConflicts: mr.hasConflicts,
+    mergeStatus: mr.mergeStatus,
+    labels: mr.labels,
+    author: mr.author,
+    reviewers: mr.reviewers,
+    targetBranch: mr.targetBranch,
+    updatedAt: mr.updatedAt,
+  };
 }
 
 function orderIntegrations(items: ProjectIntegration[]): ProjectIntegration[] {

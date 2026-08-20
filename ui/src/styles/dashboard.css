@@ -21,7 +21,7 @@
 @media (min-width: 900px) {
   .dashboard-scroll {
     width: 100%;
-    max-width: 1120px;
+    max-width: 1440px;
     margin: 0 auto;
   }
 }
@@ -112,7 +112,7 @@
 }
 
 .dashboard-table {
-  --dashboard-grid-columns: minmax(190px, 1.55fr) minmax(110px, 0.8fr) minmax(150px, 1.2fr) minmax(120px, 0.95fr) minmax(110px, 0.75fr) minmax(120px, 0.9fr) minmax(130px, 0.95fr);
+  --dashboard-grid-columns: minmax(145px, 1.55fr) minmax(90px, 0.75fr) minmax(115px, 1.2fr) minmax(100px, 0.85fr) minmax(90px, 0.7fr) minmax(105px, 0.8fr) minmax(160px, 1.1fr);
   background: color-mix(in srgb, var(--bg-panel) 78%, transparent);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-lg);
@@ -121,7 +121,7 @@
 }
 
 .dashboard-table--with-gitlab {
-  --dashboard-grid-columns: minmax(190px, 1.45fr) minmax(110px, 0.8fr) minmax(150px, 1.15fr) minmax(120px, 0.9fr) minmax(110px, 0.75fr) minmax(120px, 0.95fr) minmax(130px, 0.9fr) minmax(140px, 0.95fr);
+  --dashboard-grid-columns: minmax(145px, 1.45fr) minmax(90px, 0.75fr) minmax(115px, 1.15fr) minmax(100px, 0.85fr) minmax(90px, 0.7fr) minmax(105px, 0.8fr) minmax(80px, 0.65fr) minmax(160px, 1.1fr);
 }
 
 .dashboard-row {
@@ -132,6 +132,10 @@
   min-height: 56px;
   padding: 0 var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.dashboard-row > * {
+  min-width: 0;
 }
 
 .dashboard-row:last-of-type {
@@ -157,6 +161,16 @@
   gap: 1px;
 }
 
+.dashboard-ticket small,
+.dashboard-branch > span,
+.dashboard-link,
+.dashboard-pipeline {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dashboard-key {
   color: var(--text-strong);
   font-family: var(--font-mono);
@@ -169,6 +183,18 @@
 .dashboard-conversation-list small {
   color: var(--text-faint);
   font-size: var(--text-xs);
+}
+
+.dashboard-ticket-link {
+  width: fit-content;
+  color: var(--accent);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.dashboard-ticket-link:hover {
+  color: var(--text-strong);
+  text-decoration: underline;
 }
 
 .dashboard-status,
@@ -261,8 +287,15 @@
 .dashboard-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: var(--space-1);
+}
+
+.dashboard-actions button,
+.dashboard-actions a {
+  flex: none;
+  white-space: nowrap;
 }
 
 .dashboard-notes {

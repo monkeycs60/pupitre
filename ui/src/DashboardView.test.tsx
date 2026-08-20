@@ -127,6 +127,19 @@ test('un ticket sans conversation propose Démarrer', async () => {
   expect(await screen.findByRole('button', { name: 'Démarrer' })).toBeTruthy()
 })
 
+test('rend les liens ClickUp et MR explicites dans les cellules concernées', async () => {
+  mount(withGitlab)
+
+  await screen.findByText('TECH-24657')
+
+  const clickUpLink = screen.getByRole('link', { name: 'ClickUp ↗' })
+  expect(clickUpLink.getAttribute('href')).toBe('https://app.clickup.com/t/x')
+
+  const mergeRequestLink = screen.getByRole('link', { name: /MR reactor!1862/ })
+  expect(mergeRequestLink.getAttribute('href')).toBe('https://git/1862')
+  expect(screen.queryByRole('link', { name: 'Ouvrir' })).toBeNull()
+})
+
 test('sépare les pastilles des cellules statut et branche et garde les colonnes scrollables', async () => {
   mount(withGitlab)
 
