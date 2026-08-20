@@ -458,3 +458,71 @@ input.field-mono {
 .project-mcp-used {
   color: var(--ok);
 }
+
+.project-integrations {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.project-integration-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+
+.project-settings-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.project-settings-toggle input {
+  accent-color: var(--accent);
+}
+
+.project-settings-body input {
+  min-height: 32px;
+  padding: 4px 8px;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.project-integration-projects {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.project-integration-projects-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--text-strong);
+}
+
+.project-integration-project-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.project-integration-project-row {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+}
+
+.project-integration-note {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}

@@ -31,6 +31,9 @@ import { DebriefStore } from "../src/stores/debriefs";
 import { SearchIndex } from "../src/search";
 import { CostStore } from "../src/costs";
 import { MemoryStore } from "../src/memory";
+import { IntegrationStore } from "../src/stores/integrations";
+import { IntegrationsRefresher } from "../src/integrations/refresher";
+import { TicketStore } from "../src/stores/tickets";
 import { stubQuotaRefresher } from "./stub-quota-refresher";
 
 interface Harness {
@@ -152,6 +155,12 @@ cat "${fixture}"
   const routines = new RoutineScheduler(
     routineStore, workflows, presets, projects, conversations, runner, notifications,
   );
+  const integrations = new IntegrationStore(db);
+  const tickets = new TicketStore(db);
+  const integrationsRefresher = new IntegrationsRefresher(
+    { integrations, tickets, conversations, projects },
+    { clickUpClient: () => null, gitLabClient: () => null },
+  );
   const server = createServer({
     port: 0, projects, conversations, media, runner, events, quotas,
     quotaRefresher: stubQuotaRefresher(quotas),
@@ -159,6 +168,7 @@ cat "${fixture}"
     reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer, workflows,
     notifications, routineStore, routines, search: new SearchIndex(db), costs: new CostStore(db),
     memory: new MemoryStore(join(dir, "memory")),
+    integrations, tickets, integrationsRefresher,
   });
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,

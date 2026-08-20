@@ -94,6 +94,29 @@ et lit les captures depuis leur chemin local.
   skills, ouvre Fleet/Routines/Bibliothèque et déclenche Tester, Résumé session ou
   Gardien sur le fil courant.
 
+## Tableau de bord (tranche A)
+
+- Le **Tableau de bord** ajoute une vue projet centrée sur le **ticket** :
+  une ligne relie la tâche, sa branche, sa MR, son pipeline, son éventuel
+  déploiement, ses conversations Pupitre et ses notes locales.
+- Les données viennent de **ClickUp** et **GitLab**. La relève reste
+  déterministe, sans LLM, avec rafraîchissement automatique quand Pupitre est
+  actif, relance manuelle possible et diffusion temps réel vers l'UI.
+- Côté GitLab, Pupitre réutilise le token de **`glab`** quand il existe ; un
+  token dédié peut sinon être défini dans **Paramètres > Tokens**.
+- Le bouton **Démarrer** ouvre une nouvelle conversation liée au ticket ; le
+  bouton **Reprendre** rattache la suite au même ticket et à la même branche.
+- Les deux actions retrouvent ou créent le **worktree partagé** de la branche,
+  puis injectent un brief court : contexte du ticket, conversations soeurs et
+  possibilité d'appeler `read_sibling_conversation` à la demande.
+- La configuration projet se fait dans **Réglages du projet > Intégrations** :
+  listes ClickUp, projets GitLab, environnements suivis et motif de branche.
+- La tranche A couvre **Mes tickets**, **Environnements**, **À relire**, les
+  notes locales et le groupement des conversations par ticket dans la sidebar.
+- Elle ne couvre pas encore les **domaines**, **Notion / backlog**,
+  **Répétitions** ni **Sentry** ; le périmètre complet reste décrit dans
+  [le design du chantier](docs/plans/2026-08-19-tableau-de-bord-design.md).
+
 ## Coûts, mémoire et aide (M4-N)
 
 - **Coûts** présente l'usage mensuel en tokens par conversation et modèle. Les

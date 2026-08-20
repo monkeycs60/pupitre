@@ -39,7 +39,9 @@ interface ComposerProps {
    *  de la config choisie. */
   providerLabel?: string | null
   provider?: Provider | null
+  initialConfig?: Partial<ConversationConfig>
   initialAttachments?: Attachment[]
+  ticketId?: string | null
 }
 
 interface UploadedAttachment {
@@ -183,7 +185,9 @@ export function Composer({
   focusRequest,
   providerLabel = null,
   provider = null,
+  initialConfig,
   initialAttachments = [],
+  ticketId = null,
 }: ComposerProps) {
   const isNewConversation = conversationId === null
   const [config, setConfig] = useState<ConversationConfig>({
@@ -196,6 +200,7 @@ export function Composer({
     orchestrator: true,
     subagentPresetId: null,
     subagentEffort: null,
+    ...initialConfig,
   })
   const [attachments, setAttachments] = useState<UploadedAttachment[]>(() =>
     initialAttachments.map((attachment) => ({ id: crypto.randomUUID(), attachment })),
@@ -362,6 +367,7 @@ export function Composer({
         const conversation = await createConversation(buildCreateConversationInput({
           projectId: project.id,
           ...config,
+          ticketId,
           message: trimmedMessage,
           images: imageNames,
           attachments: attachmentInputs,

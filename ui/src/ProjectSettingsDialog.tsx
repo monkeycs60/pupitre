@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
+  deleteProjectIntegration,
   listProjectMcpServers,
+  listProjectIntegrations,
   listPresets,
   measureProjectMcpServers,
+  saveProjectIntegration,
   setProjectDefaultCorrectionPreset,
   setProjectDefaultReviewPreset,
   setProjectFilesystemScope,
@@ -12,12 +15,41 @@ import {
 import type { McpContextProbe, ProjectMcpConfig } from './api'
 import { formatCompact } from './formatCompact'
 import { ProviderMark } from './ProviderMark'
+import type { DashboardIntegration } from './types'
 import type { FilesystemScope, Preset, Project } from './types'
 
 interface ProjectSettingsDialogProps {
   project: Project
   onClose: () => void
   onUpdated: (project: Project) => void
+}
+
+const DEFAULT_BRANCH_PATTERN = '^(issue|maintenance|feature)/(TECH-\\d+)'
+
+interface ClickUpIntegrationForm {
+  enabled: boolean
+  existed: boolean
+  teamId: string
+  listIds: string
+}
+
+interface GitLabProjectForm {
+  path: string
+  label: string
+  environments: string
+}
+
+interface GitLabIntegrationForm {
+  enabled: boolean
+  existed: boolean
+  host: string
+  projects: GitLabProjectForm[]
+}
+
+interface IntegrationsForm {
+  branchPattern: string
+  clickup: ClickUpIntegrationForm
+  gitlab: GitLabIntegrationForm
 }
 
 function errorMessage(error: unknown): string {
@@ -34,6 +66,82 @@ function presetLabel(preset: Preset, kind: 'review' | 'correction'): string {
   return `${preset.name} · ${model} · ${effort}`
 }
 
+function emptyGitLabProject(): GitLabProjectForm {
+  return { path: '', label: '', environments: '' }
+}
+
+function defaultIntegrations(): IntegrationsForm {
+  return {
+    branchPattern: DEFAULT_BRANCH_PATTERN,
+    clickup: {
+      enabled: false,
+      existed: false,
+      teamId: '',
+      listIds: '',
+    },
+    gitlab: {
+      enabled: false,
+      existed: false,
+      host: 'https://git.kaizen-hosting.com',
+      projects: [],
+    },
+  }
+}
+
+function readObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function readString(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string')
+}
+
+function integrationForm(items: DashboardIntegration[]): IntegrationsForm {
+  const next = defaultIntegrations()
+  const savedPattern = items.find((item) => item.branch_pattern)?.branch_pattern
+  if (savedPattern) next.branchPattern = savedPattern
+
+  for (const item of items) {
+    if (item.type === 'clickup') {
+      const config = readObject(item.config)
+      next.clickup = {
+        enabled: true,
+        existed: true,
+        teamId: readString(config?.teamId),
+        listIds: readStringArray(config?.listIds).join(', '),
+      }
+    }
+    if (item.type === 'gitlab') {
+      const config = readObject(item.config)
+      const projects = Array.isArray(config?.projects)
+        ? config.projects
+            .map((value) => readObject(value))
+            .filter((value): value is Record<string, unknown> => value !== null)
+            .map((value) => ({
+              path: readString(value.path),
+              label: readString(value.label),
+              environments: readStringArray(value.environments).join(', '),
+            }))
+        : []
+      next.gitlab = {
+        enabled: true,
+        existed: true,
+        host: readString(config?.host) || 'https://git.kaizen-hosting.com',
+        projects,
+      }
+    }
+  }
+
+  return next
+}
+
 export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSettingsDialogProps) {
   const [scope, setScope] = useState<FilesystemScope>(project.filesystem_scope)
   const [presets, setPresets] = useState<Preset[]>([])
@@ -45,6 +153,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
   const [measuring, setMeasuring] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [probe, setProbe] = useState<McpContextProbe | null>(null)
+  const [integrations, setIntegrations] = useState<IntegrationsForm>(() => defaultIntegrations())
 
   useEffect(() => {
     const controller = new AbortController()
@@ -58,6 +167,15 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
       .then(setMcp)
       // La section MCP disparaît si l'inventaire échoue ; le reste du dialogue
       // doit rester utilisable.
+      .catch(() => {})
+    return () => controller.abort()
+  }, [project.id])
+
+  useEffect(() => {
+    setIntegrations(defaultIntegrations())
+    const controller = new AbortController()
+    void listProjectIntegrations(project.id, controller.signal)
+      .then((items) => setIntegrations(integrationForm(items)))
       .catch(() => {})
     return () => controller.abort()
   }, [project.id])
@@ -125,6 +243,18 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
     })
   }
 
+  function updateGitLabProject(index: number, patch: Partial<GitLabProjectForm>) {
+    setIntegrations((current) => ({
+      ...current,
+      gitlab: {
+        ...current.gitlab,
+        projects: current.gitlab.projects.map((projectItem, projectIndex) => (
+          projectIndex === index ? { ...projectItem, ...patch } : projectItem
+        )),
+      },
+    }))
+  }
+
   async function handleSave() {
     if (scope === 'full-system' && project.filesystem_scope !== 'full-system') {
       const confirmed = window.confirm(
@@ -138,6 +268,32 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
       let updated = await setProjectFilesystemScope(project.id, scope)
       updated = await setProjectDefaultReviewPreset(project.id, reviewPresetId || null)
       updated = await setProjectDefaultCorrectionPreset(project.id, correctionPresetId || null)
+      for (const type of ['clickup', 'gitlab'] as const) {
+        const form = integrations[type]
+        if (form.enabled) {
+          const config = type === 'clickup'
+            ? {
+                teamId: form.teamId.trim(),
+                listIds: form.listIds.split(',').map((item) => item.trim()).filter(Boolean),
+              }
+            : {
+                host: form.host.trim(),
+                projects: form.projects
+                  .map((item) => ({
+                    path: item.path.trim(),
+                    label: item.label.trim() || item.path.trim(),
+                    environments: item.environments.split(',').map((value) => value.trim()).filter(Boolean),
+                  }))
+                  .filter((item) => item.path.length > 0),
+              }
+          await saveProjectIntegration(project.id, type, {
+            config,
+            branchPattern: integrations.branchPattern.trim() || null,
+          })
+        } else if (form.existed) {
+          await deleteProjectIntegration(project.id, type)
+        }
+      }
       if (mcp !== null) await updateProjectMcpServers(project.id, mcp.enabled)
       onUpdated(updated)
       onClose()
@@ -324,6 +480,154 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
               ) : null}
             </div>
           ) : null}
+          <section className="project-integrations" aria-labelledby="project-integrations-title">
+            <div className="project-settings-section-heading">
+              <strong id="project-integrations-title">Intégrations</strong>
+              <span>Relie ClickUp et GitLab à ce projet pour alimenter le tableau de bord.</span>
+            </div>
+
+            <article className="project-integration-card">
+              <label className="project-settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={integrations.clickup.enabled}
+                  disabled={saving}
+                  onChange={(event) => setIntegrations((current) => ({
+                    ...current,
+                    clickup: { ...current.clickup, enabled: event.target.checked },
+                  }))}
+                />
+                <span>Activer ClickUp</span>
+              </label>
+              <label htmlFor="project-clickup-team-id">
+                <strong>Team ID</strong>
+                <input
+                  id="project-clickup-team-id"
+                  value={integrations.clickup.teamId}
+                  disabled={saving || !integrations.clickup.enabled}
+                  onChange={(event) => setIntegrations((current) => ({
+                    ...current,
+                    clickup: { ...current.clickup, teamId: event.target.value },
+                  }))}
+                />
+              </label>
+              <label htmlFor="project-clickup-list-ids">
+                <strong>Listes ClickUp</strong>
+                <input
+                  id="project-clickup-list-ids"
+                  value={integrations.clickup.listIds}
+                  disabled={saving || !integrations.clickup.enabled}
+                  onChange={(event) => setIntegrations((current) => ({
+                    ...current,
+                    clickup: { ...current.clickup, listIds: event.target.value },
+                  }))}
+                />
+              </label>
+            </article>
+
+            <article className="project-integration-card">
+              <label className="project-settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={integrations.gitlab.enabled}
+                  disabled={saving}
+                  onChange={(event) => setIntegrations((current) => ({
+                    ...current,
+                    gitlab: { ...current.gitlab, enabled: event.target.checked },
+                  }))}
+                />
+                <span>Activer GitLab</span>
+              </label>
+              <label htmlFor="project-gitlab-host">
+                <strong>Hôte GitLab</strong>
+                <input
+                  id="project-gitlab-host"
+                  value={integrations.gitlab.host}
+                  disabled={saving || !integrations.gitlab.enabled}
+                  onChange={(event) => setIntegrations((current) => ({
+                    ...current,
+                    gitlab: { ...current.gitlab, host: event.target.value },
+                  }))}
+                />
+              </label>
+              <div className="project-integration-projects">
+                <div className="project-integration-projects-heading">
+                  <strong>Projets GitLab</strong>
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={saving || !integrations.gitlab.enabled}
+                    onClick={() => setIntegrations((current) => ({
+                      ...current,
+                      gitlab: {
+                        ...current.gitlab,
+                        projects: [...current.gitlab.projects, emptyGitLabProject()],
+                      },
+                    }))}
+                  >
+                    + Ajouter un projet
+                  </button>
+                </div>
+                {integrations.gitlab.projects.length > 0 ? (
+                  <div className="project-integration-project-list">
+                    {integrations.gitlab.projects.map((item, index) => (
+                      <div key={`gitlab-project-${index}`} className="project-integration-project-row">
+                        <label htmlFor={`project-gitlab-path-${index}`}>
+                          <strong>Chemin</strong>
+                          <input
+                            id={`project-gitlab-path-${index}`}
+                            value={item.path}
+                            disabled={saving || !integrations.gitlab.enabled}
+                            onChange={(event) => updateGitLabProject(index, { path: event.target.value })}
+                          />
+                        </label>
+                        <label htmlFor={`project-gitlab-label-${index}`}>
+                          <strong>Libellé</strong>
+                          <input
+                            id={`project-gitlab-label-${index}`}
+                            value={item.label}
+                            disabled={saving || !integrations.gitlab.enabled}
+                            onChange={(event) => updateGitLabProject(index, { label: event.target.value })}
+                          />
+                        </label>
+                        <label htmlFor={`project-gitlab-environments-${index}`}>
+                          <strong>Environnements</strong>
+                          <input
+                            id={`project-gitlab-environments-${index}`}
+                            value={item.environments}
+                            disabled={saving || !integrations.gitlab.enabled}
+                            onChange={(event) => updateGitLabProject(index, { environments: event.target.value })}
+                          />
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="project-integration-note">Ajoutez un ou plusieurs projets suivis dans ce dépôt.</p>
+                )}
+              </div>
+              <p className="project-integration-note">
+                Token : celui de <code>glab</code> est utilisé automatiquement ; sinon,
+                renseigne-le dans Paramètres › Tokens.
+              </p>
+            </article>
+
+            <label htmlFor="project-branch-pattern">
+              <strong>Motif de branche</strong>
+              <input
+                id="project-branch-pattern"
+                value={integrations.branchPattern}
+                disabled={saving}
+                onChange={(event) => setIntegrations((current) => ({
+                  ...current,
+                  branchPattern: event.target.value,
+                }))}
+              />
+            </label>
+            <p className="project-integration-note">
+              La clé du ticket est le dernier groupe capturant.
+            </p>
+          </section>
           {error ? <p className="modal-error" role="alert">{error}</p> : null}
         </div>
         <footer className="modal-actions">

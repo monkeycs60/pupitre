@@ -16,7 +16,7 @@ import {
   defaultReviewConfig,
   normalizePresetPermissionMode,
 } from "./stores/presets";
-import type { SettingsStore } from "./stores/settings";
+import { INTEGRATION_TOKENS_KEY, type SettingsStore } from "./stores/settings";
 import type { QuotaTracker } from "./quotas";
 import type { QuotaRefresher } from "./quota-refresh";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
@@ -58,6 +58,8 @@ import {
 import { FILESYSTEM_SCOPES, type FilesystemScope } from "./access";
 import { actionFormat } from "./response-format";
 import { conductorToolTokens } from "./conductor-mcp";
+import { dashboardPayload } from "./dashboard";
+import { composeTicketBrief } from "./ticket-brief";
 import {
   claudeServerDefinitions,
   codexServerDefinitions,
@@ -68,6 +70,10 @@ import { measureMcpServers } from "./mcp-probe";
 import { verifyMcpContextCost } from "./mcp-verify";
 import { instructionsTokens } from "./context-profile";
 import type { McpServerWeight } from "./mcp-probe";
+import type { IntegrationsRefresher } from "./integrations/refresher";
+import { compileBranchPattern, extractTicketKey } from "./ticket-key";
+import type { IntegrationStore, IntegrationType } from "./stores/integrations";
+import type { Ticket, TicketStore } from "./stores/tickets";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -110,6 +116,9 @@ export interface ServerDeps {
   search: SearchIndex;
   costs: CostStore;
   memory: MemoryStore;
+  integrations: IntegrationStore;
+  tickets: TicketStore;
+  integrationsRefresher: IntegrationsRefresher;
   gamification?: GamificationService;
   htmlDocuments?: HtmlDocumentService;
   /**
@@ -125,6 +134,30 @@ interface HandoffTargetConfig {
   effort: string | null;
   speed: "standard" | "fast" | null;
   orchestrator: boolean;
+}
+
+async function ticketBriefFor(
+  deps: ServerDeps,
+  ticket: Ticket,
+  excludeConversationId: string,
+): Promise<string> {
+  const siblings = deps.tickets.conversationsByTicket(ticket.id)
+    .filter((item) => item.id !== excludeConversationId)
+    .slice(0, 5)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      summary: item.summary,
+      debrief: deps.debriefs.latest(item.id)?.content_md ?? null,
+    }));
+  return composeTicketBrief({
+    ticket,
+    branches: deps.tickets.branchesOf(ticket.id),
+    refs: deps.tickets.refsByTicket(ticket.id),
+    notes: deps.tickets.notesByTicket(ticket.id),
+    clickup: await deps.integrationsRefresher.clickUpContext(ticket.project_id, ticket.key),
+    siblings,
+  });
 }
 
 async function createContinuationFromHandoff(
@@ -182,7 +215,8 @@ async function createContinuationFromHandoff(
 type WebSocketData =
   | { channel: "conversation"; conversationId: string }
   | { channel: "quotas" }
-  | { channel: "fleet" };
+  | { channel: "fleet" }
+  | { channel: "tickets"; projectId: string };
 
 const EFFORTS_BY_PROVIDER = {
   claude: ["low", "medium", "high", "xhigh", "max"],
@@ -465,6 +499,19 @@ function optionalTrimmed(body: Record<string, unknown>, field: string): string |
   if (typeof value !== "string") throw new HttpError(400, `champ ${field} invalide`);
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
+}
+
+function publicSettings(deps: ServerDeps): Record<string, unknown> {
+  const settings = deps.settings.all();
+  const tokens = settings[INTEGRATION_TOKENS_KEY];
+  const integrationTokens = typeof tokens === "object" && tokens !== null && !Array.isArray(tokens)
+    ? Object.fromEntries(Object.keys(tokens).map((key) => [key, true]))
+    : {};
+  return {
+    ...settings,
+    [INTEGRATION_TOKENS_KEY]: integrationTokens,
+    conductorToolTokens: conductorToolTokens(),
+  };
 }
 
 function optionalBoolean(
@@ -925,6 +972,7 @@ export function createServer(deps: ServerDeps) {
   const sockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
   const fleetSockets = new Set<ServerWebSocket<WebSocketData>>();
+  const ticketSockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   let fleetTimer: ReturnType<typeof setInterval> | null = null;
   const currentFleet = () => fleetSnapshot(deps);
   const broadcastFleet = () => {
@@ -961,6 +1009,19 @@ export function createServer(deps: ServerDeps) {
     }
   };
   deps.reviews.subscribeStatus(broadcastReviewStatus);
+  const broadcastDashboard = (projectId: string) => {
+    const subscribers = ticketSockets.get(projectId);
+    if (!subscribers || subscribers.size === 0) return;
+    const message = JSON.stringify(dashboardPayload(projectId, deps.integrations, deps.tickets));
+    for (const socket of subscribers) {
+      try {
+        socket.send(message);
+      } catch {
+        subscribers.delete(socket);
+      }
+    }
+    if (subscribers.size === 0) ticketSockets.delete(projectId);
+  };
   deps.events.subscribe((conversationId, event) => {
     const message = JSON.stringify(event);
     for (const socket of sockets.get(conversationId) ?? []) {
@@ -971,6 +1032,7 @@ export function createServer(deps: ServerDeps) {
       }
     }
   });
+  deps.integrationsRefresher.subscribe(broadcastDashboard);
   deps.quotas.subscribe((state) => {
     const message = JSON.stringify(state);
     for (const socket of quotaSockets) {
@@ -1365,6 +1427,71 @@ export function createServer(deps: ServerDeps) {
             if (error instanceof GitProjectError) throw new HttpError(409, error.message);
             throw error;
           }
+        }
+
+        const projectIntegrationsId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/integrations$/,
+        );
+        if (request.method === "GET" && projectIntegrationsId !== null) {
+          if (!deps.projects.get(projectIntegrationsId)) throw new HttpError(404, "projet inconnu");
+          return json(dashboardPayload(projectIntegrationsId, deps.integrations, deps.tickets).integrations);
+        }
+
+        const projectIntegrationMatch = pathname.match(
+          /^\/api\/projects\/([^/]+)\/integrations\/(clickup|gitlab|github|notion|sentry)$/,
+        );
+        if (projectIntegrationMatch && (request.method === "PUT" || request.method === "DELETE")) {
+          const projectId = decodeURIComponent(projectIntegrationMatch[1]!);
+          const type = projectIntegrationMatch[2] as IntegrationType;
+          if (!deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+
+          if (request.method === "DELETE") {
+            const existing = deps.integrations.find(projectId, type);
+            if (existing) deps.integrations.remove(existing.id);
+            broadcastDashboard(projectId);
+            return empty(204);
+          }
+
+          const body = await readObject(request);
+          const config = body.config;
+          if (typeof config !== "object" || config === null || Array.isArray(config)) {
+            throw new HttpError(400, "champ config invalide");
+          }
+          const branchPattern = optionalTrimmed(body, "branchPattern");
+          try {
+            const saved = deps.integrations.upsert(projectId, type, {
+              config: config as Record<string, unknown>,
+              branchPattern,
+            });
+            broadcastDashboard(projectId);
+            void deps.integrationsRefresher.refreshProject(projectId).catch(() => {});
+            const { snapshot: _snapshot, ...rest } = saved;
+            return json(rest);
+          } catch (error) {
+            throw new HttpError(
+              400,
+              error instanceof Error
+                ? `motif de branche invalide : ${error.message}`
+                : "intégration invalide",
+            );
+          }
+        }
+
+        const projectDashboardId = routeId(pathname, /^\/api\/projects\/([^/]+)\/dashboard$/);
+        if (request.method === "GET" && projectDashboardId !== null) {
+          if (!deps.projects.get(projectDashboardId)) throw new HttpError(404, "projet inconnu");
+          return json(dashboardPayload(projectDashboardId, deps.integrations, deps.tickets));
+        }
+
+        const projectDashboardRefreshId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/dashboard\/refresh$/,
+        );
+        if (request.method === "POST" && projectDashboardRefreshId !== null) {
+          if (!deps.projects.get(projectDashboardRefreshId)) throw new HttpError(404, "projet inconnu");
+          void deps.integrationsRefresher.refreshProject(projectDashboardRefreshId).catch(() => {});
+          return empty(202);
         }
 
         const projectDefaultPresetId = routeId(
@@ -1817,7 +1944,7 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "GET" && pathname === "/api/settings") {
           // Lecture seule, calculée : l'UI en a besoin pour isoler le coût du
           // bridge conductor dans la jauge de contexte.
-          return json({ ...deps.settings.all(), conductorToolTokens: conductorToolTokens() });
+          return json(publicSettings(deps));
         }
 
         if (request.method === "PUT" && pathname === "/api/settings") {
@@ -1863,8 +1990,51 @@ export function createServer(deps: ServerDeps) {
             deps.settings.set("actionFormat", actionFormat(body.actionFormat));
             updated = true;
           }
+          if (INTEGRATION_TOKENS_KEY in body) {
+            const tokens = body[INTEGRATION_TOKENS_KEY];
+            if (typeof tokens !== "object" || tokens === null || Array.isArray(tokens)) {
+              throw new HttpError(400, "integrationTokens invalide");
+            }
+            const currentTokens = deps.settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY) ?? {};
+            for (const [name, value] of Object.entries(tokens as Record<string, unknown>)) {
+              if (name !== "clickup" && name !== "gitlab") {
+                throw new HttpError(400, `token ${name} inconnu`);
+              }
+              if (value === null || value === "") {
+                delete currentTokens[name];
+              } else if (typeof value === "string") {
+                currentTokens[name] = value;
+              } else {
+                throw new HttpError(400, `token ${name} invalide`);
+              }
+            }
+            deps.settings.set(INTEGRATION_TOKENS_KEY, currentTokens);
+            updated = true;
+          }
           if (!updated) throw new HttpError(400, "aucun réglage reconnu");
-          return json(deps.settings.all());
+          return json(publicSettings(deps));
+        }
+
+        const ticketNotesId = routeId(pathname, /^\/api\/tickets\/([^/]+)\/notes$/);
+        if (ticketNotesId !== null && (request.method === "GET" || request.method === "POST")) {
+          const ticket = deps.tickets.get(ticketNotesId);
+          if (!ticket) throw new HttpError(404, "ticket inconnu");
+          if (request.method === "GET") {
+            return json(deps.tickets.notesByTicket(ticket.id));
+          }
+          const body = await readObject(request);
+          const note = deps.tickets.addNote(ticket.id, requiredString(body, "body").trim());
+          broadcastDashboard(ticket.project_id);
+          return json(note, 201);
+        }
+
+        const ticketNoteId = routeId(pathname, /^\/api\/ticket-notes\/([^/]+)$/);
+        if (request.method === "DELETE" && ticketNoteId !== null) {
+          const deleted = deps.tickets.deleteNote(ticketNoteId);
+          if (!deleted) throw new HttpError(404, "note inconnue");
+          const ticket = deps.tickets.get(deleted.ticket_id);
+          if (ticket) broadcastDashboard(ticket.project_id);
+          return empty(204);
         }
 
         if (request.method === "POST" && pathname === "/api/conversations") {
@@ -1899,10 +2069,23 @@ export function createServer(deps: ServerDeps) {
           // Une conversation peut naître sur sa propre branche : Pupitre lui
           // crée alors un worktree, où tous ses agents travailleront (ADR 0001).
           const branch = optionalTrimmed(body, "branch");
+          const ticketId = optionalTrimmed(body, "ticketId");
+          let ticket = ticketId ? deps.tickets.get(ticketId) : null;
+          if (ticketId && (!ticket || ticket.project_id !== projectId)) {
+            throw new HttpError(404, "ticket inconnu");
+          }
+          let effectiveBranch = branch ?? (ticket ? deps.tickets.branchesOf(ticket.id)[0] ?? null : null);
+          if (!ticket && effectiveBranch) {
+            const patternSource = deps.integrations.listByProject(projectId)
+              .find((integration) => integration.branch_pattern)?.branch_pattern ?? null;
+            const pattern = patternSource ? compileBranchPattern(patternSource) : null;
+            const key = extractTicketKey(effectiveBranch, pattern);
+            ticket = key ? deps.tickets.findByKey(projectId, key) : null;
+          }
           let worktreePath: string | null = null;
-          if (branch !== null) {
+          if (effectiveBranch !== null) {
             try {
-              worktreePath = deps.git.createWorktree(projectId, { branch }).path;
+              worktreePath = deps.git.createWorktree(projectId, { branch: effectiveBranch }).path;
             } catch (error) {
               throw new HttpError(
                 400,
@@ -1924,9 +2107,19 @@ export function createServer(deps: ServerDeps) {
             subagentPresetId,
             subagentEffort,
             createdOnBranch: snapshot.currentBranch,
+            ticketId: ticket?.id ?? null,
             firstMessage: message.trim() || "Image jointe",
           });
-          void deps.runner.runTurn(conversation.id, message, images, attachments)
+          const preamble = ticket
+            ? await ticketBriefFor(deps, ticket, conversation.id)
+            : undefined;
+          void deps.runner.runTurn(
+            conversation.id,
+            message,
+            images,
+            attachments,
+            preamble ? { preamble } : {},
+          )
             .catch((error) => console.error("Échec du tour", error));
           return json(conversation, 201);
         }
@@ -2114,6 +2307,47 @@ export function createServer(deps: ServerDeps) {
           pathname,
           /^\/api\/conversations\/([^/]+)\/debriefs$/,
         );
+        const conversationBriefId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/brief$/,
+        );
+        if (request.method === "GET" && conversationBriefId !== null) {
+          const conversation = deps.conversations.get(conversationBriefId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const sourceId = url.searchParams.get("source");
+          if (sourceId !== null) {
+            const source = deps.conversations.get(sourceId);
+            if (!source) throw new HttpError(404, "conversation source inconnue");
+            if (
+              source.id === conversation.id
+              || source.project_id !== conversation.project_id
+              || source.ticket_id === null
+              || source.ticket_id !== conversation.ticket_id
+            ) {
+              throw new HttpError(403, "conversation sœur inaccessible");
+            }
+          }
+          const exchanges = deps.conversations.listEvents(conversation.id)
+            .flatMap((event) => {
+              if (event.type === "user-message") {
+                return [{ role: "user" as const, text: event.text.slice(0, 2_000) }];
+              }
+              if (event.type === "text-final") {
+                return [{ role: "assistant" as const, text: event.text.slice(0, 2_000) }];
+              }
+              return [];
+            })
+            .slice(-12);
+          return json({
+            id: conversation.id,
+            title: conversation.title,
+            summary: conversation.summary,
+            provider: conversation.provider,
+            updated_at: conversation.updated_at,
+            debrief: deps.debriefs.latest(conversation.id)?.content_md ?? null,
+            exchanges,
+          });
+        }
         if (request.method === "GET" && conversationDebriefsId !== null) {
           if (!deps.conversations.get(conversationDebriefsId)) {
             throw new HttpError(404, "conversation inconnue");
@@ -2909,6 +3143,14 @@ export function createServer(deps: ServerDeps) {
             if (server.upgrade(request, { data: { channel: "fleet" } })) return;
             throw new HttpError(400, "upgrade WebSocket refusé");
           }
+          if (channel === "tickets") {
+            const projectId = url.searchParams.get("project");
+            if (!projectId || !deps.projects.get(projectId)) {
+              throw new HttpError(404, "projet inconnu");
+            }
+            if (server.upgrade(request, { data: { channel: "tickets", projectId } })) return;
+            throw new HttpError(400, "upgrade WebSocket refusé");
+          }
           if (channel !== null && channel !== "conversation") {
             throw new HttpError(400, "canal inconnu");
           }
@@ -2953,6 +3195,17 @@ export function createServer(deps: ServerDeps) {
           fleetTimer ??= setInterval(broadcastFleet, 1_000);
           return;
         }
+        if (socket.data.channel === "tickets") {
+          const { projectId } = socket.data;
+          let subscribers = ticketSockets.get(projectId);
+          if (!subscribers) {
+            subscribers = new Set();
+            ticketSockets.set(projectId, subscribers);
+          }
+          subscribers.add(socket);
+          socket.send(JSON.stringify(dashboardPayload(projectId, deps.integrations, deps.tickets)));
+          return;
+        }
         const { conversationId } = socket.data;
         let subscribers = sockets.get(conversationId);
         if (!subscribers) {
@@ -2972,6 +3225,13 @@ export function createServer(deps: ServerDeps) {
             clearInterval(fleetTimer);
             fleetTimer = null;
           }
+          return;
+        }
+        if (socket.data.channel === "tickets") {
+          const { projectId } = socket.data;
+          const subscribers = ticketSockets.get(projectId);
+          subscribers?.delete(socket);
+          if (subscribers?.size === 0) ticketSockets.delete(projectId);
           return;
         }
         const { conversationId } = socket.data;

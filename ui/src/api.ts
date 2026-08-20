@@ -4,12 +4,16 @@ import type {
   ConversationSpeed,
   Debrief,
   DesignReachability,
+  DashboardPayload,
+  DashboardIntegration,
   GitDiff,
   GitCommitResult,
   GitSnapshot,
   FleetItem,
+  IntegrationType,
   SearchResult,
   Project,
+  ProjectIntegration,
   ProjectCostReport,
   MemoryDocument,
   MemoryFile,
@@ -30,6 +34,7 @@ import type {
   SkillSuggestionResult,
   StoredEvent,
   SubtaskResult,
+  TicketNote,
   TestInventory,
   TestScope,
   Workflow,
@@ -63,6 +68,7 @@ export interface CreateConversationInput {
   subagentEffort?: string | null
   /** Fait naître la conversation sur cette branche, dans un worktree dédié. */
   branch?: string | null
+  ticketId?: string | null
   message: string
   images?: string[]
   attachments?: Attachment[]
@@ -138,6 +144,7 @@ export interface Settings {
   longTaskThresholdSeconds?: number
   filesystemScope?: FilesystemScope
   actionFormat?: ActionFormat
+  integrationTokens?: Record<string, boolean>
   /** Lecture seule : calculé par le sidecar, ignoré en écriture. */
   conductorToolTokens?: number
   /** Contexte d'un tour à vide, mesuré par « Vérifier en réel ». */
@@ -638,6 +645,57 @@ export function getSettings(signal?: AbortSignal): Promise<Settings> {
 
 export function updateSettings(settings: Settings): Promise<Settings> {
   return fetchJson('/api/settings', jsonPut(settings))
+}
+
+export function getProjectDashboard(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<DashboardPayload> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/dashboard`, { signal })
+}
+
+export function refreshProjectDashboard(projectId: string): Promise<void> {
+  return fetchVoid(`/api/projects/${routeId(projectId)}/dashboard/refresh`, jsonPost({}))
+}
+
+export function listProjectIntegrations(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<DashboardIntegration[]> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/integrations`, { signal })
+}
+
+export function saveProjectIntegration(
+  projectId: string,
+  type: IntegrationType,
+  input: { config: Record<string, unknown>; branchPattern?: string | null },
+): Promise<ProjectIntegration> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/integrations/${type}`, jsonPut(input))
+}
+
+export function deleteProjectIntegration(
+  projectId: string,
+  type: IntegrationType,
+): Promise<void> {
+  return fetchVoid(`/api/projects/${routeId(projectId)}/integrations/${type}`, { method: 'DELETE' })
+}
+
+export function listTicketNotes(ticketId: string): Promise<TicketNote[]> {
+  return fetchJson(`/api/tickets/${routeId(ticketId)}/notes`)
+}
+
+export function createTicketNote(ticketId: string, body: string): Promise<TicketNote> {
+  return fetchJson(`/api/tickets/${routeId(ticketId)}/notes`, jsonPost({ body }))
+}
+
+export function deleteTicketNote(noteId: string): Promise<void> {
+  return fetchVoid(`/api/ticket-notes/${routeId(noteId)}`, { method: 'DELETE' })
+}
+
+export function updateIntegrationTokens(
+  tokens: Partial<Record<'clickup' | 'gitlab', string | null>>,
+): Promise<Settings> {
+  return fetchJson('/api/settings', jsonPut({ integrationTokens: tokens }))
 }
 
 export function setConversationPermissionMode(

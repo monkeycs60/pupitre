@@ -31,6 +31,12 @@ import { CostStore } from "./costs";
 import { MemoryStore } from "./memory";
 import { GamificationService } from "./gamification";
 import { HtmlDocumentService } from "./html-documents";
+import { ClickUpClient } from "./integrations/clickup";
+import { GitLabClient, readGlabToken } from "./integrations/gitlab";
+import { IntegrationsRefresher } from "./integrations/refresher";
+import { IntegrationStore } from "./stores/integrations";
+import { INTEGRATION_TOKENS_KEY } from "./stores/settings";
+import { TicketStore } from "./stores/tickets";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -71,8 +77,25 @@ if (process.argv.includes("--pupitre-mcp")) {
   const search = new SearchIndex(db);
   const costs = new CostStore(db);
   const memory = new MemoryStore();
+  const integrations = new IntegrationStore(db);
+  const tickets = new TicketStore(db);
   const git = new GitProjectService(db, projects);
   const gamification = new GamificationService(db, projects, git);
+  const integrationsRefresher = new IntegrationsRefresher(
+    { integrations, tickets, conversations, projects },
+    {
+      clickUpClient: () => {
+        const token = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY)?.clickup ?? null;
+        return token ? new ClickUpClient(token) : null;
+      },
+      gitLabClient: (integration) => {
+        const host = typeof integration.config.host === "string" ? integration.config.host : "";
+        if (host.trim() === "") return null;
+        const token = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY)?.gitlab ?? readGlabToken(host);
+        return token ? new GitLabClient({ host, token }) : null;
+      },
+    },
+  );
   const configuredPort = process.env.PUPITRE_PORT;
   const port = configuredPort === undefined ? 4820 : Number(configuredPort);
   if (configuredPort?.trim() === "" || !Number.isInteger(port) || port < 0 || port > 65_535) {
@@ -160,6 +183,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     stopping = true;
     try {
       quotaRefresher.stop();
+      integrationsRefresher.stop();
       clearInterval(htmlDocumentSweepTimer);
       codexAppServer.shutdown();
     } finally {
@@ -196,6 +220,9 @@ if (process.argv.includes("--pupitre-mcp")) {
     search,
     costs,
     memory,
+    integrations,
+    tickets,
+    integrationsRefresher,
     gamification,
     htmlDocuments,
   }), port);
@@ -204,6 +231,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   // Les deux relevés de quota sont des lectures gratuites : on part d'un état
   // frais et on le tient à jour en fond (cf. QuotaRefresher).
   quotaRefresher.start();
+  integrationsRefresher.start();
 
   console.log(`pupitre sidecar prêt sur http://localhost:${server.port}`);
 }

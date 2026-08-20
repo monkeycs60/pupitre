@@ -14,9 +14,20 @@ interface ConversationDraft {
   subagentEffort?: string | null
   /** Branche saisie par l'utilisateur ; vide = travailler dans le dépôt. */
   branch?: string | null
+  ticketId?: string | null
   message: string
   images: string[]
   attachments?: Attachment[]
+}
+
+export function newConversationDraftStorageKey(
+  projectId: string,
+  ticketId?: string | null,
+): string {
+  const scope = ticketId === null || ticketId === undefined
+    ? `new:${projectId}`
+    : `new:${projectId}:ticket:${ticketId}`
+  return `pupitre:draft:${scope}`
 }
 
 /** Construit le contrat HTTP depuis le formulaire, sans envoyer fast à Claude. */
@@ -35,6 +46,7 @@ export function buildCreateConversationInput(
     subagentPresetId: draft.subagentPresetId ?? null,
     subagentEffort: draft.subagentEffort ?? null,
     branch: draft.branch?.trim() || null,
+    ticketId: draft.ticketId ?? null,
     message: draft.message,
     images: draft.images,
     attachments: draft.attachments ?? [],

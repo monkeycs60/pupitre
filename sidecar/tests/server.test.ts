@@ -32,6 +32,9 @@ import { SearchIndex } from "../src/search";
 import { CostStore } from "../src/costs";
 import { MemoryStore } from "../src/memory";
 import { HtmlDocumentService } from "../src/html-documents";
+import { IntegrationStore } from "../src/stores/integrations";
+import { IntegrationsRefresher } from "../src/integrations/refresher";
+import { TicketStore } from "../src/stores/tickets";
 
 interface TestServer {
   baseUrl: string;
@@ -292,6 +295,12 @@ cat "${fixture}"
   const routines = new RoutineScheduler(
     routineStore, workflows, presets, projects, conversations, runner, notifications,
   );
+  const integrations = new IntegrationStore(db);
+  const tickets = new TicketStore(db);
+  const integrationsRefresher = new IntegrationsRefresher(
+    { integrations, tickets, conversations, projects },
+    { clickUpClient: () => null, gitLabClient: () => null },
+  );
   let shutdownCount = 0;
   const deps: ServerDeps = {
     port: 0,
@@ -328,6 +337,9 @@ cat "${fixture}"
     costs: new CostStore(db),
     memory: new MemoryStore(join(dir, "memory")),
     htmlDocuments,
+    integrations,
+    tickets,
+    integrationsRefresher,
     shutdown: () => {
       shutdownCount += 1;
     },
@@ -1054,14 +1066,18 @@ test("persiste les seuils de quota dans settings", async () => {
     quotaThresholds: { lastHour: false, usedPercent: 91 },
   });
   expect(saved.status).toBe(200);
-  expect(await saved.json()).toEqual({
+  expect(await saved.json()).toMatchObject({
+    conductorToolTokens: expect.any(Number),
+    integrationTokens: {},
     quotaThresholds: { lastHour: false, usedPercent: 91 },
   });
 
   const longTask = await putJson("/api/settings", {
     longTaskThresholdSeconds: 45,
   });
-  expect(await longTask.json()).toEqual({
+  expect(await longTask.json()).toMatchObject({
+    conductorToolTokens: expect.any(Number),
+    integrationTokens: {},
     longTaskThresholdSeconds: 45,
     quotaThresholds: { lastHour: false, usedPercent: 91 },
   });
@@ -1074,7 +1090,9 @@ test("persiste les seuils de quota dans settings", async () => {
   const globalFilesystem = await putJson("/api/settings", {
     filesystemScope: "full-system",
   });
-  expect(await globalFilesystem.json()).toEqual({
+  expect(await globalFilesystem.json()).toMatchObject({
+    conductorToolTokens: expect.any(Number),
+    integrationTokens: {},
     filesystemScope: "full-system",
     longTaskThresholdSeconds: 45,
     quotaThresholds: { lastHour: false, usedPercent: 91 },

@@ -57,7 +57,11 @@ test("publish_html_document transmet un document au sidecar local", async () => 
   }));
 
   const { tools } = await client.listTools();
-  expect(tools.map((tool) => tool.name)).toEqual(["publish_document", "publish_html_document"]);
+  expect(tools.map((tool) => tool.name)).toEqual([
+    "publish_document",
+    "publish_html_document",
+    "read_sibling_conversation",
+  ]);
   expect(tools[0]?.description).toContain("jusqu’à suppression explicite");
 
   const result = await client.callTool({
@@ -78,4 +82,49 @@ test("publish_html_document transmet un document au sidecar local", async () => 
     summary: "Synthèse",
     deleteSource: true,
   });
+});
+
+test("read_sibling_conversation relaie le brief en texte", async () => {
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch(request) {
+      const url = new URL(request.url);
+      const { pathname } = url;
+      expect(pathname).toBe("/api/conversations/conversation-1/brief");
+      expect(url.searchParams.get("source")).toBe("parent-1");
+      return Response.json({
+        id: "conversation-1",
+        title: "Reprise TECH-7",
+        summary: "Résumé utile",
+        debrief: "## Dernier débrief\n\nPoints clefs.",
+        exchanges: [
+          { role: "user", text: "Bonjour" },
+          { role: "assistant", text: "Salut, voici le plan." },
+        ],
+      });
+    },
+  });
+  servers.push(server);
+  const client = new Client({ name: "test-pupitre", version: "0.0.0" });
+  clients.push(client);
+  await client.connect(new StdioClientTransport({
+    command: process.execPath,
+    args: [pupitreMcpPath()],
+    env: {
+      PATH: process.env.PATH ?? "",
+      PUPITRE_PORT: String(server.port),
+      PUPITRE_CONVERSATION_ID: "parent-1",
+    },
+  }));
+
+  const result = await client.callTool({
+    name: "read_sibling_conversation",
+    arguments: { conversation_id: "conversation-1" },
+  }) as { content: Array<{ type: string; text?: string }>; isError?: boolean };
+
+  expect(result.isError).toBeFalsy();
+  expect(result.content[0]?.text).toContain("# Reprise TECH-7");
+  expect(result.content[0]?.text).toContain("Résumé utile");
+  expect(result.content[0]?.text).toContain("Salut, voici le plan.");
 });
