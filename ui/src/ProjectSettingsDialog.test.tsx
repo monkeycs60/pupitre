@@ -1,12 +1,14 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
+import { readFileSync } from 'node:fs'
 import type { Project } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { ProjectSettingsDialog } = await import('./ProjectSettingsDialog')
+const dialogsCss = readFileSync(new URL('./styles/dialogs.css', import.meta.url), 'utf8')
 const defaultFetch = globalThis.fetch
 
 const project: Project = {
@@ -85,4 +87,8 @@ test('enregistre une intégration GitLab avec son motif de branche', async () =>
   }
   expect(saved.config.host).toBe('https://git.example')
   expect(saved.branchPattern).toBe('^(issue|feature)/(TECH-\\d+)')
+})
+
+test('le corps des paramètres projet défile sans masquer les actions', () => {
+  expect(dialogsCss).toMatch(/\.project-settings-body\s*\{[\s\S]*?flex:\s*1;[\s\S]*?min-height:\s*0;[\s\S]*?overflow-y:\s*auto;/)
 })
