@@ -1950,6 +1950,7 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "PUT" && pathname === "/api/settings") {
           const body = await readObject(request);
           let updated = false;
+          let integrationTokensUpdated = false;
           if ("quotaThresholds" in body) {
             deps.settings.set("quotaThresholds", quotaThresholds(body));
             updated = true;
@@ -2009,9 +2010,13 @@ export function createServer(deps: ServerDeps) {
               }
             }
             deps.settings.set(INTEGRATION_TOKENS_KEY, currentTokens);
+            integrationTokensUpdated = true;
             updated = true;
           }
           if (!updated) throw new HttpError(400, "aucun réglage reconnu");
+          if (integrationTokensUpdated) {
+            void deps.integrationsRefresher.refreshAll().catch(() => {});
+          }
           return json(publicSettings(deps));
         }
 

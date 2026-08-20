@@ -339,3 +339,38 @@ test("start/stop relève immédiatement puis périodiquement sans double passage
   expect(calls).toBeGreaterThanOrEqual(2);
   expect(maxRunning).toBe(1);
 });
+
+test("une demande pendant un refresh en cours rejoue le projet une seule fois après le premier", async () => {
+  let calls = 0;
+  let releaseFirst = () => {};
+  let firstStartedResolve = () => {};
+  const firstStarted = new Promise<void>((resolve) => {
+    firstStartedResolve = resolve;
+  });
+  const firstGate = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const refresher = makeRefresher({
+    clickUpClient: () => ({
+      ...fakeClickUp(),
+      assignedTasks: async () => {
+        calls += 1;
+        if (calls === 1) {
+          firstStartedResolve();
+          await firstGate;
+        }
+        return [task];
+      },
+    }) as any,
+  });
+
+  const first = refresher.refreshProject(projectId);
+  await firstStarted;
+  const second = refresher.refreshProject(projectId);
+  const third = refresher.refreshProject(projectId);
+  releaseFirst();
+
+  await Promise.all([first, second, third]);
+
+  expect(calls).toBe(2);
+});

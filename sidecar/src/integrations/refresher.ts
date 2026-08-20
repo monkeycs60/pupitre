@@ -92,6 +92,7 @@ type Listener = (projectId: string) => void;
 export class IntegrationsRefresher {
   private readonly listeners = new Set<Listener>();
   private readonly inFlight = new Map<string, Promise<void>>();
+  private readonly queuedRefreshes = new Map<string, Promise<void>>();
   private readonly mergeRequestCache = new Map<string, GitLabMergeRequest>();
   private timer: ReturnType<typeof setInterval> | null = null;
 
@@ -144,8 +145,24 @@ export class IntegrationsRefresher {
   }
 
   refreshProject(projectId: string): Promise<void> {
+    const queued = this.queuedRefreshes.get(projectId);
+    if (queued) return queued;
+
     const running = this.inFlight.get(projectId);
-    if (running) return running;
+    if (running) {
+      const rerun = running.then(
+        () => this.startProjectRefresh(projectId),
+        () => this.startProjectRefresh(projectId),
+      ).finally(() => {
+        this.queuedRefreshes.delete(projectId);
+      });
+      this.queuedRefreshes.set(projectId, rerun);
+      return rerun;
+    }
+    return this.startProjectRefresh(projectId);
+  }
+
+  private startProjectRefresh(projectId: string): Promise<void> {
     const run = this.run(projectId).finally(() => {
       this.inFlight.delete(projectId);
     });

@@ -1105,6 +1105,21 @@ test("persiste les seuils de quota dans settings", async () => {
   await putJson("/api/settings", { filesystemScope: "project-and-ai-roots" });
 });
 
+test("sauvegarder un token relance immédiatement le refresh des intégrations", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  let refreshCalls = 0;
+  current.deps.integrationsRefresher.refreshAll = async () => {
+    refreshCalls += 1;
+  };
+
+  const response = await putJson("/api/settings", {
+    integrationTokens: { clickup: "pk_test" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(refreshCalls).toBe(1);
+});
+
 test("CRUD et exécution immédiate d'une routine avec notification", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());
