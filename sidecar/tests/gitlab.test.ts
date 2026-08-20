@@ -30,6 +30,20 @@ test("lit le token glab pour un hôte donné", () => {
   expect(readGlabToken("https://absent.example", home)).toBeNull();
 });
 
+test("lit le format d'indentation glab actuel", () => {
+  const home = mkdtempSync(join(tmpdir(), "pupitre-glab-current-format-"));
+  mkdirSync(join(home, ".config/glab-cli"), { recursive: true });
+  writeFileSync(join(home, ".config/glab-cli/config.yml"), [
+    "hosts:",
+    "    git.kaizen-hosting.com:",
+    "        token: glpat-kaizen",
+    "        api_host: git.kaizen-hosting.com",
+    "",
+  ].join("\n"));
+
+  expect(readGlabToken("https://git.kaizen-hosting.com", home)).toBe("glpat-kaizen");
+});
+
 test("ignore un token caché dans un sous-bloc YAML imbriqué", () => {
   const home = mkdtempSync(join(tmpdir(), "pupitre-glab-nested-"));
   mkdirSync(join(home, ".config/glab-cli"), { recursive: true });

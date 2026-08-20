@@ -4,8 +4,6 @@ import { join } from "node:path";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const HOSTS_INDENT = 0;
-const HOST_INDENT = 2;
-const HOST_PROPERTY_INDENT = 4;
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -103,6 +101,7 @@ export function readGlabToken(host: string, home = homedir()): string | null {
 
   let insideHosts = false;
   let currentHost: string | null = null;
+  let hostIndent: number | null = null;
   for (const line of content.split(/\r?\n/u)) {
     if (line.trim() === "") continue;
 
@@ -122,18 +121,19 @@ export function readGlabToken(host: string, home = homedir()): string | null {
       continue;
     }
 
-    const hostMatch = indentation === HOST_INDENT
-      ? line.match(/^ {2}([^:\s]+):\s*$/u)
-      : null;
-    if (hostMatch) {
-      currentHost = hostMatch[1] ?? null;
+    const hostMatch = line.match(/^( +)([^:\s]+):\s*$/u);
+    if (hostMatch && (hostIndent === null || indentation === hostIndent)) {
+      hostIndent ??= hostMatch[1]?.length ?? null;
+      if (indentation !== hostIndent) continue;
+      currentHost = hostMatch[2] ?? null;
       continue;
     }
 
-    const tokenMatch = indentation === HOST_PROPERTY_INDENT
-      ? line.match(/^ {4}token:\s*(\S+)\s*$/u)
+    const tokenMatch = hostIndent !== null && currentHost === hostname
+      && (indentation === hostIndent + 2 || indentation === hostIndent + 4)
+      ? line.match(/^\s{2,}token:\s*(\S+)\s*$/u)
       : null;
-    if (tokenMatch && currentHost === hostname) {
+    if (tokenMatch) {
       return tokenMatch[1] ?? null;
     }
   }
