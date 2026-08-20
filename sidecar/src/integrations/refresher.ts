@@ -190,28 +190,31 @@ export class IntegrationsRefresher {
   private async run(projectId: string): Promise<void> {
     const items = this.stores.integrations.listByProject(projectId);
     const pattern = compiledPattern(items);
+    const mergedKeys = new Set<string>();
     for (const item of orderIntegrations(items)) {
-      await this.refreshOne(item, pattern);
+      for (const key of await this.refreshOne(item, pattern)) mergedKeys.add(key);
     }
     this.refreshGitSource(projectId, pattern);
+    this.stores.tickets.archiveKeys(projectId, mergedKeys);
     this.stores.tickets.archiveStale(projectId);
     for (const listener of this.listeners) {
       listener(projectId);
     }
   }
 
-  private async refreshOne(item: ProjectIntegration, pattern: RegExp | null): Promise<void> {
+  private async refreshOne(item: ProjectIntegration, pattern: RegExp | null): Promise<Set<string>> {
     try {
       if (item.type === "clickup") {
         await this.refreshClickUp(item);
       } else if (item.type === "gitlab") {
-        await this.refreshGitLab(item, pattern);
+        return await this.refreshGitLab(item, pattern);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const isAuth = error instanceof ClickUpAuthError || error instanceof GitLabAuthError;
       this.stores.integrations.markError(item.id, isAuth ? "à reconfigurer" : "dégradée", message);
     }
+    return new Set<string>();
   }
 
   private clickUp(item: ProjectIntegration): ClickUpHandle | null {
@@ -261,17 +264,18 @@ export class IntegrationsRefresher {
     return this.deps.gitLabClient?.(item) ?? null;
   }
 
-  private async refreshGitLab(item: ProjectIntegration, pattern: RegExp | null): Promise<void> {
+  private async refreshGitLab(item: ProjectIntegration, pattern: RegExp | null): Promise<Set<string>> {
     const client = this.gitLab(item);
     if (!client) {
       this.stores.integrations.markUnconfigured(item.id);
-      return;
+      return new Set<string>();
     }
     const config = item.config as unknown as GitLabConfig;
     const me = await client.me();
     const environments: EnvironmentState[] = [];
     const toReview: Array<GitLabMergeRequest & { project: string }> = [];
     const writes: Array<() => void> = [];
+    const mergedKeys = new Set<string>();
 
     for (const projectConfig of config.projects ?? []) {
       const gitLabProjectId = await client.projectId(projectConfig.path);
@@ -367,6 +371,7 @@ export class IntegrationsRefresher {
         environments.push(state);
 
         if (key !== null && branch !== null) {
+          if (deploymentMergeRequest?.state === "merged") mergedKeys.add(key);
           writes.push(() => {
             const ticket = this.stores.tickets.upsert(item.project_id, {
               key,
@@ -410,6 +415,7 @@ export class IntegrationsRefresher {
       }
     });
     this.stores.integrations.markOk(item.id, { username: me.username, environments, toReview });
+    return mergedKeys;
   }
 
   private refreshGitSource(projectId: string, pattern: RegExp | null): void {

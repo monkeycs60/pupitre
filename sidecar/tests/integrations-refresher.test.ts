@@ -167,18 +167,21 @@ test("rapproche tâche ClickUp, MR, pipeline et déploiement sur la clé du tick
     expect.objectContaining({ status: "manual" }),
   );
 
-  const deployed = rows.find((row) => row.key === "TECH-23903");
+  const deployed = tickets.findByKey(projectId, "TECH-23903");
   expect(deployed?.source).toBe("git");
-  expect(deployed?.refs.find((ref) => ref.kind === "deployment")?.payload).toEqual(
+  expect(deployed?.archived_at).not.toBeNull();
+  const deployedRefs = deployed ? tickets.refsByTicket(deployed.id) : [];
+  expect(deployedRefs.find((ref) => ref.kind === "deployment")?.payload).toEqual(
     expect.objectContaining({ environment: "preprod", user: "theo.micaletti" }),
   );
-  expect(deployed?.refs.find((ref) => ref.kind === "mr")?.payload).toEqual(
+  expect(deployedRefs.find((ref) => ref.kind === "mr")?.payload).toEqual(
     expect.objectContaining({
       iid: 1815,
       state: "merged",
       url: "https://git/x/1815",
     }),
   );
+  expect(rows.find((row) => row.key === "TECH-23903")).toBeUndefined();
   expect(rows.find((row) => row.key === "TECH-24868")).toBeUndefined();
 
   const gitlab = integrations.find(projectId, "gitlab");
@@ -288,7 +291,8 @@ test("gitlab passe de ok à non configurée sans effacer snapshot ni tickets", a
   const gitlab = integrations.find(projectId, "gitlab");
   expect(gitlab?.status).toBe("non configurée");
   expect(gitlab?.snapshot.environments).toHaveLength(2);
-  expect(tickets.listByProject(projectId).find((row) => row.key === "TECH-23903")?.source).toBe("git");
+  expect(tickets.findByKey(projectId, "TECH-23903")?.source).toBe("git");
+  expect(tickets.findByKey(projectId, "TECH-23903")?.archived_at).not.toBeNull();
 });
 
 test("les conversations sur worktree créent des tickets git et se relient", async () => {

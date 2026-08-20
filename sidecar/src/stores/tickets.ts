@@ -153,6 +153,20 @@ export class TicketStore {
     ).run(at, at, id);
   }
 
+  archiveKeys(projectId: string, keys: Set<string>, now = new Date()): number {
+    if (keys.size === 0) return 0;
+    const placeholders = [...keys].map(() => "?").join(", ");
+    const archivedAt = now.toISOString();
+    return this.db.query(`
+      UPDATE tickets
+         SET archived_at = ?,
+             updated_at = ?
+       WHERE project_id = ?
+         AND archived_at IS NULL
+         AND key IN (${placeholders})
+    `).run(archivedAt, archivedAt, projectId, ...keys).changes;
+  }
+
   archiveStale(projectId: string, now: Date = new Date()): number {
     const archivedAt = now.toISOString();
     const cutoff = new Date(now.getTime() - STALE_TICKET_DAYS * 86_400_000).toISOString();
