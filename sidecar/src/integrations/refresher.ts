@@ -69,6 +69,7 @@ export interface ClickUpHandle {
   me(): Promise<number>;
   assignedTasks(input: { teamId: string; listIds: string[]; userId: number }): Promise<ClickUpTask[]>;
   taskContext(taskId: string): Promise<ClickUpContext>;
+  createTask?(input: { listId: string; name: string; description: string }): Promise<ClickUpTask>;
 }
 
 export interface GitLabHandle {
@@ -210,6 +211,22 @@ export class IntegrationsRefresher {
     } catch {
       return null;
     }
+  }
+
+  async createClickUpTask(
+    projectId: string,
+    input: { name: string; description: string },
+  ): Promise<ClickUpTask> {
+    const integration = this.stores.integrations.find(projectId, "clickup");
+    if (!integration) throw new Error("ClickUp n'est pas configuré pour ce projet");
+    const client = this.clickUp(integration);
+    if (!client?.createTask) throw new Error("Création ClickUp indisponible");
+    const config = integration.config as unknown as ClickUpConfig & { creationListId?: string };
+    const listId = config.creationListId || config.listIds?.[0];
+    if (!listId) throw new Error("Aucune liste ClickUp de création configurée");
+    const task = await client.createTask({ listId, ...input });
+    this.upsertClickUpTask(projectId, task);
+    return task;
   }
 
   private async run(projectId: string): Promise<void> {

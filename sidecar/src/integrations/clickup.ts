@@ -160,11 +160,24 @@ export class ClickUpClient {
     };
   }
 
-  private async request<T>(path: string): Promise<T> {
+  async createTask(input: { listId: string; name: string; description: string }): Promise<ClickUpTask> {
+    const payload = await this.request<unknown>(`/list/${encodeURIComponent(input.listId)}/task`, {
+      method: "POST",
+      body: JSON.stringify({ name: input.name, description: input.description }),
+    });
+    const [task] = parseClickUpTasks({ tasks: [payload] });
+    if (!task?.id) throw new ClickUpHttpError(500, "Unexpected task creation response");
+    return task;
+  }
+
+  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await this.fetchImpl(`${BASE_URL}${path}`, {
+      ...init,
       headers: {
         Authorization: this.token,
         accept: "application/json",
+        "content-type": "application/json",
+        ...init.headers,
       },
     });
 
