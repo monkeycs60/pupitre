@@ -320,9 +320,9 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
                   projects: integrations.sentry.projects.split(',').map((item) => item.trim()).filter(Boolean),
                   environment: 'production',
                   domains: [
-                    { id: 'match-ai', label: 'Match AI', keywords: ['matching', 'match ai', 'affiliate profile', 'vectorize', 'vectorization', 'signup', 'onboarding'], exclude: ['brand search'] },
-                    { id: 'wishlists', label: 'Wishlists', keywords: ['wishlist', 'wishlists'] },
-                    { id: 'instagram', label: 'Instagram', keywords: ['instagram', 'insta'] },
+                    { name: 'Match AI', aliases: ['matching', 'match ai', 'affiliate profile', 'vectorize', 'vectorization', 'signup', 'onboarding'] },
+                    { name: 'Wishlists', aliases: ['wishlist', 'wishlists'] },
+                    { name: 'Instagram', aliases: ['instagram', 'insta'] },
                   ],
                 }
           await saveProjectIntegration(project.id, type, {

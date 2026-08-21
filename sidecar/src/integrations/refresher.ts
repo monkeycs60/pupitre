@@ -7,7 +7,7 @@ import type { ConversationStore } from "../stores/conversations";
 import type { IntegrationStore, ProjectIntegration } from "../stores/integrations";
 import type { ProjectStore } from "../stores/projects";
 import type { TicketStore } from "../stores/tickets";
-import type { SentryStore } from "../stores/sentry";
+import type { SentryIssue, SentryStore } from "../stores/sentry";
 import { SentryAuthError, type SentryIssueSummary } from "./sentry";
 import { classifySentryIssue, compileDomainCatalog, type DomainDefinition } from "../sentry-domains";
 
@@ -61,6 +61,7 @@ export interface SentryHandle {
     query: string;
   }): Promise<SentryIssueSummary[]>;
   issueDetail(org: string, id: string): Promise<unknown>;
+  issueEvents?(org: string, id: string, input: { environment: "production"; statsPeriod: string }): Promise<unknown>;
 }
 
 type ClickUpContext = { description: string; comments: Array<{ author: string; text: string; at: string }> };
@@ -227,6 +228,23 @@ export class IntegrationsRefresher {
     const task = await client.createTask({ listId, ...input });
     this.upsertClickUpTask(projectId, task);
     return task;
+  }
+
+  async sentryIssueContext(issue: SentryIssue): Promise<{ detail: unknown; events: unknown }> {
+    const integration = this.stores.integrations.listByProject(issue.project_id)
+      .find((item) => item.id === issue.integration_id && item.type === "sentry");
+    if (!integration) throw new Error("Intégration Sentry inconnue");
+    const client = this.deps.sentryClient?.(integration) ?? null;
+    const config = integration.config as { org?: string };
+    if (!client || !config.org) throw new Error("Sentry n'est pas configuré");
+    const [detail, events] = await Promise.all([
+      client.issueDetail(config.org, issue.sentry_issue_id),
+      client.issueEvents?.(config.org, issue.sentry_issue_id, {
+        environment: "production",
+        statsPeriod: "24h",
+      }) ?? Promise.resolve([]),
+    ]);
+    return { detail, events };
   }
 
   private async run(projectId: string): Promise<void> {

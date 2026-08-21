@@ -61,6 +61,7 @@ test("publish_html_document transmet un document au sidecar local", async () => 
     "publish_document",
     "publish_html_document",
     "read_sibling_conversation",
+    "report_sentry_triage",
   ]);
   expect(tools[0]?.description).toContain("jusqu’à suppression explicite");
 

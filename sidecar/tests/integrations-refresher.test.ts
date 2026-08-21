@@ -10,6 +10,7 @@ import { ConversationStore } from "../src/stores/conversations";
 import { IntegrationStore } from "../src/stores/integrations";
 import { ProjectStore } from "../src/stores/projects";
 import { TicketStore } from "../src/stores/tickets";
+import { SentryStore } from "../src/stores/sentry";
 
 let projectId: string;
 let integrations: IntegrationStore;
@@ -200,6 +201,49 @@ test("rapproche tâche ClickUp, MR, pipeline et déploiement sur la clé du tick
     expect.objectContaining({ project: "reactor", name: "absente", missing: true }),
   ]);
   expect(notified).toEqual([projectId]);
+});
+
+test("relève Sentry en production, classe Match AI et respecte la cadence", async () => {
+  const sentry = new SentryStore(db);
+  integrations.upsert(projectId, "sentry", {
+    config: {
+      org: "affilae",
+      projects: ["hapigator", "reactor", "reactivator"],
+      domains: [{ name: "Match AI", aliases: ["matching", "signup"] }],
+    },
+    branchPattern: null,
+  });
+  const calls: string[] = [];
+  const refresher = new IntegrationsRefresher(
+    { integrations, tickets, conversations, projects: new ProjectStore(db), sentry },
+    {
+      clickUpClient: () => fakeClickUp() as any,
+      gitLabClient: () => fakeGitLab() as any,
+      sentryClient: () => ({
+        listIssues: async (input) => {
+          calls.push(input.project);
+          return input.project === "hapigator" ? [{
+            id: "42", shortId: "HAPI-42", project: "hapigator",
+            title: "Matching signup timed out", culprit: "POST /matching/search",
+            transaction: "/matching/search", level: "error", status: "unresolved",
+            count: 7, userCount: 2, firstSeen: "2026-08-20T10:00:00Z",
+            lastSeen: "2026-08-21T10:00:00Z", permalink: "https://sentry/42",
+            release: null, tags: {},
+          }] : [];
+        },
+        issueDetail: async () => ({ status: "unresolved" }),
+      }),
+    },
+  );
+
+  await refresher.refreshProject(projectId, { forceSentry: true });
+  await refresher.refreshProject(projectId);
+
+  expect(calls).toEqual(["hapigator", "reactor", "reactivator"]);
+  expect(sentry.listProject(projectId)[0]).toEqual(expect.objectContaining({
+    sentry_issue_id: "42",
+    relevance: expect.objectContaining({ matched: true }),
+  }));
 });
 
 test("séquence ClickUp avant GitLab pour rattacher dès le premier refresh une MR non mienne à un ticket ClickUp", async () => {

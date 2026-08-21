@@ -1532,7 +1532,9 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "GET" && sentryIssueId !== null) {
           const issue = deps.sentry?.get(sentryIssueId);
           if (!issue) throw new HttpError(404, "issue Sentry inconnue");
-          return json(redactSentryValue({ ...issue, triage: deps.sentry?.triageForIssue(issue.id) }));
+          let context: { detail: unknown; events: unknown } | null = null;
+          try { context = await deps.integrationsRefresher.sentryIssueContext(issue); } catch {}
+          return json(redactSentryValue({ ...issue, ...context, triage: deps.sentry?.triageForIssue(issue.id) }));
         }
 
         const sentryScoutIssueId = routeId(pathname, /^\/api\/sentry\/issues\/([^/]+)\/scout$/);
@@ -1549,7 +1551,9 @@ export function createServer(deps: ServerDeps) {
           const preset = (project.default_preset_id ? deps.presets.get(project.default_preset_id) : null)
             ?? deps.presets.list()[0];
           if (!preset) throw new HttpError(409, "aucun preset disponible pour Scout");
-          const payload = redactSentryValue(issue.payload);
+          let remoteContext: { detail: unknown; events: unknown } | null = null;
+          try { remoteContext = await deps.integrationsRefresher.sentryIssueContext(issue); } catch {}
+          const payload = redactSentryValue({ ...issue.payload, ...remoteContext });
           const message = `Scout Sentry ${String(issue.payload.shortId ?? issue.sentry_issue_id)} — ${String(issue.payload.title ?? "Erreur")}`;
           const conversation = deps.conversations.create({
             projectId: project.id,

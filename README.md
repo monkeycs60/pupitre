@@ -111,10 +111,21 @@ et lit les captures depuis leur chemin local.
   possibilité d'appeler `read_sibling_conversation` à la demande.
 - La configuration projet se fait dans **Réglages du projet > Intégrations** :
   listes ClickUp, projets GitLab, environnements suivis et motif de branche.
+- **Sentry** se configure séparément pour chaque projet Pupitre : token local
+  opaque, organisation et projets Sentry. L'inbox ne relève que la production,
+  toutes les 15 minutes quand l'app est active et toutes les 60 minutes en
+  arrière-plan ; un scan manuel reste disponible.
+- **Mes domaines** met en avant les issues liées aux domaines permanents du
+  projet et aux tickets ClickUp actifs. Pour affilae-mono, le catalogue couvre
+  Match AI au sens large (matching, profils affiliés, signup/onboarding et
+  vectorisation), Wishlists et Instagram ; Brand Search seul reste exclu.
+- Une issue ouvre un détail expurgé, puis **Scout** enquête en lecture seule et
+  rend un verdict structuré. Une erreur fixable peut, après confirmation,
+  créer son ticket ClickUp, sa branche `issue/TECH-…`, son worktree et une
+  conversation de correction. La MR reste soumise à une confirmation distincte.
 - La tranche A couvre **Mes tickets**, **Environnements**, **À relire**, les
   notes locales et le groupement des conversations par ticket dans la sidebar.
-- Elle ne couvre pas encore les **domaines**, **Notion / backlog**,
-  **Répétitions** ni **Sentry** ; le périmètre complet reste décrit dans
+- Elle ne couvre pas encore **Notion / backlog** ni **Répétitions** ; le périmètre complet reste décrit dans
   [le design du chantier](docs/plans/2026-08-19-tableau-de-bord-design.md).
 
 ## Coûts, mémoire et aide (M4-N)
