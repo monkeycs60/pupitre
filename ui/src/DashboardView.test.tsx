@@ -107,6 +107,16 @@ test('rend une ligne par ticket, la colonne Déployé avec GitLab, et le bandeau
   expect(screen.getByText('preprod')).toBeTruthy()
 })
 
+test('place les issues Sentry entre Mes tickets et Environnements', async () => {
+  mount(withGitlab)
+
+  await screen.findByText('TECH-24657')
+  const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)
+
+  expect(headings.indexOf('Mes tickets')).toBeLessThan(headings.indexOf('Issues Sentry'))
+  expect(headings.indexOf('Issues Sentry')).toBeLessThan(headings.indexOf('Environnements'))
+})
+
 test('Reprendre transmet ticket et branche ; sans GitLab la colonne Déployé disparaît', async () => {
   const onStart = mount({ ...withGitlab, integrations: [], environments: [] })
 
