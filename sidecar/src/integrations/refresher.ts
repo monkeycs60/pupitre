@@ -7,9 +7,14 @@ import type { ConversationStore } from "../stores/conversations";
 import type { IntegrationStore, ProjectIntegration } from "../stores/integrations";
 import type { ProjectStore } from "../stores/projects";
 import type { TicketStore } from "../stores/tickets";
+import type { SentryStore } from "../stores/sentry";
+import { SentryAuthError, type SentryIssueSummary } from "./sentry";
+import { classifySentryIssue, compileDomainCatalog, type DomainDefinition } from "../sentry-domains";
 
 export const INTEGRATIONS_POLL_MS = 5 * 60 * 1000;
 export const INTEGRATIONS_IDLE_POLL_MS = 30 * 60 * 1000;
+export const SENTRY_POLL_MS = 15 * 60 * 1000;
+export const SENTRY_IDLE_POLL_MS = 60 * 60 * 1000;
 
 export interface ClickUpConfig {
   teamId: string;
@@ -45,6 +50,17 @@ export interface RefresherStores {
   tickets: TicketStore;
   conversations: ConversationStore;
   projects: ProjectStore;
+  sentry?: SentryStore;
+}
+export interface SentryHandle {
+  listIssues(input: {
+    org: string;
+    project: string;
+    environment: "production";
+    statsPeriod: string;
+    query: string;
+  }): Promise<SentryIssueSummary[]>;
+  issueDetail(org: string, id: string): Promise<unknown>;
 }
 
 type ClickUpContext = { description: string; comments: Array<{ author: string; text: string; at: string }> };
@@ -84,6 +100,7 @@ export interface GitLabHandle {
 export interface RefresherDeps {
   clickUpClient?: (integration: ProjectIntegration) => ClickUpHandle | null;
   gitLabClient?: (integration: ProjectIntegration) => GitLabHandle | null;
+  sentryClient?: (integration: ProjectIntegration) => SentryHandle | null;
   branchOfWorktree?: (path: string) => string | null;
 }
 
@@ -94,6 +111,9 @@ export class IntegrationsRefresher {
   private readonly inFlight = new Map<string, Promise<void>>();
   private readonly queuedRefreshes = new Map<string, Promise<void>>();
   private readonly mergeRequestCache = new Map<string, GitLabMergeRequest>();
+  private readonly lastSentryRefresh = new Map<string, number>();
+  private readonly forcedSentryRefresh = new Set<string>();
+  private active = true;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -144,7 +164,12 @@ export class IntegrationsRefresher {
     );
   }
 
-  refreshProject(projectId: string): Promise<void> {
+  setActive(active: boolean): void {
+    this.active = active;
+  }
+
+  refreshProject(projectId: string, options: { forceSentry?: boolean } = {}): Promise<void> {
+    if (options.forceSentry) this.forcedSentryRefresh.add(projectId);
     const queued = this.queuedRefreshes.get(projectId);
     if (queued) return queued;
 
@@ -188,11 +213,12 @@ export class IntegrationsRefresher {
   }
 
   private async run(projectId: string): Promise<void> {
+    const forceSentry = this.forcedSentryRefresh.delete(projectId);
     const items = this.stores.integrations.listByProject(projectId);
     const pattern = compiledPattern(items);
     const mergedKeys = new Set<string>();
     for (const item of orderIntegrations(items)) {
-      for (const key of await this.refreshOne(item, pattern)) mergedKeys.add(key);
+      for (const key of await this.refreshOne(item, pattern, forceSentry)) mergedKeys.add(key);
     }
     this.refreshGitSource(projectId, pattern);
     this.stores.tickets.archiveKeys(projectId, mergedKeys);
@@ -202,16 +228,26 @@ export class IntegrationsRefresher {
     }
   }
 
-  private async refreshOne(item: ProjectIntegration, pattern: RegExp | null): Promise<Set<string>> {
+  private async refreshOne(
+    item: ProjectIntegration,
+    pattern: RegExp | null,
+    forceSentry: boolean,
+  ): Promise<Set<string>> {
     try {
       if (item.type === "clickup") {
         await this.refreshClickUp(item);
       } else if (item.type === "gitlab") {
         return await this.refreshGitLab(item, pattern);
+      } else if (item.type === "sentry") {
+        const cadence = this.active ? SENTRY_POLL_MS : SENTRY_IDLE_POLL_MS;
+        const lastRefresh = this.lastSentryRefresh.get(item.id) ?? 0;
+        if (!forceSentry && Date.now() - lastRefresh < cadence) return new Set<string>();
+        await this.refreshSentry(item);
+        this.lastSentryRefresh.set(item.id, Date.now());
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const isAuth = error instanceof ClickUpAuthError || error instanceof GitLabAuthError;
+      const isAuth = error instanceof ClickUpAuthError || error instanceof GitLabAuthError || error instanceof SentryAuthError;
       this.stores.integrations.markError(item.id, isAuth ? "à reconfigurer" : "dégradée", message);
     }
     return new Set<string>();
@@ -219,6 +255,61 @@ export class IntegrationsRefresher {
 
   private clickUp(item: ProjectIntegration): ClickUpHandle | null {
     return this.deps.clickUpClient?.(item) ?? null;
+  }
+
+  private async refreshSentry(item: ProjectIntegration): Promise<void> {
+    const client = this.deps.sentryClient?.(item) ?? null;
+    const store = this.stores.sentry;
+    if (!client || !store) {
+      this.stores.integrations.markUnconfigured(item.id);
+      return;
+    }
+    const config = item.config as {
+      org?: string;
+      projects?: string[];
+      domains?: DomainDefinition[];
+    };
+    if (!config.org || !Array.isArray(config.projects) || config.projects.length === 0) {
+      this.stores.integrations.markUnconfigured(item.id);
+      return;
+    }
+    const catalog = compileDomainCatalog(
+      config.domains ?? [],
+      this.stores.tickets.listActive(item.project_id),
+    );
+    const scannedAt = new Date().toISOString();
+    const seen = new Set<string>();
+    let count = 0;
+    for (const project of config.projects) {
+      const issues = await client.listIssues({
+        org: config.org,
+        project,
+        environment: "production",
+        statsPeriod: "24h",
+        query: "is:unresolved",
+      });
+      for (const issue of issues) {
+        seen.add(issue.id);
+        count++;
+        store.upsertIssue({
+          integrationId: item.id,
+          projectId: item.project_id,
+          sentryIssueId: issue.id,
+          payload: { ...issue },
+          relevance: classifySentryIssue(issue, [], catalog),
+          scannedAt,
+        });
+      }
+    }
+    const resolved = new Set<string>();
+    for (const issue of store.listProject(item.project_id)) {
+      if (issue.integration_id !== item.id || seen.has(issue.sentry_issue_id)) continue;
+      const detail = await client.issueDetail(config.org, issue.sentry_issue_id);
+      if (isResolvedSentryIssue(detail)) resolved.add(issue.sentry_issue_id);
+    }
+    store.markMissing(item.id, seen, resolved, scannedAt);
+    store.sweep();
+    this.stores.integrations.markOk(item.id, { issues: count, projects: config.projects.length });
   }
 
   private async refreshClickUp(item: ProjectIntegration): Promise<void> {
@@ -479,6 +570,11 @@ function orderIntegrations(items: ProjectIntegration[]): ProjectIntegration[] {
     sentry: 4,
   };
   return [...items].sort((left, right) => rank[left.type] - rank[right.type]);
+}
+
+function isResolvedSentryIssue(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  return (value as { status?: unknown }).status === "resolved";
 }
 
 function defaultBranchOfWorktree(path: string): string | null {

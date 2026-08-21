@@ -74,6 +74,9 @@ import type { IntegrationsRefresher } from "./integrations/refresher";
 import { compileBranchPattern, extractTicketKey } from "./ticket-key";
 import type { IntegrationStore, IntegrationType } from "./stores/integrations";
 import type { Ticket, TicketStore } from "./stores/tickets";
+import type { IntegrationSecretStore } from "./stores/integration-secrets";
+import type { SentryStore } from "./stores/sentry";
+import { redactSentryValue } from "./sentry-redaction";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -118,6 +121,8 @@ export interface ServerDeps {
   memory: MemoryStore;
   integrations: IntegrationStore;
   tickets: TicketStore;
+  integrationSecrets?: IntegrationSecretStore;
+  sentry?: SentryStore;
   integrationsRefresher: IntegrationsRefresher;
   gamification?: GamificationService;
   htmlDocuments?: HtmlDocumentService;
@@ -1448,7 +1453,7 @@ export function createServer(deps: ServerDeps) {
 
           if (request.method === "DELETE") {
             const existing = deps.integrations.find(projectId, type);
-            if (existing) deps.integrations.remove(existing.id);
+            if (existing) { deps.integrationSecrets?.removeIntegration(existing.id); deps.integrations.remove(existing.id); }
             broadcastDashboard(projectId);
             return empty(204);
           }
@@ -1464,8 +1469,13 @@ export function createServer(deps: ServerDeps) {
               config: config as Record<string, unknown>,
               branchPattern,
             });
+            if (type === "sentry" && deps.integrationSecrets && "token" in body) {
+              if (body.token === null || body.token === "") deps.integrationSecrets.remove(saved.id, "token");
+              else if (typeof body.token === "string") deps.integrationSecrets.set(saved.id, "token", body.token);
+              else throw new HttpError(400, "token Sentry invalide");
+            }
             broadcastDashboard(projectId);
-            void deps.integrationsRefresher.refreshProject(projectId).catch(() => {});
+            void deps.integrationsRefresher.refreshProject(projectId, { forceSentry: true }).catch(() => {});
             const { snapshot: _snapshot, ...rest } = saved;
             return json(rest);
           } catch (error) {
@@ -1490,8 +1500,39 @@ export function createServer(deps: ServerDeps) {
         );
         if (request.method === "POST" && projectDashboardRefreshId !== null) {
           if (!deps.projects.get(projectDashboardRefreshId)) throw new HttpError(404, "projet inconnu");
-          void deps.integrationsRefresher.refreshProject(projectDashboardRefreshId).catch(() => {});
+          void deps.integrationsRefresher.refreshProject(projectDashboardRefreshId, { forceSentry: true }).catch(() => {});
           return empty(202);
+        }
+
+        if (request.method === "POST" && pathname === "/api/activity/visibility") {
+          const body = await readObject(request);
+          if (typeof body.active !== "boolean") throw new HttpError(400, "champ active invalide");
+          deps.integrationsRefresher.setActive(body.active);
+          return empty(204);
+        }
+
+        const projectSentryId = routeId(pathname, /^\/api\/projects\/([^/]+)\/sentry$/);
+        if (request.method === "GET" && projectSentryId !== null) {
+          if (!deps.projects.get(projectSentryId)) throw new HttpError(404, "projet inconnu");
+          const integration = deps.integrations.find(projectSentryId, "sentry");
+          return json({
+            projectId: projectSentryId,
+            issues: deps.sentry?.listProject(projectSentryId) ?? [],
+            integration: integration
+              ? {
+                  status: integration.status,
+                  lastOkAt: integration.last_ok_at,
+                  lastError: integration.last_error,
+                  tokenConfigured: Boolean(deps.integrationSecrets?.get(integration.id, "token")),
+                }
+              : null,
+          });
+        }
+        const sentryIssueId = routeId(pathname, /^\/api\/sentry\/issues\/([^/]+)$/);
+        if (request.method === "GET" && sentryIssueId !== null) {
+          const issue = deps.sentry?.get(sentryIssueId);
+          if (!issue) throw new HttpError(404, "issue Sentry inconnue");
+          return json(redactSentryValue({ ...issue, triage: deps.sentry?.triageForIssue(issue.id) }));
         }
 
         const projectDefaultPresetId = routeId(

@@ -37,6 +37,9 @@ import { IntegrationsRefresher } from "./integrations/refresher";
 import { IntegrationStore } from "./stores/integrations";
 import { INTEGRATION_TOKENS_KEY } from "./stores/settings";
 import { TicketStore } from "./stores/tickets";
+import { IntegrationSecretStore } from "./stores/integration-secrets";
+import { SentryStore } from "./stores/sentry";
+import { SentryClient } from "./integrations/sentry";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -79,10 +82,12 @@ if (process.argv.includes("--pupitre-mcp")) {
   const memory = new MemoryStore();
   const integrations = new IntegrationStore(db);
   const tickets = new TicketStore(db);
+  const integrationSecrets = new IntegrationSecretStore(db);
+  const sentry = new SentryStore(db);
   const git = new GitProjectService(db, projects);
   const gamification = new GamificationService(db, projects, git);
   const integrationsRefresher = new IntegrationsRefresher(
-    { integrations, tickets, conversations, projects },
+    { integrations, tickets, conversations, projects, sentry },
     {
       clickUpClient: () => {
         const token = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY)?.clickup ?? null;
@@ -93,6 +98,11 @@ if (process.argv.includes("--pupitre-mcp")) {
         if (host.trim() === "") return null;
         const token = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY)?.gitlab ?? readGlabToken(host);
         return token ? new GitLabClient({ host, token }) : null;
+      },
+      sentryClient: (integration) => {
+        const token = integrationSecrets.get(integration.id, "token");
+        const baseUrl = typeof integration.config.baseUrl === "string" ? integration.config.baseUrl : "https://sentry.io";
+        return token ? new SentryClient({ baseUrl, token }) : null;
       },
     },
   );
@@ -222,6 +232,8 @@ if (process.argv.includes("--pupitre-mcp")) {
     memory,
     integrations,
     tickets,
+    integrationSecrets,
+    sentry,
     integrationsRefresher,
     gamification,
     htmlDocuments,
