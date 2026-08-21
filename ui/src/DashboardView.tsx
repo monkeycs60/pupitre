@@ -11,6 +11,7 @@ import type {
   TicketRow,
 } from './types'
 import { useDashboard } from './useDashboard'
+import { SentryInbox } from './SentryInbox'
 
 interface DashboardViewProps {
   project: Project
@@ -171,6 +172,8 @@ export function DashboardView({
             ) : null}
           </p>
         ))}
+
+        <SentryInbox projectId={project.id} onConfigure={onOpenSettings} />
 
         <section className="dashboard-section">
           <div className="dashboard-section-head">
