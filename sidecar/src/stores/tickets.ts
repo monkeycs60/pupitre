@@ -85,6 +85,16 @@ export class TicketStore {
     return row ? hydrateTicket(row) : null;
   }
 
+  listActive(projectId: string): Ticket[] {
+    return (this.db.query("SELECT * FROM tickets WHERE project_id=? AND archived_at IS NULL ORDER BY updated_at DESC").all(projectId) as Record<string, unknown>[]).map(hydrateTicket);
+  }
+
+  setDomainContext(ticketId: string, context: { sourceUpdatedAt: string; text: string }): void {
+    const ticket = this.get(ticketId);
+    if (!ticket) throw new Error("ticket inconnu");
+    this.db.query("UPDATE tickets SET payload_json=?,updated_at=? WHERE id=?").run(JSON.stringify({...ticket.payload,domainContext:{sourceUpdatedAt:context.sourceUpdatedAt,text:context.text.slice(0,2000)}}),new Date().toISOString(),ticketId);
+  }
+
   upsert(projectId: string, input: TicketInput): Ticket {
     const now = new Date().toISOString();
     const existing = this.findByKey(projectId, input.key);
