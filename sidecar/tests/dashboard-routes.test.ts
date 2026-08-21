@@ -356,6 +356,32 @@ test("dashboard : tickets, notes, refresh et canal WS", async () => {
   await waiter.event;
 });
 
+test("le scan Sentry manuel attend la relève avant de rendre l'inbox", async () => {
+  const project = await createProject("/tmp/dash-sentry-refresh");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  current!.deps.integrationsRefresher.refreshProject = async (_projectId, options = {}) => {
+    expect(options.forceSentry).toBe(true);
+    await gate;
+  };
+
+  const responsePromise = postJson(`/api/projects/${project.id}/sentry/refresh`, {});
+  const early = await Promise.race([
+    responsePromise.then(() => "resolved"),
+    Bun.sleep(30).then(() => "pending"),
+  ]);
+  expect(early).toBe("pending");
+
+  release();
+  const response = await responsePromise;
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    projectId: project.id,
+    issues: [],
+    integration: null,
+  });
+});
+
 test("GET /api/conversations/:id/brief rend titre, résumé, dernier débrief et derniers échanges", async () => {
   const project = await createProject("/tmp/brief-1");
   const conversation = current!.deps.conversations.create({

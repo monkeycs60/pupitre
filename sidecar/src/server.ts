@@ -1528,6 +1528,27 @@ export function createServer(deps: ServerDeps) {
               : null,
           });
         }
+        const projectSentryRefreshId = routeId(pathname, /^\/api\/projects\/([^/]+)\/sentry\/refresh$/);
+        if (request.method === "POST" && projectSentryRefreshId !== null) {
+          if (!deps.projects.get(projectSentryRefreshId)) throw new HttpError(404, "projet inconnu");
+          await deps.integrationsRefresher.refreshProject(projectSentryRefreshId, { forceSentry: true });
+          const integration = deps.integrations.find(projectSentryRefreshId, "sentry");
+          if (integration && integration.status !== "ok") {
+            throw new HttpError(503, integration.last_error ?? `Sentry : ${integration.status}`);
+          }
+          return json({
+            projectId: projectSentryRefreshId,
+            issues: deps.sentry?.listProject(projectSentryRefreshId) ?? [],
+            integration: integration
+              ? {
+                  status: integration.status,
+                  lastOkAt: integration.last_ok_at,
+                  lastError: integration.last_error,
+                  tokenConfigured: Boolean(deps.integrationSecrets?.get(integration.id, "token")),
+                }
+              : null,
+          });
+        }
         const sentryIssueId = routeId(pathname, /^\/api\/sentry\/issues\/([^/]+)$/);
         if (request.method === "GET" && sentryIssueId !== null) {
           const issue = deps.sentry?.get(sentryIssueId);

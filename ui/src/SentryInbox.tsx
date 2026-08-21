@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createSentryFix, getSentryInbox, getSentryIssue, refreshProjectDashboard, startSentryScout } from './api'
+import { createSentryFix, getSentryInbox, getSentryIssue, refreshSentryInbox, startSentryScout } from './api'
 import type { SentryInboxPayload, SentryIssue } from './types'
 
 function text(payload: Record<string, unknown>, key: string): string {
@@ -15,12 +15,18 @@ function dateLabel(value: string): string {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+function timeLabel(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+}
+
 export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { projectId: string; onConfigure?: () => void; onConversationSelect: (id: string) => void }) {
   const [data, setData] = useState<SentryInboxPayload | null>(null)
   const [selected, setSelected] = useState<SentryIssue | null>(null)
   const [mineOnly, setMineOnly] = useState(true)
   const [loading, setLoading] = useState(false)
   const [scouting, setScouting] = useState(false)
+  const [scanFeedback, setScanFeedback] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
   async function load(signal?: AbortSignal) {
     setData(await getSentryInbox(projectId, signal))
@@ -32,6 +38,15 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
     return () => controller.abort()
   }, [projectId])
 
+  useEffect(() => {
+    if (!selected) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected(null)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [selected])
+
   const issues = useMemo(
     () => (data?.issues ?? []).filter((issue) => !mineOnly || issue.relevance.matched),
     [data, mineOnly],
@@ -39,9 +54,20 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
 
   async function refresh() {
     setLoading(true)
+    setScanFeedback(null)
     try {
-      await refreshProjectDashboard(projectId)
-      window.setTimeout(() => void load().catch(() => {}), 600)
+      const refreshed = await refreshSentryInbox(projectId)
+      setData(refreshed)
+      const count = refreshed.issues.length
+      setScanFeedback({
+        tone: 'success',
+        text: `Scan terminé · ${count} issue${count === 1 ? '' : 's'} · ${timeLabel(refreshed.integration?.lastOkAt ?? '')}`,
+      })
+    } catch (error) {
+      setScanFeedback({
+        tone: 'error',
+        text: `Scan impossible : ${error instanceof Error ? error.message : 'erreur inconnue'}`,
+      })
     } finally {
       setLoading(false)
     }
@@ -95,9 +121,17 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
         </div>
         <div className="sentry-actions">
           <label><input type="checkbox" checked={mineOnly} onChange={(event) => setMineOnly(event.target.checked)} /> Mes domaines</label>
-          <button className="secondary-button" type="button" disabled={loading} onClick={() => void refresh()}>{loading ? 'Scan…' : 'Scanner maintenant'}</button>
+          <button className="secondary-button" type="button" disabled={loading} onClick={() => void refresh()}>{loading ? 'Scan en cours…' : 'Scanner maintenant'}</button>
         </div>
       </div>
+      {scanFeedback ? (
+        <p
+          className={`sentry-scan-feedback is-${scanFeedback.tone}`}
+          role={scanFeedback.tone === 'error' ? 'alert' : 'status'}
+        >
+          {scanFeedback.text}
+        </p>
+      ) : null}
       {issues.length === 0 ? (
         <div className="dashboard-empty"><strong>Aucune issue dans ce filtre</strong><p>Les erreurs hors de tes domaines restent accessibles en décochant « Mes domaines ».</p></div>
       ) : (
@@ -116,8 +150,8 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
       )}
       {selected ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setSelected(null)}>
-          <aside className="modal sentry-detail" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-            <header className="modal-header"><div><p className="eyebrow">{text(selected.payload, 'shortId')}</p><h2>{text(selected.payload, 'title')}</h2></div><button type="button" className="modal-close" onClick={() => setSelected(null)}>×</button></header>
+          <aside className="modal review-dialog sentry-detail" role="dialog" aria-modal="true" aria-labelledby="sentry-detail-title" onMouseDown={(event) => event.stopPropagation()}>
+            <header className="modal-header"><div><p className="eyebrow">{text(selected.payload, 'shortId')}</p><h2 id="sentry-detail-title">{text(selected.payload, 'title')}</h2></div><button type="button" className="modal-close" aria-label="Fermer" onClick={() => setSelected(null)}>×</button></header>
             <div className="sentry-detail-body">
               <p><strong>Projet :</strong> {text(selected.payload, 'project')} · production</p>
               <p><strong>Emplacement :</strong> {text(selected.payload, 'transaction') || text(selected.payload, 'culprit') || '—'}</p>

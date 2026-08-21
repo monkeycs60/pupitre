@@ -664,6 +664,10 @@ export function getSentryInbox(projectId: string, signal?: AbortSignal): Promise
   return fetchJson(`/api/projects/${routeId(projectId)}/sentry`, { signal })
 }
 
+export function refreshSentryInbox(projectId: string): Promise<SentryInboxPayload> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/sentry/refresh`, jsonPost({}))
+}
+
 export function getSentryIssue(issueId: string, signal?: AbortSignal): Promise<SentryIssue> {
   return fetchJson(`/api/sentry/issues/${routeId(issueId)}`, { signal })
 }
