@@ -351,6 +351,51 @@ export interface DashboardPayload {
   toReview: ReviewRequest[]
 }
 
+export type SentryLifecycle = 'new' | 'active' | 'quiet' | 'resolved_remote'
+export type SentryVerdict = 'real_fixable' | 'real_investigate' | 'noise' | 'uncertain'
+
+export interface SentryRelevance {
+  matched: boolean
+  reasons: Array<{ domain: string; signal: string }>
+}
+
+export interface SentryTriage {
+  issue_id: string
+  conversation_id: string | null
+  correction_conversation_id: string | null
+  ticket_id: string | null
+  status: 'idle' | 'running' | 'done' | 'error'
+  verdict: SentryVerdict | null
+  report: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface SentryIssue {
+  id: string
+  integration_id: string
+  project_id: string
+  sentry_issue_id: string
+  payload: Record<string, unknown>
+  relevance: SentryRelevance
+  lifecycle: SentryLifecycle
+  first_seen_at: string
+  last_seen_at: string
+  last_scanned_at: string
+  triage?: SentryTriage | null
+}
+
+export interface SentryInboxPayload {
+  projectId: string
+  issues: SentryIssue[]
+  integration: {
+    status: IntegrationStatus
+    lastOkAt: string | null
+    lastError: string | null
+    tokenConfigured: boolean
+  } | null
+}
+
 export interface GamificationConversation {
   conversationId: string
   complexity: number

@@ -22,6 +22,7 @@ import {
   listProjectMcpServers,
   listProjects,
   markConversationRead,
+  setAppVisibility,
 } from './api'
 import type { ContextProfile, McpServerRef } from './api'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
@@ -91,6 +92,14 @@ function lastDigest(events: AppEvent[]): { title: string; summary: string } | nu
 }
 
 function App() {
+  useEffect(() => {
+    const reportVisibility = () => {
+      void setAppVisibility(document.visibilityState === 'visible').catch(() => {})
+    }
+    reportVisibility()
+    document.addEventListener('visibilitychange', reportVisibility)
+    return () => document.removeEventListener('visibilitychange', reportVisibility)
+  }, [])
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null)

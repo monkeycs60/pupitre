@@ -46,10 +46,20 @@ interface GitLabIntegrationForm {
   projects: GitLabProjectForm[]
 }
 
+interface SentryIntegrationForm {
+  enabled: boolean
+  existed: boolean
+  baseUrl: string
+  org: string
+  projects: string
+  token: string
+}
+
 interface IntegrationsForm {
   branchPattern: string
   clickup: ClickUpIntegrationForm
   gitlab: GitLabIntegrationForm
+  sentry: SentryIntegrationForm
 }
 
 function errorMessage(error: unknown): string {
@@ -84,6 +94,14 @@ function defaultIntegrations(): IntegrationsForm {
       existed: false,
       host: 'https://git.kaizen-hosting.com',
       projects: [],
+    },
+    sentry: {
+      enabled: false,
+      existed: false,
+      baseUrl: 'https://sentry.io',
+      org: '',
+      projects: 'hapigator, reactor, reactivator',
+      token: '',
     },
   }
 }
@@ -135,6 +153,17 @@ function integrationForm(items: DashboardIntegration[]): IntegrationsForm {
         existed: true,
         host: readString(config?.host) || 'https://git.kaizen-hosting.com',
         projects,
+      }
+    }
+    if (item.type === 'sentry') {
+      const config = readObject(item.config)
+      next.sentry = {
+        enabled: true,
+        existed: true,
+        baseUrl: readString(config?.baseUrl) || 'https://sentry.io',
+        org: readString(config?.org),
+        projects: readStringArray(config?.projects).join(', '),
+        token: '',
       }
     }
   }
@@ -268,16 +297,15 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
       let updated = await setProjectFilesystemScope(project.id, scope)
       updated = await setProjectDefaultReviewPreset(project.id, reviewPresetId || null)
       updated = await setProjectDefaultCorrectionPreset(project.id, correctionPresetId || null)
-      for (const type of ['clickup', 'gitlab'] as const) {
+      for (const type of ['clickup', 'gitlab', 'sentry'] as const) {
         const form = integrations[type]
         if (form.enabled) {
-          await saveProjectIntegration(project.id, type, {
-            config: type === 'clickup'
+          const config = type === 'clickup'
               ? {
                   teamId: integrations.clickup.teamId.trim(),
                   listIds: integrations.clickup.listIds.split(',').map((item) => item.trim()).filter(Boolean),
                 }
-              : {
+              : type === 'gitlab' ? {
                   host: integrations.gitlab.host.trim(),
                   projects: integrations.gitlab.projects
                     .map((item) => ({
@@ -286,8 +314,23 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
                       environments: item.environments.split(',').map((value) => value.trim()).filter(Boolean),
                     }))
                     .filter((item) => item.path.length > 0),
-                },
+                } : {
+                  baseUrl: integrations.sentry.baseUrl.trim() || 'https://sentry.io',
+                  org: integrations.sentry.org.trim(),
+                  projects: integrations.sentry.projects.split(',').map((item) => item.trim()).filter(Boolean),
+                  environment: 'production',
+                  domains: [
+                    { id: 'match-ai', label: 'Match AI', keywords: ['matching', 'match ai', 'affiliate profile', 'vectorize', 'vectorization', 'signup', 'onboarding'], exclude: ['brand search'] },
+                    { id: 'wishlists', label: 'Wishlists', keywords: ['wishlist', 'wishlists'] },
+                    { id: 'instagram', label: 'Instagram', keywords: ['instagram', 'insta'] },
+                  ],
+                }
+          await saveProjectIntegration(project.id, type, {
+            config,
             branchPattern: integrations.branchPattern.trim() || null,
+            ...(type === 'sentry' && integrations.sentry.token.trim()
+              ? { token: integrations.sentry.token.trim() }
+              : {}),
           })
         } else if (form.existed) {
           await deleteProjectIntegration(project.id, type)
@@ -522,6 +565,76 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
                   }))}
                 />
               </label>
+            </article>
+
+            <article className="project-integration-card">
+              <label className="project-settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={integrations.sentry.enabled}
+                  disabled={saving}
+                  onChange={(event) => setIntegrations((current) => ({
+                    ...current,
+                    sentry: { ...current.sentry, enabled: event.target.checked },
+                  }))}
+                />
+                <span>Activer Sentry</span>
+              </label>
+              <label htmlFor="project-sentry-token">
+                <strong>Auth token du projet</strong>
+                <input
+                  id="project-sentry-token"
+                  type="password"
+                  autoComplete="off"
+                  value={integrations.sentry.token}
+                  placeholder={integrations.sentry.existed ? 'Laisser vide pour conserver le token' : 'sntrys_…'}
+                  disabled={saving || !integrations.sentry.enabled}
+                  onChange={(event) => setIntegrations((current) => ({
+                    ...current,
+                    sentry: { ...current.sentry, token: event.target.value },
+                  }))}
+                />
+              </label>
+              <label htmlFor="project-sentry-org">
+                <strong>Organisation Sentry</strong>
+                <input
+                  id="project-sentry-org"
+                  value={integrations.sentry.org}
+                  disabled={saving || !integrations.sentry.enabled}
+                  onChange={(event) => setIntegrations((current) => ({
+                    ...current,
+                    sentry: { ...current.sentry, org: event.target.value },
+                  }))}
+                />
+              </label>
+              <label htmlFor="project-sentry-projects">
+                <strong>Projets Sentry</strong>
+                <input
+                  id="project-sentry-projects"
+                  value={integrations.sentry.projects}
+                  disabled={saving || !integrations.sentry.enabled}
+                  onChange={(event) => setIntegrations((current) => ({
+                    ...current,
+                    sentry: { ...current.sentry, projects: event.target.value },
+                  }))}
+                />
+              </label>
+              <label htmlFor="project-sentry-url">
+                <strong>URL Sentry</strong>
+                <input
+                  id="project-sentry-url"
+                  value={integrations.sentry.baseUrl}
+                  disabled={saving || !integrations.sentry.enabled}
+                  onChange={(event) => setIntegrations((current) => ({
+                    ...current,
+                    sentry: { ...current.sentry, baseUrl: event.target.value },
+                  }))}
+                />
+              </label>
+              <p className="project-integration-note">
+                Production uniquement · Match AI, signup/onboarding, vectorisation, wishlists et Instagram.
+                Brand Search seul est exclu. Le token reste stocké localement et n’est jamais renvoyé à l’interface.
+              </p>
             </article>
 
             <article className="project-integration-card">

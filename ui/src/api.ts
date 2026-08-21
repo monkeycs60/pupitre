@@ -42,6 +42,8 @@ import type {
   FilesystemScope,
   GamificationSnapshot,
   HtmlDocument,
+  SentryInboxPayload,
+  SentryIssue,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -658,6 +660,14 @@ export function refreshProjectDashboard(projectId: string): Promise<void> {
   return fetchVoid(`/api/projects/${routeId(projectId)}/dashboard/refresh`, jsonPost({}))
 }
 
+export function getSentryInbox(projectId: string, signal?: AbortSignal): Promise<SentryInboxPayload> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/sentry`, { signal })
+}
+
+export function getSentryIssue(issueId: string, signal?: AbortSignal): Promise<SentryIssue> {
+  return fetchJson(`/api/sentry/issues/${routeId(issueId)}`, { signal })
+}
+
 export function listProjectIntegrations(
   projectId: string,
   signal?: AbortSignal,
@@ -668,9 +678,13 @@ export function listProjectIntegrations(
 export function saveProjectIntegration(
   projectId: string,
   type: IntegrationType,
-  input: { config: Record<string, unknown>; branchPattern?: string | null },
+  input: { config: Record<string, unknown>; branchPattern?: string | null; token?: string | null },
 ): Promise<ProjectIntegration> {
   return fetchJson(`/api/projects/${routeId(projectId)}/integrations/${type}`, jsonPut(input))
+}
+
+export function setAppVisibility(active: boolean): Promise<void> {
+  return fetchVoid('/api/activity/visibility', jsonPost({ active }))
 }
 
 export function deleteProjectIntegration(
