@@ -123,6 +123,13 @@ export function openDb(dir: string = dataDir()): Database {
       updated_at TEXT NOT NULL,
       UNIQUE (project_id, type)
     );
+    CREATE TABLE IF NOT EXISTS integration_secrets (
+      integration_id TEXT NOT NULL REFERENCES project_integrations(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (integration_id, name)
+    );
     CREATE TABLE IF NOT EXISTS tickets (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -156,6 +163,32 @@ export function openDb(dir: string = dataDir()): Database {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_ticket_notes_ticket ON ticket_notes(ticket_id, created_at);
+    CREATE TABLE IF NOT EXISTS sentry_issues (
+      id TEXT PRIMARY KEY,
+      integration_id TEXT NOT NULL REFERENCES project_integrations(id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      sentry_issue_id TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      relevance_json TEXT NOT NULL DEFAULT '{"matched":false,"reasons":[]}',
+      lifecycle TEXT NOT NULL CHECK (lifecycle IN ('new','active','quiet','resolved_remote')),
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      last_scanned_at TEXT NOT NULL,
+      UNIQUE (integration_id, sentry_issue_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sentry_issues_project
+      ON sentry_issues(project_id, lifecycle, last_seen_at DESC);
+    CREATE TABLE IF NOT EXISTS sentry_triages (
+      issue_id TEXT PRIMARY KEY REFERENCES sentry_issues(id) ON DELETE CASCADE,
+      conversation_id TEXT NULL REFERENCES conversations(id) ON DELETE SET NULL,
+      correction_conversation_id TEXT NULL REFERENCES conversations(id) ON DELETE SET NULL,
+      ticket_id TEXT NULL REFERENCES tickets(id) ON DELETE SET NULL,
+      status TEXT NOT NULL CHECK (status IN ('idle','running','done','error')),
+      verdict TEXT NULL CHECK (verdict IN ('real_fixable','real_investigate','noise','uncertain')),
+      report_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS commit_links (
       commit_sha TEXT NOT NULL,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
