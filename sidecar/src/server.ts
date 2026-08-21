@@ -1535,6 +1535,125 @@ export function createServer(deps: ServerDeps) {
           return json(redactSentryValue({ ...issue, triage: deps.sentry?.triageForIssue(issue.id) }));
         }
 
+        const sentryScoutIssueId = routeId(pathname, /^\/api\/sentry\/issues\/([^/]+)\/scout$/);
+        if (request.method === "POST" && sentryScoutIssueId !== null) {
+          const issue = deps.sentry?.get(sentryScoutIssueId);
+          if (!issue || !deps.sentry) throw new HttpError(404, "issue Sentry inconnue");
+          const existing = deps.sentry.triageForIssue(issue.id);
+          if (existing?.conversation_id) {
+            const conversation = deps.conversations.get(existing.conversation_id);
+            if (conversation) return json(conversation);
+          }
+          const project = deps.projects.get(issue.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const preset = (project.default_preset_id ? deps.presets.get(project.default_preset_id) : null)
+            ?? deps.presets.list()[0];
+          if (!preset) throw new HttpError(409, "aucun preset disponible pour Scout");
+          const payload = redactSentryValue(issue.payload);
+          const message = `Scout Sentry ${String(issue.payload.shortId ?? issue.sentry_issue_id)} — ${String(issue.payload.title ?? "Erreur")}`;
+          const conversation = deps.conversations.create({
+            projectId: project.id,
+            provider: preset.provider,
+            model: preset.model,
+            presetId: preset.id,
+            effort: preset.effort,
+            speed: preset.speed,
+            permissionMode: preset.permission_mode,
+            orchestrator: preset.orchestrator,
+            subagentPresetId: preset.subagent_preset_id,
+            subagentEffort: preset.subagent_effort,
+            createdOnBranch: deps.git.snapshot(project.id).currentBranch,
+            firstMessage: message,
+          });
+          deps.sentry.upsertTriage(issue.id, { status: "running", conversationId: conversation.id });
+          const skill = issue.relevance.reasons.some((reason) => reason.domain === "Match AI")
+            ? "$matching-system\n\n"
+            : "";
+          const preamble = `${skill}Tu es Scout. Analyse cette issue Sentry en lecture seule dans le code du projet. Détermine si elle est réelle et fixable, réelle à investiguer, du bruit, ou incertaine. N'effectue aucune correction. Termine obligatoirement en appelant report_sentry_triage avec ton verdict, un résumé, tes preuves et la proposition de correction.\n\nIssue expurgée :\n${JSON.stringify(payload, null, 2)}`;
+          void deps.runner.runTurn(conversation.id, message, [], [], { preamble })
+            .catch((error) => {
+              deps.sentry?.upsertTriage(issue.id, { status: "error", report: { error: String(error) } });
+            });
+          return json(conversation, 201);
+        }
+
+        if (request.method === "POST" && pathname === "/api/sentry/triages/report") {
+          if (!deps.sentry) throw new HttpError(404, "Sentry indisponible");
+          const body = await readObject(request);
+          const conversationId = requiredTrimmed(body, "conversationId");
+          const verdict = requiredTrimmed(body, "verdict");
+          if (!["real_fixable", "real_investigate", "noise", "uncertain"].includes(verdict)) {
+            throw new HttpError(400, "verdict invalide");
+          }
+          const triage = deps.sentry.triageForConversation(conversationId);
+          if (!triage) throw new HttpError(404, "triage inconnu");
+          return json(deps.sentry.upsertTriage(triage.issue_id, {
+            status: "done",
+            verdict: verdict as "real_fixable" | "real_investigate" | "noise" | "uncertain",
+            report: readObject(body.report) ?? {},
+          }));
+        }
+
+        const sentryFixIssueId = routeId(pathname, /^\/api\/sentry\/issues\/([^/]+)\/create-fix$/);
+        if (request.method === "POST" && sentryFixIssueId !== null) {
+          const body = await readObject(request);
+          if (body.confirmed !== true) throw new HttpError(400, "confirmation requise");
+          const issue = deps.sentry?.get(sentryFixIssueId);
+          const triage = issue ? deps.sentry?.triageForIssue(issue.id) : null;
+          if (!issue || !triage) throw new HttpError(404, "triage Sentry inconnu");
+          if (triage.verdict !== "real_fixable") throw new HttpError(409, "le Scout n'a pas conclu à une erreur fixable");
+          if (triage.correction_conversation_id) {
+            const existing = deps.conversations.get(triage.correction_conversation_id);
+            if (existing) return json(existing);
+          }
+          const title = `[Sentry] ${String(issue.payload.title ?? issue.sentry_issue_id)}`;
+          const description = [
+            `Issue Sentry : ${String(issue.payload.permalink ?? issue.sentry_issue_id)}`,
+            `Projet : ${String(issue.payload.project ?? "")}`,
+            `Transaction : ${String(issue.payload.transaction ?? issue.payload.culprit ?? "")}`,
+            "",
+            `Rapport Scout : ${JSON.stringify(triage.report)}`,
+          ].join("\n");
+          const task = await deps.integrationsRefresher.createClickUpTask(issue.project_id, { name: title, description });
+          const ticket = deps.tickets.findByKey(issue.project_id, task.key);
+          if (!ticket) throw new HttpError(500, "ticket ClickUp créé mais introuvable");
+          const project = deps.projects.get(issue.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const preset = (project.default_correction_preset_id ? deps.presets.get(project.default_correction_preset_id) : null)
+            ?? (project.default_preset_id ? deps.presets.get(project.default_preset_id) : null)
+            ?? deps.presets.list()[0];
+          if (!preset) throw new HttpError(409, "aucun preset de correction disponible");
+          const branch = `issue/${task.key}`;
+          const worktreePath = deps.git.createWorktree(project.id, { branch }).path;
+          const message = `Corriger ${task.key} — ${title}`;
+          const conversation = deps.conversations.create({
+            projectId: project.id,
+            provider: preset.provider,
+            model: preset.model,
+            presetId: preset.id,
+            effort: preset.effort,
+            speed: preset.speed,
+            permissionMode: preset.permission_mode,
+            orchestrator: preset.orchestrator,
+            subagentPresetId: preset.subagent_preset_id,
+            subagentEffort: preset.subagent_effort,
+            worktreePath,
+            createdOnBranch: deps.git.snapshot(project.id).currentBranch,
+            ticketId: ticket.id,
+            firstMessage: message,
+          });
+          deps.sentry?.upsertTriage(issue.id, {
+            status: "done",
+            ticketId: ticket.id,
+            correctionConversationId: conversation.id,
+            report: triage.report,
+          });
+          const preamble = `Corrige l'erreur validée par Scout dans ce worktree. Ticket ${task.key}. N'ouvre aucune merge request sans confirmation explicite de l'utilisateur.\n\nRapport Scout :\n${JSON.stringify(triage.report, null, 2)}`;
+          void deps.runner.runTurn(conversation.id, message, [], [], { preamble })
+            .catch((error) => console.error("Échec de la correction Sentry", error));
+          return json(conversation, 201);
+        }
+
         const projectDefaultPresetId = routeId(
           pathname,
           /^\/api\/projects\/([^/]+)\/default-preset$/,

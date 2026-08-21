@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getSentryInbox, getSentryIssue, refreshProjectDashboard } from './api'
+import { createSentryFix, getSentryInbox, getSentryIssue, refreshProjectDashboard, startSentryScout } from './api'
 import type { SentryInboxPayload, SentryIssue } from './types'
 
 function text(payload: Record<string, unknown>, key: string): string {
@@ -15,11 +15,12 @@ function dateLabel(value: string): string {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-export function SentryInbox({ projectId, onConfigure }: { projectId: string; onConfigure?: () => void }) {
+export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { projectId: string; onConfigure?: () => void; onConversationSelect: (id: string) => void }) {
   const [data, setData] = useState<SentryInboxPayload | null>(null)
   const [selected, setSelected] = useState<SentryIssue | null>(null)
   const [mineOnly, setMineOnly] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [scouting, setScouting] = useState(false)
 
   async function load(signal?: AbortSignal) {
     setData(await getSentryInbox(projectId, signal))
@@ -49,6 +50,28 @@ export function SentryInbox({ projectId, onConfigure }: { projectId: string; onC
   async function open(issue: SentryIssue) {
     setSelected(issue)
     try { setSelected(await getSentryIssue(issue.id)) } catch {}
+  }
+
+  async function scout() {
+    if (!selected) return
+    setScouting(true)
+    try {
+      const conversation = await startSentryScout(selected.id)
+      onConversationSelect(conversation.id)
+    } finally {
+      setScouting(false)
+    }
+  }
+
+  async function createFix() {
+    if (!selected || !window.confirm('Créer le ticket ClickUp et le worktree de correction ?')) return
+    setScouting(true)
+    try {
+      const conversation = await createSentryFix(selected.id)
+      onConversationSelect(conversation.id)
+    } finally {
+      setScouting(false)
+    }
   }
 
   if (data?.integration === null) {
@@ -101,8 +124,18 @@ export function SentryInbox({ projectId, onConfigure }: { projectId: string; onC
               <p><strong>Impact :</strong> {number(selected.payload, 'count')} événements · {number(selected.payload, 'userCount')} utilisateurs</p>
               <p><strong>Domaines :</strong> {selected.relevance.reasons.map((reason) => `${reason.domain} (${reason.signal})`).join(', ') || 'aucun'}</p>
               {text(selected.payload, 'permalink') ? <a href={text(selected.payload, 'permalink')} target="_blank" rel="noreferrer">Ouvrir dans Sentry ↗</a> : null}
+              {selected.triage?.verdict ? (
+                <div className="sentry-verdict">
+                  <strong>Verdict Scout · {selected.triage.verdict}</strong>
+                  <pre>{JSON.stringify(selected.triage.report, null, 2)}</pre>
+                </div>
+              ) : null}
             </div>
-            <footer className="modal-actions"><button type="button" className="secondary-button" onClick={() => setSelected(null)}>Fermer</button><button type="button" className="primary-button" disabled>Scout bientôt disponible</button></footer>
+            <footer className="modal-actions">
+              <button type="button" className="secondary-button" onClick={() => setSelected(null)}>Fermer</button>
+              {selected.triage?.verdict === 'real_fixable' ? <button type="button" className="primary-button" disabled={scouting} onClick={() => void createFix()}>Créer ticket + correction</button> : null}
+              <button type="button" className="primary-button" disabled={scouting} onClick={() => void scout()}>{selected.triage?.conversation_id ? 'Ouvrir Scout' : scouting ? 'Lancement…' : 'Lancer Scout'}</button>
+            </footer>
           </aside>
         </div>
       ) : null}

@@ -173,7 +173,7 @@ export function DashboardView({
           </p>
         ))}
 
-        <SentryInbox projectId={project.id} onConfigure={onOpenSettings} />
+        <SentryInbox projectId={project.id} onConfigure={onOpenSettings} onConversationSelect={onConversationSelect} />
 
         <section className="dashboard-section">
           <div className="dashboard-section-head">

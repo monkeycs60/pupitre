@@ -132,6 +132,8 @@
 .sentry-detail-body { display: grid; gap: var(--space-3); padding: var(--space-5); overflow: auto; }
 .sentry-detail-body p { margin: 0; color: var(--text-muted); }
 .sentry-detail-body a { color: var(--accent); }
+.sentry-verdict { padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--r-md); background: var(--bg-overlay); }
+.sentry-verdict pre { max-height: 220px; margin: var(--space-2) 0 0; overflow: auto; color: var(--text-muted); font-size: var(--text-xs); white-space: pre-wrap; }
 
 .dashboard-table {
   --dashboard-grid-columns: minmax(145px, 1.55fr) minmax(90px, 0.75fr) minmax(115px, 1.2fr) minmax(100px, 0.85fr) minmax(90px, 0.7fr) minmax(105px, 0.8fr) minmax(160px, 1.1fr);

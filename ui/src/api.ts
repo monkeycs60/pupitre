@@ -668,6 +668,14 @@ export function getSentryIssue(issueId: string, signal?: AbortSignal): Promise<S
   return fetchJson(`/api/sentry/issues/${routeId(issueId)}`, { signal })
 }
 
+export function startSentryScout(issueId: string): Promise<Conversation> {
+  return fetchJson(`/api/sentry/issues/${routeId(issueId)}/scout`, jsonPost({}))
+}
+
+export function createSentryFix(issueId: string): Promise<Conversation> {
+  return fetchJson(`/api/sentry/issues/${routeId(issueId)}/create-fix`, jsonPost({ confirmed: true }))
+}
+
 export function listProjectIntegrations(
   projectId: string,
   signal?: AbortSignal,

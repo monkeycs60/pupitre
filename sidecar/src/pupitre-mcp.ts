@@ -127,6 +127,29 @@ export function createPupitreServer(): McpServer {
       return text(`Lecture impossible : ${error instanceof Error ? error.message : String(error)}`, true);
     }
   });
+  server.registerTool("report_sentry_triage", {
+    title: "Rendre le verdict Scout Sentry",
+    description: "Enregistre le verdict structuré du Scout pour l'issue Sentry liée à cette conversation.",
+    inputSchema: {
+      verdict: z.enum(["real_fixable", "real_investigate", "noise", "uncertain"]),
+      summary: z.string().min(1),
+      evidence: z.array(z.string()).default([]),
+      proposed_fix: z.string().optional(),
+    },
+  }, async (args: { verdict: "real_fixable" | "real_investigate" | "noise" | "uncertain"; summary: string; evidence: string[]; proposed_fix?: string }) => {
+    try {
+      const id = conversationId();
+      const response = await fetch(`${baseUrl()}/api/sentry/triages/report`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ conversationId: id, verdict: args.verdict, report: args }),
+      });
+      if (!response.ok) throw new Error(await errorMessage(response));
+      return text("Verdict Scout enregistré dans l'inbox Sentry.");
+    } catch (error) {
+      return text(`Verdict impossible à enregistrer : ${error instanceof Error ? error.message : String(error)}`, true);
+    }
+  });
   return server;
 }
 
