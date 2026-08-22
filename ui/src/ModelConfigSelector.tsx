@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { ConversationConfig } from './ConfigPanel'
 import {
@@ -164,6 +164,23 @@ export function ModelConfigSelector({
     : ['low', 'medium', 'high', 'xhigh']
   const isDirty = selectedPreset !== null && !sameConfig(config, configOf(selectedPreset))
   const summary = configSummary(config)
+
+  // Le sous-menu est ancré au bouton, mais la liste des modèles dépasse souvent le viewport.
+  useLayoutEffect(() => {
+    if (!open || submenu === null) return
+    const el = rootRef.current?.querySelector('.preset-selector-submenu') as HTMLElement | null
+    if (!el) return
+    el.style.top = '0px'
+    el.style.maxHeight = ''
+    const pad = 8
+    const first = el.getBoundingClientRect()
+    const overflowBottom = first.bottom - (window.innerHeight - pad)
+    if (overflowBottom > 0) el.style.top = `${-overflowBottom}px`
+    const next = el.getBoundingClientRect()
+    if (next.top >= pad) return
+    el.style.top = `${parseFloat(el.style.top || '0') + (pad - next.top)}px`
+    el.style.maxHeight = `${window.innerHeight - pad * 2}px`
+  }, [open, submenu])
 
   useEffect(() => {
     if (!open) return

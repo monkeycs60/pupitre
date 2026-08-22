@@ -565,6 +565,8 @@
 
 .preset-selector-model-menu {
   width: 610px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .preset-selector-provider + .preset-selector-provider {

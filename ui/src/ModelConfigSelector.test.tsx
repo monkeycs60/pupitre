@@ -130,6 +130,24 @@ test('ancre chaque sous-menu à son réglage déclencheur', () => {
   }
 })
 
+test('liste les modèles Grok dans le sous-menu', () => {
+  render(createElement(ModelConfigSelector, {
+    config,
+    presets: [],
+    selectedPresetId: '',
+    quotas: emptyQuotas,
+    onConfigChange: () => undefined,
+    onPresetSelect: () => undefined,
+  }))
+
+  fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
+  fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
+
+  const selector = screen.getByRole('menu', { name: 'Choisir un modèle' }).closest('.preset-selector')
+  expect(selector?.classList.contains('opens-top')).toBe(true)
+  expect(screen.getByRole('menuitemradio', { name: 'Grok 4.6' })).toBeTruthy()
+})
+
 test('peut ouvrir les sous-menus vers la gauche dans un en-tête droit', () => {
   render(createElement(ModelConfigSelector, {
     config,
