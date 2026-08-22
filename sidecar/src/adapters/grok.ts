@@ -33,11 +33,10 @@ export function runGrokTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   );
   if (opts.conductor) args.push("--allow", "MCPTool(conductor__*)");
   if (opts.pupitre) args.push("--allow", "MCPTool(pupitre__*)");
-  // Conductor est le pont Pupitre. Les spawn_subagent natifs de Grok n'y
-  // passent pas : pas de carte, pas de limite, écriture parallèle. On les
-  // coupe dès que Conductor est là, et sur les tours sans pont (review,
-  // sous-tâche) qui n'ont pas non plus à forker.
-  if (opts.conductor || !opts.pupitre) args.push("--no-subagents");
+  // Review, débrief et sous-tâche n'ont pas le pont Pupitre : one-shot, pas
+  // de fork natif. Un fil de conversation le garde — spawn_subagent est une
+  // faculté Grok, distincte de Conductor.
+  if (!opts.pupitre) args.push("--no-subagents");
 
   return spawnJsonl({
     bin,

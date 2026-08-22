@@ -104,7 +104,7 @@ test("injecte un plugin MCP éphémère pour le pont Pupitre", async () => {
   expect(args).not.toContain("--no-subagents");
 });
 
-test("une conversation orchestratrice coupe les sous-agents natifs", async () => {
+test("un fil de conversation garde les sous-agents natifs, même orchestré", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-grok-"));
   process.env.PUPITRE_GROK_BIN = FAKE;
   process.env.FAKE_GROK_ARGS_FILE = join(dir, "args");
@@ -119,5 +119,5 @@ test("une conversation orchestratrice coupe les sous-agents natifs", async () =>
     pupitre: { port: 4820, conversationId: "conversation-1" },
     conductor: { port: 4820, conversationId: "conversation-1" },
   });
-  expect(readFileSync(join(dir, "args"), "utf8")).toContain("--no-subagents");
+  expect(readFileSync(join(dir, "args"), "utf8")).not.toContain("--no-subagents");
 });
