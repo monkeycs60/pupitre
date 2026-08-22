@@ -146,7 +146,7 @@ export class GitProjectService {
    * Pupitre. Hors du dépôt : un worktree imbriqué apparaîtrait comme des
    * fichiers non suivis dans le dépôt principal, et polluerait chaque diff.
    */
-  createWorktree(projectId: string, input: { branch: string }): GitWorktree {
+  createWorktree(projectId: string, input: { branch: string; startPoint?: string }): GitWorktree {
     const cwd = this.projectPath(projectId);
     const branch = input.branch.trim();
     if (!branch || !SAFE_BRANCH.test(branch) || branch.includes("..")) {
@@ -168,10 +168,27 @@ export class GitProjectService {
     const known = this.runGit(cwd, ["branch", "--list", branch]).trim() !== "";
     this.runGit(cwd, known
       ? ["worktree", "add", directory, branch]
-      : ["worktree", "add", "-b", branch, directory]);
+      : ["worktree", "add", "-b", branch, directory, input.startPoint ?? "HEAD"]);
 
     const created = this.worktrees(cwd).find((item) => item.path === directory);
     if (!created) throw new GitProjectError("worktree créé mais introuvable");
+    return created;
+  }
+
+  createDetachedWorktree(projectId: string, input: { name: string; startPoint: string }): GitWorktree {
+    const cwd = this.projectPath(projectId);
+    const name = input.name.trim();
+    if (!name || !SAFE_BRANCH.test(name) || name.includes("..")) {
+      throw new GitProjectError(`nom de worktree invalide : ${input.name}`);
+    }
+    const directory = join(this.worktreeRoot, projectId, `detached-${name.replaceAll("/", "-")}`);
+    mkdirSync(join(this.worktreeRoot, projectId), { recursive: true });
+    const existing = this.worktrees(cwd).find((item) => item.path === directory);
+    if (existing) return existing;
+    if (existsSync(directory)) rmSync(directory, { recursive: true, force: true });
+    this.runGit(cwd, ["worktree", "add", "--detach", directory, input.startPoint]);
+    const created = this.worktrees(cwd).find((item) => item.path === directory);
+    if (!created) throw new GitProjectError("worktree détaché créé mais introuvable");
     return created;
   }
 

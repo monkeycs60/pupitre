@@ -26,6 +26,8 @@ export interface Conversation {
   created_on_branch: string | null;
   ticket_id: string | null;
   ticket_key?: string | null;
+  origin_type?: "sentry" | null;
+  origin_key?: string | null;
   /** Reçoit le bridge MCP `conductor` (délégation de sous-tâches). */
   orchestrator: boolean;
   created_at: string; updated_at: string;
@@ -90,6 +92,8 @@ export class ConversationStore {
     /** Branche courante du projet au moment de la création. */
     createdOnBranch?: string | null;
     ticketId?: string | null;
+    originType?: "sentry" | null;
+    originKey?: string | null;
     firstMessage: string;
   }): Conversation {
     const id = crypto.randomUUID();
@@ -100,8 +104,8 @@ export class ConversationStore {
       `INSERT INTO conversations
          (id, project_id, title, summary, provider, model, preset_id, effort, speed, permission_mode, orchestrator,
           subagent_preset_id, subagent_effort,
-          continued_from, handoff_pending, routine_id, worktree_path, created_on_branch, ticket_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          continued_from, handoff_pending, routine_id, worktree_path, created_on_branch, ticket_id, origin_type, origin_key, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -122,6 +126,8 @@ export class ConversationStore {
       input.worktreePath ?? null,
       input.createdOnBranch ?? null,
       input.ticketId ?? null,
+      input.originType ?? null,
+      input.originKey ?? null,
       now,
       now,
     );
@@ -159,9 +165,13 @@ export class ConversationStore {
         ? "c.deleted_at IS NULL AND c.archived = 1"
         : "c.deleted_at IS NULL AND c.archived = 0";
     const rows = this.db.query(
-      `SELECT c.*, t.key AS ticket_key
+      `SELECT c.*, t.key AS ticket_key,
+              COALESCE(c.origin_type, CASE WHEN st.issue_id IS NOT NULL THEN 'sentry' ELSE NULL END) AS origin_type,
+              COALESCE(c.origin_key, json_extract(si.payload_json, '$.shortId')) AS origin_key
        FROM conversations c
        LEFT JOIN tickets t ON t.id = c.ticket_id
+       LEFT JOIN sentry_triages st ON st.conversation_id = c.id OR st.correction_conversation_id = c.id
+       LEFT JOIN sentry_issues si ON si.id = st.issue_id
        WHERE c.project_id = ? AND ${predicate}
        ORDER BY c.pinned DESC, c.updated_at DESC`
     ).all(projectId) as any[];

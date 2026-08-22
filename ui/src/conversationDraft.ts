@@ -15,6 +15,8 @@ interface ConversationDraft {
   /** Branche saisie par l'utilisateur ; vide = travailler dans le dépôt. */
   branch?: string | null
   ticketId?: string | null
+  originType?: 'sentry' | null
+  originKey?: string | null
   message: string
   images: string[]
   attachments?: Attachment[]
@@ -47,6 +49,7 @@ export function buildCreateConversationInput(
     subagentEffort: draft.subagentEffort ?? null,
     branch: draft.branch?.trim() || null,
     ticketId: draft.ticketId ?? null,
+    ...(draft.originType ? { originType: draft.originType, originKey: draft.originKey ?? null } : {}),
     message: draft.message,
     images: draft.images,
     attachments: draft.attachments ?? [],

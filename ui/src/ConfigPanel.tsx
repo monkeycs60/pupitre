@@ -135,6 +135,8 @@ export function ConfigPanel({
         if (abortController.signal.aborted) return
         setPresets(loaded)
         const projectDefault = loaded.find((preset) => preset.id === project.default_preset_id)
+          ?? loaded.find((preset) => preset.id === 'builtin-speed')
+          ?? loaded[0]
         if (applyProjectDefault && projectDefault) {
           setSelectedPresetId(projectDefault.id)
           onConfigChange(keepBranch(configOf(projectDefault), configRef.current))

@@ -1719,6 +1719,23 @@
   font-size: var(--text-xs);
 }
 
+.conv-group-create {
+  border: 0;
+  padding: 0 3px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.conv-group-create:hover { color: var(--accent); }
+
+.provider-mark-sentry {
+  color: #6c5ce7;
+  font-size: 15px;
+  line-height: 12px;
+}
+
 .conv-group-count.is-attention {
   padding: 1px 6px;
   color: var(--streak);

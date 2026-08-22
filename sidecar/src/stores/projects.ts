@@ -7,6 +7,7 @@ export interface Project {
   default_preset_id: string | null;
   default_review_preset_id: string | null;
   default_correction_preset_id: string | null;
+  default_scout_preset_id: string | null;
   filesystem_scope: FilesystemScope;
   auto_rescan: boolean;
   /**
@@ -79,6 +80,10 @@ export class ProjectStore {
 
   setDefaultCorrectionPreset(id: string, presetId: string | null): void {
     this.db.query("UPDATE projects SET default_correction_preset_id = ? WHERE id = ?").run(presetId, id);
+  }
+
+  setDefaultScoutPreset(id: string, presetId: string | null): void {
+    this.db.query("UPDATE projects SET default_scout_preset_id = ? WHERE id = ?").run(presetId, id);
   }
 
   /** Applique une permission explicite portée par le preset par défaut. */

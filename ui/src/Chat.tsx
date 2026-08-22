@@ -59,6 +59,8 @@ interface ChatProps {
   initialAttachments?: Attachment[]
   initialConfig?: Partial<ConversationConfig>
   ticketId?: string | null
+  originType?: 'sentry' | null
+  originKey?: string | null
   /** Multiplicateur XP du tour (complexité × focus), voir turnXp.ts. */
   turnXpMultiplier?: number
   reviewStatus: ReviewStatusSnapshot | null
@@ -122,6 +124,8 @@ export function Chat({
   initialAttachments = [],
   initialConfig,
   ticketId = null,
+  originType = null,
+  originKey = null,
   turnXpMultiplier,
   reviewStatus,
   onOpenCode,
@@ -360,6 +364,8 @@ export function Chat({
             initialConfig={initialConfig}
             initialAttachments={initialAttachments}
             ticketId={ticketId}
+            originType={originType}
+            originKey={originKey}
           />
         </div>
         <SkillsSuggestionsPanel

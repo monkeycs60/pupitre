@@ -71,6 +71,8 @@ export interface CreateConversationInput {
   /** Fait naître la conversation sur cette branche, dans un worktree dédié. */
   branch?: string | null
   ticketId?: string | null
+  originType?: 'sentry' | null
+  originKey?: string | null
   message: string
   images?: string[]
   attachments?: Attachment[]
@@ -522,6 +524,10 @@ export function setProjectDefaultCorrectionPreset(
     `/api/projects/${routeId(id)}/default-correction-preset`,
     jsonPut({ presetId }),
   )
+}
+
+export function setProjectDefaultScoutPreset(id: string, presetId: string | null): Promise<Project> {
+  return fetchJson(`/api/projects/${routeId(id)}/default-scout-preset`, jsonPut({ presetId }))
 }
 
 export function setProjectFilesystemScope(

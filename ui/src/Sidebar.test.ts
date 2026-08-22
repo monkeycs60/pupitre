@@ -277,7 +277,7 @@ test('affiche le compteur live de la conversation sélectionnée', async () => {
   expect(document.querySelector('.conv-row-count')?.textContent).toBe('4')
 })
 
-test('regroupe les conversations par ticket avant la récence', async () => {
+test('place les groupes ticket et Sentry selon leur dernière activité', async () => {
   const todayAtNine = new Date()
   todayAtNine.setHours(9, 0, 0, 0)
   const ticketYesterday: Conversation = {
@@ -304,16 +304,26 @@ test('regroupe les conversations par ticket avant la récence', async () => {
     title: 'Sans ticket',
     updated_at: todayAtNine.toISOString(),
   }
+  const sentryConversation: Conversation = {
+    ...startedConversation,
+    id: 'conversation-sentry',
+    title: 'Scout erreur',
+    origin_type: 'sentry',
+    origin_key: 'REACTOR-B4S',
+    updated_at: new Date(todayAtNine.getTime() + 60_000).toISOString(),
+  }
   installApi(
     [],
     () => Promise.reject(new Error('aucun lancement attendu')),
-    [ticketYesterday, ticketToday, recentUnticketed],
+    [ticketYesterday, ticketToday, recentUnticketed, sentryConversation],
   )
   renderSidebar()
 
-  await waitFor(() => expect(document.querySelectorAll('.conv-group-header').length).toBe(2))
+  await waitFor(() => expect(document.querySelectorAll('.conv-group-header').length).toBe(3))
   const headers = [...document.querySelectorAll('.conv-group-header > span:first-child')].map((element) => element.textContent)
-  expect(headers[0]).toBe('TECH-1 · 2')
-  expect(headers).toContain("Aujourd'hui")
+  expect(headers[0]).toBe('Sentry · REACTOR-B4S · 1')
+  expect(headers[1]).toBe("Aujourd'hui")
+  expect(headers[2]).toBe('TECH-1 · 2')
   expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(2)
+  expect(document.querySelector('.conv-row-sentry .provider-mark-sentry')).not.toBeNull()
 })

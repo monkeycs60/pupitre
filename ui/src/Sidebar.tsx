@@ -37,6 +37,7 @@ interface SidebarProps {
   onProjectSelect: (project: Project) => void
   onConversationSelect: (conversation: Conversation) => void
   onConversationCreate: () => void
+  onConversationCreateFromContext?: (seed: { ticketId?: string | null; branch: string | null; ticketKey?: string | null; originType?: 'sentry' | null; originKey?: string | null }) => void
   onConversationClosed?: () => void
   onConversationRead?: () => void
   conversationListVersion: number
@@ -124,7 +125,7 @@ function shortConversationTime(value: string): string {
   return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 }
 
-type ConversationGroup = { key: string; label: string; items: Conversation[] }
+type ConversationGroup = { key: string; label: string; items: Conversation[]; latestUpdatedAt?: number }
 
 /** Regroupe les conversations par récence (épinglées d'abord), comme la
  *  maquette : Épinglées / Aujourd'hui / Cette semaine / Plus ancien. */
@@ -154,8 +155,15 @@ function groupConversationsByRecency(items: Conversation[]): ConversationGroup[]
 
 function groupConversations(items: Conversation[]): ConversationGroup[] {
   const conversationsByTicket = new Map<string, Conversation[]>()
+  const conversationsBySentryIssue = new Map<string, Conversation[]>()
   const withoutTicket: Conversation[] = []
   for (const conversation of items) {
+    if (conversation.origin_type === 'sentry' && conversation.origin_key) {
+      const grouped = conversationsBySentryIssue.get(conversation.origin_key) ?? []
+      grouped.push(conversation)
+      conversationsBySentryIssue.set(conversation.origin_key, grouped)
+      continue
+    }
     if (conversation.ticket_key) {
       const grouped = conversationsByTicket.get(conversation.ticket_key) ?? []
       grouped.push(conversation)
@@ -164,16 +172,22 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
     }
     withoutTicket.push(conversation)
   }
-  const ticketGroups = [...conversationsByTicket.entries()]
-    .map(([ticketKey, groupedConversations]) => ({
-      key: `ticket-${ticketKey}`,
-      label: `${ticketKey} · ${groupedConversations.length}`,
-      items: groupedConversations,
-      latestUpdatedAt: Math.max(...groupedConversations.map((conversation) => Date.parse(conversation.updated_at))),
+  const contextualGroups = [
+    ...[...conversationsByTicket.entries()].map(([key, grouped]) => ({ type: 'ticket', key, grouped })),
+    ...[...conversationsBySentryIssue.entries()].map(([key, grouped]) => ({ type: 'sentry', key, grouped })),
+  ]
+    .map((context) => ({
+      key: `${context.type}-${context.key}`,
+      label: `${context.type === 'sentry' ? `Sentry · ${context.key}` : context.key} · ${context.grouped.length}`,
+      items: context.grouped,
+      latestUpdatedAt: Math.max(...context.grouped.map((conversation) => Date.parse(conversation.updated_at))),
     }))
-    .sort((left, right) => right.latestUpdatedAt - left.latestUpdatedAt)
-    .map(({ latestUpdatedAt: _latestUpdatedAt, ...group }) => group)
-  return [...ticketGroups, ...groupConversationsByRecency(withoutTicket)]
+  const recencyGroups = groupConversationsByRecency(withoutTicket).map((group) => ({
+    ...group,
+    latestUpdatedAt: Math.max(...group.items.map((conversation) => Date.parse(conversation.updated_at))),
+  }))
+  return [...contextualGroups, ...recencyGroups]
+    .sort((left, right) => left.key === 'pinned' ? -1 : right.key === 'pinned' ? 1 : (right.latestUpdatedAt ?? 0) - (left.latestUpdatedAt ?? 0))
 }
 
 export function Sidebar({
@@ -182,6 +196,7 @@ export function Sidebar({
   onProjectSelect,
   onConversationSelect,
   onConversationCreate,
+  onConversationCreateFromContext,
   onConversationClosed,
   onConversationRead,
   conversationListVersion,
@@ -552,6 +567,23 @@ export function Sidebar({
                 <div className="conv-group-header">
                   <span>{group.label}</span>
                   <span className="conv-group-rule" aria-hidden="true" />
+                  {(group.key.startsWith('ticket-') || group.key.startsWith('sentry-')) && onConversationCreateFromContext ? (
+                    <button
+                      type="button"
+                      className="conv-group-create"
+                      aria-label={`Nouvelle conversation dans ${group.label}`}
+                      onClick={() => {
+                        const context = group.items[0]!
+                        onConversationCreateFromContext({
+                          ticketId: context.ticket_id,
+                          ticketKey: context.ticket_key,
+                          branch: branchOfWorktree(context.worktree_path),
+                          originType: context.origin_type,
+                          originKey: context.origin_key,
+                        })
+                      }}
+                    >+</button>
+                  ) : null}
                   {(() => {
                     const unread = group.items.filter((conversation) => (
                       conversationRowState(conversation, activeConversationIds) === 'unread'
@@ -572,7 +604,7 @@ export function Sidebar({
                 const messageCount = isSelected ? liveConversationMessageCount : undefined
                 return (
               <div
-                className={`navigation-row conv-row-state-${state} ${isSelected ? 'is-selected' : ''}`}
+                className={`navigation-row conv-row-state-${state}${conversation.origin_type === 'sentry' ? ' conv-row-sentry' : ''} ${isSelected ? 'is-selected' : ''}`}
                 key={conversation.id}
               >
                 <span className={`conv-row-edge ${state === 'unread' ? 'is-visible' : ''}`} aria-hidden="true" />
@@ -600,7 +632,9 @@ export function Sidebar({
                     </span>
                   ) : (
                     <span className="conv-row-line2">
-                      <ProviderMark provider={conversation.provider} className="conv-row-mark" />
+                      {conversation.origin_type === 'sentry' ? (
+                        <span className="provider-mark provider-mark-sentry conv-row-mark" role="img" aria-label="Sentry" title="Issue Sentry">◈</span>
+                      ) : <ProviderMark provider={conversation.provider} className="conv-row-mark" />}
                       {conversation.ticket_key ? (
                         <span className="conv-row-ticket">{conversation.ticket_key}</span>
                       ) : null}

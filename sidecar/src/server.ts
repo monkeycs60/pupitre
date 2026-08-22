@@ -1569,13 +1569,16 @@ export function createServer(deps: ServerDeps) {
           }
           const project = deps.projects.get(issue.project_id);
           if (!project) throw new HttpError(404, "projet inconnu");
-          const preset = (project.default_preset_id ? deps.presets.get(project.default_preset_id) : null)
+          const preset = (project.default_scout_preset_id ? deps.presets.get(project.default_scout_preset_id) : null)
+            ?? (project.default_preset_id ? deps.presets.get(project.default_preset_id) : null)
             ?? deps.presets.list()[0];
           if (!preset) throw new HttpError(409, "aucun preset disponible pour Scout");
           let remoteContext: { detail: unknown; events: unknown } | null = null;
           try { remoteContext = await deps.integrationsRefresher.sentryIssueContext(issue); } catch {}
           const payload = redactSentryValue({ ...issue.payload, ...remoteContext });
           const message = `Scout Sentry ${String(issue.payload.shortId ?? issue.sentry_issue_id)} — ${String(issue.payload.title ?? "Erreur")}`;
+          const scoutName = `sentry-${String(issue.payload.shortId ?? issue.sentry_issue_id)}`.replace(/[^a-zA-Z0-9._-]/g, "-");
+          const worktreePath = deps.git.createDetachedWorktree(project.id, { name: scoutName, startPoint: "origin/develop" }).path;
           const conversation = deps.conversations.create({
             projectId: project.id,
             provider: preset.provider,
@@ -1587,7 +1590,10 @@ export function createServer(deps: ServerDeps) {
             orchestrator: preset.orchestrator,
             subagentPresetId: preset.subagent_preset_id,
             subagentEffort: preset.subagent_effort,
-            createdOnBranch: deps.git.snapshot(project.id).currentBranch,
+            worktreePath,
+            createdOnBranch: "origin/develop",
+            originType: "sentry",
+            originKey: String(issue.payload.shortId ?? issue.sentry_issue_id),
             firstMessage: message,
           });
           deps.sentry.upsertTriage(issue.id, { status: "running", conversationId: conversation.id });
@@ -1649,7 +1655,7 @@ export function createServer(deps: ServerDeps) {
             ?? deps.presets.list()[0];
           if (!preset) throw new HttpError(409, "aucun preset de correction disponible");
           const branch = `issue/${task.key}`;
-          const worktreePath = deps.git.createWorktree(project.id, { branch }).path;
+          const worktreePath = deps.git.createWorktree(project.id, { branch, startPoint: "origin/develop" }).path;
           const message = `Corriger ${task.key} — ${title}`;
           const conversation = deps.conversations.create({
             projectId: project.id,
@@ -1663,8 +1669,10 @@ export function createServer(deps: ServerDeps) {
             subagentPresetId: preset.subagent_preset_id,
             subagentEffort: preset.subagent_effort,
             worktreePath,
-            createdOnBranch: deps.git.snapshot(project.id).currentBranch,
+            createdOnBranch: "origin/develop",
             ticketId: ticket.id,
+            originType: "sentry",
+            originKey: String(issue.payload.shortId ?? issue.sentry_issue_id),
             firstMessage: message,
           });
           deps.sentry?.upsertTriage(issue.id, {
@@ -1746,6 +1754,17 @@ export function createServer(deps: ServerDeps) {
           }
           deps.projects.setDefaultCorrectionPreset(projectDefaultCorrectionPresetId, presetId as string | null);
           return json(deps.projects.get(projectDefaultCorrectionPresetId));
+        }
+
+        const projectDefaultScoutPresetId = routeId(pathname, /^\/api\/projects\/([^/]+)\/default-scout-preset$/);
+        if (request.method === "PUT" && projectDefaultScoutPresetId !== null) {
+          if (!deps.projects.get(projectDefaultScoutPresetId)) throw new HttpError(404, "projet inconnu");
+          const body = await readObject(request);
+          const presetId = body.presetId;
+          if (presetId !== null && typeof presetId !== "string") throw new HttpError(400, "champ presetId invalide");
+          if (typeof presetId === "string" && !deps.presets.get(presetId)) throw new HttpError(404, "preset inconnu");
+          deps.projects.setDefaultScoutPreset(projectDefaultScoutPresetId, presetId as string | null);
+          return json(deps.projects.get(projectDefaultScoutPresetId));
         }
 
         const projectFilesystemScopeId = routeId(
@@ -2260,6 +2279,10 @@ export function createServer(deps: ServerDeps) {
           // crée alors un worktree, où tous ses agents travailleront (ADR 0001).
           const branch = optionalTrimmed(body, "branch");
           const ticketId = optionalTrimmed(body, "ticketId");
+          const originType = optionalTrimmed(body, "originType");
+          const originKey = optionalTrimmed(body, "originKey");
+          if (originType !== null && originType !== "sentry") throw new HttpError(400, "origine invalide");
+          if (originType === "sentry" && originKey === null) throw new HttpError(400, "clé Sentry requise");
           let ticket = ticketId ? deps.tickets.get(ticketId) : null;
           if (ticketId && (!ticket || ticket.project_id !== projectId)) {
             throw new HttpError(404, "ticket inconnu");
@@ -2283,6 +2306,10 @@ export function createServer(deps: ServerDeps) {
               );
             }
           }
+          if (worktreePath === null && originType === "sentry" && originKey) {
+            worktreePath = deps.conversations.listByProject(projectId)
+              .find((item) => item.origin_type === "sentry" && item.origin_key === originKey)?.worktree_path ?? null;
+          }
           const snapshot = deps.git.snapshot(projectId);
           const conversation = deps.conversations.create({
             worktreePath,
@@ -2296,8 +2323,10 @@ export function createServer(deps: ServerDeps) {
             orchestrator,
             subagentPresetId,
             subagentEffort,
-            createdOnBranch: snapshot.currentBranch,
+            createdOnBranch: originType === "sentry" ? "origin/develop" : snapshot.currentBranch,
             ticketId: ticket?.id ?? null,
+            originType: originType as "sentry" | null,
+            originKey,
             firstMessage: message.trim() || "Image jointe",
           });
           const preamble = ticket

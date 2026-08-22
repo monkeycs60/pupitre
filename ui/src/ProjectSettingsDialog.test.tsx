@@ -51,6 +51,7 @@ test('enregistre une intégration GitLab avec son motif de branche', async () =>
     if (url.endsWith('/api/projects/p1/filesystem-scope')) return json(project)
     if (url.endsWith('/api/projects/p1/default-review-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/default-correction-preset')) return json(project)
+    if (url.endsWith('/api/projects/p1/default-scout-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/integrations/gitlab') && method === 'PUT') {
       calls.push({ url, body: JSON.parse(String(init?.body)) })
       return json({

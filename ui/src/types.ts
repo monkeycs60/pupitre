@@ -188,6 +188,7 @@ export interface Project {
   default_preset_id: string | null
   default_review_preset_id?: string | null
   default_correction_preset_id?: string | null
+  default_scout_preset_id?: string | null
   auto_rescan: boolean
 }
 
@@ -231,6 +232,8 @@ export interface Conversation {
   created_on_branch: string | null
   ticket_id: string | null
   ticket_key?: string | null
+  origin_type?: 'sentry' | null
+  origin_key?: string | null
   cli_session_id: string | null
   preset_id?: string | null
   pinned: boolean

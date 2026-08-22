@@ -24,7 +24,8 @@ export function openDb(dir: string = dataDir()): Database {
       filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots',
       pinned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
       default_review_preset_id TEXT NULL,
-      default_correction_preset_id TEXT NULL
+      default_correction_preset_id TEXT NULL,
+      default_scout_preset_id TEXT NULL
     );
     CREATE TABLE IF NOT EXISTS presets (
       id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -388,10 +389,13 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "message_count INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "last_read_turn INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "created_on_branch TEXT NULL");
+  addColumn(db, "conversations", "origin_type TEXT NULL");
+  addColumn(db, "conversations", "origin_key TEXT NULL");
   migrateConversationMessageCounts(db);
   addColumn(db, "projects", "default_preset_id TEXT NULL");
   const addedDefaultReviewPreset = addColumn(db, "projects", "default_review_preset_id TEXT NULL");
   const addedDefaultCorrectionPreset = addColumn(db, "projects", "default_correction_preset_id TEXT NULL");
+  const addedDefaultScoutPreset = addColumn(db, "projects", "default_scout_preset_id TEXT NULL");
   if (addedDefaultReviewPreset || addedDefaultCorrectionPreset) {
     // Les anciens projets utilisaient le preset conversationnel comme défaut
     // du Gardien ; le recopier conserve leur comportement tout en séparant
@@ -405,6 +409,7 @@ export function openDb(dir: string = dataDir()): Database {
       WHERE default_correction_preset_id IS NULL AND default_preset_id IS NOT NULL;
     `);
   }
+  if (addedDefaultScoutPreset) db.exec("UPDATE projects SET default_scout_preset_id = default_preset_id WHERE default_scout_preset_id IS NULL");
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
   addColumn(db, "projects", "auto_rescan INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "reviews", "code_provider TEXT NULL");

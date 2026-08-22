@@ -105,9 +105,11 @@ function App() {
     useState<Conversation | null>(null)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
   const [conversationSeed, setConversationSeed] = useState<{
-    ticketId: string
-    ticketKey: string
+    ticketId?: string | null
+    ticketKey?: string | null
     branch: string | null
+    originType?: 'sentry' | null
+    originKey?: string | null
   } | null>(null)
   const [newConversationDraft, setNewConversationDraft] = useState('')
   const [newConversationAttachments, setNewConversationAttachments] = useState<Attachment[]>([])
@@ -404,6 +406,17 @@ function App() {
     setWorkspaceView('conversations')
   }
 
+  function handleStartFromContext(seed: { ticketId?: string | null; branch: string | null; ticketKey?: string | null; originType?: 'sentry' | null; originKey?: string | null }) {
+    if (!confirmLeaveMemory() || selectedProject === null) return
+    setConversationSeed(seed)
+    setSelectedConversation(null)
+    setNewConversationDraft('')
+    setNewConversationAttachments([])
+    setIsCreatingConversation(true)
+    setShowSwitchModel(false)
+    setWorkspaceView('conversations')
+  }
+
   function handleConversationClosed() {
     setSelectedConversation(null)
     setConversationSeed(null)
@@ -684,6 +697,7 @@ function App() {
         onProjectSelect={handleProjectSelect}
         onConversationSelect={handleConversationSelect}
         onConversationCreate={handleConversationCreate}
+        onConversationCreateFromContext={handleStartFromContext}
         onConversationClosed={handleConversationClosed}
         onConversationRead={() => setRailReadVersion((current) => current + 1)}
         conversationListVersion={conversationListVersion}
@@ -876,6 +890,8 @@ function App() {
                 ? { branch: conversationSeed.branch, ticketKey: conversationSeed.ticketKey }
                 : undefined}
               ticketId={conversationSeed?.ticketId ?? null}
+              originType={conversationSeed?.originType ?? null}
+              originKey={conversationSeed?.originKey ?? null}
               turnXpMultiplier={complexityMultiplier(
                 (selectedConversation
                   ? gamification.snapshot?.conversations[selectedConversation.id]?.complexity

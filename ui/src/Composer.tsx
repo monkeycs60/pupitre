@@ -42,6 +42,8 @@ interface ComposerProps {
   initialConfig?: Partial<ConversationConfig>
   initialAttachments?: Attachment[]
   ticketId?: string | null
+  originType?: 'sentry' | null
+  originKey?: string | null
 }
 
 interface UploadedAttachment {
@@ -188,6 +190,8 @@ export function Composer({
   initialConfig,
   initialAttachments = [],
   ticketId = null,
+  originType = null,
+  originKey = null,
 }: ComposerProps) {
   const isNewConversation = conversationId === null
   const [config, setConfig] = useState<ConversationConfig>({
@@ -368,6 +372,8 @@ export function Composer({
           projectId: project.id,
           ...config,
           ticketId,
+          originType,
+          originKey,
           message: trimmedMessage,
           images: imageNames,
           attachments: attachmentInputs,

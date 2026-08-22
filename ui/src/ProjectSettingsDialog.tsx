@@ -7,6 +7,7 @@ import {
   measureProjectMcpServers,
   saveProjectIntegration,
   setProjectDefaultCorrectionPreset,
+  setProjectDefaultScoutPreset,
   setProjectDefaultReviewPreset,
   setProjectFilesystemScope,
   updateProjectMcpServers,
@@ -176,6 +177,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
   const [presets, setPresets] = useState<Preset[]>([])
   const [reviewPresetId, setReviewPresetId] = useState(() => projectPresetId(project.default_review_preset_id, project.default_preset_id))
   const [correctionPresetId, setCorrectionPresetId] = useState(() => projectPresetId(project.default_correction_preset_id, project.default_preset_id))
+  const [scoutPresetId, setScoutPresetId] = useState(() => projectPresetId(project.default_scout_preset_id, project.default_preset_id))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mcp, setMcp] = useState<ProjectMcpConfig | null>(null)
@@ -297,6 +299,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
       let updated = await setProjectFilesystemScope(project.id, scope)
       updated = await setProjectDefaultReviewPreset(project.id, reviewPresetId || null)
       updated = await setProjectDefaultCorrectionPreset(project.id, correctionPresetId || null)
+      updated = await setProjectDefaultScoutPreset(project.id, scoutPresetId || null)
       for (const type of ['clickup', 'gitlab', 'sentry'] as const) {
         const form = integrations[type]
         if (form.enabled) {
@@ -390,6 +393,13 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
               >
                 <option value="">Automatique · modèle de la conversation</option>
                 {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset, 'correction')}</option>)}
+              </select>
+            </label>
+            <label htmlFor="project-scout-preset">
+              <strong>Preset Scout Sentry</strong>
+              <select id="project-scout-preset" value={scoutPresetId} disabled={saving} onChange={(event) => setScoutPresetId(event.target.value)}>
+                <option value="">Automatique · preset général</option>
+                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset, 'review')}</option>)}
               </select>
             </label>
           </section>

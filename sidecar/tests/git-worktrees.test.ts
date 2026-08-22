@@ -61,6 +61,28 @@ test("crée un worktree sur une branche neuve, hors du dépôt", () => {
   expect(git.snapshot(projectId).worktrees.map((item) => item.branch)).toContain("ticket-42");
 });
 
+test("crée un worktree Scout détaché depuis develop sans créer de branche", () => {
+  run("branch", "develop");
+
+  const created = git.createDetachedWorktree(projectId, { name: "sentry-REACTOR-B4S", startPoint: "develop" });
+
+  expect(created.detached).toBe(true);
+  expect(run("branch", "--list", "scout/*")).toBe("");
+  expect(Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: created.path }).stdout.toString().trim())
+    .toBe(run("rev-parse", "develop"));
+});
+
+test("crée une branche de correction explicitement depuis develop", () => {
+  run("branch", "develop");
+  writeFileSync(join(repo, "README.md"), "branche courante\n");
+  run("commit", "-am", "courant", "-q");
+
+  const created = git.createWorktree(projectId, { branch: "issue/TECH-1", startPoint: "develop" });
+
+  expect(Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: created.path }).stdout.toString().trim())
+    .toBe(run("rev-parse", "develop"));
+});
+
 test("réutilise le worktree existant d'une branche plutôt que d'échouer", () => {
   const first = git.createWorktree(projectId, { branch: "ticket-42" });
   const second = git.createWorktree(projectId, { branch: "ticket-42" });
