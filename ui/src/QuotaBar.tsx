@@ -197,6 +197,7 @@ export function QuotaStatus({ snapshot }: { snapshot: QuotaSnapshot }) {
     <section className="quota-status" aria-label="Usage des quotas">
       <CompactProviderQuota provider="claude" state={snapshot.claude} now={now} />
       <CompactProviderQuota provider="codex" state={snapshot.codex} now={now} />
+      <CompactProviderQuota provider="grok" state={snapshot.grok ?? null} now={now} />
     </section>
   )
 }
@@ -204,7 +205,7 @@ export function QuotaStatus({ snapshot }: { snapshot: QuotaSnapshot }) {
 /**
  * Détail des quotas, affiché à la demande dans le menu des outils.
  *
- * Les deux providers répondent à une lecture d'état gratuite, relevée au
+ * Claude, Codex et Grok répondent à une lecture d'état gratuite, relevée au
  * démarrage puis périodiquement. Quand une donnée manque quand même (session
  * expirée, app-server éteint), la barre nomme la cause au lieu d'afficher
  * « inconnu » — qui se lirait comme une panne de Pupitre.
@@ -235,6 +236,7 @@ export function QuotaBar({ snapshot }: { snapshot: QuotaSnapshot }) {
     <section className="quota-bar" aria-label="Quotas">
       <ProviderQuota provider="claude" state={snapshot.claude} now={now} />
       <ProviderQuota provider="codex" state={snapshot.codex} now={now} />
+      <ProviderQuota provider="grok" state={snapshot.grok ?? null} now={now} />
 
       <div className="quota-bar-footer">
         {freshness !== null ? <span className="quota-freshness">{freshness}</span> : null}
@@ -243,7 +245,7 @@ export function QuotaBar({ snapshot }: { snapshot: QuotaSnapshot }) {
           className="quota-refresh"
           onClick={() => void handleRefresh()}
           disabled={isRefreshing}
-          title="Relever les quotas des deux providers maintenant. Deux lectures gratuites : aucun quota consommé."
+          title="Relever les quotas maintenant. Lectures gratuites : aucun quota consommé."
         >
           {isRefreshing ? 'Relève…' : 'Actualiser'}
         </button>

@@ -39,6 +39,7 @@ test("premier tour : prompt-file, pas de resume, events session et done", async 
   expect(args).toContain("--model grok-4.6");
   expect(args).not.toContain("--resume");
   expect(args).not.toContain("--effort");
+  expect(args).toContain("--no-subagents");
   expect(args).not.toContain("salut");
   expect(readFileSync(join(dir, "prompt"), "utf8")).toBe("salut");
   expect(events.some((event) => event.type === "session" && event.provider === "grok")).toBe(true);
@@ -100,4 +101,23 @@ test("injecte un plugin MCP éphémère pour le pont Pupitre", async () => {
   expect(readdirSync(plugins)).toEqual([]);
   const args = readFileSync(join(dir, "args"), "utf8");
   expect(args).toContain("MCPTool(pupitre__*)");
+  expect(args).not.toContain("--no-subagents");
+});
+
+test("une conversation orchestratrice coupe les sous-agents natifs", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-grok-"));
+  process.env.PUPITRE_GROK_BIN = FAKE;
+  process.env.FAKE_GROK_ARGS_FILE = join(dir, "args");
+  process.env.PUPITRE_GROK_PLUGINS_DIR = join(dir, "plugins");
+  await collect({
+    cwd: "/tmp",
+    model: "grok-4.6",
+    prompt: "délègue",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+    pupitre: { port: 4820, conversationId: "conversation-1" },
+    conductor: { port: 4820, conversationId: "conversation-1" },
+  });
+  expect(readFileSync(join(dir, "args"), "utf8")).toContain("--no-subagents");
 });

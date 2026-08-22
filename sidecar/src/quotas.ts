@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { AppEvent, Provider } from "./events";
 
-// Le QuotaTracker normalise les payloads bruts de quota des deux providers dans
+// Le QuotaTracker normalise les payloads bruts de quota des providers dans
 // une forme unique, la garde en mémoire, la persiste (table `quota_state`) et
 // notifie ses abonnés (WS `/ws?channel=quotas`).
 //
@@ -13,6 +13,8 @@ import type { AppEvent, Provider } from "./events";
 //   {status, resetsAt: <epoch s>, rateLimitType: "five_hour", …} — pas de %.
 // - codex  : `account/rateLimits/updated` → params.rateLimits
 //   {primary:{usedPercent, windowDurationMins, resetsAt}, secondary:…|null, …}.
+// - grok   : `GET …/v1/billing?format=credits`
+//   {config:{creditUsagePercent, currentPeriod:{type,start,end}, …}}.
 
 export interface QuotaWindow {
   /** Identifiant stable de la fenêtre pour ce provider (clé de merge). */
@@ -33,6 +35,7 @@ export interface QuotaState {
 export interface QuotaSnapshot {
   claude: QuotaState | null;
   codex: QuotaState | null;
+  grok: QuotaState | null;
 }
 
 type QuotaListener = (state: QuotaState) => void;
@@ -56,7 +59,7 @@ export class QuotaTracker {
       value: string;
     }[];
     for (const row of rows) {
-      if (row.key !== "claude" && row.key !== "codex") continue;
+      if (row.key !== "claude" && row.key !== "codex" && row.key !== "grok") continue;
       try {
         this.states.set(row.key, JSON.parse(row.value) as QuotaState);
       } catch (error) {
@@ -70,7 +73,7 @@ export class QuotaTracker {
   }
 
   snapshot(): QuotaSnapshot {
-    return { claude: this.get("claude"), codex: this.get("codex") };
+    return { claude: this.get("claude"), codex: this.get("codex"), grok: this.get("grok") };
   }
 
   subscribe(listener: QuotaListener): () => void {
@@ -104,7 +107,9 @@ export class QuotaTracker {
       ? claudeQuota(payload)
       : provider === "codex"
         ? codexQuota(payload)
-        : { windows: [] as QuotaWindow[], isComplete: false };
+        : provider === "grok"
+          ? grokQuota(payload)
+          : { windows: [] as QuotaWindow[], isComplete: false };
     // Un payload clairsemé reste clairsemé même si l'appelant croit tenir un
     // snapshot : la forme du payload a le dernier mot sur son exhaustivité.
     const replace = isFullSnapshot && parsed.isComplete;
@@ -290,5 +295,53 @@ function codexQuota(payload: unknown): ParsedQuota {
   return {
     windows,
     isComplete: "primary" in limits || "secondary" in limits,
+  };
+}
+
+function moneyVal(value: unknown): number | null {
+  const direct = optionalNumber(value);
+  if (direct !== null) return direct;
+  return optionalNumber(asRecord(value)?.val);
+}
+
+function grokQuota(payload: unknown): ParsedQuota {
+  const root = asRecord(payload);
+  if (!root) return { windows: [], isComplete: false };
+  const config = asRecord(root.config) ?? root;
+  const period = asRecord(config.currentPeriod);
+  const periodType = typeof period?.type === "string"
+    ? period.type
+    : typeof config.currentPeriod === "string" ? config.currentPeriod : "";
+  const monthly = periodType.includes("MONTH");
+  const label = monthly ? "monthly" : "weekly";
+  const windowDurationMins = monthly ? 43_200 : 10_080;
+
+  let usedPercent = optionalNumber(config.creditUsagePercent)
+    ?? optionalNumber(config.credit_usage_percent);
+  if (usedPercent === null) {
+    const usage = asRecord(config.usage) ?? asRecord(root.usage);
+    const used = moneyVal(usage?.totalUsed ?? usage?.includedUsed);
+    const limit = moneyVal(config.monthlyLimit ?? root.monthlyLimit);
+    if (used !== null && limit !== null && limit > 0) {
+      usedPercent = (used / limit) * 100;
+    }
+  }
+  const cycle = asRecord(config.billingCycle) ?? asRecord(root.billingCycle);
+  const resetsAt = toIsoDate(
+    period?.end
+    ?? config.billingPeriodEnd
+    ?? cycle?.billingPeriodEnd,
+  );
+  if (usedPercent === null && resetsAt === null) {
+    return { windows: [], isComplete: false };
+  }
+  return {
+    isComplete: true,
+    windows: [{
+      label,
+      usedPercent,
+      resetsAt,
+      windowDurationMins,
+    }],
   };
 }

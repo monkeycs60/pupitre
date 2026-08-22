@@ -141,7 +141,7 @@ function renderSidebar(
     onConversationCreate: () => undefined,
     onConversationCreateFromContext,
     conversationListVersion: 0,
-    quotas: { snapshot: { claude: null, codex: null } },
+    quotas: { snapshot: { claude: null, codex: null, grok: null } },
     runningSubtasks: 0,
     liveConversationMessageCount,
     activeFleet,

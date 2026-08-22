@@ -3353,7 +3353,7 @@ export function createServer(deps: ServerDeps) {
           return json(deps.quotas.snapshot());
         }
 
-        // Relève immédiate des deux providers, sans attendre le tour de poll.
+        // Relève immédiate, sans attendre le tour de poll.
         if (request.method === "POST" && pathname === "/api/quotas/refresh") {
           return json(await deps.quotaRefresher.refresh());
         }

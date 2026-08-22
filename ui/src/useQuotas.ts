@@ -11,7 +11,7 @@ import {
 import type { QuotaSnapshot, QuotaState } from './types'
 import { loadQuotaThresholds } from './quotaSettings'
 
-const EMPTY_SNAPSHOT: QuotaSnapshot = { claude: null, codex: null }
+const EMPTY_SNAPSHOT: QuotaSnapshot = { claude: null, codex: null, grok: null }
 
 // Clés d'alertes déjà poussées, persistées pour ne pas re-notifier au rechargement.
 const NOTIFIED_KEY = 'pupitre.quota-notified'
@@ -40,7 +40,7 @@ export interface Quotas {
 }
 
 /**
- * Quotas des deux providers : snapshot HTTP initial puis flux WS `channel=quotas`
+ * Quotas des providers : snapshot HTTP initial puis flux WS `channel=quotas`
  * (le serveur renvoie l'état courant à l'ouverture, donc la reconnexion se
  * resynchronise seule). Même mécanique de backoff que useConversationEvents.
  */

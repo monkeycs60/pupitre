@@ -53,6 +53,7 @@ let previousCodexBin: string | undefined;
 /** Relevés que les lectures scriptées du QuotaRefresher rendront (cf. beforeEach). */
 let claudeUsageProbe: unknown = null;
 let codexRateLimitsProbe: unknown = null;
+let grokUsageProbe: unknown = null;
 let claudeProbeCount = 0;
 
 function jsonHeaders(): HeadersInit {
@@ -196,6 +197,7 @@ cat "${fixture}"
   chmodSync(fakeClaude, 0o755);
   claudeUsageProbe = null;
   codexRateLimitsProbe = null;
+  grokUsageProbe = null;
   claudeProbeCount = 0;
   previousClaudeBin = process.env.PUPITRE_CLAUDE_BIN;
   previousCodexBin = process.env.PUPITRE_CODEX_BIN;
@@ -318,6 +320,7 @@ cat "${fixture}"
         claudeProbeCount += 1;
         return claudeUsageProbe;
       },
+      readGrokUsage: async () => grokUsageProbe,
     }),
     subtasks,
     presets,
@@ -591,7 +594,7 @@ test("expose le graphe Git et un diff entre deux références", async () => {
 test("POST /api/quotas/refresh relève les deux providers et rend le snapshot", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const vide = await fetch(`${current.baseUrl}/api/quotas`);
-  expect(await vide.json()).toEqual({ claude: null, codex: null });
+  expect(await vide.json()).toEqual({ claude: null, codex: null, grok: null });
 
   const resetsAt = Math.floor(Date.now() / 1000) + 3_600;
   const resetsAtIso = new Date(resetsAt * 1000).toISOString();
@@ -610,12 +613,24 @@ test("POST /api/quotas/refresh relève les deux providers et rend le snapshot", 
     primary: { usedPercent: 42, windowDurationMins: 300, resetsAt },
     secondary: null,
   };
+  grokUsageProbe = {
+    config: {
+      currentPeriod: {
+        type: "USAGE_PERIOD_TYPE_WEEKLY",
+        start: resetsAtIso,
+        end: resetsAtIso,
+      },
+      creditUsagePercent: 25,
+    },
+  };
 
   const refreshed = await fetch(`${current.baseUrl}/api/quotas/refresh`, { method: "POST" });
   expect(refreshed.status).toBe(200);
+
   const snapshot = await refreshed.json() as {
     claude: { windows: { label: string; usedPercent: number | null }[] } | null;
     codex: { windows: { usedPercent: number | null }[] } | null;
+    grok: { windows: { usedPercent: number | null }[] } | null;
   };
   // Le relevé OAuth porte de vrais pourcentages, dont une fenêtre par modèle.
   expect(snapshot.claude?.windows).toEqual([
@@ -624,6 +639,9 @@ test("POST /api/quotas/refresh relève les deux providers et rend le snapshot", 
   ]);
   expect(snapshot.codex?.windows[0]).toEqual(
     expect.objectContaining({ usedPercent: 42 }),
+  );
+  expect(snapshot.grok?.windows[0]).toEqual(
+    expect.objectContaining({ usedPercent: 25 }),
   );
   expect(claudeProbeCount).toBe(1);
 
@@ -2079,7 +2097,7 @@ test("GET /api/quotas est vide au démarrage puis reflète le tour claude", asyn
   if (!current) throw new Error("serveur de test non démarré");
   const empty = await fetch(`${current.baseUrl}/api/quotas`);
   expect(empty.status).toBe(200);
-  expect(await empty.json()).toEqual({ claude: null, codex: null });
+  expect(await empty.json()).toEqual({ claude: null, codex: null, grok: null });
 
   const project = await createProject(tmpdir());
   const created = await postJson("/api/conversations", {

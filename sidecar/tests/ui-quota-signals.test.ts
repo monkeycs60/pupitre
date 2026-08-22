@@ -124,16 +124,19 @@ test("résumé sans relevé : la cause dépend du provider", () => {
   });
   expect(quotaSummary("codex", state("codex", []), NOW).note)
     .toContain("app-server codex");
+  expect(quotaSummary("grok", null, NOW).note)
+    .toContain("session Grok absente");
 });
 
 test("la fraîcheur retient le relevé provider le plus récent", () => {
   const snapshot = {
     claude: { ...state("claude", []), updatedAt: new Date(NOW - 80 * MINUTE).toISOString() },
     codex: { ...state("codex", []), updatedAt: new Date(NOW - 3 * MINUTE).toISOString() },
+    grok: null,
   };
 
   expect(quotaFreshness(snapshot, NOW)).toBe("mis à jour il y a 3 min");
-  expect(quotaFreshness({ claude: null, codex: null }, NOW)).toBeNull();
+  expect(quotaFreshness({ claude: null, codex: null, grok: null }, NOW)).toBeNull();
 });
 
 test("pulse : quota peu entamé et reset dans moins d'une heure, modèles chers", () => {

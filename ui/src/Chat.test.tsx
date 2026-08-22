@@ -29,7 +29,7 @@ const project = {
   path: '/tmp/project-1',
 } as Project
 
-const quotas: QuotaSnapshot = { claude: null, codex: null }
+const quotas: QuotaSnapshot = { claude: null, codex: null, grok: null }
 
 test('une entrée ticket n’hérite pas du brouillon new:<project> existant', async () => {
   globalThis.fetch = mock(async (input: RequestInfo | URL) => {

@@ -9,6 +9,7 @@ import { QuotaRefresher } from "../src/quota-refresh";
 let quotas: QuotaTracker;
 let claudeReads: number;
 let codexReads: number;
+let grokReads: number;
 
 /**
  * Forme réelle de `GET /api/oauth/usage` (relevée le 2026-08-06), réduite aux
@@ -42,7 +43,21 @@ function usagePayload() {
   };
 }
 
-function refresher(claudeUsage: unknown = null): QuotaRefresher {
+function grokCreditsPayload() {
+  return {
+    config: {
+      currentPeriod: {
+        type: "USAGE_PERIOD_TYPE_WEEKLY",
+        start: "2026-08-20T13:33:02.366Z",
+        end: "2026-08-27T13:33:02.366Z",
+      },
+      creditUsagePercent: 25,
+      billingPeriodEnd: "2026-08-27T13:33:02.366Z",
+    },
+  };
+}
+
+function refresher(claudeUsage: unknown = null, grokUsage: unknown = null): QuotaRefresher {
   return new QuotaRefresher(quotas, {
     readCodexRateLimits: async () => {
       codexReads += 1;
@@ -52,6 +67,10 @@ function refresher(claudeUsage: unknown = null): QuotaRefresher {
       claudeReads += 1;
       return claudeUsage;
     },
+    readGrokUsage: async () => {
+      grokReads += 1;
+      return grokUsage;
+    },
   });
 }
 
@@ -59,6 +78,7 @@ beforeEach(() => {
   quotas = new QuotaTracker(openDb(mkdtempSync(join(tmpdir(), "pupitre-quota-refresh-"))));
   claudeReads = 0;
   codexReads = 0;
+  grokReads = 0;
 });
 
 test("le relevé OAuth donne les pourcentages claude, dont la fenêtre par modèle", async () => {
@@ -93,6 +113,7 @@ test("la relève est gratuite : elle tourne à chaque appel, sans condition", as
   await shared.refresh();
   expect(claudeReads).toBe(2);
   expect(codexReads).toBe(2);
+  expect(grokReads).toBe(2);
 });
 
 test("deux relèves simultanées n'en font qu'une", async () => {
@@ -111,6 +132,9 @@ test("une source indisponible laisse l'état précédent intact", async () => {
     },
     readClaudeUsage: async () => {
       throw new Error("jeton expiré");
+    },
+    readGrokUsage: async () => {
+      throw new Error("session grok expirée");
     },
   });
   await expect(failing.refresh()).resolves.toBeDefined();
@@ -165,4 +189,17 @@ test("un relevé OAuth complet retire une fenêtre qui a disparu", async () => {
 
   await refresher({ limits: [usagePayload().limits[0]] }).refresh();
   expect(quotas.get("claude")?.windows.map((w) => w.label)).toEqual(["five_hour"]);
+});
+
+test("le relevé crédits Grok donne le pourcentage hebdo", async () => {
+  await refresher(null, grokCreditsPayload()).refresh();
+  expect(grokReads).toBe(1);
+  expect(quotas.get("grok")?.windows).toEqual([
+    {
+      label: "weekly",
+      usedPercent: 25,
+      resetsAt: "2026-08-27T13:33:02.366Z",
+      windowDurationMins: 10_080,
+    },
+  ]);
 });

@@ -195,13 +195,13 @@ Les réglages transverses vivent dans la table key/value `settings` (`GET/PUT /a
 
 ## Relève des quotas
 
-Les deux providers n'exposent pas leur état de la même façon, et le `QuotaRefresher` (`sidecar/src/quota-refresh.ts`) cache l'asymétrie derrière un seul appel :
+Les providers n'exposent pas leur état de la même façon, et le `QuotaRefresher` (`sidecar/src/quota-refresh.ts`) cache l'asymétrie derrière un seul appel :
 
 | | Lecture d'état | Pourcentage d'usage | Coût d'une relève |
 | --- | --- | --- | --- |
 | codex | `account/rateLimits/read` sur l'app-server | oui (`usedPercent`) | gratuit |
 | claude | aucune — le `rate_limit_event` n'existe que dans le flux d'un tour, et n'est écrit ni dans les transcripts ni dans un cache | **non**, seulement `resetsAt` | un tour minimal |
-| grok | aucune — le headless Grok ne publie pas de quota d'abonnement grok.com | **non** | — |
+| grok | `GET …/v1/billing?format=credits` avec le jeton de `grok login` | oui (`creditUsagePercent`) | gratuit |
 
 La sonde claude (`sidecar/src/adapters/claude-quota.ts`) est donc réduite au strict nécessaire : modèle haiku, prompt système d'une ligne, aucun MCP, aucun hook, répertoire temporaire vide pour ne découvrir aucun `CLAUDE.md`. Au démarrage, elle ne tourne que si le relevé stocké ne couvre plus la fenêtre en cours (`claudeQuotaIsStale`) ; `POST /api/quotas/refresh` la force. Deux relèves simultanées ne paient qu'un seul tour.
 

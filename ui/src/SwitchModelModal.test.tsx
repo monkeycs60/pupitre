@@ -74,7 +74,7 @@ const fablePreset: Preset = {
   updated_at: '2026-08-09T00:00:00.000Z',
 }
 
-const quotas: QuotaSnapshot = { claude: null, codex: null }
+const quotas: QuotaSnapshot = { claude: null, codex: null, grok: null }
 
 test('confirme une passation Claude après une sélection dans le même sélecteur', async () => {
   let handoffPayload: unknown = null

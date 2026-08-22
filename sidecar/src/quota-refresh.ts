@@ -1,19 +1,22 @@
 import type { QuotaSnapshot, QuotaTracker } from "./quotas";
 import { readClaudeUsage } from "./adapters/claude-usage";
+import { readGrokUsage } from "./adapters/grok-usage";
 import { codexAppServer } from "./adapters/codex-app-server";
 
-// Les deux providers exposent désormais une lecture d'état pure et gratuite :
+// Les providers exposent une lecture d'état pure et gratuite :
 //   - codex  : `account/rateLimits/read` sur son app-server ;
-//   - claude : `GET /api/oauth/usage` avec le jeton de Claude Code.
+//   - claude : `GET /api/oauth/usage` avec le jeton de Claude Code ;
+//   - grok   : `GET …/v1/billing?format=credits` avec le jeton de `grok login`.
 // Le rafraîchisseur les relève ensemble, sans jamais consommer de quota — d'où
 // la relève périodique, qui garde la barre vivante pendant une session.
 
-/** Cadence de la relève de fond. Deux lectures gratuites : rien à économiser. */
+/** Cadence de la relève de fond. Trois lectures gratuites : rien à économiser. */
 export const QUOTA_POLL_MS = 5 * 60 * 1000;
 
 interface QuotaRefreshDeps {
   readCodexRateLimits?: () => Promise<unknown>;
   readClaudeUsage?: () => Promise<unknown | null>;
+  readGrokUsage?: () => Promise<unknown | null>;
 }
 
 export class QuotaRefresher {
@@ -21,11 +24,13 @@ export class QuotaRefresher {
   private timer: ReturnType<typeof setInterval> | null = null;
   private readCodex: () => Promise<unknown>;
   private readClaude: () => Promise<unknown | null>;
+  private readGrok: () => Promise<unknown | null>;
 
   constructor(private quotas: QuotaTracker, deps: QuotaRefreshDeps = {}) {
     this.readCodex = deps.readCodexRateLimits
       ?? (() => codexAppServer.readRateLimits());
     this.readClaude = deps.readClaudeUsage ?? (() => readClaudeUsage());
+    this.readGrok = deps.readGrokUsage ?? (() => readGrokUsage());
   }
 
   refresh(): Promise<QuotaSnapshot> {
@@ -66,6 +71,11 @@ export class QuotaRefresher {
       this.readClaude()
         .then((usage) => {
           if (usage) this.quotas.ingestPayload("claude", usage);
+        })
+        .catch(() => {}),
+      this.readGrok()
+        .then((usage) => {
+          if (usage) this.quotas.ingestPayload("grok", usage);
         })
         .catch(() => {}),
     ]);

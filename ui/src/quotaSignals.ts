@@ -104,6 +104,8 @@ export function windowTitle(window: QuotaWindow): string {
       return 'hebdo'
     case 'opus_weekly':
       return 'hebdo opus'
+    case 'monthly':
+      return 'mensuel'
     case 'primary':
     case 'secondary':
       // Les noms primary/secondary ne garantissent pas la durée : la fixture
@@ -234,7 +236,7 @@ export function quotaSummary(
       note: provider === 'claude'
         ? 'Usage illisible : session Claude Code absente ou expirée. Relancez `claude` puis actualisez.'
         : provider === 'grok'
-          ? 'Grok.com ne publie pas de quota d’abonnement dans le flux headless.'
+          ? 'Usage illisible : session Grok absente ou expirée. Relancez `grok login` puis actualisez.'
         : 'Aucun relevé reçu de l’app-server codex.',
     }
   }

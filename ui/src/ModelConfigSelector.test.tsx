@@ -11,7 +11,7 @@ const { ModelConfigSelector } = await import('./ModelConfigSelector')
 
 afterEach(cleanup)
 
-const emptyQuotas: QuotaSnapshot = { claude: null, codex: null }
+const emptyQuotas: QuotaSnapshot = { claude: null, codex: null, grok: null }
 
 const config: ConversationConfig = {
   provider: 'claude',

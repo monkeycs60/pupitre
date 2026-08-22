@@ -459,7 +459,7 @@ export interface SessionSummary {
   created_at: string
 }
 
-// Miroir de sidecar/src/quotas.ts : forme normalisée des deux providers.
+// Miroir de sidecar/src/quotas.ts : forme normalisée des providers.
 export interface QuotaWindow {
   label: string
   /** null = le provider ne publie pas de pourcentage pour cette fenêtre. */
@@ -478,6 +478,7 @@ export interface QuotaState {
 export interface QuotaSnapshot {
   claude: QuotaState | null
   codex: QuotaState | null
+  grok: QuotaState | null
 }
 
 // Miroir de sidecar/src/subtasks.ts : une sous-tâche déléguée par une

@@ -58,7 +58,7 @@ const initialConfig: ConversationConfig = {
   subagentEffort: null,
 }
 
-const quotas: QuotaSnapshot = { claude: null, codex: null }
+const quotas: QuotaSnapshot = { claude: null, codex: null, grok: null }
 
 test('remplace le panneau de création par le chip du preset par défaut', async () => {
   globalThis.fetch = mock(() => Promise.resolve(new Response(JSON.stringify([speedPreset]), {

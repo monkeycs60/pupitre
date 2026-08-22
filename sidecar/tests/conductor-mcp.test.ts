@@ -320,6 +320,7 @@ test("check_quotas : rend les fenêtres des deux providers en clair", async () =
   expect(rendered).toContain("fenêtre 5 h");
   expect(rendered).toContain("fenêtre 7 j");
   expect(rendered).toContain("claude : aucun relevé");
+  expect(rendered).toContain("grok : aucun relevé");
 });
 
 test("sans conversation orchestratrice connue, delegate refuse proprement", async () => {

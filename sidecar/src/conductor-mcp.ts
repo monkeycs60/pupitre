@@ -81,6 +81,7 @@ interface QuotaWindowBody {
 interface QuotaSnapshotBody {
   claude: { windows: QuotaWindowBody[]; updatedAt: string } | null;
   codex: { windows: QuotaWindowBody[]; updatedAt: string } | null;
+  grok: { windows: QuotaWindowBody[]; updatedAt: string } | null;
 }
 
 class SubtaskLimitReached extends Error {}
@@ -177,7 +178,7 @@ function describeSubtask(result: SubtaskResultBody): string {
 
 function describeQuotas(snapshot: QuotaSnapshotBody): string {
   const lines: string[] = [];
-  for (const provider of ["claude", "codex"] as const) {
+  for (const provider of ["claude", "codex", "grok"] as const) {
     const state = snapshot[provider];
     if (!state) {
       lines.push(`${provider} : aucun relevé (aucun tour depuis le démarrage)`);

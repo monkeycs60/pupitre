@@ -200,6 +200,7 @@ export function CostsView({ project, onConversationSelect }: CostsViewProps) {
         <div className="quota-card-grid">
           <QuotaCard provider="claude" state={quotas.snapshot.claude} now={now} />
           <QuotaCard provider="codex" state={quotas.snapshot.codex} now={now} />
+          <QuotaCard provider="grok" state={quotas.snapshot.grok ?? null} now={now} />
         </div>
 
         {report ? (

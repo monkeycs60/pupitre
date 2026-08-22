@@ -58,6 +58,7 @@ test("ingère le rate-limit claude de la fixture en une fenêtre normalisée", (
   ]);
   expect(tracker.snapshot().claude).toEqual(state!);
   expect(tracker.snapshot().codex).toBeNull();
+  expect(tracker.snapshot().grok).toBeNull();
 });
 
 test("ingère le payload rateLimits codex de la fixture", () => {
@@ -148,7 +149,29 @@ test("ignore les events non rate-limit et les payloads inexploitables", () => {
   expect(tracker.ingestPayload("claude", { status: "allowed" })).toBeNull();
   expect(tracker.ingestPayload("codex", { status: "allowed" })).toBeNull();
   expect(tracker.ingestPayload("codex", "pas un objet")).toBeNull();
-  expect(tracker.snapshot()).toEqual({ claude: null, codex: null });
+  expect(tracker.snapshot()).toEqual({ claude: null, codex: null, grok: null });
+});
+
+test("ingère le payload crédits Grok", () => {
+  const state = tracker.ingestPayload("grok", {
+    config: {
+      currentPeriod: {
+        type: "USAGE_PERIOD_TYPE_WEEKLY",
+        start: "2026-08-20T13:33:02.366Z",
+        end: "2026-08-27T13:33:02.366Z",
+      },
+      creditUsagePercent: 25,
+    },
+  });
+  expect(state!.windows).toEqual([
+    {
+      label: "weekly",
+      usedPercent: 25,
+      resetsAt: "2026-08-27T13:33:02.366Z",
+      windowDurationMins: 10_080,
+    },
+  ]);
+  expect(tracker.snapshot().grok).toEqual(state!);
 });
 
 test("l'état survit à la réouverture de la base", () => {

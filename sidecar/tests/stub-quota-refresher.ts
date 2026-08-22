@@ -11,5 +11,6 @@ export function stubQuotaRefresher(quotas: QuotaTracker): QuotaRefresher {
   return new QuotaRefresher(quotas, {
     readCodexRateLimits: async () => null,
     readClaudeUsage: async () => null,
+    readGrokUsage: async () => null,
   });
 }
