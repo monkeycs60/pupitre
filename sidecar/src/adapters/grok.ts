@@ -45,7 +45,13 @@ export function runGrokTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     parseLine: parseGrokLine,
     emit,
     signal: opts.signal,
-    env: { GROK_DISABLE_AUTOUPDATER: "1" },
+    env: {
+      GROK_DISABLE_AUTOUPDATER: "1",
+      // Grok scanne ~/.claude.json et Cursor par défaut : dans affilae-mono
+      // ça lançait ~15 serveurs MCP (plusieurs HS) et bloquait 20 s avant le 1er token.
+      GROK_CLAUDE_MCPS_ENABLED: "false",
+      GROK_CURSOR_MCPS_ENABLED: "false",
+    },
   }).finally(() => {
     rmSync(join(promptFile, ".."), { recursive: true, force: true });
     if (pluginDir) rmSync(pluginDir, { recursive: true, force: true });

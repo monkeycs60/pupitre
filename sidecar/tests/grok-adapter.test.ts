@@ -34,6 +34,8 @@ test("premier tour : prompt-file, pas de resume, events session et done", async 
     images: [],
   });
   const args = readFileSync(join(dir, "args"), "utf8");
+  expect(args).toContain("GROK_CLAUDE_MCPS_ENABLED=false");
+  expect(args).toContain("GROK_CURSOR_MCPS_ENABLED=false");
   expect(args).toContain("--output-format streaming-messages-json");
   expect(args).toContain("--include-partial-messages");
   expect(args).toContain("--model grok-4.6");

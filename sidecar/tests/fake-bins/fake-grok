@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Rejoue la fixture Grok ; enregistre les args reçus pour les assertions.
-echo "$@" > "${FAKE_GROK_ARGS_FILE:-/dev/null}"
+{
+  echo "$@"
+  echo "GROK_CLAUDE_MCPS_ENABLED=${GROK_CLAUDE_MCPS_ENABLED-}"
+  echo "GROK_CURSOR_MCPS_ENABLED=${GROK_CURSOR_MCPS_ENABLED-}"
+} > "${FAKE_GROK_ARGS_FILE:-/dev/null}"
 prompt_file=""
 prev=""
 for arg in "$@"; do
