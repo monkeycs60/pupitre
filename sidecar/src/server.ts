@@ -2309,6 +2309,10 @@ export function createServer(deps: ServerDeps) {
           if (worktreePath === null && originType === "sentry" && originKey) {
             worktreePath = deps.conversations.listByProject(projectId)
               .find((item) => item.origin_type === "sentry" && item.origin_key === originKey)?.worktree_path ?? null;
+            if (worktreePath === null) {
+              const scoutName = `sentry-${originKey}`.replace(/[^a-zA-Z0-9._-]/g, "-");
+              worktreePath = deps.git.createDetachedWorktree(projectId, { name: scoutName, startPoint: "origin/develop" }).path;
+            }
           }
           const snapshot = deps.git.snapshot(projectId);
           const conversation = deps.conversations.create({

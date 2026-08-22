@@ -130,6 +130,7 @@ function renderSidebar(
   activeFleet: FleetItem[] = [],
   selectedConversation: Conversation | null = null,
   liveConversationMessageCount?: number,
+  onConversationCreateFromContext?: (seed: { branch: string | null; originType?: 'sentry' | null; originKey?: string | null }) => void,
 ) {
   const onConversationSelect = mock(() => undefined)
   render(createElement(Sidebar, {
@@ -138,6 +139,7 @@ function renderSidebar(
     onProjectSelect: () => undefined,
     onConversationSelect,
     onConversationCreate: () => undefined,
+    onConversationCreateFromContext,
     conversationListVersion: 0,
     quotas: { snapshot: { claude: null, codex: null } },
     runningSubtasks: 0,
@@ -310,6 +312,7 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
     title: 'Scout erreur',
     origin_type: 'sentry',
     origin_key: 'REACTOR-B4S',
+    worktree_path: '/worktrees/detached-sentry-REACTOR-B4S',
     updated_at: new Date(todayAtNine.getTime() + 60_000).toISOString(),
   }
   installApi(
@@ -317,7 +320,8 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
     () => Promise.reject(new Error('aucun lancement attendu')),
     [ticketYesterday, ticketToday, recentUnticketed, sentryConversation],
   )
-  renderSidebar()
+  const onCreate = mock(() => undefined)
+  renderSidebar([], null, undefined, onCreate)
 
   await waitFor(() => expect(document.querySelectorAll('.conv-group-header').length).toBe(3))
   const headers = [...document.querySelectorAll('.conv-group-header > span:first-child')].map((element) => element.textContent)
@@ -326,4 +330,10 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   expect(headers[2]).toBe('TECH-1 · 2')
   expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(2)
   expect(document.querySelector('.conv-row-sentry .provider-mark-sentry')).not.toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /Nouvelle conversation dans Sentry/ }))
+  expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
+    branch: null,
+    originType: 'sentry',
+    originKey: 'REACTOR-B4S',
+  }))
 })
