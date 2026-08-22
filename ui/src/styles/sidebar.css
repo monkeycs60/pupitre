@@ -1806,6 +1806,11 @@
   font-weight: 600;
 }
 
+.conv-row-sentry .conv-row-title,
+.conv-row-sentry.is-selected .conv-row-title {
+  color: var(--sentry-gold);
+}
+
 .conv-row-time {
   flex: none;
   color: var(--text-faint);

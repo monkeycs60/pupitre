@@ -330,6 +330,10 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   expect(headers[2]).toBe('TECH-1 · 2')
   expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(2)
   expect(document.querySelector('.conv-row-sentry .provider-mark.is-sentry')).not.toBeNull()
+  fireEvent.click(screen.getByRole('tab', { name: 'Sentry' }))
+  await waitFor(() => expect(document.querySelectorAll('.conv-row-sentry')).toHaveLength(1))
+  expect(document.querySelectorAll('.navigation-row')).toHaveLength(1)
+  expect(document.querySelector('.conv-row-sentry .conv-row-title')?.textContent).toBe('Scout erreur')
   fireEvent.click(screen.getByRole('button', { name: /Nouvelle conversation dans Sentry/ }))
   expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
     branch: null,

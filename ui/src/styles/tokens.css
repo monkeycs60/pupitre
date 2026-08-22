@@ -49,11 +49,12 @@
   --ok-soft: rgba(78, 201, 165, 0.12);
   --streak: #f0b64a;
   --streak-soft: rgba(240, 182, 74, 0.12);
-  /* Providers : codex → vert, claude → or (badges du redesign) */
+  /* Providers */
   --prov-codex: #4ec9a5;
   --prov-codex-soft: rgba(78, 201, 165, 0.12);
-  --prov-claude: #f0b64a;
-  --prov-claude-soft: rgba(240, 182, 74, 0.12);
+  --prov-claude: #d97757;
+  --prov-claude-soft: rgba(217, 119, 87, 0.12);
+  --sentry-gold: #d6ad55;
   --neutral-soft: rgba(255, 255, 255, 0.05);
 
   /* Palette catégorielle des graphiques, validée pour fond sombre sur la liste

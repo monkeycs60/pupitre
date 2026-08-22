@@ -76,7 +76,7 @@ function conversationRelation(
   return continuation ? `→ passation vers ${continuation.title}` : null
 }
 
-type ConversationScope = 'active' | 'archived' | 'trash'
+type ConversationScope = 'active' | 'archived' | 'trash' | 'sentry'
 type SidebarTab = 'conversations' | 'workflows'
 type ConversationRowState = 'live' | 'unread' | 'read'
 
@@ -245,23 +245,27 @@ export function Sidebar({
     let ignore = false
     if (selectedProject === null) return
 
+    const apiScope = conversationScope === 'sentry' ? 'active' : conversationScope
     void Promise.all([
-      listProjectConversations(selectedProject.id, conversationScope),
+      listProjectConversations(selectedProject.id, apiScope),
       listProjectWorkflows(selectedProject.id),
     ])
       .then(([items, loadedWorkflows]) => {
         if (!ignore) {
+          const scopedItems = conversationScope === 'sentry'
+            ? items.filter((item) => item.origin_type === 'sentry')
+            : items
           const currentSelectedConversation = selectedConversationRef.current
           const selectedLoadedConversation = workspaceViewRef.current === 'conversations' && currentSelectedConversation !== null
-            ? items.find((item) => item.id === currentSelectedConversation.id)
+            ? scopedItems.find((item) => item.id === currentSelectedConversation.id)
             : undefined
           const shouldMarkSelectedRead = selectedLoadedConversation !== undefined
             && selectedLoadedConversation.digest_turn > (selectedLoadedConversation.last_read_turn ?? 0)
           const nextItems = shouldMarkSelectedRead
-            ? items.map((item) => item.id === selectedLoadedConversation.id
+            ? scopedItems.map((item) => item.id === selectedLoadedConversation.id
               ? { ...item, last_read_turn: selectedLoadedConversation.digest_turn }
               : item)
-            : items
+            : scopedItems
           setConversations(pinnedFirst(nextItems))
           setWorkflows(loadedWorkflows)
           if (shouldMarkSelectedRead) {
@@ -373,7 +377,7 @@ export function Sidebar({
     setError(null)
     try {
       const updated = await setConversationArchived(conversation.id, !conversation.archived)
-      setConversations((current) => conversationScope === 'active' && updated.archived
+      setConversations((current) => (conversationScope === 'active' || conversationScope === 'sentry') && updated.archived
         ? current.filter((item) => item.id !== updated.id)
         : conversationScope === 'archived' && !updated.archived
           ? current.filter((item) => item.id !== updated.id)
@@ -526,7 +530,7 @@ export function Sidebar({
         </div>
 
         <div className="conversation-filters" role="tablist" aria-label="Vue des conversations">
-          {([['active', 'Actives'], ['archived', 'Archives'], ['trash', 'Corbeille']] as const).map(([scope, label]) => (
+          {([['active', 'Actives'], ['archived', 'Archives'], ['trash', 'Corbeille'], ['sentry', 'Sentry']] as const).map(([scope, label]) => (
             <button
               type="button"
               key={scope}

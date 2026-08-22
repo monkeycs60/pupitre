@@ -17,3 +17,8 @@ test('rend les marques officielles comme SVG nus, sans conteneur décoratif', ()
     unmount()
   }
 })
+
+test('utilise le corail officiel Anthropic pour Claude', async () => {
+  const tokens = await Bun.file(new URL('./styles/tokens.css', import.meta.url)).text()
+  expect(tokens).toContain('--prov-claude: #d97757;')
+})
