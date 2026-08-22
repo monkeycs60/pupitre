@@ -47,10 +47,13 @@ export function runGrokTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     signal: opts.signal,
     env: {
       GROK_DISABLE_AUTOUPDATER: "1",
-      // Grok scanne ~/.claude.json et Cursor par défaut : dans affilae-mono
-      // ça lançait ~15 serveurs MCP (plusieurs HS) et bloquait 20 s avant le 1er token.
-      GROK_CLAUDE_MCPS_ENABLED: "false",
+      // Grok n'importe pas les MCP Codex. Sans filtre projet, on reprend ceux
+      // de Claude. Un filtre (`mcpServers`) est déjà dans le plugin : on coupe
+      // alors le scan pour ne pas relancer toute la liste. Timeout court : un
+      // serveur HS bloquait 20 s le premier token.
+      GROK_CLAUDE_MCPS_ENABLED: opts.mcpServers ? "false" : "true",
       GROK_CURSOR_MCPS_ENABLED: "false",
+      GROK_MCP_STARTUP_TIMEOUT_SECS: "8",
     },
   }).finally(() => {
     rmSync(join(promptFile, ".."), { recursive: true, force: true });

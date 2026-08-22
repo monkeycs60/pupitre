@@ -34,8 +34,9 @@ test("premier tour : prompt-file, pas de resume, events session et done", async 
     images: [],
   });
   const args = readFileSync(join(dir, "args"), "utf8");
-  expect(args).toContain("GROK_CLAUDE_MCPS_ENABLED=false");
+  expect(args).toContain("GROK_CLAUDE_MCPS_ENABLED=true");
   expect(args).toContain("GROK_CURSOR_MCPS_ENABLED=false");
+  expect(args).toContain("GROK_MCP_STARTUP_TIMEOUT_SECS=8");
   expect(args).toContain("--output-format streaming-messages-json");
   expect(args).toContain("--include-partial-messages");
   expect(args).toContain("--model grok-4.6");
@@ -104,6 +105,23 @@ test("injecte un plugin MCP éphémère pour le pont Pupitre", async () => {
   const args = readFileSync(join(dir, "args"), "utf8");
   expect(args).toContain("MCPTool(pupitre__*)");
   expect(args).not.toContain("--no-subagents");
+});
+
+test("un filtre MCP projet coupe le scan Claude pour éviter le doublon", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-grok-"));
+  process.env.PUPITRE_GROK_BIN = FAKE;
+  process.env.FAKE_GROK_ARGS_FILE = join(dir, "args");
+  process.env.PUPITRE_GROK_PLUGINS_DIR = join(dir, "plugins");
+  await collect({
+    cwd: "/tmp",
+    model: "grok-4.6",
+    prompt: "filtre",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+    mcpServers: { clickup: { command: "clickup" } },
+  });
+  expect(readFileSync(join(dir, "args"), "utf8")).toContain("GROK_CLAUDE_MCPS_ENABLED=false");
 });
 
 test("un fil de conversation garde les sous-agents natifs, même orchestré", async () => {
