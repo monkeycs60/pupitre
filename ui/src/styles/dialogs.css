@@ -441,17 +441,14 @@ input.field-mono {
 .project-mcp-badge {
   width: 16px;
   height: 16px;
-  border-radius: var(--r-xs);
 }
 
 .project-mcp-badge.is-claude {
   color: var(--accent);
-  background: var(--accent-soft);
 }
 
 .project-mcp-badge.is-codex {
   color: var(--ok);
-  background: var(--ok-soft);
 }
 
 .project-mcp-failed {

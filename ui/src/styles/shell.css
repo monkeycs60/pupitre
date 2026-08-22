@@ -729,17 +729,11 @@ body.is-resizing-documents-list {
 }
 
 .provider-mark {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  color: currentColor;
-}
-
-.provider-mark svg {
   display: block;
+  flex: none;
   width: 12px;
   height: 12px;
+  color: currentColor;
   fill: currentColor;
 }
 
@@ -826,18 +820,14 @@ body.is-resizing-documents-list {
 .conversation-prov {
   width: 19px;
   height: 14px;
-  font-weight: 600;
-  border-radius: var(--r-xs);
 }
 
 .conversation-prov.is-codex {
   color: var(--prov-codex);
-  background: var(--prov-codex-soft);
 }
 
 .conversation-prov.is-claude {
   color: var(--prov-claude);
-  background: var(--prov-claude-soft);
 }
 
 .header-actions {

@@ -1730,10 +1730,8 @@
 
 .conv-group-create:hover { color: var(--accent); }
 
-.provider-mark-sentry {
+.conv-row-mark.is-sentry {
   color: #6c5ce7;
-  font-size: 15px;
-  line-height: 12px;
 }
 
 .conv-group-count.is-attention {
@@ -1954,18 +1952,13 @@
 }
 
 .conv-row-mark {
-  align-items: center;
-  justify-content: center;
   color: var(--text-muted);
-  border-radius: 4px;
 }
 
 .conv-row-mark.is-codex {
   color: var(--prov-codex);
-  background: var(--prov-codex-soft);
 }
 
 .conv-row-mark.is-claude {
   color: var(--prov-claude);
-  background: var(--prov-claude-soft);
 }

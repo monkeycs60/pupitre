@@ -633,7 +633,7 @@ export function Sidebar({
                   ) : (
                     <span className="conv-row-line2">
                       {conversation.origin_type === 'sentry' ? (
-                        <span className="provider-mark provider-mark-sentry conv-row-mark" role="img" aria-label="Sentry" title="Issue Sentry">◈</span>
+                        <ProviderMark provider="sentry" className="conv-row-mark" />
                       ) : <ProviderMark provider={conversation.provider} className="conv-row-mark" />}
                       {conversation.ticket_key ? (
                         <span className="conv-row-ticket">{conversation.ticket_key}</span>
