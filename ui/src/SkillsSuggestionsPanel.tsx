@@ -48,6 +48,8 @@ const SKILL_SOURCE_LABELS: Record<SkillSuggestion['provenance'], string> = {
   'codex-prompt': 'Codex · prompt',
   'agents-global': 'AGENTS · global',
   'agents-project': 'AGENTS · projet',
+  'grok-global': 'Grok · global',
+  'grok-project': 'Grok · projet',
 }
 
 interface SkillsSuggestionsPanelProps {

@@ -22,3 +22,12 @@ test('utilise le corail officiel Anthropic pour Claude', async () => {
   const tokens = await Bun.file(new URL('./styles/tokens.css', import.meta.url)).text()
   expect(tokens).toContain('--prov-claude: #d97757;')
 })
+
+test('utilise le monogramme Grok officiel sans conteneur', () => {
+  const { container, unmount } = render(createElement(ProviderMark, { provider: 'grok' }))
+  const mark = container.firstElementChild
+  expect(mark?.getAttribute('viewBox')).toBe('0 0 34 33')
+  expect(mark?.querySelector('path')?.getAttribute('d')).toContain('M13.2371 21.0407L24.3186 12.8506')
+  expect(mark?.querySelectorAll('path')).toHaveLength(2)
+  unmount()
+})
