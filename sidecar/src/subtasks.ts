@@ -3,10 +3,8 @@ import type { AppEvent, Provider, StoredEvent } from "./events";
 import type { ConversationStore } from "./stores/conversations";
 import type { Project, ProjectStore } from "./stores/projects";
 import type { QuotaTracker } from "./quotas";
-import { runClaudeTurn } from "./adapters/claude";
+import { runProviderTurn } from "./adapters/run";
 import { claudeServerDefinitions } from "./mcp-inventory";
-import { runCodexTurn } from "./adapters/codex";
-import { runCodexAppServerTurn } from "./adapters/codex-app-server";
 import type { FilesystemScope } from "./access";
 import { conversationCwd } from "./workspace";
 
@@ -333,9 +331,7 @@ export class SubtaskRunner {
         // de délégation et ne peut pas créer de sous-sous-tâche — la
         // récursion est structurellement impossible, pas simplement découragée.
       };
-      if (subtask.provider === "claude") await runClaudeTurn(opts, emit);
-      else if (process.env.PUPITRE_CODEX_MODE === "exec") await runCodexTurn(opts, emit);
-      else await runCodexAppServerTurn(opts, emit);
+      await runProviderTurn(subtask.provider, opts, emit);
       if (outcome.terminal === null) {
         emit({ type: "status", state: "error", error: "tour terminé sans statut" });
       }

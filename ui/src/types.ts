@@ -1,4 +1,4 @@
-export type Provider = 'claude' | 'codex'
+export type Provider = 'claude' | 'codex' | 'grok'
 export type ConversationSpeed = 'standard' | 'fast'
 export type PresetPermissionMode =
   'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'bypassPermissions'
@@ -89,6 +89,8 @@ export type SkillProvenance =
   | 'codex-prompt'
   | 'agents-global'
   | 'agents-project'
+  | 'grok-global'
+  | 'grok-project'
 
 export interface SkillSummary {
   id: string

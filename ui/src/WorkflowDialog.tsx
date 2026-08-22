@@ -345,7 +345,7 @@ export function WorkflowDialog({
             </label>
             {!presetId ? (
               <div className="workflow-model-grid">
-                <label><span>Provider</span><select value={provider} onChange={(event) => handleProvider(event.target.value as Provider)}><option value="codex">codex</option><option value="claude">claude</option></select></label>
+                <label><span>Provider</span><select value={provider} onChange={(event) => handleProvider(event.target.value as Provider)}><option value="codex">codex</option><option value="claude">claude</option><option value="grok">grok</option></select></label>
                 <label><span>Modèle</span><select value={model} onChange={(event) => setModel(event.target.value)}>{PROVIDER_MODELS[provider].map((item) => <option key={item}>{item}</option>)}</select></label>
                 <label><span>Effort</span><select value={effort} onChange={(event) => setEffort(event.target.value)}>{PROVIDER_EFFORTS[provider].map((item) => <option key={item}>{item}</option>)}</select></label>
                 {provider === 'codex' ? <label><span>Vitesse</span><select value={speed} onChange={(event) => setSpeed(event.target.value as ConversationSpeed)}><option value="standard">standard</option><option value="fast">fast</option></select></label> : null}

@@ -103,7 +103,7 @@ function providerQuota(provider: Provider, quotas: QuotaSnapshot): {
   filled: number
   tone: 'ok' | 'warn' | 'danger'
 } {
-  const summary = quotaSummary(provider, quotas[provider])
+  const summary = quotaSummary(provider, quotas[provider] ?? null)
   const remaining = summary.usedPercent === null ? null : Math.max(0, 100 - summary.usedPercent)
   return {
     label: remaining === null ? 'quota indisponible' : `${Math.round(remaining)} % restants · ${summary.note ?? 'réinitialisation inconnue'}`,
@@ -303,7 +303,7 @@ export function ModelConfigSelector({
                 </button>
                 {submenu === 'model' ? (
                   <section className="preset-selector-submenu preset-selector-model-menu" role="menu" aria-label="Choisir un modèle">
-                    {(['codex', 'claude'] as const).map((provider) => {
+                    {(['codex', 'claude', 'grok'] as const).map((provider) => {
                       const quota = providerQuota(provider, quotas)
                       return (
                         <div className="preset-selector-provider" key={provider}>

@@ -13,7 +13,7 @@ import { join } from "node:path";
  */
 export interface McpServerRef {
   name: string;
-  provider: "claude" | "codex";
+  provider: "claude" | "codex" | "grok";
   scope: "global" | "projet";
 }
 
@@ -151,6 +151,12 @@ export function listMcpServers(projectPath: string, home = homedir()): McpServer
   }
   for (const name of tomlServerNames(join(home, ".codex", "config.toml"))) {
     servers.push({ name, provider: "codex", scope: "global" });
+  }
+  for (const name of tomlServerNames(join(home, ".grok", "config.toml"))) {
+    servers.push({ name, provider: "grok", scope: "global" });
+  }
+  for (const name of tomlServerNames(join(projectPath, ".grok", "config.toml"))) {
+    servers.push({ name, provider: "grok", scope: "projet" });
   }
   // Un même serveur peut être déclaré deux fois (global + projet) : il n'est
   // chargé qu'une fois, on ne le compte donc qu'une fois.

@@ -3,11 +3,13 @@ import type { Provider } from './types'
 export const PROVIDER_MODELS = {
   claude: ['fable-5', 'opus', 'sonnet', 'haiku'],
   codex: ['gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra'],
+  grok: ['grok-4.6', 'grok-4.5'],
 } as const satisfies Record<Provider, readonly string[]>
 
 export const PROVIDER_EFFORTS = {
   claude: ['low', 'medium', 'high', 'xhigh', 'max'],
   codex: ['low', 'medium', 'high', 'xhigh'],
+  grok: ['low', 'medium', 'high', 'xhigh'],
 } as const satisfies Record<Provider, readonly string[]>
 
 /**
@@ -23,6 +25,8 @@ export const MODEL_LABELS: Record<string, string> = {
   'gpt-5.6-sol': 'GPT-5.6 Sol',
   'gpt-5.6-luna': 'GPT-5.6 Luna',
   'gpt-5.6-terra': 'GPT-5.6 Terra',
+  'grok-4.6': 'Grok 4.6',
+  'grok-4.5': 'Grok 4.5',
 }
 
 /** Un modèle inconnu s'affiche tel quel plutôt que de disparaître. */
@@ -43,6 +47,8 @@ export const MODEL_HINTS: Record<string, string> = {
   'gpt-5.6-sol': 'le plus capable',
   'gpt-5.6-luna': 'rapide et économe',
   'gpt-5.6-terra': 'polyvalent',
+  'grok-4.6': 'le plus capable',
+  'grok-4.5': 'génération précédente',
 }
 
 /** Un échange représentatif, utilisé uniquement pour comparer les tarifs API. */
@@ -64,7 +70,7 @@ export interface ModelPricing {
 }
 
 /**
- * Tarifs indicatifs en dollars par million de tokens, relevés le 9 août 2026.
+ * Tarifs indicatifs en dollars par million de tokens, relevés le 22 août 2026.
  * Ils ne représentent jamais une facture d'abonnement : le sélecteur les
  * emploie seulement pour rendre le compromis coût/capacité lisible.
  */
@@ -76,6 +82,8 @@ export const MODEL_PRICING: readonly ModelPricing[] = [
   { provider: 'claude', model: 'opus', input: 5, output: 25 },
   { provider: 'claude', model: 'sonnet', input: 2, output: 10 },
   { provider: 'claude', model: 'haiku', input: 1, output: 5 },
+  { provider: 'grok', model: 'grok-4.6', input: 2, output: 6 },
+  { provider: 'grok', model: 'grok-4.5', input: 2, output: 6 },
 ]
 
 export function modelPricing(model: string): ModelPricing | null {

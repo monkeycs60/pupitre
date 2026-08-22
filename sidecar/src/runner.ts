@@ -2,9 +2,7 @@ import type { ConversationStore } from "./stores/conversations";
 import type { Project, ProjectStore } from "./stores/projects";
 import type { MediaStore } from "./media";
 import type { AppEvent, MediaAttachment, StoredEvent } from "./events";
-import { runClaudeTurn } from "./adapters/claude";
-import { runCodexTurn } from "./adapters/codex";
-import { runCodexAppServerTurn } from "./adapters/codex-app-server";
+import { runProviderTurn } from "./adapters/run";
 import type { QuotaTracker } from "./quotas";
 import { ConversationActivity } from "./conversation-activity";
 import type { GitProjectService, GitTurnTracking } from "./git";
@@ -309,11 +307,7 @@ export class ConversationRunner {
         ...(selectedMcpServers(project) ?? {}),
         ...(supportsSteer && acceptSteer ? { registerSteer: acceptSteer } : {}),
       };
-      if (conv.provider === "claude") await runClaudeTurn(opts, emit);
-      // Codex passe par l'app-server (vrais deltas, quotas natifs) ; le chemin
-      // `codex exec` historique reste accessible via PUPITRE_CODEX_MODE=exec.
-      else if (process.env.PUPITRE_CODEX_MODE === "exec") await runCodexTurn(opts, emit);
-      else await runCodexAppServerTurn(opts, emit);
+      await runProviderTurn(conv.provider, opts, emit);
     } finally {
       try {
         if (this.git && gitTracking) this.git.finishTurn(gitTracking, conversationId);

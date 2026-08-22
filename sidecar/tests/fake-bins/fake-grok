@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Rejoue la fixture Grok ; enregistre les args reçus pour les assertions.
+echo "$@" > "${FAKE_GROK_ARGS_FILE:-/dev/null}"
+prompt_file=""
+prev=""
+for arg in "$@"; do
+  if [[ "$prev" == "--prompt-file" ]]; then
+    prompt_file="$arg"
+  fi
+  prev="$arg"
+done
+if [[ -n "${FAKE_GROK_PROMPT_FILE:-}" && -n "$prompt_file" && -f "$prompt_file" ]]; then
+  cat "$prompt_file" > "$FAKE_GROK_PROMPT_FILE"
+fi
+cat "$(dirname "$0")/../fixtures/grok-basic.jsonl"

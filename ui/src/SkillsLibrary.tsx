@@ -27,6 +27,8 @@ const PROVENANCE_LABELS: Record<SkillProvenance, string> = {
   'codex-prompt': 'Codex · prompt',
   'agents-global': 'Codex · AGENTS global',
   'agents-project': 'Codex · AGENTS projet',
+  'grok-global': 'Grok · global',
+  'grok-project': 'Grok · projet',
 }
 
 const SCOPE_BADGES: Record<SkillProvenance, { label: string; kind: string }> = {
@@ -36,6 +38,8 @@ const SCOPE_BADGES: Record<SkillProvenance, { label: string; kind: string }> = {
   'claude-plugin': { label: 'PLUGIN', kind: 'plugin' },
   'codex-prompt': { label: 'CODEX', kind: 'codex' },
   'agents-global': { label: 'CODEX', kind: 'codex' },
+  'grok-global': { label: 'GROK', kind: 'grok' },
+  'grok-project': { label: 'PROJET', kind: 'projet' },
 }
 
 function errorMessage(error: unknown): string {
@@ -183,6 +187,13 @@ export function SkillsLibrary({ project }: SkillsLibraryProps) {
                 onClick={() => setProvider('codex')}
               >
                 Codex
+              </button>
+              <button
+                type="button"
+                className={`library-pill ${provider === 'grok' ? 'is-active' : ''}`}
+                onClick={() => setProvider('grok')}
+              >
+                Grok
               </button>
               <button
                 type="button"

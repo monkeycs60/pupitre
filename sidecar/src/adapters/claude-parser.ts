@@ -1,8 +1,8 @@
-import { parseJsonlLine, type AppEvent } from "../events";
+import { parseJsonlLine, type AppEvent, type Provider } from "../events";
 import { boundedToolOutput } from "./output";
 
 // Une ligne stream-json Claude peut produire 0..n AppEvents.
-export function parseClaudeLine(line: string): AppEvent[] {
+export function parseClaudeLine(line: string, provider: Provider = "claude"): AppEvent[] {
   const obj = parseJsonlLine(line);
   if (!obj) return [];
   const out: AppEvent[] = [];
@@ -11,7 +11,7 @@ export function parseClaudeLine(line: string): AppEvent[] {
     case "system": {
       if (obj.subtype === "init" && typeof obj.session_id === "string") {
         out.push({
-          type: "session", provider: "claude",
+          type: "session", provider,
           cliSessionId: obj.session_id, model: String(obj.model ?? ""),
         });
       }
@@ -64,8 +64,16 @@ export function parseClaudeLine(line: string): AppEvent[] {
       //  "rateLimitType":"five_hour",…}} — payload brut, normalisé par le QuotaTracker.
       const info = obj.rate_limit_info;
       if (typeof info === "object" && info !== null && !Array.isArray(info)) {
-        out.push({ type: "rate-limit", provider: "claude", payload: info });
+        out.push({ type: "rate-limit", provider, payload: info });
       }
+      break;
+    }
+    case "error": {
+      out.push({
+        type: "status",
+        state: "error",
+        error: String(obj.message ?? obj.result ?? "erreur"),
+      });
       break;
     }
     case "result": {

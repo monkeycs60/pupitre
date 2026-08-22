@@ -15,4 +15,5 @@ test('Gardien propose exactement les modèles disponibles dans le chat', () => {
   expect(options.REVIEW_MODELS).toBe(options.PROVIDER_MODELS)
   expect(options.REVIEW_MODELS.codex).toContain('gpt-5.6-luna')
   expect(options.REVIEW_MODELS.claude).toContain('haiku')
+  expect(options.REVIEW_MODELS.grok).toContain('grok-4.6')
 })

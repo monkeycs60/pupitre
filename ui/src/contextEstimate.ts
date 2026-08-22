@@ -14,11 +14,16 @@ const MODEL_CONTEXT_WINDOWS: Partial<Record<Provider, Record<string, number>>> =
     'gpt-5.6-luna': 400_000,
     'gpt-5.6-terra': 400_000,
   },
+  grok: {
+    'grok-4.6': 500_000,
+    'grok-4.5': 500_000,
+  },
 }
 
 const FALLBACK_CONTEXT_WINDOWS: Record<Provider, number> = {
   claude: 200_000,
   codex: 400_000,
+  grok: 500_000,
 }
 
 export interface ContextEstimate {

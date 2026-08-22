@@ -451,6 +451,10 @@ input.field-mono {
   color: var(--ok);
 }
 
+.project-mcp-badge.is-grok {
+  color: var(--prov-grok);
+}
+
 .project-mcp-failed {
   color: var(--warn);
 }

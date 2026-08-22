@@ -57,6 +57,24 @@ test("ajoute --effort quand un effort est fourni", async () => {
   expect(readFileSync(argsFile, "utf8")).toContain("--effort xhigh");
 });
 
+test("traduit l'ancien identifiant Fable 5 vers l'alias accepté par Claude Code", async () => {
+  const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
+  process.env.PUPITRE_CLAUDE_BIN = FAKE;
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  await collect({
+    cwd: "/tmp",
+    model: "fable-5",
+    prompt: "analyse",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+  });
+
+  const args = readFileSync(argsFile, "utf8");
+  expect(args).toContain("--model fable");
+  expect(args).not.toContain("--model fable-5");
+});
+
 test("YOLO transmet le bypass dangereux à Claude", async () => {
   const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
   process.env.PUPITRE_CLAUDE_BIN = FAKE;
@@ -72,7 +90,7 @@ test("YOLO transmet le bypass dangereux à Claude", async () => {
   const args = readFileSync(argsFile, "utf8");
   expect(args).toContain("--permission-mode bypassPermissions");
   expect(args).toContain("--dangerously-skip-permissions");
-  expect(args).toContain("--add-dir /home/clement/.claude /home/clement/.codex");
+  expect(args).toContain("--add-dir /home/clement/.claude /home/clement/.codex /home/clement/.grok");
   expect(args).toContain("Edit(~/.claude/**)");
   expect(args).toContain("Write(~/.codex/**)");
   expect(args).toContain("Bash(npm run build:*)");

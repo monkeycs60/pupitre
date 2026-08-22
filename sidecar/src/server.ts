@@ -3,6 +3,7 @@ import { basename, extname } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { MediaAttachment, Provider, StoredEvent } from "./events";
+import { isProvider } from "./events";
 import type { MediaStore } from "./media";
 import type { ConversationRunner } from "./runner";
 import type { Conversation, ConversationStore } from "./stores/conversations";
@@ -226,10 +227,12 @@ type WebSocketData =
 const EFFORTS_BY_PROVIDER = {
   claude: ["low", "medium", "high", "xhigh", "max"],
   codex: ["low", "medium", "high", "xhigh"],
+  grok: ["low", "medium", "high", "xhigh"],
 } as const satisfies Record<Provider, readonly string[]>;
 const MODELS_BY_PROVIDER = {
   claude: ["fable-5", "opus", "sonnet", "haiku"],
   codex: ["gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra"],
+  grok: ["grok-4.6", "grok-4.5"],
 } as const satisfies Record<Provider, readonly string[]>;
 const SPEEDS = ["standard", "fast"] as const;
 const DEFAULT_MEDIA_MAX_BYTES = 10 * 1024 * 1024;
@@ -484,8 +487,8 @@ function optionalSpeed(
   ) {
     throw new HttpError(400, "vitesse invalide");
   }
-  if (provider === "claude" && value === "fast") {
-    throw new HttpError(400, "vitesse fast indisponible pour claude");
+  if (provider !== "codex" && value === "fast") {
+    throw new HttpError(400, `vitesse fast indisponible pour ${provider}`);
   }
   return value as "standard" | "fast";
 }
@@ -663,14 +666,13 @@ export function effectiveSubtaskConfig(
 function presetInput(body: Record<string, unknown>): PresetInput {
   const name = requiredString(body, "name");
   const provider = requiredString(body, "provider");
-  if (provider !== "claude" && provider !== "codex") {
+  if (!isProvider(provider)) {
     throw new HttpError(400, "provider invalide");
   }
   const reviewProviderValue = body.review_provider;
   if (
     reviewProviderValue !== undefined
-    && reviewProviderValue !== "claude"
-    && reviewProviderValue !== "codex"
+    && !isProvider(reviewProviderValue)
   ) {
     throw new HttpError(400, "review_provider invalide");
   }
@@ -890,7 +892,7 @@ function workflowInput(
     ({ provider, model, effort, speed, orchestrator } = preset);
   } else {
     const providerValue = requiredString(body, "provider");
-    if (providerValue !== "claude" && providerValue !== "codex") {
+    if (!isProvider(providerValue)) {
       throw new HttpError(400, "provider invalide");
     }
     provider = providerValue;
@@ -948,7 +950,7 @@ function routineInput(
     ({ provider, model, effort, speed, orchestrator } = config);
   } else {
     const providerValue = requiredString(body, "provider");
-    if (providerValue !== "claude" && providerValue !== "codex") {
+    if (!isProvider(providerValue)) {
       throw new HttpError(400, "provider invalide");
     }
     provider = providerValue;
@@ -1205,7 +1207,7 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "GET" && pathname === "/api/skills") {
           const provider = url.searchParams.get("provider");
-          if (provider !== null && provider !== "claude" && provider !== "codex") {
+          if (provider !== null && !isProvider(provider)) {
             throw new HttpError(400, "provider de skill invalide");
           }
           return json(deps.skills.list({
@@ -2253,12 +2255,12 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(404, "projet inconnu");
           }
           const provider = requiredString(body, "provider");
-          if (provider !== "claude" && provider !== "codex") {
+          if (!isProvider(provider)) {
             throw new HttpError(400, "provider invalide");
           }
           const model = requiredString(body, "model");
-          const effort = optionalEffort(body, provider as Provider);
-          const speed = optionalSpeed(body, provider as Provider);
+          const effort = optionalEffort(body, provider);
+          const speed = optionalSpeed(body, provider);
           const permissionMode = optionalPresetPermissionMode(body);
           const requestedPresetId = optionalNamedPresetId(body, "presetId");
           const presetId = requestedPresetId ?? inferPresetId({
@@ -2364,7 +2366,7 @@ export function createServer(deps: ServerDeps) {
           try {
             const body = await readObject(request);
             const provider = requiredString(body, "provider");
-            if (provider !== "claude" && provider !== "codex") {
+            if (!isProvider(provider)) {
               throw new HttpError(400, "provider invalide");
             }
             if (provider !== conversation.provider) {
@@ -2628,7 +2630,7 @@ export function createServer(deps: ServerDeps) {
           }
           const body = await readObject(request);
           const provider = requiredString(body, "provider");
-          if (provider !== "claude" && provider !== "codex") {
+          if (!isProvider(provider)) {
             throw new HttpError(400, "provider invalide");
           }
           if (provider === source.provider) {
@@ -2670,7 +2672,7 @@ export function createServer(deps: ServerDeps) {
           }
           const body = await readObject(request);
           const provider = requiredString(body, "provider");
-          if (provider !== "claude" && provider !== "codex") {
+          if (!isProvider(provider)) {
             throw new HttpError(400, "provider invalide");
           }
           const model = requiredString(body, "model");
@@ -3197,7 +3199,7 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(404, "conversation inconnue");
           }
           const provider = requiredString(body, "provider");
-          if (provider !== "claude" && provider !== "codex") {
+          if (!isProvider(provider)) {
             throw new HttpError(400, "provider invalide");
           }
           const model = requiredString(body, "model");

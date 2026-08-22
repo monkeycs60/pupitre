@@ -417,7 +417,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
           </label>
           <p>
             Ce réglage s’applique à toutes les conversations de ce projet. Les racines
-            <code> ~/.claude</code> et <code> ~/.codex</code> restent toujours accessibles.
+            <code> ~/.claude</code>, <code> ~/.codex</code> et <code> ~/.grok</code> restent toujours accessibles.
           </p>
           {mcp !== null && mcp.servers.length > 0 ? (
             <div className="project-mcp">

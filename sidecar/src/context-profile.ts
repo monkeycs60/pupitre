@@ -15,6 +15,7 @@ const GLOBAL_FILES = [
   ".claude/CLAUDE.md",
   ".claude/AGENTS.md",
   ".codex/AGENTS.md",
+  ".grok/AGENTS.md",
 ];
 
 const PROJECT_FILES = ["CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md"];

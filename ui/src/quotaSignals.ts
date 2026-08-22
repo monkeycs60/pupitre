@@ -8,6 +8,7 @@ import type { Provider, QuotaSnapshot, QuotaState, QuotaWindow } from './types'
 export const EXPENSIVE_MODELS = {
   claude: ['fable-5', 'opus'],
   codex: ['gpt-5.6-sol', 'gpt-5.6-terra'],
+  grok: ['grok-4.6'],
 } as const satisfies Record<Provider, readonly string[]>
 
 /** Pulse : beaucoup de quota restant ET fenêtre qui expire bientôt. */
@@ -232,6 +233,8 @@ export function quotaSummary(
       headline: 'jamais relevé',
       note: provider === 'claude'
         ? 'Usage illisible : session Claude Code absente ou expirée. Relancez `claude` puis actualisez.'
+        : provider === 'grok'
+          ? 'Grok.com ne publie pas de quota d’abonnement dans le flux headless.'
         : 'Aucun relevé reçu de l’app-server codex.',
     }
   }

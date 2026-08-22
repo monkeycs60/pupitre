@@ -10,6 +10,7 @@ interface SpawnJsonlOptions {
   parseLine: (line: string) => AppEvent[];
   emit: EmitFn;
   signal?: AbortSignal;
+  env?: Record<string, string>;
   /** Garde stdin ouvert afin qu'un provider accepte des messages en vol. */
   streamingInput?: {
     initialLine: string;
@@ -29,6 +30,7 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
     const child = spawn(opts.bin, opts.args, {
       cwd: opts.cwd,
       stdio: [opts.streamingInput ? "pipe" : "ignore", "pipe", "pipe"],
+      env: opts.env ? { ...process.env, ...opts.env } : undefined,
     });
     let sawTerminal = false;
     let settled = false;

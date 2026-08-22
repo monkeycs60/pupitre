@@ -1967,3 +1967,7 @@
 .conv-row-mark.is-claude {
   color: var(--prov-claude);
 }
+
+.conv-row-mark.is-grok {
+  color: var(--prov-grok);
+}

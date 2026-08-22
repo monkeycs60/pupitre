@@ -261,6 +261,11 @@
   background: var(--bg-hover);
 }
 
+.scope-badge.is-grok {
+  color: var(--prov-grok);
+  background: var(--prov-grok-soft);
+}
+
 .skill-row-description {
   overflow: hidden;
   color: var(--text-muted);

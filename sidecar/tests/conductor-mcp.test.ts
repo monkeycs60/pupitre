@@ -203,6 +203,7 @@ test("les trois outils sont exposés avec des descriptions exploitables", async 
   // et la recommandation de routage.
   expect(delegate.description).toContain("gpt-5.6-luna");
   expect(delegate.description).toContain("fable-5");
+  expect(delegate.description).toContain("grok-4.6");
   expect(delegate.description).toContain("xhigh");
   expect(delegate.description).toContain("check_quotas");
   expect(delegate.description!.toLowerCase()).toContain("codex");

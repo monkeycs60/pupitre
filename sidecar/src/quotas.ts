@@ -102,7 +102,9 @@ export class QuotaTracker {
   ): QuotaState | null {
     const parsed = provider === "claude"
       ? claudeQuota(payload)
-      : codexQuota(payload);
+      : provider === "codex"
+        ? codexQuota(payload)
+        : { windows: [] as QuotaWindow[], isComplete: false };
     // Un payload clairsemé reste clairsemé même si l'appelant croit tenir un
     // snapshot : la forme du payload a le dernier mot sur son exhaustivité.
     const replace = isFullSnapshot && parsed.isComplete;

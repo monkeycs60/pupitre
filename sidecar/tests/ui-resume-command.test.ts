@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { resumeCommand } from "../../ui/src/resumeCommand";
 import type { Conversation } from "../../ui/src/types";
 
-function conversation(provider: "claude" | "codex", sessionId: string | null): Conversation {
+function conversation(provider: "claude" | "codex" | "grok", sessionId: string | null): Conversation {
   return {
     id: "conversation", project_id: "project", title: "Reprise", summary: "Reprise", provider,
     model: "model", effort: null, speed: null, orchestrator: true,
@@ -18,5 +18,7 @@ test("génère la commande de reprise propre à chaque CLI", () => {
     .toBe("claude --resume 'session-123'");
   expect(resumeCommand(conversation("codex", "thread-456")))
     .toBe("codex resume 'thread-456'");
+  expect(resumeCommand(conversation("grok", "grok-session-1")))
+    .toBe("grok --resume 'grok-session-1'");
   expect(resumeCommand(conversation("codex", null))).toBeNull();
 });

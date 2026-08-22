@@ -180,6 +180,7 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
                   >
                     <option value="claude">claude</option>
                     <option value="codex">codex</option>
+                    <option value="grok">grok</option>
                   </select>
                 </label>
                 <label>

@@ -264,7 +264,7 @@ export function openDb(dir: string = dataDir()): Database {
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       triggers_json TEXT NOT NULL DEFAULT '[]',
-      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex')),
+      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex', 'grok')),
       provenance TEXT NOT NULL,
       path TEXT NOT NULL UNIQUE,
       project_id TEXT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -289,7 +289,7 @@ export function openDb(dir: string = dataDir()): Database {
       skill_invocation TEXT NOT NULL,
       prompt TEXT NOT NULL,
       preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
-      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex')),
+      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex', 'grok')),
       model TEXT NOT NULL,
       effort TEXT NULL,
       speed TEXT NULL,
@@ -307,7 +307,7 @@ export function openDb(dir: string = dataDir()): Database {
       workflow_id TEXT NULL REFERENCES workflows(id) ON DELETE SET NULL,
       prompt TEXT NULL,
       preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
-      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex')),
+      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex', 'grok')),
       model TEXT NOT NULL,
       effort TEXT NULL,
       speed TEXT NULL,
@@ -555,6 +555,19 @@ export function openDb(dir: string = dataDir()): Database {
       .run(SPEED_REVIEW_MIGRATION_KEY, "1");
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
+  widenProviderCheck(db, "skills");
+  widenProviderCheck(db, "workflows");
+  widenProviderCheck(db, "routines");
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_skills_provider_project
+      ON skills(provider, project_id, name COLLATE NOCASE);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_workflows_project_name
+      ON workflows(project_id, name COLLATE NOCASE);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_routines_project_name
+      ON routines(project_id, name COLLATE NOCASE);
+    CREATE INDEX IF NOT EXISTS idx_routines_due
+      ON routines(enabled, next_run_at);
+  `);
   db.exec("PRAGMA foreign_keys = ON");
   return db;
 }
@@ -569,6 +582,22 @@ function addColumn(db: Database, table: string, definition: string): boolean {
     }
     return false;
   }
+}
+
+function widenProviderCheck(db: Database, table: string): void {
+  const row = db.query(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+  ).get(table) as { sql: string } | null;
+  if (!row?.sql.includes("CHECK (provider IN ('claude', 'codex'))")) return;
+  const rebuilt = row.sql.replace(
+    "CHECK (provider IN ('claude', 'codex'))",
+    "CHECK (provider IN ('claude', 'codex', 'grok'))",
+  );
+  const staging = `${table}__grok_provider`;
+  db.exec(`ALTER TABLE ${table} RENAME TO ${staging}`);
+  db.exec(rebuilt);
+  db.exec(`INSERT INTO ${table} SELECT * FROM ${staging}`);
+  db.exec(`DROP TABLE ${staging}`);
 }
 
 function dropColumn(db: Database, table: string, column: string): void {

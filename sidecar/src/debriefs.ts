@@ -1,6 +1,4 @@
-import { runClaudeTurn } from "./adapters/claude";
-import { runCodexTurn } from "./adapters/codex";
-import { runCodexAppServerTurn } from "./adapters/codex-app-server";
+import { runProviderTurn } from "./adapters/run";
 import type { AppEvent, Provider, StoredEvent } from "./events";
 import type { QuotaTracker } from "./quotas";
 import type { ConversationStore } from "./stores/conversations";
@@ -581,9 +579,7 @@ async function generateWithAdapters(
     sandboxMode: "read-only" as const,
     images: [],
   };
-  if (input.provider === "claude") await runClaudeTurn(options, emit);
-  else if (process.env.PUPITRE_CODEX_MODE === "exec") await runCodexTurn(options, emit);
-  else await runCodexAppServerTurn(options, emit);
+  await runProviderTurn(input.provider, options, emit);
   if (providerError !== null) throw new Error(providerError);
   return final || parts.join("");
 }

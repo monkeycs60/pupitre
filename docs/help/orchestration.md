@@ -1,7 +1,7 @@
 # Orchestration
 
 L'orchestration donne au modèle principal un outil **Conductor** pour déléguer
-des recherches ou implémentations à Claude ou Codex. Les sous-tâches tournent en
+des recherches ou implémentations à Claude, Codex ou Grok. Les sous-tâches tournent en
 parallèle, dans le projet parent, et apparaissent comme des cartes dans le fil.
 
 La limite est de quatre sous-tâches simultanées par conversation. Une sous-tâche

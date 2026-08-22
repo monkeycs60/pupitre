@@ -17,6 +17,6 @@ export function normalizeFilesystemScope(value: unknown): FilesystemScope {
 /** Racines toujours accessibles : instructions, skills, plugins, prompts et mémoire. */
 export function aiRoots(): string[] {
   const home = homedir();
-  return [join(home, ".claude"), join(home, ".codex")];
+  return [join(home, ".claude"), join(home, ".codex"), join(home, ".grok")];
 }
 

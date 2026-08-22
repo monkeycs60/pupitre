@@ -11,14 +11,16 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { ProjectStore } from "./stores/projects";
 
-export type SkillProvider = "claude" | "codex";
+export type SkillProvider = "claude" | "codex" | "grok";
 export type SkillProvenance =
   | "claude-global"
   | "claude-plugin"
   | "claude-project"
   | "codex-prompt"
   | "agents-global"
-  | "agents-project";
+  | "agents-project"
+  | "grok-global"
+  | "grok-project";
 
 export interface SkillSummary {
   id: string;
@@ -459,11 +461,17 @@ export class SkillInventory {
     for (const path of findMarkdownFiles(join(this.homeDir, ".codex/prompts"), 2)) {
       add(path, "codex", "codex-prompt", null);
     }
+    for (const path of findNamedFiles(join(this.homeDir, ".grok/skills"), "SKILL.md", 2)) {
+      add(path, "grok", "grok-global", null);
+    }
     const globalAgents = join(this.homeDir, ".codex/AGENTS.md");
     if (existsSync(globalAgents)) add(globalAgents, "codex", "agents-global", null);
     for (const project of this.projects.list()) {
       for (const path of findNamedFiles(join(project.path, ".claude/skills"), "SKILL.md", 2)) {
         add(path, "claude", "claude-project", project.id);
+      }
+      for (const path of findNamedFiles(join(project.path, ".grok/skills"), "SKILL.md", 2)) {
+        add(path, "grok", "grok-project", project.id);
       }
       const agents = join(project.path, "AGENTS.md");
       if (existsSync(agents)) add(agents, "codex", "agents-project", project.id);
@@ -498,6 +506,7 @@ export class SkillInventory {
     addRootAndChildren(join(this.homeDir, ".claude/plugins/marketplaces"), 2);
     addRootAndChildren(join(this.homeDir, ".codex/prompts"), 2);
     addRootAndChildren(join(this.homeDir, ".codex"), 0);
+    addRootAndChildren(join(this.homeDir, ".grok/skills"), 1);
     const indexedPaths = this.db.query("SELECT path FROM skills").all() as Array<{ path: string }>;
     for (const skill of indexedPaths) {
       roots.add(dirname(skill.path));
@@ -505,6 +514,7 @@ export class SkillInventory {
     for (const project of this.projects.list()) {
       addRootAndChildren(project.path, 0);
       addRootAndChildren(join(project.path, ".claude/skills"), 1);
+      addRootAndChildren(join(project.path, ".grok/skills"), 1);
     }
     for (const root of roots) {
       try {

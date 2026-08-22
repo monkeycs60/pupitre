@@ -355,9 +355,9 @@ export interface ReviewModelConfig {
 }
 
 export function defaultReviewConfig(provider: Provider): ReviewModelConfig {
-  return provider === "claude"
-    ? { provider, model: "opus", effort: "high" }
-    : { provider, model: "gpt-5.6-sol", effort: "high" };
+  if (provider === "claude") return { provider, model: "opus", effort: "high" };
+  if (provider === "grok") return { provider, model: "grok-4.6", effort: "high" };
+  return { provider, model: "gpt-5.6-sol", effort: "high" };
 }
 
 function hasExplicitReview(input: PresetInput): boolean {

@@ -23,9 +23,9 @@ const VIZ_COLORS = [
 /* Au-delà, la couleur passe à l'alerte — même seuil que QuotaBar/QuotaMeter. */
 const CRITICAL_PERCENT = 90
 
-const PROVIDER_NAMES: Record<Provider, string> = { claude: 'CLAUDE', codex: 'CODEX' }
-const PROVIDER_COLORS: Record<Provider, string> = { claude: 'var(--accent)', codex: 'var(--warn)' }
-const PROVIDER_CHIP_BG: Record<Provider, string> = { claude: 'var(--accent-soft)', codex: 'var(--warn-soft)' }
+const PROVIDER_NAMES: Record<Provider, string> = { claude: 'CLAUDE', codex: 'CODEX', grok: 'GROK' }
+const PROVIDER_COLORS: Record<Provider, string> = { claude: 'var(--accent)', codex: 'var(--warn)', grok: 'var(--prov-grok)' }
+const PROVIDER_CHIP_BG: Record<Provider, string> = { claude: 'var(--accent-soft)', codex: 'var(--warn-soft)', grok: 'var(--prov-grok-soft)' }
 
 /** Une part du classement, avec les modèles qu'elle recouvre (pour le filtre). */
 interface ModelSlice { label: string; value: number; models: string[] }

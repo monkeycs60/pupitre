@@ -175,7 +175,7 @@ export function AppSettingsView() {
           </select>
         </label>
         <p className="settings-help">
-          Les racines <code>~/.claude</code> et <code>~/.codex</code> restent accessibles
+          Les racines <code>~/.claude</code>, <code>~/.codex</code> et <code>~/.grok</code> restent accessibles
           dans les deux modes.
         </p>
         {saved ? <p className="settings-success" role="status">Paramètre enregistré.</p> : null}

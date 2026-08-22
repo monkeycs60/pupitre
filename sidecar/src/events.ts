@@ -127,7 +127,12 @@ export interface TestScopeEvent {
 // entre le replay HTTP et le flux WS côté UI.
 export type StoredEvent = AppEvent & { id: number };
 
-export type Provider = "claude" | "codex";
+export const PROVIDERS = ["claude", "codex", "grok"] as const;
+export type Provider = (typeof PROVIDERS)[number];
+
+export function isProvider(value: unknown): value is Provider {
+  return value === "claude" || value === "codex" || value === "grok";
+}
 
 export interface MediaAttachment {
   name: string;

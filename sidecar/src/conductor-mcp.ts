@@ -213,13 +213,14 @@ function text(value: string, isError = false) {
 const MODELS_DOC =
   "Modèles disponibles — provider 'claude' : fable-5 (le plus capable), opus, "
   + "sonnet, haiku (le plus rapide/économe) ; provider 'codex' : gpt-5.6-sol "
-  + "(raisonnement profond), gpt-5.6-luna (rapide et économe), gpt-5.6-terra (polyvalent).";
+  + "(raisonnement profond), gpt-5.6-luna (rapide et économe), gpt-5.6-terra (polyvalent) "
+  + "; provider 'grok' : grok-4.6 (le plus capable), grok-4.5.";
 const EFFORT_DOC =
   "effort : low | medium | high | xhigh (claude accepte aussi 'max'). "
   + "Plus l'effort est élevé, plus le sub-agent réfléchit — et consomme.";
 const SPEED_DOC =
   "speed : 'fast' n'existe QUE pour codex (service tier prioritaire) ; "
-  + "l'omettre ou 'standard' sinon. Passer speed='fast' à claude est une erreur.";
+  + "l'omettre ou 'standard' sinon. Passer speed='fast' à claude ou grok est une erreur.";
 const RECO_DOC =
   "Recommandation : pour une sous-tâche d'EXÉCUTION (lire des fichiers, "
   + "appliquer un patch mécanique, lancer des tests, rédiger un résumé), prends "
@@ -229,7 +230,7 @@ const RECO_DOC =
   + "appelle check_quotas AVANT de choisir et route vers celui qui a le plus de marge.";
 
 const taskShape = {
-  provider: z.enum(["claude", "codex"]).describe("Abonnement à utiliser pour ce sub-agent."),
+  provider: z.enum(["claude", "codex", "grok"]).describe("Abonnement à utiliser pour ce sub-agent."),
   model: z.string().describe(MODELS_DOC),
   effort: z.string().optional().describe(EFFORT_DOC),
   speed: z.enum(["standard", "fast"]).optional().describe(SPEED_DOC),

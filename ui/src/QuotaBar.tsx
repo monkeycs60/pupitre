@@ -18,6 +18,7 @@ import { HelpLink } from './HelpLink'
 const PROVIDER_NAMES: Record<Provider, string> = {
   claude: 'Claude',
   codex: 'Codex',
+  grok: 'Grok',
 }
 
 /* Seuil réellement critique : la couleur d'alerte n'apparaît qu'à partir

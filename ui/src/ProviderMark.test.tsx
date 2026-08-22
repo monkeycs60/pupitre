@@ -8,7 +8,7 @@ const { render } = await import('@testing-library/react')
 const { ProviderMark } = await import('./ProviderMark')
 
 test('rend les marques officielles comme SVG nus, sans conteneur décoratif', () => {
-  for (const provider of ['sentry', 'claude', 'codex'] as const) {
+  for (const provider of ['sentry', 'claude', 'codex', 'grok'] as const) {
     const { container, unmount } = render(createElement(ProviderMark, { provider }))
     const mark = container.firstElementChild
     expect(mark?.tagName.toLowerCase()).toBe('svg')

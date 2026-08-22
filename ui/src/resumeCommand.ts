@@ -6,7 +6,11 @@ function shellQuote(value: string): string {
 
 export function resumeCommand(conversation: Conversation): string | null {
   if (!conversation.cli_session_id) return null
-  return conversation.provider === 'claude'
-    ? `claude --resume ${shellQuote(conversation.cli_session_id)}`
-    : `codex resume ${shellQuote(conversation.cli_session_id)}`
+  if (conversation.provider === 'claude') {
+    return `claude --resume ${shellQuote(conversation.cli_session_id)}`
+  }
+  if (conversation.provider === 'grok') {
+    return `grok --resume ${shellQuote(conversation.cli_session_id)}`
+  }
+  return `codex resume ${shellQuote(conversation.cli_session_id)}`
 }

@@ -21,6 +21,7 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     },
   });
   const permissionMode = opts.permissionMode === "default" ? "auto" : opts.permissionMode;
+  const model = opts.model === "fable-5" ? "fable" : opts.model;
   const accessDirs = opts.filesystemScope === "full-system" ? ["/"] : aiRoots();
   // `--add-dir` élargit la racine visible, mais ne suffit pas pour les fichiers
   // d'instructions globaux : Claude les traite comme des fichiers sensibles.
@@ -37,7 +38,7 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   const args = [
     "-p", "--input-format", "stream-json", "--output-format", "stream-json",
     "--include-partial-messages",
-    "--verbose", "--model", opts.model, "--permission-mode", permissionMode,
+    "--verbose", "--model", model, "--permission-mode", permissionMode,
     // Le cwd reste le projet, mais les instructions globales et la mémoire
     // sont aussi des surfaces de travail légitimes pour Pupitre.
     "--add-dir", ...accessDirs,

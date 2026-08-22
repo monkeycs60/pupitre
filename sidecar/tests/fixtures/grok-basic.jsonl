@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"grok-session-1","model":"grok-4.6","cwd":"/tmp/pupitre-fixture","permissionMode":"acceptEdits","tools":["read_file","run_terminal_cmd"],"skills":[],"uuid":"init-1"}
+{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"BONJOUR GROK"}},"session_id":"grok-session-1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"BONJOUR GROK"},{"type":"tool_use","id":"call_1","name":"run_terminal_cmd","input":{"command":"ls"}}]},"session_id":"grok-session-1"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":"ok"}]},"session_id":"grok-session-1"}
+{"type":"result","subtype":"success","session_id":"grok-session-1","usage":{"input_tokens":12,"output_tokens":8,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"modelUsage":{"grok-4.6":{"inputTokens":12,"outputTokens":8,"contextWindow":500000}}}

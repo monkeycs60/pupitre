@@ -830,6 +830,10 @@ body.is-resizing-documents-list {
   color: var(--prov-claude);
 }
 
+.conversation-prov.is-grok {
+  color: var(--prov-grok);
+}
+
 .header-actions {
   display: flex;
   flex: none;

@@ -70,9 +70,21 @@ description: Skill du projet.
 # Local
 `);
   write(join(projectPath, "AGENTS.md"), "# Consignes Pupitre\n\nRègles du dépôt.");
+  write(join(home, ".grok/skills/review/SKILL.md"), `---
+name: grok-review
+description: Review Grok.
+---
+# Grok
+`);
+  write(join(projectPath, ".grok/skills/local-grok/SKILL.md"), `---
+name: grok-local
+description: Skill Grok du projet.
+---
+# Local Grok
+`);
 
   const inventory = new SkillInventory(db, projects, { homeDir: home });
-  expect(inventory.refresh()).toBe(6);
+  expect(inventory.refresh()).toBe(8);
   const project = projects.list()[0];
   if (!project) throw new Error("projet fixture absent");
   const skills = inventory.list({ projectId: project.id });
@@ -81,6 +93,8 @@ description: Skill du projet.
     "agents-global",
     "agents-project",
     "claude-global",
+    "grok-project",
+    "grok-global",
     "claude-project",
     "claude-plugin",
     "codex-prompt",

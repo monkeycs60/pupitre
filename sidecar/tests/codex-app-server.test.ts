@@ -259,8 +259,9 @@ test("premier tour : session avec le threadId, deltas dans l'ordre, tool + usage
   expect(start.params.runtimeWorkspaceRoots).toContain("/tmp");
   expect(start.params.runtimeWorkspaceRoots).toContain("/home/clement/.claude");
   expect(start.params.runtimeWorkspaceRoots).toContain("/home/clement/.codex");
+  expect(start.params.runtimeWorkspaceRoots).toContain("/home/clement/.grok");
   // Aucune racine supplémentaire n'est demandée hors worktree.
-  expect(start.params.runtimeWorkspaceRoots).toHaveLength(3);
+  expect(start.params.runtimeWorkspaceRoots).toHaveLength(4);
   const turnStart = requests.find((r) => r.method === "turn/start")!;
   expect(turnStart.params).toMatchObject({ threadId: "fake-thread-0001", effort: "high" });
   expect(turnStart.params.input[0]).toEqual({ type: "text", text: "salut" });

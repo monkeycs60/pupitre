@@ -1,6 +1,6 @@
 # Pupitre
 
-Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Codex CLI** sur tes abonnements (jamais d'API payante), avec discussions par projet, orchestration, contrôle des changements, tests guidés et historique Git. Le pupitre du chef d'orchestre : l'app dirige les CLIs sans jouer une note elle-même.
+Mission control bureau pour Linux : une app qui pilote **Claude Code**, **Codex CLI** et **Grok Build** sur tes abonnements (jamais d'API payante), avec discussions par projet, orchestration, contrôle des changements, tests guidés et historique Git. Le pupitre du chef d'orchestre : l'app dirige les CLIs sans jouer une note elle-même.
 
 ## Architecture (M4)
 
@@ -10,7 +10,7 @@ Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Code
 │  fenêtre native, spawn du sidecar en dev    │
 ├─────────────────────────────────────────────┤
 │  Sidecar Bun/TypeScript (le cerveau)        │
-│  stores SQLite · adapters claude/codex      │
+│  stores SQLite · adapters claude/codex/grok │
 │  conversations · subtasks · reviews · skills│
 │  serveur HTTP+WS · Git · tests · media       │
 ├─────────────────────────────────────────────┤
@@ -20,7 +20,7 @@ Mission control bureau pour Linux : une app qui pilote **Claude Code** et **Code
 └─────────────────────────────────────────────┘
 ```
 
-Les deux CLIs sont normalisés en un schéma d'événements unifié (`sidecar/src/events.ts`) ; le frontend ne connaît jamais Claude ou Codex directement. Les sessions sont celles des vrais CLIs (`claude -r`, `codex exec resume`) : reprise gratuite, et tes skills/CLAUDE.md/AGENTS.md marchent tels quels.
+Les CLIs sont normalisés en un schéma d'événements unifié (`sidecar/src/events.ts`) ; le frontend ne connaît jamais Claude, Codex ou Grok directement. Les sessions sont celles des vrais CLIs (`claude -r`, `codex exec resume`, `grok --resume`) : reprise gratuite, et tes skills/CLAUDE.md/AGENTS.md marchent tels quels. Grok lit aussi `~/.grok/skills` et les skills Claude par compatibilité.
 
 ## Contrôle des changements (M3)
 
@@ -46,7 +46,8 @@ la sidebar. Exception contrôlée : pendant un tour Codex ou Claude, le composeu
 reste ouvert et les précisions — captures comprises — sont injectées dans le tour
 actif, puis conservées comme telles dans l'historique. Codex utilise
 `turn/steer` ; Claude reçoit des messages `stream-json` sur son entrée persistante
-et lit les captures depuis leur chemin local.
+et lit les captures depuis leur chemin local. Un tour Grok est one-shot
+(`grok -p`) : le composeur se bloque jusqu'à la fin, comme `codex exec`.
 
 ## Bibliothèque de skills (M4-K)
 
@@ -136,7 +137,7 @@ et lit les captures depuis leur chemin local.
 - **Mémoire** lit et édite `~/.claude/memory` avec écritures atomiques,
   protection contre les chemins extérieurs et confirmation avant suppression ou
   abandon d'un brouillon.
-- **Reprendre au terminal** copie `claude --resume` ou `codex resume` avec l'id
+- **Reprendre au terminal** copie `claude --resume`, `codex resume` ou `grok --resume` avec l'id
   de session du fil. L'import inverse est reporté après constat de plusieurs
   formats Codex incompatibles dans l'historique local.
 - **Aide** embarque les pages Markdown des concepts Pupitre, les recherche en
@@ -172,13 +173,14 @@ Le bridge est **sans état** : chaque outil est un appel à l'API D1 ci-dessus. 
 | `delegate_parallel({tasks:[…max 4]})` | Crée toutes les sous-tâches (le `429` de la limite de concurrence est encaissé et réessayé — c'est le séquençage attendu côté appelant), attend tout, rend les résultats dans l'ordre des tâches. |
 | `check_quotas()` | `GET /api/quotas` mis en forme lisible (fenêtres, % utilisé, reset). |
 
-Les descriptions d'outils sont la doc que lit l'orchestrateur : modèles disponibles (`claude` : fable-5 / opus / sonnet / haiku ; `codex` : gpt-5.6-sol / gpt-5.6-luna / gpt-5.6-terra), efforts, `speed: fast` **codex uniquement**, et la recommandation de routage (sous-tâche d'exécution → `gpt-5.6-luna`, effort low/medium, fast ; `check_quotas` avant de choisir en cas d'hésitation).
+Les descriptions d'outils sont la doc que lit l'orchestrateur : modèles disponibles (`claude` : fable-5 / opus / sonnet / haiku ; `codex` : gpt-5.6-sol / gpt-5.6-luna / gpt-5.6-terra ; `grok` : grok-4.6 / grok-4.5), efforts, `speed: fast` **codex uniquement**, et la recommandation de routage (sous-tâche d'exécution → `gpt-5.6-luna`, effort low/medium, fast ; `check_quotas` avant de choisir en cas d'hésitation).
 
 **Câblage, par tour** — piloté par la colonne de conversation `orchestrator` (INTEGER, **défaut 1**, acceptée par `POST /api/conversations`) :
 
 - **claude** : `--mcp-config '<JSON inline>'` avec `{mcpServers:{conductor:{command, args:[<chemin absolu>], env:{PUPITRE_PORT, PUPITRE_CONVERSATION_ID}}}}`. Pas de `--strict-mcp-config` : les serveurs MCP de l'utilisateur restent actifs.
 - **codex (app-server)** : le champ `config` de `thread/start` / `thread/resume` est un **override de configuration par thread** (clés de `config.toml`) — on y met `mcp_servers.conductor`. C'est ce qui résout le problème du process app-server *partagé* par tout le sidecar : chaque thread démarre ses propres serveurs MCP, donc chaque tour reçoit son propre `PUPITRE_CONVERSATION_ID` par l'environnement. Aucun besoin de passer l'id par le prompt.
 - **codex exec** (chemin historique `PUPITRE_CODEX_MODE=exec`) : les mêmes valeurs en overrides `-c mcp_servers.conductor.*`.
+- **grok** : `grok -p` n'a pas `--mcp-config`. Le pont est un plugin éphémère sous `~/.grok/plugins/.pupitre-*` (chargé et de confiance), retiré à la fin du tour. Le flux est `streaming-messages-json` (même fil Messages que Claude Code). Pas de précision en vol : le headless Grok ne lit pas stdin.
 - Filet documenté : chaque outil accepte aussi un paramètre optionnel `conversation_id` qui prime sur l'environnement, pour un hôte incapable de transmettre un environnement par tour.
 
 Le port du sidecar est fourni au `ConversationRunner` par une fonction **obligatoire** (résolue à chaque tour, le serveur étant construit après le runner). Un tour orchestrateur qui résout un port invalide échoue immédiatement avec un `status: error` explicite, au lieu de lancer un CLI dont les délégations partiraient vers un port mort.
@@ -199,6 +201,7 @@ Les deux providers n'exposent pas leur état de la même façon, et le `QuotaRef
 | --- | --- | --- | --- |
 | codex | `account/rateLimits/read` sur l'app-server | oui (`usedPercent`) | gratuit |
 | claude | aucune — le `rate_limit_event` n'existe que dans le flux d'un tour, et n'est écrit ni dans les transcripts ni dans un cache | **non**, seulement `resetsAt` | un tour minimal |
+| grok | aucune — le headless Grok ne publie pas de quota d'abonnement grok.com | **non** | — |
 
 La sonde claude (`sidecar/src/adapters/claude-quota.ts`) est donc réduite au strict nécessaire : modèle haiku, prompt système d'une ligne, aucun MCP, aucun hook, répertoire temporaire vide pour ne découvrir aucun `CLAUDE.md`. Au démarrage, elle ne tourne que si le relevé stocké ne couvre plus la fenêtre en cours (`claudeQuotaIsStale`) ; `POST /api/quotas/refresh` la force. Deux relèves simultanées ne paient qu'un seul tour.
 
@@ -219,7 +222,7 @@ Depuis un fil ouvert, la modale « Changer de modèle » distingue deux opérati
 ## Prérequis
 
 - [Bun](https://bun.sh) ≥ 1.3, Rust ≥ 1.77 (+ deps Tauri Linux : `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`…)
-- `claude` (Claude Code) et `codex` (Codex CLI) installés **et authentifiés** sur leurs abonnements
+- `claude` (Claude Code), `codex` (Codex CLI) et `grok` (Grok Build) installés **et authentifiés** sur leurs abonnements
 
 ## Démarrage (dev)
 

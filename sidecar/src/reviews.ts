@@ -1,8 +1,6 @@
 import type { AppEvent, Provider } from "./events";
 import { createHash } from "node:crypto";
-import { runClaudeTurn } from "./adapters/claude";
-import { runCodexTurn } from "./adapters/codex";
-import { runCodexAppServerTurn } from "./adapters/codex-app-server";
+import { runProviderTurn } from "./adapters/run";
 import type { QuotaTracker } from "./quotas";
 import type { Conversation, ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
@@ -652,9 +650,7 @@ export async function scanWithAdapters(
     sandboxMode: "read-only" as const,
     images: [],
   };
-  if (input.provider === "claude") await runClaudeTurn(options, emit);
-  else if (process.env.PUPITRE_CODEX_MODE === "exec") await runCodexTurn(options, emit);
-  else await runCodexAppServerTurn(options, emit);
+  await runProviderTurn(input.provider, options, emit);
   if (terminalError !== null) throw new Error(terminalError);
   const output = finals.at(-1)?.trim() || deltas.join("").trim();
   if (!output) throw new Error("sortie vide du modèle de review");
