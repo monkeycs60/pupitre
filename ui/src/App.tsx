@@ -54,6 +54,7 @@ import { DashboardView } from './DashboardView'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { SurfaceSwitch } from './SurfaceSwitch'
+import { ConversationDomains } from './ConversationDomains'
 import { isAppRestartShortcut, restartApp } from './appRestart'
 import {
   locationForSelection,
@@ -81,11 +82,11 @@ function storedSidebarWidth(): number {
 }
 
 /** Dernier digest reçu dans le flux, ou null si la conversation n'en a pas encore. */
-function lastDigest(events: AppEvent[]): { title: string; summary: string } | null {
+function lastDigest(events: AppEvent[]): Extract<AppEvent, { type: 'conversation-digest' }> | null {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]
     if (event.type === 'conversation-digest') {
-      return { title: event.title, summary: event.summary }
+      return event
     }
   }
   return null
@@ -173,6 +174,8 @@ function App() {
   const digest = lastDigest(events)
   const digestTitle = digest?.title
   const digestSummary = digest?.summary
+  const digestDomains = digest?.domains
+  const digestProposedDomainCount = digest?.proposedDomainCount
   const selectedConversationId = selectedConversation?.id
   const selectedConversationDigestTurn = selectedConversation?.digest_turn
   const selectedConversationLastReadTurn = selectedConversation?.last_read_turn ?? 0
@@ -180,12 +183,17 @@ function App() {
     if (digestTitle === undefined || digestSummary === undefined) return
     setSelectedConversation((current) =>
       current === null
-      || (current.title === digestTitle && current.summary === digestSummary)
         ? current
-        : { ...current, title: digestTitle, summary: digestSummary },
+        : {
+            ...current,
+            title: digestTitle,
+            summary: digestSummary,
+            domains: digestDomains ?? current.domains,
+            proposed_domain_count: digestProposedDomainCount ?? current.proposed_domain_count,
+          },
     )
     setConversationListVersion((current) => current + 1)
-  }, [digestTitle, digestSummary])
+  }, [digestTitle, digestSummary, digestDomains, digestProposedDomainCount])
 
   useEffect(() => {
     if (workspaceView !== 'conversations' || selectedConversationId === undefined || selectedConversationDigestTurn === undefined) return
@@ -799,6 +807,12 @@ function App() {
                     >
                       C{gamification.snapshot.conversations[selectedConversation.id].complexity}
                     </span>
+                  ) : null}
+                  {selectedConversation !== null ? (
+                    <ConversationDomains
+                      domains={selectedConversation.domains ?? []}
+                      proposedCount={selectedConversation.proposed_domain_count ?? 0}
+                    />
                   ) : null}
                 </div>
                 {selectedConversation !== null ? (

@@ -240,6 +240,7 @@ export function Sidebar({
   }
   const activeConversationIds = new Set(activeByConversation.keys())
   const activeDomains = projectDomains.filter((domain) => domain.status === 'actif')
+  const proposedDomainCount = projectDomains.filter((domain) => domain.status === 'proposé').length
   if (workspaceView === 'conversations' && selectedConversation !== null && runningSubtasks > 0) {
     activeConversationIds.add(selectedConversation.id)
   }
@@ -487,8 +488,8 @@ export function Sidebar({
             type="button"
             className="conv-sidebar-gear"
             onClick={() => handleProjectSettings(selectedProject)}
-            aria-label={`Paramètres de ${selectedProject.name}`}
-            title="Paramètres du projet"
+            aria-label={`Paramètres de ${selectedProject.name}${proposedDomainCount > 0 ? `, ${proposedDomainCount} domaine${proposedDomainCount > 1 ? 's' : ''} proposé${proposedDomainCount > 1 ? 's' : ''}` : ''}`}
+            title={proposedDomainCount > 0 ? `${proposedDomainCount} domaine${proposedDomainCount > 1 ? 's' : ''} proposé${proposedDomainCount > 1 ? 's' : ''}` : 'Paramètres du projet'}
           >
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <g stroke="currentColor" strokeWidth="1.25">
@@ -496,6 +497,7 @@ export function Sidebar({
                 <path d="M6.5 2h3l.5 2a4.5 4.5 0 0 1 1.3.8l1.9-.7 1.5 2.6-1.5 1.3a5 5 0 0 1 0 1.6l1.5 1.3-1.5 2.6-1.9-.7a4.5 4.5 0 0 1-1.3.8l-.5 2h-3l-.5-2a4.5 4.5 0 0 1-1.3-.8l-1.9.7-1.5-2.6 1.5-1.3a5 5 0 0 1 0-1.6L1.3 6.7l1.5-2.6 1.9.7A4.5 4.5 0 0 1 6 4l.5-2Z" />
               </g>
             </svg>
+            {proposedDomainCount > 0 ? <span className="conv-sidebar-gear-badge" aria-hidden="true">{proposedDomainCount}</span> : null}
           </button>
         ) : null}
       </div>

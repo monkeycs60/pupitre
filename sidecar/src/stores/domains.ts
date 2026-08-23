@@ -27,6 +27,7 @@ export interface DigestDomainSuggestion {
 
 export type ConversationWithDomains<T extends Conversation = Conversation> = T & {
   domains: Array<Pick<ConversationDomain, "id" | "name" | "kind" | "origin">>;
+  proposed_domain_count: number;
 };
 
 export class DomainConflictError extends Error {
@@ -274,20 +275,26 @@ export class DomainStore {
     const ids = conversations.map((conversation) => conversation.id);
     const placeholders = ids.map(() => "?").join(", ");
     const rows = this.db.query(`
-      SELECT cd.conversation_id, d.id, d.name, d.kind, cd.origin
+      SELECT cd.conversation_id, d.id, d.name, d.kind, d.status, cd.origin
         FROM conversation_domains cd
         INNER JOIN domains d ON d.id = cd.domain_id
-       WHERE cd.conversation_id IN (${placeholders}) AND d.status = 'actif'
+       WHERE cd.conversation_id IN (${placeholders})
        ORDER BY d.name COLLATE NOCASE
     `).all(...ids) as Array<{
       conversation_id: string;
       id: string;
       name: string;
       kind: DomainKind;
+      status: DomainStatus;
       origin: DomainOrigin;
     }>;
     const byConversation = new Map<string, Array<Pick<ConversationDomain, "id" | "name" | "kind" | "origin">>>();
+    const proposedCounts = new Map<string, number>();
     for (const row of rows) {
+      if (row.status === "proposé") {
+        proposedCounts.set(row.conversation_id, (proposedCounts.get(row.conversation_id) ?? 0) + 1);
+        continue;
+      }
       const list = byConversation.get(row.conversation_id) ?? [];
       list.push({ id: row.id, name: row.name, kind: row.kind, origin: row.origin });
       byConversation.set(row.conversation_id, list);
@@ -295,6 +302,7 @@ export class DomainStore {
     return conversations.map((conversation) => ({
       ...conversation,
       domains: byConversation.get(conversation.id) ?? [],
+      proposed_domain_count: proposedCounts.get(conversation.id) ?? 0,
     }));
   }
 

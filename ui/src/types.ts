@@ -256,6 +256,7 @@ export interface Conversation {
   ticket_id: string | null
   ticket_key?: string | null
   domains?: ConversationDomain[]
+  proposed_domain_count?: number
   origin_type?: 'sentry' | null
   origin_key?: string | null
   cli_session_id: string | null
@@ -716,7 +717,7 @@ export type AppEvent =
   | { type: 'session'; provider: Provider; cliSessionId: string; model: string }
   // Titre et résumé régénérés après un tour : met la sidebar à jour, ne s'affiche
   // pas dans le fil.
-  | { type: 'conversation-digest'; title: string; summary: string; domains?: ConversationDomain[] }
+  | { type: 'conversation-digest'; title: string; summary: string; domains?: ConversationDomain[]; proposedDomainCount?: number }
   | { type: 'user-message'; text: string; images: string[]; attachments?: Attachment[]; steering?: boolean }
   | { type: 'text-delta'; text: string }
   | { type: 'text-final'; text: string }

@@ -119,6 +119,7 @@
 }
 
 .conv-sidebar-gear {
+  position: relative;
   display: grid;
   place-items: center;
   width: 28px;
@@ -130,6 +131,21 @@
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.conv-sidebar-gear-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 15px;
+  padding: 0 4px;
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  background: var(--warning);
+  border-radius: var(--r-full);
 }
 
 .conv-sidebar-gear:hover {

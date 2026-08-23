@@ -368,11 +368,14 @@ export class ConversationRunner {
         this.domains.applyDigestSuggestions(conversationId, conv.project_id, digest.domains);
       }
       const visible = this.domains?.forConversation(conversationId, { visibleOnly: true }) ?? [];
+      const proposedDomainCount = (this.domains?.forConversation(conversationId) ?? [])
+        .filter((domain) => domain.status === "proposé").length;
       persist({
         type: "conversation-digest",
         title: updated.title,
         summary: updated.summary,
         domains: visible.map((domain) => ({ id: domain.id, name: domain.name, kind: domain.kind })),
+        proposedDomainCount,
       });
     } catch (error) {
       console.error("Rafraîchissement du digest impossible", error);

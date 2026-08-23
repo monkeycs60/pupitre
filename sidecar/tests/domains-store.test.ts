@@ -168,8 +168,9 @@ test("les skills projet techniques ou exploratoires ne deviennent pas des domain
 
 test("les conversations sans domaine restent listables", () => {
   const conv = conversation();
+  domains.applyDigestSuggestions(conv.id, projectId, [{ name: "Nouveau sujet", kind: "métier" }]);
   expect(domains.forConversation(conv.id, { visibleOnly: true })).toEqual([]);
   expect(domains.decorateConversations(conversations.listByProject(projectId))[0]).toEqual(
-    expect.objectContaining({ id: conv.id, domains: [] }),
+    expect.objectContaining({ id: conv.id, domains: [], proposed_domain_count: 1 }),
   );
 });
