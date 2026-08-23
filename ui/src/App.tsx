@@ -797,24 +797,7 @@ function App() {
           <>
             <header className="conversation-header">
               <div className="conversation-title-block">
-                <div className="conversation-title-row">
-                  <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
-                  {selectedConversation !== null
-                  && gamification.snapshot?.conversations[selectedConversation.id] ? (
-                    <span
-                      className="conversation-title-complexity"
-                      title={`${gamification.snapshot.conversations[selectedConversation.id].commits} commit(s) · ×${gamification.snapshot.conversations[selectedConversation.id].multiplier.toLocaleString('fr-FR')}`}
-                    >
-                      C{gamification.snapshot.conversations[selectedConversation.id].complexity}
-                    </span>
-                  ) : null}
-                  {selectedConversation !== null ? (
-                    <ConversationDomains
-                      domains={selectedConversation.domains ?? []}
-                      proposedCount={selectedConversation.proposed_domain_count ?? 0}
-                    />
-                  ) : null}
-                </div>
+                <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
                 {selectedConversation !== null ? (
                   <p>
                     <ProviderMark provider={selectedConversation.provider} className="conversation-prov" />
@@ -833,6 +816,21 @@ function App() {
                   </p>
                 ) : null}
               </div>
+              {selectedConversation !== null
+              && gamification.snapshot?.conversations[selectedConversation.id] ? (
+                <span
+                  className="conversation-title-complexity"
+                  title={`${gamification.snapshot.conversations[selectedConversation.id].commits} commit(s) · ×${gamification.snapshot.conversations[selectedConversation.id].multiplier.toLocaleString('fr-FR')}`}
+                >
+                  C{gamification.snapshot.conversations[selectedConversation.id].complexity}
+                </span>
+              ) : null}
+              {selectedConversation !== null ? (
+                <ConversationDomains
+                  domains={selectedConversation.domains ?? []}
+                  proposedCount={selectedConversation.proposed_domain_count ?? 0}
+                />
+              ) : null}
               {selectedConversation !== null ? (
                 <SurfaceSwitch
                   active="conversation"

@@ -687,13 +687,6 @@ body.is-resizing-documents-list {
   flex: 1 1 auto;
 }
 
-.conversation-title-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
 .conversation-header-domains {
   display: flex;
   flex: 0 1 auto;
