@@ -24,12 +24,6 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_START_TIMEOUT_MS = 180_000;
 const DEFAULT_IDLE_MS = 5 * 60_000;
 const DEFAULT_MCP_STARTUP_TIMEOUT_SEC = 5;
-/** Plugin Codex ClickUp. Override `-c` au spawn Pupitre, sans écrire config.toml. */
-export const CLICKUP_CODEX_PLUGIN_ID = "clickup@openai-curated";
-
-export function clickupPluginDisableArgs(): string[] {
-  return ["-c", `plugins.${JSON.stringify(CLICKUP_CODEX_PLUGIN_ID)}.enabled=false`];
-}
 
 type McpPolicy = "bounded" | "full" | "off";
 
@@ -357,7 +351,7 @@ export class CodexAppServerClient {
       ]);
       args = policy === "off"
         ? ["app-server", "--disable", "plugins", ...mcpArgs]
-        : ["app-server", ...mcpArgs, ...clickupPluginDisableArgs()];
+        : ["app-server", ...mcpArgs];
     }
     // `detached` isole l'app-server dans son propre groupe de process : c'est ce
     // qui permet de tuer d'un coup ses serveurs MCP (npx, plugins…), sinon
@@ -507,9 +501,6 @@ export class CodexAppServerClient {
     const overrides = {
       ...(opts.effort ? { model_reasoning_effort: opts.effort } : {}),
       ...(Object.keys(threadMcpServers).length ? { mcp_servers: threadMcpServers } : {}),
-      ...(mcpPolicy() === "bounded"
-        ? { plugins: { [CLICKUP_CODEX_PLUGIN_ID]: { enabled: false } } }
-        : {}),
     };
     const config = Object.keys(overrides).length ? { config: overrides } : {};
     const result = opts.cliSessionId

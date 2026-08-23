@@ -20,38 +20,6 @@ function useFakeCodex(): string {
   return argsFile;
 }
 
-test("exec désactive le plugin ClickUp par override, sans full", async () => {
-  const argsFile = useFakeCodex();
-  await collect({
-    cwd: "/tmp",
-    model: "gpt-5.6-luna",
-    speed: "standard",
-    prompt: "salut",
-    cliSessionId: null,
-    permissionMode: "acceptEdits",
-    images: [],
-  });
-  expect(readFileSync(argsFile, "utf8")).toContain(
-    'plugins."clickup@openai-curated".enabled=false',
-  );
-});
-
-test("exec en mode full ne touche pas au plugin ClickUp", async () => {
-  process.env.PUPITRE_CODEX_MCP_POLICY = "full";
-  const argsFile = useFakeCodex();
-  await collect({
-    cwd: "/tmp",
-    model: "gpt-5.6-luna",
-    speed: "standard",
-    prompt: "salut",
-    cliSessionId: null,
-    permissionMode: "acceptEdits",
-    images: [],
-  });
-  expect(readFileSync(argsFile, "utf8")).not.toContain("clickup@openai-curated");
-  delete process.env.PUPITRE_CODEX_MCP_POLICY;
-});
-
 test("premier tour : exec --json avec cwd et modèle, sans resume", async () => {
   const argsFile = useFakeCodex();
   const events = await collect({
@@ -64,8 +32,7 @@ test("premier tour : exec --json avec cwd et modèle, sans resume", async () => 
     images: [],
   });
   const args = readFileSync(argsFile, "utf8");
-  expect(args).toContain("exec --json --skip-git-repo-check -m gpt-5.6-luna -s workspace-write");
-  expect(args).toContain("--add-dir");
+  expect(args).toContain("exec --json --skip-git-repo-check -m gpt-5.6-luna -s workspace-write --add-dir");
   expect(args).toContain("/home/clement/.claude");
   expect(args).toContain("/home/clement/.codex");
   expect(args).not.toContain("-C"); // le cwd passe par le spawn, pas par -C
@@ -196,5 +163,4 @@ test("binaire introuvable → status error, pas d'exception", async () => {
 afterAll(() => {
   delete process.env.PUPITRE_CODEX_BIN;
   delete process.env.FAKE_CODEX_ARGS_FILE;
-  delete process.env.PUPITRE_CODEX_MCP_POLICY;
 });
