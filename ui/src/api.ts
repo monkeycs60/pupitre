@@ -378,6 +378,23 @@ export function deleteProjectDomain(projectId: string, domainId: string): Promis
   return fetchVoid(`/api/projects/${routeId(projectId)}/domains/${routeId(domainId)}`, { method: 'DELETE' })
 }
 
+export function associateConversationDomain(
+  conversationId: string,
+  domainId: string,
+): Promise<Conversation> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/domains`, jsonPost({ domainId }))
+}
+
+export function dissociateConversationDomain(
+  conversationId: string,
+  domainId: string,
+): Promise<Conversation> {
+  return fetchJson(
+    `/api/conversations/${routeId(conversationId)}/domains/${routeId(domainId)}`,
+    { method: 'DELETE' },
+  )
+}
+
 export function listMemory(): Promise<MemoryFile[]> {
   return fetchJson('/api/memory')
 }

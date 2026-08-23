@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  associateConversationDomain,
+  dissociateConversationDomain,
   listProjectConversations,
+  listProjectDomains,
   listProjectWorkflows,
   markConversationRead,
   renameConversation,
@@ -12,7 +15,7 @@ import {
   setConversationPermissionMode,
 } from './api'
 import { QuotaStatus } from './QuotaBar'
-import type { Conversation, FleetItem, GamificationSnapshot, Project, Workflow, WorkspaceView } from './types'
+import type { Conversation, FleetItem, GamificationSnapshot, Project, ProjectDomain, Workflow, WorkspaceView } from './types'
 import type { Quotas } from './useQuotas'
 import type { GamificationPulse } from './useGamification'
 import { WorkflowDialog } from './WorkflowDialog'
@@ -224,6 +227,8 @@ export function Sidebar({
   const [renameDraft, setRenameDraft] = useState('')
   const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null)
   const [domainRevision, setDomainRevision] = useState(0)
+  const [projectDomains, setProjectDomains] = useState<ProjectDomain[]>([])
+  const [domainMenuOpen, setDomainMenuOpen] = useState(false)
   const selectedConversationRef = useRef(selectedConversation)
   selectedConversationRef.current = selectedConversation
   const workspaceViewRef = useRef(workspaceView)
@@ -234,12 +239,14 @@ export function Sidebar({
     if (!activeByConversation.has(item.conversationId)) activeByConversation.set(item.conversationId, item)
   }
   const activeConversationIds = new Set(activeByConversation.keys())
+  const activeDomains = projectDomains.filter((domain) => domain.status === 'actif')
   if (workspaceView === 'conversations' && selectedConversation !== null && runningSubtasks > 0) {
     activeConversationIds.add(selectedConversation.id)
   }
   useEffect(() => {
     setConversations([])
     setWorkflows([])
+    setProjectDomains([])
   }, [selectedProject?.id, conversationScope])
 
   useEffect(() => {
@@ -250,8 +257,9 @@ export function Sidebar({
     void Promise.all([
       listProjectConversations(selectedProject.id, apiScope),
       listProjectWorkflows(selectedProject.id),
+      listProjectDomains(selectedProject.id).catch(() => [] as ProjectDomain[]),
     ])
-      .then(([items, loadedWorkflows]) => {
+      .then(([items, loadedWorkflows, loadedDomains]) => {
         if (!ignore) {
           const scopedItems = conversationScope === 'sentry'
             ? items.filter((item) => item.origin_type === 'sentry')
@@ -269,6 +277,7 @@ export function Sidebar({
             : scopedItems
           setConversations(pinnedFirst(nextItems))
           setWorkflows(loadedWorkflows)
+          setProjectDomains(loadedDomains)
           if (shouldMarkSelectedRead) {
             void markConversationRead(
               selectedLoadedConversation.id,
@@ -350,8 +359,28 @@ export function Sidebar({
 
   function closeConversationMenu() {
     setOpenConversationMenu(null)
+    setDomainMenuOpen(false)
     setRenameConversationId(null)
     setRenameDraft('')
+  }
+
+  function applyConversationDomains(conversation: Conversation, domains: Conversation['domains']) {
+    const updated = { ...conversation, domains: domains ?? [] }
+    setConversations((current) => current.map((item) => item.id === conversation.id ? updated : item))
+    if (selectedConversation?.id === conversation.id) onConversationSelect(updated)
+  }
+
+  async function handleDomainToggle(conversation: Conversation, domain: ProjectDomain) {
+    const attached = (conversation.domains ?? []).some((item) => item.id === domain.id)
+    setError(null)
+    try {
+      const updated = attached
+        ? await dissociateConversationDomain(conversation.id, domain.id)
+        : await associateConversationDomain(conversation.id, domain.id)
+      applyConversationDomains(conversation, updated.domains)
+    } catch (domainError: unknown) {
+      setError(errorMessage(domainError))
+    }
   }
 
   function startRename(conversation: Conversation) {
@@ -689,13 +718,49 @@ export function Sidebar({
                     className="conversation-more-button"
                     aria-label={`Actions pour ${conversation.title}`}
                     aria-expanded={openConversationMenu === conversation.id}
-                    onClick={() => setOpenConversationMenu((current) => current === conversation.id ? null : conversation.id)}
+                    onClick={() => {
+                      setDomainMenuOpen(false)
+                      setOpenConversationMenu((current) => current === conversation.id ? null : conversation.id)
+                    }}
                   >
                     <span aria-hidden="true">⋯</span>
                   </button>
                   {openConversationMenu === conversation.id ? (
                     <div className="conversation-actions-menu" role="menu">
                       <button type="button" role="menuitem" onClick={() => startRename(conversation)}>Renommer</button>
+                      {projectDomains.length > 0 ? (
+                        <div className="conversation-domain-item">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            aria-haspopup="true"
+                            aria-expanded={domainMenuOpen}
+                            onClick={() => setDomainMenuOpen((open) => !open)}
+                          >
+                            Domaines
+                          </button>
+                          {domainMenuOpen ? (
+                            <div className="conversation-domains-submenu" role="group" aria-label="Domaines de la conversation">
+                              {activeDomains.length === 0 ? (
+                                <p className="conversation-domains-empty">Aucun domaine validé</p>
+                              ) : activeDomains.map((domain) => {
+                                const attached = (conversation.domains ?? []).some((item) => item.id === domain.id)
+                                return (
+                                  <button
+                                    key={domain.id}
+                                    type="button"
+                                    role="menuitemcheckbox"
+                                    aria-checked={attached}
+                                    onClick={() => void handleDomainToggle(conversation, domain)}
+                                  >
+                                    {domain.name}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <button type="button" role="menuitem" onClick={() => void handleConversationYolo(conversation)}>
                         {conversation.permission_mode === 'bypassPermissions'
                           ? 'Désactiver YOLO'

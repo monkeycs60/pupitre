@@ -46,8 +46,10 @@ domaine. La fusion reporte les conversations vers le domaine cible. Un domaine
 encore associé à une conversation ne se supprime pas : il faut d'abord
 dissocier ou fusionner.
 
-Les pastilles de la sidebar ne montrent que les domaines **actifs**. Dans la
-palette Ctrl+K, les pastilles du projet courant filtrent la recherche.
+Les pastilles de la sidebar ne montrent que les domaines **actifs**. Le menu
+⋯ d’une conversation permet d’en attacher ou d’en retirer, parmi ceux déjà
+validés. Dans la palette Ctrl+K, les pastilles du projet courant filtrent la
+recherche.
 
 ## Limites
 

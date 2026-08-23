@@ -1,7 +1,7 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
-import type { Conversation, FleetItem, Project, Workflow } from './types'
+import type { Conversation, FleetItem, Project, ProjectDomain, Workflow } from './types'
 import { formatActiveDuration } from './formatActiveDuration'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
@@ -96,16 +96,22 @@ function installApi(
   workflows: Workflow[],
   runRequest: (workflowId: string) => Promise<Response>,
   conversations: Conversation[] = [],
+  projectDomains: ProjectDomain[] = [],
 ) {
   let runRequestCount = 0
   let readRequestCount = 0
+  const domainCalls: Array<{ method: string; path: string }> = []
   const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const path = String(input)
+    const method = init?.method ?? 'GET'
     if (path === `/api/projects/${project.id}/conversations?scope=active`) {
       return Promise.resolve(jsonResponse(conversations))
     }
     if (path === `/api/projects/${project.id}/workflows`) {
       return Promise.resolve(jsonResponse(workflows))
+    }
+    if (path === `/api/projects/${project.id}/domains`) {
+      return Promise.resolve(jsonResponse(projectDomains))
     }
     const readMatch = path.match(/^\/api\/conversations\/([^/]+)\/read$/)
     if (readMatch && init?.method === 'POST') {
@@ -117,12 +123,29 @@ function installApi(
       runRequestCount += 1
       return runRequest(decodeURIComponent(match[1]!))
     }
-    return Promise.reject(new Error(`Requête inattendue : ${path}`))
+    const associateMatch = path.match(/^\/api\/conversations\/([^/]+)\/domains$/)
+    if (associateMatch && method === 'POST') {
+      domainCalls.push({ method, path })
+      const conversation = conversations.find((item) => item.id === decodeURIComponent(associateMatch[1]!))
+      const domain = projectDomains.find((item) => item.status === 'actif')
+      return Promise.resolve(jsonResponse({
+        ...conversation,
+        domains: domain ? [{ id: domain.id, name: domain.name, kind: domain.kind }] : [],
+      }))
+    }
+    const detachMatch = path.match(/^\/api\/conversations\/([^/]+)\/domains\/([^/]+)$/)
+    if (detachMatch && method === 'DELETE') {
+      domainCalls.push({ method, path })
+      const conversation = conversations.find((item) => item.id === decodeURIComponent(detachMatch[1]!))
+      return Promise.resolve(jsonResponse({ ...conversation, domains: [] }))
+    }
+    return Promise.reject(new Error(`Requête inattendue : ${method} ${path}`))
   })
   globalThis.fetch = fetchMock as typeof fetch
   return {
     getRunRequestCount: () => runRequestCount,
     getReadRequestCount: () => readRequestCount,
+    getDomainCalls: () => domainCalls,
   }
 }
 
@@ -358,4 +381,43 @@ test('affiche les pastilles des domaines actifs seulement', async () => {
   const pills = [...document.querySelectorAll('.conv-row-domain')].map((element) => element.textContent)
   expect(pills).toEqual(['API', 'Match AI'])
   expect(document.querySelector('.conv-row-domain-metier')?.textContent).toBe('Match AI')
+})
+
+test('le menu d’une conversation n’attache que les domaines déjà validés', async () => {
+  const conversation: Conversation = {
+    ...startedConversation,
+    id: 'conversation-attach-domain',
+    title: 'Sans pastille',
+    domains: [],
+  }
+  const api = installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation], [
+    {
+      id: 'd-proposed',
+      project_id: project.id,
+      name: 'Match AI',
+      kind: 'métier',
+      status: 'proposé',
+      created_at: '2026-08-23T08:00:00.000Z',
+      updated_at: '2026-08-23T08:00:00.000Z',
+    },
+    {
+      id: 'd-api',
+      project_id: project.id,
+      name: 'API',
+      kind: 'technique',
+      status: 'actif',
+      created_at: '2026-08-23T08:00:00.000Z',
+      updated_at: '2026-08-23T08:00:00.000Z',
+    },
+  ])
+  renderSidebar()
+  await waitFor(() => expect(document.querySelector('.navigation-main')).not.toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: 'Actions pour Sans pastille' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Domaines' }))
+  expect(screen.queryByRole('menuitemcheckbox', { name: 'Match AI' })).toBeNull()
+  fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'API' }))
+  await waitFor(() => expect(document.querySelector('.conv-row-domain')?.textContent).toBe('API'))
+  expect(api.getDomainCalls()).toEqual([
+    { method: 'POST', path: '/api/conversations/conversation-attach-domain/domains' },
+  ])
 })

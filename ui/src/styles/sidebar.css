@@ -584,6 +584,27 @@
   color: var(--danger);
 }
 
+.conversation-domain-item {
+  position: relative;
+  display: grid;
+}
+
+.conversation-domains-submenu {
+  display: grid;
+  padding: 0 0 var(--space-1) var(--space-2);
+}
+
+.conversation-domains-empty {
+  margin: 0;
+  padding: 6px var(--space-2);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.conversation-domains-submenu button[aria-checked='true'] {
+  color: var(--accent-bright);
+}
+
 .conversation-hover-preview {
   position: absolute;
   top: calc(100% - 2px);
