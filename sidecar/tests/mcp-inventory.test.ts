@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { codexServerDefinitions, listMcpServers, usedMcpServers } from "../src/mcp-inventory";
+import {
+  codexServerDefinitions,
+  listMcpServers,
+  unmeasuredMcpServers,
+  usedMcpServers,
+} from "../src/mcp-inventory";
 
 function fixture(): { home: string; project: string } {
   const home = mkdtempSync(join(tmpdir(), "pupitre-mcp-home-"));
@@ -102,6 +107,19 @@ test("déduit les serveurs appelés depuis les noms d'outils", () => {
 
 test("un historique sans outil MCP ne suggère rien", () => {
   expect(usedMcpServers(["Read", "Write", "Bash"])).toEqual([]);
+});
+
+test("ne relance pas la sonde pour un serveur déjà pesé ou sans définition", () => {
+  const pending = unmeasuredMcpServers(
+    ["clickup", "mongodb", "posthog", "figma"],
+    {
+      clickup: { command: "npx" },
+      mongodb: { command: "npx" },
+      figma: { url: "https://mcp.figma.com/mcp" },
+    },
+    { clickup: { tokens: 835 }, mongodb: { tokens: 425 } },
+  );
+  expect(Object.keys(pending)).toEqual(["figma"]);
 });
 
 test("un serveur sans instructions ne coûte que ses noms d'outils", async () => {

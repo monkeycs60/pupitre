@@ -128,6 +128,24 @@ export function claudeServerDefinitions(
  * événements `tool-start`. Les deux CLI préfixent les outils MCP de la même
  * façon : `mcp__<serveur>__<outil>`.
  */
+/**
+ * Serveurs à peser : présents dans la sélection, lançables, et pas encore en
+ * cache. Un nom hors définitions (URL Codex sans commande, plugin) ne doit
+ * PAS relancer la sonde de tous les autres — c'était le leak ClickUp.
+ */
+export function unmeasuredMcpServers(
+  loaded: string[],
+  available: Record<string, unknown>,
+  weights: Record<string, { tokens: number | null }>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    loaded.flatMap((name) => {
+      if (!(name in available) || weights[name] !== undefined) return [];
+      return [[name, available[name]]];
+    }),
+  );
+}
+
 export function usedMcpServers(toolNames: string[]): string[] {
   const used = new Set<string>();
   for (const toolName of toolNames) {

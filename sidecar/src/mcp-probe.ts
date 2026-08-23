@@ -19,7 +19,28 @@ import { createInterface } from "node:readline";
  * process npx coûte plusieurs secondes et de la bande passante.
  */
 
-const HANDSHAKE_TIMEOUT_MS = 20_000;
+const DEFAULT_HANDSHAKE_TIMEOUT_MS = 20_000;
+
+function handshakeTimeoutMs(): number {
+  const raw = Number(process.env.PUPITRE_MCP_PROBE_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HANDSHAKE_TIMEOUT_MS;
+}
+
+/** npx laisse un `sh`/`node` derrière : tuer le pid lancé ne suffit pas. */
+function killProcessTree(child: ReturnType<typeof spawn>): void {
+  const pid = child.pid;
+  if (pid === undefined) return;
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      // Déjà mort.
+    }
+  }
+}
+
 const CHARS_PER_TOKEN = 4;
 /** Nom de l'outil mis en forme dans la liste présentée au modèle. */
 const TOOL_NAME_TOKENS = 8;
@@ -59,6 +80,9 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
       // HOME ou d'un token déjà exporté par le shell de l'utilisateur.
       env: { ...process.env, ...(definition.env ?? {}) },
       stdio: ["pipe", "pipe", "ignore"],
+      // Groupe dédié : `npx mcp-remote` fork un sh+node qui ignore le SIGKILL
+      // du parent. Sans ça, chaque sonde laisse des ClickUp/Mongo orphelins.
+      detached: true,
     });
 
     let settled = false;
@@ -67,13 +91,13 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      child.kill("SIGKILL");
+      killProcessTree(child);
       resolve(result);
     };
 
     const timer = setTimeout(
       () => finish({ name, tokens: null, toolCount: 0, error: "délai dépassé" }),
-      HANDSHAKE_TIMEOUT_MS,
+      handshakeTimeoutMs(),
     );
     timer.unref();
 
@@ -148,7 +172,7 @@ async function probeHttp(name: string, url: string): Promise<McpServerWeight> {
         ...(sessionId ? { "mcp-session-id": sessionId } : {}),
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(HANDSHAKE_TIMEOUT_MS),
+      signal: AbortSignal.timeout(handshakeTimeoutMs()),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const text = await response.text();
@@ -192,7 +216,19 @@ async function probeHttp(name: string, url: string): Promise<McpServerWeight> {
  * Pèse plusieurs serveurs en parallèle. Un serveur qui échoue n'empêche pas les
  * autres : la mesure est un confort de diagnostic, pas un chemin critique.
  */
+let measureQueue: Promise<void> = Promise.resolve();
+
 export async function measureMcpServers(
+  definitions: Record<string, unknown>,
+): Promise<McpServerWeight[]> {
+  // Une sonde à la fois : le GET context-profile relançait la mesure tant
+  // qu'un serveur (ClickUp) échouait, et les npx se superposaient.
+  const run = measureQueue.then(() => measureMcpServersNow(definitions));
+  measureQueue = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+async function measureMcpServersNow(
   definitions: Record<string, unknown>,
 ): Promise<McpServerWeight[]> {
   const weights = await Promise.all(

@@ -65,6 +65,7 @@ import {
   claudeServerDefinitions,
   codexServerDefinitions,
   listMcpServers,
+  unmeasuredMcpServers,
   usedMcpServers,
 } from "./mcp-inventory";
 import { measureMcpServers } from "./mcp-probe";
@@ -1969,9 +1970,7 @@ export function createServer(deps: ServerDeps) {
             ...claudeServerDefinitions(project.path),
           });
           const cache = (deps.settings.get<Record<string, unknown>>("mcpWeights")) ?? {};
-          for (const weight of weights) {
-            if (weight.tokens !== null) cache[weight.name] = weight;
-          }
+          for (const weight of weights) cache[weight.name] = weight;
           deps.settings.set("mcpWeights", cache);
           return json(weights);
         }
@@ -1991,15 +1990,17 @@ export function createServer(deps: ServerDeps) {
           // Première consultation : on pèse les serveurs une fois plutôt que
           // d'afficher zéro et d'attendre une action manuelle que rien
           // n'annonce. Les fois suivantes viennent du cache.
-          if (loaded.some((name) => weights[name] === undefined)) {
-            const measured = await measureMcpServers({
-              ...codexServerDefinitions(),
-              ...claudeServerDefinitions(project.path),
-            });
+          const available = {
+            ...codexServerDefinitions(),
+            ...claudeServerDefinitions(project.path),
+          };
+          const pending = unmeasuredMcpServers(loaded, available, weights);
+          if (Object.keys(pending).length > 0) {
+            const measured = await measureMcpServers(pending);
             weights = { ...weights };
-            for (const weight of measured) {
-              if (weight.tokens !== null) weights[weight.name] = weight;
-            }
+            // Y compris les échecs (`tokens: null`) : sinon ce GET relance la
+            // sonde à chaque ouverture, et les npx enfants s'accumulent.
+            for (const weight of measured) weights[weight.name] = weight;
             deps.settings.set("mcpWeights", weights);
           }
           const mcpTokens = loaded.reduce(
