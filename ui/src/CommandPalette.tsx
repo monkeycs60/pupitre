@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import {
   listProjectConversations,
+  listProjectDomains,
   listProjectWorkflows,
   listProjects,
   listSkills,
@@ -11,6 +12,7 @@ import {
 import type {
   Conversation,
   Project,
+  ProjectDomain,
   SearchResult,
   SkillSummary,
   Workflow,
@@ -79,6 +81,8 @@ export function CommandPalette({
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [skills, setSkills] = useState<SkillSummary[]>([])
   const [results, setResults] = useState<SearchResult[]>([])
+  const [domains, setDomains] = useState<ProjectDomain[]>([])
+  const [domainId, setDomainId] = useState<string | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -104,16 +108,19 @@ export function CommandPalette({
     let ignore = false
     void listProjects()
       .then(async (loadedProjects) => {
-        const [conversationGroups, workflowGroups, loadedSkills] = await Promise.all([
+        const [conversationGroups, workflowGroups, loadedSkills, loadedDomains] = await Promise.all([
           Promise.all(loadedProjects.map((project) => listProjectConversations(project.id))),
           Promise.all(loadedProjects.map((project) => listProjectWorkflows(project.id))),
           listSkills({ favoriteProjectId: currentProject?.id }),
+          currentProject ? listProjectDomains(currentProject.id) : Promise.resolve([]),
         ])
         if (ignore) return
         setProjects(loadedProjects)
         setConversations(conversationGroups.flat().sort((left, right) => right.updated_at.localeCompare(left.updated_at)))
         setWorkflows(workflowGroups.flat())
         setSkills(loadedSkills)
+        setDomains(loadedDomains.filter((domain) => domain.status === 'actif'))
+        setDomainId(null)
       })
       .catch((loadError: unknown) => {
         if (!ignore) setError(loadError instanceof Error ? loadError.message : 'Palette indisponible')
@@ -129,7 +136,12 @@ export function CommandPalette({
     setResults([])
     const controller = new AbortController()
     const timer = setTimeout(() => {
-      void searchGlobal(query, undefined, controller.signal)
+      void searchGlobal(
+        query,
+        domainId ? currentProject?.id : undefined,
+        controller.signal,
+        domainId ?? undefined,
+      )
         .then(setResults)
         .catch((searchError: unknown) => {
           if (!controller.signal.aborted) setError(searchError instanceof Error ? searchError.message : 'Recherche indisponible')
@@ -139,7 +151,7 @@ export function CommandPalette({
       clearTimeout(timer)
       controller.abort()
     }
-  }, [open, query])
+  }, [open, query, domainId, currentProject?.id])
 
   const items = useMemo<PaletteItem[]>(() => {
     const next: PaletteItem[] = []
@@ -283,6 +295,21 @@ export function CommandPalette({
           aria-expanded
           aria-activedescendant={activeItem ? `palette-option-${encodeURIComponent(activeItem.id)}` : undefined}
         />
+        {domains.length > 0 ? (
+          <div className="palette-domain-filters" role="group" aria-label="Filtrer par domaine">
+            {domains.map((domain) => (
+              <button
+                key={domain.id}
+                type="button"
+                className={`palette-domain-filter${domainId === domain.id ? ' is-selected' : ''}`}
+                aria-pressed={domainId === domain.id}
+                onClick={() => setDomainId((current) => current === domain.id ? null : domain.id)}
+              >
+                {domain.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {error ? <p className="palette-error" role="alert">{error}</p> : null}
         <div id="palette-results" className="palette-results" role="listbox" aria-label="Résultats de recherche et commandes">
           {items.length === 0 ? <p className="palette-empty">Aucun résultat.</p> : items.map((item, index) => {

@@ -223,6 +223,7 @@ export function Sidebar({
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null)
+  const [domainRevision, setDomainRevision] = useState(0)
   const selectedConversationRef = useRef(selectedConversation)
   selectedConversationRef.current = selectedConversation
   const workspaceViewRef = useRef(workspaceView)
@@ -283,7 +284,7 @@ export function Sidebar({
     return () => {
       ignore = true
     }
-  }, [selectedProject, conversationListVersion, conversationScope])
+  }, [selectedProject, conversationListVersion, conversationScope, domainRevision])
 
   useEffect(() => {
     setSidebarTab('conversations')
@@ -642,6 +643,18 @@ export function Sidebar({
                       {conversation.ticket_key ? (
                         <span className="conv-row-ticket">{conversation.ticket_key}</span>
                       ) : null}
+                      {(conversation.domains ?? []).length > 0 ? (
+                        <span className="conv-row-domains">
+                          {conversation.domains!.map((domain) => (
+                            <span
+                              key={domain.id}
+                              className={`conv-row-domain conv-row-domain-${domain.kind === 'métier' ? 'metier' : 'technique'}`}
+                            >
+                              {domain.name}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
                       {branch !== null ? (
                         <span className="conv-row-branch" title={`Branche du worktree : ${conversation.worktree_path}`}>
                           <BranchIcon />{branch}
@@ -821,6 +834,7 @@ export function Sidebar({
           project={projectSettingsProject}
           onClose={() => setProjectSettingsProject(null)}
           onUpdated={handleProjectSettingsUpdated}
+          onDomainsChanged={() => setDomainRevision((current) => current + 1)}
         />
       ) : null}
 

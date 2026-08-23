@@ -12,6 +12,8 @@ import type {
   FleetItem,
   IntegrationType,
   SearchResult,
+  ProjectDomain,
+  DomainKind,
   Project,
   ProjectIntegration,
   ProjectCostReport,
@@ -333,10 +335,47 @@ export function searchGlobal(
   query: string,
   projectId?: string,
   signal?: AbortSignal,
+  domainId?: string,
 ): Promise<SearchResult[]> {
   const params = new URLSearchParams({ q: query })
   if (projectId) params.set('projectId', projectId)
+  if (domainId) params.set('domainId', domainId)
   return fetchJson(`/api/search?${params.toString()}`, { signal })
+}
+
+export function listProjectDomains(projectId: string, signal?: AbortSignal): Promise<ProjectDomain[]> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/domains`, { signal })
+}
+
+export function createProjectDomain(
+  projectId: string,
+  input: { name: string; kind: DomainKind },
+): Promise<ProjectDomain> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/domains`, jsonPost(input))
+}
+
+export function validateProjectDomain(projectId: string, domainId: string): Promise<ProjectDomain> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/domains/${routeId(domainId)}/validate`, jsonPost({}))
+}
+
+export function renameProjectDomain(
+  projectId: string,
+  domainId: string,
+  input: { name?: string; kind?: DomainKind },
+): Promise<ProjectDomain> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/domains/${routeId(domainId)}`, jsonPatch(input))
+}
+
+export function mergeProjectDomain(
+  projectId: string,
+  domainId: string,
+  targetId: string,
+): Promise<ProjectDomain> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/domains/${routeId(domainId)}/merge`, jsonPost({ targetId }))
+}
+
+export function deleteProjectDomain(projectId: string, domainId: string): Promise<void> {
+  return fetchVoid(`/api/projects/${routeId(projectId)}/domains/${routeId(domainId)}`, { method: 'DELETE' })
 }
 
 export function listMemory(): Promise<MemoryFile[]> {

@@ -1,4 +1,10 @@
 import { spawn } from "node:child_process";
+import {
+  isDomainKind,
+  normalizeDomainName,
+  type DigestDomainSuggestion,
+  type Domain,
+} from "./stores/domains";
 
 /** Modèle volontairement bon marché : le digest tourne à chaque palier de tours. */
 const DIGEST_MODEL = process.env.PUPITRE_DIGEST_MODEL ?? "claude-haiku-4-5-20251001";
@@ -6,15 +12,18 @@ const DIGEST_TIMEOUT_MS = 45_000;
 /** Bornes des textes envoyés : un digest ne doit jamais coûter un vrai tour. */
 const FIRST_MAX = 1_200;
 const LATEST_MAX = 800;
+const DIGEST_DOMAIN_MAX = 2;
 
 export interface Digest {
   title: string;
   summary: string;
+  domains: DigestDomainSuggestion[];
 }
 
 export interface DigestSource {
   first: string;
   latest: string[];
+  domainCatalog?: Array<Pick<Domain, "name" | "kind" | "status">>;
 }
 
 /**
@@ -33,8 +42,41 @@ function clamp(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}…`;
 }
 
-function buildPrompt(source: DigestSource): string {
+export function parseDomainSuggestions(raw: unknown): DigestDomainSuggestion[] {
+  if (!Array.isArray(raw)) return [];
+  const suggestions: DigestDomainSuggestion[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const name = normalizeDomainName(typeof (item as { name?: unknown }).name === "string"
+      ? (item as { name: string }).name
+      : "");
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const kind = (item as { kind?: unknown }).kind;
+    suggestions.push({ name, kind: isDomainKind(kind) ? kind : "technique" });
+    if (suggestions.length >= DIGEST_DOMAIN_MAX) break;
+  }
+  return suggestions;
+}
+
+export function parseDigestPayload(payload: unknown): Digest | null {
+  if (!payload || typeof payload !== "object") return null;
+  const digest = payload as { title?: unknown; summary?: unknown; domains?: unknown };
+  if (typeof digest.title !== "string" || typeof digest.summary !== "string") return null;
+  const title = digest.title.trim();
+  const summary = digest.summary.trim();
+  if (!title || !summary) return null;
+  return { title, summary, domains: parseDomainSuggestions(digest.domains) };
+}
+
+export function buildDigestPrompt(source: DigestSource): string {
   const latest = source.latest.map((line) => clamp(line, LATEST_MAX)).join("\n\n");
+  const catalog = (source.domainCatalog ?? [])
+    .map((domain) => `${domain.name} (${domain.kind}, ${domain.status})`)
+    .join(", ");
   return [
     "Tu résumes une conversation entre un développeur et un agent de code.",
     "",
@@ -45,12 +87,16 @@ function buildPrompt(source: DigestSource): string {
     latest,
     "",
     "Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans bloc de code :",
-    '{"title": "...", "summary": "..."}',
+    '{"title": "...", "summary": "...", "domains": [{"name": "...", "kind": "métier"}]}',
     "",
     "- title : 45 caractères maximum, en français, sans ponctuation finale.",
     "  Décris le TRAVAIL réel, pas la formulation du premier message.",
     "  Exemples : « Rendu Mermaid dans le chat », « Fix des tableaux Markdown ».",
     "- summary : 2 phrases maximum, en français. Ce qui est demandé, où ça en est.",
+    "- domains : 0, 1 ou 2 domaines touchés par cette conversation.",
+    "  kind vaut « métier » ou « technique ». Préfère un nom du catalogue s'il convient ;",
+    "  sinon propose un nom court nouveau. N'invente pas plus de deux domaines.",
+    catalog ? `- Catalogue existant : ${catalog}.` : "- Aucun domaine n'existe encore pour ce projet.",
   ].join("\n");
 }
 
@@ -100,7 +146,7 @@ export async function generateDigest(source: DigestSource, cwd: string): Promise
   if (!source.first.trim()) return null;
   let raw: string;
   try {
-    raw = await runClaude(buildPrompt(source), cwd);
+    raw = await runClaude(buildDigestPrompt(source), cwd);
   } catch (error) {
     console.error("Digest de conversation impossible", error);
     return null;
@@ -110,10 +156,5 @@ export async function generateDigest(source: DigestSource, cwd: string): Promise
   const payload = typeof envelope?.result === "string"
     ? extractJson(envelope.result)
     : envelope;
-  const digest = payload as { title?: unknown; summary?: unknown } | null;
-  if (typeof digest?.title !== "string" || typeof digest.summary !== "string") return null;
-  const title = digest.title.trim();
-  const summary = digest.summary.trim();
-  if (!title || !summary) return null;
-  return { title, summary };
+  return parseDigestPayload(payload);
 }

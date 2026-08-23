@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDb } from "../src/db";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
-import { shouldRefreshDigest } from "../src/conversation-digest";
+import { buildDigestPrompt, parseDigestPayload, shouldRefreshDigest } from "../src/conversation-digest";
 
 let conversations: ConversationStore;
 let projectId: string;
@@ -69,4 +69,50 @@ test("compte les tours et extrait la matière du digest", () => {
   const source = conversations.digestSource(conv.id);
   expect(source.first).toContain("Utilisateur : Corrige le rendu");
   expect(source.latest.at(-1)).toBe("Agent : Il manque remark-gfm.");
+});
+
+test("le digest accepte 0 à 2 domaines et ignore le reste", () => {
+  expect(parseDigestPayload({
+    title: "Fix des tableaux Markdown",
+    summary: "Les tableaux GFM ne sont pas rendus.",
+  })).toEqual({
+    title: "Fix des tableaux Markdown",
+    summary: "Les tableaux GFM ne sont pas rendus.",
+    domains: [],
+  });
+  expect(parseDigestPayload({
+    title: "Matching",
+    summary: "On vectorise les profils.",
+    domains: [
+      { name: "Match AI", kind: "métier" },
+      { name: "API", kind: "technique" },
+      { name: "Trop", kind: "technique" },
+      { name: "", kind: "métier" },
+      { kind: "technique" },
+    ],
+  })?.domains).toEqual([
+    { name: "Match AI", kind: "métier" },
+    { name: "API", kind: "technique" },
+  ]);
+  expect(parseDigestPayload({
+    title: "Auth",
+    summary: "Login cassé.",
+    domains: [{ name: "Auth", kind: "inconnu" }],
+  })?.domains).toEqual([{ name: "Auth", kind: "technique" }]);
+  expect(parseDigestPayload({ title: "", summary: "x" })).toBeNull();
+});
+
+test("le prompt du digest liste le catalogue existant sans tour supplémentaire", () => {
+  const prompt = buildDigestPrompt({
+    first: "Corrige le matching",
+    latest: ["Agent : on vectorise."],
+    domainCatalog: [
+      { name: "Match AI", kind: "métier", status: "actif" },
+      { name: "Wishlists", kind: "métier", status: "proposé" },
+    ],
+  });
+  expect(prompt).toContain('"domains"');
+  expect(prompt).toContain("Match AI (métier, actif)");
+  expect(prompt).toContain("Wishlists (métier, proposé)");
+  expect(prompt).toContain("1 ou 2 domaines");
 });

@@ -72,6 +72,27 @@ export interface FleetItem {
   lastEvent: string
 }
 
+export type DomainKind = 'métier' | 'technique'
+export type DomainStatus = 'actif' | 'proposé'
+export type DomainOrigin = 'auto' | 'manuel'
+
+export interface ProjectDomain {
+  id: string
+  project_id: string
+  name: string
+  kind: DomainKind
+  status: DomainStatus
+  created_at: string
+  updated_at: string
+}
+
+export interface ConversationDomain {
+  id: string
+  name: string
+  kind: DomainKind
+  origin?: DomainOrigin
+}
+
 export interface SearchResult {
   kind: 'conversation' | 'event' | 'debrief'
   sourceId: string
@@ -234,6 +255,7 @@ export interface Conversation {
   created_on_branch: string | null
   ticket_id: string | null
   ticket_key?: string | null
+  domains?: ConversationDomain[]
   origin_type?: 'sentry' | null
   origin_key?: string | null
   cli_session_id: string | null
@@ -694,7 +716,7 @@ export type AppEvent =
   | { type: 'session'; provider: Provider; cliSessionId: string; model: string }
   // Titre et résumé régénérés après un tour : met la sidebar à jour, ne s'affiche
   // pas dans le fil.
-  | { type: 'conversation-digest'; title: string; summary: string }
+  | { type: 'conversation-digest'; title: string; summary: string; domains?: ConversationDomain[] }
   | { type: 'user-message'; text: string; images: string[]; attachments?: Attachment[]; steering?: boolean }
   | { type: 'text-delta'; text: string }
   | { type: 'text-final'; text: string }

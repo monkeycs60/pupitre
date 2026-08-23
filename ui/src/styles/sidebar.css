@@ -454,6 +454,38 @@
   font-size: var(--text-xs);
 }
 
+.conv-row-domains {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.conv-row-domain {
+  flex: none;
+  max-width: 9rem;
+  overflow: hidden;
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--neutral-soft);
+  border-radius: var(--r-xs);
+}
+
+.conv-row-domain-metier {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+}
+
+.conv-row-domain-technique {
+  color: var(--text-muted);
+  background: var(--neutral-soft);
+}
+
 .pin-button {
   width: 24px;
   height: 24px;

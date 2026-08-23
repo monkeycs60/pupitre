@@ -103,7 +103,12 @@ export type AppEvent =
       error?: string;
     }
   /** Titre et résumé régénérés après un tour : la sidebar se met à jour. */
-  | { type: "conversation-digest"; title: string; summary: string }
+  | {
+      type: "conversation-digest";
+      title: string;
+      summary: string;
+      domains?: Array<{ id: string; name: string; kind: "métier" | "technique" }>;
+    }
   | { type: "status"; state: "running" | "done" | "error"; error?: string };
 
 export interface TestScopeEvent {

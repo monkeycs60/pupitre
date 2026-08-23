@@ -10,12 +10,14 @@ import { ConversationStore } from "../src/stores/conversations";
 import { IntegrationStore } from "../src/stores/integrations";
 import { ProjectStore } from "../src/stores/projects";
 import { TicketStore } from "../src/stores/tickets";
+import { DomainStore } from "../src/stores/domains";
 import { SentryStore } from "../src/stores/sentry";
 
 let projectId: string;
 let integrations: IntegrationStore;
 let tickets: TicketStore;
 let conversations: ConversationStore;
+let domains: DomainStore;
 let db: ReturnType<typeof openDb>;
 
 const task: ClickUpTask = {
@@ -115,7 +117,7 @@ function makeRefresher(
   overrides: Partial<ConstructorParameters<typeof IntegrationsRefresher>[1]> = {},
 ) {
   return new IntegrationsRefresher(
-    { integrations, tickets, conversations, projects: new ProjectStore(db) },
+    { integrations, tickets, conversations, projects: new ProjectStore(db), domains },
     {
       clickUpClient: () => fakeClickUp() as any,
       gitLabClient: () => fakeGitLab() as any,
@@ -130,6 +132,7 @@ beforeEach(() => {
   integrations = new IntegrationStore(db);
   tickets = new TicketStore(db);
   conversations = new ConversationStore(db);
+  domains = new DomainStore(db);
   integrations.upsert(projectId, "clickup", {
     config: { teamId: "1", listIds: ["a"] },
     branchPattern: "^(issue|maintenance|feature)/(TECH-\\d+)",
@@ -201,6 +204,9 @@ test("rapproche tâche ClickUp, MR, pipeline et déploiement sur la clé du tick
     expect.objectContaining({ project: "reactor", name: "absente", missing: true }),
   ]);
   expect(notified).toEqual([projectId]);
+  const proposed = domains.listByProject(projectId);
+  expect(proposed.map((domain) => domain.name).sort()).toEqual(["BackOffice"]);
+  expect(proposed[0]).toEqual(expect.objectContaining({ status: "proposé", kind: "technique" }));
 });
 
 test("relève Sentry en production, classe Match AI et respecte la cadence", async () => {

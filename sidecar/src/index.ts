@@ -37,6 +37,7 @@ import { IntegrationsRefresher } from "./integrations/refresher";
 import { IntegrationStore } from "./stores/integrations";
 import { INTEGRATION_TOKENS_KEY } from "./stores/settings";
 import { TicketStore } from "./stores/tickets";
+import { DomainStore } from "./stores/domains";
 import { IntegrationSecretStore } from "./stores/integration-secrets";
 import { SentryStore } from "./stores/sentry";
 import { SentryClient } from "./integrations/sentry";
@@ -82,12 +83,13 @@ if (process.argv.includes("--pupitre-mcp")) {
   const memory = new MemoryStore();
   const integrations = new IntegrationStore(db);
   const tickets = new TicketStore(db);
+  const domains = new DomainStore(db);
   const integrationSecrets = new IntegrationSecretStore(db);
   const sentry = new SentryStore(db);
   const git = new GitProjectService(db, projects);
   const gamification = new GamificationService(db, projects, git);
   const integrationsRefresher = new IntegrationsRefresher(
-    { integrations, tickets, conversations, projects, sentry },
+    { integrations, tickets, conversations, projects, sentry, domains },
     {
       clickUpClient: () => {
         const token = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY)?.clickup ?? null;
@@ -130,6 +132,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     },
     undefined,
     () => actionFormat(settings.get("actionFormat")),
+    domains,
   );
   // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
   // tournent en parallèle du tour parent qui les a demandées.
@@ -232,6 +235,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     memory,
     integrations,
     tickets,
+    domains,
     integrationSecrets,
     sentry,
     integrationsRefresher,

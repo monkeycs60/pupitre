@@ -16,6 +16,7 @@ import {
 import type { McpContextProbe, ProjectMcpConfig } from './api'
 import { formatCompact } from './formatCompact'
 import { ProviderMark } from './ProviderMark'
+import { DomainSettings } from './DomainSettings'
 import type { DashboardIntegration } from './types'
 import type { FilesystemScope, Preset, Project } from './types'
 
@@ -23,6 +24,7 @@ interface ProjectSettingsDialogProps {
   project: Project
   onClose: () => void
   onUpdated: (project: Project) => void
+  onDomainsChanged?: () => void
 }
 
 const DEFAULT_BRANCH_PATTERN = '^(issue|maintenance|feature)/(TECH-\\d+)'
@@ -172,7 +174,7 @@ function integrationForm(items: DashboardIntegration[]): IntegrationsForm {
   return next
 }
 
-export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSettingsDialogProps) {
+export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsChanged }: ProjectSettingsDialogProps) {
   const [scope, setScope] = useState<FilesystemScope>(project.filesystem_scope)
   const [presets, setPresets] = useState<Preset[]>([])
   const [reviewPresetId, setReviewPresetId] = useState(() => projectPresetId(project.default_review_preset_id, project.default_preset_id))
@@ -532,6 +534,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
               ) : null}
             </div>
           ) : null}
+          <DomainSettings projectId={project.id} disabled={saving} onChanged={onDomainsChanged} />
           <section className="project-integrations" aria-labelledby="project-integrations-title">
             <div className="project-settings-section-heading">
               <strong id="project-integrations-title">Intégrations</strong>

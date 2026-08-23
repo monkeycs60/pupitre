@@ -75,6 +75,15 @@ import type { IntegrationsRefresher } from "./integrations/refresher";
 import { compileBranchPattern, extractTicketKey } from "./ticket-key";
 import type { IntegrationStore, IntegrationType } from "./stores/integrations";
 import type { Ticket, TicketStore } from "./stores/tickets";
+import {
+  DomainConflictError,
+  DomainNotFoundError,
+  DomainProtectedError,
+  type DomainStore,
+  isDomainKind,
+  suggestionsFromLabels,
+  suggestionsFromSkills,
+} from "./stores/domains";
 import type { IntegrationSecretStore } from "./stores/integration-secrets";
 import type { SentryStore } from "./stores/sentry";
 import { redactSentryValue } from "./sentry-redaction";
@@ -122,6 +131,7 @@ export interface ServerDeps {
   memory: MemoryStore;
   integrations: IntegrationStore;
   tickets: TicketStore;
+  domains?: DomainStore;
   integrationSecrets?: IntegrationSecretStore;
   sentry?: SentryStore;
   integrationsRefresher: IntegrationsRefresher;
@@ -321,6 +331,31 @@ function memoryHttpError(error: unknown, fallback = "fichier mémoire inconnu"):
     throw new HttpError(409, error.message);
   }
   throw new HttpError(404, fallback);
+}
+
+function requireDomains(deps: ServerDeps): DomainStore {
+  if (!deps.domains) throw new HttpError(501, "domaines non câblés");
+  return deps.domains;
+}
+
+function domainHttpError(error: unknown): never {
+  if (error instanceof DomainConflictError || error instanceof DomainProtectedError) {
+    throw new HttpError(409, error.message);
+  }
+  if (error instanceof DomainNotFoundError) throw new HttpError(404, error.message);
+  if (error instanceof Error) throw new HttpError(400, error.message);
+  throw error;
+}
+
+function seedProjectDomains(deps: ServerDeps, projectId: string): void {
+  const domains = requireDomains(deps);
+  const labels = deps.tickets.listByProject(projectId).flatMap((ticket) => (
+    Array.isArray(ticket.payload.labels) ? ticket.payload.labels : []
+  ));
+  domains.proposeMany(projectId, [
+    ...suggestionsFromLabels(labels),
+    ...suggestionsFromSkills(deps.skills.list({ projectId }), projectId),
+  ]);
 }
 
 function htmlDocumentHttpError(error: unknown): never {
@@ -1115,8 +1150,17 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "GET" && pathname === "/api/search") {
           const query = url.searchParams.get("q") ?? "";
           const projectId = url.searchParams.get("projectId") ?? undefined;
+          const domainId = url.searchParams.get("domainId") ?? undefined;
           if (projectId && !deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
-          return json(deps.search.search(query, projectId));
+          let conversationIds: string[] | undefined;
+          if (domainId) {
+            const domain = requireDomains(deps).get(domainId);
+            if (!domain || domain.status !== "actif" || (projectId && domain.project_id !== projectId)) {
+              throw new HttpError(404, "domaine inconnu");
+            }
+            conversationIds = requireDomains(deps).conversationIdsFor(domainId);
+          }
+          return json(deps.search.search(query, projectId, 50, conversationIds));
         }
 
         if (request.method === "GET" && pathname === "/api/memory") {
@@ -1506,6 +1550,73 @@ export function createServer(deps: ServerDeps) {
           return empty(202);
         }
 
+        const projectDomainsId = routeId(pathname, /^\/api\/projects\/([^/]+)\/domains$/);
+        if (projectDomainsId !== null) {
+          if (!deps.projects.get(projectDomainsId)) throw new HttpError(404, "projet inconnu");
+          const domains = requireDomains(deps);
+          if (request.method === "GET") {
+            seedProjectDomains(deps, projectDomainsId);
+            return json(domains.listByProject(projectDomainsId));
+          }
+          if (request.method === "POST") {
+            const body = await readObject(request);
+            const name = requiredString(body, "name");
+            const kind = body.kind;
+            if (!isDomainKind(kind)) throw new HttpError(400, "kind de domaine invalide");
+            try {
+              return json(domains.create(projectDomainsId, { name, kind, status: "actif" }), 201);
+            } catch (error) {
+              domainHttpError(error);
+            }
+          }
+        }
+
+        const projectDomainAction = pathname.match(
+          /^\/api\/projects\/([^/]+)\/domains\/([^/]+)\/(validate|merge)$/,
+        );
+        if (request.method === "POST" && projectDomainAction) {
+          const projectId = decodeURIComponent(projectDomainAction[1]!);
+          const domainId = decodeURIComponent(projectDomainAction[2]!);
+          const action = projectDomainAction[3]!;
+          if (!deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+          const domains = requireDomains(deps);
+          const domain = domains.get(domainId);
+          if (!domain || domain.project_id !== projectId) throw new HttpError(404, "domaine inconnu");
+          try {
+            if (action === "validate") return json(domains.validate(domainId));
+            const body = await readObject(request);
+            const targetId = requiredString(body, "targetId");
+            const target = domains.get(targetId);
+            if (!target || target.project_id !== projectId) throw new HttpError(404, "domaine cible inconnu");
+            return json(domains.merge(domainId, targetId));
+          } catch (error) {
+            domainHttpError(error);
+          }
+        }
+
+        const projectDomainIdMatch = pathname.match(/^\/api\/projects\/([^/]+)\/domains\/([^/]+)$/);
+        if (projectDomainIdMatch && (request.method === "PATCH" || request.method === "DELETE")) {
+          const projectId = decodeURIComponent(projectDomainIdMatch[1]!);
+          const domainId = decodeURIComponent(projectDomainIdMatch[2]!);
+          if (!deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+          const domains = requireDomains(deps);
+          const domain = domains.get(domainId);
+          if (!domain || domain.project_id !== projectId) throw new HttpError(404, "domaine inconnu");
+          try {
+            if (request.method === "DELETE") {
+              domains.remove(domainId);
+              return empty(204);
+            }
+            const body = await readObject(request);
+            const kind = body.kind === undefined ? undefined : body.kind;
+            if (kind !== undefined && !isDomainKind(kind)) throw new HttpError(400, "kind de domaine invalide");
+            const name = optionalTrimmed(body, "name") ?? undefined;
+            return json(domains.rename(domainId, { name, kind }));
+          } catch (error) {
+            domainHttpError(error);
+          }
+        }
+
         if (request.method === "POST" && pathname === "/api/activity/visibility") {
           const body = await readObject(request);
           if (typeof body.active !== "boolean") throw new HttpError(400, "champ active invalide");
@@ -1827,7 +1938,8 @@ export function createServer(deps: ServerDeps) {
           if (scope !== "active" && scope !== "archived" && scope !== "trash") {
             throw new HttpError(400, "portée de conversations invalide");
           }
-          return json(deps.conversations.listByProject(projectConversationsId, scope));
+          const listed = deps.conversations.listByProject(projectConversationsId, scope);
+          return json(deps.domains ? deps.domains.decorateConversations(listed) : listed);
         }
 
         const projectCostsId = routeId(pathname, /^\/api\/projects\/([^/]+)\/costs$/);
@@ -2698,6 +2810,44 @@ export function createServer(deps: ServerDeps) {
               error instanceof Error ? error.message : "échec de la nouvelle conversation",
             );
           }
+        }
+
+        const conversationDomainsId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/domains$/,
+        );
+        if (request.method === "POST" && conversationDomainsId !== null) {
+          const conversation = deps.conversations.get(conversationDomainsId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const body = await readObject(request);
+          const domainId = requiredString(body, "domainId");
+          const domains = requireDomains(deps);
+          const domain = domains.get(domainId);
+          if (!domain || domain.project_id !== conversation.project_id) {
+            throw new HttpError(404, "domaine inconnu");
+          }
+          try {
+            domains.associate(conversation.id, domainId, "manuel");
+            return json(domains.decorateConversations([conversation])[0]);
+          } catch (error) {
+            domainHttpError(error);
+          }
+        }
+
+        const conversationDomainMatch = pathname.match(
+          /^\/api\/conversations\/([^/]+)\/domains\/([^/]+)$/,
+        );
+        if (request.method === "DELETE" && conversationDomainMatch) {
+          const conversation = deps.conversations.get(decodeURIComponent(conversationDomainMatch[1]!));
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const domainId = decodeURIComponent(conversationDomainMatch[2]!);
+          const domains = requireDomains(deps);
+          const domain = domains.get(domainId);
+          if (!domain || domain.project_id !== conversation.project_id) {
+            throw new HttpError(404, "domaine inconnu");
+          }
+          domains.dissociate(conversation.id, domainId);
+          return json(domains.decorateConversations([conversation])[0]);
         }
 
         const messageConversationId = routeId(

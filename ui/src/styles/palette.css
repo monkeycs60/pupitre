@@ -42,6 +42,30 @@
   border-radius: var(--r-xs);
 }
 
+.palette-domain-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.palette-domain-filter {
+  padding: 0 8px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 22px;
+  background: var(--neutral-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  cursor: pointer;
+}
+
+.palette-domain-filter.is-selected {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
 .command-palette > input {
   flex: none;
   width: calc(100% - 24px);

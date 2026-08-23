@@ -24,27 +24,31 @@ export class SearchIndex {
     this.rebuild();
   }
 
-  search(query: string, projectId?: string, limit = 50): SearchResult[] {
+  search(query: string, projectId?: string, limit = 50, conversationIds?: string[]): SearchResult[] {
     const match = matchQuery(query);
     if (!match) return [];
+    if (conversationIds && conversationIds.length === 0) return [];
     const boundedLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+    const domainClause = conversationIds
+      ? `AND conversation_id IN (${conversationIds.map(() => "?").join(", ")})`
+      : "";
     const rows = projectId
       ? this.db.query(`
           SELECT kind, source_id, conversation_id, project_id, title,
             snippet(search_index, 5, '', '', '…', 28) AS excerpt,
             bm25(search_index, 0.0, 0.0, 0.0, 0.0, 8.0, 1.0) AS rank
           FROM search_index
-          WHERE search_index MATCH ? AND project_id = ?
+          WHERE search_index MATCH ? AND project_id = ? ${domainClause}
           ORDER BY rank LIMIT ?
-        `).all(match, projectId, boundedLimit)
+        `).all(match, projectId, ...(conversationIds ?? []), boundedLimit)
       : this.db.query(`
           SELECT kind, source_id, conversation_id, project_id, title,
             snippet(search_index, 5, '', '', '…', 28) AS excerpt,
             bm25(search_index, 0.0, 0.0, 0.0, 0.0, 8.0, 1.0) AS rank
           FROM search_index
-          WHERE search_index MATCH ?
+          WHERE search_index MATCH ? ${domainClause}
           ORDER BY rank LIMIT ?
-        `).all(match, boundedLimit);
+        `).all(match, ...(conversationIds ?? []), boundedLimit);
     return (rows as Array<Record<string, unknown>>).map((row) => ({
       kind: row.kind as SearchKind,
       sourceId: String(row.source_id),

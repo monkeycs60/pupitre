@@ -124,8 +124,10 @@ et lit les captures depuis leur chemin local. Un tour Grok est one-shot
   rend un verdict structuré. Une erreur fixable peut, après confirmation,
   créer son ticket ClickUp, sa branche `issue/TECH-…`, son worktree et une
   conversation de correction. La MR reste soumise à une confirmation distincte.
-- La tranche A couvre **Mes tickets**, **Environnements**, **À relire**, les
-  notes locales et le groupement des conversations par ticket dans la sidebar.
+- La taxonomie **Domaines** vit dans les réglages du projet : le digest propose
+  1–2 labels, les pastilles et le filtre de recherche n'affichent que les
+  domaines validés. ClickUp (champ Service) et les skills projet amorcent des
+  propositions, jamais des labels visibles.
 - Elle ne couvre pas encore **Notion / backlog** ni **Répétitions** ; le périmètre complet reste décrit dans
   [le design du chantier](docs/plans/2026-08-19-tableau-de-bord-design.md).
 

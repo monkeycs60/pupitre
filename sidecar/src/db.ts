@@ -164,6 +164,25 @@ export function openDb(dir: string = dataDir()): Database {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_ticket_notes_ticket ON ticket_notes(ticket_id, created_at);
+    CREATE TABLE IF NOT EXISTS domains (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL COLLATE NOCASE,
+      kind TEXT NOT NULL CHECK (kind IN ('métier', 'technique')),
+      status TEXT NOT NULL CHECK (status IN ('actif', 'proposé')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (project_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_domains_project ON domains(project_id, status, name);
+    CREATE TABLE IF NOT EXISTS conversation_domains (
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      domain_id TEXT NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+      origin TEXT NOT NULL CHECK (origin IN ('auto', 'manuel')),
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (conversation_id, domain_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_conversation_domains_domain ON conversation_domains(domain_id);
     CREATE TABLE IF NOT EXISTS sentry_issues (
       id TEXT PRIMARY KEY,
       integration_id TEXT NOT NULL REFERENCES project_integrations(id) ON DELETE CASCADE,

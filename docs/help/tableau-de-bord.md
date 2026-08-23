@@ -34,12 +34,26 @@ cas, Pupitre retrouve ou crée le **worktree partagé** de la branche, injecte u
 brief de reprise court, puis laisse l'agent creuser une conversation soeur au
 besoin avec `read_sibling_conversation`.
 
-## Limites de la tranche A
+## Domaines
 
-Cette première tranche couvre **Mes tickets**, **Environnements**, **À relire**,
-les notes locales et le groupement des conversations par ticket dans la
-sidebar.
+Un **domaine** est un label métier (Match AI, onboarding…) ou technique
+(API, BackOffice…) du projet. Le digest de conversation peut en proposer un
+ou deux, mais une proposition reste invisible dans la sidebar et la recherche
+tant qu'elle n'est pas validée dans **Réglages du projet > Domaines**.
 
-Les **domaines**, le **backlog Notion**, les **Répétitions** et l'intégration
-**Sentry** ne sont pas encore livrés ici. Le périmètre visé pour les tranches
-suivantes est détaillé dans [le design validé](../plans/2026-08-19-tableau-de-bord-design.md).
+Depuis ces réglages vous pouvez valider, renommer, fusionner ou supprimer un
+domaine. La fusion reporte les conversations vers le domaine cible. Un domaine
+encore associé à une conversation ne se supprime pas : il faut d'abord
+dissocier ou fusionner.
+
+Les pastilles de la sidebar ne montrent que les domaines **actifs**. Dans la
+palette Ctrl+K, les pastilles du projet courant filtrent la recherche.
+
+## Limites
+
+Cette vue couvre **Mes tickets**, **Environnements**, **À relire**, les notes
+locales, le groupement des conversations par ticket, l'inbox **Sentry** et les
+**domaines**.
+
+Le **backlog Notion** et les **Répétitions** arriveront ensuite. Le périmètre
+visé est détaillé dans [le design validé](../plans/2026-08-19-tableau-de-bord-design.md).

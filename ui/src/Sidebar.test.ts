@@ -341,3 +341,21 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
     originKey: 'REACTOR-B4S',
   }))
 })
+
+test('affiche les pastilles des domaines actifs seulement', async () => {
+  const labelled: Conversation = {
+    ...startedConversation,
+    id: 'conversation-domains',
+    title: 'Conversation labellisée',
+    domains: [
+      { id: 'd-api', name: 'API', kind: 'technique' },
+      { id: 'd-match', name: 'Match AI', kind: 'métier' },
+    ],
+  }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [labelled])
+  renderSidebar()
+  await waitFor(() => expect(document.querySelectorAll('.conv-row-domain').length).toBe(2))
+  const pills = [...document.querySelectorAll('.conv-row-domain')].map((element) => element.textContent)
+  expect(pills).toEqual(['API', 'Match AI'])
+  expect(document.querySelector('.conv-row-domain-metier')?.textContent).toBe('Match AI')
+})

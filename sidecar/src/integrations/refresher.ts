@@ -7,6 +7,7 @@ import type { ConversationStore } from "../stores/conversations";
 import type { IntegrationStore, ProjectIntegration } from "../stores/integrations";
 import type { ProjectStore } from "../stores/projects";
 import type { TicketStore } from "../stores/tickets";
+import { suggestionsFromLabels, type DomainStore } from "../stores/domains";
 import type { SentryIssue, SentryStore } from "../stores/sentry";
 import { SentryAuthError, type SentryIssueSummary } from "./sentry";
 import { classifySentryIssue, compileDomainCatalog, type DomainDefinition } from "../sentry-domains";
@@ -51,6 +52,7 @@ export interface RefresherStores {
   conversations: ConversationStore;
   projects: ProjectStore;
   sentry?: SentryStore;
+  domains?: DomainStore;
 }
 export interface SentryHandle {
   listIssues(input: {
@@ -365,6 +367,10 @@ export class IntegrationsRefresher {
         this.upsertClickUpTask(item.project_id, task);
       }
     });
+    this.stores.domains?.proposeMany(
+      item.project_id,
+      suggestionsFromLabels(tasks.flatMap((task) => task.labels)),
+    );
     this.stores.integrations.markOk(item.id, { userId, tasks: tasks.length });
   }
 

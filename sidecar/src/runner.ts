@@ -8,7 +8,8 @@ import { ConversationActivity } from "./conversation-activity";
 import type { GitProjectService, GitTurnTracking } from "./git";
 import type { SkillInventory } from "./skills";
 import type { AppNotification } from "./stores/notifications";
-import { generateDigest, shouldRefreshDigest } from "./conversation-digest";
+import { generateDigest, shouldRefreshDigest, type DigestSource } from "./conversation-digest";
+import type { DomainStore } from "./stores/domains";
 import { DEFAULT_ACTION_FORMAT, withActionFormat } from "./response-format";
 import { claudeServerDefinitions } from "./mcp-inventory";
 import type { ActionFormat } from "./response-format";
@@ -99,6 +100,7 @@ export class ConversationRunner {
     readonly activity = new ConversationActivity(),
     /** Lu à chaque tour : le réglage peut changer sans redémarrer le sidecar. */
     private actionFormat: () => ActionFormat = () => DEFAULT_ACTION_FORMAT,
+    private domains?: DomainStore,
   ) {
     sweepOrphanedRuns(convs);
   }
@@ -354,11 +356,24 @@ export class ConversationRunner {
       if (!conv || conv.title_locked) return;
       const turn = this.convs.turnCount(conversationId);
       if (!shouldRefreshDigest(turn, conv.digest_turn)) return;
-      const digest = await generateDigest(this.convs.digestSource(conversationId), cwd);
+      const source: DigestSource = {
+        ...this.convs.digestSource(conversationId),
+        domainCatalog: this.domains?.listByProject(conv.project_id),
+      };
+      const digest = await generateDigest(source, cwd);
       if (!digest) return;
       const updated = this.convs.updateDigest(conversationId, digest, turn);
       if (!updated) return;
-      persist({ type: "conversation-digest", title: updated.title, summary: updated.summary });
+      if (this.domains) {
+        this.domains.applyDigestSuggestions(conversationId, conv.project_id, digest.domains);
+      }
+      const visible = this.domains?.forConversation(conversationId, { visibleOnly: true }) ?? [];
+      persist({
+        type: "conversation-digest",
+        title: updated.title,
+        summary: updated.summary,
+        domains: visible.map((domain) => ({ id: domain.id, name: domain.name, kind: domain.kind })),
+      });
     } catch (error) {
       console.error("Rafraîchissement du digest impossible", error);
     }
