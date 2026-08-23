@@ -205,8 +205,7 @@ test("rapproche tâche ClickUp, MR, pipeline et déploiement sur la clé du tick
   ]);
   expect(notified).toEqual([projectId]);
   const proposed = domains.listByProject(projectId);
-  expect(proposed.map((domain) => domain.name).sort()).toEqual(["BackOffice"]);
-  expect(proposed[0]).toEqual(expect.objectContaining({ status: "proposé", kind: "technique" }));
+  expect(proposed).toEqual([]);
 });
 
 test("relève Sentry en production, classe Match AI et respecte la cadence", async () => {

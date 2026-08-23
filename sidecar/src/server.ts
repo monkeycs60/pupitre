@@ -353,8 +353,9 @@ function seedProjectDomains(deps: ServerDeps, projectId: string): void {
   const labels = deps.tickets.listByProject(projectId).flatMap((ticket) => (
     Array.isArray(ticket.payload.labels) ? ticket.payload.labels : []
   ));
+  const knownDomainNames = domains.listByProject(projectId).map((domain) => domain.name);
   domains.proposeMany(projectId, [
-    ...suggestionsFromLabels(labels),
+    ...suggestionsFromLabels(labels, knownDomainNames),
     ...suggestionsFromSkills(deps.skills.list({ projectId }), projectId),
   ]);
 }

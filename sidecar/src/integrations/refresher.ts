@@ -369,7 +369,10 @@ export class IntegrationsRefresher {
     });
     this.stores.domains?.proposeMany(
       item.project_id,
-      suggestionsFromLabels(tasks.flatMap((task) => task.labels)),
+      suggestionsFromLabels(
+        tasks.flatMap((task) => task.labels),
+        this.stores.domains.listByProject(item.project_id).map((domain) => domain.name),
+      ),
     );
     this.stores.integrations.markOk(item.id, { userId, tasks: tasks.length });
   }

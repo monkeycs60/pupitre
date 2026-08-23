@@ -537,10 +537,11 @@ test("domaines : CRUD, suggestion invisible, fusion et filtre de recherche", asy
     text: "Embedding quartz",
   });
   current!.deps.search.rebuild();
+  current!.deps.domains!.proposeMany(project.id, [{ name: "Match AI", kind: "métier" }]);
 
   const seeded = await fetch(`${current!.baseUrl}/api/projects/${project.id}/domains`)
     .then((response) => response.json()) as Array<{ id: string; name: string; status: string }>;
-  expect(seeded.map((domain) => domain.name).sort()).toEqual(["API", "Match AI"]);
+  expect(seeded.map((domain) => domain.name)).toEqual(["Match AI"]);
   expect(seeded.every((domain) => domain.status === "proposé")).toBe(true);
 
   const created = await postJson(`/api/projects/${project.id}/domains`, {

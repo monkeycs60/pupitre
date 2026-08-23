@@ -53,21 +53,24 @@ export class DomainNotFoundError extends Error {
 const NAME_MAX = 48;
 const DIGEST_MAX = 2;
 const METIER_HINT = /match|onboard|auth|wishlist|instagram|billing|paiement|affiliate/i;
-const INFRA_SKILL = /^(create-|fix-|debug-|hapi-|reactor-|reactivator-|project-guide|cypress-|clickup|gws|wrangler|conges|release-notes|skills-management|mongodb|vat-regulation|testing-)/i;
 
 export function kindFromName(name: string): DomainKind {
   return METIER_HINT.test(name) ? "métier" : "technique";
 }
 
-export function suggestionsFromLabels(labels: unknown): DigestDomainSuggestion[] {
+export function suggestionsFromLabels(
+  labels: unknown,
+  knownDomainNames: string[] = [],
+): DigestDomainSuggestion[] {
   if (!Array.isArray(labels)) return [];
+  const known = new Map(knownDomainNames.map((name) => [normalizeDomainName(name).toLowerCase(), name]));
   const suggestions: DigestDomainSuggestion[] = [];
   const seen = new Set<string>();
   for (const label of labels) {
     if (typeof label !== "string") continue;
-    const name = normalizeDomainName(label);
+    const key = normalizeDomainName(label).toLowerCase();
+    const name = known.get(key);
     if (!name) continue;
-    const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     suggestions.push({ name, kind: kindFromName(name) });
@@ -76,23 +79,10 @@ export function suggestionsFromLabels(labels: unknown): DigestDomainSuggestion[]
 }
 
 export function suggestionsFromSkills(
-  skills: Array<{ name: string; project_id: string | null; provenance: string }>,
-  projectId: string,
+  _skills: Array<{ name: string; project_id: string | null; provenance: string }>,
+  _projectId: string,
 ): DigestDomainSuggestion[] {
-  const suggestions: DigestDomainSuggestion[] = [];
-  const seen = new Set<string>();
-  for (const skill of skills) {
-    if (skill.project_id !== projectId) continue;
-    if (!skill.provenance.endsWith("-project")) continue;
-    const name = normalizeDomainName(skill.name.replace(/^_+/, ""));
-    if (INFRA_SKILL.test(name)) continue;
-    if (!name) continue;
-    const key = name.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    suggestions.push({ name, kind: kindFromName(name) });
-  }
-  return suggestions;
+  return [];
 }
 
 export function normalizeDomainName(name: string): string {

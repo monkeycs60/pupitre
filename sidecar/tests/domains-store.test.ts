@@ -136,21 +136,34 @@ test("la suppression est refusée tant qu'une conversation est associée", () =>
   expect(domains.get(domain.id)).toBeNull();
 });
 
-test("les labels ClickUp et les skills projet deviennent des propositions", () => {
-  expect(suggestionsFromLabels(["API", "Match AI", "api", ""])).toEqual([
-    { name: "API", kind: "technique" },
+test("les labels ClickUp structurels ne deviennent pas des domaines", () => {
+  expect(suggestionsFromLabels([
+    "API",
+    "BackOffice",
+    "Feeds",
+    "Marketplace",
+    "Trend Radar",
+    "Match AI",
+    "Analytics",
+    "match ai",
+  ], ["Match AI", "Analytics"])).toEqual([
     { name: "Match AI", kind: "métier" },
+    { name: "Analytics", kind: "technique" },
   ]);
+});
+
+test("les skills projet techniques ou exploratoires ne deviennent pas des domaines", () => {
   expect(suggestionsFromSkills([
     { name: "_matching-system", project_id: projectId, provenance: "claude-project" },
     { name: "_hapi-review", project_id: projectId, provenance: "claude-project" },
     { name: "create-mr", project_id: projectId, provenance: "claude-project" },
     { name: "release-notes", project_id: projectId, provenance: "claude-project" },
+    { name: "Affilae-mono AI guidelines", project_id: projectId, provenance: "agents-project" },
+    { name: "feed-diagnose", project_id: projectId, provenance: "agents-project" },
+    { name: "team", project_id: projectId, provenance: "agents-project" },
     { name: "global-skill", project_id: null, provenance: "claude-global" },
     { name: "trend-radar-system", project_id: otherProjectId, provenance: "agents-project" },
-  ], projectId)).toEqual([
-    { name: "matching-system", kind: "métier" },
-  ]);
+  ], projectId)).toEqual([]);
 });
 
 test("les conversations sans domaine restent listables", () => {
