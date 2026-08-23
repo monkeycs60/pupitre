@@ -684,8 +684,7 @@ body.is-resizing-documents-list {
 }
 
 .conversation-title-block {
-  flex: 0 1 calc(50% - 132px);
-  max-width: calc(50% - 132px);
+  flex: 1 1 auto;
 }
 
 .conversation-title-row {
@@ -791,15 +790,14 @@ body.is-resizing-documents-list {
 }
 
 .surface-switch {
-  position: absolute;
-  top: 50%;
-  left: 50%;
+  position: relative;
   display: flex;
+  flex: none;
+  margin-left: auto;
   padding: 3px;
   background: #191b20;
   border: 1px solid var(--border-subtle);
   border-radius: 9px;
-  transform: translate(-50%, -50%);
 }
 
 .surface-switch-thumb {
