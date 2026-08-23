@@ -11,6 +11,7 @@ import { Titlebar } from './Titlebar'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
 import type { Attachment, Conversation, DocumentArtifact, Project } from './types'
+import type { ChangelogReview } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import { ContextGauge } from './ContextGauge'
@@ -56,6 +57,7 @@ import { BranchIcon } from './BranchIcon'
 import { SurfaceSwitch } from './SurfaceSwitch'
 import { ConversationDomains } from './ConversationDomains'
 import { isAppRestartShortcut, restartApp } from './appRestart'
+import { ChangelogReviewDialog } from './ChangelogReviewDialog'
 import {
   locationForSelection,
   readLastActiveLocation,
@@ -90,6 +92,14 @@ function lastDigest(events: AppEvent[]): Extract<AppEvent, { type: 'conversation
     }
   }
   return null
+}
+
+function hasUncataloguedWork(events: AppEvent[]): boolean {
+  let lastSummary = -1
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (events[index]?.type === 'session-summary-ref') { lastSummary = index; break }
+  }
+  return events.slice(lastSummary + 1).some((event) => event.type === 'text-final')
 }
 
 function App() {
@@ -148,6 +158,7 @@ function App() {
   /** Configuration du projet ouverte depuis le diagnostic de contexte. */
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false)
   const [restartStatus, setRestartStatus] = useState<'idle' | 'running' | 'error'>('idle')
+  const [changelogReview, setChangelogReview] = useState<ChangelogReview | null>(null)
   const { events, connection, retryAt } = useConversationEvents(
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
@@ -176,6 +187,7 @@ function App() {
   const digestSummary = digest?.summary
   const digestDomains = digest?.domains
   const digestProposedDomainCount = digest?.proposedDomainCount
+  const uncataloguedWork = hasUncataloguedWork(events)
   const selectedConversationId = selectedConversation?.id
   const selectedConversationDigestTurn = selectedConversation?.digest_turn
   const selectedConversationLastReadTurn = selectedConversation?.last_read_turn ?? 0
@@ -586,7 +598,10 @@ function App() {
     }
     setWorkspaceView('conversations')
     if (action === 'test') await createTestInventory(selectedConversation.id)
-    else await createSessionSummary(selectedConversation.id)
+    else {
+      const result = await createSessionSummary(selectedConversation.id)
+      if (result.review) setChangelogReview(result.review)
+    }
   }
 
   async function startWorktreeReview() {
@@ -877,6 +892,9 @@ function App() {
                       <button type="button" role="menuitem" onClick={() => void startWorktreeReview()}>
                         Relire le diff
                       </button>
+                      <button type="button" role="menuitem" onClick={() => void handlePaletteAction('summary')}>
+                        {uncataloguedWork ? 'Changements prêts à cataloguer' : 'Résumé session'}
+                      </button>
                     </div>
                   </details>
                 </div>
@@ -953,6 +971,9 @@ function App() {
           onClose={() => setProjectSettingsOpen(false)}
           onUpdated={handleProjectUpdated}
         />
+      ) : null}
+      {changelogReview ? (
+        <ChangelogReviewDialog review={changelogReview} onClose={() => setChangelogReview(null)} />
       ) : null}
       {restartStatus !== 'idle' ? (
         <div className={`app-restart-status ${restartStatus === 'error' ? 'is-error' : ''}`} role={restartStatus === 'error' ? 'alert' : 'status'}>

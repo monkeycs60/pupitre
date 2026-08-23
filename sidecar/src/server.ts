@@ -88,6 +88,11 @@ import {
 import type { IntegrationSecretStore } from "./stores/integration-secrets";
 import type { SentryStore } from "./stores/sentry";
 import { redactSentryValue } from "./sentry-redaction";
+import {
+  ChangelogConflictError,
+  SkillRootAmbiguousError,
+  type ChangelogService,
+} from "./changelog";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -133,6 +138,7 @@ export interface ServerDeps {
   integrations: IntegrationStore;
   tickets: TicketStore;
   domains?: DomainStore;
+  changelog?: ChangelogService;
   integrationSecrets?: IntegrationSecretStore;
   sentry?: SentryStore;
   integrationsRefresher: IntegrationsRefresher;
@@ -337,6 +343,11 @@ function memoryHttpError(error: unknown, fallback = "fichier mémoire inconnu"):
 function requireDomains(deps: ServerDeps): DomainStore {
   if (!deps.domains) throw new HttpError(501, "domaines non câblés");
   return deps.domains;
+}
+
+function requireChangelog(deps: ServerDeps): ChangelogService {
+  if (!deps.changelog) throw new HttpError(501, "changelog non câblé");
+  return deps.changelog;
 }
 
 function domainHttpError(error: unknown): never {
@@ -2579,11 +2590,19 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(409, "un tour est déjà en cours");
           }
           try {
-            return json(
-              await deps.debriefs.generateSessionSummary(conversationSessionSummaryId),
-              201,
-            );
+            const summary = await deps.debriefs.generateSessionSummary(conversationSessionSummaryId);
+            const review = deps.changelog
+              ? await deps.changelog.propose(conversationSessionSummaryId, summary)
+              : null;
+            return json({ ...summary, summary, review }, 201);
           } catch (error) {
+            if (error instanceof NoNewSessionSummaryEventsError && deps.changelog) {
+              const latest = deps.debriefs.latestSessionSummary(conversationSessionSummaryId);
+              if (latest) {
+                const review = await deps.changelog.propose(conversationSessionSummaryId, latest);
+                return json({ ...latest, summary: latest, review }, 200);
+              }
+            }
             if (
               error instanceof DebriefAlreadyRunningError
               || error instanceof NoNewSessionSummaryEventsError
@@ -2595,6 +2614,26 @@ export function createServer(deps: ServerDeps) {
               error instanceof Error ? error.message : "échec du résumé de session",
             );
           }
+        }
+
+        const changelogReviewId = routeId(pathname, /^\/api\/changelog-reviews\/([^/]+)\/publish$/);
+        if (request.method === "POST" && changelogReviewId !== null) {
+          const body = await readObject(request);
+          if (!Array.isArray(body.changes)) throw new HttpError(400, "champ changes invalide");
+          try {
+            return json(await requireChangelog(deps).publish(changelogReviewId, body.changes as never[]));
+          } catch (error) {
+            if (error instanceof ChangelogConflictError || error instanceof SkillRootAmbiguousError) {
+              throw new HttpError(409, error.message);
+            }
+            throw error;
+          }
+        }
+
+        const projectChangelogId = routeId(pathname, /^\/api\/projects\/([^/]+)\/changelog$/);
+        if (request.method === "GET" && projectChangelogId !== null) {
+          const domainId = url.searchParams.get("domainId") ?? undefined;
+          return json(requireChangelog(deps).list(projectChangelogId, domainId));
         }
 
         const conversationTestInventoryId = routeId(

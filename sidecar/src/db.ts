@@ -183,6 +183,40 @@ export function openDb(dir: string = dataDir()): Database {
       PRIMARY KEY (conversation_id, domain_id)
     );
     CREATE INDEX IF NOT EXISTS idx_conversation_domains_domain ON conversation_domains(domain_id);
+    CREATE TABLE IF NOT EXISTS changelog_reviews (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      summary_id TEXT NOT NULL UNIQUE,
+      event_id_from INTEGER NOT NULL,
+      event_id_to INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('proposé', 'publié')),
+      changes_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      published_at TEXT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_changelog_reviews_conversation
+      ON changelog_reviews(conversation_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS domain_changes (
+      id TEXT PRIMARY KEY,
+      group_id TEXT NOT NULL,
+      review_id TEXT NOT NULL REFERENCES changelog_reviews(id) ON DELETE CASCADE,
+      domain_id TEXT NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+      nature TEXT NOT NULL CHECK (nature IN ('ajout', 'modification', 'correction', 'retrait')),
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      impact TEXT NOT NULL,
+      evidence_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      UNIQUE (group_id, domain_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_domain_changes_domain
+      ON domain_changes(domain_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS domain_publications (
+      domain_id TEXT PRIMARY KEY REFERENCES domains(id) ON DELETE CASCADE,
+      skill_root TEXT NOT NULL,
+      skill_sha256 TEXT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS sentry_issues (
       id TEXT PRIMARY KEY,
       integration_id TEXT NOT NULL REFERENCES project_integrations(id) ON DELETE CASCADE,

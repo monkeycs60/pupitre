@@ -16,7 +16,7 @@ import { runPupitreMcp } from "./pupitre-mcp";
 import { ReviewStore } from "./stores/reviews";
 import { ReviewRunner } from "./reviews";
 import { DebriefStore } from "./stores/debriefs";
-import { DebriefRunner } from "./debriefs";
+import { DebriefRunner, generateWithAdapters } from "./debriefs";
 import { GitProjectService } from "./git";
 import { TestingStore } from "./stores/testing";
 import { TesterRunner } from "./testing";
@@ -38,6 +38,8 @@ import { IntegrationStore } from "./stores/integrations";
 import { INTEGRATION_TOKENS_KEY } from "./stores/settings";
 import { TicketStore } from "./stores/tickets";
 import { DomainStore } from "./stores/domains";
+import { ChangelogStore } from "./stores/changelog";
+import { ChangelogService } from "./changelog";
 import { IntegrationSecretStore } from "./stores/integration-secrets";
 import { SentryStore } from "./stores/sentry";
 import { SentryClient } from "./integrations/sentry";
@@ -87,6 +89,10 @@ if (process.argv.includes("--pupitre-mcp")) {
   const integrationSecrets = new IntegrationSecretStore(db);
   const sentry = new SentryStore(db);
   const git = new GitProjectService(db, projects);
+  const changelog = new ChangelogService(
+    new ChangelogStore(db), conversations, projects, domains, git,
+    (input) => generateWithAdapters(input, quotas),
+  );
   const gamification = new GamificationService(db, projects, git);
   const integrationsRefresher = new IntegrationsRefresher(
     { integrations, tickets, conversations, projects, sentry, domains },
@@ -236,6 +242,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     integrations,
     tickets,
     domains,
+    changelog,
     integrationSecrets,
     sentry,
     integrationsRefresher,

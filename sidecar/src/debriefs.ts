@@ -110,6 +110,20 @@ export class DebriefRunner {
     }
   }
 
+  latestSessionSummary(conversationId: string): SessionSummary | null {
+    const event = [...this.conversations.listEvents(conversationId)].reverse()
+      .find((item) => item.type === "session-summary-ref");
+    if (!event || event.type !== "session-summary-ref") return null;
+    return {
+      id: event.summaryId,
+      conversation_id: conversationId,
+      event_id_from: event.eventIdFrom,
+      event_id_to: event.eventIdTo,
+      content_md: event.contentMd,
+      created_at: event.createdAt,
+    };
+  }
+
   private async generateUnlocked(conversationId: string): Promise<Debrief> {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) throw new Error("conversation inconnue");
@@ -186,10 +200,10 @@ export class DebriefRunner {
 
     const generation = {
       cwd: conversationCwd(project, conversation),
-      provider: conversation.provider,
-      model: conversation.model,
-      effort: conversation.effort ?? undefined,
-      speed: conversation.speed ?? undefined,
+      provider: "codex" as const,
+      model: "gpt-5.6-luna",
+      effort: "high",
+      speed: undefined,
     };
     const partials: string[] = [];
     for (const transcript of transcriptChunks) {
@@ -552,7 +566,7 @@ function consolidationPrompt(content: string, label: string): string {
   ].join("\n");
 }
 
-async function generateWithAdapters(
+export async function generateWithAdapters(
   input: DebriefGenerationInput,
   quotas: QuotaTracker,
 ): Promise<string> {

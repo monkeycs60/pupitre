@@ -482,6 +482,54 @@ export interface SessionSummary {
   created_at: string
 }
 
+export type ChangeNature = 'ajout' | 'modification' | 'correction' | 'retrait'
+
+export interface ChangeProposal {
+  id: string
+  groupId: string
+  domainId: string
+  domainName: string
+  nature: ChangeNature
+  title: string
+  description: string
+  impact: string
+  evidence: string[]
+  ambiguous: boolean
+  selected: boolean
+}
+
+export interface ChangelogReview {
+  id: string
+  conversationId: string
+  summaryId: string
+  eventIdFrom: number
+  eventIdTo: number
+  status: 'proposé' | 'publié'
+  changes: ChangeProposal[]
+  createdAt: string
+  publishedAt: string | null
+}
+
+export interface SessionSummaryResult {
+  summary: SessionSummary
+  review: ChangelogReview | null
+}
+
+export interface DomainChangeRow {
+  id: string
+  group_id: string
+  review_id: string
+  domain_id: string
+  domain_name: string
+  conversation_id: string
+  nature: ChangeNature
+  title: string
+  description: string
+  impact: string
+  evidence: string[]
+  created_at: string
+}
+
 // Miroir de sidecar/src/quotas.ts : forme normalisée des providers.
 export interface QuotaWindow {
   label: string

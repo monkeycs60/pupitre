@@ -96,6 +96,15 @@
   margin-top: var(--space-7);
 }
 
+.dashboard-changelog .dashboard-section-head p { margin: 4px 0 0; color: var(--text-muted); font-size: 12px; }
+.dashboard-changelog select { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); padding: 7px 10px; }
+.dashboard-changelog-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.dashboard-changelog-list li { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-subtle); }
+.dashboard-changelog-list li > div { display: flex; gap: 6px; align-items: center; }
+.dashboard-changelog-list time { margin-left: auto; color: var(--text-faint); font-size: 11px; }
+.dashboard-changelog-list p, .dashboard-changelog-list small { margin: 0; }
+.dashboard-changelog-list p { color: var(--text-muted); }
+
 .dashboard-section-head {
   display: flex;
   align-items: center;

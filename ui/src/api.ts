@@ -29,7 +29,10 @@ import type {
   ReviewStatusSnapshot,
   Routine,
   RoutineRun,
-  SessionSummary,
+  SessionSummaryResult,
+  ChangeProposal,
+  ChangelogReview,
+  DomainChangeRow,
   AppNotification,
   SkillDetail,
   SkillSummary,
@@ -864,11 +867,23 @@ export function createDebrief(conversationId: string): Promise<Debrief> {
   )
 }
 
-export function createSessionSummary(conversationId: string): Promise<SessionSummary> {
+export function createSessionSummary(conversationId: string): Promise<SessionSummaryResult> {
   return fetchJson(
     `/api/conversations/${routeId(conversationId)}/session-summary`,
     jsonPost({}),
   )
+}
+
+export function publishChangelogReview(
+  reviewId: string,
+  changes: ChangeProposal[],
+): Promise<{ review: ChangelogReview; files: string[] }> {
+  return fetchJson(`/api/changelog-reviews/${routeId(reviewId)}/publish`, jsonPost({ changes }))
+}
+
+export function listProjectChangelog(projectId: string, domainId?: string): Promise<DomainChangeRow[]> {
+  const query = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
+  return fetchJson(`/api/projects/${routeId(projectId)}/changelog${query}`)
 }
 
 export interface HandoffDocument {

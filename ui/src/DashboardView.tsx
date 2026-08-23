@@ -1,8 +1,9 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { BranchIcon } from './BranchIcon'
-import { createTicketNote, listTicketNotes, refreshProjectDashboard } from './api'
+import { createTicketNote, listProjectChangelog, listTicketNotes, refreshProjectDashboard } from './api'
 import type {
   DashboardIntegration,
+  DomainChangeRow,
   Project,
   ReviewRequest,
   TicketConversationSummary,
@@ -102,12 +103,24 @@ export function DashboardView({
   const [openNotesTicketId, setOpenNotesTicketId] = useState<string | null>(null)
   const [notesByTicket, setNotesByTicket] = useState<Record<string, TicketNote[]>>({})
   const [draftNote, setDraftNote] = useState('')
+  const [changelog, setChangelog] = useState<DomainChangeRow[]>([])
+  const [changelogDomain, setChangelogDomain] = useState('')
   const hasGitlab = data?.integrations.some((integration) => integration.type === 'gitlab') ?? false
   const degradedIntegrations = data?.integrations.filter((integration) => integration.status !== 'ok') ?? []
   const tableClassName = useMemo(
     () => `dashboard-table${hasGitlab ? ' dashboard-table--with-gitlab' : ''}`,
     [hasGitlab],
   )
+  const changelogDomains = useMemo(() => [...new Map(changelog.map((item) => [item.domain_id, item.domain_name])).entries()], [changelog])
+  const visibleChangelog = changelogDomain ? changelog.filter((item) => item.domain_id === changelogDomain) : changelog
+
+  useEffect(() => {
+    let cancelled = false
+    void listProjectChangelog(project.id).then((items) => {
+      if (!cancelled && Array.isArray(items)) setChangelog(items)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [project.id])
 
   async function handleRefresh() {
     try {
@@ -368,6 +381,14 @@ export function DashboardView({
         </section>
 
         <SentryInbox projectId={project.id} onConfigure={onOpenSettings} onConversationSelect={onConversationSelect} />
+
+        <section className="dashboard-section dashboard-changelog">
+          <div className="dashboard-section-head">
+            <div><h2 className="dashboard-section-title">Changelog</h2><p>Modifications réalisées et validées par domaine.</p></div>
+            {changelogDomains.length > 1 ? <select aria-label="Filtrer le changelog par domaine" value={changelogDomain} onChange={(event) => setChangelogDomain(event.target.value)}><option value="">Tous les domaines</option>{changelogDomains.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : null}
+          </div>
+          {visibleChangelog.length === 0 ? <div className="dashboard-empty"><strong>Aucun changement validé</strong><p>Utilise « Résumé session » depuis une conversation reliée à un domaine.</p></div> : <ol className="dashboard-changelog-list">{visibleChangelog.slice(0, 40).map((item) => <li key={item.id}><div><span className="dashboard-pill">{item.domain_name}</span><span className="dashboard-pill">{item.nature}</span><time>{new Date(item.created_at).toLocaleDateString('fr-FR')}</time></div><strong>{item.title}</strong><p>{item.description}</p><small>{item.impact}</small></li>)}</ol>}
+        </section>
 
         {data && data.environments.length > 0 ? (
           <section className="dashboard-section">
