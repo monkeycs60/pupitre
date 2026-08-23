@@ -86,6 +86,8 @@ test("borne par défaut les MCP utilisateur sans désactiver les plugins", async
     "mcp_servers.sentry.startup_timeout_sec=5",
     "-c",
     "mcp_servers.node_repl.startup_timeout_sec=5",
+    "-c",
+    'plugins."clickup@openai-curated".enabled=false',
   ]);
 });
 
@@ -158,6 +160,8 @@ test("le timeout de démarrage MCP est configurable", async () => {
     "mcp_servers.sentry.startup_timeout_sec=9",
     "-c",
     "mcp_servers.node_repl.startup_timeout_sec=9",
+    "-c",
+    'plugins."clickup@openai-curated".enabled=false',
   ]);
 });
 
@@ -178,6 +182,9 @@ test("un thread orchestrateur conserve les bornes MCP en ajoutant conductor", as
         PUPITRE_CONVERSATION_ID: "conversation-parent",
       },
     },
+  });
+  expect(start.params.config.plugins).toEqual({
+    "clickup@openai-curated": { enabled: false },
   });
 });
 

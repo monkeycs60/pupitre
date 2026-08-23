@@ -4,6 +4,7 @@ import type { TurnOptions, EmitFn } from "./types";
 import { codexExecConfigArgs } from "../conductor";
 import { codexExecPupitreConfigArgs } from "../pupitre";
 import { aiRoots, DEFAULT_FILESYSTEM_SCOPE } from "../access";
+import { clickupPluginDisableArgs } from "./codex-app-server";
 
 export function runCodexTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   const bin = process.env.PUPITRE_CODEX_BIN ?? "codex";
@@ -31,6 +32,10 @@ export function runCodexTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
       : []),
     ...(opts.conductor ? codexExecConfigArgs(opts.conductor) : []),
     ...(opts.pupitre ? codexExecPupitreConfigArgs(opts.pupitre) : []),
+    ...(process.env.PUPITRE_CODEX_MCP_POLICY === "full"
+      || process.env.PUPITRE_CODEX_USER_MCPS === "1"
+      ? []
+      : clickupPluginDisableArgs()),
     ...(opts.cliSessionId || scope === "full-system" || opts.sandboxMode
       ? []
       : ["--add-dir", ...aiRoots()]),
