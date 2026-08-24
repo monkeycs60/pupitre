@@ -63,7 +63,7 @@ export function fleetSnapshot(deps: {
       provider: conversation.provider,
       model: conversation.model,
       startedAt: active.startedAt,
-      lastEvent: eventLabel(deps.conversations.listEvents(conversation.id).at(-1)),
+      lastEvent: eventLabel(deps.conversations.latestEvent(conversation.id)),
     });
   }
   for (const subtask of deps.subtasks.activeSubtasks()) {
@@ -81,7 +81,7 @@ export function fleetSnapshot(deps: {
       provider: subtask.provider,
       model: subtask.model,
       startedAt: subtask.created_at,
-      lastEvent: eventLabel(deps.conversations.listEvents(subtask.id).at(-1)),
+      lastEvent: eventLabel(deps.conversations.latestEvent(subtask.id)),
     });
   }
   for (const project of deps.projects.list()) {

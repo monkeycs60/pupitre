@@ -512,4 +512,19 @@ export class ConversationStore {
     }
     return events;
   }
+
+  /** Le dernier événement seul : le snapshot fleet le lit chaque seconde,
+   *  charger tout le replay pour un `.at(-1)` coûtait des Mo de JSON.parse. */
+  latestEvent(conversationId: string): StoredEvent | undefined {
+    const row = this.db.query(
+      "SELECT id, payload FROM events WHERE conversation_id = ? ORDER BY id DESC LIMIT 1"
+    ).get(conversationId) as { id: number; payload: string } | null;
+    if (!row) return undefined;
+    try {
+      return { ...JSON.parse(row.payload), id: Number(row.id) };
+    } catch (error) {
+      console.error("Événement de conversation corrompu, ligne ignorée", error);
+      return undefined;
+    }
+  }
 }
