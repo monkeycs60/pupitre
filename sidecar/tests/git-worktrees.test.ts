@@ -80,6 +80,31 @@ test("choisit la branche par défaut du remote quand origin/develop n'existe pas
   expect(git.preferredStartPoint(projectId, "origin/develop")).toBe("origin/main");
 });
 
+test("crée le worktree Scout depuis le dépôt applicatif demandé", () => {
+  const hapigator = join(repo, "apps", "hapigator");
+  mkdirSync(hapigator, { recursive: true });
+  const inHapigator = (...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: hapigator });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+    return result.stdout.toString().trim();
+  };
+  inHapigator("init", "-q", "-b", "develop");
+  inHapigator("config", "user.email", "git@example.test");
+  inHapigator("config", "user.name", "Git Fixture");
+  writeFileSync(join(hapigator, "package.json"), "{}\n");
+  inHapigator("add", "package.json");
+  inHapigator("commit", "-qm", "hapigator");
+
+  const created = git.createDetachedWorktree(projectId, {
+    name: "sentry-HAPIGATOR-4HA",
+    startPoint: "develop",
+    repositoryPath: hapigator,
+  });
+
+  expect(Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: created.path }).stdout.toString().trim())
+    .toBe(inHapigator("rev-parse", "develop"));
+});
+
 test("crée une branche de correction explicitement depuis develop", () => {
   run("branch", "develop");
   writeFileSync(join(repo, "README.md"), "branche courante\n");

@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { dataDir } from "./db";
 import type { ProjectStore } from "./stores/projects";
 
@@ -146,8 +146,8 @@ export class GitProjectService {
    * Pupitre. Hors du dépôt : un worktree imbriqué apparaîtrait comme des
    * fichiers non suivis dans le dépôt principal, et polluerait chaque diff.
    */
-  createWorktree(projectId: string, input: { branch: string; startPoint?: string }): GitWorktree {
-    const cwd = this.projectPath(projectId);
+  createWorktree(projectId: string, input: { branch: string; startPoint?: string; repositoryPath?: string }): GitWorktree {
+    const cwd = this.repositoryPath(projectId, input.repositoryPath);
     const branch = input.branch.trim();
     if (!branch || !SAFE_BRANCH.test(branch) || branch.includes("..")) {
       throw new GitProjectError(`nom de branche invalide : ${input.branch}`);
@@ -175,13 +175,19 @@ export class GitProjectService {
     return created;
   }
 
-  createDetachedWorktree(projectId: string, input: { name: string; startPoint: string }): GitWorktree {
-    const cwd = this.projectPath(projectId);
+  createDetachedWorktree(projectId: string, input: { name: string; startPoint: string; repositoryPath?: string }): GitWorktree {
+    const cwd = this.repositoryPath(projectId, input.repositoryPath);
     const name = input.name.trim();
     if (!name || !SAFE_BRANCH.test(name) || name.includes("..")) {
       throw new GitProjectError(`nom de worktree invalide : ${input.name}`);
     }
-    const directory = join(this.worktreeRoot, projectId, `detached-${name.replaceAll("/", "-")}`);
+    const repositoryDirectory = input.repositoryPath ? basename(cwd) : null;
+    const directory = join(
+      this.worktreeRoot,
+      projectId,
+      ...(repositoryDirectory ? [repositoryDirectory] : []),
+      `detached-${name.replaceAll("/", "-")}`,
+    );
     mkdirSync(join(this.worktreeRoot, projectId), { recursive: true });
     const existing = this.worktrees(cwd).find((item) => item.path === directory);
     if (existing) return existing;
@@ -192,8 +198,8 @@ export class GitProjectService {
     return created;
   }
 
-  preferredStartPoint(projectId: string, preferred: string): string {
-    const cwd = this.projectPath(projectId);
+  preferredStartPoint(projectId: string, preferred: string, repositoryPath?: string): string {
+    const cwd = this.repositoryPath(projectId, repositoryPath);
     if (this.tryResolve(cwd, preferred)) return preferred;
     const remoteHead = this.optionalGit(cwd, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])?.trim();
     return remoteHead && this.tryResolve(cwd, remoteHead) ? remoteHead : "HEAD";
@@ -529,6 +535,17 @@ export class GitProjectService {
     const project = this.projects.get(projectId);
     if (!project) throw new GitProjectError("projet inconnu");
     return project.path;
+  }
+
+  private repositoryPath(projectId: string, requestedPath?: string): string {
+    const projectPath = resolve(this.projectPath(projectId));
+    if (!requestedPath) return projectPath;
+    const candidate = resolve(requestedPath);
+    const rel = relative(projectPath, candidate);
+    if (rel.startsWith("..") || resolve(this.optionalGit(candidate, ["rev-parse", "--show-toplevel"])?.trim() ?? "") !== candidate) {
+      throw new GitProjectError("dépôt applicatif invalide");
+    }
+    return candidate;
   }
 
   /**

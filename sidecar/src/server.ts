@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import { basename, extname } from "node:path";
+import { basename, extname, join } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { MediaAttachment, Provider, StoredEvent } from "./events";
@@ -916,6 +916,12 @@ function routeId(pathname: string, pattern: RegExp): string | null {
   }
 }
 
+function sentryRepositoryPath(projectPath: string, sentryProject: unknown): string {
+  if (typeof sentryProject !== "string" || !/^[A-Za-z0-9._-]+$/.test(sentryProject)) return projectPath;
+  const candidate = join(projectPath, "apps", sentryProject);
+  return existsSync(join(candidate, ".git")) ? candidate : projectPath;
+}
+
 function workflowInput(
   body: Record<string, unknown>,
   projectId: string,
@@ -1689,13 +1695,15 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "POST" && sentryScoutIssueId !== null) {
           const issue = deps.sentry?.get(sentryScoutIssueId);
           if (!issue || !deps.sentry) throw new HttpError(404, "issue Sentry inconnue");
+          const project = deps.projects.get(issue.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const repositoryPath = sentryRepositoryPath(project.path, issue.payload.project);
+          const startPoint = deps.git.preferredStartPoint(project.id, "origin/develop", repositoryPath);
           const existing = deps.sentry.triageForIssue(issue.id);
           if (existing?.conversation_id) {
             const conversation = deps.conversations.get(existing.conversation_id);
-            if (conversation) return json(conversation);
+            if (conversation?.created_on_branch === startPoint) return json(conversation);
           }
-          const project = deps.projects.get(issue.project_id);
-          if (!project) throw new HttpError(404, "projet inconnu");
           const preset = (project.default_scout_preset_id ? deps.presets.get(project.default_scout_preset_id) : null)
             ?? (project.default_preset_id ? deps.presets.get(project.default_preset_id) : null)
             ?? deps.presets.list()[0];
@@ -1705,8 +1713,7 @@ export function createServer(deps: ServerDeps) {
           const payload = redactSentryValue({ ...issue.payload, ...remoteContext });
           const message = `Scout Sentry ${String(issue.payload.shortId ?? issue.sentry_issue_id)} — ${String(issue.payload.title ?? "Erreur")}`;
           const scoutName = `sentry-${String(issue.payload.shortId ?? issue.sentry_issue_id)}`.replace(/[^a-zA-Z0-9._-]/g, "-");
-          const startPoint = deps.git.preferredStartPoint(project.id, "origin/develop");
-          const worktreePath = deps.git.createDetachedWorktree(project.id, { name: scoutName, startPoint }).path;
+          const worktreePath = deps.git.createDetachedWorktree(project.id, { name: scoutName, startPoint, repositoryPath }).path;
           const conversation = deps.conversations.create({
             projectId: project.id,
             provider: preset.provider,
@@ -1783,8 +1790,9 @@ export function createServer(deps: ServerDeps) {
             ?? deps.presets.list()[0];
           if (!preset) throw new HttpError(409, "aucun preset de correction disponible");
           const branch = `issue/${task.key}`;
-          const startPoint = deps.git.preferredStartPoint(project.id, "origin/develop");
-          const worktreePath = deps.git.createWorktree(project.id, { branch, startPoint }).path;
+          const repositoryPath = sentryRepositoryPath(project.path, issue.payload.project);
+          const startPoint = deps.git.preferredStartPoint(project.id, "origin/develop", repositoryPath);
+          const worktreePath = deps.git.createWorktree(project.id, { branch, startPoint, repositoryPath }).path;
           const message = `Corriger ${task.key} — ${title}`;
           const conversation = deps.conversations.create({
             projectId: project.id,
@@ -2379,9 +2387,8 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "POST" && pathname === "/api/conversations") {
           const body = await readObject(request);
           const projectId = requiredString(body, "projectId");
-          if (!deps.projects.get(projectId)) {
-            throw new HttpError(404, "projet inconnu");
-          }
+          const project = deps.projects.get(projectId);
+          if (!project) throw new HttpError(404, "projet inconnu");
           const provider = requiredString(body, "provider");
           if (!isProvider(provider)) {
             throw new HttpError(400, "provider invalide");
@@ -2426,6 +2433,7 @@ export function createServer(deps: ServerDeps) {
             ticket = key ? deps.tickets.findByKey(projectId, key) : null;
           }
           let worktreePath: string | null = null;
+          let sentryStartPoint: string | null = null;
           if (effectiveBranch !== null) {
             try {
               worktreePath = deps.git.createWorktree(projectId, { branch: effectiveBranch }).path;
@@ -2437,13 +2445,20 @@ export function createServer(deps: ServerDeps) {
             }
           }
           if (worktreePath === null && originType === "sentry" && originKey) {
+            const sentryIssue = deps.sentry?.listProject(projectId)
+              .find((item) => String(item.payload.shortId ?? item.sentry_issue_id) === originKey);
+            const repositoryPath = sentryRepositoryPath(project.path, sentryIssue?.payload.project);
+            sentryStartPoint = deps.git.preferredStartPoint(projectId, "origin/develop", repositoryPath);
             worktreePath = deps.conversations.listByProject(projectId)
-              .find((item) => item.origin_type === "sentry" && item.origin_key === originKey)?.worktree_path ?? null;
+              .find((item) => item.origin_type === "sentry"
+                && item.origin_key === originKey
+                && item.created_on_branch === sentryStartPoint)?.worktree_path ?? null;
             if (worktreePath === null) {
               const scoutName = `sentry-${originKey}`.replace(/[^a-zA-Z0-9._-]/g, "-");
               worktreePath = deps.git.createDetachedWorktree(projectId, {
                 name: scoutName,
-                startPoint: deps.git.preferredStartPoint(projectId, "origin/develop"),
+                startPoint: sentryStartPoint,
+                repositoryPath,
               }).path;
             }
           }
@@ -2460,9 +2475,7 @@ export function createServer(deps: ServerDeps) {
             orchestrator,
             subagentPresetId,
             subagentEffort,
-            createdOnBranch: originType === "sentry"
-              ? deps.git.preferredStartPoint(projectId, "origin/develop")
-              : snapshot.currentBranch,
+            createdOnBranch: sentryStartPoint ?? snapshot.currentBranch,
             ticketId: ticket?.id ?? null,
             originType: originType as "sentry" | null,
             originKey,
