@@ -1705,7 +1705,8 @@ export function createServer(deps: ServerDeps) {
           const payload = redactSentryValue({ ...issue.payload, ...remoteContext });
           const message = `Scout Sentry ${String(issue.payload.shortId ?? issue.sentry_issue_id)} — ${String(issue.payload.title ?? "Erreur")}`;
           const scoutName = `sentry-${String(issue.payload.shortId ?? issue.sentry_issue_id)}`.replace(/[^a-zA-Z0-9._-]/g, "-");
-          const worktreePath = deps.git.createDetachedWorktree(project.id, { name: scoutName, startPoint: "origin/develop" }).path;
+          const startPoint = deps.git.preferredStartPoint(project.id, "origin/develop");
+          const worktreePath = deps.git.createDetachedWorktree(project.id, { name: scoutName, startPoint }).path;
           const conversation = deps.conversations.create({
             projectId: project.id,
             provider: preset.provider,
@@ -1718,7 +1719,7 @@ export function createServer(deps: ServerDeps) {
             subagentPresetId: preset.subagent_preset_id,
             subagentEffort: preset.subagent_effort,
             worktreePath,
-            createdOnBranch: "origin/develop",
+            createdOnBranch: startPoint,
             originType: "sentry",
             originKey: String(issue.payload.shortId ?? issue.sentry_issue_id),
             firstMessage: message,
@@ -1782,7 +1783,8 @@ export function createServer(deps: ServerDeps) {
             ?? deps.presets.list()[0];
           if (!preset) throw new HttpError(409, "aucun preset de correction disponible");
           const branch = `issue/${task.key}`;
-          const worktreePath = deps.git.createWorktree(project.id, { branch, startPoint: "origin/develop" }).path;
+          const startPoint = deps.git.preferredStartPoint(project.id, "origin/develop");
+          const worktreePath = deps.git.createWorktree(project.id, { branch, startPoint }).path;
           const message = `Corriger ${task.key} — ${title}`;
           const conversation = deps.conversations.create({
             projectId: project.id,
@@ -1796,7 +1798,7 @@ export function createServer(deps: ServerDeps) {
             subagentPresetId: preset.subagent_preset_id,
             subagentEffort: preset.subagent_effort,
             worktreePath,
-            createdOnBranch: "origin/develop",
+            createdOnBranch: startPoint,
             ticketId: ticket.id,
             originType: "sentry",
             originKey: String(issue.payload.shortId ?? issue.sentry_issue_id),
@@ -2439,7 +2441,10 @@ export function createServer(deps: ServerDeps) {
               .find((item) => item.origin_type === "sentry" && item.origin_key === originKey)?.worktree_path ?? null;
             if (worktreePath === null) {
               const scoutName = `sentry-${originKey}`.replace(/[^a-zA-Z0-9._-]/g, "-");
-              worktreePath = deps.git.createDetachedWorktree(projectId, { name: scoutName, startPoint: "origin/develop" }).path;
+              worktreePath = deps.git.createDetachedWorktree(projectId, {
+                name: scoutName,
+                startPoint: deps.git.preferredStartPoint(projectId, "origin/develop"),
+              }).path;
             }
           }
           const snapshot = deps.git.snapshot(projectId);
@@ -2455,7 +2460,9 @@ export function createServer(deps: ServerDeps) {
             orchestrator,
             subagentPresetId,
             subagentEffort,
-            createdOnBranch: originType === "sentry" ? "origin/develop" : snapshot.currentBranch,
+            createdOnBranch: originType === "sentry"
+              ? deps.git.preferredStartPoint(projectId, "origin/develop")
+              : snapshot.currentBranch,
             ticketId: ticket?.id ?? null,
             originType: originType as "sentry" | null,
             originKey,

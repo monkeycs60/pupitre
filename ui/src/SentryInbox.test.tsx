@@ -88,3 +88,19 @@ test('affiche une erreur de scan sans perdre les issues existantes', async () =>
   expect((await screen.findByRole('alert')).textContent).toContain('Scan impossible : Sentry indisponible')
   await waitFor(() => expect(screen.getByRole('button', { name: /Matching search timed out/ })).toBeTruthy())
 })
+
+test('affiche la raison quand le lancement de Scout échoue', async () => {
+  globalThis.fetch = mock(async (input, init) => (
+    init?.method === 'POST' && String(input).endsWith('/scout')
+      ? Response.json({ error: 'référence Git origin/develop introuvable' }, { status: 400 })
+      : Response.json(String(input).includes('/api/sentry/issues/') ? issue : inbox)
+  )) as typeof fetch
+  mount()
+
+  fireEvent.click(await screen.findByRole('button', { name: /Matching search timed out/ }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Lancer Scout' }))
+
+  expect((await screen.findByRole('alert')).textContent)
+    .toContain('Scout impossible : référence Git origin/develop introuvable')
+  expect((screen.getByRole('button', { name: 'Lancer Scout' }) as HTMLButtonElement).disabled).toBe(false)
+})

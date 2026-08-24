@@ -192,6 +192,13 @@ export class GitProjectService {
     return created;
   }
 
+  preferredStartPoint(projectId: string, preferred: string): string {
+    const cwd = this.projectPath(projectId);
+    if (this.tryResolve(cwd, preferred)) return preferred;
+    const remoteHead = this.optionalGit(cwd, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])?.trim();
+    return remoteHead && this.tryResolve(cwd, remoteHead) ? remoteHead : "HEAD";
+  }
+
   /**
    * Retire un worktree et son dossier. Le dépôt principal et les worktrees
    * encore portés par une conversation sont protégés : les supprimer

@@ -72,6 +72,14 @@ test("crée un worktree Scout détaché depuis develop sans créer de branche", 
     .toBe(run("rev-parse", "develop"));
 });
 
+test("choisit la branche par défaut du remote quand origin/develop n'existe pas", () => {
+  run("remote", "add", "origin", repo);
+  run("fetch", "origin");
+  run("remote", "set-head", "origin", "main");
+
+  expect(git.preferredStartPoint(projectId, "origin/develop")).toBe("origin/main");
+});
+
 test("crée une branche de correction explicitement depuis develop", () => {
   run("branch", "develop");
   writeFileSync(join(repo, "README.md"), "branche courante\n");

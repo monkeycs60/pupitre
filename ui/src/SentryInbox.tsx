@@ -26,6 +26,7 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
   const [mineOnly, setMineOnly] = useState(true)
   const [loading, setLoading] = useState(false)
   const [scouting, setScouting] = useState(false)
+  const [scoutFeedback, setScoutFeedback] = useState<string | null>(null)
   const [scanFeedback, setScanFeedback] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
   async function load(signal?: AbortSignal) {
@@ -74,6 +75,7 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
   }
 
   async function open(issue: SentryIssue) {
+    setScoutFeedback(null)
     setSelected(issue)
     try { setSelected(await getSentryIssue(issue.id)) } catch {}
   }
@@ -81,9 +83,12 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
   async function scout() {
     if (!selected) return
     setScouting(true)
+    setScoutFeedback(null)
     try {
       const conversation = await startSentryScout(selected.id)
       onConversationSelect(conversation.id)
+    } catch (error) {
+      setScoutFeedback(`Scout impossible : ${error instanceof Error ? error.message : 'erreur inconnue'}`)
     } finally {
       setScouting(false)
     }
@@ -164,6 +169,7 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
                   <pre>{JSON.stringify(selected.triage.report, null, 2)}</pre>
                 </div>
               ) : null}
+              {scoutFeedback ? <p className="sentry-scan-feedback is-error" role="alert">{scoutFeedback}</p> : null}
             </div>
             <footer className="modal-actions">
               <button type="button" className="secondary-button" onClick={() => setSelected(null)}>Fermer</button>
