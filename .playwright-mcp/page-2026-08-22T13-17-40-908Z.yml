@@ -1,0 +1,54 @@
+- main [ref=e3]:
+  - generic [ref=e5]:
+    - generic [ref=e6]: Pupitre
+    - button "Rechercher partout Ctrl K" [ref=e7] [cursor=pointer]:
+      - generic [ref=e12]: Rechercher partout
+      - generic [ref=e13]: Ctrl K
+  - navigation "Projets et navigation" [ref=e14]:
+    - generic [ref=e16]:
+      - button "Conversations" [ref=e17] [cursor=pointer]
+      - button "Fleet" [ref=e22] [cursor=pointer]
+      - button "Tableau de bord" [disabled] [ref=e26]
+      - button "Git" [disabled] [ref=e30]
+      - button "Documents" [ref=e37] [cursor=pointer]
+      - button "Claude Design" [ref=e42] [cursor=pointer]
+      - button "Progression" [ref=e46] [cursor=pointer]
+      - button "Coûts & quotas" [disabled] [ref=e51]
+      - button "Skills" [ref=e56] [cursor=pointer]
+      - button "Mémoire" [ref=e60] [cursor=pointer]
+      - button "Routines" [ref=e66] [cursor=pointer]
+      - button "Aide" [ref=e71] [cursor=pointer]
+      - button "Réglages" [ref=e76] [cursor=pointer]
+  - complementary [ref=e81]:
+    - generic [ref=e83]:
+      - generic [ref=e84]: Aucun projet
+      - generic [ref=e85]: Choisis un projet dans le rail
+    - region "Navigation du projet" [ref=e86]:
+      - tablist "Contenu de la sidebar" [ref=e87]:
+        - tab "Conversations 0" [selected] [ref=e88] [cursor=pointer]:
+          - text: Conversations
+          - generic [ref=e89]: "0"
+        - tab "Workflows 0" [ref=e90] [cursor=pointer]:
+          - text: Workflows
+          - generic [ref=e91]: "0"
+      - tabpanel "Conversations 0" [ref=e92]:
+        - button "Nouvelle conversation" [disabled] [ref=e94]:
+          - generic [ref=e95]: +
+        - textbox "Filtrer les conversations" [ref=e102]:
+          - /placeholder: Filtrer 0 conversation…
+        - tablist "Vue des conversations" [ref=e103]:
+          - tab "Actives" [selected] [ref=e104] [cursor=pointer]
+          - tab "Archives" [ref=e105] [cursor=pointer]
+          - tab "Corbeille" [ref=e106] [cursor=pointer]
+          - tab "Sentry" [ref=e107] [cursor=pointer]
+        - paragraph [ref=e109]: Sélectionnez un projet
+    - region "Usage des quotas" [ref=e112]:
+      - 'generic "Claude — jamais relevé · Usage illisible : session Claude Code absente ou expirée. Relancez `claude` puis actualisez." [ref=e113]':
+        - generic [ref=e114]: Claude
+        - generic [ref=e116]: jamais relevé
+      - generic "Codex — jamais relevé · Aucun relevé reçu de l’app-server codex." [ref=e117]:
+        - generic [ref=e118]: Codex
+        - generic [ref=e120]: jamais relevé
+  - separator "Redimensionner la barre latérale" [ref=e121]
+  - region "Conversation" [ref=e123]:
+    - paragraph [ref=e125]: Sélectionnez un projet pour commencer.

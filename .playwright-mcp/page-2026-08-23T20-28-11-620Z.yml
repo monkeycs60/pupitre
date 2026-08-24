@@ -1,0 +1,321 @@
+- main [ref=f4e3]:
+  - generic [ref=f4e4]:
+    - generic [ref=f4e5]:
+      - generic [ref=f4e6]: Pupitre
+      - generic [ref=f4e130]:
+        - generic [ref=f4e131]:
+          - generic [ref=f4e132]: /
+          - generic [ref=f4e133]: affilae-mono
+        - generic [ref=f4e134]:
+          - generic [ref=f4e135]: /
+          - generic [ref=f4e136]: Conversation initialisée, attente de directives
+      - button "Rechercher partout Ctrl K" [ref=f4e7] [cursor=pointer]:
+        - generic [ref=f4e12]: Rechercher partout
+        - generic [ref=f4e13]: Ctrl K
+    - generic "Temps actif aujourd'hui" [ref=f4e138]: 11 min
+  - navigation "Projets et navigation" [ref=f4e14]:
+    - generic [ref=f4e142]:
+      - button "PU pupitre" [ref=f4e144] [cursor=pointer]:
+        - generic [ref=f4e145]: PU
+        - generic: pupitre
+      - button "AM affilae-mono" [ref=f4e148] [cursor=pointer]:
+        - generic [ref=f4e149]: AM
+        - generic: affilae-mono
+      - button "RP recall-people-2026" [ref=f4e151] [cursor=pointer]:
+        - generic [ref=f4e152]: RP
+        - generic: recall-people-2026
+      - button "CO coworking" [ref=f4e154] [cursor=pointer]:
+        - generic [ref=f4e155]: CO
+        - generic: coworking
+    - generic [ref=f4e16]:
+      - button "Conversations" [ref=f4e17] [cursor=pointer]
+      - button "Fleet" [ref=f4e22] [cursor=pointer]
+      - button "Tableau de bord" [ref=f4e26] [cursor=pointer]
+      - button "Git" [ref=f4e30] [cursor=pointer]
+      - button "Documents" [ref=f4e37] [cursor=pointer]
+      - button "Claude Design" [ref=f4e42] [cursor=pointer]
+      - button "Progression" [ref=f4e46] [cursor=pointer]
+      - button "Coûts & quotas" [ref=f4e51] [cursor=pointer]
+      - button "Skills" [ref=f4e56] [cursor=pointer]
+      - button "Mémoire" [ref=f4e60] [cursor=pointer]
+      - button "Routines" [ref=f4e66] [cursor=pointer]
+      - button "Aide" [ref=f4e71] [cursor=pointer]
+      - button "Réglages" [ref=f4e76] [cursor=pointer]
+  - complementary [ref=f4e81]:
+    - generic [ref=f4e82]:
+      - generic [ref=f4e83]:
+        - generic [ref=f4e84]: affilae-mono
+        - generic "/home/clement/Desktop/affilae-mono" [ref=f4e156]
+      - button "Paramètres de affilae-mono" [ref=f4e157] [cursor=pointer]
+    - region "Navigation du projet" [ref=f4e86]:
+      - tablist "Contenu de la sidebar" [ref=f4e87]:
+        - tab "Conversations 10" [selected] [ref=f4e162] [cursor=pointer]:
+          - text: Conversations
+          - generic [ref=f4e89]: "10"
+        - tab "Workflows 0" [ref=f4e90] [cursor=pointer]:
+          - text: Workflows
+          - generic [ref=f4e91]: "0"
+      - tabpanel "Conversations 10" [ref=f4e163]:
+        - button "Nouvelle conversation" [ref=f4e94] [cursor=pointer]:
+          - generic [ref=f4e95]: +
+        - textbox "Filtrer les conversations" [ref=f4e102]:
+          - /placeholder: Filtrer 10 conversations…
+        - tablist "Vue des conversations" [ref=f4e103]:
+          - tab "Actives" [selected] [ref=f4e104] [cursor=pointer]
+          - tab "Archives" [ref=f4e105] [cursor=pointer]
+          - tab "Corbeille" [ref=f4e106] [cursor=pointer]
+          - tab "Sentry" [ref=f4e107] [cursor=pointer]
+        - generic [ref=f4e108]:
+          - generic [ref=f4e164]:
+            - generic [ref=f4e165]:
+              - generic [ref=f4e166]: Cette semaine
+              - generic [ref=f4e168]: "2"
+            - generic [ref=f4e169]:
+              - button "Conversation initialisée, attente de directives sam Grok main 2" [ref=f4e170] [cursor=pointer]:
+                - generic [ref=f4e171]:
+                  - generic [ref=f4e173]: Conversation initialisée, attente de directives
+                  - generic [ref=f4e174]: sam
+                - generic [ref=f4e175]:
+                  - img "Grok" [ref=f4e176]
+                  - generic "Branche à la création" [ref=f4e179]: main
+                  - generic [ref=f4e185]: "2"
+              - generic [ref=f4e186]:
+                - button "Épingler Conversation initialisée, attente de directives" [ref=f4e187] [cursor=pointer]: ◇
+                - button "Actions pour Conversation initialisée, attente de directives" [expanded] [active] [ref=f4e188] [cursor=pointer]: ⋯
+                - menu [ref=f4e528]:
+                  - menuitem "Renommer" [ref=f4e529] [cursor=pointer]
+                  - menuitem "Domaines" [ref=f4e531] [cursor=pointer]
+                  - menuitem "Activer YOLO" [ref=f4e532] [cursor=pointer]
+                  - menuitem "Archiver" [ref=f4e533] [cursor=pointer]
+                  - menuitem "Mettre à la corbeille" [ref=f4e534] [cursor=pointer]
+              - 'tooltip "Conversation initialisée, attente de directives L''utilisateur a ouvert une session et salué l''agent. Aucun travail spécifique n''a été demandé pour le moment. grok · Grok 4.6 · il y a 1 j effort: low"':
+                - strong: Conversation initialisée, attente de directives
+                - paragraph: L'utilisateur a ouvert une session et salué l'agent. Aucun travail spécifique n'a été demandé pour le moment.
+                - generic: grok · Grok 4.6 · il y a 1 j
+                - generic: "effort: low"
+            - generic [ref=f4e189]:
+              - button "Attente des directives de travail sam Grok main 2" [ref=f4e190] [cursor=pointer]:
+                - generic [ref=f4e191]:
+                  - generic [ref=f4e193]: Attente des directives de travail
+                  - generic [ref=f4e194]: sam
+                - generic [ref=f4e195]:
+                  - img "Grok" [ref=f4e196]
+                  - generic "Branche à la création" [ref=f4e199]: main
+                  - generic [ref=f4e205]: "2"
+              - generic [ref=f4e206]:
+                - button "Épingler Attente des directives de travail" [ref=f4e207] [cursor=pointer]: ◇
+                - button "Actions pour Attente des directives de travail" [ref=f4e208] [cursor=pointer]: ⋯
+          - generic [ref=f4e209]:
+            - generic [ref=f4e210]:
+              - generic [ref=f4e211]: TECH-24176 · 2
+              - button "Nouvelle conversation dans TECH-24176 · 2" [ref=f4e213] [cursor=pointer]: +
+              - generic [ref=f4e214]: "2"
+            - generic [ref=f4e215]:
+              - button "Inverser une liste en JavaScript sam ChatGPT TECH-24176 main 2" [ref=f4e216] [cursor=pointer]:
+                - generic [ref=f4e217]:
+                  - generic [ref=f4e219]: Inverser une liste en JavaScript
+                  - generic [ref=f4e220]: sam
+                - generic [ref=f4e221]:
+                  - img "ChatGPT" [ref=f4e222]
+                  - generic [ref=f4e224]: TECH-24176
+                  - generic "Branche à la création" [ref=f4e225]: main
+                  - generic [ref=f4e231]: "2"
+              - generic [ref=f4e232]:
+                - button "Épingler Inverser une liste en JavaScript" [ref=f4e233] [cursor=pointer]: ◇
+                - button "Actions pour Inverser une liste en JavaScript" [ref=f4e234] [cursor=pointer]: ⋯
+            - generic [ref=f4e235]:
+              - button "Modèle fable-5 indisponible sam Claude TECH-24176 main 2" [ref=f4e236] [cursor=pointer]:
+                - generic [ref=f4e237]:
+                  - generic [ref=f4e239]: Modèle fable-5 indisponible
+                  - generic [ref=f4e240]: sam
+                - generic [ref=f4e241]:
+                  - img "Claude" [ref=f4e242]
+                  - generic [ref=f4e244]: TECH-24176
+                  - generic "Branche à la création" [ref=f4e245]: main
+                  - generic [ref=f4e251]: "2"
+              - generic [ref=f4e252]:
+                - button "Épingler Modèle fable-5 indisponible" [ref=f4e253] [cursor=pointer]: ◇
+                - button "Actions pour Modèle fable-5 indisponible" [ref=f4e254] [cursor=pointer]: ⋯
+          - generic [ref=f4e255]:
+            - generic [ref=f4e256]:
+              - generic [ref=f4e257]: Sentry · REACTOR-B4S · 1
+              - button "Nouvelle conversation dans Sentry · REACTOR-B4S · 1" [ref=f4e259] [cursor=pointer]: +
+              - generic [ref=f4e260]: "1"
+            - generic [ref=f4e261]:
+              - button "Diagnostic du bug TypeError getLength sur React sam Sentry main 4" [ref=f4e262] [cursor=pointer]:
+                - generic [ref=f4e263]:
+                  - generic [ref=f4e265]: Diagnostic du bug TypeError getLength sur React
+                  - generic [ref=f4e266]: sam
+                - generic [ref=f4e267]:
+                  - img "Sentry" [ref=f4e268]
+                  - generic "Branche à la création" [ref=f4e270]: main
+                  - generic [ref=f4e276]: "4"
+              - generic [ref=f4e277]:
+                - button "Épingler Diagnostic du bug TypeError getLength sur React" [ref=f4e278] [cursor=pointer]: ◇
+                - button "Actions pour Diagnostic du bug TypeError getLength sur React" [ref=f4e279] [cursor=pointer]: ⋯
+          - generic [ref=f4e280]:
+            - generic [ref=f4e281]:
+              - generic [ref=f4e282]: TECH-24128 · 3
+              - button "Nouvelle conversation dans TECH-24128 · 3" [ref=f4e284] [cursor=pointer]: +
+              - generic [ref=f4e285]: "3"
+            - generic [ref=f4e286]:
+              - button "Résoudre conflit hapigator MR !473 sam Claude TECH-24128 feature-TECH-24128 2" [ref=f4e287] [cursor=pointer]:
+                - generic [ref=f4e288]:
+                  - generic [ref=f4e290]: Résoudre conflit hapigator MR !473
+                  - generic [ref=f4e291]: sam
+                - generic [ref=f4e292]:
+                  - img "Claude" [ref=f4e293]
+                  - generic [ref=f4e295]: TECH-24128
+                  - 'generic "Branche du worktree : /home/clement/.local/share/pupitre/worktrees/51ac81d5-d3c5-4e05-8e60-99eea03d7952/feature-TECH-24128" [ref=f4e296]': feature-TECH-24128
+                  - generic [ref=f4e302]: "2"
+              - generic [ref=f4e303]:
+                - button "Épingler Résoudre conflit hapigator MR !473" [ref=f4e304] [cursor=pointer]: ◇
+                - button "Actions pour Résoudre conflit hapigator MR !473" [ref=f4e305] [cursor=pointer]: ⋯
+            - generic [ref=f4e306]:
+              - button "Configuration du modèle fable-5 impossible ven Claude TECH-24128 feature-TECH-24128 2" [ref=f4e307] [cursor=pointer]:
+                - generic [ref=f4e308]:
+                  - generic [ref=f4e310]: Configuration du modèle fable-5 impossible
+                  - generic [ref=f4e311]: ven
+                - generic [ref=f4e312]:
+                  - img "Claude" [ref=f4e313]
+                  - generic [ref=f4e315]: TECH-24128
+                  - 'generic "Branche du worktree : /home/clement/.local/share/pupitre/worktrees/51ac81d5-d3c5-4e05-8e60-99eea03d7952/feature-TECH-24128" [ref=f4e316]': feature-TECH-24128
+                  - generic [ref=f4e322]: "2"
+              - generic [ref=f4e323]:
+                - button "Épingler Configuration du modèle fable-5 impossible" [ref=f4e324] [cursor=pointer]: ◇
+                - button "Actions pour Configuration du modèle fable-5 impossible" [ref=f4e325] [cursor=pointer]: ⋯
+            - generic [ref=f4e326]:
+              - button "Session initialisée - tâche à préciser ven Claude TECH-24128 feature-TECH-24128 2" [ref=f4e327] [cursor=pointer]:
+                - generic [ref=f4e328]:
+                  - generic [ref=f4e330]: Session initialisée - tâche à préciser
+                  - generic [ref=f4e331]: ven
+                - generic [ref=f4e332]:
+                  - img "Claude" [ref=f4e333]
+                  - generic [ref=f4e335]: TECH-24128
+                  - 'generic "Branche du worktree : /home/clement/.local/share/pupitre/worktrees/51ac81d5-d3c5-4e05-8e60-99eea03d7952/feature-TECH-24128" [ref=f4e336]': feature-TECH-24128
+                  - generic [ref=f4e342]: "2"
+              - generic [ref=f4e343]:
+                - button "Épingler Session initialisée - tâche à préciser" [ref=f4e344] [cursor=pointer]: ◇
+                - button "Actions pour Session initialisée - tâche à préciser" [ref=f4e345] [cursor=pointer]: ⋯
+          - generic [ref=f4e346]:
+            - generic [ref=f4e347]:
+              - generic [ref=f4e348]: Sentry · HAPIGATOR-4MY · 1
+              - button "Nouvelle conversation dans Sentry · HAPIGATOR-4MY · 1" [ref=f4e350] [cursor=pointer]: +
+              - generic [ref=f4e351]: "1"
+            - generic [ref=f4e352]:
+              - button "Triage timeout Sentry matching search ven Sentry main 2" [ref=f4e353] [cursor=pointer]:
+                - generic [ref=f4e354]:
+                  - generic [ref=f4e356]: Triage timeout Sentry matching search
+                  - generic [ref=f4e357]: ven
+                - generic [ref=f4e358]:
+                  - img "Sentry" [ref=f4e359]
+                  - generic "Branche à la création" [ref=f4e361]: main
+                  - generic [ref=f4e367]: "2"
+              - generic [ref=f4e368]:
+                - button "Épingler Triage timeout Sentry matching search" [ref=f4e369] [cursor=pointer]: ◇
+                - button "Actions pour Triage timeout Sentry matching search" [ref=f4e370] [cursor=pointer]: ⋯
+          - generic [ref=f4e371]:
+            - generic [ref=f4e372]:
+              - generic [ref=f4e373]: TECH-24657 · 1
+              - button "Nouvelle conversation dans TECH-24657 · 1" [ref=f4e375] [cursor=pointer]: +
+              - generic [ref=f4e376]: "1"
+            - generic [ref=f4e377]:
+              - button "Vérifier l'état des tests ven Claude TECH-24657 feature-TECH-24657 2" [ref=f4e378] [cursor=pointer]:
+                - generic [ref=f4e379]:
+                  - generic [ref=f4e381]: Vérifier l'état des tests
+                  - generic [ref=f4e382]: ven
+                - generic [ref=f4e383]:
+                  - img "Claude" [ref=f4e384]
+                  - generic [ref=f4e386]: TECH-24657
+                  - 'generic "Branche du worktree : /home/clement/.local/share/pupitre/worktrees/51ac81d5-d3c5-4e05-8e60-99eea03d7952/feature-TECH-24657" [ref=f4e387]': feature-TECH-24657
+                  - generic [ref=f4e393]: "2"
+              - generic [ref=f4e394]:
+                - button "Épingler Vérifier l'état des tests" [ref=f4e395] [cursor=pointer]: ◇
+                - button "Actions pour Vérifier l'état des tests" [ref=f4e396] [cursor=pointer]: ⋯
+    - generic [ref=f4e110]:
+      - button "Niveau 52 209 XP restants 11 min · aujourd'hui" [ref=f4e527] [cursor=pointer]:
+        - generic [ref=f4e398]: "52"
+        - generic [ref=f4e403]:
+          - generic [ref=f4e404]:
+            - strong [ref=f4e405]: Niveau 52
+            - generic [ref=f4e406]: 209 XP restants
+          - generic [ref=f4e409]: 11 min · aujourd'hui
+      - region "Usage des quotas" [ref=f4e112]:
+        - generic "Claude — 37 % utilisé · hebdo · reset dans 2 j 15 h" [ref=f4e410]:
+          - generic [ref=f4e114]: Claude
+          - meter "Claude — 37 % utilisé" [ref=f4e411]
+          - generic [ref=f4e116]: 37 % utilisé
+        - generic "Codex — 6 % utilisé · 30 j · reset dans 28 j 16 h" [ref=f4e413]:
+          - generic [ref=f4e118]: Codex
+          - meter "Codex — 6 % utilisé" [ref=f4e414]
+          - generic [ref=f4e120]: 6 % utilisé
+        - generic "Grok — 76 % utilisé · hebdo · reset dans 3 j 17 h" [ref=f4e416]:
+          - generic [ref=f4e122]: Grok
+          - meter "Grok — 76 % utilisé" [ref=f4e417]
+          - generic [ref=f4e124]: 76 % utilisé
+  - separator "Redimensionner la barre latérale" [ref=f4e125]
+  - region "Conversation initialisée, attente de directives" [ref=f4e419]:
+    - generic [ref=f4e420]:
+      - generic [ref=f4e421]:
+        - generic [ref=f4e422]:
+          - heading "Conversation initialisée, attente de directives" [level=1] [ref=f4e423]
+          - generic "0 commit(s) · ×1" [ref=f4e424]: C0
+        - paragraph [ref=f4e425]:
+          - img "Grok" [ref=f4e426]
+          - text: Grok 4.6 · low
+      - tablist "Surface de travail" [ref=f4e429]:
+        - tab "Conversation" [selected] [ref=f4e431] [cursor=pointer]
+        - tab "Code" [ref=f4e432] [cursor=pointer]
+      - generic [ref=f4e433]:
+        - progressbar "Contexte estimé" [ref=f4e434]:
+          - generic [ref=f4e439]:
+            - generic [ref=f4e440]: Contexte 6%
+            - generic [ref=f4e441]: Sous contrôle
+        - button "Passer la main" [ref=f4e442] [cursor=pointer]
+      - generic [ref=f4e443]:
+        - button "Afficher le code" [ref=f4e444] [cursor=pointer]
+        - button "Reprendre au terminal" [ref=f4e447] [cursor=pointer]
+        - group [ref=f4e451]:
+          - generic "Actions de la conversation" [ref=f4e452] [cursor=pointer]: ⋯
+    - generic [ref=f4e455]:
+      - generic [ref=f4e456]:
+        - generic "Navigation dans la conversation" [ref=f4e457]:
+          - generic [ref=f4e458]:
+            - generic [ref=f4e459]: Rechercher dans le fil
+            - textbox "Rechercher dans le fil" [ref=f4e460]
+            - button "Rechercher" [ref=f4e461] [cursor=pointer]: ⌕
+          - button "Dernier message" [ref=f4e462] [cursor=pointer]
+        - generic [ref=f4e464]:
+          - article [ref=f4e465]:
+            - paragraph [ref=f4e467]: salut mec
+          - article [ref=f4e468]:
+            - paragraph [ref=f4e470]: Salut. Je suis là — dis-moi sur quoi tu veux avancer.
+          - generic [ref=f4e472]:
+            - generic [ref=f4e473]: ● terminé
+            - generic [ref=f4e474]: 1er retour 19 s · total 20 s
+            - generic [ref=f4e475]: 30 305 → 137 tokens
+            - button "Lancer le Gardien" [ref=f4e476] [cursor=pointer]
+            - generic [ref=f4e477]: +9 XP
+          - group "Gardien" [ref=f4e478]:
+            - strong [ref=f4e482]: Gardien
+            - generic [ref=f4e483]: pas encore relu
+            - button "Relire" [ref=f4e484] [cursor=pointer]
+            - button "Ouvrir le code" [ref=f4e485] [cursor=pointer]
+        - generic [ref=f4e487]:
+          - generic [ref=f4e488]:
+            - textbox "Message" [ref=f4e489]:
+              - /placeholder: ""
+            - generic: Écris ton message, ou / pour une action, $ pour un skill
+          - generic [ref=f4e490]:
+            - generic [ref=f4e491]:
+              - button "Choose File" [ref=f4e492]
+              - button "Joindre" [ref=f4e493] [cursor=pointer]
+              - button "Insérer un skill" [ref=f4e496] [cursor=pointer]
+              - button "Tester" [ref=f4e501] [cursor=pointer]
+              - button "Résumé de la session" [ref=f4e505] [cursor=pointer]
+              - generic [ref=f4e511]: grok · Grok 4.6 · low
+            - button "Envoyer" [disabled] [ref=f4e513]:
+              - text: Envoyer
+              - generic [ref=f4e514]: ⏎
+      - complementary "Skills suggérés" [ref=f4e515]:
+        - button "Skills" [ref=f4e516] [cursor=pointer]

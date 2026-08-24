@@ -16,6 +16,7 @@ import {
 } from './api'
 import { buildCreateConversationInput } from './conversationDraft'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
+import { ProviderMark } from './ProviderMark'
 import { ComposerPalette, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
 import type { ComposerAction, ComposerPaletteTrigger } from './ComposerPalette'
 import type { Attachment, Conversation, Project, Provider, QuotaSnapshot, SkillSummary } from './types'
@@ -689,10 +690,13 @@ export function Composer({
               </svg>
               <span>Insérer un skill</span>
             </button>
-            {composerModel ? (
+            {composerModel && provider ? (
               <>
                 <span className="composer-tools-divider" aria-hidden="true" />
-                <span className="composer-model">{composerModel}</span>
+                <span className={`composer-model is-${provider}`} title={`${provider} · ${composerModel}`}>
+                  <ProviderMark provider={provider} />
+                  {composerModel}
+                </span>
               </>
             ) : null}
           </div>

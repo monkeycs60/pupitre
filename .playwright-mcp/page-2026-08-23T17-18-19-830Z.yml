@@ -1,0 +1,57 @@
+- main [ref=f1e3]:
+  - generic [ref=f1e5]:
+    - generic [ref=f1e6]: Pupitre
+    - button "Rechercher partout Ctrl K" [ref=f1e7] [cursor=pointer]:
+      - generic [ref=f1e12]: Rechercher partout
+      - generic [ref=f1e13]: Ctrl K
+  - navigation "Projets et navigation" [ref=f1e14]:
+    - generic [ref=f1e16]:
+      - button "Conversations" [ref=f1e17] [cursor=pointer]
+      - button "Fleet" [ref=f1e22] [cursor=pointer]
+      - button "Tableau de bord" [disabled] [ref=f1e26]
+      - button "Git" [disabled] [ref=f1e30]
+      - button "Documents" [ref=f1e37] [cursor=pointer]
+      - button "Claude Design" [ref=f1e42] [cursor=pointer]
+      - button "Progression" [ref=f1e46] [cursor=pointer]
+      - button "Coûts & quotas" [disabled] [ref=f1e51]
+      - button "Skills" [ref=f1e56] [cursor=pointer]
+      - button "Mémoire" [ref=f1e60] [cursor=pointer]
+      - button "Routines" [ref=f1e66] [cursor=pointer]
+      - button "Aide" [ref=f1e71] [cursor=pointer]
+      - button "Réglages" [ref=f1e76] [cursor=pointer]
+  - complementary [ref=f1e81]:
+    - generic [ref=f1e83]:
+      - generic [ref=f1e84]: Aucun projet
+      - generic [ref=f1e85]: Choisis un projet dans le rail
+    - region "Navigation du projet" [ref=f1e86]:
+      - tablist "Contenu de la sidebar" [ref=f1e87]:
+        - tab "Conversations 0" [selected] [ref=f1e88] [cursor=pointer]:
+          - text: Conversations
+          - generic [ref=f1e89]: "0"
+        - tab "Workflows 0" [ref=f1e90] [cursor=pointer]:
+          - text: Workflows
+          - generic [ref=f1e91]: "0"
+      - tabpanel "Conversations 0" [ref=f1e92]:
+        - button "Nouvelle conversation" [disabled] [ref=f1e94]:
+          - generic [ref=f1e95]: +
+        - textbox "Filtrer les conversations" [ref=f1e102]:
+          - /placeholder: Filtrer 0 conversation…
+        - tablist "Vue des conversations" [ref=f1e103]:
+          - tab "Actives" [selected] [ref=f1e104] [cursor=pointer]
+          - tab "Archives" [ref=f1e105] [cursor=pointer]
+          - tab "Corbeille" [ref=f1e106] [cursor=pointer]
+          - tab "Sentry" [ref=f1e107] [cursor=pointer]
+        - paragraph [ref=f1e109]: Sélectionnez un projet
+    - region "Usage des quotas" [ref=f1e112]:
+      - 'generic "Claude — jamais relevé · Usage illisible : session Claude Code absente ou expirée. Relancez `claude` puis actualisez." [ref=f1e113]':
+        - generic [ref=f1e114]: Claude
+        - generic [ref=f1e116]: jamais relevé
+      - generic "Codex — jamais relevé · Aucun relevé reçu de l’app-server codex." [ref=f1e117]:
+        - generic [ref=f1e118]: Codex
+        - generic [ref=f1e120]: jamais relevé
+      - 'generic "Grok — jamais relevé · Usage illisible : session Grok absente ou expirée. Relancez `grok login` puis actualisez." [ref=f1e121]':
+        - generic [ref=f1e122]: Grok
+        - generic [ref=f1e124]: jamais relevé
+  - separator "Redimensionner la barre latérale" [ref=f1e125]
+  - region "Conversation" [ref=f1e127]:
+    - paragraph [ref=f1e129]: Sélectionnez un projet pour commencer.

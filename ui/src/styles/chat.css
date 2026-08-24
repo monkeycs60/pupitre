@@ -29,11 +29,13 @@
   background: var(--bg-workspace);
 }
 
+/* Toolbar, fil et composer partagent la même colonne de 840 px : leurs bords
+   s'alignent au lieu de flotter à trois largeurs différentes. */
 .conversation-toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  width: min(100%, 760px);
+  width: min(100%, calc(840px + 2 * var(--space-6)));
   padding: var(--space-2) var(--space-6) 0;
   margin: 0 auto;
 }
@@ -90,7 +92,7 @@
 }
 
 .events-list {
-  width: min(100%, 760px);
+  width: min(100%, calc(840px + 2 * var(--space-6)));
   min-height: 100%;
   padding: var(--space-6) var(--space-6) var(--space-8);
   margin: 0 auto;
@@ -108,6 +110,8 @@
 .message-row {
   display: flex;
   margin: 0 0 var(--space-6);
+  /* Entrée douce : chaque message se pose au lieu d'apparaître sec. */
+  animation: msg-in 220ms var(--ease) both;
   /* Le navigateur saute la mise en page et la peinture des messages hors
      écran. `contain-intrinsic-size` leur réserve une hauteur estimée, sinon
      la barre de défilement sauterait à chaque message qui entre dans le
@@ -137,8 +141,10 @@
   color: var(--text-strong);
   white-space: pre-wrap;
   line-height: 1.62;
-  background: var(--bg-raised);
-  border: 1px solid var(--border-subtle);
+  /* Voile accent : la voix de l'utilisateur se distingue des cartes outil,
+     toutes posées sur le même gris relevé. */
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-raised));
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
   /* Coin cassé côté message : signature visuelle des bulles utilisateur. */
   border-radius: 12px 12px 4px 12px;
 }
@@ -264,6 +270,17 @@
 @keyframes caret-blink {
   50% {
     opacity: 0.15;
+  }
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
@@ -943,12 +960,52 @@
 }
 
 .running-indicator {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
   color: var(--accent);
 }
 
-.running-indicator > span {
-  display: inline-block;
-  animation: status-pulse 1.2s var(--ease) infinite;
+/* Trois points en cascade : le tour écrit, l'attente doit se sentir vivante. */
+.running-dots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.running-dots i {
+  width: 4px;
+  height: 4px;
+  background: var(--accent);
+  border-radius: var(--r-full);
+  animation: running-dot 1.1s var(--ease) infinite;
+}
+
+.running-dots i:nth-child(2) { animation-delay: 0.16s; }
+.running-dots i:nth-child(3) { animation-delay: 0.32s; }
+
+@keyframes running-dot {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  35% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* Filet balayé pendant le tour : même langage que la ligne Gardien. */
+.turn-meta-running {
+  position: relative;
+}
+
+.turn-meta-running::before {
+  position: absolute;
+  top: -5px;
+  right: 0;
+  left: 0;
+  height: 1.5px;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(90deg, transparent 0 31%, var(--accent) 50%, transparent 69%);
+  background-size: 38% 100%;
+  background-repeat: no-repeat;
+  animation: g-sweep 1.6s var(--ease) infinite;
 }
 
 @keyframes status-pulse {
@@ -1056,7 +1113,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .streaming-caret,
-  .running-indicator > span {
+  .running-dots i,
+  .turn-meta-running::before {
     animation: none;
   }
 }

@@ -147,10 +147,10 @@ function TurnFooter({ block, action }: {
           ) : null}
         </div>
       ) : null}
-      <div className={`turn-meta${isDone ? ' turn-meta-done' : ''}`}>
+      <div className={`turn-meta${isDone ? ' turn-meta-done' : ''}${isRunning ? ' turn-meta-running' : ''}`}>
         {isRunning ? (
           <span className="running-indicator" role="status">
-            <span aria-hidden="true">●</span> en cours
+            <span className="running-dots" aria-hidden="true"><i /><i /><i /></span> en cours
           </span>
         ) : null}
         {isDone ? (

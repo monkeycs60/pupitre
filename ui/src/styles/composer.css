@@ -1039,13 +1039,40 @@
   background: var(--border-subtle);
 }
 
+/* Modèle de la conversation : unique mention, portée par la marque du
+   provider — le chip prend la couleur Claude / Codex / Grok. */
 .composer-model {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
   overflow: hidden;
-  color: var(--text-faint);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  text-overflow: ellipsis;
   white-space: nowrap;
+  border-radius: var(--r-full);
+}
+
+.composer-model .provider-mark {
+  width: 11px;
+  height: 11px;
+}
+
+.composer-model.is-claude {
+  color: var(--prov-claude);
+  background: var(--prov-claude-soft);
+}
+
+.composer-model.is-codex {
+  color: var(--prov-codex);
+  background: var(--prov-codex-soft);
+}
+
+.composer-model.is-grok {
+  color: var(--prov-grok);
+  background: var(--prov-grok-soft);
 }
 
 .composer-send-group {

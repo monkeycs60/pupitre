@@ -399,7 +399,7 @@ export function Chat({
             onMessageChange={setMessage}
             focusRequest={focusRequest}
             providerLabel={conversation
-              ? `${conversation.provider} · ${modelLabel(conversation.model)} · ${conversation.effort ?? 'default'}${conversation.speed === 'fast' ? ' · rapide' : ''}`
+              ? `${modelLabel(conversation.model)} · ${conversation.effort ?? 'default'}${conversation.speed === 'fast' ? ' · rapide' : ''}`
               : null}
             provider={conversation?.provider ?? null}
             initialConfig={initialConfig}
