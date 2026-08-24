@@ -9,8 +9,16 @@ const MILESTONE_HOURS = [10, 25, 50, 100, 250, 500] as const;
 const MERGE_GAP_MS = 1_000;
 /** Garde-fou d'écriture : l'UI envoie des tranches courtes, jamais des blocs. */
 const MAX_PRESENCE_SLICE_MS = 30 * 60_000;
-/** Un tour laissé ouvert par une machine endormie ne doit pas gonfler le total. */
-const MAX_AGENT_SEGMENT_MS = 30 * 60_000;
+/**
+ * Dernier garde-fou, au-dessus de tout tour plausible : il ne se déclenche que
+ * si une anomalie a échappé au retranchement des suspensions.
+ */
+const MAX_AGENT_SEGMENT_MS = 2 * 60 * 60_000;
+/** Battement du sidecar, seul témoin fiable d'une machine qui s'endort. */
+const HEARTBEAT_MS = 10_000;
+/** Six battements manqués : ni le ramasse-miettes ni une machine chargée. */
+const SUSPENSION_THRESHOLD_MS = 60_000;
+const HEARTBEAT_KEY = "time-tracking:heartbeat";
 const SYNC_WATERMARK_KEY = "time-tracking:last-event-id";
 const BACKFILL_KEY = "time-tracking:backfilled-at";
 
@@ -112,6 +120,24 @@ export function intersect(left: Span[], right: Span[]): Span[] {
   return out;
 }
 
+/** Retire des trous à une série : un tour moins le sommeil de la machine. */
+export function subtract(spans: Span[], holes: Span[]): Span[] {
+  let out = merge(spans);
+  for (const hole of merge(holes)) {
+    const next: Span[] = [];
+    for (const span of out) {
+      if (hole.end <= span.start || hole.start >= span.end) {
+        next.push(span);
+        continue;
+      }
+      if (hole.start > span.start) next.push({ start: span.start, end: hole.start });
+      if (hole.end < span.end) next.push({ start: hole.end, end: span.end });
+    }
+    out = next;
+  }
+  return out;
+}
+
 function total(spans: Span[]): number {
   return spans.reduce((sum, span) => sum + (span.end - span.start), 0);
 }
@@ -193,6 +219,40 @@ export class TimeTrackingService {
       new Date(start).toISOString(),
       new Date(end).toISOString(),
       localDay(new Date(start)),
+    );
+  }
+
+  /**
+   * Un battement du sidecar. Deux battements trop espacés ne peuvent pas
+   * s'expliquer par la charge : le process a été suspendu, donc la machine a
+   * dormi. On garde le trou pour le retrancher des tours qui l'enjambent.
+   *
+   * Renvoie la suspension détectée, s'il y en a une.
+   */
+  heartbeat(nowMs = Date.now()): Span | null {
+    const previous = Number(this.setting(HEARTBEAT_KEY) ?? "0");
+    this.setSetting(HEARTBEAT_KEY, String(nowMs));
+    // Premier battement du process : pas de référence, donc rien à conclure.
+    if (previous <= 0 || nowMs <= previous) return null;
+    if (nowMs - previous <= SUSPENSION_THRESHOLD_MS) return null;
+    const suspension = { start: previous, end: nowMs };
+    const inserted = this.db.query(
+      "INSERT OR IGNORE INTO system_suspensions (started_at, ended_at) VALUES (?, ?)",
+    ).run(new Date(previous).toISOString(), new Date(nowMs).toISOString());
+    if (inserted.changes === 0) return null;
+    // Les tours déjà découpés l'ont été sans connaître ce trou : on les refait.
+    // Une suspension est rare et la resynchronisation est immédiate — la
+    // justesse vaut mieux qu'un rattrapage ciblé et fragile.
+    this.db.query("DELETE FROM time_entries WHERE source = 'agent'").run();
+    this.setSetting(SYNC_WATERMARK_KEY, "0");
+    return suspension;
+  }
+
+  private suspensions(): Span[] {
+    return merge(
+      (this.db.query("SELECT started_at, ended_at FROM system_suspensions").all() as Array<{
+        started_at: string; ended_at: string;
+      }>).map(toSpan),
     );
   }
 
@@ -363,6 +423,7 @@ export class TimeTrackingService {
         (source_key, project_id, conversation_id, source, started_at, ended_at, day, backfilled)
       VALUES (?, ?, ?, 'agent', ?, ?, ?, 0)
     `);
+    const asleep = this.suspensions();
     const write = this.db.transaction(() => {
       for (const row of events) {
         let payload: { startedAt?: string; completedAt?: string };
@@ -373,14 +434,20 @@ export class TimeTrackingService {
         }
         const span = agentSpan(payload.startedAt, payload.completedAt);
         if (!span) continue;
-        insert.run(
-          `agent:${row.conversation_id}:${new Date(span.start).toISOString()}`,
-          row.project_id,
-          row.conversation_id,
-          new Date(span.start).toISOString(),
-          new Date(span.end).toISOString(),
-          localDay(new Date(span.start)),
-        );
+        // Un tour qui enjambe une veille se découpe en morceaux plutôt que de
+        // se faire tronquer : les positions restent justes, donc la
+        // supervision se calcule encore au bon endroit.
+        const pieces = subtract([span], asleep);
+        pieces.forEach((piece, index) => {
+          insert.run(
+            `agent:${row.conversation_id}:${new Date(span.start).toISOString()}:${index}`,
+            row.project_id,
+            row.conversation_id,
+            new Date(piece.start).toISOString(),
+            new Date(piece.end).toISOString(),
+            localDay(new Date(piece.start)),
+          );
+        });
       }
       this.setSetting(SYNC_WATERMARK_KEY, String(Math.max(highest, Number(events[events.length - 1]!.id))));
     });
@@ -461,7 +528,13 @@ function agentSpan(startedAt?: string, completedAt?: string): Span | null {
   const start = Date.parse(startedAt);
   const end = Date.parse(completedAt);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
-  return { start, end: Math.min(end, start + MAX_AGENT_SEGMENT_MS) };
+  if (end - start > MAX_AGENT_SEGMENT_MS) {
+    // Deux heures sans suspension enregistrée : le garde-fou tient, mais
+    // l'anomalie mérite une trace plutôt qu'un chiffre faussement propre.
+    console.warn(`[temps] tour de ${Math.round((end - start) / 60_000)} min tronqué à 120 min (${startedAt})`);
+    return { start, end: start + MAX_AGENT_SEGMENT_MS };
+  }
+  return { start, end };
 }
 
-export { LEVEL_MS, MILESTONE_HOURS, MAX_PRESENCE_SLICE_MS };
+export { LEVEL_MS, MILESTONE_HOURS, MAX_PRESENCE_SLICE_MS, MAX_AGENT_SEGMENT_MS, HEARTBEAT_MS, SUSPENSION_THRESHOLD_MS };

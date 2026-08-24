@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { openDb } from "../src/db";
-import { TimeTrackingService, MILESTONE_HOURS, intersect, merge } from "../src/time-tracking";
+import { TimeTrackingService, MILESTONE_HOURS, SUSPENSION_THRESHOLD_MS, intersect, merge, subtract } from "../src/time-tracking";
 import { GitProjectService } from "../src/git";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
@@ -200,6 +200,75 @@ test("une tranche aberrante est refusée plutôt que stockée", () => {
       projectId: project.id, startedAt: at(0), endedAt: at(31),
     })).toThrow();
     expect(service.snapshot(project.id).user.ms).toBe(0);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("retrancher un trou coupe l'intervalle en deux plutôt que de le raccourcir", () => {
+  expect(subtract([span(0, 60)], [span(20, 30)])).toEqual([span(0, 20), span(30, 60)]);
+  expect(subtract([span(0, 60)], [span(0, 20)])).toEqual([span(20, 60)]);
+  expect(subtract([span(0, 60)], [span(40, 90)])).toEqual([span(0, 40)]);
+  expect(subtract([span(0, 60)], [span(0, 60)])).toEqual([]);
+  expect(subtract([span(0, 60)], [span(70, 80)])).toEqual([span(0, 60)]);
+});
+
+test("deux battements trop espacés enregistrent une suspension, deux battements normaux non", () => {
+  const { dir, db, service } = setup();
+  try {
+    const base = Date.parse(at(0));
+    expect(service.heartbeat(base)).toBeNull();
+    expect(service.heartbeat(base + 10_000)).toBeNull();
+    const asleep = service.heartbeat(base + 10_000 + SUSPENSION_THRESHOLD_MS + 1_000);
+    expect(asleep).not.toBeNull();
+    expect(asleep!.end - asleep!.start).toBe(SUSPENSION_THRESHOLD_MS + 1_000);
+    // Rejouer le même battement ne crée pas une seconde suspension.
+    const rows = db.query("SELECT COUNT(*) AS n FROM system_suspensions").get() as { n: number };
+    expect(Number(rows.n)).toBe(1);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("un tour qui enjambe une veille ne compte pas le sommeil de la machine", () => {
+  const { dir, db, project, conversations, conversation, service } = setup();
+  try {
+    // Le premier battement pose la référence, le second révèle le trou :
+    // la machine a dormi de la 20e à la 80e minute.
+    service.heartbeat(Date.parse(at(20)));
+    service.heartbeat(Date.parse(at(80)));
+    // Un tour part à la 10e minute et se termine à la 90e : quatre-vingts
+    // minutes brutes, dont soixante de sommeil.
+    conversations.appendEvent(conversation.id, {
+      type: "turn-timing", phase: "completed", startedAt: at(10), completedAt: at(90),
+    });
+    const snapshot = service.snapshot(project.id);
+    expect(snapshot.agent.ms).toBe(20 * 60_000);
+
+    // Et le découpage garde les positions : présent de la 0e à la 15e minute,
+    // la supervision ne retient que les cinq minutes réellement partagées.
+    presence(service, project.id, 0, 15);
+    expect(service.snapshot(project.id).supervisionMs).toBe(5 * 60_000);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("une suspension découverte après coup refait le découpage des tours", () => {
+  const { dir, db, project, conversations, conversation, service } = setup();
+  try {
+    conversations.appendEvent(conversation.id, {
+      type: "turn-timing", phase: "completed", startedAt: at(10), completedAt: at(90),
+    });
+    expect(service.snapshot(project.id).agent.ms).toBe(80 * 60_000);
+    // La suspension n'est connue qu'ensuite : le tour déjà stocké doit être
+    // recalculé, pas laissé tel quel.
+    service.heartbeat(Date.parse(at(20)));
+    service.heartbeat(Date.parse(at(80)));
+    expect(service.snapshot(project.id).agent.ms).toBe(20 * 60_000);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });

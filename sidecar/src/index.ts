@@ -30,7 +30,7 @@ import { RoutineScheduler, RoutineStore } from "./routines";
 import { SearchIndex } from "./search";
 import { CostStore } from "./costs";
 import { MemoryStore } from "./memory";
-import { TimeTrackingService } from "./time-tracking";
+import { TimeTrackingService, HEARTBEAT_MS } from "./time-tracking";
 import { HtmlDocumentService } from "./html-documents";
 import { ClickUpClient } from "./integrations/clickup";
 import { GitLabClient, readGlabToken } from "./integrations/gitlab";
@@ -101,6 +101,15 @@ if (process.argv.includes("--pupitre-mcp")) {
   if (backfilled) {
     console.log(`[temps] historique repris : ${Math.round(backfilled.presenceMs / 60_000)} min de présence sur ${backfilled.days} jours`);
   }
+  // Le battement du sidecar est le seul témoin fiable d'une veille machine :
+  // l'UI, elle, ne tourne que fenêtre au premier plan.
+  time.heartbeat();
+  setInterval(() => {
+    const suspension = time.heartbeat();
+    if (suspension) {
+      console.log(`[temps] suspension de ${Math.round((suspension.end - suspension.start) / 60_000)} min retranchée des tours`);
+    }
+  }, HEARTBEAT_MS).unref?.();
   const integrationsRefresher = new IntegrationsRefresher(
     { integrations, tickets, conversations, projects, sentry, domains },
     {

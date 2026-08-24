@@ -428,6 +428,13 @@ export function openDb(dir: string = dataDir()): Database {
       ON time_entries(project_id, source, started_at);
     CREATE INDEX IF NOT EXISTS idx_time_entries_conversation
       ON time_entries(conversation_id, source);
+    -- Suspensions du process : veille machine, hibernation, gel. Elles se
+    -- retranchent des tours, qui sinon mesureraient le sommeil de la machine.
+    CREATE TABLE IF NOT EXISTS system_suspensions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      started_at TEXT NOT NULL UNIQUE,
+      ended_at TEXT NOT NULL
+    );
   `);
   dropEventsForeignKey(db);
   migrateDocuments(db);
