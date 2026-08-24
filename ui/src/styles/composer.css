@@ -76,13 +76,14 @@
   align-items: center;
   gap: var(--space-1);
   margin-left: var(--space-4);
+  min-width: 0;
   font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
 .config-branch input {
   flex: 1;
-  min-width: 140px;
+  min-width: 72px;
   min-height: 28px;
   padding: 3px var(--space-2);
   color: var(--text);
@@ -271,7 +272,8 @@
   position: relative;
   z-index: 40;
   display: flex;
-  flex: none;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 0;
   padding: 0;
@@ -281,12 +283,14 @@
 .preset-selector {
   position: relative;
   display: inline-flex;
+  min-width: 0;
 }
 
 .preset-selector-chip {
   display: inline-flex;
   align-items: center;
   min-width: 0;
+  max-width: 100%;
   height: 28px;
   padding: 0 10px;
   color: var(--text);
@@ -327,11 +331,13 @@
 
 .preset-selector-chip-summary,
 .preset-selector-chip-dirty {
-  flex: none;
+  overflow: hidden;
+  min-width: 0;
   margin-left: 7px;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .preset-selector-chip-summary {
@@ -918,6 +924,7 @@
 
 .composer-tools {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: var(--space-1);
   min-width: 0;

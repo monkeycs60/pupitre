@@ -635,6 +635,10 @@ export function refreshQuotas(): Promise<QuotaSnapshot> {
   return fetchJson('/api/quotas/refresh', { method: 'POST' })
 }
 
+export function authenticateQuotaProvider(provider: Provider): Promise<QuotaSnapshot> {
+  return fetchJson('/api/quotas/auth', jsonPost({ provider }))
+}
+
 export interface McpServerRef {
   name: string
   provider: Provider

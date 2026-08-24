@@ -9,6 +9,7 @@ import { SettingsStore } from "./stores/settings";
 import { actionFormat } from "./response-format";
 import { QuotaTracker } from "./quotas";
 import { QuotaRefresher } from "./quota-refresh";
+import { authenticateQuotaProvider } from "./quota-auth";
 import { SubtaskRunner } from "./subtasks";
 import { codexAppServer } from "./adapters/codex-app-server";
 import { runConductorMcp } from "./conductor-mcp";
@@ -222,6 +223,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     events,
     quotas,
     quotaRefresher,
+    authenticateQuotaProvider,
     subtasks,
     presets,
     settings,

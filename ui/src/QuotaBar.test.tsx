@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, mock, test } from 'bun:test'
 import type { QuotaSnapshot } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
@@ -31,7 +31,22 @@ test('signale un quota périmé et permet de relancer sa relève', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Actualiser les quotas' }))
 
   await waitFor(() => {
-    expect(screen.getByRole('alert').textContent).toContain('Claude reste périmé')
-    expect(screen.getByRole('alert').textContent).toContain('Codex, Grok indisponibles')
+    expect(screen.getByRole('button', { name: 'Actualiser les quotas' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.queryByRole('alert')).toBeNull()
   })
+})
+
+test('un clic sur une jauge périmée lance la reconnexion du provider', async () => {
+  const authenticate = mock(async () => staleSnapshot())
+  render(
+    <QuotaStatus
+      snapshot={staleSnapshot()}
+      onRefresh={async () => staleSnapshot()}
+      onAuthenticate={authenticate}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: /Reconnecter Claude/ }))
+
+  await waitFor(() => expect(authenticate).toHaveBeenCalledWith('claude'))
 })

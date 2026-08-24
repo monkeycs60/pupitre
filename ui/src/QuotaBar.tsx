@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { refreshQuotas } from './api'
+import { authenticateQuotaProvider, refreshQuotas } from './api'
 import {
   describeWindow,
   formatCountdown,
@@ -98,10 +98,12 @@ function ProviderQuota({ provider, state, now }: {
   )
 }
 
-function CompactProviderQuota({ provider, state, now }: {
+function CompactProviderQuota({ provider, state, now, onAuthenticate, authentication }: {
   provider: Provider
   state: QuotaState | null
   now: number
+  onAuthenticate: (provider: Provider) => void
+  authentication: 'idle' | 'running' | 'error'
 }) {
   const summary = quotaSummary(provider, state, now)
   const freshness = quotaStateFreshness(state, now)
@@ -130,7 +132,7 @@ function CompactProviderQuota({ provider, state, now }: {
 
   return (
     <div
-      className="quota-status-row"
+      className={`quota-status-row${freshness.stale ? ' can-reconnect' : ''}`}
       tabIndex={0}
       aria-describedby={tooltipId}
       aria-label={`${PROVIDER_NAMES[provider]} — ${stale ? `données périmées, dernier relevé ${freshness.label}` : detail}`}
@@ -153,8 +155,23 @@ function CompactProviderQuota({ provider, state, now }: {
         <span className={gaugeClassName} aria-hidden="true" />
       )}
       <span className={`quota-status-value${stale ? ' is-stale' : ''}`}>
-        {stale ? 'données périmées' : summary.headline}
+        {authentication === 'running'
+          ? 'connexion…'
+          : authentication === 'error'
+            ? 'connexion requise'
+            : stale ? 'données périmées' : summary.headline}
       </span>
+
+      {freshness.stale ? (
+        <button
+          type="button"
+          className="quota-status-reconnect"
+          onClick={() => onAuthenticate(provider)}
+          disabled={authentication === 'running'}
+          aria-label={`Reconnecter ${PROVIDER_NAMES[provider]}`}
+          title={`Ouvrir ${PROVIDER_NAMES[provider]} dans un terminal pour renouveler la connexion`}
+        />
+      ) : null}
 
       <div className="quota-status-tooltip" id={tooltipId} role="tooltip">
         <div className="quota-status-tooltip-header">
@@ -203,39 +220,39 @@ function CompactProviderQuota({ provider, state, now }: {
 export function QuotaStatus({
   snapshot,
   onRefresh = refreshQuotas,
+  onAuthenticate = authenticateQuotaProvider,
 }: {
   snapshot: QuotaSnapshot
   onRefresh?: () => Promise<QuotaSnapshot>
+  onAuthenticate?: (provider: Provider) => Promise<QuotaSnapshot>
 }) {
   const now = useNow()
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [refreshFailed, setRefreshFailed] = useState(false)
+  const [authenticating, setAuthenticating] = useState<Provider | null>(null)
+  const [authenticationError, setAuthenticationError] = useState<Provider | null>(null)
+
+  async function handleAuthenticate(provider: Provider) {
+    if (authenticating !== null) return
+    setAuthenticating(provider)
+    setAuthenticationError(null)
+    try {
+      await onAuthenticate(provider)
+    } catch {
+      setAuthenticationError(provider)
+    } finally {
+      setAuthenticating(null)
+    }
+  }
 
   async function handleRefresh() {
     if (isRefreshing) return
     setIsRefreshing(true)
-    setError(null)
+    setRefreshFailed(false)
     try {
-      const refreshed = await onRefresh()
-      const entries = Object.entries(refreshed) as [Provider, QuotaState | null][]
-      const staleProviders = entries
-        .filter(([, state]) => state !== null && quotaStateFreshness(state).stale)
-        .map(([provider]) => PROVIDER_NAMES[provider])
-      const unavailableProviders = entries
-        .filter(([, state]) => state === null)
-        .map(([provider]) => PROVIDER_NAMES[provider])
-      const issues = []
-      if (staleProviders.length > 0) {
-        issues.push(`${staleProviders.join(', ')} reste${staleProviders.length > 1 ? 'nt' : ''} périmé${staleProviders.length > 1 ? 's' : ''}`)
-      }
-      if (unavailableProviders.length > 0) {
-        issues.push(`${unavailableProviders.join(', ')} indisponible${unavailableProviders.length > 1 ? 's' : ''}`)
-      }
-      if (issues.length > 0) {
-        setError(`${issues.join('. ')} : authentification ou service indisponible.`)
-      }
-    } catch (refreshError: unknown) {
-      setError(refreshError instanceof Error ? refreshError.message : 'Relève impossible.')
+      await onRefresh()
+    } catch {
+      setRefreshFailed(true)
     } finally {
       setIsRefreshing(false)
     }
@@ -243,9 +260,18 @@ export function QuotaStatus({
 
   return (
     <section className="quota-status" aria-label="Usage des quotas">
-      <CompactProviderQuota provider="claude" state={snapshot.claude} now={now} />
-      <CompactProviderQuota provider="codex" state={snapshot.codex} now={now} />
-      <CompactProviderQuota provider="grok" state={snapshot.grok ?? null} now={now} />
+      {(['claude', 'codex', 'grok'] as const).map((provider) => (
+        <CompactProviderQuota
+          key={provider}
+          provider={provider}
+          state={snapshot[provider] ?? null}
+          now={now}
+          onAuthenticate={(selected) => void handleAuthenticate(selected)}
+          authentication={authenticating === provider
+            ? 'running'
+            : authenticationError === provider ? 'error' : 'idle'}
+        />
+      ))}
       <div className="quota-status-actions">
         <button
           type="button"
@@ -253,11 +279,11 @@ export function QuotaStatus({
           onClick={() => void handleRefresh()}
           disabled={isRefreshing}
           aria-label="Actualiser les quotas"
+          title={refreshFailed ? 'Relève impossible. Cliquez pour réessayer.' : undefined}
         >
-          {isRefreshing ? 'Relève…' : 'Actualiser'}
+          {isRefreshing ? 'Relève…' : refreshFailed ? 'Réessayer' : 'Actualiser'}
         </button>
       </div>
-      {error !== null ? <p className="quota-error" role="alert">{error}</p> : null}
     </section>
   )
 }

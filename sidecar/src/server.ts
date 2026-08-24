@@ -118,6 +118,7 @@ export interface ServerDeps {
   events: ConversationEventBus;
   quotas: QuotaTracker;
   quotaRefresher: QuotaRefresher;
+  authenticateQuotaProvider?: (provider: Provider) => Promise<void>;
   subtasks: SubtaskRunner;
   presets: PresetStore;
   settings: SettingsStore;
@@ -3546,6 +3547,17 @@ export function createServer(deps: ServerDeps) {
 
         // Relève immédiate, sans attendre le tour de poll.
         if (request.method === "POST" && pathname === "/api/quotas/refresh") {
+          return json(await deps.quotaRefresher.refresh());
+        }
+
+        if (request.method === "POST" && pathname === "/api/quotas/auth") {
+          const body = await readObject(request);
+          const provider = requiredString(body, "provider");
+          if (!isProvider(provider)) throw new HttpError(400, "provider invalide");
+          if (!deps.authenticateQuotaProvider) {
+            throw new HttpError(501, "reconnexion indisponible");
+          }
+          await deps.authenticateQuotaProvider(provider);
           return json(await deps.quotaRefresher.refresh());
         }
 

@@ -55,6 +55,7 @@ let claudeUsageProbe: unknown = null;
 let codexRateLimitsProbe: unknown = null;
 let grokUsageProbe: unknown = null;
 let claudeProbeCount = 0;
+let authenticatedQuotaProvider: string | null = null;
 
 function jsonHeaders(): HeadersInit {
   return { "content-type": "application/json" };
@@ -199,6 +200,7 @@ cat "${fixture}"
   codexRateLimitsProbe = null;
   grokUsageProbe = null;
   claudeProbeCount = 0;
+  authenticatedQuotaProvider = null;
   previousClaudeBin = process.env.PUPITRE_CLAUDE_BIN;
   previousCodexBin = process.env.PUPITRE_CODEX_BIN;
   process.env.PUPITRE_CLAUDE_BIN = fakeClaude;
@@ -322,6 +324,9 @@ cat "${fixture}"
       },
       readGrokUsage: async () => grokUsageProbe,
     }),
+    authenticateQuotaProvider: async (provider) => {
+      authenticatedQuotaProvider = provider;
+    },
     subtasks,
     presets,
     settings,
@@ -648,6 +653,17 @@ test("POST /api/quotas/refresh relève les deux providers et rend le snapshot", 
   // La lecture est gratuite : un rafraîchissement explicite relève sans condition.
   await fetch(`${current.baseUrl}/api/quotas/refresh`, { method: "POST" });
   expect(claudeProbeCount).toBe(2);
+});
+
+test("POST /api/quotas/auth ouvre l'authentification du provider puis relève les quotas", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+
+  const response = await postJson("/api/quotas/auth", { provider: "claude" });
+
+  expect(response.status).toBe(200);
+  expect(authenticatedQuotaProvider).toBe("claude");
+  expect(claudeProbeCount).toBe(1);
+  expect((await postJson("/api/quotas/auth", { provider: "inconnu" })).status).toBe(400);
 });
 
 test("CRUD des presets, intégrés éditables et restaurables, défaut par projet", async () => {
