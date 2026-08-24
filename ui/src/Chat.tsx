@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { FormEvent } from 'react'
 import { EventStream } from './EventStream'
 import { groupEvents } from './groupEvents'
 import { retryCountdownSeconds } from './backoff'
@@ -36,12 +35,7 @@ import { TaskToggleContext } from './taskToggle'
 import type { TaskAction } from './taskToggle'
 import { toggleAction, withTaskActions } from './taskDraft'
 import { newConversationDraftStorageKey } from './conversationDraft'
-
-declare global {
-  interface Window {
-    find?: (text: string, caseSensitive?: boolean, backwards?: boolean, wrapAround?: boolean) => boolean
-  }
-}
+import { ThreadSearch } from './ThreadSearch'
 
 interface ChatProps {
   events: AppEvent[]
@@ -135,7 +129,8 @@ function SessionSummaryAction({ conversationId, uncatalogued, onChangelogReview 
           <path d="M6 7h5M6 9.5h5" />
         </g>
       </svg>
-      {isCreating ? 'Résumé en cours…' : uncatalogued ? 'Cataloguer les changements' : 'Résumé de session'}
+      {isCreating ? 'Résumé en cours…' : 'Résumé de session'}
+      {!isCreating && uncatalogued ? <span className="turn-summary-pill">changelog</span> : null}
     </button>
   )
 }
@@ -186,7 +181,8 @@ export function Chat({
   onConversationReadRef.current = onConversationRead
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
   const [message, setMessage] = useState(() => readDraft(draftStorageKey) ?? initialMessage)
-  const [findQuery, setFindQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [atBottom, setAtBottom] = useState(true)
   const [focusRequest, setFocusRequest] = useState(0)
   /** Actions *DO THIS* cochées dans le fil, source de la consigne composée. */
   const [selectedActions, setSelectedActions] = useState<TaskAction[]>([])
@@ -274,8 +270,20 @@ export function Chat({
     const distanceFromBottom =
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
     followsBottomRef.current = distanceFromBottom <= 64
+    setAtBottom(followsBottomRef.current)
     if (followsBottomRef.current) onConversationRead?.()
   }
+
+  useEffect(() => {
+    function handleSearchShortcut(event: globalThis.KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handleSearchShortcut)
+    return () => window.removeEventListener('keydown', handleSearchShortcut)
+  }, [])
 
   // useCallback obligatoire : une identité instable ici casserait la
   // mémoïsation d'EventStream et annulerait tout le gain.
@@ -284,15 +292,9 @@ export function Chat({
     setFocusRequest((current) => current + 1)
   }, [])
 
-  function handleFind(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const query = findQuery.trim()
-    if (!query) return
-    if (typeof window.find === 'function') window.find(query, false, false, true)
-  }
-
   function jumpToBottom() {
     followsBottomRef.current = true
+    setAtBottom(true)
     scrollToBottomIfFollowing()
     onConversationRead?.()
   }
@@ -357,22 +359,22 @@ export function Chat({
             <ReconnectBanner retryAt={retryAt} />
           ) : null}
 
-          <div className="conversation-toolbar" aria-label="Navigation dans la conversation">
-            <form className="conversation-search" onSubmit={handleFind}>
-              <label className="sr-only" htmlFor="conversation-find">Rechercher dans le fil</label>
-              <input
-                id="conversation-find"
-                value={findQuery}
-                onChange={(event) => setFindQuery(event.target.value)}
-                placeholder="Rechercher dans le fil"
-              />
-              <button type="submit" aria-label="Rechercher" title="Rechercher dans le fil">⌕</button>
-            </form>
-            <button type="button" className="conversation-jump" onClick={jumpToBottom} title="Aller au dernier message">
-              Dernier message
-            </button>
-          </div>
-
+          <div className="events-shell">
+            <ThreadSearch
+              viewportRef={viewportRef}
+              open={searchOpen}
+              onOpen={() => setSearchOpen(true)}
+              onClose={() => setSearchOpen(false)}
+              contentVersion={events.length}
+            />
+            {!atBottom ? (
+              <button type="button" className="thread-jump" onClick={jumpToBottom} title="Aller au dernier message">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M8 3v9M4.5 8.5 8 12l3.5-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Dernier message
+              </button>
+            ) : null}
           <div className="events-view" ref={viewportRef} onScroll={handleScroll}>
             <div className="events-list" aria-live="polite">
               {blocks.length === 0 ? (
@@ -403,6 +405,7 @@ export function Chat({
                 </TaskToggleContext.Provider>
               )}
             </div>
+          </div>
           </div>
 
           <Composer
