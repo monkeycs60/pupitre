@@ -789,35 +789,6 @@
   font-family: var(--font-mono);
 }
 
-.turn-time {
-  margin-left: auto;
-  color: var(--accent-hover);
-  font-family: var(--font-mono);
-  font-weight: 600;
-}
-
-.turn-review-action {
-  margin-left: auto;
-  padding: 2px var(--space-2);
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  cursor: pointer;
-}
-
-.turn-review-action:hover {
-  color: var(--text-strong);
-  background: var(--bg-hover);
-  border-color: var(--border-strong);
-}
-
-.turn-review-action + .turn-time {
-  margin-left: 0;
-}
-
 /* Le Gardien reste dans le flux : une seule ligne d'état. */
 .guardian-line {
   margin: calc(-1 * var(--space-3)) 0 var(--space-5);
@@ -936,6 +907,27 @@
 
 .turn-timing {
   color: var(--text-muted);
+}
+
+.turn-usage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 1px solid color-mix(in srgb, var(--text-muted) 24%, transparent);
+}
+
+.turn-usage-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.turn-usage-metric svg {
+  color: var(--text-faint);
 }
 
 .turn-error {

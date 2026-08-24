@@ -11,8 +11,6 @@ interface EventViewProps {
   block: EventBlock
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
-  turnUserMs?: Record<string, number>
-  onReviewChanges?: () => void
 }
 
 function formatPreValue(value: unknown): string {
@@ -92,6 +90,19 @@ function parsedTime(value: string | undefined): number | null {
   return Number.isNaN(timestamp) ? null : timestamp
 }
 
+function TokenDirectionIcon({ direction }: { direction: 'input' | 'output' }) {
+  const incoming = direction === 'input'
+  return <svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true">
+    <path
+      d={incoming ? 'M2 6h7M6.5 3.5 9 6 6.5 8.5' : 'M10 6H3M5.5 3.5 3 6l2.5 2.5'}
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+}
+
 function basename(path: string): string {
   const segments = path.split(/[/\\]/)
   return segments.at(-1) || path
@@ -114,14 +125,8 @@ function TurnFiles({ files }: { files: Array<{ path: string; added: number; remo
   )
 }
 
-function TurnFooter({
-  block,
-  turnUserMs,
-  onReviewChanges,
-}: {
+function TurnFooter({ block }: {
   block: Extract<EventBlock, { kind: 'turn-footer' }>
-  turnUserMs?: Record<string, number>
-  onReviewChanges?: () => void
 }) {
   const isRunning = block.status?.state === 'running'
   const isDone = block.status?.state === 'done'
@@ -129,18 +134,9 @@ function TurnFooter({
   // Synchronisation avec l'horloge système : seul effet nécessaire au compteur.
   const now = useNow(isRunning ? 1_000 : 30_000)
   const startedAt = parsedTime(block.timing?.startedAt)
-  const firstResponseAt = parsedTime(block.timing?.firstResponseAt)
   const completedAt = parsedTime(block.timing?.completedAt)
   const endAt = completedAt ?? (isRunning ? now : null)
-  const firstResponseMs = startedAt !== null && firstResponseAt !== null
-    ? firstResponseAt - startedAt
-    : null
   const totalMs = startedAt !== null && endAt !== null ? endAt - startedAt : null
-  // Ce que le tour a coûté en temps humain : la présence pendant sa fenêtre,
-  // pas sa durée — celle-ci est déjà affichée juste à gauche.
-  const userMs = block.timing?.startedAt !== undefined
-    ? turnUserMs?.[block.timing.startedAt]
-    : undefined
   const turnError = isError
     ? summarizeTurnError(block.status?.error ?? 'Une erreur est survenue.')
     : null
@@ -174,37 +170,25 @@ function TurnFooter({
           </span>
         ) : null}
         {totalMs !== null ? (
-          <span className="turn-timing">
-            {firstResponseMs === null
-              ? isRunning
-                ? `attente ${formatDuration(totalMs)}`
-                : `aucun retour · total ${formatDuration(totalMs)}`
-              : `1er retour ${formatDuration(firstResponseMs)} · ${
-                  isRunning ? 'durée' : 'total'
-                } ${formatDuration(totalMs)}`}
+          <span className="turn-timing" title="Durée du run">
+            {formatDuration(totalMs)}
           </span>
         ) : null}
         {block.usage ? (
-          <span className="usage">
-            {block.usage.inputTokens.toLocaleString('fr-FR')} →{' '}
-            {block.usage.outputTokens.toLocaleString('fr-FR')} tokens
+          <span className="turn-usage" aria-label="Utilisation des tokens">
+            <span className="turn-usage-metric" aria-label={`${block.usage.inputTokens.toLocaleString('fr-FR')} tokens en entrée`} title="Tokens en entrée">
+              <TokenDirectionIcon direction="input" />
+              {block.usage.inputTokens.toLocaleString('fr-FR')}
+            </span>
+            <span className="turn-usage-metric" aria-label={`${block.usage.outputTokens.toLocaleString('fr-FR')} tokens en sortie`} title="Tokens en sortie">
+              <TokenDirectionIcon direction="output" />
+              {block.usage.outputTokens.toLocaleString('fr-FR')}
+            </span>
           </span>
         ) : null}
         {block.subtaskCount !== undefined ? (
           <span className="turn-subtasks" title="Agents délégués lancés depuis ce tour, un par tâche ou signalement">
             {block.subtaskCount} agent{block.subtaskCount > 1 ? 's' : ''} délégué{block.subtaskCount > 1 ? 's' : ''}
-          </span>
-        ) : null}
-        {isDone && onReviewChanges ? (
-          <button type="button" className="turn-review-action" onClick={onReviewChanges}>
-            Lancer le Gardien
-          </button>
-        ) : null}
-        {userMs !== undefined ? (
-          <span className="turn-time" title="Ton temps de présence pendant ce tour">
-            {/* Sous la minute, la seconde n'apporte rien : « 0 min » dit
-                simplement que tu n'étais pas devant. */}
-            +{userMs < 60_000 ? `${Math.round(userMs / 60_000)} min` : formatDuration(userMs)}
           </span>
         ) : null}
       </div>
@@ -218,7 +202,7 @@ function TurnFooter({
  */
 export const EventView = memo(EventViewImpl)
 
-function EventViewImpl({ block, onImageOpen, onImageLoad, turnUserMs, onReviewChanges }: EventViewProps) {
+function EventViewImpl({ block, onImageOpen, onImageLoad }: EventViewProps) {
   switch (block.kind) {
     case 'user':
       return (
@@ -283,7 +267,7 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnUserMs, onReviewCh
       )
 
     case 'turn-footer': {
-      return <TurnFooter block={block} turnUserMs={turnUserMs} onReviewChanges={onReviewChanges} />
+      return <TurnFooter block={block} />
     }
   }
 }

@@ -928,7 +928,6 @@ function App() {
               ticketId={conversationSeed?.ticketId ?? null}
               originType={conversationSeed?.originType ?? null}
               originKey={conversationSeed?.originKey ?? null}
-              turnUserMs={time.snapshot?.turns ?? {}}
               reviewStatus={fleet.reviewStatus}
               onOpenCode={handleGitSelect}
             />

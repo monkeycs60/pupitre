@@ -61,8 +61,6 @@ interface ChatProps {
   ticketId?: string | null
   originType?: 'sentry' | null
   originKey?: string | null
-  /** Temps humain par tour, clé = horodatage de départ du tour. */
-  turnUserMs?: Record<string, number>
   reviewStatus: ReviewStatusSnapshot | null
   onOpenCode: (flagId?: string) => void
 }
@@ -126,7 +124,6 @@ export function Chat({
   ticketId = null,
   originType = null,
   originKey = null,
-  turnUserMs,
   reviewStatus,
   onOpenCode,
 }: ChatProps) {
@@ -285,11 +282,6 @@ export function Chat({
     if (!conversation) return
     void startReview({ conversationId: conversation.id, scope: 'worktree' }).catch(() => {})
   }, [conversation])
-  const focusReview = useCallback(() => {
-    document.getElementById('guardian-line')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    relire()
-  }, [relire])
-
   return (
     <>
       <div className={`chat-layout ${skillsPanelOpen ? 'has-suggestions' : ''}`}>
@@ -330,8 +322,6 @@ export function Chat({
                     onImageLoad={scrollToBottomIfFollowing}
                     onSubtaskStatusChange={handleSubtaskStatusChange}
                     onDebriefQuestion={handleDebriefQuestion}
-                    turnUserMs={turnUserMs}
-                    onReviewChanges={focusReview}
                   />
                   {!isRunning && conversation !== null ? (
                     <GuardianLine
