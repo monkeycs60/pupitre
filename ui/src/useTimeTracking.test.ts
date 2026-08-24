@@ -157,6 +157,17 @@ test('le compteur s’arrête après deux minutes sans le moindre signal', async
   expect(totalPostedMs()).toBe(stopped)
 })
 
+test('le compteur affiché ne se publie qu’à la minute, pas à chaque seconde', async () => {
+  install()
+  const read = mount('p1')
+  await act(async () => { await Promise.resolve() })
+  const before = read()?.snapshot
+  await tick(59)
+  expect(read()?.snapshot).toBe(before)
+  await tick(1)
+  expect(read()?.snapshot?.user.ms).toBe(60_000)
+})
+
 test('la molette suffit à rester actif : lire n’est pas être absent', async () => {
   install()
   mount('p1')

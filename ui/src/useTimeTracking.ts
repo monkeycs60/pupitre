@@ -9,6 +9,10 @@ import type { TimeMode, TimeSnapshot } from './types'
  */
 const IDLE_LIMIT_MS = 2 * 60_000
 const TICK_MS = 1_000
+/** Le tick d'une seconde reste interne (refs) : publié tel quel dans le state,
+ *  il re-rendait tout l'arbre depuis App chaque seconde. Les affichages
+ *  (niveau, barre de progression, compteur du jour) se contentent de la minute. */
+const PUBLISH_MS = 60_000
 const FLUSH_MS = 15_000
 const POLL_MS = 30_000
 /** Au-delà, deux ticks appartiennent à deux moments différents. */
@@ -54,6 +58,8 @@ export function useTimeTracking(
   const [pendingMs, setPendingMs] = useState(0)
   const [mode, setMode] = useState<TimeMode>(() => readMode(projectId))
 
+  const pending = useRef(0)
+  const published = useRef(0)
   const open = useRef<OpenSlice | null>(null)
   const queue = useRef<Array<{ projectId: string; conversationId: string | null; startedAt: string; endedAt: string }>>([])
   const flushing = useRef(false)
@@ -87,7 +93,9 @@ export function useTimeTracking(
         setSnapshot(next)
         // Seuls les ticks postérieurs au départ de la requête restent à
         // ajouter : les précédents sont déjà dans la réponse ou le seront.
-        setPendingMs((current) => Math.max(0, Math.min(current, Date.now() - startedAt)))
+        pending.current = Math.max(0, Math.min(pending.current, Date.now() - startedAt))
+        published.current = pending.current
+        setPendingMs(pending.current)
       } catch {
         // Le suivi du temps est une lecture de confort : jamais bloquant.
       }
@@ -172,7 +180,11 @@ export function useTimeTracking(
           lastTickMs: now,
         }
       }
-      setPendingMs((current) => current + TICK_MS)
+      pending.current += TICK_MS
+      if (pending.current - published.current >= PUBLISH_MS) {
+        published.current = pending.current
+        setPendingMs(pending.current)
+      }
       const openedFor = open.current ? now - open.current.startMs : 0
       if (openedFor >= FLUSH_MS) void flush()
     }, TICK_MS)

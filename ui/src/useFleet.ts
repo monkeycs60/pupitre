@@ -143,6 +143,10 @@ export function useFleet(projectId?: string): FleetState {
     const controller = new AbortController()
 
     function applySnapshot(snapshot: FleetItem[]) {
+      // Le serveur rediffuse le snapshot chaque seconde, identique la plupart
+      // du temps : le réinjecter tel quel re-rendait App — donc tout l'arbre —
+      // au même rythme. Seuls les vrais changements sont publiés.
+      if (JSON.stringify(snapshot) === JSON.stringify(activeRef.current)) return
       const nextHistory = rememberDepartedFleetRuns(
         activeRef.current,
         snapshot,

@@ -268,7 +268,9 @@ export function Sidebar({
   selectedConversationRef.current = selectedConversation
   const workspaceViewRef = useRef(workspaceView)
   workspaceViewRef.current = workspaceView
-  const now = useNow(1_000)
+  // La seconde n'alimente que le chrono des conversations live ; au repos, ce
+  // tick re-rendait toute la sidebar (groupes, tris, previews) chaque seconde.
+  const now = useNow(activeFleet.length > 0 || runningSubtasks > 0 ? 1_000 : 30_000)
   const activeByConversation = new Map<string, FleetItem>()
   for (const item of activeFleet) {
     if (!activeByConversation.has(item.conversationId)) activeByConversation.set(item.conversationId, item)
