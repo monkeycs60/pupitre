@@ -113,6 +113,17 @@ function TurnFiles({ files }: { files: Array<{ path: string; added: number; remo
   )
 }
 
+/**
+ * Libellé du tour en cours : « réfléchit » ouvre le tour, puis alterne avec
+ * « écrit ». Ambiance temporelle, pas une télémétrie — le flux d'événements
+ * ne distingue pas les phases, et la rotation suffit à rendre l'attente
+ * vivante sans prétendre plus qu'elle ne sait.
+ */
+function runningLabel(totalMs: number | null): string {
+  if (totalMs === null || totalMs < 6_000) return 'réfléchit…'
+  return Math.floor(totalMs / 6_000) % 2 === 1 ? 'écrit…' : 'réfléchit…'
+}
+
 function TurnFooter({ block, action }: {
   block: Extract<EventBlock, { kind: 'turn-footer' }>
   action?: ReactNode
@@ -150,7 +161,8 @@ function TurnFooter({ block, action }: {
       <div className={`turn-meta${isDone ? ' turn-meta-done' : ''}${isRunning ? ' turn-meta-running' : ''}`}>
         {isRunning ? (
           <span className="running-indicator" role="status">
-            <span className="running-dots" aria-hidden="true"><i /><i /><i /></span> en cours
+            <span className="running-dots" aria-hidden="true"><i /><i /><i /></span>
+            <span className="running-label" key={runningLabel(totalMs)}>{runningLabel(totalMs)}</span>
           </span>
         ) : null}
         {isDone ? (

@@ -711,7 +711,7 @@ export function Composer({
                 {isCancelling ? 'Annulation…' : 'Annuler le tour'}
               </button>
             ) : null}
-            <button type="submit" className="send-button" disabled={!canSubmit}>
+            <button type="submit" className={`send-button${isRunning ? ' is-running' : ''}`} disabled={!canSubmit}>
               {isSubmitting
                 ? isNewConversation
                   ? 'Création…'

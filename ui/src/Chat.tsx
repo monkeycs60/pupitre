@@ -65,6 +65,7 @@ interface ChatProps {
   onOpenCode: (flagId?: string) => void
   onHandoff: () => void
   onChangelogReview: (review: ChangelogReview) => void
+  onSwitchModel: () => void
 }
 
 interface LightboxImage {
@@ -171,6 +172,7 @@ export function Chat({
   onOpenCode,
   onHandoff,
   onChangelogReview,
+  onSwitchModel,
 }: ChatProps) {
   const draftStorageKey = conversation === null
     ? newConversationDraftStorageKey(project.id, ticketId)
@@ -318,6 +320,14 @@ export function Chat({
     }
     if (action === 'test') {
       await createTestInventory(conversation.id).catch(() => {})
+      return
+    }
+    if (action === 'switch-model') {
+      onSwitchModel()
+      return
+    }
+    if (action === 'handoff') {
+      onHandoff()
       return
     }
     const result = await createSessionSummary(conversation.id).catch(() => null)

@@ -37,3 +37,25 @@ export function TicketLinkIcons({ links, ticketKey }: { links: TicketLinks; tick
     </span>
   )
 }
+
+/** Lien vers l'issue Sentry d'une conversation ou d'un groupe scout. */
+export function SentryLinkIcon({ url, issueKey }: { url: string; issueKey: string }) {
+  return (
+    <span className="ticket-link-icons">
+      <ExternalLink
+        className="ticket-link-icon"
+        href={url}
+        ariaLabel={`Ouvrir ${issueKey} dans Sentry`}
+        title={`Ouvrir ${issueKey} dans Sentry`}
+      >
+        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ color: 'var(--sentry-gold)' }}>
+          <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+            <path d="M7 3.4a1.15 1.15 0 0 1 2 0l4.5 7.8a1.15 1.15 0 0 1-1 1.7H10" />
+            <path d="M6.1 6.6a7.5 7.5 0 0 1 3.4 6.3" />
+            <path d="M4.6 9.2a4.4 4.4 0 0 1 2 3.7H3.5a1.15 1.15 0 0 1-1-1.7l.6-1.1" />
+          </g>
+        </svg>
+      </ExternalLink>
+    </span>
+  )
+}

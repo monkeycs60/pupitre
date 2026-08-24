@@ -1174,6 +1174,29 @@
   background: var(--accent-hover);
 }
 
+/* Tour en cours : un reflet balaie le bouton d'envoi, écho du filet de la
+   barre de fin de tour — l'app entière dit « ça travaille ». */
+.send-button.is-running {
+  position: relative;
+  overflow: hidden;
+}
+
+.send-button.is-running::after {
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: sheen 1.8s var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .send-button.is-running::after {
+    animation: none;
+  }
+}
+
 .cancel-button {
   min-height: 30px;
   padding: 0 12px;

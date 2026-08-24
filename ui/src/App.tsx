@@ -49,8 +49,8 @@ import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { SurfaceSwitch } from './SurfaceSwitch'
 import { ConversationInstruction } from './ConversationInstruction'
-import { TicketLinkIcons } from './TicketLinkIcons'
-import { useTicketLinks } from './ticketLinks'
+import { SentryLinkIcon, TicketLinkIcons } from './TicketLinkIcons'
+import { useSentryLinks, useTicketLinks } from './ticketLinks'
 import { isAppRestartShortcut, restartApp } from './appRestart'
 import { ChangelogReviewDialog } from './ChangelogReviewDialog'
 import {
@@ -148,6 +148,7 @@ function App() {
   )
   const fleet = useFleet(selectedProject?.id)
   const ticketLinks = useTicketLinks(selectedProject?.id)
+  const sentryLinks = useSentryLinks(selectedProject?.id)
   useAppNotifications()
 
   useEffect(() => {
@@ -561,12 +562,6 @@ function App() {
     }
   }
 
-  async function startWorktreeReview() {
-    if (!selectedConversation) return
-    await startReview({ conversationId: selectedConversation.id, scope: 'worktree' })
-    handleGitSelect()
-  }
-
   async function handleRoutineConversationSelect(projectId: string, conversationId: string) {
     const project = selectedProject?.id === projectId
       ? selectedProject
@@ -691,6 +686,7 @@ function App() {
         agentRunning={fleet.items.length > 0}
         activeFleet={fleet.items}
         ticketLinks={ticketLinks}
+        sentryLinks={sentryLinks}
       />
       <div
         className="sidebar-resize-handle"
@@ -798,6 +794,15 @@ function App() {
                     />
                   )
                 })()}
+                {(() => {
+                  const originKey = selectedConversation?.origin_type === 'sentry'
+                    ? selectedConversation.origin_key ?? null
+                    : null
+                  const url = originKey !== null ? sentryLinks.get(originKey) : undefined
+                  return originKey !== null && url !== undefined
+                    ? <SentryLinkIcon url={url} issueKey={originKey} />
+                    : null
+                })()}
               </div>
               {selectedConversation !== null ? (
                 <SurfaceSwitch
@@ -809,20 +814,6 @@ function App() {
               {selectedConversation !== null ? (
                 <div className="header-actions">
                   <ResumeCommandButton conversation={selectedConversation} />
-                  <details className="header-action-menu">
-                    <summary className="header-action header-action-icon" title="Actions de la conversation">
-                      <span aria-hidden="true">⋯</span>
-                      <span className="sr-only">Actions de la conversation</span>
-                    </summary>
-                    <div role="menu">
-                      <button type="button" role="menuitem" onClick={() => setShowSwitchModel(true)}>
-                        Changer de modèle
-                      </button>
-                      <button type="button" role="menuitem" onClick={() => void startWorktreeReview()}>
-                        Relire le diff
-                      </button>
-                    </div>
-                  </details>
                 </div>
               ) : null}
             </header>
@@ -852,6 +843,7 @@ function App() {
               onOpenCode={handleGitSelect}
               onHandoff={() => setShowHandoff(true)}
               onChangelogReview={setChangelogReview}
+              onSwitchModel={() => setShowSwitchModel(true)}
             />
             {showSwitchModel && selectedConversation !== null ? (
               <SwitchModelModal

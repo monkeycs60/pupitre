@@ -26,7 +26,7 @@ import { useNow } from './useNow'
 import { LevelCard } from './LevelCard'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
-import { TicketLinkIcons } from './TicketLinkIcons'
+import { SentryLinkIcon, TicketLinkIcons } from './TicketLinkIcons'
 import type { TicketLinks } from './ticketLinks'
 
 declare global {
@@ -60,6 +60,8 @@ interface SidebarProps {
   agentRunning?: boolean
   /** Liens ClickUp / MR par clé de ticket, pour les groupes contextuels. */
   ticketLinks?: Map<string, TicketLinks>
+  /** Permalinks Sentry par shortId d'issue, pour les groupes scout. */
+  sentryLinks?: Map<string, string>
 }
 
 function pinnedFirst<T extends { pinned: boolean }>(items: T[]): T[] {
@@ -152,6 +154,8 @@ type ConversationGroup = {
   latestUpdatedAt?: number
   /** Clé du ticket pour les groupes contextuels : porte les liens externes. */
   ticketKey?: string | null
+  /** ShortId de l'issue pour les groupes Sentry : porte le permalink. */
+  sentryKey?: string | null
 }
 
 /** Regroupe les conversations par récence (épinglées d'abord), comme la
@@ -207,6 +211,7 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
       key: `${context.type}-${context.key}`,
       label: context.type === 'sentry' ? `Sentry · ${context.key}` : context.key,
       ticketKey: context.type === 'ticket' ? context.key : null,
+      sentryKey: context.type === 'sentry' ? context.key : null,
       items: context.grouped,
       latestUpdatedAt: Math.max(...context.grouped.map((conversation) => Date.parse(conversation.updated_at))),
     }))
@@ -238,6 +243,7 @@ export function Sidebar({
   onTimeModeToggle,
   agentRunning = false,
   ticketLinks,
+  sentryLinks,
 }: SidebarProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [workflows, setWorkflows] = useState<Workflow[]>([])
@@ -674,6 +680,7 @@ export function Sidebar({
                 conversationRowState(conversation, activeConversationIds) === 'unread'
               )).length
               const groupLinks = group.ticketKey ? ticketLinks?.get(group.ticketKey) : undefined
+              const groupSentryUrl = group.sentryKey ? sentryLinks?.get(group.sentryKey) : undefined
               return (
               <div className="conv-group" key={group.key}>
                 <div className="conv-group-header">
@@ -690,6 +697,7 @@ export function Sidebar({
                     <span>{group.label}</span>
                   </button>
                   {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
+                  {groupSentryUrl !== undefined ? <SentryLinkIcon url={groupSentryUrl} issueKey={group.sentryKey!} /> : null}
                   <span className="conv-group-rule" aria-hidden="true" />
                   {(group.key.startsWith('ticket-') || group.key.startsWith('sentry-')) && onConversationCreateFromContext ? (
                     <button
