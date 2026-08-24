@@ -79,13 +79,6 @@ export function suggestionsFromLabels(
   return suggestions;
 }
 
-export function suggestionsFromSkills(
-  _skills: Array<{ name: string; project_id: string | null; provenance: string }>,
-  _projectId: string,
-): DigestDomainSuggestion[] {
-  return [];
-}
-
 export function normalizeDomainName(name: string): string {
   return name.normalize("NFC").trim().replace(/\s+/g, " ").slice(0, NAME_MAX);
 }
@@ -139,23 +132,28 @@ export class DomainStore {
   proposeMany(projectId: string, items: DigestDomainSuggestion[]): Domain[] {
     const seen = new Set<string>();
     const result: Domain[] = [];
-    for (const item of items) {
-      const name = normalizeDomainName(item.name);
-      if (!name) continue;
-      const key = name.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const existing = this.findByName(projectId, name);
-      if (existing) {
-        result.push(existing);
-        continue;
+    // Un seul commit WAL pour la fournée : appelé sur le GET des domaines du
+    // clic projet, chaque INSERT isolé payait sinon son propre fsync.
+    const propose = this.db.transaction(() => {
+      for (const item of items) {
+        const name = normalizeDomainName(item.name);
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const existing = this.findByName(projectId, name);
+        if (existing) {
+          result.push(existing);
+          continue;
+        }
+        result.push(this.create(projectId, {
+          name,
+          kind: isDomainKind(item.kind) ? item.kind : "technique",
+          status: "proposé",
+        }));
       }
-      result.push(this.create(projectId, {
-        name,
-        kind: isDomainKind(item.kind) ? item.kind : "technique",
-        status: "proposé",
-      }));
-    }
+    });
+    propose();
     return result;
   }
 

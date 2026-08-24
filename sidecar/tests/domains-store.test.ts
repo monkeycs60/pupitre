@@ -9,7 +9,6 @@ import {
   DomainProtectedError,
   DomainStore,
   suggestionsFromLabels,
-  suggestionsFromSkills,
 } from "../src/stores/domains";
 import { ProjectStore } from "../src/stores/projects";
 
@@ -158,20 +157,6 @@ test("les labels ClickUp structurels ne deviennent pas des domaines", () => {
     { name: "Match AI", kind: "métier" },
     { name: "Analytics", kind: "technique" },
   ]);
-});
-
-test("les skills projet techniques ou exploratoires ne deviennent pas des domaines", () => {
-  expect(suggestionsFromSkills([
-    { name: "_matching-system", project_id: projectId, provenance: "claude-project" },
-    { name: "_hapi-review", project_id: projectId, provenance: "claude-project" },
-    { name: "create-mr", project_id: projectId, provenance: "claude-project" },
-    { name: "release-notes", project_id: projectId, provenance: "claude-project" },
-    { name: "Affilae-mono AI guidelines", project_id: projectId, provenance: "agents-project" },
-    { name: "feed-diagnose", project_id: projectId, provenance: "agents-project" },
-    { name: "team", project_id: projectId, provenance: "agents-project" },
-    { name: "global-skill", project_id: null, provenance: "claude-global" },
-    { name: "trend-radar-system", project_id: otherProjectId, provenance: "agents-project" },
-  ], projectId)).toEqual([]);
 });
 
 test("les conversations sans domaine restent listables", () => {

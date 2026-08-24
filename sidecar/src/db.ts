@@ -18,6 +18,11 @@ export function openDb(dir: string = dataDir()): Database {
   db.exec(`
     PRAGMA foreign_keys = OFF;
     PRAGMA journal_mode = WAL;
+    -- En WAL, FULL imposait un fsync par transaction — donc par événement
+    -- appendé pendant le streaming. NORMAL ne risque qu'un retour en arrière
+    -- de quelques transactions sur coupure de courant, jamais une corruption.
+    PRAGMA synchronous = NORMAL;
+    PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL UNIQUE,
       permission_mode TEXT NOT NULL DEFAULT 'acceptEdits',

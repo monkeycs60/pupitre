@@ -83,7 +83,6 @@ import {
   type DomainStore,
   isDomainKind,
   suggestionsFromLabels,
-  suggestionsFromSkills,
 } from "./stores/domains";
 import type { IntegrationSecretStore } from "./stores/integration-secrets";
 import type { SentryStore } from "./stores/sentry";
@@ -406,10 +405,7 @@ function seedProjectDomains(deps: ServerDeps, projectId: string): void {
     Array.isArray(ticket.payload.labels) ? ticket.payload.labels : []
   ));
   const knownDomainNames = domains.listByProject(projectId).map((domain) => domain.name);
-  domains.proposeMany(projectId, [
-    ...suggestionsFromLabels(labels, knownDomainNames),
-    ...suggestionsFromSkills(deps.skills.list({ projectId }), projectId),
-  ]);
+  domains.proposeMany(projectId, suggestionsFromLabels(labels, knownDomainNames));
 }
 
 function htmlDocumentHttpError(error: unknown): never {
