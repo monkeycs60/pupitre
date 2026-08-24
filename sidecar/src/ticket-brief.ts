@@ -1,4 +1,4 @@
-import type { Ticket, TicketNote, TicketRef, TicketSource } from "./stores/tickets";
+import type { Ticket, TicketRef, TicketSource } from "./stores/tickets";
 
 export const MAX_BRIEF_CHARS = 12_000;
 const MAX_DEBRIEF_CHARS = 3_000;
@@ -9,7 +9,7 @@ export interface TicketBriefInput {
   ticket: Pick<Ticket, "key" | "title" | "status" | "source" | "external_url">;
   branches: string[];
   refs: Array<Pick<TicketRef, "kind" | "ref" | "payload">>;
-  notes: Array<Pick<TicketNote, "body" | "created_at">>;
+  instruction: string;
   clickup: {
     description: string;
     comments: Array<{ author: string; text: string; at: string }>;
@@ -89,11 +89,8 @@ export function composeTicketBrief(input: TicketBriefInput): string {
     }
   }
 
-  if (input.notes.length) {
-    parts.push("", "## Notes");
-    for (const note of input.notes) {
-      parts.push(`- (${note.created_at.slice(0, 10)}) ${note.body}`);
-    }
+  if (input.instruction.trim()) {
+    parts.push("", "## Instruction du ticket", input.instruction.trim());
   }
 
   if (input.siblings.length) {

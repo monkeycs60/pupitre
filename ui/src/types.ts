@@ -255,6 +255,7 @@ export interface Conversation {
   created_on_branch: string | null
   ticket_id: string | null
   ticket_key?: string | null
+  ticket_instruction: string | null
   domains?: ConversationDomain[]
   proposed_domain_count?: number
   origin_type?: 'sentry' | null
@@ -335,6 +336,7 @@ export interface TicketRow {
   title: string
   status: string
   external_url: string | null
+  instruction: string
   payload: Record<string, unknown>
   last_seen_at: string
   archived_at: string | null

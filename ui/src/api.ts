@@ -796,6 +796,13 @@ export function deleteTicketNote(noteId: string): Promise<void> {
   return fetchVoid(`/api/ticket-notes/${routeId(noteId)}`, { method: 'DELETE' })
 }
 
+export function updateTicketInstruction(ticketId: string, instruction: string): Promise<void> {
+  return fetchVoid(
+    `/api/tickets/${routeId(ticketId)}/instruction`,
+    { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ instruction }) },
+  )
+}
+
 export function updateIntegrationTokens(
   tokens: Partial<Record<'clickup' | 'gitlab', string | null>>,
 ): Promise<Settings> {

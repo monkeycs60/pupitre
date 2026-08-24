@@ -56,6 +56,7 @@ import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { SurfaceSwitch } from './SurfaceSwitch'
 import { ConversationDomains } from './ConversationDomains'
+import { ConversationInstruction } from './ConversationInstruction'
 import { isAppRestartShortcut, restartApp } from './appRestart'
 import { ChangelogReviewDialog } from './ChangelogReviewDialog'
 import {
@@ -845,6 +846,9 @@ function App() {
                 >
                   {formatActiveDuration(time.snapshot.conversations[selectedConversation.id].userMs)}
                 </span>
+              ) : null}
+              {selectedConversation?.ticket_instruction ? (
+                <ConversationInstruction instruction={selectedConversation.ticket_instruction} />
               ) : null}
               {selectedConversation !== null ? (
                 <ConversationDomains

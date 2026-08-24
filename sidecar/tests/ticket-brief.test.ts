@@ -19,7 +19,7 @@ const base = {
       mergeStatus: "mergeable",
     },
   }],
-  notes: [{ body: "penser au cache", created_at: "2026-08-19T10:00:00Z" }],
+  instruction: "Penser au cache.",
   clickup: {
     description: "Faire la chose.",
     comments: [{ author: "Alex", text: "Dernier mot", at: "2026-08-19T09:00:00Z" }],
@@ -38,7 +38,7 @@ test("compose un brief markdown ordonné et borné", () => {
   const order = [
     "## Ticket",
     "## Branche et MR",
-    "## Notes",
+    "## Instruction du ticket",
     "## Conversations précédentes",
     "## Consigne",
   ].map((heading) => brief.indexOf(heading));
@@ -67,19 +67,16 @@ test("sans ClickUp ni conversations sœurs, les sections absentes ne sont pas é
     ...base,
     clickup: null,
     siblings: [],
-    notes: [],
+    instruction: "",
   });
-  expect(brief).not.toContain("## Notes");
+  expect(brief).not.toContain("## Instruction du ticket");
   expect(brief).not.toContain("## Conversations précédentes");
 });
 
 test("préserve la consigne quand les sections cumulatives dépassent le budget", () => {
   const brief = composeTicketBrief({
     ...base,
-    notes: Array.from({ length: 400 }, () => ({
-      body: "note".repeat(20),
-      created_at: "2026-08-19T10:00:00Z",
-    })),
+    instruction: "instruction".repeat(2_000),
     clickup: {
       description: "desc",
       comments: Array.from({ length: 50 }, () => ({

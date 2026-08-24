@@ -6,7 +6,7 @@ import type { DashboardPayload, Project } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
-const { act, cleanup, fireEvent, render, screen } = await import('@testing-library/react')
+const { cleanup, fireEvent, render, screen } = await import('@testing-library/react')
 const { DashboardView } = await import('./DashboardView')
 const dashboardCss = readFileSync(new URL('./styles/dashboard.css', import.meta.url), 'utf8')
 
@@ -41,6 +41,7 @@ const ticket = {
   title: 'Leviers',
   status: 'in progress',
   external_url: 'https://app.clickup.com/t/x',
+  instruction: 'Vérifier la rétrocompatibilité.',
   payload: { statusColor: '#4466ff' },
   last_seen_at: '',
   archived_at: null,
@@ -103,7 +104,8 @@ test('rend une ligne par ticket, la colonne Déployé avec GitLab, et le bandeau
   expect(document.querySelectorAll('.dashboard-row:not(.dashboard-head)')).toHaveLength(1)
   expect(document.querySelector('.dashboard-table--with-gitlab')).not.toBeNull()
   expect(screen.getByText(/GitLab/).textContent).toContain('dégradée')
-  expect(screen.getByText('failed')).toBeTruthy()
+  expect(screen.getByText('Échec')).toBeTruthy()
+  expect(screen.getByText('Fusionnable')).toBeTruthy()
   expect(screen.getByText('preprod')).toBeTruthy()
 })
 
@@ -144,6 +146,7 @@ test('rend les liens ClickUp et MR explicites dans les cellules concernées', as
 
   const clickUpLink = screen.getByRole('link', { name: 'Ouvrir TECH-24657 dans ClickUp' })
   expect(clickUpLink.getAttribute('href')).toBe('https://app.clickup.com/t/x')
+  expect(clickUpLink.parentElement?.classList.contains('dashboard-ticket-heading')).toBe(true)
 
   const mergeRequestLink = screen.getByRole('link', { name: /MR reactor!1862/ })
   expect(mergeRequestLink.getAttribute('href')).toBe('https://git/1862')
@@ -166,7 +169,7 @@ test('sépare les pastilles des cellules statut et branche et garde les colonnes
   expect(dashboardCss).toMatch(/\.dashboard-table\s*\{[\s\S]*?overflow:\s*visible/)
 })
 
-test('expose l’état et la cible des disclosures Conversations et Notes', async () => {
+test('expose les conversations et édite l’instruction dans un dialogue centré', async () => {
   mount(withGitlab)
 
   await screen.findByText('TECH-24657')
@@ -180,15 +183,45 @@ test('expose l’état et la cible des disclosures Conversations et Notes', asyn
   expect(conversationsButton.getAttribute('aria-expanded')).toBe('true')
   expect(document.getElementById('ticket-t1-conversations')).not.toBeNull()
 
-  const notesButton = screen.getByRole('button', { name: 'Notes pour TECH-24657 (0)' })
-  expect(notesButton.getAttribute('aria-expanded')).toBe('false')
-  expect(notesButton.getAttribute('aria-controls')).toBe('ticket-t1-notes')
+  fireEvent.click(screen.getByRole('button', { name: 'Instruction' }))
+  expect(screen.getByRole('dialog', { name: 'Instruction · TECH-24657' })).toBeTruthy()
+  expect((screen.getByLabelText('Instruction') as HTMLTextAreaElement).value).toBe('Vérifier la rétrocompatibilité.')
+})
 
-  await act(async () => {
-    fireEvent.click(notesButton)
-    await Promise.resolve()
-  })
+test('trie les tickets par statut puis inverse le tri', async () => {
+  mount({ ...withGitlab, tickets: [ticket, { ...ticket, id: 't2', key: 'TECH-3', status: 'Open' }] })
+  await screen.findByText('TECH-24657')
 
-  expect(notesButton.getAttribute('aria-expanded')).toBe('true')
-  expect(document.getElementById('ticket-t1-notes')).not.toBeNull()
+  const statusSort = screen.getByRole('button', { name: /Statut/ })
+  fireEvent.click(statusSort)
+  expect([...document.querySelectorAll('.dashboard-key')].map((item) => item.textContent)).toEqual(['TECH-24657', 'TECH-3'])
+  fireEvent.click(statusSort)
+  expect([...document.querySelectorAll('.dashboard-key')].map((item) => item.textContent)).toEqual(['TECH-3', 'TECH-24657'])
+})
+
+test('traduit et colore les états GitLab ambigus', async () => {
+  const unchecked = {
+    ...ticket,
+    id: 'unchecked',
+    key: 'TECH-1',
+    refs: ticket.refs.map((ref) => ref.kind === 'mr'
+      ? { ...ref, id: 'mr-unchecked', payload: { ...ref.payload, mergeStatus: 'unchecked' } }
+      : ref),
+  }
+  const conflict = {
+    ...ticket,
+    id: 'conflict',
+    key: 'TECH-2',
+    refs: ticket.refs.map((ref) => ref.kind === 'mr'
+      ? { ...ref, id: 'mr-conflict', payload: { ...ref.payload, mergeStatus: 'conflict', hasConflicts: true } }
+      : ref),
+  }
+  mount({ ...withGitlab, tickets: [unchecked, conflict] })
+
+  const waiting = await screen.findByText('Vérification en attente')
+  const conflicts = screen.getByText('Conflits')
+  expect(waiting.classList.contains('is-neutral')).toBe(true)
+  expect(waiting.getAttribute('title')).toContain('pas encore calculé')
+  expect(conflicts.classList.contains('is-danger')).toBe(true)
+  expect(screen.getAllByText('Échec').every((item) => item.classList.contains('is-danger'))).toBe(true)
 })

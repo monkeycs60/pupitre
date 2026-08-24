@@ -319,7 +319,7 @@ test("les tokens d'intégration s'écrivent dans settings sans jamais être relu
   expect(JSON.stringify(settings)).not.toContain("pk_secret");
 });
 
-test("dashboard : tickets, notes, refresh et canal WS", async () => {
+test("dashboard : tickets, instruction, refresh et canal WS", async () => {
   const project = await createProject("/tmp/dash-2");
   const ticket = current!.deps.tickets.upsert(project.id, {
     key: "TECH-1",
@@ -347,13 +347,13 @@ test("dashboard : tickets, notes, refresh et canal WS", async () => {
         && refreshedAt !== initial.refreshedAt
         && typeof tickets[0] === "object"
         && tickets[0] !== null
-        && (tickets[0] as { notes_count?: unknown }).notes_count === 1;
+        && (tickets[0] as { instruction?: unknown }).instruction === "penser au cache";
     },
   );
   await waiter.opened;
 
-  const note = await postJson(`/api/tickets/${ticket.id}/notes`, { body: "penser au cache" });
-  expect(note.status).toBe(201);
+  const instruction = await putJson(`/api/tickets/${ticket.id}/instruction`, { instruction: "penser au cache" });
+  expect(instruction.status).toBe(200);
 
   const refresh = await postJson(`/api/projects/${project.id}/dashboard/refresh`, {});
   expect(refresh.status).toBe(202);
@@ -503,6 +503,7 @@ test("POST /api/conversations avec ticketId relie la conversation, prend la bran
     status: "",
     externalUrl: null,
   });
+  current!.deps.tickets.setInstruction(ticket.id, "Préserver la rétrocompatibilité.");
   current!.deps.tickets.upsertRef(ticket.id, {
     kind: "branch",
     ref: "feature/TECH-7",
@@ -523,9 +524,11 @@ test("POST /api/conversations avec ticketId relie la conversation, prend la bran
   const conversation = await created.json() as {
     id: string;
     ticket_id: string | null;
+    ticket_instruction: string | null;
     worktree_path: string | null;
   };
   expect(conversation.ticket_id).toBe(ticket.id);
+  expect(conversation.ticket_instruction).toBe("Préserver la rétrocompatibilité.");
   expect(conversation.worktree_path).toContain("feature-TECH-7");
 
   await waitForRunnerIdle(conversation.id);
@@ -535,6 +538,8 @@ test("POST /api/conversations avec ticketId relie la conversation, prend la bran
   expect(userMessage).toMatchObject({ type: "user-message", text: "On reprend" });
   const sent = readFileSync(fakeClaudePromptLog, "utf8");
   expect(sent).toContain("# Reprise du ticket TECH-7");
+  expect(sent).toContain("## Instruction du ticket");
+  expect(sent).toContain("Préserver la rétrocompatibilité.");
 });
 
 test("domaines : CRUD, suggestion invisible, fusion et filtre de recherche", async () => {

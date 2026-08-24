@@ -26,6 +26,7 @@ export interface Conversation {
   created_on_branch: string | null;
   ticket_id: string | null;
   ticket_key?: string | null;
+  ticket_instruction: string | null;
   origin_type?: "sentry" | null;
   origin_key?: string | null;
   /** Reçoit le bridge MCP `conductor` (délégation de sous-tâches). */
@@ -92,6 +93,7 @@ export class ConversationStore {
     /** Branche courante du projet au moment de la création. */
     createdOnBranch?: string | null;
     ticketId?: string | null;
+    ticketInstruction?: string | null;
     originType?: "sentry" | null;
     originKey?: string | null;
     firstMessage: string;
@@ -104,8 +106,8 @@ export class ConversationStore {
       `INSERT INTO conversations
          (id, project_id, title, summary, provider, model, preset_id, effort, speed, permission_mode, orchestrator,
           subagent_preset_id, subagent_effort,
-          continued_from, handoff_pending, routine_id, worktree_path, created_on_branch, ticket_id, origin_type, origin_key, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          continued_from, handoff_pending, routine_id, worktree_path, created_on_branch, ticket_id, ticket_instruction, origin_type, origin_key, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -126,6 +128,7 @@ export class ConversationStore {
       input.worktreePath ?? null,
       input.createdOnBranch ?? null,
       input.ticketId ?? null,
+      input.ticketInstruction?.trim() || null,
       input.originType ?? null,
       input.originKey ?? null,
       now,

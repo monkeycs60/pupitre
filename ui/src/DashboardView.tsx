@@ -1,13 +1,12 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BranchIcon } from './BranchIcon'
-import { createTicketNote, listProjectChangelog, listTicketNotes, refreshProjectDashboard } from './api'
+import { listProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
 import type {
   DashboardIntegration,
   DomainChangeRow,
   Project,
   ReviewRequest,
   TicketConversationSummary,
-  TicketNote,
   TicketRef,
   TicketRow,
 } from './types'
@@ -47,12 +46,22 @@ function textValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-function pipelineTone(status: string | null): string {
-  if (status === null) return ''
-  if (status === 'success') return 'is-ok'
-  if (status === 'failed' || status === 'canceled') return 'is-danger'
-  if (status === 'running' || status === 'manual' || status === 'pending') return 'is-warn'
-  return ''
+interface StatusPresentation {
+  label: string
+  tone: 'is-ok' | 'is-danger' | 'is-warn' | 'is-info' | 'is-neutral'
+  explanation: string
+}
+
+function pipelinePresentation(ref: TicketRef | undefined): StatusPresentation | null {
+  const status = textValue(ref?.payload.status)
+  if (!status) return null
+  if (status === 'success') return { label: 'Réussi', tone: 'is-ok', explanation: 'Le pipeline s’est terminé avec succès.' }
+  if (status === 'failed') return { label: 'Échec', tone: 'is-danger', explanation: 'Le pipeline a échoué.' }
+  if (status === 'running') return { label: 'En cours', tone: 'is-info', explanation: 'Le pipeline est en cours d’exécution.' }
+  if (status === 'manual') return { label: 'Action requise', tone: 'is-warn', explanation: 'Une action manuelle est nécessaire pour poursuivre le pipeline.' }
+  if (status === 'pending' || status === 'created' || status === 'preparing') return { label: 'En attente', tone: 'is-warn', explanation: 'Le pipeline attend son exécution.' }
+  if (status === 'canceled' || status === 'skipped') return { label: status === 'canceled' ? 'Annulé' : 'Ignoré', tone: 'is-neutral', explanation: `Pipeline ${status === 'canceled' ? 'annulé' : 'ignoré'}.` }
+  return { label: status, tone: 'is-neutral', explanation: `État GitLab : ${status}.` }
 }
 
 function relative(value: string | null | undefined): string {
@@ -74,17 +83,20 @@ function deploymentLabel(ref: TicketRef | undefined): string {
   return environment ?? user ?? ref.ref
 }
 
-function mrLabel(ref: TicketRef | undefined): string {
-  if (!ref) return '—'
-  const mergeStatus = textValue(ref.payload.mergeStatus)
-  const state = textValue(ref.payload.state)
-  return mergeStatus ?? state ?? ref.ref
-}
-
-function pipelineStatus(ref: TicketRef | undefined): string | null {
+function mrPresentation(ref: TicketRef | undefined): StatusPresentation | null {
   if (!ref) return null
-  const status = textValue(ref.payload.status)
-  return status ?? ref.ref
+  const mergeStatus = textValue(ref.payload.mergeStatus)
+  if (ref.payload.hasConflicts === true || mergeStatus === 'conflict') {
+    return { label: 'Conflits', tone: 'is-danger', explanation: 'La branche contient des conflits à résoudre avant la fusion.' }
+  }
+  if (mergeStatus === 'mergeable') return { label: 'Fusionnable', tone: 'is-ok', explanation: 'GitLab autorise la fusion de cette MR.' }
+  if (mergeStatus === 'unchecked' || mergeStatus === 'checking') {
+    return { label: 'Vérification en attente', tone: 'is-neutral', explanation: 'GitLab n’a pas encore calculé si cette MR peut être fusionnée.' }
+  }
+  if (mergeStatus === 'ci_still_running') return { label: 'CI en cours', tone: 'is-info', explanation: 'La fusion attend la fin de la CI.' }
+  if (mergeStatus === 'not_approved' || mergeStatus === 'approvals_syncing') return { label: 'Approbation requise', tone: 'is-warn', explanation: 'La MR attend une approbation.' }
+  const state = textValue(ref.payload.state)
+  return { label: mergeStatus ?? state ?? ref.ref, tone: 'is-neutral', explanation: `État GitLab : ${mergeStatus ?? state ?? ref.ref}.` }
 }
 
 function reviewLabel(review: ReviewRequest): string {
@@ -110,9 +122,11 @@ export function DashboardView({
 }: DashboardViewProps) {
   const { data, connected, error } = useDashboard(project.id)
   const [openConversations, setOpenConversations] = useState<Record<string, boolean>>({})
-  const [openNotesTicketId, setOpenNotesTicketId] = useState<string | null>(null)
-  const [notesByTicket, setNotesByTicket] = useState<Record<string, TicketNote[]>>({})
-  const [draftNote, setDraftNote] = useState('')
+  const [instructionTicket, setInstructionTicket] = useState<TicketRow | null>(null)
+  const [instructionDraft, setInstructionDraft] = useState('')
+  const [instructionSaving, setInstructionSaving] = useState(false)
+  const [instructionError, setInstructionError] = useState<string | null>(null)
+  const [sort, setSort] = useState<{ key: 'ticket' | 'status'; direction: 'asc' | 'desc' }>({ key: 'ticket', direction: 'asc' })
   const [changelog, setChangelog] = useState<DomainChangeRow[]>([])
   const [changelogDomain, setChangelogDomain] = useState('')
   const hasGitlab = data?.integrations.some((integration) => integration.type === 'gitlab') ?? false
@@ -123,6 +137,12 @@ export function DashboardView({
   )
   const changelogDomains = useMemo(() => [...new Map(changelog.map((item) => [item.domain_id, item.domain_name])).entries()], [changelog])
   const visibleChangelog = changelogDomain ? changelog.filter((item) => item.domain_id === changelogDomain) : changelog
+  const sortedTickets = useMemo(() => [...(data?.tickets ?? [])].sort((left, right) => {
+    const comparison = sort.key === 'ticket'
+      ? left.key.localeCompare(right.key, 'fr', { numeric: true })
+      : left.status.localeCompare(right.status, 'fr', { sensitivity: 'base' }) || left.key.localeCompare(right.key, 'fr', { numeric: true })
+    return sort.direction === 'asc' ? comparison : -comparison
+  }), [data?.tickets, sort])
 
   useEffect(() => {
     let cancelled = false
@@ -138,28 +158,30 @@ export function DashboardView({
     } catch {}
   }
 
-  async function handleToggleNotes(ticket: TicketRow) {
-    if (openNotesTicketId === ticket.id) {
-      setOpenNotesTicketId(null)
-      setDraftNote('')
-      return
-    }
-    setOpenNotesTicketId(ticket.id)
-    setDraftNote('')
-    try {
-      const notes = await listTicketNotes(ticket.id)
-      setNotesByTicket((current) => ({ ...current, [ticket.id]: notes }))
-    } catch {}
+  function handleSort(key: 'ticket' | 'status') {
+    setSort((current) => current.key === key
+      ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+      : { key, direction: 'asc' })
   }
 
-  async function handleAddNote(ticket: TicketRow) {
-    const body = draftNote.trim()
-    if (!body) return
+  function openInstruction(ticket: TicketRow) {
+    setInstructionTicket(ticket)
+    setInstructionDraft(ticket.instruction)
+    setInstructionError(null)
+  }
+
+  async function handleSaveInstruction() {
+    if (!instructionTicket || instructionSaving) return
+    setInstructionSaving(true)
+    setInstructionError(null)
     try {
-      const note = await createTicketNote(ticket.id, body)
-      setNotesByTicket((current) => ({ ...current, [ticket.id]: [...(current[ticket.id] ?? []), note] }))
-      setDraftNote('')
-    } catch {}
+      await updateTicketInstruction(instructionTicket.id, instructionDraft)
+      setInstructionTicket(null)
+    } catch (saveError) {
+      setInstructionError(saveError instanceof Error ? saveError.message : 'Impossible d’enregistrer l’instruction.')
+    } finally {
+      setInstructionSaving(false)
+    }
   }
 
   return (
@@ -209,8 +231,12 @@ export function DashboardView({
           ) : (
             <div className={tableClassName} role="region" aria-label="Mes tickets">
               <div className="dashboard-row dashboard-head">
-                <span>Ticket</span>
-                <span>Statut</span>
+                <span aria-sort={sort.key === 'ticket' ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  <button type="button" className="dashboard-sort-button" onClick={() => handleSort('ticket')}>Ticket <i aria-hidden="true">{sort.key === 'ticket' ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}</i></button>
+                </span>
+                <span aria-sort={sort.key === 'status' ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  <button type="button" className="dashboard-sort-button" onClick={() => handleSort('status')}>Statut <i aria-hidden="true">{sort.key === 'status' ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}</i></button>
+                </span>
                 <span>Branche</span>
                 <span>MR</span>
                 <span>Pipeline</span>
@@ -219,34 +245,27 @@ export function DashboardView({
                 <span>Actions</span>
               </div>
 
-              {data.tickets.map((ticket) => {
+              {sortedTickets.map((ticket) => {
                 const branch = refOf(ticket, 'branch')
                 const mergeRequest = refOf(ticket, 'mr')
                 const pipeline = refOf(ticket, 'pipeline')
                 const deployment = refOf(ticket, 'deployment')
-                const notes = notesByTicket[ticket.id] ?? []
-                const notesCount = notesByTicket[ticket.id] ? notes.length : ticket.notes_count
-                const pipelineLabel = pipelineStatus(pipeline)
+                const pipelineStatus = pipelinePresentation(pipeline)
+                const mergeRequestStatus = mrPresentation(mergeRequest)
                 const pipelineUrl = textValue(pipeline?.payload.url)
                 const mergeRequestUrl = textValue(mergeRequest?.payload.url)
                 const externalUrl = ticket.external_url
 
                 return (
-                  <Fragment key={ticket.id}>
-                    <div className="dashboard-row">
+                  <div className="dashboard-row" key={ticket.id}>
                       <span className="dashboard-ticket">
-                        <strong className="dashboard-key">{ticket.key}</strong>
+                        <span className="dashboard-ticket-heading">
+                          <strong className="dashboard-key">{ticket.key}</strong>
+                          {externalUrl ? (
+                            <ExternalLink className="dashboard-ticket-link" href={externalUrl} ariaLabel={`Ouvrir ${ticket.key} dans ClickUp`} title="Ouvrir dans ClickUp"><ClickUpIcon /></ExternalLink>
+                          ) : null}
+                        </span>
                         <small>{ticket.title}</small>
-                        {externalUrl ? (
-                          <ExternalLink
-                            className="dashboard-ticket-link"
-                            href={externalUrl}
-                            ariaLabel={`Ouvrir ${ticket.key} dans ClickUp`}
-                            title="Ouvrir dans ClickUp"
-                          >
-                            <ClickUpIcon />
-                          </ExternalLink>
-                        ) : null}
                       </span>
 
                       <span className="dashboard-status">
@@ -274,16 +293,16 @@ export function DashboardView({
                             ariaLabel={`MR ${mergeRequest.ref}`}
                           >
                             <span>{mergeRequest.ref}</span>
-                            <small>{mrLabel(mergeRequest)}</small>
+                            {mergeRequestStatus ? <small className={`dashboard-state ${mergeRequestStatus.tone}`} title={mergeRequestStatus.explanation}>{mergeRequestStatus.label}</small> : null}
                           </ExternalLink>
                         ) : '—'}
                       </span>
 
-                      <span className={`dashboard-pipeline ${pipelineTone(pipelineLabel)}`}>
-                        {pipeline && pipelineUrl && pipelineLabel ? (
-                          <ExternalLink href={pipelineUrl}>{pipelineLabel}</ExternalLink>
+                      <span className="dashboard-pipeline">
+                        {pipeline && pipelineUrl && pipelineStatus ? (
+                          <ExternalLink className={`dashboard-state ${pipelineStatus.tone}`} href={pipelineUrl} title={pipelineStatus.explanation}>{pipelineStatus.label}</ExternalLink>
                         ) : (
-                          pipelineLabel ?? '—'
+                          pipelineStatus ? <span className={`dashboard-state ${pipelineStatus.tone}`} title={pipelineStatus.explanation}>{pipelineStatus.label}</span> : '—'
                         )}
                       </span>
 
@@ -341,47 +360,13 @@ export function DashboardView({
                         </button>
                         <button
                           type="button"
-                          className="text-button"
-                          aria-label={`Notes pour ${ticket.key} (${notesCount})`}
-                          aria-expanded={openNotesTicketId === ticket.id}
-                          aria-controls={`ticket-${ticket.id}-notes`}
-                          onClick={() => void handleToggleNotes(ticket)}
+                          className={`text-button dashboard-instruction-button${ticket.instruction ? ' is-active' : ''}`}
+                          onClick={() => openInstruction(ticket)}
                         >
-                          Notes ({notesCount})
+                          {ticket.instruction ? 'Instruction' : '+ Instruction'}
                         </button>
                       </span>
-                    </div>
-
-                    {openNotesTicketId === ticket.id ? (
-                      <div id={`ticket-${ticket.id}-notes`} className="dashboard-notes">
-                        <div className="dashboard-notes-list">
-                          {notes.length === 0 ? (
-                            <p className="dashboard-notes-empty">Aucune note pour ce ticket.</p>
-                          ) : (
-                            <ul>
-                              {notes.map((note) => <li key={note.id}>{note.body}</li>)}
-                            </ul>
-                          )}
-                        </div>
-                        <form
-                          className="dashboard-note-form"
-                          onSubmit={(event) => {
-                            event.preventDefault()
-                            void handleAddNote(ticket)
-                          }}
-                        >
-                          <input
-                            type="text"
-                            value={draftNote}
-                            onChange={(event) => setDraftNote(event.target.value)}
-                            placeholder="Ajouter une note"
-                            aria-label="Nouvelle note"
-                          />
-                          <button type="submit" className="secondary-button">Ajouter</button>
-                        </form>
-                      </div>
-                    ) : null}
-                  </Fragment>
+                  </div>
                 )
               })}
             </div>
@@ -460,6 +445,22 @@ export function DashboardView({
           </section>
         ) : null}
       </div>
+      {instructionTicket ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setInstructionTicket(null)} onKeyDown={(event) => { if (event.key === 'Escape') setInstructionTicket(null) }}>
+          <section className="modal review-dialog dashboard-instruction-dialog" role="dialog" aria-modal="true" aria-labelledby="ticket-instruction-title" onMouseDown={(event) => event.stopPropagation()}>
+            <header className="modal-header">
+              <div><h2 id="ticket-instruction-title">Instruction · {instructionTicket.key}</h2><p>Injectée dans chaque nouvelle conversation reliée à ce ticket.</p></div>
+              <button type="button" className="modal-close" onClick={() => setInstructionTicket(null)} aria-label="Fermer">×</button>
+            </header>
+            <form className="review-dialog-form dashboard-instruction-form" onSubmit={(event) => { event.preventDefault(); void handleSaveInstruction() }}>
+              <label htmlFor="ticket-instruction">Instruction</label>
+              <textarea id="ticket-instruction" autoFocus rows={8} value={instructionDraft} onChange={(event) => setInstructionDraft(event.target.value)} placeholder="Ex. Vérifier la rétrocompatibilité de l’API avant toute modification…" />
+              {instructionError ? <p className="modal-error" role="alert">{instructionError}</p> : null}
+              <footer className="modal-actions"><button type="button" className="secondary-button" onClick={() => setInstructionTicket(null)}>Annuler</button><button type="submit" className="primary-button" disabled={instructionSaving}>{instructionSaving ? 'Enregistrement…' : 'Enregistrer'}</button></footer>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </section>
   )
 }

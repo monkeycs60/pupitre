@@ -11,6 +11,7 @@ export interface Ticket {
   title: string;
   status: string;
   external_url: string | null;
+  instruction: string;
   payload: Record<string, unknown>;
   last_seen_at: string;
   archived_at: string | null;
@@ -93,6 +94,17 @@ export class TicketStore {
     const ticket = this.get(ticketId);
     if (!ticket) throw new Error("ticket inconnu");
     this.db.query("UPDATE tickets SET payload_json=?,updated_at=? WHERE id=?").run(JSON.stringify({...ticket.payload,domainContext:{sourceUpdatedAt:context.sourceUpdatedAt,text:context.text.slice(0,2000)}}),new Date().toISOString(),ticketId);
+  }
+
+  setInstruction(ticketId: string, instruction: string): Ticket {
+    const ticket = this.get(ticketId);
+    if (!ticket) throw new Error("ticket inconnu");
+    this.db.query("UPDATE tickets SET instruction = ?, updated_at = ? WHERE id = ?").run(
+      instruction.trim(),
+      new Date().toISOString(),
+      ticketId,
+    );
+    return this.get(ticketId)!;
   }
 
   upsert(projectId: string, input: TicketInput): Ticket {
@@ -307,6 +319,7 @@ function hydrateTicket(row: Record<string, unknown>): Ticket {
     title: String(rest.title),
     status: String(rest.status ?? ""),
     external_url: (rest.external_url as string | null | undefined) ?? null,
+    instruction: String(rest.instruction ?? ""),
     payload: JSON.parse(String(payload_json ?? "{}")) as Record<string, unknown>,
     last_seen_at: String(rest.last_seen_at ?? ""),
     archived_at: (rest.archived_at as string | null | undefined) ?? null,

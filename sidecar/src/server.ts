@@ -178,7 +178,7 @@ async function ticketBriefFor(
     ticket,
     branches: deps.tickets.branchesOf(ticket.id),
     refs: deps.tickets.refsByTicket(ticket.id),
-    notes: deps.tickets.notesByTicket(ticket.id),
+    instruction: ticket.instruction,
     clickup: await deps.integrationsRefresher.clickUpContext(ticket.project_id, ticket.key),
     siblings,
   });
@@ -2395,6 +2395,18 @@ export function createServer(deps: ServerDeps) {
           return json(note, 201);
         }
 
+        const ticketInstructionId = routeId(pathname, /^\/api\/tickets\/([^/]+)\/instruction$/);
+        if (request.method === "PUT" && ticketInstructionId !== null) {
+          const ticket = deps.tickets.get(ticketInstructionId);
+          if (!ticket) throw new HttpError(404, "ticket inconnu");
+          const body = await readObject(request);
+          const instruction = body.instruction;
+          if (typeof instruction !== "string") throw new HttpError(400, "instruction invalide");
+          const updated = deps.tickets.setInstruction(ticket.id, instruction);
+          broadcastDashboard(ticket.project_id);
+          return json(updated);
+        }
+
         const ticketNoteId = routeId(pathname, /^\/api\/ticket-notes\/([^/]+)$/);
         if (request.method === "DELETE" && ticketNoteId !== null) {
           const deleted = deps.tickets.deleteNote(ticketNoteId);
@@ -2497,6 +2509,7 @@ export function createServer(deps: ServerDeps) {
             subagentEffort,
             createdOnBranch: sentryStartPoint ?? snapshot.currentBranch,
             ticketId: ticket?.id ?? null,
+            ticketInstruction: ticket?.instruction ?? null,
             originType: originType as "sentry" | null,
             originKey,
             firstMessage: message.trim() || "Image jointe",

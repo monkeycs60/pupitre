@@ -151,6 +151,7 @@ export function openDb(dir: string = dataDir()): Database {
       title TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT '',
       external_url TEXT NULL,
+      instruction TEXT NOT NULL DEFAULT '',
       payload_json TEXT NOT NULL DEFAULT '{}',
       last_seen_at TEXT NOT NULL DEFAULT '',
       archived_at TEXT NULL,
@@ -474,7 +475,20 @@ export function openDb(dir: string = dataDir()): Database {
   // Nombre de tours au moment du dernier digest (0 = jamais généré).
   addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "ticket_id TEXT NULL REFERENCES tickets(id) ON DELETE SET NULL");
+  addColumn(db, "conversations", "ticket_instruction TEXT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS idx_conversations_ticket ON conversations(ticket_id)");
+  const addedTicketInstruction = addColumn(db, "tickets", "instruction TEXT NOT NULL DEFAULT ''");
+  if (addedTicketInstruction) {
+    db.exec(`
+      UPDATE tickets
+      SET instruction = COALESCE((
+        SELECT group_concat(body, char(10) || char(10))
+        FROM ticket_notes
+        WHERE ticket_notes.ticket_id = tickets.id
+        ORDER BY created_at
+      ), '')
+    `);
+  }
   addColumn(db, "conversations", "message_count INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "last_read_turn INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "created_on_branch TEXT NULL");

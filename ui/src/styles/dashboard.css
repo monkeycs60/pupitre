@@ -185,6 +185,27 @@
   background: color-mix(in srgb, var(--bg-overlay) 55%, var(--bg-panel));
 }
 
+.dashboard-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.dashboard-sort-button:hover {
+  color: var(--text-strong);
+}
+
+.dashboard-sort-button i {
+  color: var(--accent);
+  font-style: normal;
+}
+
 .dashboard-ticket,
 .dashboard-link a,
 .dashboard-actions,
@@ -195,6 +216,13 @@
 .dashboard-ticket {
   display: grid;
   gap: 1px;
+}
+
+.dashboard-ticket-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .dashboard-ticket small,
@@ -276,19 +304,31 @@
   color: var(--text-strong);
 }
 
-.dashboard-pipeline.is-ok,
+.dashboard-state.is-ok,
 .dashboard-pill.is-ok {
   color: var(--ok);
 }
 
-.dashboard-pipeline.is-warn,
+.dashboard-state.is-warn,
 .dashboard-pill.is-warn {
   color: var(--warn);
 }
 
-.dashboard-pipeline.is-danger,
+.dashboard-state.is-danger,
 .dashboard-pill.is-danger {
   color: var(--danger);
+}
+
+.dashboard-state.is-info {
+  color: var(--viz-1);
+}
+
+.dashboard-state.is-neutral {
+  color: var(--text-faint);
+}
+
+.dashboard-state {
+  cursor: help;
 }
 
 .dashboard-conversations {
@@ -338,36 +378,31 @@
   white-space: nowrap;
 }
 
-.dashboard-notes {
-  padding: var(--space-3) var(--space-4) var(--space-4);
-  background: color-mix(in srgb, var(--bg-overlay) 45%, transparent);
-  border-bottom: 1px solid var(--border-subtle);
+.dashboard-instruction-button.is-active {
+  color: var(--accent-bright);
 }
 
-.dashboard-notes-list ul {
-  padding-left: 18px;
-  margin: 0 0 var(--space-3);
+.dashboard-instruction-dialog {
+  width: min(620px, calc(100vw - 32px));
 }
 
-.dashboard-notes-empty {
-  margin: 0 0 var(--space-3);
-  color: var(--text-faint);
-}
-
-.dashboard-note-form {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.dashboard-note-form input {
-  flex: 1;
-  min-width: 0;
-  min-height: 32px;
-  padding: 0 var(--space-3);
+.dashboard-instruction-form textarea {
+  width: 100%;
+  min-height: 180px;
+  padding: var(--space-3);
+  resize: vertical;
   color: var(--text);
+  font: inherit;
+  line-height: 1.5;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
+}
+
+.dashboard-instruction-form textarea:focus-visible {
+  border-color: var(--accent-border);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .dashboard-envs {

@@ -749,6 +749,34 @@ body.is-resizing-documents-list {
   border-radius: var(--r-xs);
 }
 
+.conversation-instruction-badge {
+  flex: none;
+  padding: 2px 8px;
+  color: var(--accent-bright);
+  font-size: var(--text-xs);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+
+.conversation-instruction-badge:hover {
+  border-color: var(--accent-border);
+}
+
+.conversation-instruction-dialog {
+  width: min(620px, calc(100vw - 32px));
+}
+
+.conversation-instruction-content {
+  max-height: min(50vh, 420px);
+  padding: var(--space-4) var(--space-5);
+  overflow: auto;
+  color: var(--text);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .conversation-header p {
   display: flex;
   align-items: center;

@@ -170,6 +170,21 @@ test("notes et liaison de conversation", () => {
   expect(conversations.listByProject(projectId)[0]?.ticket_key).toBe("TECH-5");
 });
 
+test("une instruction est unique et modifiable par ticket", () => {
+  const ticket = tickets.upsert(projectId, {
+    key: "TECH-INSTRUCTION",
+    source: "clickup",
+    title: "Instruction",
+    status: "open",
+    externalUrl: null,
+  });
+
+  expect(tickets.setInstruction(ticket.id, "  Garder la compatibilité.  ").instruction)
+    .toBe("Garder la compatibilité.");
+  expect(tickets.setInstruction(ticket.id, "Nouvelle instruction").instruction)
+    .toBe("Nouvelle instruction");
+});
+
 test("listByProject rend les tickets actifs avec refs et compteurs", () => {
   const ticket = tickets.upsert(projectId, {
     key: "TECH-6",
