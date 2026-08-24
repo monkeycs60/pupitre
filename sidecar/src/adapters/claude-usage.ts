@@ -19,6 +19,12 @@ import { join } from "node:path";
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const TIMEOUT_MS = 8_000;
 
+interface ClaudeUsageDeps {
+  readAccessToken?: () => string | null;
+  fetchUsage?: (token: string, signal: AbortSignal) => Promise<Response>;
+  refreshSession?: () => Promise<boolean>;
+}
+
 function configDir(): string {
   return process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
 }
@@ -36,22 +42,53 @@ function accessToken(): string | null {
   }
 }
 
+async function fetchUsage(token: string, signal: AbortSignal): Promise<Response> {
+  return fetch(USAGE_URL, {
+    headers: {
+      authorization: `Bearer ${token}`,
+      "user-agent": "claude-code/2.0.31",
+      "anthropic-beta": "oauth-2025-04-20",
+      accept: "application/json",
+    },
+    signal,
+  });
+}
+
+async function refreshSession(): Promise<boolean> {
+  const claude = process.env.PUPITRE_CLAUDE_BIN ?? Bun.which("claude");
+  if (!claude) return false;
+  const child = Bun.spawn([claude, "auth", "status"], {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  const timeout = setTimeout(() => child.kill(), TIMEOUT_MS);
+  try {
+    return await child.exited === 0;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** Payload d'usage brut, laissé au QuotaTracker qui sait le normaliser. */
-export async function readClaudeUsage(signal?: AbortSignal): Promise<unknown | null> {
-  const token = accessToken();
+export async function readClaudeUsage(
+  signal?: AbortSignal,
+  deps: ClaudeUsageDeps = {},
+): Promise<unknown | null> {
+  const readToken = deps.readAccessToken ?? accessToken;
+  const request = deps.fetchUsage ?? fetchUsage;
+  const renew = deps.refreshSession ?? refreshSession;
+  const requestSignal = () => signal ?? AbortSignal.timeout(TIMEOUT_MS);
+  let token = readToken();
   if (token === null) return null;
 
   try {
-    const response = await fetch(USAGE_URL, {
-      headers: {
-        authorization: `Bearer ${token}`,
-        // Les mêmes en-têtes que Claude Code : l'endpoint les exige.
-        "user-agent": "claude-code/2.0.31",
-        "anthropic-beta": "oauth-2025-04-20",
-        accept: "application/json",
-      },
-      signal: signal ?? AbortSignal.timeout(TIMEOUT_MS),
-    });
+    let response = await request(token, requestSignal());
+    if (response.status === 401 && await renew()) {
+      token = readToken();
+      if (token === null) return null;
+      response = await request(token, requestSignal());
+    }
     if (!response.ok) return null;
     return await response.json();
   } catch {
