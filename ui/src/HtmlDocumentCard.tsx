@@ -10,6 +10,7 @@ import type { HtmlDocumentBlock } from './groupEvents'
 import type { HtmlDocument, HtmlDocumentState } from './types'
 import { htmlDocumentContentUrl, htmlDocumentExternalUrl } from './transport'
 import { useNow } from './useNow'
+import { isTauriRuntime } from './externalLink'
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} o`
@@ -33,10 +34,6 @@ function remainingLabel(expiresAt: string, now: number): string {
   if (minutes < 60) return `expire dans ${minutes} min`
   const hours = Math.ceil(minutes / 60)
   return `expire dans ${hours} h`
-}
-
-function isTauriRuntime(): boolean {
-  return '__TAURI_INTERNALS__' in window || '__TAURI__' in window
 }
 
 function eventSnapshot(block: HtmlDocumentBlock): HtmlDocument {

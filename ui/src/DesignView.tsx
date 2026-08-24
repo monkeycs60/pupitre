@@ -13,6 +13,7 @@ import {
 } from './designPanel'
 import { HelpLink } from './HelpLink'
 import type { DesignReachability } from './types'
+import { isTauriRuntime } from './externalLink'
 
 /** Claude Design (claude.ai/design) n'existe que sur le web : pas d'API, pas de
  *  CLI. Pupitre l'affiche donc dans une webview enfant posée sur la zone de
@@ -34,10 +35,6 @@ import type { DesignReachability } from './types'
 const DESIGN_URL_FALLBACK = 'https://claude.ai/design/'
 
 const URL_POLL_MS = 2_500
-
-function isTauriRuntime(): boolean {
-  return '__TAURI_INTERNALS__' in window || '__TAURI__' in window
-}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)

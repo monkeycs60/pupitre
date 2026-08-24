@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createSentryFix, getSentryInbox, getSentryIssue, refreshSentryInbox, startSentryScout } from './api'
 import type { SentryInboxPayload, SentryIssue } from './types'
+import { ExternalLink } from './externalLink'
 
 function text(payload: Record<string, unknown>, key: string): string {
   return typeof payload[key] === 'string' ? payload[key] as string : ''
@@ -162,7 +163,7 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
               <p><strong>Emplacement :</strong> {text(selected.payload, 'transaction') || text(selected.payload, 'culprit') || '—'}</p>
               <p><strong>Impact :</strong> {number(selected.payload, 'count')} événements · {number(selected.payload, 'userCount')} utilisateurs</p>
               <p><strong>Domaines :</strong> {selected.relevance.reasons.map((reason) => `${reason.domain} (${reason.signal})`).join(', ') || 'aucun'}</p>
-              {text(selected.payload, 'permalink') ? <a href={text(selected.payload, 'permalink')} target="_blank" rel="noreferrer">Ouvrir dans Sentry ↗</a> : null}
+              {text(selected.payload, 'permalink') ? <ExternalLink href={text(selected.payload, 'permalink')!}>Ouvrir dans Sentry ↗</ExternalLink> : null}
               {selected.triage?.verdict ? (
                 <div className="sentry-verdict">
                   <strong>Verdict Scout · {selected.triage.verdict}</strong>

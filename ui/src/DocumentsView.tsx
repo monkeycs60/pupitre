@@ -17,6 +17,7 @@ import {
 } from './api'
 import { documentContentUrl, documentExternalUrl, documentThumbnailUrl } from './transport'
 import type { Attachment, DocumentArtifact, Project } from './types'
+import { isTauriRuntime } from './externalLink'
 
 interface DocumentsViewProps {
   currentProject: Project | null
@@ -39,10 +40,6 @@ function storedDocumentsListWidth(): number {
   return Number.isFinite(parsed)
     ? clampDocumentsListWidth(parsed)
     : DEFAULT_DOCUMENTS_LIST_WIDTH
-}
-
-function isTauriRuntime(): boolean {
-  return '__TAURI_INTERNALS__' in window || '__TAURI__' in window
 }
 
 function formatBytes(bytes: number): string {

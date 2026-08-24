@@ -13,6 +13,7 @@ import type {
 } from './types'
 import { useDashboard } from './useDashboard'
 import { SentryInbox } from './SentryInbox'
+import { ExternalLink } from './externalLink'
 
 interface DashboardViewProps {
   project: Project
@@ -237,16 +238,14 @@ export function DashboardView({
                         <strong className="dashboard-key">{ticket.key}</strong>
                         <small>{ticket.title}</small>
                         {externalUrl ? (
-                          <a
+                          <ExternalLink
                             className="dashboard-ticket-link"
                             href={externalUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label={`Ouvrir ${ticket.key} dans ClickUp`}
+                            ariaLabel={`Ouvrir ${ticket.key} dans ClickUp`}
                             title="Ouvrir dans ClickUp"
                           >
                             <ClickUpIcon />
-                          </a>
+                          </ExternalLink>
                         ) : null}
                       </span>
 
@@ -270,21 +269,19 @@ export function DashboardView({
 
                       <span className="dashboard-link">
                         {mergeRequest && mergeRequestUrl ? (
-                          <a
+                          <ExternalLink
                             href={mergeRequestUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label={`MR ${mergeRequest.ref}`}
+                            ariaLabel={`MR ${mergeRequest.ref}`}
                           >
                             <span>{mergeRequest.ref}</span>
                             <small>{mrLabel(mergeRequest)}</small>
-                          </a>
+                          </ExternalLink>
                         ) : '—'}
                       </span>
 
                       <span className={`dashboard-pipeline ${pipelineTone(pipelineLabel)}`}>
                         {pipeline && pipelineUrl && pipelineLabel ? (
-                          <a href={pipelineUrl} target="_blank" rel="noreferrer">{pipelineLabel}</a>
+                          <ExternalLink href={pipelineUrl}>{pipelineLabel}</ExternalLink>
                         ) : (
                           pipelineLabel ?? '—'
                         )}
@@ -450,10 +447,10 @@ export function DashboardView({
               {data.toReview.map((review) => (
                 <li key={`${review.project}!${review.iid}`}>
                   <div className="dashboard-review-main">
-                    <a className="dashboard-card-link" href={review.url} target="_blank" rel="noreferrer">
+                    <ExternalLink className="dashboard-card-link" href={review.url}>
                       <strong>{reviewLabel(review)}</strong>
                       <span>{review.title}</span>
-                    </a>
+                    </ExternalLink>
                     {review.draft ? <span className="dashboard-pill is-warn">draft</span> : null}
                   </div>
                   <small>{review.author} · {relative(review.updatedAt)}</small>
