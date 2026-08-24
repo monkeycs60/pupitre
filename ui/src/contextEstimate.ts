@@ -37,6 +37,12 @@ export function contextWindowTokens(provider: Provider, model: string): number {
   return MODEL_CONTEXT_WINDOWS[provider]?.[model] ?? FALLBACK_CONTEXT_WINDOWS[provider]
 }
 
+export function formatContextWindow(tokens: number): string {
+  if (tokens >= 1_000_000 && tokens % 1_000_000 === 0) return `${tokens / 1_000_000}M`
+  if (tokens >= 1_000 && tokens % 1_000 === 0) return `${tokens / 1_000}k`
+  return tokens.toLocaleString('fr-FR')
+}
+
 /**
  * Calibré, pas supposé : sur du français mêlé de code, deux échantillons de
  * 3 234 et 9 702 caractères envoyés au CLI coûtent respectivement 926 et 2 768

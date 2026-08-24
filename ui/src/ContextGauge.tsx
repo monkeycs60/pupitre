@@ -1,4 +1,4 @@
-import { contextEstimate } from './contextEstimate'
+import { contextEstimate, formatContextWindow } from './contextEstimate'
 import type { AppEvent, Conversation } from './types'
 
 export function ContextGauge({
@@ -11,6 +11,7 @@ export function ContextGauge({
   onHandoff: () => void
 }) {
   const estimate = contextEstimate(events, conversation.provider, conversation.model)
+  const formattedWindow = formatContextWindow(estimate.windowTokens)
   const ringLength = 66
   const ringOffset = ringLength * (1 - Math.max(0, Math.min(100, estimate.percent)) / 100)
 
@@ -19,7 +20,7 @@ export function ContextGauge({
       <div
         className="context-gauge-summary"
         role="progressbar"
-        aria-label={`Contexte ${estimate.percent} %`}
+        aria-label={`Contexte ${estimate.percent} %, fenêtre ${formattedWindow}`}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={estimate.percent}
@@ -43,6 +44,7 @@ export function ContextGauge({
           </svg>
         </span>
         <span>{estimate.percent} %</span>
+        <span className="context-gauge-capacity" aria-hidden="true">· {formattedWindow}</span>
       </div>
       <button type="button" className="context-gauge-handoff" onClick={onHandoff}>
         Passer la main

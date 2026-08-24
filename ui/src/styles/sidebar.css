@@ -1306,6 +1306,11 @@
   display: block;
 }
 
+.context-gauge-capacity {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
 /* --- Anneau de répartition (coûts) --------------------------------------- */
 
 .donut-chart {
