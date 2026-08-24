@@ -17,7 +17,7 @@ test('résume une erreur technique longue et garde un détail nettoyé', () => {
   expect(result.details).toBe('ERROR command failed avec une très longue commande')
 })
 
-test('le pied de tour expose seulement la durée du run et les tokens directionnels', () => {
+test('le pied de tour expose seulement le statut et la durée du run', () => {
   render(createElement(EventView, {
     block: {
       kind: 'turn-footer',
@@ -35,8 +35,8 @@ test('le pied de tour expose seulement la durée du run et les tokens directionn
   }))
 
   expect(screen.getByTitle('Durée du run').textContent).toBe('4 min 06 s')
-  expect(screen.getByTitle('Tokens en entrée').getAttribute('aria-label')).toBe('50 tokens en entrée')
-  expect(screen.getByTitle('Tokens en sortie').getAttribute('aria-label')).toBe('16 083 tokens en sortie')
+  expect(document.body.textContent).not.toContain('50')
+  expect(document.body.textContent).not.toContain('16 083')
   expect(document.body.textContent).not.toContain('1er retour')
   expect(document.body.textContent).not.toContain('Lancer le Gardien')
   expect(document.body.textContent).not.toContain('+0 min')

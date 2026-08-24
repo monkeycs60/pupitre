@@ -90,19 +90,6 @@ function parsedTime(value: string | undefined): number | null {
   return Number.isNaN(timestamp) ? null : timestamp
 }
 
-function TokenDirectionIcon({ direction }: { direction: 'input' | 'output' }) {
-  const incoming = direction === 'input'
-  return <svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true">
-    <path
-      d={incoming ? 'M2 6h7M6.5 3.5 9 6 6.5 8.5' : 'M10 6H3M5.5 3.5 3 6l2.5 2.5'}
-      stroke="currentColor"
-      strokeWidth="1.25"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-}
-
 function basename(path: string): string {
   const segments = path.split(/[/\\]/)
   return segments.at(-1) || path
@@ -172,18 +159,6 @@ function TurnFooter({ block }: {
         {totalMs !== null ? (
           <span className="turn-timing" title="Durée du run">
             {formatDuration(totalMs)}
-          </span>
-        ) : null}
-        {block.usage ? (
-          <span className="turn-usage" aria-label="Utilisation des tokens">
-            <span className="turn-usage-metric" aria-label={`${block.usage.inputTokens.toLocaleString('fr-FR')} tokens en entrée`} title="Tokens en entrée">
-              <TokenDirectionIcon direction="input" />
-              {block.usage.inputTokens.toLocaleString('fr-FR')}
-            </span>
-            <span className="turn-usage-metric" aria-label={`${block.usage.outputTokens.toLocaleString('fr-FR')} tokens en sortie`} title="Tokens en sortie">
-              <TokenDirectionIcon direction="output" />
-              {block.usage.outputTokens.toLocaleString('fr-FR')}
-            </span>
           </span>
         ) : null}
         {block.subtaskCount !== undefined ? (
