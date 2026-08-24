@@ -372,3 +372,22 @@ export function quotaFreshness(
   if (minutes < 60) return `mis à jour il y a ${minutes} min`
   return `mis à jour il y a ${Math.floor(minutes / 60)} h`
 }
+
+export function quotaStateFreshness(
+  state: QuotaState | null,
+  now: number = Date.now(),
+): { stale: boolean; label: string } {
+  if (state === null) return { stale: true, label: 'jamais relevé' }
+  const timestamp = Date.parse(state.updatedAt)
+  if (Number.isNaN(timestamp)) return { stale: true, label: 'date inconnue' }
+
+  const minutes = Math.floor(Math.max(0, now - timestamp) / 60_000)
+  const label = minutes < 1
+    ? 'à l’instant'
+    : minutes < 60
+      ? `il y a ${minutes} min`
+      : minutes < 24 * 60
+        ? `il y a ${Math.floor(minutes / 60)} h`
+        : `il y a ${Math.floor(minutes / (24 * 60))} j`
+  return { stale: minutes >= 10, label }
+}

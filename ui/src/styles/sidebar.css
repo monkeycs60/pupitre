@@ -934,6 +934,23 @@
   background: var(--border-subtle);
 }
 
+.quota-status-gauge.is-stale {
+  opacity: 0.35;
+}
+
+.quota-status-value.is-stale {
+  color: var(--warn);
+}
+
+.quota-status-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.quota-status .quota-error {
+  padding: 0;
+}
+
 /* Les deux signaux vivent sur deux couches différentes afin de se cumuler :
    ambre sur la piste hebdomadaire, rouge animé dans la dernière heure Claude. */
 .quota-status-gauge.is-weekly-ending {

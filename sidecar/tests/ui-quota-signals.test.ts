@@ -9,6 +9,7 @@ import {
   quotaSummary,
   quotaWindowSignals,
   quotaFreshness,
+  quotaStateFreshness,
   nextQuotaReevaluationDelay,
   shouldPulse,
   tightestWindow,
@@ -137,6 +138,17 @@ test("la fraîcheur retient le relevé provider le plus récent", () => {
 
   expect(quotaFreshness(snapshot, NOW)).toBe("mis à jour il y a 3 min");
   expect(quotaFreshness({ claude: null, codex: null, grok: null }, NOW)).toBeNull();
+});
+
+test("la fraîcheur d'un provider distingue un relevé actuel d'un relevé périmé", () => {
+  const current = { ...state("claude", []), updatedAt: new Date(NOW - 9 * MINUTE).toISOString() };
+  const stale = { ...state("claude", []), updatedAt: new Date(NOW - 11 * MINUTE).toISOString() };
+
+  expect(quotaStateFreshness(current, NOW)).toEqual({ stale: false, label: "il y a 9 min" });
+  expect(quotaStateFreshness(stale, NOW)).toEqual({ stale: true, label: "il y a 11 min" });
+  expect(quotaStateFreshness({ ...current, updatedAt: new Date(NOW - 10 * MINUTE).toISOString() }, NOW).stale)
+    .toBe(true);
+  expect(quotaStateFreshness(null, NOW)).toEqual({ stale: true, label: "jamais relevé" });
 });
 
 test("pulse : quota peu entamé et reset dans moins d'une heure, modèles chers", () => {

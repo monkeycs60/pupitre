@@ -6,6 +6,7 @@ import {
   formatResetClock,
   msUntilReset,
   quotaFreshness,
+  quotaStateFreshness,
   quotaStateSignals,
   quotaSummary,
   quotaWindowSignals,
@@ -103,6 +104,8 @@ function CompactProviderQuota({ provider, state, now }: {
   now: number
 }) {
   const summary = quotaSummary(provider, state, now)
+  const freshness = quotaStateFreshness(state, now)
+  const stale = state !== null && freshness.stale
   const usedPercent = summary.usedPercent === null
     ? null
     : Math.min(100, Math.max(0, summary.usedPercent))
@@ -111,6 +114,7 @@ function CompactProviderQuota({ provider, state, now }: {
   const tooltipId = `quota-status-${provider}`
   const gaugeClassName = [
     'quota-status-gauge',
+    stale ? 'is-stale' : '',
     usedPercent === null ? 'is-unknown' : '',
     signals.weeklyEnding ? 'is-weekly-ending' : '',
     signals.lastHour ? 'is-last-hour' : '',
@@ -129,7 +133,7 @@ function CompactProviderQuota({ provider, state, now }: {
       className="quota-status-row"
       tabIndex={0}
       aria-describedby={tooltipId}
-      aria-label={`${PROVIDER_NAMES[provider]} — ${detail}`}
+      aria-label={`${PROVIDER_NAMES[provider]} — ${stale ? `données périmées, dernier relevé ${freshness.label}` : detail}`}
     >
       <span className="quota-status-provider">{PROVIDER_NAMES[provider]}</span>
       {usedPercent !== null ? (
@@ -139,19 +143,23 @@ function CompactProviderQuota({ provider, state, now }: {
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(usedPercent)}
-          aria-label={`${PROVIDER_NAMES[provider]} — ${Math.round(usedPercent)} % utilisé`}
+          aria-label={stale
+            ? `${PROVIDER_NAMES[provider]} — dernier relevé périmé : ${Math.round(usedPercent)} % utilisé`
+            : `${PROVIDER_NAMES[provider]} — ${Math.round(usedPercent)} % utilisé`}
         >
           <span style={{ width: `${usedPercent}%` }} />
         </span>
       ) : (
         <span className={gaugeClassName} aria-hidden="true" />
       )}
-      <span className="quota-status-value">{summary.headline}</span>
+      <span className={`quota-status-value${stale ? ' is-stale' : ''}`}>
+        {stale ? 'données périmées' : summary.headline}
+      </span>
 
       <div className="quota-status-tooltip" id={tooltipId} role="tooltip">
         <div className="quota-status-tooltip-header">
           <strong>{PROVIDER_NAMES[provider]}</strong>
-          <span>Usage et réinitialisation</span>
+          <span>{stale ? `Dernier relevé ${freshness.label}` : 'Usage et réinitialisation'}</span>
         </div>
         {state === null || state.windows.length === 0 ? (
           <p>{summary.headline}</p>
@@ -170,7 +178,9 @@ function CompactProviderQuota({ provider, state, now }: {
                   <strong>
                     {window.usedPercent === null
                       ? 'usage non publié'
-                      : `${Math.round(window.usedPercent)} % utilisé`}
+                      : stale
+                        ? `${Math.round(window.usedPercent)} % au dernier relevé`
+                        : `${Math.round(window.usedPercent)} % utilisé`}
                   </strong>
                   <span>{resetLabel(window)}</span>
                 </div>
@@ -190,14 +200,64 @@ function CompactProviderQuota({ provider, state, now }: {
 }
 
 /** Résumé permanent et compact affiché sous la liste des conversations. */
-export function QuotaStatus({ snapshot }: { snapshot: QuotaSnapshot }) {
+export function QuotaStatus({
+  snapshot,
+  onRefresh = refreshQuotas,
+}: {
+  snapshot: QuotaSnapshot
+  onRefresh?: () => Promise<QuotaSnapshot>
+}) {
   const now = useNow()
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleRefresh() {
+    if (isRefreshing) return
+    setIsRefreshing(true)
+    setError(null)
+    try {
+      const refreshed = await onRefresh()
+      const entries = Object.entries(refreshed) as [Provider, QuotaState | null][]
+      const staleProviders = entries
+        .filter(([, state]) => state !== null && quotaStateFreshness(state).stale)
+        .map(([provider]) => PROVIDER_NAMES[provider])
+      const unavailableProviders = entries
+        .filter(([, state]) => state === null)
+        .map(([provider]) => PROVIDER_NAMES[provider])
+      const issues = []
+      if (staleProviders.length > 0) {
+        issues.push(`${staleProviders.join(', ')} reste${staleProviders.length > 1 ? 'nt' : ''} périmé${staleProviders.length > 1 ? 's' : ''}`)
+      }
+      if (unavailableProviders.length > 0) {
+        issues.push(`${unavailableProviders.join(', ')} indisponible${unavailableProviders.length > 1 ? 's' : ''}`)
+      }
+      if (issues.length > 0) {
+        setError(`${issues.join('. ')} : authentification ou service indisponible.`)
+      }
+    } catch (refreshError: unknown) {
+      setError(refreshError instanceof Error ? refreshError.message : 'Relève impossible.')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   return (
     <section className="quota-status" aria-label="Usage des quotas">
       <CompactProviderQuota provider="claude" state={snapshot.claude} now={now} />
       <CompactProviderQuota provider="codex" state={snapshot.codex} now={now} />
       <CompactProviderQuota provider="grok" state={snapshot.grok ?? null} now={now} />
+      <div className="quota-status-actions">
+        <button
+          type="button"
+          className="quota-refresh"
+          onClick={() => void handleRefresh()}
+          disabled={isRefreshing}
+          aria-label="Actualiser les quotas"
+        >
+          {isRefreshing ? 'Relève…' : 'Actualiser'}
+        </button>
+      </div>
+      {error !== null ? <p className="quota-error" role="alert">{error}</p> : null}
     </section>
   )
 }
