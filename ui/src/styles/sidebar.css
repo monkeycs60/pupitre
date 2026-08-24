@@ -1799,14 +1799,6 @@
   white-space: nowrap;
 }
 
-.level-swap {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
 .level-running {
   display: inline-flex;
   align-items: center;

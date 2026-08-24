@@ -14,17 +14,6 @@ function steppedProgress(counter: TimeCounter): number {
   return Math.floor(counter.levelMs / MINUTE_MS) * MINUTE_MS / 3_600_000
 }
 
-function SwapIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-      <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M1.5 4h9M8 1.5 10.5 4 8 6.5" />
-        <path d="M10.5 8h-9M4 5.5 1.5 8 4 10.5" />
-      </g>
-    </svg>
-  )
-}
-
 export function LevelCard({
   snapshot,
   mode,
@@ -39,7 +28,6 @@ export function LevelCard({
   const [hovered, setHovered] = useState(false)
   const isAgent = mode === 'agent'
   const counter = isAgent ? snapshot.agent : snapshot.user
-  const other = isAgent ? snapshot.user : snapshot.agent
   const otherLabel = isAgent ? 'Utilisateur' : 'Agent'
   const progress = steppedProgress(counter)
   const remaining = Math.ceil((3_600_000 - counter.levelMs) / MINUTE_MS)
@@ -97,12 +85,7 @@ export function LevelCard({
           <span className="level-today">
             {formatActiveDuration(counter.todayMs)} aujourd’hui
           </span>
-          {hovered ? (
-            <span className="level-swap">
-              <SwapIcon />
-              {otherLabel} {formatActiveDuration(other.ms)}
-            </span>
-          ) : agentRunning ? (
+          {agentRunning ? (
             <span className="level-running">
               <i aria-hidden="true" />
               agent

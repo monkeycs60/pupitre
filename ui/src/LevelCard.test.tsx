@@ -61,7 +61,6 @@ test('au repos, la carte ne montre que le niveau, le mode et le temps du jour', 
   expect(document.querySelector('.level-ring-value')?.textContent).toBe('1')
   expect(document.querySelector('.level-today')?.textContent).toContain('33 min')
   // Le détail n'apparaît qu'au survol.
-  expect(document.querySelector('.level-swap')).toBeNull()
   expect(document.querySelector('.level-share')).toBeNull()
 })
 
@@ -75,15 +74,16 @@ test('la barre avance d’un cran par minute, jamais entre deux', () => {
   expect(fill.style.width).toBe(`${(19 / 60) * 100}%`)
 })
 
-test('le survol révèle la part de supervision et l’autre compteur', () => {
+test('le survol révèle la part de supervision, et rien d’autre', () => {
   render(
     <LevelCard snapshot={snapshot()} mode="user" agentRunning={false} onToggle={() => undefined} />,
   )
   fireEvent.mouseEnter(card())
   expect(document.querySelector('.level-share')?.textContent).toContain('supervisé')
-  expect(document.querySelector('.level-swap')?.textContent).toContain('Agent')
-  fireEvent.mouseLeave(card())
+  // La pastille d'échange a été retirée : le clic sur la carte suffit.
   expect(document.querySelector('.level-swap')).toBeNull()
+  fireEvent.mouseLeave(card())
+  expect(document.querySelector('.level-share')).toBeNull()
 })
 
 test('le clic bascule sur le compteur agent', () => {
