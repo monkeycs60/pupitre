@@ -297,7 +297,7 @@ test("une source en 401 passe à reconfigurer et n'efface rien ; l'autre continu
     clickUpClient: () => ({
       ...fakeClickUp(),
       me: async () => {
-        throw new ClickUpAuthError("401");
+        throw new ClickUpAuthError(401);
       },
     }) as any,
   });
@@ -387,10 +387,7 @@ test("start/stop relève immédiatement puis périodiquement sans double passage
   let calls = 0;
   let running = 0;
   let maxRunning = 0;
-  let release: (() => void) | null = null;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise: gate, resolve: release } = Promise.withResolvers<void>();
 
   const refresher = makeRefresher({
     clickUpClient: () => ({
@@ -409,7 +406,7 @@ test("start/stop relève immédiatement puis périodiquement sans double passage
   refresher.start(20);
   refresher.start(20);
   await new Promise((resolve) => setTimeout(resolve, 70));
-  release?.();
+  release();
   await new Promise((resolve) => setTimeout(resolve, 70));
   refresher.stop();
 

@@ -3,9 +3,10 @@
   "scripts": {
     "dev:sidecar": "bun run --cwd sidecar src/index.ts",
     "dev:sidecar:watch": "bun run --cwd sidecar --watch src/index.ts",
+    "typecheck:sidecar": "bun run --cwd sidecar typecheck",
     "build:sidecar": "bun run scripts/build-sidecar.ts",
     "prepare:tauri-dev": "bun run scripts/prepare-tauri-dev.ts",
-    "tauri:before-build": "bun run build:sidecar && bun run --cwd ui build"
+    "tauri:before-build": "bun run typecheck:sidecar && bun run build:sidecar && bun run --cwd ui build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4"

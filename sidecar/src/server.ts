@@ -304,6 +304,15 @@ function requiredString(
   return value;
 }
 
+function requiredTrimmed(body: Record<string, unknown>, field: string): string {
+  return requiredString(body, field).trim();
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
 function safeFilename(value: string): string {
   const normalized = value
     .normalize("NFKD")
@@ -1767,7 +1776,7 @@ export function createServer(deps: ServerDeps) {
           return json(deps.sentry.upsertTriage(triage.issue_id, {
             status: "done",
             verdict: verdict as "real_fixable" | "real_investigate" | "noise" | "uncertain",
-            report: readObject(body.report) ?? {},
+            report: objectValue(body.report),
           }));
         }
 
@@ -2738,7 +2747,7 @@ export function createServer(deps: ServerDeps) {
             }
           }
           const exchanges = deps.conversations.listEvents(conversation.id)
-            .flatMap((event) => {
+            .flatMap<Array<{ role: "user" | "assistant"; text: string }>>((event) => {
               if (event.type === "user-message") {
                 return [{ role: "user" as const, text: event.text.slice(0, 2_000) }];
               }

@@ -210,6 +210,7 @@ test("programme une réévaluation à l'entrée dans la dernière heure", () => 
   const snapshot = {
     claude: state("claude", [window({ resetsAt: isoIn(75) })]),
     codex: state("codex", [window({ resetsAt: isoIn(180) })]),
+    grok: null,
   };
 
   expect(nextQuotaReevaluationDelay(snapshot, DEFAULT_QUOTA_THRESHOLDS, NOW))

@@ -25,7 +25,7 @@ test("parse les tâches v2 en tickets normalisés", () => {
 
 test("le client pagine jusqu'à last_page et envoie le token en Authorization", async () => {
   const calls: string[] = [];
-  const fetchImpl: typeof fetch = async (input, init) => {
+  const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     calls.push(url);
     expect((init?.headers as Record<string, string>).Authorization).toBe("pk_test");
@@ -44,7 +44,7 @@ test("le client pagine jusqu'à last_page et envoie le token en Authorization", 
 
 test("assignedTasks continue au-delà de 100 pages jusqu'à last_page", async () => {
   const pages: number[] = [];
-  const fetchImpl: typeof fetch = async (input) => {
+  const fetchImpl = async (input: RequestInfo | URL) => {
     const url = String(input);
     const page = Number(new URL(url).searchParams.get("page"));
     pages.push(page);

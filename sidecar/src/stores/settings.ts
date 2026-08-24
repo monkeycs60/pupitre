@@ -34,10 +34,14 @@ export class SettingsStore {
   }
 
   set(key: string, value: unknown): void {
+    const encoded = JSON.stringify(value);
+    if (encoded === undefined) {
+      throw new TypeError(`Le réglage ${key} n'est pas sérialisable en JSON`);
+    }
     this.db.query(`
       INSERT INTO settings (key, value) VALUES (?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `).run(key, JSON.stringify(value));
+    `).run(key, encoded);
   }
 
   all(): Record<string, unknown> {

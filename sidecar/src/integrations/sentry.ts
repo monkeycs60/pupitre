@@ -1,7 +1,7 @@
 export class SentryHttpError extends Error { constructor(public status:number,message:string){super(message);this.name="SentryHttpError";} }
 export class SentryAuthError extends SentryHttpError { constructor(status:number){super(status,"Sentry authentication failed");this.name="SentryAuthError";} }
 export interface SentryIssueSummary {id:string;shortId:string;project:string;title:string;culprit:string|null;transaction:string|null;level:string;status:string;count:number;userCount:number;firstSeen:string;lastSeen:string;permalink:string;release:string|null;tags:Record<string,string[]>}
-type FetchLike=typeof fetch;
+type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 export class SentryClient {
  private baseUrl:string; private token:string; private fetchImpl:FetchLike;
  constructor(input:{baseUrl:string;token:string;fetchImpl?:FetchLike}){this.baseUrl=input.baseUrl.replace(/\/$/,"");this.token=input.token;this.fetchImpl=input.fetchImpl??fetch;}

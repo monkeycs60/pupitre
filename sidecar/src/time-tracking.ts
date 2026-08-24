@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { GitProjectService } from "./git";
 import {
-  TIME_BACKFILL_KEY, TIME_HEARTBEAT_KEY, TIME_SYNC_WATERMARK_KEY,
+  SettingsStore, TIME_BACKFILL_KEY, TIME_HEARTBEAT_KEY, TIME_SYNC_WATERMARK_KEY,
 } from "./stores/settings";
 import type { ProjectStore } from "./stores/projects";
 
@@ -193,11 +193,15 @@ function nextMilestoneFor(ms: number): { hours: number | null; remaining: number
 }
 
 export class TimeTrackingService {
+  private readonly settings: SettingsStore;
+
   constructor(
     private db: Database,
     private projects: ProjectStore,
     private git: GitProjectService,
-  ) {}
+  ) {
+    this.settings = new SettingsStore(db);
+  }
 
   /**
    * Une tranche de présence envoyée par l'UI. Les tranches successives d'un
@@ -531,9 +535,7 @@ export class TimeTrackingService {
   }
 
   private setSetting(key: string, value: string): void {
-    this.db.query(
-      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-    ).run(key, JSON.stringify(value));
+    this.settings.set(key, value);
   }
 }
 

@@ -10,7 +10,7 @@ import { ConversationStore } from "../src/stores/conversations";
 import { DomainStore } from "../src/stores/domains";
 import { ProjectStore } from "../src/stores/projects";
 
-function setup(generator = async (input: { prompt: string }) => input.prompt.includes("SKILL_MD_ACTUEL")
+function setup(generator: import("../src/debriefs").DebriefGenerator = async (input) => input.prompt.includes("SKILL_MD_ACTUEL")
   ? "## État actuel\n\nLe domaine reflète les changements validés.\n\n## Changements récents\n\n- Mise à jour cataloguée."
   : "[]") {
   const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-project-"));

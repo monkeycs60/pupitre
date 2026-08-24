@@ -302,6 +302,8 @@ test("la comptabilité du suivi ne casse pas la lecture des réglages", () => {
 test("une valeur héritée en clair est relue puis remise au bon format", () => {
   const { dir, db, service } = setup();
   try {
+    db.exec("DROP TRIGGER settings_value_json_insert");
+    db.exec("DROP TRIGGER settings_value_json_update");
     // Ce qu'écrivait la version fautive : une date ISO nue.
     db.query("INSERT INTO settings (key, value) VALUES (?, ?)")
       .run("time-tracking:backfilled-at", "2026-08-24T12:00:00.000Z");

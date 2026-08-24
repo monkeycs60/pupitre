@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { countConversationMessages } from "./message-count";
-import { MESSAGE_COUNT_MIGRATION_KEY, SPEED_REVIEW_MIGRATION_KEY } from "./stores/settings";
+import { MESSAGE_COUNT_MIGRATION_KEY, SettingsStore, SPEED_REVIEW_MIGRATION_KEY } from "./stores/settings";
 
 export function dataDir(): string {
   return process.env.PUPITRE_DATA_DIR ?? join(homedir(), ".local/share/pupitre");
@@ -40,6 +40,18 @@ export function openDb(dir: string = dataDir()): Database {
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY, value TEXT NOT NULL
     );
+    CREATE TRIGGER IF NOT EXISTS settings_value_json_insert
+      BEFORE INSERT ON settings
+      WHEN json_valid(NEW.value) = 0
+      BEGIN
+        SELECT RAISE(ABORT, 'settings.value doit contenir du JSON valide');
+      END;
+    CREATE TRIGGER IF NOT EXISTS settings_value_json_update
+      BEFORE UPDATE OF value ON settings
+      WHEN json_valid(NEW.value) = 0
+      BEGIN
+        SELECT RAISE(ABORT, 'settings.value doit contenir du JSON valide');
+      END;
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
       title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '',
@@ -628,8 +640,7 @@ export function openDb(dir: string = dataDir()): Database {
         AND review_model = 'gpt-5.6-sol'
         AND review_effort = 'high';
     `);
-    db.query("INSERT INTO settings (key, value) VALUES (?, ?)")
-      .run(SPEED_REVIEW_MIGRATION_KEY, "1");
+    new SettingsStore(db).set(SPEED_REVIEW_MIGRATION_KEY, true);
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
   widenProviderCheck(db, "skills");
@@ -708,8 +719,7 @@ function migrateConversationMessageCounts(db: Database): void {
     update.run(countConversationMessages(parsedEvents), conversation.id);
   }
 
-  db.query("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
-    .run(MESSAGE_COUNT_MIGRATION_KEY, "1");
+  new SettingsStore(db).set(MESSAGE_COUNT_MIGRATION_KEY, true);
 }
 
 function migrateDocuments(db: Database): void {

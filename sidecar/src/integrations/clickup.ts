@@ -33,7 +33,7 @@ export interface ClickUpTaskContext {
   comments: Array<{ author: string; text: string; at: string }>;
 }
 
-type FetchLike = typeof fetch;
+type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 function toIsoEpoch(value: unknown): string {
   const millis = Number(value);

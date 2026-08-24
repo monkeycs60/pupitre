@@ -37,20 +37,21 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
     let aborted = false;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
 
-    if (opts.streamingInput && child.stdin) {
+    const stdin = child.stdin;
+    if (opts.streamingInput && stdin) {
       // Les writes Node sont ordonnés : le premier prompt sera toujours reçu
       // avant une éventuelle précision envoyée immédiatement après le spawn.
-      child.stdin.write(opts.streamingInput.initialLine + "\n");
+      stdin.write(opts.streamingInput.initialLine + "\n");
       opts.streamingInput.registerWrite((line) => new Promise((resolve) => {
-        if (settled || sawTerminal || child.stdin.destroyed) {
+        if (settled || sawTerminal || stdin.destroyed) {
           resolve(false);
           return;
         }
-        child.stdin.write(line + "\n", (error) => resolve(error == null));
+        stdin.write(line + "\n", (error) => resolve(error == null));
       }));
       // Une fermeture précoce du process peut aussi faire échouer stdin ;
       // l'événement `error` du child publiera le statut terminal.
-      child.stdin.on("error", () => {});
+      stdin.on("error", () => {});
     }
 
     const settle = () => {
@@ -77,7 +78,10 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
     };
     opts.signal?.addEventListener("abort", abort, { once: true });
 
-    const lines = createInterface({ input: child.stdout });
+    const stdout = child.stdout;
+    const stderrStream = child.stderr;
+    if (!stdout || !stderrStream) throw new Error("stdout/stderr indisponible");
+    const lines = createInterface({ input: stdout });
     lines.on("line", (line) => {
       if (aborted) return;
       let events: AppEvent[];
@@ -97,7 +101,7 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
     });
 
     let stderr = "";
-    child.stderr.on("data", (data) => (stderr += data));
+    stderrStream.on("data", (data) => (stderr += data));
     child.on("error", (error) => {
       if (!sawTerminal) {
         sawTerminal = true;
