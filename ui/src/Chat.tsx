@@ -14,14 +14,14 @@ import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
 import type { ConversationConfig } from './ConfigPanel'
 import { modelLabel } from './modelOptions'
-import { startReview } from './api'
+import { createSessionSummary, startReview } from './api'
 import type {
   AppEvent,
   Attachment,
+  ChangelogReview,
   Conversation,
   Project,
   QuotaSnapshot,
-  SkillSuggestion,
   SubtaskStatus,
   ReviewStatusSnapshot,
 } from './types'
@@ -31,8 +31,6 @@ import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
 import { appendDebriefQuestionPrompt } from './debriefQuestion'
 import type { DebriefBlock } from './groupEvents'
-import { SkillsSuggestionsPanel } from './SkillsSuggestionsPanel'
-import { latestUserText, withSkillInvocation } from './skillSuggestionDraft'
 import { TaskToggleContext } from './taskToggle'
 import type { TaskAction } from './taskToggle'
 import { toggleAction, withTaskActions } from './taskDraft'
@@ -65,21 +63,12 @@ interface ChatProps {
   reviewStatus: ReviewStatusSnapshot | null
   onOpenCode: (flagId?: string) => void
   onHandoff: () => void
+  onChangelogReview: (review: ChangelogReview) => void
 }
 
 interface LightboxImage {
   src: string
   alt: string
-}
-
-const SKILLS_PANEL_KEY = 'pupitre:skills-panel-open'
-
-function initialSkillsPanelOpen(): boolean {
-  try {
-    return localStorage.getItem(SKILLS_PANEL_KEY) === 'true'
-  } catch {
-    return false
-  }
 }
 
 function readDraft(key: string): string | null {
@@ -96,6 +85,57 @@ function lastStatusIsRunning(events: AppEvent[]): boolean {
     if (event.type === 'status') return event.state === 'running'
   }
   return false
+}
+
+/** Des réponses sont arrivées depuis le dernier résumé : le bouton de fin de
+ *  tour passe en mode « Cataloguer » (résumé + revue de changelog). */
+export function hasUncataloguedWork(events: AppEvent[]): boolean {
+  let lastSummary = -1
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (events[index]?.type === 'session-summary-ref') { lastSummary = index; break }
+  }
+  return events.slice(lastSummary + 1).some((event) => event.type === 'text-final')
+}
+
+function SessionSummaryAction({ conversationId, uncatalogued, onChangelogReview }: {
+  conversationId: string
+  uncatalogued: boolean
+  onChangelogReview: (review: ChangelogReview) => void
+}) {
+  const [isCreating, setIsCreating] = useState(false)
+
+  async function handleClick() {
+    if (isCreating) return
+    setIsCreating(true)
+    try {
+      const result = await createSessionSummary(conversationId)
+      if (result.review) onChangelogReview(result.review)
+    } catch {
+      // Le fil affiche déjà l'erreur du sidecar ; le bouton redevient actif.
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className={`turn-summary-button${uncatalogued ? ' is-catalog' : ''}`}
+      onClick={() => void handleClick()}
+      disabled={isCreating}
+      title={uncatalogued
+        ? 'Résumer la session et cataloguer les changements dans le changelog'
+        : 'Résumer la session dans le fil'}
+    >
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <g stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 2.5h6.5L13 5v8.5H4v-11Z" />
+          <path d="M6 7h5M6 9.5h5" />
+        </g>
+      </svg>
+      {isCreating ? 'Résumé en cours…' : uncatalogued ? 'Cataloguer les changements' : 'Résumé de session'}
+    </button>
+  )
 }
 
 function ReconnectBanner({ retryAt }: { retryAt: number | null }) {
@@ -129,13 +169,14 @@ export function Chat({
   reviewStatus,
   onOpenCode,
   onHandoff,
+  onChangelogReview,
 }: ChatProps) {
   const draftStorageKey = conversation === null
     ? newConversationDraftStorageKey(project.id, ticketId)
     : `pupitre:draft:${conversation.id}`
   const blocks = useMemo(() => groupEvents(events), [events])
-  const previousUserText = useMemo(() => latestUserText(events), [events])
   const isRunning = lastStatusIsRunning(events)
+  const uncatalogued = useMemo(() => hasUncataloguedWork(events), [events])
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
   const onConversationReadRef = useRef(onConversationRead)
@@ -144,7 +185,6 @@ export function Chat({
   const [message, setMessage] = useState(() => readDraft(draftStorageKey) ?? initialMessage)
   const [findQuery, setFindQuery] = useState('')
   const [focusRequest, setFocusRequest] = useState(0)
-  const [skillsPanelOpen, setSkillsPanelOpen] = useState(initialSkillsPanelOpen)
   /** Actions *DO THIS* cochées dans le fil, source de la consigne composée. */
   const [selectedActions, setSelectedActions] = useState<TaskAction[]>([])
   // Le premier rendu ne doit rien recomposer : il effacerait le bloc d'un
@@ -241,18 +281,6 @@ export function Chat({
     setFocusRequest((current) => current + 1)
   }, [])
 
-  function handleSkillsPanelToggle() {
-    setSkillsPanelOpen((current) => {
-      const next = !current
-      try {
-        localStorage.setItem(SKILLS_PANEL_KEY, String(next))
-      } catch {
-        // La préférence reste en mémoire si le stockage web est indisponible.
-      }
-      return next
-    })
-  }
-
   function handleFind(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const query = findQuery.trim()
@@ -266,11 +294,6 @@ export function Chat({
     onConversationRead?.()
   }
 
-  function handleSkillLaunch(skill: SkillSuggestion) {
-    setMessage((current) => withSkillInvocation(current, skill.invocation))
-    setFocusRequest((current) => current + 1)
-  }
-
   /**
    * Case cochée dans un bloc *DO THIS* : la sélection est recomposée en entier
    * pour que l'en-tête du message reste juste (« actions 2 et 4 »).
@@ -280,14 +303,13 @@ export function Chat({
     onConversationReadRef.current?.()
   }, [])
 
-  const suggestionText = message.trim() || previousUserText
   const relire = useCallback(() => {
     if (!conversation) return
     void startReview({ conversationId: conversation.id, scope: 'worktree' }).catch(() => {})
   }, [conversation])
   return (
     <>
-      <div className={`chat-layout ${skillsPanelOpen ? 'has-suggestions' : ''}`}>
+      <div className="chat-layout">
         <div className="chat-main">
           {connection === 'reconnecting' ? (
             <ReconnectBanner retryAt={retryAt} />
@@ -326,7 +348,14 @@ export function Chat({
                     onSubtaskStatusChange={handleSubtaskStatusChange}
                     onDebriefQuestion={handleDebriefQuestion}
                     turnFooterAction={conversation !== null && !isRunning ? (
-                      <ContextGauge conversation={conversation} events={events} onHandoff={onHandoff} />
+                      <>
+                        <ContextGauge conversation={conversation} events={events} onHandoff={onHandoff} />
+                        <SessionSummaryAction
+                          conversationId={conversation.id}
+                          uncatalogued={uncatalogued}
+                          onChangelogReview={onChangelogReview}
+                        />
+                      </>
                     ) : undefined}
                   />
                   {!isRunning && conversation !== null ? (
@@ -364,13 +393,6 @@ export function Chat({
             originKey={originKey}
           />
         </div>
-        <SkillsSuggestionsPanel
-          projectId={project.id}
-          text={suggestionText}
-          open={skillsPanelOpen}
-          onToggle={handleSkillsPanelToggle}
-          onLaunch={handleSkillLaunch}
-        />
       </div>
 
       {lightboxImage !== null ? (

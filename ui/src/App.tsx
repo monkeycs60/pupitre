@@ -23,8 +23,6 @@ import {
   setAppVisibility,
 } from './api'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
-import { modelLabel } from './modelOptions'
-import { ProviderMark } from './ProviderMark'
 import type { ActionFormat } from './actionHeadings'
 import { SkillsLibrary } from './SkillsLibrary'
 import { RoutinesView } from './RoutinesView'
@@ -38,7 +36,6 @@ import { MemoryView } from './MemoryView'
 import { ResumeCommandButton } from './ResumeCommandButton'
 import { HelpView } from './HelpView'
 import type { AppEvent, WorkspaceView } from './types'
-import { formatActiveDuration, formatShortDuration } from './formatActiveDuration'
 import { useTimeTracking } from './useTimeTracking'
 import { useFleet } from './useFleet'
 import { countConversationMessages } from './conversationMessageCount'
@@ -51,7 +48,6 @@ import { DashboardView } from './DashboardView'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { SurfaceSwitch } from './SurfaceSwitch'
-import { ConversationDomains } from './ConversationDomains'
 import { ConversationInstruction } from './ConversationInstruction'
 import { isAppRestartShortcut, restartApp } from './appRestart'
 import { ChangelogReviewDialog } from './ChangelogReviewDialog'
@@ -89,14 +85,6 @@ function lastDigest(events: AppEvent[]): Extract<AppEvent, { type: 'conversation
     }
   }
   return null
-}
-
-function hasUncataloguedWork(events: AppEvent[]): boolean {
-  let lastSummary = -1
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    if (events[index]?.type === 'session-summary-ref') { lastSummary = index; break }
-  }
-  return events.slice(lastSummary + 1).some((event) => event.type === 'text-final')
 }
 
 function App() {
@@ -176,7 +164,6 @@ function App() {
   const digestSummary = digest?.summary
   const digestDomains = digest?.domains
   const digestProposedDomainCount = digest?.proposedDomainCount
-  const uncataloguedWork = hasUncataloguedWork(events)
   const selectedConversationId = selectedConversation?.id
   const selectedConversationDigestTurn = selectedConversation?.digest_turn
   const selectedConversationLastReadTurn = selectedConversation?.last_read_turn ?? 0
@@ -781,42 +768,20 @@ function App() {
             <header className="conversation-header">
               <div className="conversation-title-block">
                 <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
-                {selectedConversation !== null ? (
-                  <p>
-                    <ProviderMark provider={selectedConversation.provider} className="conversation-prov" />
-                    {modelLabel(selectedConversation.model)} ·{' '}
-                    {selectedConversation.effort ?? 'default'}
-                    {selectedConversation.speed === 'fast' ? ' · rapide' : ''}
-                    {branchOfWorktree(selectedConversation.worktree_path) !== null ? (
-                      <span
-                        className="conversation-branch"
-                        title={`Worktree dédié : ${selectedConversation.worktree_path}`}
-                      >
-                        <BranchIcon />
-                        {branchOfWorktree(selectedConversation.worktree_path)}
-                      </span>
-                    ) : null}
-                  </p>
+                {selectedConversation !== null
+                && branchOfWorktree(selectedConversation.worktree_path) !== null ? (
+                  <span
+                    className="conversation-branch"
+                    title={`Worktree dédié : ${selectedConversation.worktree_path}`}
+                  >
+                    <BranchIcon />
+                    {branchOfWorktree(selectedConversation.worktree_path)}
+                  </span>
+                ) : null}
+                {selectedConversation?.ticket_instruction ? (
+                  <ConversationInstruction instruction={selectedConversation.ticket_instruction} />
                 ) : null}
               </div>
-              {selectedConversation !== null
-              && time.snapshot?.conversations[selectedConversation.id] ? (
-                <span
-                  className="conversation-title-time"
-                  title={`${formatShortDuration(time.snapshot.conversations[selectedConversation.id].agentMs)} d'agent sur cette conversation`}
-                >
-                  {formatActiveDuration(time.snapshot.conversations[selectedConversation.id].userMs)}
-                </span>
-              ) : null}
-              {selectedConversation?.ticket_instruction ? (
-                <ConversationInstruction instruction={selectedConversation.ticket_instruction} />
-              ) : null}
-              {selectedConversation !== null ? (
-                <ConversationDomains
-                  domains={selectedConversation.domains ?? []}
-                  proposedCount={selectedConversation.proposed_domain_count ?? 0}
-                />
-              ) : null}
               {selectedConversation !== null ? (
                 <SurfaceSwitch
                   active="conversation"
@@ -826,17 +791,6 @@ function App() {
               ) : null}
               {selectedConversation !== null ? (
                 <div className="header-actions">
-                  <button
-                    type="button"
-                    className="header-action header-action-icon"
-                    onClick={() => handleGitSelect()}
-                    title="Afficher le code et les reviews"
-                    aria-label="Afficher le code"
-                  >
-                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
-                    </svg>
-                  </button>
                   <ResumeCommandButton conversation={selectedConversation} />
                   <details className="header-action-menu">
                     <summary className="header-action header-action-icon" title="Actions de la conversation">
@@ -849,9 +803,6 @@ function App() {
                       </button>
                       <button type="button" role="menuitem" onClick={() => void startWorktreeReview()}>
                         Relire le diff
-                      </button>
-                      <button type="button" role="menuitem" onClick={() => void handlePaletteAction('summary')}>
-                        {uncataloguedWork ? 'Changements prêts à cataloguer' : 'Résumé session'}
                       </button>
                     </div>
                   </details>
@@ -883,6 +834,7 @@ function App() {
               reviewStatus={fleet.reviewStatus}
               onOpenCode={handleGitSelect}
               onHandoff={() => setShowHandoff(true)}
+              onChangelogReview={setChangelogReview}
             />
             {showSwitchModel && selectedConversation !== null ? (
               <SwitchModelModal

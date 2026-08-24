@@ -36,7 +36,6 @@ import type {
   AppNotification,
   SkillDetail,
   SkillSummary,
-  SkillSuggestionResult,
   StoredEvent,
   SubtaskResult,
   TicketNote,
@@ -481,18 +480,6 @@ export function setSkillFavorite(
     `/api/projects/${routeId(projectId)}/skills/${routeId(skillId)}/favorite`,
     jsonPut({ favorite }),
   )
-}
-
-export function suggestSkills(
-  projectId: string,
-  text: string,
-  resolveAmbiguous: boolean,
-  signal?: AbortSignal,
-): Promise<SkillSuggestionResult> {
-  return fetchJson('/api/skills/suggestions', {
-    ...jsonPost({ projectId, text, resolveAmbiguous }),
-    signal,
-  })
 }
 
 export function composeSkill(input: {

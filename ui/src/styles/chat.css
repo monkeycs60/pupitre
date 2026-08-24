@@ -5,6 +5,22 @@
    sur une surface à peine relevée.
 --------------------------------------------------------------------------- */
 
+.chat-layout {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 .events-view {
   flex: 1;
   min-height: 0;
@@ -787,6 +803,50 @@
 .turn-subtasks {
   color: var(--text-muted);
   font-family: var(--font-mono);
+}
+
+/* Résumé de session : sur la barre de fin de tour, discret tant qu'il n'y a
+   rien à cataloguer, accentué dès que des réponses attendent le changelog. */
+.turn-summary-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.turn-summary-button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.turn-summary-button:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.turn-summary-button.is-catalog {
+  color: var(--accent-bright);
+  font-weight: 500;
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.turn-summary-button.is-catalog:hover:not(:disabled) {
+  color: var(--accent-bright);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  border-color: var(--accent-border);
 }
 
 /* Le Gardien reste dans le flux : une seule ligne d'état. */
