@@ -26,6 +26,8 @@ import { useNow } from './useNow'
 import { LevelCard } from './LevelCard'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
+import { TicketLinkIcons } from './TicketLinkIcons'
+import type { TicketLinks } from './ticketLinks'
 
 declare global {
   interface Window {
@@ -56,6 +58,8 @@ interface SidebarProps {
   onTimeModeToggle: () => void
   /** Un tour tourne : la carte le signale sans changer de compteur. */
   agentRunning?: boolean
+  /** Liens ClickUp / MR par clé de ticket, pour les groupes contextuels. */
+  ticketLinks?: Map<string, TicketLinks>
 }
 
 function pinnedFirst<T extends { pinned: boolean }>(items: T[]): T[] {
@@ -80,8 +84,20 @@ function conversationRelation(
   return continuation ? `→ passation vers ${continuation.title}` : null
 }
 
-type ConversationScope = 'active' | 'archived' | 'trash' | 'sentry'
+type ConversationScope = 'active' | 'archived' | 'trash'
 type SidebarTab = 'conversations' | 'workflows'
+
+const CONVERSATION_SCOPES: Array<[ConversationScope, string]> = [
+  ['active', 'Actives'],
+  ['archived', 'Archives'],
+  ['trash', 'Corbeille'],
+]
+
+const SCOPE_PLACEHOLDERS: Record<ConversationScope, string> = {
+  active: 'Filtrer les conversations actives…',
+  archived: 'Filtrer les archives…',
+  trash: 'Filtrer la corbeille…',
+}
 type ConversationRowState = 'live' | 'unread' | 'read'
 
 function conversationRowState(
@@ -129,7 +145,14 @@ function shortConversationTime(value: string): string {
   return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 }
 
-type ConversationGroup = { key: string; label: string; items: Conversation[]; latestUpdatedAt?: number }
+type ConversationGroup = {
+  key: string
+  label: string
+  items: Conversation[]
+  latestUpdatedAt?: number
+  /** Clé du ticket pour les groupes contextuels : porte les liens externes. */
+  ticketKey?: string | null
+}
 
 /** Regroupe les conversations par récence (épinglées d'abord), comme la
  *  maquette : Épinglées / Aujourd'hui / Cette semaine / Plus ancien. */
@@ -182,7 +205,8 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
   ]
     .map((context) => ({
       key: `${context.type}-${context.key}`,
-      label: `${context.type === 'sentry' ? `Sentry · ${context.key}` : context.key} · ${context.grouped.length}`,
+      label: context.type === 'sentry' ? `Sentry · ${context.key}` : context.key,
+      ticketKey: context.type === 'ticket' ? context.key : null,
       items: context.grouped,
       latestUpdatedAt: Math.max(...context.grouped.map((conversation) => Date.parse(conversation.updated_at))),
     }))
@@ -213,6 +237,7 @@ export function Sidebar({
   timeMode,
   onTimeModeToggle,
   agentRunning = false,
+  ticketLinks,
 }: SidebarProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [workflows, setWorkflows] = useState<Workflow[]>([])
@@ -222,6 +247,8 @@ export function Sidebar({
   const [workflowToEdit, setWorkflowToEdit] = useState<Workflow | null>(null)
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('conversations')
   const [conversationScope, setConversationScope] = useState<ConversationScope>('active')
+  const [scopeMenuOpen, setScopeMenuOpen] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [filterText, setFilterText] = useState('')
   const [workflowFilterText, setWorkflowFilterText] = useState('')
   const [openConversationMenu, setOpenConversationMenu] = useState<string | null>(null)
@@ -256,17 +283,14 @@ export function Sidebar({
     let ignore = false
     if (selectedProject === null) return
 
-    const apiScope = conversationScope === 'sentry' ? 'active' : conversationScope
     void Promise.all([
-      listProjectConversations(selectedProject.id, apiScope),
+      listProjectConversations(selectedProject.id, conversationScope),
       listProjectWorkflows(selectedProject.id),
       listProjectDomains(selectedProject.id).catch(() => [] as ProjectDomain[]),
     ])
       .then(([items, loadedWorkflows, loadedDomains]) => {
         if (!ignore) {
-          const scopedItems = conversationScope === 'sentry'
-            ? items.filter((item) => item.origin_type === 'sentry')
-            : items
+          const scopedItems = items
           const currentSelectedConversation = selectedConversationRef.current
           const selectedLoadedConversation = workspaceViewRef.current === 'conversations' && currentSelectedConversation !== null
             ? scopedItems.find((item) => item.id === currentSelectedConversation.id)
@@ -304,7 +328,28 @@ export function Sidebar({
     setWorkflowFilterText('')
     setWorkflowToEdit(null)
     setShowWorkflowDialog(false)
+    setScopeMenuOpen(false)
+    try {
+      const stored = localStorage.getItem(`pupitre:sidebar-collapsed:${selectedProject?.id ?? ''}`)
+      setCollapsedGroups(new Set(stored === null ? [] : JSON.parse(stored) as string[]))
+    } catch {
+      setCollapsedGroups(new Set())
+    }
   }, [selectedProject?.id])
+
+  function toggleGroupCollapsed(groupKey: string) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(groupKey)) next.delete(groupKey)
+      else next.add(groupKey)
+      try {
+        localStorage.setItem(`pupitre:sidebar-collapsed:${selectedProject?.id ?? ''}`, JSON.stringify([...next]))
+      } catch {
+        // La préférence reste en mémoire si le stockage local est bloqué.
+      }
+      return next
+    })
+  }
 
   function handleProjectSettings(project: Project) {
     setProjectSettingsProject(project)
@@ -410,7 +455,7 @@ export function Sidebar({
     setError(null)
     try {
       const updated = await setConversationArchived(conversation.id, !conversation.archived)
-      setConversations((current) => (conversationScope === 'active' || conversationScope === 'sentry') && updated.archived
+      setConversations((current) => conversationScope === 'active' && updated.archived
         ? current.filter((item) => item.id !== updated.id)
         : conversationScope === 'archived' && !updated.archived
           ? current.filter((item) => item.id !== updated.id)
@@ -547,7 +592,7 @@ export function Sidebar({
           </button>
         </div>
 
-        <div className="conversation-filter-input">
+        <div className={`conversation-filter-input${conversationScope !== 'active' ? ' has-scope' : ''}`}>
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
               <circle cx="7" cy="7" r="4.2" />
@@ -558,28 +603,51 @@ export function Sidebar({
             type="text"
             value={filterText}
             onChange={(event) => setFilterText(event.target.value)}
-            placeholder={`Filtrer ${conversations.length} conversation${conversations.length > 1 ? 's' : ''}…`}
+            placeholder={SCOPE_PLACEHOLDERS[conversationScope]}
             aria-label="Filtrer les conversations"
           />
+          <button
+            type="button"
+            className="conversation-scope-toggle"
+            aria-label="Choisir le périmètre : actives, archives ou corbeille"
+            aria-haspopup="menu"
+            aria-expanded={scopeMenuOpen}
+            title="Actives, archives ou corbeille"
+            onClick={() => setScopeMenuOpen((open) => !open)}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2.5 4h11M4.5 8h7M6.5 12h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
 
-        <div className="conversation-filters" role="tablist" aria-label="Vue des conversations">
-          {([['active', 'Actives'], ['archived', 'Archives'], ['trash', 'Corbeille'], ['sentry', 'Sentry']] as const).map(([scope, label]) => (
-            <button
-              type="button"
-              key={scope}
-              role="tab"
-              aria-selected={conversationScope === scope}
-              className={conversationScope === scope ? 'is-selected' : ''}
-              onClick={() => {
-                closeConversationMenu()
-                setConversationScope(scope)
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {scopeMenuOpen ? (
+          <div className="conversation-scope-anchor">
+          <div className="conversation-scope-menu" role="menu" aria-label="Périmètre des conversations">
+            {CONVERSATION_SCOPES.map(([scope, label]) => (
+              <button
+                type="button"
+                key={scope}
+                role="menuitemradio"
+                aria-checked={conversationScope === scope}
+                className={conversationScope === scope ? 'is-selected' : ''}
+                onClick={() => {
+                  closeConversationMenu()
+                  setConversationScope(scope)
+                  setScopeMenuOpen(false)
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  {conversationScope === scope ? (
+                    <path d="M2.5 8.5 6 12l7.5-8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  ) : null}
+                </svg>
+                {label}
+              </button>
+            ))}
+          </div>
+          </div>
+        ) : null}
 
         {conversationScope === 'trash' && conversations.length > 0 ? (
           <button type="button" className="trash-purge-button" onClick={() => void handleTrashPurge()}>
@@ -600,10 +668,28 @@ export function Sidebar({
             if (filtered.length === 0) {
               return <p className="list-empty">Aucune conversation ne correspond</p>
             }
-            return groupConversations(filtered).map((group) => (
+            return groupConversations(filtered).map((group) => {
+              const isCollapsed = collapsedGroups.has(group.key)
+              const unread = group.items.filter((conversation) => (
+                conversationRowState(conversation, activeConversationIds) === 'unread'
+              )).length
+              const groupLinks = group.ticketKey ? ticketLinks?.get(group.ticketKey) : undefined
+              return (
               <div className="conv-group" key={group.key}>
                 <div className="conv-group-header">
-                  <span>{group.label}</span>
+                  <button
+                    type="button"
+                    className="conv-group-toggle"
+                    aria-expanded={!isCollapsed}
+                    aria-label={`${isCollapsed ? 'Déplier' : 'Replier'} ${group.label}`}
+                    onClick={() => toggleGroupCollapsed(group.key)}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={isCollapsed ? { transform: 'rotate(-90deg)' } : undefined}>
+                      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span>{group.label}</span>
+                  </button>
+                  {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
                   <span className="conv-group-rule" aria-hidden="true" />
                   {(group.key.startsWith('ticket-') || group.key.startsWith('sentry-')) && onConversationCreateFromContext ? (
                     <button
@@ -622,18 +708,12 @@ export function Sidebar({
                       }}
                     >+</button>
                   ) : null}
-                  {(() => {
-                    const unread = group.items.filter((conversation) => (
-                      conversationRowState(conversation, activeConversationIds) === 'unread'
-                    )).length
-                    return (
-                      <span className={`conv-group-count ${unread > 0 ? 'is-attention' : ''}`}>
-                        {unread > 0 ? `${unread} à lire` : group.items.length}
-                      </span>
-                    )
-                  })()}
+                  {unread > 0 ? (
+                    <span className="conv-group-count is-attention">{unread} à lire</span>
+                  ) : null}
+                  <span className="conv-group-count">{group.items.length}</span>
                 </div>
-                {group.items.map((conversation) => {
+                {isCollapsed ? null : group.items.map((conversation) => {
                 const isSelected = (workspaceView === 'conversations' || workspaceView === 'git')
                   && selectedConversation?.id === conversation.id
                 const activeItem = activeByConversation.get(conversation.id)
@@ -676,18 +756,6 @@ export function Sidebar({
                       {conversation.ticket_key ? (
                         <span className="conv-row-ticket">{conversation.ticket_key}</span>
                       ) : null}
-                      {(conversation.domains ?? []).length > 0 ? (
-                        <span className="conv-row-domains">
-                          {conversation.domains!.map((domain) => (
-                            <span
-                              key={domain.id}
-                              className={`conv-row-domain conv-row-domain-${domain.kind === 'métier' ? 'metier' : 'technique'}`}
-                            >
-                              {domain.name}
-                            </span>
-                          ))}
-                        </span>
-                      ) : null}
                       {branch !== null ? (
                         <span className="conv-row-branch" title={`Branche du worktree : ${conversation.worktree_path}`}>
                           <BranchIcon />{branch}
@@ -697,7 +765,6 @@ export function Sidebar({
                           <BranchIcon />{conversation.created_on_branch}
                         </span>
                       ) : null}
-                      <span className="conv-row-count">{conversationMessageCount(conversation, messageCount)}</span>
                     </span>
                   )}
                   {conversationRelation(conversation, conversations) ? (
@@ -810,7 +877,8 @@ export function Sidebar({
                 )
                 })}
               </div>
-            ))
+              )
+            })
           })()}
         </div>
           </div>

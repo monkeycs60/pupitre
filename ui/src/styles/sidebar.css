@@ -470,38 +470,6 @@
   font-size: var(--text-xs);
 }
 
-.conv-row-domains {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-width: 0;
-}
-
-.conv-row-domain {
-  flex: none;
-  max-width: 9rem;
-  overflow: hidden;
-  padding: 0 6px;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  line-height: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: var(--neutral-soft);
-  border-radius: var(--r-xs);
-}
-
-.conv-row-domain-metier {
-  color: var(--accent-bright);
-  background: var(--accent-soft);
-}
-
-.conv-row-domain-technique {
-  color: var(--text-muted);
-  background: var(--neutral-soft);
-}
-
 .pin-button {
   width: 24px;
   height: 24px;
@@ -737,28 +705,79 @@
   color: var(--text-muted);
 }
 
-.conversation-filters {
-  display: flex;
-  gap: 3px;
-  padding: 0 var(--space-2) var(--space-2);
-}
-
-.conversation-filters button {
-  min-height: 24px;
-  padding: 2px 9px;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  font-weight: 500;
+/* Périmètre (actives / archives / corbeille) : un menu sur le champ de
+   filtre remplace la rangée d'onglets — Sentry vit dans les groupes du fil. */
+.conversation-scope-toggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--text-faint);
   background: transparent;
   border: 0;
-  border-radius: var(--r-full);
+  border-radius: var(--r-xs);
   cursor: pointer;
 }
 
-.conversation-filters button:hover,
-.conversation-filters button.is-selected {
+.conversation-scope-toggle:hover,
+.conversation-scope-toggle[aria-expanded='true'] {
   color: var(--text);
   background: var(--bg-hover);
+}
+
+.conversation-filter-input.has-scope {
+  border-color: var(--accent-border);
+}
+
+.conversation-filter-input.has-scope .conversation-scope-toggle {
+  color: var(--accent-bright);
+}
+
+.conversation-scope-anchor {
+  position: relative;
+  height: 0;
+}
+
+.conversation-scope-menu {
+  position: absolute;
+  top: 0;
+  right: var(--space-2);
+  z-index: 30;
+  display: grid;
+  gap: 1px;
+  min-width: 168px;
+  padding: var(--space-1);
+  margin-top: 2px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-popover);
+  animation: pop-in var(--dur-fast) var(--ease);
+}
+
+.conversation-scope-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+
+.conversation-scope-menu button:hover {
+  background: var(--bg-hover);
+}
+
+.conversation-scope-menu button.is-selected {
+  color: var(--text-strong);
+  background: var(--bg-active);
 }
 
 .workflow-sidebar-panel {
@@ -1704,12 +1723,71 @@
   padding: 12px 6px 4px;
 }
 
-.conv-group-header > span:first-child {
+/* Replier un groupe = replier un ticket : chevron + libellé, un seul bouton. */
+.conv-group-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 70%;
+  padding: 1px 3px;
+  margin: -1px -3px;
   color: var(--text-faint);
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+
+.conv-group-toggle:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.conv-group-toggle svg {
+  flex: none;
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.conv-group-toggle > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-link-icons {
+  display: inline-flex;
+  flex: none;
+  gap: 3px;
+  align-items: center;
+}
+
+.ticket-link-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-xs);
+  /* Marques ClickUp / GitLab : discrètes au repos, pleines couleurs au survol. */
+  opacity: 0.55;
+  filter: grayscale(0.4);
+  transition: opacity var(--dur-fast) var(--ease), filter var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.ticket-link-icon:hover {
+  background: var(--bg-hover);
+  opacity: 1;
+  filter: none;
+}
+
+.ticket-link-icon svg {
+  width: 12px;
+  height: 12px;
 }
 
 .conv-group-rule {

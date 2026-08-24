@@ -49,6 +49,8 @@ import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { SurfaceSwitch } from './SurfaceSwitch'
 import { ConversationInstruction } from './ConversationInstruction'
+import { TicketLinkIcons } from './TicketLinkIcons'
+import { useTicketLinks } from './ticketLinks'
 import { isAppRestartShortcut, restartApp } from './appRestart'
 import { ChangelogReviewDialog } from './ChangelogReviewDialog'
 import {
@@ -145,6 +147,7 @@ function App() {
     workspaceView === 'progress' ? null : selectedConversation?.id ?? null,
   )
   const fleet = useFleet(selectedProject?.id)
+  const ticketLinks = useTicketLinks(selectedProject?.id)
   useAppNotifications()
 
   useEffect(() => {
@@ -687,6 +690,7 @@ function App() {
         onTimeModeToggle={time.toggleMode}
         agentRunning={fleet.items.length > 0}
         activeFleet={fleet.items}
+        ticketLinks={ticketLinks}
       />
       <div
         className="sidebar-resize-handle"
@@ -781,6 +785,19 @@ function App() {
                 {selectedConversation?.ticket_instruction ? (
                   <ConversationInstruction instruction={selectedConversation.ticket_instruction} />
                 ) : null}
+                {(() => {
+                  if (selectedConversation === null) return null
+                  const links = (selectedConversation.ticket_key !== null && selectedConversation.ticket_key !== undefined
+                    ? ticketLinks.get(selectedConversation.ticket_key)
+                    : undefined)
+                    ?? (selectedConversation.ticket_id !== null ? ticketLinks.get(selectedConversation.ticket_id) : undefined)
+                  return links === undefined ? null : (
+                    <TicketLinkIcons
+                      links={links}
+                      ticketKey={selectedConversation.ticket_key ?? links.ticketKey}
+                    />
+                  )
+                })()}
               </div>
               {selectedConversation !== null ? (
                 <SurfaceSwitch

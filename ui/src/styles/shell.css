@@ -397,6 +397,29 @@ body.is-resizing-documents-list {
   animation: rail-live 1.8s var(--ease) infinite;
 }
 
+/* Non-lus du projet : pastille flottante sur l'avatar, lisible sans ouvrir
+   la sidebar du projet. */
+.rail-avatar-badge {
+  position: absolute;
+  top: -3px;
+  left: 32px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  color: var(--on-accent);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  background: var(--streak);
+  border: 2px solid var(--bg-rail);
+  border-radius: var(--r-full);
+  pointer-events: none;
+}
+
 .rail-add {
   display: flex;
   align-items: center;

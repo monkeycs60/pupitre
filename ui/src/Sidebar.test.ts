@@ -295,8 +295,20 @@ test('affiche le compteur live de la conversation sélectionnée', async () => {
     title: 'Conversation live',
     message_count: 2,
   }
+  const activeItem: FleetItem = {
+    id: 'turn-live-count',
+    kind: 'turn',
+    projectId: project.id,
+    projectName: project.name,
+    conversationId: conversation.id,
+    title: conversation.title,
+    provider: conversation.provider,
+    model: conversation.model,
+    startedAt: '2026-08-08T09:05:00.000Z',
+    lastEvent: 'outil · lecture',
+  }
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation])
-  renderSidebar([], conversation, 4)
+  renderSidebar([activeItem], conversation, 4)
 
   await waitFor(() => expect(document.querySelector('.navigation-main')).not.toBeNull())
   expect(document.querySelector('.conv-row-count')?.textContent).toBe('4')
@@ -347,16 +359,12 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   renderSidebar([], null, undefined, onCreate)
 
   await waitFor(() => expect(document.querySelectorAll('.conv-group-header').length).toBe(3))
-  const headers = [...document.querySelectorAll('.conv-group-header > span:first-child')].map((element) => element.textContent)
-  expect(headers[0]).toBe('Sentry · REACTOR-B4S · 1')
+  const headers = [...document.querySelectorAll('.conv-group-toggle > span')].map((element) => element.textContent)
+  expect(headers[0]).toBe('Sentry · REACTOR-B4S')
   expect(headers[1]).toBe("Aujourd'hui")
-  expect(headers[2]).toBe('TECH-1 · 2')
+  expect(headers[2]).toBe('TECH-1')
   expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(2)
   expect(document.querySelector('.conv-row-sentry .provider-mark.is-sentry')).not.toBeNull()
-  fireEvent.click(screen.getByRole('tab', { name: 'Sentry' }))
-  await waitFor(() => expect(document.querySelectorAll('.conv-row-sentry')).toHaveLength(1))
-  expect(document.querySelectorAll('.navigation-row')).toHaveLength(1)
-  expect(document.querySelector('.conv-row-sentry .conv-row-title')?.textContent).toBe('Scout erreur')
   fireEvent.click(screen.getByRole('button', { name: /Nouvelle conversation dans Sentry/ }))
   expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
     branch: null,
@@ -365,7 +373,39 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   }))
 })
 
-test('affiche les pastilles des domaines actifs seulement', async () => {
+test('replier un groupe cache ses conversations et garde le compte des non-lues', async () => {
+  const unreadTicket: Conversation = {
+    ...startedConversation,
+    id: 'conversation-unread-ticket',
+    title: 'Ticket non lu',
+    ticket_id: 'ticket-1',
+    ticket_key: 'TECH-1',
+    digest_turn: 3,
+    last_read_turn: 1,
+  }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [unreadTicket])
+  renderSidebar()
+
+  await waitFor(() => expect(document.querySelector('.navigation-row')).not.toBeNull())
+  expect(screen.getByText('1 à lire')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Replier TECH-1' }))
+  expect(document.querySelector('.navigation-row')).toBeNull()
+  expect(screen.getByText('1 à lire')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Déplier TECH-1' }))
+  expect(document.querySelector('.navigation-row')).not.toBeNull()
+})
+
+test('le menu du filtre bascule vers les archives', async () => {
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [startedConversation])
+  renderSidebar()
+
+  await waitFor(() => expect(document.querySelector('.navigation-row')).not.toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: /Choisir le périmètre/ }))
+  expect(screen.getByRole('menuitemradio', { name: 'Actives' }).getAttribute('aria-checked')).toBe('true')
+  expect(screen.getByRole('menuitemradio', { name: 'Corbeille' })).toBeTruthy()
+})
+
+test('la ligne de conversation reste épurée : pas de pastilles de domaines', async () => {
   const labelled: Conversation = {
     ...startedConversation,
     id: 'conversation-domains',
@@ -377,10 +417,10 @@ test('affiche les pastilles des domaines actifs seulement', async () => {
   }
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [labelled])
   renderSidebar()
-  await waitFor(() => expect(document.querySelectorAll('.conv-row-domain').length).toBe(2))
-  const pills = [...document.querySelectorAll('.conv-row-domain')].map((element) => element.textContent)
-  expect(pills).toEqual(['API', 'Match AI'])
-  expect(document.querySelector('.conv-row-domain-metier')?.textContent).toBe('Match AI')
+  await waitFor(() => expect(document.querySelector('.navigation-row')).not.toBeNull())
+  expect(document.querySelector('.conv-row-mark')).not.toBeNull()
+  expect(screen.queryByText('API')).toBeNull()
+  expect(screen.queryByText('Match AI')).toBeNull()
 })
 
 test('le menu d’une conversation n’attache que les domaines déjà validés', async () => {
@@ -416,10 +456,9 @@ test('le menu d’une conversation n’attache que les domaines déjà validés'
   fireEvent.click(screen.getByRole('menuitem', { name: 'Domaines' }))
   expect(screen.queryByRole('menuitemcheckbox', { name: 'Match AI' })).toBeNull()
   fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'API' }))
-  await waitFor(() => expect(document.querySelector('.conv-row-domain')?.textContent).toBe('API'))
-  expect(api.getDomainCalls()).toEqual([
+  await waitFor(() => expect(api.getDomainCalls()).toEqual([
     { method: 'POST', path: '/api/conversations/conversation-attach-domain/domains' },
-  ])
+  ]))
 })
 
 test('signale sur la roue dentée les domaines proposés du projet', async () => {

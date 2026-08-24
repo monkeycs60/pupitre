@@ -261,6 +261,7 @@ export function Rail({
         {projects.map((project) => {
           const active = selectedProject?.id === project.id && workspaceView === 'conversations'
           const current = selectedProject?.id === project.id
+          const unread = unreadByProject[project.id] ?? 0
           return (
             <div className="rail-project" key={project.id}>
               <span className={`rail-project-bar ${active ? 'is-active' : ''}`} aria-hidden="true" />
@@ -268,12 +269,16 @@ export function Rail({
                 type="button"
                 className={`rail-avatar ${current ? 'is-current' : ''} ${project.id !== selectedProject?.id && activeProjectIds.includes(project.id) ? 'is-live' : ''}`}
                 onClick={() => onProjectSelect(project)}
-                title={project.name}
+                title={unread > 0 ? `${project.name} · ${unread} à lire` : project.name}
                 aria-current={current ? 'true' : undefined}
+                aria-label={unread > 0 ? `${project.name}, ${unread} conversation${unread > 1 ? 's' : ''} à lire` : project.name}
               >
                 <span className="rail-project-initials">{projectInitials(project.name)}</span>
                 <span className="rail-project-label">{project.name}</span>
               </button>
+              {unread > 0 ? (
+                <span className="rail-avatar-badge" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>
+              ) : null}
             </div>
           )
         })}
