@@ -16,7 +16,9 @@ import {
 } from './api'
 import { buildCreateConversationInput } from './conversationDraft'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
-import type { Attachment, Conversation, Project, Provider, QuotaSnapshot } from './types'
+import { ComposerPalette, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
+import type { ComposerAction, ComposerPaletteTrigger } from './ComposerPalette'
+import type { Attachment, Conversation, Project, Provider, QuotaSnapshot, SkillSummary } from './types'
 import { PROVIDER_MODELS } from './modelOptions'
 import { mediaUrl } from './transport'
 import { invoke } from '@tauri-apps/api/core'
@@ -42,6 +44,9 @@ interface ComposerProps {
   ticketId?: string | null
   originType?: 'sentry' | null
   originKey?: string | null
+  /** Actions `/` du popover (résumé, test, review) : exécutées par le parent,
+   *  qui tient les callbacks de revue et d'ouverture du code. */
+  onAction?: (action: ComposerAction) => void | Promise<void>
 }
 
 interface UploadedAttachment {
@@ -190,6 +195,7 @@ export function Composer({
   ticketId = null,
   originType = null,
   originKey = null,
+  onAction,
 }: ComposerProps) {
   const isNewConversation = conversationId === null
   const [config, setConfig] = useState<ConversationConfig>({
@@ -213,6 +219,11 @@ export function Composer({
   const [isCancelling, setIsCancelling] = useState(false)
   const [configReady, setConfigReady] = useState(!isNewConversation)
   const [toast, setToast] = useState<string | null>(null)
+  const [trigger, setTrigger] = useState<ComposerPaletteTrigger | null>(null)
+  const [paletteIndex, setPaletteIndex] = useState(0)
+  /** Échap sur un token : le popover reste fermé tant que ce `$`/`/` vit. */
+  const dismissedAnchorRef = useRef<number | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importPathsRef = useRef<(paths: string[]) => void>(() => {})
   const canSteer = conversationId !== null
@@ -224,6 +235,74 @@ export function Composer({
     !isSubmitting &&
     (!isRunning || canSteer) &&
     configReady
+  const paletteItems = useComposerPaletteItems(trigger, project.id, conversationId !== null)
+
+  function syncPaletteTrigger(value: string, cursor: number) {
+    const next = paletteTrigger(value, cursor)
+    if (next === null) {
+      dismissedAnchorRef.current = null
+      setTrigger(null)
+      return
+    }
+    if (dismissedAnchorRef.current === next.anchor) {
+      setTrigger(null)
+      return
+    }
+    if (trigger === null || trigger.anchor !== next.anchor || trigger.mode !== next.mode) {
+      setPaletteIndex(0)
+    }
+    setTrigger(next)
+  }
+
+  function handleCaretSync() {
+    const area = textareaRef.current
+    if (area !== null) syncPaletteTrigger(message, area.selectionStart)
+  }
+
+  function handleSkillPick(skill: SkillSummary) {
+    if (trigger === null) return
+    const cursor = textareaRef.current?.selectionStart ?? message.length
+    const inserted = `$${skill.invocation} `
+    onMessageChange(`${message.slice(0, trigger.anchor)}${inserted}${message.slice(cursor)}`)
+    setTrigger(null)
+    dismissedAnchorRef.current = null
+    const caret = trigger.anchor + inserted.length
+    requestAnimationFrame(() => {
+      const area = textareaRef.current
+      if (area !== null) {
+        area.focus()
+        area.setSelectionRange(caret, caret)
+      }
+    })
+  }
+
+  function handlePaletteAction(action: ComposerAction) {
+    if (trigger === null) return
+    const cursor = textareaRef.current?.selectionStart ?? message.length
+    onMessageChange(`${message.slice(0, trigger.anchor)}${message.slice(cursor)}`)
+    setTrigger(null)
+    dismissedAnchorRef.current = null
+    void onAction?.(action)
+  }
+
+  /** Bouton « Insérer un skill » : pose un `$` au bout du message et rend le
+   *  focus au textarea — le popover s'ouvre par le même chemin que la frappe. */
+  function openSkillPalette() {
+    const base = message.length > 0 && !message.endsWith(' ') && !message.endsWith('\n')
+      ? `${message} $`
+      : `${message}$`
+    onMessageChange(base)
+    dismissedAnchorRef.current = null
+    setPaletteIndex(0)
+    setTrigger({ mode: 'skills', anchor: base.length - 1, query: '' })
+    requestAnimationFrame(() => {
+      const area = textareaRef.current
+      if (area !== null) {
+        area.focus()
+        area.setSelectionRange(base.length, base.length)
+      }
+    })
+  }
 
   async function importFiles(files: File[]) {
     if (files.length === 0 || (isRunning && !canSteer)) return
@@ -403,6 +482,31 @@ export function Composer({
       event.stopPropagation()
       return
     }
+    if (trigger !== null) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        setPaletteIndex((current) => paletteItems.count ? (current + 1) % paletteItems.count : 0)
+        return
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        setPaletteIndex((current) => paletteItems.count ? (current - 1 + paletteItems.count) % paletteItems.count : 0)
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        dismissedAnchorRef.current = trigger.anchor
+        setTrigger(null)
+        return
+      }
+      if (event.key === 'Enter' && !event.shiftKey && paletteItems.count > 0) {
+        event.preventDefault()
+        const index = Math.min(paletteIndex, paletteItems.count - 1)
+        if (trigger.mode === 'skills') handleSkillPick(paletteItems.skills[index]!)
+        else handlePaletteAction(paletteItems.actions[index]!.id)
+        return
+      }
+    }
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) {
       return
     }
@@ -491,11 +595,31 @@ export function Composer({
         ) : null}
 
         <div className="composer-input-wrap">
+          {trigger !== null ? (
+            <ComposerPalette
+              trigger={trigger}
+              items={paletteItems}
+              selectedIndex={Math.min(paletteIndex, Math.max(0, paletteItems.count - 1))}
+              onSelectedIndexChange={setPaletteIndex}
+              onSkillPick={handleSkillPick}
+              onAction={handlePaletteAction}
+              hasConversation={conversationId !== null}
+            />
+          ) : null}
           <textarea
             key={`composer-message-${focusRequest}`}
+            ref={textareaRef}
             value={message}
-            onChange={(event) => onMessageChange(event.target.value)}
+            onChange={(event) => {
+              onMessageChange(event.target.value)
+              syncPaletteTrigger(event.target.value, event.target.selectionStart)
+            }}
             onKeyDown={handleKeyDown}
+            onKeyUp={(event) => {
+              if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) handleCaretSync()
+            }}
+            onClick={handleCaretSync}
+            onBlur={() => setTrigger(null)}
             onPaste={(event) => void handlePaste(event)}
             placeholder={isRunning ? (canSteer ? 'Ajoute une précision au tour en cours…' : 'tour en cours…') : ''}
             aria-label="Message"
@@ -554,7 +678,7 @@ export function Composer({
             <button
               type="button"
               className="composer-skill-button"
-              onClick={() => onMessageChange(message.length > 0 ? `${message} $` : '$')}
+              onClick={openSkillPalette}
               disabled={(isRunning && !canSteer) || isSubmitting}
               title="Insérer un skill ($)"
               aria-label="Insérer un skill"

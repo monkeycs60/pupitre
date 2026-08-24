@@ -895,6 +895,108 @@
   position: relative;
 }
 
+/* --- Popover `/` actions et `$` skills ------------------------------------ */
+
+.composer-palette {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  z-index: 40;
+  width: min(100%, 560px);
+  overflow: hidden;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-overlay);
+  animation: pop-in var(--dur-fast) var(--ease);
+}
+
+.composer-palette-list {
+  display: grid;
+  gap: 1px;
+  max-height: 264px;
+  padding: var(--space-1);
+  overflow-y: auto;
+}
+
+.composer-palette-empty {
+  margin: 0;
+  padding: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.composer-palette-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 7px 10px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.composer-palette-row.is-selected {
+  background: var(--accent-soft);
+}
+
+.composer-palette-invocation {
+  flex: none;
+  color: var(--accent-bright);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+}
+
+.composer-palette-row.is-selected .composer-palette-invocation {
+  color: var(--text-strong);
+}
+
+.composer-palette-description {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-palette-source {
+  flex: none;
+  padding: 0 6px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 16px;
+  background: var(--neutral-soft);
+  border-radius: var(--r-xs);
+}
+
+.composer-palette-footer {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 6px var(--space-3);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.composer-palette-footer kbd {
+  padding: 0 4px;
+  font-size: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xs);
+}
+
+.composer-palette-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
 .composer-placeholder {
   position: absolute;
   top: var(--space-2);

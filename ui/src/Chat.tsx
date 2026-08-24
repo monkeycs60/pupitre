@@ -14,7 +14,8 @@ import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
 import type { ConversationConfig } from './ConfigPanel'
 import { modelLabel } from './modelOptions'
-import { createSessionSummary, startReview } from './api'
+import { createSessionSummary, createTestInventory, startReview } from './api'
+import type { ComposerAction } from './ComposerPalette'
 import type {
   AppEvent,
   Attachment,
@@ -307,6 +308,21 @@ export function Chat({
     if (!conversation) return
     void startReview({ conversationId: conversation.id, scope: 'worktree' }).catch(() => {})
   }, [conversation])
+
+  async function handleComposerAction(action: ComposerAction) {
+    if (!conversation) return
+    if (action === 'review') {
+      await startReview({ conversationId: conversation.id, scope: 'worktree' }).catch(() => {})
+      onOpenCode()
+      return
+    }
+    if (action === 'test') {
+      await createTestInventory(conversation.id).catch(() => {})
+      return
+    }
+    const result = await createSessionSummary(conversation.id).catch(() => null)
+    if (result?.review) onChangelogReview(result.review)
+  }
   return (
     <>
       <div className="chat-layout">
@@ -391,6 +407,7 @@ export function Chat({
             ticketId={ticketId}
             originType={originType}
             originKey={originKey}
+            onAction={(action) => void handleComposerAction(action)}
           />
         </div>
       </div>
