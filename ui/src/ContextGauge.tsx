@@ -1,7 +1,10 @@
+import { memo, useMemo } from 'react'
 import { contextEstimate, formatContextWindow } from './contextEstimate'
 import type { AppEvent, Conversation } from './types'
 
-export function ContextGauge({
+// memo + useMemo : l'estimation parcourt tous les événements du fil, elle ne
+// doit tourner qu'à leur changement, pas à chaque re-render du parent.
+export const ContextGauge = memo(function ContextGauge({
   conversation,
   events,
   onHandoff,
@@ -10,7 +13,10 @@ export function ContextGauge({
   events: AppEvent[]
   onHandoff: () => void
 }) {
-  const estimate = contextEstimate(events, conversation.provider, conversation.model)
+  const estimate = useMemo(
+    () => contextEstimate(events, conversation.provider, conversation.model),
+    [events, conversation.provider, conversation.model],
+  )
   const formattedWindow = formatContextWindow(estimate.windowTokens)
   const ringLength = 66
   const ringOffset = ringLength * (1 - Math.max(0, Math.min(100, estimate.percent)) / 100)
@@ -51,4 +57,4 @@ export function ContextGauge({
       </button>
     </div>
   )
-}
+})

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getConversationEvents, getSubtaskEvents } from './api'
 import { reconnectDelayMs } from './backoff'
-import { mergeReplayAndBuffer } from './mergeEvents'
+import { appendLiveEvent, mergeReplayAndBuffer } from './mergeEvents'
 import type { StoredEvent } from './types'
 import { webSocketUrl } from './transport'
 
@@ -95,7 +95,7 @@ export function useConversationEvents(
         }
 
         if (buffer !== null) buffer.push(event)
-        else setEvents((current) => mergeReplayAndBuffer(current, [event]))
+        else setEvents((current) => appendLiveEvent(current, event))
       })
 
       currentSocket.addEventListener('close', dropAndRetry)

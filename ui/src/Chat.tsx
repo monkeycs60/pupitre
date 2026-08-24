@@ -311,6 +311,22 @@ export function Chat({
     void startReview({ conversationId: conversation.id, scope: 'worktree' }).catch(() => {})
   }, [conversation])
 
+  // Identité stable exigée : ce fragment est une prop d'EventStream, et un JSX
+  // inline recréé à chaque frappe dans le composer annulait son memo() — le
+  // fil entier était reconstruit à chaque touche.
+  const turnFooterAction = useMemo(() => (
+    conversation !== null && !isRunning ? (
+      <>
+        <ContextGauge conversation={conversation} events={events} onHandoff={onHandoff} />
+        <SessionSummaryAction
+          conversationId={conversation.id}
+          uncatalogued={uncatalogued}
+          onChangelogReview={onChangelogReview}
+        />
+      </>
+    ) : undefined
+  ), [conversation, isRunning, events, uncatalogued, onHandoff, onChangelogReview])
+
   async function handleComposerAction(action: ComposerAction) {
     if (!conversation) return
     if (action === 'review') {
@@ -373,16 +389,7 @@ export function Chat({
                     onImageLoad={scrollToBottomIfFollowing}
                     onSubtaskStatusChange={handleSubtaskStatusChange}
                     onDebriefQuestion={handleDebriefQuestion}
-                    turnFooterAction={conversation !== null && !isRunning ? (
-                      <>
-                        <ContextGauge conversation={conversation} events={events} onHandoff={onHandoff} />
-                        <SessionSummaryAction
-                          conversationId={conversation.id}
-                          uncatalogued={uncatalogued}
-                          onChangelogReview={onChangelogReview}
-                        />
-                      </>
-                    ) : undefined}
+                    turnFooterAction={turnFooterAction}
                   />
                   {!isRunning && conversation !== null ? (
                     <GuardianLine

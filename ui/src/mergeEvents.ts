@@ -19,3 +19,16 @@ export function mergeReplayAndBuffer(
   for (const event of replay) byId.set(event.id, event)
   return [...byId.values()].sort((a, b) => a.id - b.id)
 }
+
+// Chemin chaud du flux live : le cas normal est un événement plus récent que
+// tout l'existant, qui s'appende sans reconstruire ni re-trier le fil — la
+// fusion complète ci-dessus, O(N log N), re-triait toute la conversation à
+// chaque delta. Elle reste le filet des arrivées dans le désordre.
+export function appendLiveEvent(
+  current: StoredEvent[],
+  event: StoredEvent,
+): StoredEvent[] {
+  const last = current[current.length - 1]
+  if (last === undefined || event.id > last.id) return [...current, event]
+  return mergeReplayAndBuffer(current, [event])
+}
