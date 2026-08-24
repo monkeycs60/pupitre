@@ -136,3 +136,36 @@ test('le mode est mémorisé par projet', async () => {
   await act(async () => { await Promise.resolve() })
   expect(again()?.mode).toBe('agent')
 })
+
+function totalPostedMs(): number {
+  return posted.reduce((sum, slice) => {
+    const entry = slice as { startedAt: string; endedAt: string }
+    return sum + (Date.parse(entry.endedAt) - Date.parse(entry.startedAt))
+  }, 0)
+}
+
+test('le compteur s’arrête après deux minutes sans le moindre signal', async () => {
+  install()
+  mount('p1')
+  await act(async () => { await Promise.resolve() })
+  await tick(200)
+  const stopped = totalPostedMs()
+  // Deux minutes comptées, à une tranche de flush près, puis plus rien.
+  expect(stopped).toBeGreaterThanOrEqual(115_000)
+  expect(stopped).toBeLessThanOrEqual(125_000)
+  await tick(120)
+  expect(totalPostedMs()).toBe(stopped)
+})
+
+test('la molette suffit à rester actif : lire n’est pas être absent', async () => {
+  install()
+  mount('p1')
+  await act(async () => { await Promise.resolve() })
+  for (let round = 0; round < 4; round += 1) {
+    await tick(90)
+    await act(async () => { window.dispatchEvent(new Event('wheel')) })
+  }
+  await tick(20)
+  // 380 secondes de lecture à la molette, bien au-delà des deux minutes.
+  expect(totalPostedMs()).toBeGreaterThanOrEqual(360_000)
+})

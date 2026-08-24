@@ -2,8 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { addPresenceSlice, getTimeSnapshot } from './api'
 import type { TimeMode, TimeSnapshot } from './types'
 
-/** Sans frappe ni souris pendant ce délai, on cesse de compter. */
-const IDLE_LIMIT_MS = 5 * 60_000
+/**
+ * Sans signal d'activité pendant ce délai, on cesse de compter. Deux minutes
+ * ne tiennent que parce que la molette et le défilement comptent : lire une
+ * réponse longue sans toucher à la souris reste du travail.
+ */
+const IDLE_LIMIT_MS = 2 * 60_000
 const TICK_MS = 1_000
 const FLUSH_MS = 15_000
 const POLL_MS = 30_000
@@ -109,6 +113,8 @@ export function useTimeTracking(
     window.addEventListener('keydown', markActivity, true)
     window.addEventListener('pointermove', markActivity, { capture: true, passive: true })
     window.addEventListener('pointerdown', markActivity, { capture: true, passive: true })
+    window.addEventListener('wheel', markActivity, { capture: true, passive: true })
+    window.addEventListener('scroll', markActivity, { capture: true, passive: true })
     window.addEventListener('focus', handleFocus)
     window.addEventListener('blur', handleBlur)
 
@@ -179,6 +185,8 @@ export function useTimeTracking(
       window.removeEventListener('keydown', markActivity, true)
       window.removeEventListener('pointermove', markActivity, true)
       window.removeEventListener('pointerdown', markActivity, true)
+      window.removeEventListener('wheel', markActivity, true)
+      window.removeEventListener('scroll', markActivity, true)
       window.removeEventListener('focus', handleFocus)
       window.removeEventListener('blur', handleBlur)
       document.removeEventListener('visibilitychange', flushNow)
