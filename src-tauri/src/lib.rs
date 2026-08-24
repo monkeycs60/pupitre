@@ -20,6 +20,13 @@ const MAIN_WINDOW_LABEL: &str = "main";
 
 const DESIGN_WINDOW_LABEL: &str = "design";
 
+/// Préfixe des étiquettes des popups ouvertes depuis la fenêtre principale.
+const MAIN_POPUP_LABEL_PREFIX: &str = "main-popup-";
+
+/// Compteur d'étiquettes de ces popups, pour la même raison que côté Design :
+/// Tauri refuse deux fenêtres de même étiquette.
+static MAIN_POPUP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 /// Préfixe des étiquettes des popups de connexion, qui sert aussi à les
 /// retrouver pour les fermer.
 const DESIGN_POPUP_LABEL_PREFIX: &str = "design-popup-";
@@ -487,6 +494,92 @@ pub(crate) fn build_design_popup<R: tauri::Runtime>(
     }
 }
 
+/// Téléchargements de la fenêtre principale — un `download` sur une ancre, par
+/// exemple le bouton d'une pièce jointe.
+///
+/// Sans ce gestionnaire, wry ne branche pas le signal de téléchargement de
+/// WebKit et le clic est ignoré en silence, exactement comme l'était
+/// `target="_blank"` sans `on_new_window`. Le dossier est révélé à la fin, ce
+/// qui est la seule confirmation visible qu'un fichier est arrivé.
+fn handle_main_download<R: tauri::Runtime>(
+    webview: tauri::Webview<R>,
+    event: DownloadEvent<'_>,
+) -> bool {
+    match event {
+        DownloadEvent::Requested { url, destination } => {
+            log::info!(
+                "Téléchargement demandé : {url} vers {}",
+                destination.display()
+            );
+        }
+        DownloadEvent::Finished { url, path, success } => {
+            log::info!("Téléchargement terminé : {url} vers {path:?} (succès : {success})");
+            if success {
+                if let Some(path) = path {
+                    if let Err(error) = webview.app_handle().opener().reveal_item_in_dir(path) {
+                        log::warn!("Impossible d'ouvrir le dossier du téléchargement : {error}");
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    true
+}
+
+/// Popups ouvertes par la fenêtre principale.
+///
+/// Le contenu de cette fenêtre est notre propre interface : un `window.open`
+/// n'y vient donc jamais d'une page tierce. `window_features` est repris tel
+/// quel parce que c'est lui qui, sous Linux, fait partager le processus web à
+/// la popup — sans quoi une session ouverte dans la fenêtre parente n'y serait
+/// pas, ce qui condamne d'avance tout flux de connexion.
+fn build_main_popup<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    url: tauri::Url,
+    features: tauri::webview::NewWindowFeatures,
+) -> tauri::webview::NewWindowResponse<R> {
+    let label = format!(
+        "{MAIN_POPUP_LABEL_PREFIX}{}",
+        MAIN_POPUP_COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    let built = tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::External(url))
+        .window_features(features)
+        .title("Pupitre")
+        .on_download(handle_main_download)
+        .build();
+    match built {
+        Ok(window) => tauri::webview::NewWindowResponse::Create { window },
+        Err(error) => {
+            log::error!("Popup refusée : {error}");
+            tauri::webview::NewWindowResponse::Deny
+        }
+    }
+}
+
+/// Construit la fenêtre principale.
+///
+/// Elle vivait dans `tauri.conf.json`, ce qui interdisait de lui attacher le
+/// moindre gestionnaire : `on_download` et `on_new_window` n'existent que sur
+/// le constructeur. Deux clics étaient donc avalés en silence — le bouton
+/// « Télécharger » d'une pièce jointe et tout `window.open`. Les propriétés
+/// ci-dessous reprennent une à une celles que portait la configuration.
+fn build_main_window(app: &tauri::AppHandle) -> Result<(), tauri::Error> {
+    let popup_app = app.clone();
+    tauri::WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, tauri::WebviewUrl::default())
+        .title("Pupitre")
+        .inner_size(1280.0, 800.0)
+        .min_inner_size(960.0, 600.0)
+        .resizable(true)
+        .fullscreen(false)
+        .decorations(false)
+        .on_download(handle_main_download)
+        .on_new_window(move |url, features| build_main_popup(&popup_app, url, features))
+        .build()?;
+    Ok(())
+}
+
 /// Ouvre Claude Design dans la fenêtre principale, sur la zone de contenu, le
 /// rail restant visible à sa gauche.
 ///
@@ -640,6 +733,7 @@ pub fn run() {
 
             app.manage(SidecarProcess::default());
             supervise_sidecar(app.handle().clone());
+            build_main_window(app.handle())?;
             Ok(())
         })
         .on_window_event(|window, event| {
