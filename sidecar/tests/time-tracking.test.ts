@@ -7,6 +7,7 @@ import { TimeTrackingService, MILESTONE_HOURS, SUSPENSION_THRESHOLD_MS, intersec
 import { GitProjectService } from "../src/git";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
+import { SettingsStore } from "../src/stores/settings";
 
 const HOUR = 3_600_000;
 
@@ -269,6 +270,84 @@ test("une suspension découverte après coup refait le découpage des tours", ()
     service.heartbeat(Date.parse(at(20)));
     service.heartbeat(Date.parse(at(80)));
     expect(service.snapshot(project.id).agent.ms).toBe(20 * 60_000);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("la comptabilité du suivi ne casse pas la lecture des réglages", () => {
+  const { dir, db, project, service } = setup();
+  try {
+    const settings = new SettingsStore(db);
+    settings.set("theme", "sombre");
+    presence(service, project.id, 0, 30);
+    service.heartbeat(Date.parse(at(0)));
+    service.backfill();
+
+    // `all()` reparse toutes les valeurs : une chaîne brute écrite en direct
+    // ferait tomber la route entière, pas seulement sa propre clé.
+    expect(() => settings.all()).not.toThrow();
+    const all = settings.all();
+    expect(all.theme).toBe("sombre");
+    // Ces clés sont de la comptabilité interne : elles n'ont rien à faire
+    // dans les réglages exposés.
+    expect(Object.keys(all).some((key) => key.startsWith("time-tracking:"))).toBe(false);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("une valeur héritée en clair est relue puis remise au bon format", () => {
+  const { dir, db, service } = setup();
+  try {
+    // Ce qu'écrivait la version fautive : une date ISO nue.
+    db.query("INSERT INTO settings (key, value) VALUES (?, ?)")
+      .run("time-tracking:backfilled-at", "2026-08-24T12:00:00.000Z");
+    // La reprise ne doit pas se rejouer parce que la lecture a échoué.
+    expect(service.backfill()).toBeNull();
+    const row = db.query("SELECT value FROM settings WHERE key = ?")
+      .get("time-tracking:backfilled-at") as { value: string };
+    expect(JSON.parse(row.value)).toBe("2026-08-24T12:00:00.000Z");
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("le filigrane de synchronisation reste un nombre lisible", () => {
+  const { dir, db, project, conversations, conversation, service } = setup();
+  try {
+    conversations.appendEvent(conversation.id, {
+      type: "turn-timing", phase: "completed", startedAt: at(0), completedAt: at(6),
+    });
+    service.snapshot(project.id);
+    const stored = new SettingsStore(db).get<string>("time-tracking:last-event-id");
+    expect(Number.isFinite(Number(stored))).toBe(true);
+    expect(Number(stored)).toBeGreaterThan(0);
+
+    // Un tour suivant doit encore être vu : un filigrane cassé fige l'horloge
+    // agent sans rien signaler.
+    conversations.appendEvent(conversation.id, {
+      type: "turn-timing", phase: "completed", startedAt: at(20), completedAt: at(29),
+    });
+    expect(service.snapshot(project.id).agent.ms).toBe(15 * 60_000);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("un filigrane illisible se rattrape au lieu de figer la synchronisation", () => {
+  const { dir, db, project, conversations, conversation, service } = setup();
+  try {
+    db.query("INSERT INTO settings (key, value) VALUES (?, ?)")
+      .run("time-tracking:last-event-id", JSON.stringify("NaN"));
+    conversations.appendEvent(conversation.id, {
+      type: "turn-timing", phase: "completed", startedAt: at(0), completedAt: at(6),
+    });
+    expect(service.snapshot(project.id).agent.ms).toBe(6 * 60_000);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });

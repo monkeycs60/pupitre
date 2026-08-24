@@ -1,5 +1,8 @@
 import type { Database } from "bun:sqlite";
 import type { GitProjectService } from "./git";
+import {
+  TIME_BACKFILL_KEY, TIME_HEARTBEAT_KEY, TIME_SYNC_WATERMARK_KEY,
+} from "./stores/settings";
 import type { ProjectStore } from "./stores/projects";
 
 /** Un niveau vaut une heure passée. Rien à calibrer, rien à pondérer. */
@@ -20,7 +23,7 @@ const HEARTBEAT_MS = 10_000;
 const SUSPENSION_THRESHOLD_MS = 60_000;
 const HEARTBEAT_KEY = "time-tracking:heartbeat";
 const SYNC_WATERMARK_KEY = "time-tracking:last-event-id";
-const BACKFILL_KEY = "time-tracking:backfilled-at";
+const BACKFILL_KEY = TIME_BACKFILL_KEY;
 
 export interface Span {
   start: number;
@@ -399,7 +402,10 @@ export class TimeTrackingService {
    * sur le direct. Le filigrane évite de relire toute la table à chaque appel.
    */
   syncAgentSegments(): void {
-    const watermark = Number(this.setting(SYNC_WATERMARK_KEY) ?? "0");
+    // Un filigrane illisible remet la synchronisation à zéro plutôt que de la
+    // figer : `INSERT OR IGNORE` rend le rejeu de l'historique sans effet.
+    const stored = Number(this.setting(SYNC_WATERMARK_KEY) ?? "0");
+    const watermark = Number.isFinite(stored) ? stored : 0;
     const events = this.db.query(`
       SELECT e.id, e.conversation_id, e.payload, c.project_id
       FROM events e
@@ -412,8 +418,8 @@ export class TimeTrackingService {
     `).all(watermark) as Array<{
       id: number | bigint; conversation_id: string; payload: string; project_id: string;
     }>;
-    const highest = Number(this.db.query("SELECT COALESCE(MAX(id), 0) AS id FROM events")
-      .get() as { id: number | bigint }).id;
+    const highest = Number((this.db.query("SELECT COALESCE(MAX(id), 0) AS id FROM events")
+      .get() as { id: number | bigint }).id);
     if (events.length === 0) {
       if (highest > watermark) this.setSetting(SYNC_WATERMARK_KEY, String(highest));
       return;
@@ -506,16 +512,28 @@ export class TimeTrackingService {
     return { presenceMs, days };
   }
 
+  /**
+   * La table `settings` a pour contrat des valeurs encodées en JSON : `all()`
+   * les reparse en bloc, donc une chaîne brute y casse toute la lecture. Les
+   * valeurs héritées d'une version qui l'ignorait sont relues telles quelles,
+   * puis réécrites au bon format.
+   */
   private setting(key: string): string | null {
     const row = this.db.query("SELECT value FROM settings WHERE key = ?")
       .get(key) as { value: string } | null;
-    return row?.value ?? null;
+    if (!row) return null;
+    try {
+      return String(JSON.parse(row.value));
+    } catch {
+      this.setSetting(key, row.value);
+      return row.value;
+    }
   }
 
   private setSetting(key: string, value: string): void {
     this.db.query(
       "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-    ).run(key, value);
+    ).run(key, JSON.stringify(value));
   }
 }
 
