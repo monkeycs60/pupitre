@@ -475,6 +475,17 @@ export class GitProjectService {
     record();
   }
 
+  /** Le compte seul, sans `linkedCommitStats` : celui-ci lance deux `git` en
+   *  spawnSync par commit lié, et gèle l'event loop ~350 ms sur le chemin du
+   *  `GET /api/time` déclenché à chaque clic projet/conversation. */
+  linkedCommitCount(projectId?: string): number {
+    const row = this.db.query(`
+      SELECT COUNT(*) AS count FROM commit_links
+      ${projectId ? "WHERE project_id = ?" : ""}
+    `).get(...(projectId ? [projectId] : [])) as { count: number };
+    return row.count;
+  }
+
   /** Statistiques des commits attribués à une conversation pour la progression. */
   linkedCommitStats(projectId?: string): GitLinkedCommit[] {
     const projects = projectId

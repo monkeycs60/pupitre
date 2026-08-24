@@ -335,7 +335,7 @@ export class TimeTrackingService {
       weekAgentMs: total(clip(agent, week)),
       previousWeekUserMs: total(clip(user, previousWeek)),
       activeDays,
-      commits: this.git.linkedCommitStats(projectId).length,
+      commits: this.git.linkedCommitCount(projectId),
       turnCount: rows.filter((row) => row.source === "agent").length,
       backfilledMs: total(merge(
         rows.filter((row) => row.source === "presence" && row.backfilled === 1).map(toSpan),

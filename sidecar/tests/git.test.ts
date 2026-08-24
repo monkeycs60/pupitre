@@ -306,3 +306,13 @@ test("expose le worktree vivant et commit seulement les fichiers sélectionnés"
     expect.objectContaining({ id: conversationId }),
   ]);
 });
+
+test("compte les commits liés par projet", () => {
+  const first = commit("a.ts", "export const a = 1\n", "ajoute a");
+  const second = commit("b.ts", "export const b = 1\n", "ajoute b");
+  gitView.recordCommitLinks(projectId, conversationId, [first, second]);
+
+  expect(gitView.linkedCommitCount(projectId)).toBe(2);
+  expect(gitView.linkedCommitCount()).toBe(2);
+  expect(gitView.linkedCommitCount("projet-inconnu")).toBe(0);
+});
