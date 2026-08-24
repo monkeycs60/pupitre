@@ -1765,25 +1765,6 @@
   color: var(--text-faint);
 }
 
-.level-bar {
-  position: relative;
-  display: block;
-  height: 4px;
-  margin-top: 5px;
-  overflow: hidden;
-  background: var(--border);
-  border-radius: var(--r-full);
-}
-
-.level-bar-fill {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--level-hue), var(--level-hue-soft));
-  border-radius: var(--r-full);
-  /* Un cran par minute : la transition rend le pas lisible sans le lisser. */
-  transition: width 300ms var(--ease), background var(--dur) var(--ease);
-}
-
 .level-meta {
   display: flex;
   align-items: baseline;
@@ -1816,7 +1797,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .level-bar-fill,
   .level-ring-fill { transition: none; }
   .level-running > i { animation: none; }
 }

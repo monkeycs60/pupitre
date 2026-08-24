@@ -64,14 +64,16 @@ test('au repos, la carte ne montre que le niveau, le mode et le temps du jour', 
   expect(document.querySelector('.level-share')).toBeNull()
 })
 
-test('la barre avance d’un cran par minute, jamais entre deux', () => {
-  // 1 h 19 min 45 s : la barre doit afficher 19 minutes, pas 19,75.
+test('l’anneau avance d’un cran par minute, jamais entre deux', () => {
+  // 1 h 19 min 45 s : l'anneau doit afficher 19 minutes, pas 19,75.
   const almost = counter(HOUR + 19 * 60_000 + 45_000)
   render(
     <LevelCard snapshot={snapshot({ user: almost })} mode="user" agentRunning={false} onToggle={() => undefined} />,
   )
-  const fill = document.querySelector('.level-bar-fill') as HTMLElement
-  expect(fill.style.width).toBe(`${(19 / 60) * 100}%`)
+  const ring = document.querySelector('.level-ring-fill') as SVGCircleElement
+  expect(ring.getAttribute('stroke-dashoffset')).toBe(String(110 * (1 - 19 / 60)))
+  // La barre faisait doublon avec l'anneau : elle a été retirée.
+  expect(document.querySelector('.level-bar')).toBeNull()
 })
 
 test('le survol révèle la part de supervision, et rien d’autre', () => {
@@ -79,7 +81,10 @@ test('le survol révèle la part de supervision, et rien d’autre', () => {
     <LevelCard snapshot={snapshot()} mode="user" agentRunning={false} onToggle={() => undefined} />,
   )
   fireEvent.mouseEnter(card())
-  expect(document.querySelector('.level-share')?.textContent).toContain('supervisé')
+  const share = document.querySelector('.level-share')
+  expect(share?.textContent).toContain('supervisé')
+  // Le mot ne se suffit pas : l'infobulle dit ce qu'il recouvre.
+  expect(share?.getAttribute('title')).toContain('tour tournait')
   // La pastille d'échange a été retirée : le clic sur la carte suffit.
   expect(document.querySelector('.level-swap')).toBeNull()
   fireEvent.mouseLeave(card())
@@ -98,9 +103,10 @@ test('le clic bascule sur le compteur agent', () => {
   )
   expect(card().dataset.mode).toBe('agent')
   expect(screen.getByText('Agent')).toBeTruthy()
-  // 22 minutes d'agent : niveau 0, barre au tiers.
+  // 22 minutes d'agent : niveau 0, anneau au tiers.
   expect(document.querySelector('.level-ring-value')?.textContent).toBe('0')
-  expect((document.querySelector('.level-bar-fill') as HTMLElement).style.width).toBe(`${(22 / 60) * 100}%`)
+  expect((document.querySelector('.level-ring-fill') as SVGCircleElement).getAttribute('stroke-dashoffset'))
+    .toBe(String(110 * (1 - 22 / 60)))
 })
 
 test('sans projet sélectionné, la carte annonce sa portée globale', () => {

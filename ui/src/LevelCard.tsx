@@ -69,7 +69,12 @@ export function LevelCard({
         <span className="level-info-top">
           <strong>{isAgent ? 'Agent' : 'Utilisateur'}</strong>
           {hovered ? (
-            <span className="level-share">
+            <span
+              className="level-share"
+              title={isAgent
+                ? 'Part des heures d’agent que tu as suivies en direct : le reste a tourné pendant que tu étais ailleurs.'
+                : 'Part de tes heures passées pendant qu’un tour tournait — tu regardes, tu surveilles. Le reste, c’est ta rédaction : tu écris, tu lis, tu décides.'}
+            >
               {share} % {isAgent ? 'suivi' : 'supervisé'}
             </span>
           ) : snapshot.scope === 'global' ? (
@@ -77,9 +82,6 @@ export function LevelCard({
               {snapshot.projectCount} projet{snapshot.projectCount > 1 ? 's' : ''}
             </span>
           ) : null}
-        </span>
-        <span className="level-bar" aria-hidden="true">
-          <span className="level-bar-fill" style={{ width: `${progress * 100}%` }} />
         </span>
         <span className="level-meta">
           <span className="level-today">
