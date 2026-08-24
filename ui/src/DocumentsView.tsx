@@ -15,9 +15,8 @@ import {
   listDocuments,
   uploadMedia,
 } from './api'
-import { documentContentUrl, documentExternalUrl, documentThumbnailUrl } from './transport'
+import { documentContentUrl, documentExternalUrl, documentThumbnailUrl, hasTauriRuntime } from './transport'
 import type { Attachment, DocumentArtifact, Project } from './types'
-import { isTauriRuntime } from './externalLink'
 
 interface DocumentsViewProps {
   currentProject: Project | null
@@ -192,7 +191,7 @@ export function DocumentsView({
     try {
       const grant = await createHtmlDocumentViewToken(document.id)
       const url = documentExternalUrl(document.id, grant.token)
-      if (isTauriRuntime()) await openUrl(url)
+      if (hasTauriRuntime()) await openUrl(url)
       else window.open(url, '_blank', 'noopener,noreferrer')
     } catch (reason) {
       setError(errorMessage(reason))
@@ -242,7 +241,7 @@ export function DocumentsView({
     setBusy('export')
     setError(null)
     try {
-      if (isTauriRuntime()) {
+      if (hasTauriRuntime()) {
         const destination = await save({
           defaultPath: document.originalName,
           filters: [{

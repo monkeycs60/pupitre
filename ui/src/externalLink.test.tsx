@@ -9,7 +9,8 @@ mock.module('@tauri-apps/plugin-opener', () => ({
 }))
 
 const { cleanup, render, fireEvent } = await import('@testing-library/react')
-const { ExternalLink, isTauriRuntime } = await import('./externalLink')
+const { ExternalLink } = await import('./externalLink')
+const { hasTauriRuntime } = await import('./transport')
 
 const TAURI = '__TAURI_INTERNALS__'
 
@@ -26,7 +27,7 @@ afterEach(() => {
 
 test('dans la fenêtre Tauri, le clic délègue au système au lieu de ne rien faire', () => {
   inTauri(true)
-  expect(isTauriRuntime()).toBe(true)
+  expect(hasTauriRuntime()).toBe(true)
   render(<ExternalLink href="https://app.clickup.com/t/86c1">ClickUp</ExternalLink>)
   const link = document.querySelector('a') as HTMLAnchorElement
   // `target="_blank"` est ignoré par la fenêtre principale : sans interception,
@@ -65,4 +66,28 @@ test('le lien reste une vraie ancre : adresse, cible et libellés préservés', 
   expect(link.getAttribute('rel')).toBe('noreferrer')
   expect(link.className).toBe('dashboard-ticket-link')
   expect(link.getAttribute('aria-label')).toBe('Ouvrir TECH-1 dans ClickUp')
+})
+
+test('la pièce jointe passe par le même chemin que les liens du tableau de bord', async () => {
+  const { AttachmentPreview } = await import('./AttachmentPreview')
+  inTauri(true)
+  render(
+    <AttachmentPreview
+      attachment={{
+        name: 'abc.pdf',
+        originalName: 'rapport.pdf',
+        mimeType: 'application/pdf',
+        size: 1024,
+      } as never}
+    />,
+  )
+  const ouvrir = [...document.querySelectorAll('a.event-attachment-action')]
+    .find((a) => a.textContent === 'Ouvrir') as HTMLAnchorElement
+  expect(ouvrir).toBeTruthy()
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+  fireEvent(ouvrir, event)
+  expect(event.defaultPrevented).toBe(true)
+  // L'adresse est servie par le sidecar : c'est bien elle qui part au système.
+  expect(opened.length).toBe(1)
+  expect(opened[0]).toContain('/media/abc.pdf')
 })

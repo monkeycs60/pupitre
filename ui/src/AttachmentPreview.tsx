@@ -1,6 +1,7 @@
 import Markdown from './Markdown'
 import type { Attachment } from './types'
 import { mediaUrl } from './transport'
+import { ExternalLink } from './externalLink'
 import {
   formatAttachmentSize,
   getAttachmentPreviewKind,
@@ -74,15 +75,13 @@ export function AttachmentPreview({ attachment }: { attachment: Attachment }) {
           <span className="event-attachment-name" title={attachment.originalName}>{attachment.originalName}</span>
         </div>
         <div className="event-attachment-actions">
-          <a
+          <ExternalLink
             className="event-attachment-action"
             href={mediaHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Ouvrir ${attachment.originalName}`}
+            ariaLabel={`Ouvrir ${attachment.originalName}`}
           >
             Ouvrir
-          </a>
+          </ExternalLink>
           <a
             className="event-attachment-action"
             href={mediaHref}

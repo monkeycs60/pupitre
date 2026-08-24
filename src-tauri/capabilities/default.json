@@ -18,6 +18,9 @@
           "url": "http://127.0.0.1:4820/api/documents/**"
         },
         {
+          "url": "http://127.0.0.1:4820/media/**"
+        },
+        {
           "url": "https://claude.ai/design/**"
         },
         {

@@ -13,7 +13,7 @@ import {
 } from './designPanel'
 import { HelpLink } from './HelpLink'
 import type { DesignReachability } from './types'
-import { isTauriRuntime } from './externalLink'
+import { hasTauriRuntime } from './transport'
 
 /** Claude Design (claude.ai/design) n'existe que sur le web : pas d'API, pas de
  *  CLI. Pupitre l'affiche donc dans une webview enfant posée sur la zone de
@@ -106,7 +106,7 @@ export function DesignView() {
   }, [])
 
   useEffect(() => {
-    if (resume === undefined || autoOpened.current || !isTauriRuntime()) return
+    if (resume === undefined || autoOpened.current || !hasTauriRuntime()) return
     autoOpened.current = true
     void openPanel(resume)
   }, [openPanel, resume])
@@ -116,7 +116,7 @@ export function DesignView() {
   // plutôt que de le fermer, ce qui garde la page chargée et rend le retour
   // instantané.
   useEffect(() => {
-    if (!isTauriRuntime()) return
+    if (!hasTauriRuntime()) return
     return () => {
       sentBounds.current = null
       void invoke('set_design_panel_visible', { visible: false }).catch(() => {})
@@ -130,7 +130,7 @@ export function DesignView() {
   // donc l'emplacement réservé plutôt que de recalculer une géométrie en Rust.
   useEffect(() => {
     const slot = slotRef.current
-    if (slot === null || !isTauriRuntime()) return
+    if (slot === null || !hasTauriRuntime()) return
     if (panelState.kind !== 'open') return
 
     function place() {
@@ -165,7 +165,7 @@ export function DesignView() {
   // le placement est bien réinitialisé — la zone a pu bouger pendant que le
   // panneau était caché, et GTK ne l'a pas vu.
   useEffect(() => {
-    if (!isTauriRuntime() || panelState.kind !== 'open') return
+    if (!hasTauriRuntime() || panelState.kind !== 'open') return
     if (suspended === wasSuspended.current) return
     wasSuspended.current = suspended
     void invoke('set_design_panel_visible', { visible: !suspended }).catch(() => {})
@@ -176,7 +176,7 @@ export function DesignView() {
   // session absente, et mémorise la page atteinte. C'est Rust qui lit l'URL : la
   // page distante ne reçoit aucun IPC.
   useEffect(() => {
-    if (!isTauriRuntime()) return
+    if (!hasTauriRuntime()) return
     let stopped = false
     async function check() {
       try {
@@ -231,7 +231,7 @@ export function DesignView() {
   const offline = reachability !== null && !reachability.reachable
 
   async function openInBrowser() {
-    if (isTauriRuntime()) await openUrl(designUrl)
+    if (hasTauriRuntime()) await openUrl(designUrl)
     else window.open(designUrl, '_blank', 'noopener,noreferrer')
   }
 
@@ -276,7 +276,7 @@ export function DesignView() {
                   séparée reste le chemin qui fonctionne.
                 </p>
               </section>
-            ) : !isTauriRuntime() ? (
+            ) : !hasTauriRuntime() ? (
               <section className="design-card">
                 <h2>Panneau indisponible</h2>
                 <p>
@@ -304,7 +304,7 @@ export function DesignView() {
             type="button"
             className="design-action is-quiet"
             onClick={() => void openWindow(resume ?? null)}
-            disabled={!isTauriRuntime()}
+            disabled={!hasTauriRuntime()}
           >
             Ouvrir dans une fenêtre séparée
           </button>

@@ -1,9 +1,6 @@
 import { openUrl } from '@tauri-apps/plugin-opener'
 import type { MouseEvent, ReactNode } from 'react'
-
-export function isTauriRuntime(): boolean {
-  return '__TAURI_INTERNALS__' in window || '__TAURI__' in window
-}
+import { hasTauriRuntime } from './transport'
 
 /**
  * Ouvre une adresse hors de l'application.
@@ -16,7 +13,7 @@ export function isTauriRuntime(): boolean {
  * blanche vit dans `src-tauri/capabilities/default.json`.
  */
 export async function openExternal(url: string): Promise<void> {
-  if (isTauriRuntime()) await openUrl(url)
+  if (hasTauriRuntime()) await openUrl(url)
   else window.open(url, '_blank', 'noopener,noreferrer')
 }
 
@@ -39,9 +36,13 @@ export function ExternalLink({
   children: ReactNode
 }) {
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (!isTauriRuntime()) return
+    if (!hasTauriRuntime()) return
     event.preventDefault()
-    void openExternal(href)
+    // Un refus du plugin — adresse hors liste blanche — redonnerait le « il ne
+    // se passe rien » qu'on corrige ici. On le laisse au moins traçable.
+    openExternal(href).catch((reason: unknown) => {
+      console.error(`[lien] ouverture refusée pour ${href}`, reason)
+    })
   }
 
   return (

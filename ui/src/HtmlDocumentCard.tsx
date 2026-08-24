@@ -8,9 +8,8 @@ import {
 } from './api'
 import type { HtmlDocumentBlock } from './groupEvents'
 import type { HtmlDocument, HtmlDocumentState } from './types'
-import { htmlDocumentContentUrl, htmlDocumentExternalUrl } from './transport'
+import { htmlDocumentContentUrl, htmlDocumentExternalUrl, hasTauriRuntime } from './transport'
 import { useNow } from './useNow'
-import { isTauriRuntime } from './externalLink'
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} o`
@@ -174,7 +173,7 @@ export function HtmlDocumentCard({
     try {
       const grant = await createHtmlDocumentViewToken(block.documentId)
       const url = htmlDocumentExternalUrl(block.documentId, grant.token)
-      if (isTauriRuntime()) await openUrl(url)
+      if (hasTauriRuntime()) await openUrl(url)
       else window.open(url, '_blank', 'noopener,noreferrer')
     } catch (reason) {
       setError(errorMessage(reason, 'Ouverture impossible'))
