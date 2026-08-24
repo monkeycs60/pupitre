@@ -97,6 +97,17 @@ test("négocie l'API expérimentale pour les champs app-server utilisés par Pup
   expect(initialize?.params.capabilities).toEqual({ experimentalApi: true });
 });
 
+test("la lecture des quotas démarre l'app-server même sans tour Codex", async () => {
+  const files = useFake();
+
+  const rateLimits = await newClient().readRateLimits();
+
+  expect(rateLimits).toMatchObject({ primary: { usedPercent: 42 } });
+  expect(sentRequests(files.log).map((request) => request.method)).toContain(
+    "account/rateLimits/read",
+  );
+});
+
 test("app-server ancien : retente initialize sans capabilities et omet les champs expérimentaux", async () => {
   const files = useFake();
   process.env.FAKE_APP_SERVER_REJECT_CAPABILITIES = "1";

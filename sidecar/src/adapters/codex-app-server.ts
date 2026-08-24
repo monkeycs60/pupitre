@@ -274,15 +274,13 @@ export class CodexAppServerClient {
 
   /**
    * Poll de l'état de quota (`account/rateLimits/read`, cf. fixture du spike).
-   * Ne démarre PAS le process : appelé au boot du sidecar, il ne renvoie un
-   * état que si un tour codex a déjà réveillé l'app-server. Sinon le premier
-   * tour codex fournira l'état via `account/rateLimits/updated`.
+   * Démarre le process si nécessaire : la relève doit fonctionner même si
+   * aucun tour Codex n'a encore été lancé dans Pupitre.
    */
   async readRateLimits(): Promise<unknown | null> {
-    if (!this.ready || !this.proc) return null;
     this.clearIdleWatchdog();
     try {
-      await this.ready;
+      await this.ensureProcess();
       const result = await this.request("account/rateLimits/read", {});
       return (result as { rateLimits?: unknown } | null)?.rateLimits ?? null;
     } finally {

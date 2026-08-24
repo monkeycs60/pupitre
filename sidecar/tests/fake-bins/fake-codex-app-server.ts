@@ -157,6 +157,21 @@ lines.on("line", (line) => {
       }
       send({ jsonrpc: "2.0", id, result: { turnId: params?.expectedTurnId } });
       return;
+    case "account/rateLimits/read":
+      send({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          rateLimits: {
+            primary: {
+              usedPercent: 42,
+              resetsAt: 1_800_000_000,
+              windowDurationMins: 300,
+            },
+          },
+        },
+      });
+      return;
     default:
       send({ jsonrpc: "2.0", id, result: {} });
   }
