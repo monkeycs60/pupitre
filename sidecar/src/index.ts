@@ -30,7 +30,7 @@ import { RoutineScheduler, RoutineStore } from "./routines";
 import { SearchIndex } from "./search";
 import { CostStore } from "./costs";
 import { MemoryStore } from "./memory";
-import { GamificationService } from "./gamification";
+import { TimeTrackingService } from "./time-tracking";
 import { HtmlDocumentService } from "./html-documents";
 import { ClickUpClient } from "./integrations/clickup";
 import { GitLabClient, readGlabToken } from "./integrations/gitlab";
@@ -94,7 +94,13 @@ if (process.argv.includes("--pupitre-mcp")) {
     new ChangelogStore(db), conversations, projects, domains, git,
     (input) => generateWithAdapters(input, quotas),
   );
-  const gamification = new GamificationService(db, projects, git);
+  const time = new TimeTrackingService(db, projects, git);
+  // Reprise d'historique : exacte pour les tours, approchée pour la présence.
+  // Ne s'exécute qu'une fois, puis se marque terminée dans `settings`.
+  const backfilled = time.backfill();
+  if (backfilled) {
+    console.log(`[temps] historique repris : ${Math.round(backfilled.presenceMs / 60_000)} min de présence sur ${backfilled.days} jours`);
+  }
   const integrationsRefresher = new IntegrationsRefresher(
     { integrations, tickets, conversations, projects, sentry, domains },
     {
@@ -248,7 +254,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     integrationSecrets,
     sentry,
     integrationsRefresher,
-    gamification,
+    time,
     htmlDocuments,
   }), port);
   routines.start();

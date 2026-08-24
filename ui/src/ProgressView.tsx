@@ -1,68 +1,27 @@
-import { useState, type ReactElement } from 'react'
-import type { GamificationPeriod, GamificationSnapshot } from './types'
+import { useState } from 'react'
+import type { TimeSnapshot } from './types'
 
 interface ProgressViewProps {
-  snapshot: GamificationSnapshot | null
+  snapshot: TimeSnapshot | null
 }
 
+const HOUR_MS = 3_600_000
+
 function formatDuration(milliseconds: number): string {
-  const minutes = Math.floor(milliseconds / 60_000)
+  const minutes = Math.floor(Math.max(0, milliseconds) / 60_000)
   const hours = Math.floor(minutes / 60)
   if (hours === 0) return `${minutes} min`
   return `${hours} h ${String(minutes % 60).padStart(2, '0')}`
 }
 
-function maxComplexity(period: GamificationPeriod): number {
-  return Math.max(1, ...Object.values(period.complexity))
+function formatDate(iso: string | null): string {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
 }
 
-/** Objectifs indicatifs (pas de cible fournie par le snapshot) : bornes rondes
- *  calibrées sur un rythme d'usage courant, affichées comme repère, pas comme
- *  promesse. */
-const GOAL_XP = 500
-const GOAL_CONVERSATIONS = 15
-const GOAL_ACTIVE_MS = 8 * 60 * 60_000
-
-interface Badge {
-  name: string
-  meta: string
-  unlocked: boolean
-  icon: 'level' | 'projects' | 'pace' | 'commits' | 'time' | 'focus'
-}
-
-const BADGE_ICONS: Record<Badge['icon'], ReactElement> = {
-  level: (
-    <path d="M8 1.5 9.9 5.4 14.2 6l-3.1 3 .7 4.3L8 11.3 4.2 13.3l.7-4.3-3.1-3 4.3-.6z" fill="currentColor" />
-  ),
-  projects: (
-    <path d="M2 3.5h4.5L8 5.5h6v7a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z" fill="currentColor" />
-  ),
-  pace: (
-    <path d="M2 13 5.5 6l2.5 4 2-6 3 9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-  ),
-  commits: (
-    <>
-      <circle cx="8" cy="8" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M1.5 8h4M10.5 8h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </>
-  ),
-  time: (
-    <>
-      <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M8 4.5V8l2.6 1.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </>
-  ),
-  focus: (
-    <path d="M8.5 1.5 3 9h4l-.5 5.5L13 7H9z" fill="currentColor" />
-  ),
-}
-
-function BadgeIcon({ icon }: { icon: Badge['icon'] }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true">
-      {BADGE_ICONS[icon]}
-    </svg>
-  )
+function ratePerHour(count: number, ms: number): string {
+  if (ms < 60_000) return '—'
+  return (count / (ms / HOUR_MS)).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
 }
 
 export function ProgressView({ snapshot }: ProgressViewProps) {
@@ -72,10 +31,12 @@ export function ProgressView({ snapshot }: ProgressViewProps) {
   }
 
   const report = [
-    `Pupitre · niveau ${snapshot.level}`,
-    `Cette semaine : +${snapshot.week.xp} XP · ${snapshot.week.projects} projets · ${snapshot.week.conversations} conversations`,
-    `${snapshot.week.commits} commits · ${snapshot.week.pushes} pushes · ${formatDuration(snapshot.week.activeMs)} actives`,
-    `Tokens : ${snapshot.week.inputTokens} input · ${snapshot.week.outputTokens} output`,
+    `Pupitre · ${formatDuration(snapshot.user.ms)} passées sur ${snapshot.projectCount} projet(s)`,
+    `Cette semaine : ${formatDuration(snapshot.weekUserMs)} (agent ${formatDuration(snapshot.weekAgentMs)})`,
+    `Supervision ${formatDuration(snapshot.supervisionMs)} · rédaction ${formatDuration(snapshot.writingMs)}`,
+    ...snapshot.projects.map(
+      (project) => `${project.name} : ${formatDuration(project.user.ms)} (agent ${formatDuration(project.agent.ms)})`,
+    ),
   ].join('\n')
 
   async function copyReport() {
@@ -89,51 +50,53 @@ export function ProgressView({ snapshot }: ProgressViewProps) {
   }
 
   const ringLen = 283
-  const progress = Math.max(0, Math.min(1, snapshot.progress))
-  const ringOffset = ringLen * (1 - progress)
-  const xpToNext = Math.max(0, snapshot.nextLevelXp - snapshot.xp)
-  const max = maxComplexity(snapshot.week)
-  const complexityEntries = Object.entries(snapshot.week.complexity)
-  const totalComplexityCount = complexityEntries.reduce((sum, [, count]) => sum + count, 0)
+  // Le héros mesure la marche vers le palier suivant, pas l'heure en cours :
+  // à l'échelle d'une vie de projet, une heure ne se voit pas.
+  const reachedMilestone = [...snapshot.milestones].reverse().find((step) => step.reached)
+  const floorMs = (reachedMilestone?.hours ?? 0) * HOUR_MS
+  const ceilingMs = (snapshot.nextMilestone ?? snapshot.user.ms / HOUR_MS) * HOUR_MS
+  const milestoneProgress = ceilingMs > floorMs
+    ? Math.max(0, Math.min(1, (snapshot.user.ms - floorMs) / (ceilingMs - floorMs)))
+    : 1
+  const supervisionShare = snapshot.user.ms > 0
+    ? Math.round((snapshot.supervisionMs / snapshot.user.ms) * 100)
+    : 0
+  const weekDelta = snapshot.weekUserMs - snapshot.previousWeekUserMs
+  const widest = Math.max(1, ...snapshot.projects.map((project) => project.user.ms))
+  const activeToday = snapshot.projects.filter((project) => project.user.todayMs > 0).length
 
-  const stats: Array<{ label: string; value: string; trend: string }> = [
-    { label: 'XP · semaine', value: `+${snapshot.week.xp.toLocaleString('fr-FR')}`, trend: `auj. +${snapshot.today.xp.toLocaleString('fr-FR')}` },
-    { label: 'Projets', value: String(snapshot.week.projects), trend: `auj. ${snapshot.today.projects}` },
-    { label: 'Conversations', value: String(snapshot.week.conversations), trend: `auj. ${snapshot.today.conversations}` },
-    { label: 'Commits / push', value: `${snapshot.week.commits} / ${snapshot.week.pushes}`, trend: `auj. ${snapshot.today.commits} / ${snapshot.today.pushes}` },
-    { label: 'Temps actif', value: formatDuration(snapshot.week.activeMs), trend: `auj. ${formatDuration(snapshot.today.activeMs)}` },
-  ]
-
-  const goals = [
+  const stats: Array<{ label: string; value: string; trend: string; muted?: boolean }> = [
     {
-      label: 'XP cette semaine',
-      value: `${Math.min(snapshot.week.xp, GOAL_XP).toLocaleString('fr-FR')} / ${GOAL_XP.toLocaleString('fr-FR')}`,
-      pct: Math.min(100, (snapshot.week.xp / GOAL_XP) * 100),
-      hint: snapshot.week.xp >= GOAL_XP ? 'Objectif atteint' : `Encore ${(GOAL_XP - snapshot.week.xp).toLocaleString('fr-FR')} XP`,
+      label: 'Heures (7 j)',
+      value: formatDuration(snapshot.weekUserMs),
+      trend: `${weekDelta >= 0 ? '+' : '−'}${formatDuration(Math.abs(weekDelta))} vs semaine passée`,
     },
     {
-      label: 'Conversations',
-      value: `${Math.min(snapshot.week.conversations, GOAL_CONVERSATIONS)} / ${GOAL_CONVERSATIONS}`,
-      pct: Math.min(100, (snapshot.week.conversations / GOAL_CONVERSATIONS) * 100),
-      hint: snapshot.week.conversations >= GOAL_CONVERSATIONS ? 'Objectif atteint' : `Encore ${GOAL_CONVERSATIONS - snapshot.week.conversations}`,
+      label: 'Aujourd’hui',
+      value: formatDuration(snapshot.user.todayMs),
+      trend: `${activeToday} projet${activeToday > 1 ? 's' : ''} touché${activeToday > 1 ? 's' : ''}`,
     },
     {
-      label: 'Temps actif',
-      value: `${formatDuration(Math.min(snapshot.week.activeMs, GOAL_ACTIVE_MS))} / ${formatDuration(GOAL_ACTIVE_MS)}`,
-      pct: Math.min(100, (snapshot.week.activeMs / GOAL_ACTIVE_MS) * 100),
-      hint: snapshot.week.activeMs >= GOAL_ACTIVE_MS ? 'Objectif atteint' : `Encore ${formatDuration(GOAL_ACTIVE_MS - snapshot.week.activeMs)}`,
+      label: 'Moyenne / jour',
+      value: formatDuration(snapshot.activeDays > 0 ? snapshot.user.ms / snapshot.activeDays : 0),
+      trend: `sur ${snapshot.activeDays} jour${snapshot.activeDays > 1 ? 's' : ''} actif${snapshot.activeDays > 1 ? 's' : ''}`,
+    },
+    {
+      label: 'Commits / h',
+      value: ratePerHour(snapshot.commits, snapshot.user.ms),
+      trend: `${snapshot.commits} commit${snapshot.commits > 1 ? 's' : ''} lié${snapshot.commits > 1 ? 's' : ''}`,
+    },
+    {
+      label: 'Agent en parallèle',
+      value: formatDuration(snapshot.agent.ms),
+      trend: snapshot.user.ms > 0
+        ? `${(snapshot.agent.ms / snapshot.user.ms).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} h par heure passée`
+        : '—',
+      muted: true,
     },
   ]
 
-  const badges: Badge[] = [
-    { name: `Niveau ${snapshot.level}`, meta: `${snapshot.xp.toLocaleString('fr-FR')} XP`, unlocked: true, icon: 'level' },
-    { name: 'Multi-projets', meta: `${snapshot.week.projects} projets`, unlocked: snapshot.week.projects >= 2, icon: 'projects' },
-    { name: 'Rythme soutenu', meta: `${snapshot.week.conversations} conv.`, unlocked: snapshot.week.conversations >= 10, icon: 'pace' },
-    { name: 'Builder', meta: `${snapshot.week.commits} commits`, unlocked: snapshot.week.commits >= 5, icon: 'commits' },
-    { name: 'Sessions longues', meta: formatDuration(snapshot.week.activeMs), unlocked: snapshot.week.activeMs >= 4 * 60 * 60_000, icon: 'time' },
-    { name: 'Focus', meta: `×${snapshot.focusMultiplier.toLocaleString('fr-FR')}`, unlocked: snapshot.focusMultiplier > 1, icon: 'focus' },
-  ]
-  const unlockedCount = badges.filter((b) => b.unlocked).length
+  const reachedCount = snapshot.milestones.filter((step) => step.reached).length
 
   return (
     <div className="progress-view">
@@ -157,23 +120,29 @@ export function ProgressView({ snapshot }: ProgressViewProps) {
                 strokeWidth="7"
                 strokeLinecap="round"
                 strokeDasharray={ringLen}
-                strokeDashoffset={ringOffset}
+                strokeDashoffset={ringLen * (1 - milestoneProgress)}
                 transform="rotate(-90 52 52)"
                 className="progress-ring-fill"
-                style={{ '--ring-len': ringLen } as React.CSSProperties}
               />
             </svg>
             <div className="progress-ring-label">
-              <span>Niveau</span>
-              <strong>{snapshot.level}</strong>
+              <span>Heures</span>
+              <strong>{snapshot.user.level}</strong>
             </div>
           </div>
 
           <div className="progress-hero-main">
-            <h1>Bien joué, il te reste {xpToNext.toLocaleString('fr-FR')} XP</h1>
-            <p>{snapshot.xp.toLocaleString('fr-FR')} XP au total · niveau {snapshot.level + 1} au prochain palier</p>
-            <div className="progress-xp-track" aria-label={`${Math.round(progress * 100)} % du niveau suivant`}>
-              <span className="progress-xp-fill" style={{ width: `${progress * 100}%` }} />
+            <h1>
+              {formatDuration(snapshot.user.ms)} passées dans Pupitre, sur {snapshot.projectCount}
+              {' '}projet{snapshot.projectCount > 1 ? 's' : ''}
+            </h1>
+            <p>
+              {snapshot.nextMilestone !== null
+                ? `Palier ${snapshot.nextMilestone} h dans ${formatDuration(snapshot.msToNextMilestone ?? 0)}`
+                : 'Tous les paliers sont franchis'}
+            </p>
+            <div className="progress-xp-track" aria-label={`${Math.round(milestoneProgress * 100)} % du palier suivant`}>
+              <span className="progress-xp-fill" style={{ width: `${milestoneProgress * 100}%` }} />
               <span className="progress-xp-sheen" />
             </div>
           </div>
@@ -181,23 +150,36 @@ export function ProgressView({ snapshot }: ProgressViewProps) {
           <div className="progress-focus-card">
             <div className="progress-focus-card-row">
               <span className="progress-focus-icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 16 16">{BADGE_ICONS.focus}</svg>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="8" cy="8" r="6.2" />
+                  <path d="M8 4.4V8l2.4 1.6" />
+                </svg>
               </span>
               <div>
-                <div className="progress-focus-value">×{snapshot.focusMultiplier.toLocaleString('fr-FR')}</div>
-                <div className="progress-focus-caption">multiplicateur focus</div>
+                <div className="progress-focus-value">{formatDuration(snapshot.user.todayMs)}</div>
+                <div className="progress-focus-caption">aujourd’hui</div>
               </div>
             </div>
-            <div className="progress-focus-sub">{formatDuration(snapshot.activeMsToday)} actives aujourd’hui</div>
+            <div className="progress-focus-sub">
+              agent {formatDuration(snapshot.agent.todayMs)} en parallèle
+            </div>
           </div>
         </div>
 
+        {snapshot.backfilledMs > 0 ? (
+          <p className="progress-backfill-note">
+            Dont {formatDuration(snapshot.backfilledMs)} reconstituées depuis l’historique des tours et
+            réparties entre les projets au prorata : ces heures-là n’ont pas d’horaire, donc le partage
+            rédaction / supervision ne vaut que pour les heures mesurées directement.
+          </p>
+        ) : null}
+
         <div className="progress-stat-grid">
-          {stats.map((s) => (
-            <div className="progress-stat-tile" key={s.label}>
-              <div className="progress-stat-label">{s.label}</div>
-              <div className="progress-stat-value">{s.value}</div>
-              <div className="progress-stat-trend">{s.trend}</div>
+          {stats.map((stat) => (
+            <div className="progress-stat-tile" key={stat.label} data-muted={stat.muted === true}>
+              <div className="progress-stat-label">{stat.label}</div>
+              <div className="progress-stat-value">{stat.value}</div>
+              <div className="progress-stat-trend">{stat.trend}</div>
             </div>
           ))}
         </div>
@@ -205,62 +187,108 @@ export function ProgressView({ snapshot }: ProgressViewProps) {
         <div className="progress-two-col">
           <div>
             <div className="progress-col-heading">
-              <h2>Objectifs de la semaine</h2>
-              <span>repères indicatifs</span>
+              <h2>Heures par projet</h2>
+              <span>
+                {snapshot.projectCount} projet{snapshot.projectCount > 1 ? 's' : ''}
+                {' · '}
+                {formatDuration(snapshot.user.ms)}
+              </span>
             </div>
             <div className="progress-goals">
-              {goals.map((g) => (
-                <div className="progress-goal-card" key={g.label} data-complete={g.pct >= 100}>
+              {snapshot.projects.map((project) => (
+                <div className="progress-goal-card" key={project.projectId}>
                   <div className="progress-goal-top">
-                    <span>{g.label}</span>
-                    <span className="progress-goal-value">{g.value}</span>
+                    <span>{project.name}</span>
+                    <span className="progress-goal-value">{formatDuration(project.user.ms)}</span>
                   </div>
                   <div className="progress-goal-track">
-                    <span style={{ width: `${g.pct}%` }} />
+                    <span style={{ width: `${(project.user.ms / widest) * 100}%` }} />
                   </div>
-                  <div className="progress-goal-hint">{g.hint}</div>
+                  <div className="progress-goal-hint">
+                    <span>
+                      {project.nextMilestone !== null
+                        ? `palier ${project.nextMilestone} h dans ${formatDuration(project.msToNextMilestone ?? 0)}`
+                        : 'tous les paliers franchis'}
+                    </span>
+                    <span className="progress-goal-agent">agent {formatDuration(project.agent.ms)}</span>
+                  </div>
                 </div>
               ))}
+              {snapshot.projects.length === 0 ? (
+                <p className="progress-goal-hint">Aucune heure mesurée pour l’instant.</p>
+              ) : null}
             </div>
           </div>
 
           <div>
             <div className="progress-col-heading">
-              <h2>Répartition des conversations</h2>
-              <span>par complexité · {totalComplexityCount} au total</span>
+              <h2>Paliers</h2>
+              <span>{reachedCount} / {snapshot.milestones.length} franchis</span>
             </div>
             <div className="progress-complexity-rows">
-              {complexityEntries.map(([label, count]) => (
-                <div className="progress-complexity-row" key={label}>
-                  <span className="progress-complexity-chip">{label.slice(0, 2).toUpperCase()}</span>
-                  <div className="progress-complexity-mid">
-                    <div className="progress-complexity-mid-top">
-                      <span>{label}</span>
-                      <span>{count}</span>
-                    </div>
-                    <div className="progress-complexity-track">
-                      <span style={{ width: `${(count / max) * 100}%` }} />
+              {snapshot.milestones.map((step) => {
+                const isNext = step.hours === snapshot.nextMilestone
+                return (
+                  <div
+                    className="progress-milestone-row"
+                    key={step.hours}
+                    data-reached={step.reached}
+                    data-next={isNext}
+                  >
+                    <span className="progress-milestone-chip">{step.hours} h</span>
+                    <div className="progress-complexity-mid">
+                      <div className="progress-complexity-mid-top">
+                        <span>{step.hours} heures passées</span>
+                        <span>
+                          {step.reached
+                            ? `franchi le ${formatDate(step.reachedOn)}`
+                            : isNext
+                              ? `dans ${formatDuration(snapshot.msToNextMilestone ?? 0)}`
+                              : 'verrouillé'}
+                        </span>
+                      </div>
+                      {isNext ? (
+                        <div className="progress-complexity-track">
+                          <span style={{ width: `${milestoneProgress * 100}%` }} />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
 
         <div className="progress-badges-section">
           <div className="progress-col-heading">
-            <h2>Hauts faits</h2>
-            <span>{unlockedCount} / {badges.length} débloqués</span>
+            <h2>Les deux natures de tes heures</h2>
+            <span>{formatDuration(snapshot.user.ms)} au total</span>
           </div>
-          <div className="progress-badges-grid">
-            {badges.map((b) => (
-              <div className="progress-badge" key={b.name} data-unlocked={b.unlocked} title={b.meta}>
-                <span className="progress-badge-icon"><BadgeIcon icon={b.icon} /></span>
-                <span className="progress-badge-name">{b.name}</span>
-                <span className="progress-badge-meta">{b.meta}</span>
-              </div>
-            ))}
+          <div className="progress-split">
+            <div className="progress-split-track" aria-hidden="true">
+              <span
+                className="progress-split-writing"
+                style={{ width: `${snapshot.user.ms > 0 ? (snapshot.writingMs / snapshot.user.ms) * 100 : 0}%` }}
+              />
+              <span
+                className="progress-split-supervision"
+                style={{ width: `${snapshot.user.ms > 0 ? (snapshot.supervisionMs / snapshot.user.ms) * 100 : 0}%` }}
+              />
+            </div>
+            <div className="progress-split-legend">
+              <span>
+                <i className="is-writing" aria-hidden="true" />
+                Rédaction {formatDuration(snapshot.writingMs)} — tu travailles, rien ne tourne
+              </span>
+              <span>
+                <i className="is-supervision" aria-hidden="true" />
+                Supervision {formatDuration(snapshot.supervisionMs)} — {supervisionShare} % de tes heures
+              </span>
+              <span className="progress-split-alone">
+                Agent sans toi {formatDuration(snapshot.agentAloneMs)} — ne compte pas dans le niveau
+              </span>
+            </div>
           </div>
         </div>
       </div>

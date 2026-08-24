@@ -393,6 +393,8 @@ export function openDb(dir: string = dataDir()): Database {
       conversation_id TEXT NULL,
       created_at TEXT NOT NULL
     );
+    -- Vestiges du système d'XP, plus alimentés : gamification_activity sert
+    -- encore de source à la reprise d'historique de time_entries.
     CREATE TABLE IF NOT EXISTS gamification_activity (
       day TEXT PRIMARY KEY,
       active_ms INTEGER NOT NULL DEFAULT 0,
@@ -411,6 +413,21 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_gamification_awards_day
       ON gamification_awards(day, created_at);
+    CREATE TABLE IF NOT EXISTS time_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_key TEXT NOT NULL UNIQUE,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      conversation_id TEXT NULL REFERENCES conversations(id) ON DELETE SET NULL,
+      source TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL,
+      day TEXT NOT NULL,
+      backfilled INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_time_entries_scope
+      ON time_entries(project_id, source, started_at);
+    CREATE INDEX IF NOT EXISTS idx_time_entries_conversation
+      ON time_entries(conversation_id, source);
   `);
   dropEventsForeignKey(db);
   migrateDocuments(db);

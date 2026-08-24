@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getCurrentWindow, type Window } from '@tauri-apps/api/window'
-import type { GamificationSnapshot } from './types'
+import type { TimeSnapshot } from './types'
 import { formatActiveDuration } from './formatActiveDuration'
 
 type ResizeDirection = Parameters<Window['startResizeDragging']>[0]
@@ -13,7 +13,7 @@ interface TitlebarProps {
   /** Fil d'Ariane discret (projet · vue) ; les entrées vides sont ignorées. */
   crumbs?: Array<string | null | undefined>
   onSearch?: () => void
-  gamification?: GamificationSnapshot | null
+  time?: TimeSnapshot | null
 }
 
 const RESIZE_HANDLES: ReadonlyArray<[string, ResizeDirection]> = [
@@ -30,18 +30,18 @@ const RESIZE_HANDLES: ReadonlyArray<[string, ResizeDirection]> = [
 const FLAME_PATH =
   'M8 13.6c2.6 0 4.3-1.7 4.3-4 0-2.5-1.9-3.9-2.7-6.1-1.2 1-1.9 2.1-1.9 3.3 0 .9.4 1.4.4 2 0 .8-.5 1.3-1.2 1.3-.9 0-1.4-.8-1.4-1.9-.9.9-1.2 2-1.2 3.2 0 2.2 1.4 4.2 3.7 4.2Z'
 
-function activeLabel(snapshot: GamificationSnapshot | null | undefined): string | null {
+function activeLabel(snapshot: TimeSnapshot | null | undefined): string | null {
   if (!snapshot) return null
-  const minutes = Math.floor(snapshot.activeMsToday / 60_000)
+  const minutes = Math.floor(snapshot.user.todayMs / 60_000)
   if (minutes < 1) return null
-  return formatActiveDuration(snapshot.activeMsToday)
+  return formatActiveDuration(snapshot.user.todayMs)
 }
 
-export function Titlebar({ crumbs, onSearch, gamification }: TitlebarProps) {
+export function Titlebar({ crumbs, onSearch, time }: TitlebarProps) {
   const visibleCrumbs = (crumbs ?? []).filter(
     (crumb): crumb is string => typeof crumb === 'string' && crumb.length > 0,
   )
-  const activity = activeLabel(gamification)
+  const activity = activeLabel(time)
 
   const drag = IS_TAURI ? { 'data-tauri-drag-region': true } : {}
 

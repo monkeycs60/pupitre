@@ -5,14 +5,13 @@ import type { Attachment } from './types'
 import { mediaUrl } from './transport'
 import { useNow } from './useNow'
 import { AttachmentPreview } from './AttachmentPreview'
-import { tokenXp } from './turnXp'
 import { summarizeTurnError } from './turnError'
 
 interface EventViewProps {
   block: EventBlock
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
-  turnXpMultiplier?: number
+  turnUserMs?: Record<string, number>
   onReviewChanges?: () => void
 }
 
@@ -117,11 +116,11 @@ function TurnFiles({ files }: { files: Array<{ path: string; added: number; remo
 
 function TurnFooter({
   block,
-  turnXpMultiplier,
+  turnUserMs,
   onReviewChanges,
 }: {
   block: Extract<EventBlock, { kind: 'turn-footer' }>
-  turnXpMultiplier?: number
+  turnUserMs?: Record<string, number>
   onReviewChanges?: () => void
 }) {
   const isRunning = block.status?.state === 'running'
@@ -137,9 +136,11 @@ function TurnFooter({
     ? firstResponseAt - startedAt
     : null
   const totalMs = startedAt !== null && endAt !== null ? endAt - startedAt : null
-  const xp = block.usage !== undefined && turnXpMultiplier !== undefined
-    ? Math.max(1, Math.round(tokenXp(block.usage.inputTokens, block.usage.outputTokens) * turnXpMultiplier))
-    : null
+  // Ce que le tour a coûté en temps humain : la présence pendant sa fenêtre,
+  // pas sa durée — celle-ci est déjà affichée juste à gauche.
+  const userMs = block.timing?.startedAt !== undefined
+    ? turnUserMs?.[block.timing.startedAt]
+    : undefined
   const turnError = isError
     ? summarizeTurnError(block.status?.error ?? 'Une erreur est survenue.')
     : null
@@ -199,7 +200,13 @@ function TurnFooter({
             Lancer le Gardien
           </button>
         ) : null}
-        {xp !== null ? <span className="turn-xp">+{xp} XP</span> : null}
+        {userMs !== undefined ? (
+          <span className="turn-time" title="Ton temps de présence pendant ce tour">
+            {/* Sous la minute, la seconde n'apporte rien : « 0 min » dit
+                simplement que tu n'étais pas devant. */}
+            +{userMs < 60_000 ? `${Math.round(userMs / 60_000)} min` : formatDuration(userMs)}
+          </span>
+        ) : null}
       </div>
     </footer>
   )
@@ -211,7 +218,7 @@ function TurnFooter({
  */
 export const EventView = memo(EventViewImpl)
 
-function EventViewImpl({ block, onImageOpen, onImageLoad, turnXpMultiplier, onReviewChanges }: EventViewProps) {
+function EventViewImpl({ block, onImageOpen, onImageLoad, turnUserMs, onReviewChanges }: EventViewProps) {
   switch (block.kind) {
     case 'user':
       return (
@@ -276,7 +283,7 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnXpMultiplier, onRe
       )
 
     case 'turn-footer': {
-      return <TurnFooter block={block} turnXpMultiplier={turnXpMultiplier} onReviewChanges={onReviewChanges} />
+      return <TurnFooter block={block} turnUserMs={turnUserMs} onReviewChanges={onReviewChanges} />
     }
   }
 }

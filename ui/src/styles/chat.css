@@ -789,9 +789,9 @@
   font-family: var(--font-mono);
 }
 
-.turn-xp {
+.turn-time {
   margin-left: auto;
-  color: var(--streak);
+  color: var(--accent-hover);
   font-family: var(--font-mono);
   font-weight: 600;
 }
@@ -814,7 +814,7 @@
   border-color: var(--border-strong);
 }
 
-.turn-review-action + .turn-xp {
+.turn-review-action + .turn-time {
   margin-left: 0;
 }
 

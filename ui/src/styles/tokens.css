@@ -192,7 +192,7 @@ pre {
   outline-offset: 1px;
 }
 
-/* --- Animations partagées (gamification, jauges, live) ------------------ */
+/* --- Animations partagées (jauges, anneaux, live) ----------------------- */
 
 @keyframes livepulse {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -210,13 +210,6 @@ pre {
 @keyframes sheen {
   0% { transform: translateX(-130%); }
   55%, 100% { transform: translateX(360%); }
-}
-
-@keyframes xp-rise {
-  0% { opacity: 0; transform: translateY(8px) scale(0.96); }
-  18% { opacity: 1; transform: translateY(0) scale(1); }
-  78% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-10px); }
 }
 
 @keyframes pop-in {

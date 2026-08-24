@@ -169,9 +169,9 @@ function renderSidebar(
     liveConversationMessageCount,
     activeFleet,
     workspaceView: 'conversations',
-    onProgressSelect: () => undefined,
-    gamification: null,
-    xpPulse: null,
+    time: null,
+    timeMode: 'user' as const,
+    onTimeModeToggle: () => undefined,
   }))
   return onConversationSelect
 }

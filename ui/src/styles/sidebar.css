@@ -1675,15 +1675,37 @@
 }
 
 .level-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 11px;
   width: 100%;
-  padding: 0;
+  padding: 6px 8px;
+  margin: -6px -8px;
   text-align: left;
   background: transparent;
   border: 0;
+  border-radius: var(--r-sm);
   cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+.level-card:hover,
+.level-card:focus-visible {
+  background: var(--bg-hover);
+}
+
+/* Le compteur agent emprunte la teinte du provider : « la machine » sans
+   avoir à l'écrire, et sans conflit avec le vert « terminé » ni l'ambre des
+   jauges de quota juste en dessous. */
+.level-card[data-mode='agent'] {
+  --level-hue: var(--prov-claude);
+  --level-hue-soft: #e59078;
+}
+
+.level-card[data-mode='user'] {
+  --level-hue: var(--accent);
+  --level-hue-soft: var(--accent-hover);
 }
 
 .level-ring {
@@ -1695,6 +1717,11 @@
 
 .level-ring svg {
   display: block;
+}
+
+.level-ring-fill {
+  stroke: var(--level-hue);
+  transition: stroke-dashoffset 300ms var(--ease), stroke var(--dur) var(--ease);
 }
 
 .level-ring-value {
@@ -1726,10 +1753,16 @@
   font-weight: 600;
 }
 
-.level-info-top > span {
+.level-share,
+.level-scope {
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.level-scope {
+  color: var(--text-faint);
 }
 
 .level-bar {
@@ -1745,33 +1778,55 @@
 .level-bar-fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  background: linear-gradient(90deg, var(--level-hue), var(--level-hue-soft));
   border-radius: var(--r-full);
-  animation: gauge-fill 900ms var(--ease);
-}
-
-.level-bar-xp {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 1;
-  background: var(--streak);
-  border-radius: var(--r-full);
-  transform-origin: left center;
-  animation: xp-bar-fill 3.5s var(--ease) both;
-}
-
-@keyframes xp-bar-fill {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+  /* Un cran par minute : la transition rend le pas lisible sans le lisser. */
+  transition: width 300ms var(--ease), background var(--dur) var(--ease);
 }
 
 .level-meta {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
   margin-top: 5px;
-  color: var(--text-faint);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+}
+
+.level-today {
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.level-swap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.level-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.level-running > i {
+  width: 5px;
+  height: 5px;
+  background: var(--prov-claude);
+  border-radius: var(--r-full);
+  animation: status-pulse 1.2s var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .level-bar-fill,
+  .level-ring-fill { transition: none; }
+  .level-running > i { animation: none; }
 }
 
 .sidebar-quotas {
@@ -1780,21 +1835,7 @@
   border-top: 1px solid var(--border-subtle);
 }
 
-/* La pastille +XP flotte au-dessus du pied, comme dans la maquette. */
-.sidebar-footer .xp-pulse {
-  position: absolute;
-  top: -10px;
-  right: var(--space-3);
-  padding: 3px 9px;
-  color: var(--streak);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  background: var(--streak-soft);
-  border: 1px solid rgba(240, 182, 74, 0.36);
-  border-radius: var(--r-full);
-  animation: xp-rise 5s var(--ease);
-}
+
 
 /* --- Conversations groupées à deux lignes (maquette redesign) ------------- */
 

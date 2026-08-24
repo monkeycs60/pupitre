@@ -45,7 +45,7 @@ import type {
   Workflow,
   Attachment,
   FilesystemScope,
-  GamificationSnapshot,
+  TimeSnapshot,
   HtmlDocument,
   SentryInboxPayload,
   SentryIssue,
@@ -314,16 +314,25 @@ export function exportDocument(id: string, path: string): Promise<{ path: string
   return fetchJson(`/api/documents/${routeId(id)}/export`, jsonPost({ path }))
 }
 
-export function getGamification(projectId?: string, signal?: AbortSignal): Promise<GamificationSnapshot> {
-  const suffix = projectId ? `?projectId=${routeId(projectId)}` : ''
-  return fetchJson(`/api/gamification${suffix}`, { signal })
+export function getTimeSnapshot(
+  projectId?: string,
+  conversationId?: string,
+  signal?: AbortSignal,
+): Promise<TimeSnapshot> {
+  const params = new URLSearchParams()
+  if (projectId) params.set('projectId', projectId)
+  if (conversationId) params.set('conversationId', conversationId)
+  const suffix = params.size > 0 ? `?${params.toString()}` : ''
+  return fetchJson(`/api/time${suffix}`, { signal })
 }
 
-export function addGamificationActivity(
-  day: string,
-  activeMs: number,
-): Promise<void> {
-  return fetchVoid('/api/gamification/activity', jsonPost({ day, activeMs }))
+export function addPresenceSlice(slice: {
+  projectId: string
+  conversationId?: string | null
+  startedAt: string
+  endedAt: string
+}): Promise<void> {
+  return fetchVoid('/api/time/presence', jsonPost(slice))
 }
 
 export function getFleet(signal?: AbortSignal): Promise<FleetItem[]> {

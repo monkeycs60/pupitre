@@ -15,16 +15,15 @@ import {
   setConversationPermissionMode,
 } from './api'
 import { QuotaStatus } from './QuotaBar'
-import type { Conversation, FleetItem, GamificationSnapshot, Project, ProjectDomain, Workflow, WorkspaceView } from './types'
+import type { Conversation, FleetItem, Project, ProjectDomain, TimeMode, TimeSnapshot, Workflow, WorkspaceView } from './types'
 import type { Quotas } from './useQuotas'
-import type { GamificationPulse } from './useGamification'
 import { WorkflowDialog } from './WorkflowDialog'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { modelLabel } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
 import { filterWorkflows, workflowSummary } from './workflowSidebar'
 import { useNow } from './useNow'
-import { formatActiveDuration } from './formatActiveDuration'
+import { LevelCard } from './LevelCard'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 
@@ -52,9 +51,11 @@ interface SidebarProps {
   /** Snapshot Fleet global, nécessaire pour marquer les conversations non ouvertes comme live. */
   activeFleet?: FleetItem[]
   workspaceView: WorkspaceView
-  onProgressSelect: () => void
-  gamification: GamificationSnapshot | null
-  xpPulse: GamificationPulse | null
+  time: TimeSnapshot | null
+  timeMode: TimeMode
+  onTimeModeToggle: () => void
+  /** Un tour tourne : la carte le signale sans changer de compteur. */
+  agentRunning?: boolean
 }
 
 function pinnedFirst<T extends { pinned: boolean }>(items: T[]): T[] {
@@ -208,9 +209,10 @@ export function Sidebar({
   liveConversationMessageCount,
   activeFleet = [],
   workspaceView,
-  onProgressSelect,
-  gamification,
-  xpPulse,
+  time,
+  timeMode,
+  onTimeModeToggle,
+  agentRunning = false,
 }: SidebarProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [workflows, setWorkflows] = useState<Workflow[]>([])
@@ -906,76 +908,13 @@ export function Sidebar({
       ) : null}
 
       <div className="sidebar-footer">
-        {gamification ? (
-          <button
-            type="button"
-            className="level-card"
-            onClick={onProgressSelect}
-            title="Voir la progression et le rapport hebdomadaire"
-          >
-            {(() => {
-              const ringLen = 110
-              const progress = Math.max(0, Math.min(1, gamification.progress))
-              const offset = ringLen * (1 - progress)
-              const band = Math.max(1, gamification.nextLevelXp - gamification.levelXp)
-              const remaining = Math.max(0, Math.round(band * (1 - progress)))
-              const pulseProgress = xpPulse
-                ? Math.min(progress, xpPulse.amount / band)
-                : 0
-              const stableProgress = Math.max(0, progress - pulseProgress)
-              const activeTime = formatActiveDuration(gamification.activeMsToday)
-              return (
-                <>
-                  <span className="level-ring" aria-hidden="true">
-                    <svg width="42" height="42" viewBox="0 0 42 42">
-                      <circle cx="21" cy="21" r="17.5" fill="none" stroke="var(--border)" strokeWidth="4" />
-                      <circle
-                        cx="21"
-                        cy="21"
-                        r="17.5"
-                        fill="none"
-                        stroke="var(--accent)"
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        strokeDasharray={ringLen}
-                        strokeDashoffset={offset}
-                        transform="rotate(-90 21 21)"
-                      />
-                    </svg>
-                    <span className="level-ring-value">{gamification.level}</span>
-                  </span>
-                  <span className="level-info">
-                    <span className="level-info-top">
-                      <strong>Niveau {gamification.level}</strong>
-                      <span>{remaining.toLocaleString('fr-FR')} XP restants</span>
-                    </span>
-                    <span className="level-bar" aria-hidden="true">
-                      <span
-                        className="level-bar-fill"
-                        style={{ width: `${(xpPulse ? stableProgress : progress) * 100}%` }}
-                      />
-                      {xpPulse ? (
-                        <span
-                          className="level-bar-xp"
-                          key={xpPulse.id}
-                          style={{
-                            left: `${stableProgress * 100}%`,
-                            width: `${pulseProgress * 100}%`,
-                          }}
-                        />
-                      ) : null}
-                    </span>
-                    <span className="level-meta">
-                      {activeTime} · aujourd'hui
-                    </span>
-                  </span>
-                </>
-              )
-            })()}
-            {xpPulse ? (
-              <span className="xp-pulse" key={xpPulse.id} aria-live="polite">+{xpPulse.amount} XP</span>
-            ) : null}
-          </button>
+        {time ? (
+          <LevelCard
+            snapshot={time}
+            mode={timeMode}
+            agentRunning={agentRunning}
+            onToggle={onTimeModeToggle}
+          />
         ) : null}
         <div className="sidebar-quotas">
           <QuotaStatus snapshot={quotas.snapshot} />

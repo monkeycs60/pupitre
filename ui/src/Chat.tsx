@@ -61,8 +61,8 @@ interface ChatProps {
   ticketId?: string | null
   originType?: 'sentry' | null
   originKey?: string | null
-  /** Multiplicateur XP du tour (complexité × focus), voir turnXp.ts. */
-  turnXpMultiplier?: number
+  /** Temps humain par tour, clé = horodatage de départ du tour. */
+  turnUserMs?: Record<string, number>
   reviewStatus: ReviewStatusSnapshot | null
   onOpenCode: (flagId?: string) => void
 }
@@ -126,7 +126,7 @@ export function Chat({
   ticketId = null,
   originType = null,
   originKey = null,
-  turnXpMultiplier,
+  turnUserMs,
   reviewStatus,
   onOpenCode,
 }: ChatProps) {
@@ -330,7 +330,7 @@ export function Chat({
                     onImageLoad={scrollToBottomIfFollowing}
                     onSubtaskStatusChange={handleSubtaskStatusChange}
                     onDebriefQuestion={handleDebriefQuestion}
-                    turnXpMultiplier={turnXpMultiplier}
+                    turnUserMs={turnUserMs}
                     onReviewChanges={focusReview}
                   />
                   {!isRunning && conversation !== null ? (

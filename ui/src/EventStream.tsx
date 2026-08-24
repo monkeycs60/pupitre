@@ -16,7 +16,7 @@ interface EventStreamProps {
   onImageLoad: () => void
   onSubtaskStatusChange?: (subtaskId: string, status: SubtaskStatus | null) => void
   onDebriefQuestion?: (block: DebriefBlock) => void
-  turnXpMultiplier?: number
+  turnUserMs?: Record<string, number>
   onReviewChanges?: () => void
 }
 
@@ -33,7 +33,7 @@ function EventStreamImpl({
   onImageLoad,
   onSubtaskStatusChange,
   onDebriefQuestion,
-  turnXpMultiplier,
+  turnUserMs,
   onReviewChanges,
 }: EventStreamProps) {
   const rendered: ReactNode[] = []
@@ -98,7 +98,7 @@ function EventStreamImpl({
             block={block}
             onImageOpen={onImageOpen}
             onImageLoad={onImageLoad}
-            turnXpMultiplier={turnXpMultiplier}
+            turnUserMs={turnUserMs}
             onReviewChanges={block.id === newestTurnFooterId ? onReviewChanges : undefined}
           />
       ),

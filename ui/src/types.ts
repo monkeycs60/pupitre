@@ -271,7 +271,6 @@ export interface Conversation {
   deleted_at: string | null
   created_at: string
   updated_at: string
-  gamification?: GamificationConversation
 }
 
 export type IntegrationType = 'clickup' | 'gitlab' | 'github' | 'notion' | 'sentry'
@@ -424,45 +423,56 @@ export interface SentryInboxPayload {
   } | null
 }
 
-export interface GamificationConversation {
-  conversationId: string
-  complexity: number
-  multiplier: number
-  inputTokens: number
-  outputTokens: number
-  commits: number
-  pushes: number
-  additions: number
-  deletions: number
-  xp: number
-}
-
-export interface GamificationPeriod {
-  activeMs: number
-  inputTokens: number
-  outputTokens: number
-  conversations: number
-  projects: number
-  commits: number
-  pushes: number
-  additions: number
-  deletions: number
-  xp: number
-  complexity: Record<string, number>
-}
-
-export interface GamificationSnapshot {
-  xp: number
+export interface TimeCounter {
+  ms: number
   level: number
-  levelXp: number
-  nextLevelXp: number
+  levelMs: number
   progress: number
-  activeMsToday: number
-  focusMultiplier: number
-  today: GamificationPeriod
-  week: GamificationPeriod
-  conversations: Record<string, GamificationConversation>
+  todayMs: number
 }
+
+export interface TimeProjectSummary {
+  projectId: string
+  name: string
+  user: TimeCounter
+  agent: TimeCounter
+  nextMilestone: number | null
+  msToNextMilestone: number | null
+}
+
+export interface TimeMilestone {
+  hours: number
+  reached: boolean
+  reachedOn: string | null
+}
+
+export interface TimeSnapshot {
+  scope: 'project' | 'global'
+  projectId: string | null
+  projectCount: number
+  user: TimeCounter
+  agent: TimeCounter
+  supervisionMs: number
+  writingMs: number
+  agentAloneMs: number
+  weekUserMs: number
+  weekAgentMs: number
+  previousWeekUserMs: number
+  activeDays: number
+  commits: number
+  turnCount: number
+  backfilledMs: number
+  nextMilestone: number | null
+  msToNextMilestone: number | null
+  milestones: TimeMilestone[]
+  projects: TimeProjectSummary[]
+  conversations: Record<string, { userMs: number; agentMs: number }>
+  /** Temps humain par tour, clé = horodatage de départ. Rempli à la demande. */
+  turns: Record<string, number>
+}
+
+/** Compteur lu dans le pied de sidebar. Mémorisé par projet. */
+export type TimeMode = 'user' | 'agent'
 
 export interface Debrief {
   id: string

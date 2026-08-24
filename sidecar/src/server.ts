@@ -51,7 +51,7 @@ import {
   MemoryPathError,
   type MemoryStore,
 } from "./memory";
-import type { GamificationService } from "./gamification";
+import type { TimeTrackingService } from "./time-tracking";
 import {
   HtmlDocumentError,
   type HtmlDocumentService,
@@ -143,7 +143,7 @@ export interface ServerDeps {
   integrationSecrets?: IntegrationSecretStore;
   sentry?: SentryStore;
   integrationsRefresher: IntegrationsRefresher;
-  gamification?: GamificationService;
+  time?: TimeTrackingService;
   htmlDocuments?: HtmlDocumentService;
   /**
    * Arrêt propre du sidecar, déclenché par `POST /api/shutdown` : c'est ce qui
@@ -1137,22 +1137,33 @@ export function createServer(deps: ServerDeps) {
           return json({ ...(await probeDesignReachability()), url: DESIGN_URL });
         }
 
-        if (request.method === "GET" && pathname === "/api/gamification") {
-          if (!deps.gamification) throw new HttpError(501, "progression non câblée");
+        if (request.method === "GET" && pathname === "/api/time") {
+          if (!deps.time) throw new HttpError(501, "suivi du temps non câblé");
           const projectId = url.searchParams.get("projectId") ?? undefined;
           if (projectId && !deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
-          return json(deps.gamification.snapshot(projectId));
+          const conversationId = url.searchParams.get("conversationId");
+          return json({
+            ...deps.time.snapshot(projectId),
+            turns: conversationId ? deps.time.conversationTurns(conversationId) : {},
+          });
         }
 
-        if (request.method === "POST" && pathname === "/api/gamification/activity") {
-          if (!deps.gamification) throw new HttpError(501, "progression non câblée");
+        if (request.method === "POST" && pathname === "/api/time/presence") {
+          if (!deps.time) throw new HttpError(501, "suivi du temps non câblé");
           const body = await readObject(request);
-          const day = requiredString(body, "day");
-          const activeMs = body.activeMs;
-          if (typeof activeMs !== "number" || !Number.isFinite(activeMs) || activeMs < 0 || activeMs > 60_000) {
-            throw new HttpError(400, "durée active invalide");
+          const projectId = requiredString(body, "projectId");
+          if (!deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+          const conversationId = typeof body.conversationId === "string" ? body.conversationId : null;
+          try {
+            deps.time.addPresence({
+              projectId,
+              conversationId,
+              startedAt: requiredString(body, "startedAt"),
+              endedAt: requiredString(body, "endedAt"),
+            });
+          } catch (error) {
+            throw new HttpError(400, error instanceof Error ? error.message : "tranche invalide");
           }
-          deps.gamification.addActiveTime(day, activeMs);
           return json({ ok: true });
         }
 

@@ -42,8 +42,8 @@ import { MemoryView } from './MemoryView'
 import { ResumeCommandButton } from './ResumeCommandButton'
 import { HelpView } from './HelpView'
 import type { AppEvent, WorkspaceView } from './types'
-import { useGamification } from './useGamification'
-import { complexityMultiplier } from './turnXp'
+import { formatActiveDuration, formatShortDuration } from './formatActiveDuration'
+import { useTimeTracking } from './useTimeTracking'
 import { useFleet } from './useFleet'
 import { countConversationMessages } from './conversationMessageCount'
 import { ProgressView } from './ProgressView'
@@ -166,7 +166,12 @@ function App() {
     ? countConversationMessages(events)
     : undefined
   const quotas = useQuotas()
-  const gamification = useGamification()
+  // La Progression est une vue globale : on y lit tous les projets, et le
+  // temps passé à consulter ses propres chiffres n'est imputé à aucun d'eux.
+  const time = useTimeTracking(
+    workspaceView === 'progress' ? null : selectedProject?.id ?? null,
+    workspaceView === 'progress' ? null : selectedConversation?.id ?? null,
+  )
   const fleet = useFleet(selectedProject?.id)
   useAppNotifications()
 
@@ -686,7 +691,7 @@ function App() {
       <Titlebar
         crumbs={[selectedProject?.name, titlebarView]}
         onSearch={() => setPaletteOpen(true)}
-        gamification={gamification.snapshot}
+        time={time.snapshot}
       />
       <Rail
         selectedProject={selectedProject}
@@ -728,9 +733,10 @@ function App() {
         runningSubtasks={runningSubtasks}
         liveConversationMessageCount={liveConversationMessageCount}
         workspaceView={workspaceView}
-        onProgressSelect={handleProgressSelect}
-        gamification={gamification.snapshot}
-        xpPulse={gamification.xpPulse}
+        time={time.snapshot}
+        timeMode={time.mode}
+        onTimeModeToggle={time.toggleMode}
+        agentRunning={fleet.items.length > 0}
         activeFleet={fleet.items}
       />
       <div
@@ -777,7 +783,7 @@ function App() {
         ) : workspaceView === 'help' ? (
           <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         ) : workspaceView === 'progress' ? (
-          <ProgressView snapshot={gamification.snapshot} />
+          <ProgressView snapshot={time.snapshot} />
         ) : workspaceView === 'settings' ? (
           <AppSettingsView />
         ) : selectedProject === null ? (
@@ -832,12 +838,12 @@ function App() {
                 ) : null}
               </div>
               {selectedConversation !== null
-              && gamification.snapshot?.conversations[selectedConversation.id] ? (
+              && time.snapshot?.conversations[selectedConversation.id] ? (
                 <span
-                  className="conversation-title-complexity"
-                  title={`${gamification.snapshot.conversations[selectedConversation.id].commits} commit(s) · ×${gamification.snapshot.conversations[selectedConversation.id].multiplier.toLocaleString('fr-FR')}`}
+                  className="conversation-title-time"
+                  title={`${formatShortDuration(time.snapshot.conversations[selectedConversation.id].agentMs)} d'agent sur cette conversation`}
                 >
-                  C{gamification.snapshot.conversations[selectedConversation.id].complexity}
+                  {formatActiveDuration(time.snapshot.conversations[selectedConversation.id].userMs)}
                 </span>
               ) : null}
               {selectedConversation !== null ? (
@@ -922,11 +928,7 @@ function App() {
               ticketId={conversationSeed?.ticketId ?? null}
               originType={conversationSeed?.originType ?? null}
               originKey={conversationSeed?.originKey ?? null}
-              turnXpMultiplier={complexityMultiplier(
-                (selectedConversation
-                  ? gamification.snapshot?.conversations[selectedConversation.id]?.complexity
-                  : undefined) ?? 0,
-              ) * (gamification.snapshot?.focusMultiplier ?? 1)}
+              turnUserMs={time.snapshot?.turns ?? {}}
               reviewStatus={fleet.reviewStatus}
               onOpenCode={handleGitSelect}
             />
