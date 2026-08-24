@@ -22,7 +22,6 @@ import { GitProjectService } from "../src/git";
 import { TestingStore } from "../src/stores/testing";
 import { TesterRunner } from "../src/testing";
 import { SkillInventory } from "../src/skills";
-import { SkillSuggestionService } from "../src/skill-suggestions";
 import { SkillComposer } from "../src/skill-composer";
 import { WorkflowStore } from "../src/stores/workflows";
 import { NotificationStore } from "../src/stores/notifications";
@@ -191,7 +190,6 @@ beforeEach(() => {
   );
   const skills = new SkillInventory(db, projects, { homeDir: dir });
   skills.refresh();
-  const skillSuggestions = new SkillSuggestionService(skills, projects, quotas, async () => []);
   const skillComposer = new SkillComposer(skills, projects, quotas, {
     homeDir: dir,
     generator: async () => JSON.stringify({
@@ -239,7 +237,6 @@ beforeEach(() => {
     git: new GitProjectService(db, projects, { worktreeRoot: join(dir, "worktrees") }),
     testers,
     skills,
-    skillSuggestions,
     skillComposer,
     workflows,
     notifications,

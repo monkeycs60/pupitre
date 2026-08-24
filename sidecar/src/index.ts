@@ -22,7 +22,6 @@ import { GitProjectService } from "./git";
 import { TestingStore } from "./stores/testing";
 import { TesterRunner } from "./testing";
 import { SkillInventory } from "./skills";
-import { SkillSuggestionService } from "./skill-suggestions";
 import { SkillComposer } from "./skill-composer";
 import { WorkflowStore } from "./stores/workflows";
 import { NotificationStore } from "./stores/notifications";
@@ -76,7 +75,6 @@ if (process.argv.includes("--pupitre-mcp")) {
   const reviewStore = new ReviewStore(db);
   const skills = new SkillInventory(db, projects);
   skills.start();
-  const skillSuggestions = new SkillSuggestionService(skills, projects, quotas);
   const skillComposer = new SkillComposer(skills, projects, quotas);
   const workflows = new WorkflowStore(db);
   const notifications = new NotificationStore(db);
@@ -247,7 +245,6 @@ if (process.argv.includes("--pupitre-mcp")) {
     git,
     testers,
     skills,
-    skillSuggestions,
     skillComposer,
     workflows,
     routineStore,

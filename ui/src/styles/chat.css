@@ -257,12 +257,15 @@
   background: transparent;
 }
 
-.streaming-caret {
+/* Caret de streaming : collé au dernier caractère écrit, où que le Markdown
+   l'ait posé (paragraphe, liste, bloc de code). */
+.assistant-message.is-streaming > :last-child::after {
   display: inline-block;
   width: 6px;
   height: 14px;
   margin-left: 3px;
   vertical-align: -2px;
+  content: '';
   background: var(--accent);
   animation: caret-blink 1s steps(2, start) infinite;
 }
@@ -994,25 +997,6 @@
   35% { opacity: 1; transform: translateY(-3px); }
 }
 
-/* Filet balayé pendant le tour : même langage que la ligne Gardien. */
-.turn-meta-running {
-  position: relative;
-}
-
-.turn-meta-running::before {
-  position: absolute;
-  top: -5px;
-  right: 0;
-  left: 0;
-  height: 1.5px;
-  pointer-events: none;
-  content: '';
-  background: linear-gradient(90deg, transparent 0 31%, var(--accent) 50%, transparent 69%);
-  background-size: 38% 100%;
-  background-repeat: no-repeat;
-  animation: g-sweep 1.6s var(--ease) infinite;
-}
-
 @keyframes status-pulse {
   50% {
     opacity: 0.25;
@@ -1117,9 +1101,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .streaming-caret,
-  .running-dots i,
-  .turn-meta-running::before {
+  .assistant-message.is-streaming > :last-child::after,
+  .running-dots i {
     animation: none;
   }
 }

@@ -22,7 +22,6 @@ import { GitProjectService } from "../src/git";
 import { TestingStore } from "../src/stores/testing";
 import { TesterRunner } from "../src/testing";
 import { SkillInventory } from "../src/skills";
-import { SkillSuggestionService } from "../src/skill-suggestions";
 import { SkillComposer } from "../src/skill-composer";
 import { WorkflowStore } from "../src/stores/workflows";
 import { NotificationStore } from "../src/stores/notifications";
@@ -144,7 +143,6 @@ cat "${fixture}"
   );
   const skills = new SkillInventory(db, projects, { homeDir: dir });
   skills.refresh();
-  const skillSuggestions = new SkillSuggestionService(skills, projects, quotas, async () => []);
   const skillComposer = new SkillComposer(skills, projects, quotas, {
     homeDir: dir,
     generator: async () => "{}",
@@ -165,7 +163,7 @@ cat "${fixture}"
     port: 0, projects, conversations, media, runner, events, quotas,
     quotaRefresher: stubQuotaRefresher(quotas),
     subtasks, presets, settings,
-    reviews, debriefs, git, testers, skills, skillSuggestions, skillComposer, workflows,
+    reviews, debriefs, git, testers, skills, skillComposer, workflows,
     notifications, routineStore, routines, search: new SearchIndex(db), costs: new CostStore(db),
     memory: new MemoryStore(join(dir, "memory")),
     integrations, tickets, integrationsRefresher,

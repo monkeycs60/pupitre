@@ -132,7 +132,8 @@ function TurnFooter({ block, action }: {
   const isDone = block.status?.state === 'done'
   const isError = block.status?.state === 'error'
   // Synchronisation avec l'horloge système : seul effet nécessaire au compteur.
-  const now = useNow(isRunning ? 1_000 : 30_000)
+  // 100 ms en cours de tour : le dixième de seconde de formatDuration vit.
+  const now = useNow(isRunning ? 100 : 30_000)
   const startedAt = parsedTime(block.timing?.startedAt)
   const completedAt = parsedTime(block.timing?.completedAt)
   const endAt = completedAt ?? (isRunning ? now : null)
@@ -158,7 +159,7 @@ function TurnFooter({ block, action }: {
           ) : null}
         </div>
       ) : null}
-      <div className={`turn-meta${isDone ? ' turn-meta-done' : ''}${isRunning ? ' turn-meta-running' : ''}`}>
+      <div className={`turn-meta${isDone ? ' turn-meta-done' : ''}`}>
         {isRunning ? (
           <span className="running-indicator" role="status">
             <span className="running-dots" aria-hidden="true"><i /><i /><i /></span>
@@ -214,11 +215,10 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: Ev
     case 'assistant':
       return (
         <article className="message-row message-row-assistant">
-          <div className="message-bubble assistant-message">
+          {/* Le caret de streaming est un ::after du dernier bloc rendu : il
+              suit le texte au caractère près au lieu de flotter dessous. */}
+          <div className={`message-bubble assistant-message${block.streaming ? ' is-streaming' : ''}`}>
             <Markdown scope={block.id}>{block.text}</Markdown>
-            {block.streaming ? (
-              <span className="streaming-caret" aria-hidden="true" />
-            ) : null}
           </div>
         </article>
       )

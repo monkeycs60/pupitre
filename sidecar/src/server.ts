@@ -37,7 +37,6 @@ import {
   type TesterRunner,
 } from "./testing";
 import type { SkillInventory, SkillProvider } from "./skills";
-import type { SkillSuggestionService } from "./skill-suggestions";
 import { SkillAlreadyExistsError, type SkillComposer } from "./skill-composer";
 import type { WorkflowInput, WorkflowStore } from "./stores/workflows";
 import type { NotificationStore } from "./stores/notifications";
@@ -126,7 +125,6 @@ export interface ServerDeps {
   git: GitProjectService;
   testers: TesterRunner;
   skills: SkillInventory;
-  skillSuggestions: SkillSuggestionService;
   skillComposer: SkillComposer;
   workflows: WorkflowStore;
   routineStore: RoutineStore;
@@ -1331,15 +1329,6 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "POST" && pathname === "/api/skills/refresh") {
           return json({ count: deps.skills.refresh() });
-        }
-
-        if (request.method === "POST" && pathname === "/api/skills/suggestions") {
-          const body = await readObject(request);
-          const projectId = requiredString(body, "projectId");
-          if (!deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
-          const text = requiredString(body, "text");
-          const resolveAmbiguous = optionalBoolean(body, "resolveAmbiguous", false);
-          return json(await deps.skillSuggestions.suggest(projectId, text, resolveAmbiguous));
         }
 
         if (request.method === "POST" && pathname === "/api/skills/generate") {

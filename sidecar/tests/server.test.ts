@@ -23,7 +23,6 @@ import { GitProjectService } from "../src/git";
 import { TestingStore } from "../src/stores/testing";
 import { TesterRunner } from "../src/testing";
 import { SkillInventory } from "../src/skills";
-import { SkillSuggestionService } from "../src/skill-suggestions";
 import { SkillComposer } from "../src/skill-composer";
 import { WorkflowStore } from "../src/stores/workflows";
 import { NotificationStore } from "../src/stores/notifications";
@@ -284,7 +283,6 @@ cat "${fixture}"
   );
   const skills = new SkillInventory(db, projects, { homeDir: dir });
   skills.refresh();
-  const skillSuggestions = new SkillSuggestionService(skills, projects, quotas, async () => []);
   const skillComposer = new SkillComposer(skills, projects, quotas, {
     homeDir: dir,
     generator: async () => JSON.stringify({
@@ -335,7 +333,6 @@ cat "${fixture}"
     git: gitView,
     testers,
     skills,
-    skillSuggestions,
     skillComposer,
     workflows,
     notifications,
@@ -514,13 +511,8 @@ test("API skills : refresh, filtres, détail et favori par projet", async () => 
   const suggestions = await postJson("/api/skills/suggestions", {
     projectId: project.id,
     text: "applique les consignes du projet",
-    resolveAmbiguous: true,
   });
-  expect(suggestions.status).toBe(200);
-  expect(await suggestions.json()).toMatchObject({
-    suggestions: [expect.objectContaining({ id: skillId })],
-    resolvedByModel: false,
-  });
+  expect(suggestions.status).toBe(404);
   const generated = await postJson("/api/skills/generate", {
     projectId: project.id,
     description: "Vérifier les contrats API",
