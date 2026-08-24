@@ -200,12 +200,17 @@ export class DomainStore {
   }
 
   remove(id: string): boolean {
-    this.require(id);
+    const domain = this.require(id);
     const count = (this.db.query(
       "SELECT COUNT(*) AS n FROM conversation_domains WHERE domain_id = ?",
     ).get(id) as { n: number }).n;
-    if (count > 0) throw new DomainProtectedError();
-    return this.db.query("DELETE FROM domains WHERE id = ?").run(id).changes > 0;
+    if (count > 0 && domain.status === "actif") throw new DomainProtectedError();
+    return this.db.transaction(() => {
+      if (count > 0) {
+        this.db.query("DELETE FROM conversation_domains WHERE domain_id = ?").run(id);
+      }
+      return this.db.query("DELETE FROM domains WHERE id = ?").run(id).changes > 0;
+    })();
   }
 
   associate(conversationId: string, domainId: string, origin: DomainOrigin): void {

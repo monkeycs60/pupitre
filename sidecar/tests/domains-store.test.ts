@@ -126,14 +126,22 @@ test("la fusion reporte les associations vers la cible sans doublon", () => {
   expect(domains.conversationIdsFor(target.id).sort()).toEqual([onlySource.id, shared.id].sort());
 });
 
-test("la suppression est refusée tant qu'une conversation est associée", () => {
+test("une proposition se supprime avec ses associations automatiques", () => {
   const domain = domains.create(projectId, { name: "API", kind: "technique", status: "proposé" });
   const conv = conversation();
   domains.associate(conv.id, domain.id, "auto");
+  expect(domains.remove(domain.id)).toBe(true);
+  expect(domains.get(domain.id)).toBeNull();
+  expect(domains.forConversation(conv.id)).toEqual([]);
+});
+
+test("la suppression d'un domaine actif associé reste refusée", () => {
+  const domain = domains.create(projectId, { name: "API", kind: "technique", status: "actif" });
+  const conv = conversation();
+  domains.associate(conv.id, domain.id, "manuel");
   expect(() => domains.remove(domain.id)).toThrow(DomainProtectedError);
   domains.dissociate(conv.id, domain.id);
   expect(domains.remove(domain.id)).toBe(true);
-  expect(domains.get(domain.id)).toBeNull();
 });
 
 test("les labels ClickUp structurels ne deviennent pas des domaines", () => {

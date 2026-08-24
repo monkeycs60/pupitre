@@ -588,6 +588,18 @@ test("domaines : CRUD, suggestion invisible, fusion et filtre de recherche", asy
   expect(visible.find((item) => item.id === conversation.id)?.domains.map((domain) => domain.name))
     .toEqual(["Match AI"]);
 
+  const removable = current!.deps.domains!.proposeMany(project.id, [
+    { name: "Maintenance", kind: "technique" },
+  ])[0]!;
+  current!.deps.domains!.associate(conversation.id, removable.id, "auto");
+  const removed = await fetch(`${current!.baseUrl}/api/projects/${project.id}/domains/${removable.id}`, {
+    method: "DELETE",
+  });
+  expect(removed.status).toBe(204);
+  expect(current!.deps.domains!.get(removable.id)).toBeNull();
+  expect(current!.deps.domains!.forConversation(conversation.id).map((domain) => domain.name))
+    .toEqual(["Match AI"]);
+
   const alias = await postJson(`/api/projects/${project.id}/domains`, {
     name: "Matching",
     kind: "métier",
