@@ -363,6 +363,10 @@ export class IntegrationsRefresher {
       userId,
     });
     this.stores.tickets.transaction(() => {
+      this.stores.tickets.markMissingClickUpAssignments(
+        item.project_id,
+        new Set(tasks.map((task) => task.key)),
+      );
       for (const task of tasks) {
         this.upsertClickUpTask(item.project_id, task);
       }
@@ -391,6 +395,7 @@ export class IntegrationsRefresher {
         priority: task.priority,
         labels: task.labels,
         updatedAt: task.updatedAt,
+        assignedToMe: true,
       },
     });
   }

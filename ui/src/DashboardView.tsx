@@ -29,6 +29,15 @@ const INTEGRATION_LABEL: Record<string, string> = {
   sentry: 'Sentry',
 }
 
+function ClickUpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#ff02f0" d="M2.4 8.3 12.1 0l9.5 8.3-3.1 3.5-6.5-5.7-6.6 5.7Z" />
+      <path fill="#7b68ee" d="m2 18.4 3.7-2.8c2 2.6 4 3.8 6.4 3.8 2.3 0 4.3-1.2 6.2-3.7l3.7 2.7c-2.7 3.7-6.1 5.6-10 5.6-3.8 0-7.2-1.9-10-5.6Z" />
+    </svg>
+  )
+}
+
 function refOf(ticket: TicketRow, kind: TicketRef['kind']): TicketRef | undefined {
   return ticket.refs.find((ref) => ref.kind === kind)
 }
@@ -233,8 +242,10 @@ export function DashboardView({
                             href={externalUrl}
                             target="_blank"
                             rel="noreferrer"
+                            aria-label={`Ouvrir ${ticket.key} dans ClickUp`}
+                            title="Ouvrir dans ClickUp"
                           >
-                            ClickUp ↗
+                            <ClickUpIcon />
                           </a>
                         ) : null}
                       </span>
@@ -329,7 +340,7 @@ export function DashboardView({
                             ticketKey: ticket.key,
                           })}
                         >
-                          {ticket.conversations.length === 0 ? 'Démarrer' : 'Reprendre'}
+                          Nouvelle conv.
                         </button>
                         <button
                           type="button"

@@ -222,15 +222,19 @@
 }
 
 .dashboard-ticket-link {
-  width: fit-content;
-  color: var(--accent);
-  font-size: var(--text-xs);
-  text-decoration: none;
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+  opacity: 0.78;
 }
 
 .dashboard-ticket-link:hover {
-  color: var(--text-strong);
-  text-decoration: underline;
+  opacity: 1;
+}
+
+.dashboard-ticket-link svg {
+  width: 100%;
+  height: 100%;
 }
 
 .dashboard-status,

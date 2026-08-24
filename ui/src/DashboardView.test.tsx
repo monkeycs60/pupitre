@@ -117,10 +117,10 @@ test('place les issues Sentry entre Mes tickets et Environnements', async () => 
   expect(headings.indexOf('Issues Sentry')).toBeLessThan(headings.indexOf('Environnements'))
 })
 
-test('Reprendre transmet ticket et branche ; sans GitLab la colonne Déployé disparaît', async () => {
+test('Nouvelle conv. transmet ticket et branche ; sans GitLab la colonne Déployé disparaît', async () => {
   const onStart = mount({ ...withGitlab, integrations: [], environments: [] })
 
-  const button = await screen.findByRole('button', { name: 'Reprendre' })
+  const button = await screen.findByRole('button', { name: 'Nouvelle conv.' })
   fireEvent.click(button)
 
   expect(onStart).toHaveBeenCalledWith({
@@ -131,10 +131,10 @@ test('Reprendre transmet ticket et branche ; sans GitLab la colonne Déployé di
   expect(document.querySelector('.dashboard-table--with-gitlab')).toBeNull()
 })
 
-test('un ticket sans conversation propose Démarrer', async () => {
+test('un ticket sans conversation propose aussi Nouvelle conv.', async () => {
   mount({ ...withGitlab, tickets: [{ ...ticket, conversations: [] }] })
 
-  expect(await screen.findByRole('button', { name: 'Démarrer' })).toBeTruthy()
+  expect(await screen.findByRole('button', { name: 'Nouvelle conv.' })).toBeTruthy()
 })
 
 test('rend les liens ClickUp et MR explicites dans les cellules concernées', async () => {
@@ -142,7 +142,7 @@ test('rend les liens ClickUp et MR explicites dans les cellules concernées', as
 
   await screen.findByText('TECH-24657')
 
-  const clickUpLink = screen.getByRole('link', { name: 'ClickUp ↗' })
+  const clickUpLink = screen.getByRole('link', { name: 'Ouvrir TECH-24657 dans ClickUp' })
   expect(clickUpLink.getAttribute('href')).toBe('https://app.clickup.com/t/x')
 
   const mergeRequestLink = screen.getByRole('link', { name: /MR reactor!1862/ })

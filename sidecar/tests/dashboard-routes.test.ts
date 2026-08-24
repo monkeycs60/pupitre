@@ -323,10 +323,11 @@ test("dashboard : tickets, notes, refresh et canal WS", async () => {
   const project = await createProject("/tmp/dash-2");
   const ticket = current!.deps.tickets.upsert(project.id, {
     key: "TECH-1",
-    source: "git",
+    source: "clickup",
     title: "b",
-    status: "",
-    externalUrl: null,
+    status: "open",
+    externalUrl: "https://app.clickup.com/t/TECH-1",
+    payload: { assignedToMe: true },
   });
 
   const initial = await fetch(`${current!.baseUrl}/api/projects/${project.id}/dashboard`)
@@ -357,6 +358,26 @@ test("dashboard : tickets, notes, refresh et canal WS", async () => {
   const refresh = await postJson(`/api/projects/${project.id}/dashboard/refresh`, {});
   expect(refresh.status).toBe(202);
   await waiter.event;
+});
+
+test("dashboard : Mes tickets ne contient que les tâches ClickUp actuellement attribuées", async () => {
+  const project = await createProject("/tmp/dash-assigned");
+  for (const input of [
+    { key: "TECH-ME", source: "clickup" as const, externalUrl: "https://clickup/me", payload: { assignedToMe: true } },
+    { key: "TECH-OLD", source: "clickup" as const, externalUrl: "https://clickup/old", payload: { assignedToMe: false } },
+    { key: "TECH-GIT", source: "git" as const, externalUrl: null, payload: {} },
+  ]) {
+    current!.deps.tickets.upsert(project.id, {
+      ...input,
+      title: input.key,
+      status: "open",
+    });
+  }
+
+  const dashboard = await fetch(`${current!.baseUrl}/api/projects/${project.id}/dashboard`)
+    .then((response) => response.json()) as { tickets: Array<{ key: string }> };
+
+  expect(dashboard.tickets.map((ticket) => ticket.key)).toEqual(["TECH-ME"]);
 });
 
 test("le scan Sentry manuel attend la relève avant de rendre l'inbox", async () => {

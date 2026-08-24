@@ -163,6 +163,16 @@ export class TicketStore {
     ).run(at, at, id);
   }
 
+  markMissingClickUpAssignments(projectId: string, assignedKeys: Set<string>): void {
+    for (const ticket of this.listActive(projectId)) {
+      if (ticket.source !== "clickup" || assignedKeys.has(ticket.key)) continue;
+      this.db.query("UPDATE tickets SET payload_json = ? WHERE id = ?").run(
+        JSON.stringify({ ...ticket.payload, assignedToMe: false }),
+        ticket.id,
+      );
+    }
+  }
+
   archiveKeys(projectId: string, keys: Set<string>, now = new Date()): number {
     if (keys.size === 0) return 0;
     const placeholders = [...keys].map(() => "?").join(", ");

@@ -274,6 +274,22 @@ test("séquence ClickUp avant GitLab pour rattacher dès le premier refresh une 
   );
 });
 
+test("marque comme désattribué un ticket absent de la dernière relève ClickUp", async () => {
+  tickets.upsert(projectId, {
+    key: "TECH-OLD",
+    source: "clickup",
+    title: "Ancien ticket",
+    status: "open",
+    externalUrl: "https://app.clickup.com/t/old",
+    payload: { assignedToMe: true },
+  });
+
+  await makeRefresher().refreshProject(projectId);
+
+  expect(tickets.findByKey(projectId, "TECH-OLD")?.payload.assignedToMe).toBe(false);
+  expect(tickets.findByKey(projectId, task.key)?.payload.assignedToMe).toBe(true);
+});
+
 test("une source en 401 passe à reconfigurer et n'efface rien ; l'autre continue", async () => {
   await makeRefresher().refreshProject(projectId);
 

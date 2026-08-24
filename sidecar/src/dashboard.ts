@@ -40,7 +40,9 @@ export function dashboardPayload(
       branch_pattern: item.branch_pattern,
       config: item.config,
     })),
-    tickets: tickets.listByProject(projectId),
+    tickets: tickets.listByProject(projectId).filter((ticket) =>
+      ticket.source === "clickup" && ticket.payload.assignedToMe !== false
+    ),
     environments: Array.isArray(gitlab?.snapshot.environments)
       ? gitlab.snapshot.environments as EnvironmentState[]
       : [],
