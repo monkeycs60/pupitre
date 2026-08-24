@@ -1526,6 +1526,33 @@ test("change de modèle dans le même provider et le tour suivant l'utilise", as
   });
   const conversation = await created.json() as { id: string };
   await waitForRunnerIdle(conversation.id);
+  current.db.query("UPDATE conversations SET ticket_instruction = ? WHERE id = ?")
+    .run("Respecter le brief du tableau de bord", conversation.id);
+  current.deps.conversations.appendEvent(conversation.id, {
+    type: "user-message",
+    text: "Voici la capture",
+    images: ["capture.png"],
+    attachments: [{ name: "rapport.pdf", originalName: "Rapport final.pdf", mimeType: "application/pdf", size: 42 }],
+  });
+  current.deps.conversations.appendEvent(conversation.id, {
+    type: "tool-end",
+    toolId: "secret-tool",
+    output: "sortie technique à exclure",
+    images: [],
+  });
+
+  const discussionResponse = await fetch(
+    `${current.baseUrl}/api/conversations/${conversation.id}/discussion-document`,
+  );
+  expect(discussionResponse.status).toBe(200);
+  const discussion = await discussionResponse.json() as { filename: string; contentMd: string };
+  expect(discussion.filename).toMatch(/^discussion-/);
+  expect(discussion.contentMd).toContain("## Instruction du ticket\n\nRespecter le brief du tableau de bord");
+  expect(discussion.contentMd).toContain("### Utilisateur");
+  expect(discussion.contentMd).toContain("### Modèle");
+  expect(discussion.contentMd).toContain("capture.png");
+  expect(discussion.contentMd).toContain("Rapport final.pdf");
+  expect(discussion.contentMd).not.toContain("sortie technique à exclure");
 
   const argsFile = join(tmpdir(), `pupitre-switch-${crypto.randomUUID()}`);
   process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;

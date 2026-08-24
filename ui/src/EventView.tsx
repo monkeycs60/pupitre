@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import Markdown from './Markdown'
 import type { EventBlock } from './eventBlocks'
 import type { Attachment } from './types'
@@ -11,6 +11,7 @@ interface EventViewProps {
   block: EventBlock
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
+  turnFooterAction?: ReactNode
 }
 
 function formatPreValue(value: unknown): string {
@@ -112,8 +113,9 @@ function TurnFiles({ files }: { files: Array<{ path: string; added: number; remo
   )
 }
 
-function TurnFooter({ block }: {
+function TurnFooter({ block, action }: {
   block: Extract<EventBlock, { kind: 'turn-footer' }>
+  action?: ReactNode
 }) {
   const isRunning = block.status?.state === 'running'
   const isDone = block.status?.state === 'done'
@@ -166,6 +168,7 @@ function TurnFooter({ block }: {
             {block.subtaskCount} agent{block.subtaskCount > 1 ? 's' : ''} délégué{block.subtaskCount > 1 ? 's' : ''}
           </span>
         ) : null}
+        {action}
       </div>
     </footer>
   )
@@ -177,7 +180,7 @@ function TurnFooter({ block }: {
  */
 export const EventView = memo(EventViewImpl)
 
-function EventViewImpl({ block, onImageOpen, onImageLoad }: EventViewProps) {
+function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: EventViewProps) {
   switch (block.kind) {
     case 'user':
       return (
@@ -242,7 +245,7 @@ function EventViewImpl({ block, onImageOpen, onImageLoad }: EventViewProps) {
       )
 
     case 'turn-footer': {
-      return <TurnFooter block={block} />
+      return <TurnFooter block={block} action={turnFooterAction} />
     }
   }
 }

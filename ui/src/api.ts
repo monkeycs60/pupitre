@@ -913,6 +913,16 @@ export interface HandoffDocument {
   createdAt: string
 }
 
+export interface DiscussionDocument {
+  filename: string
+  contentMd: string
+  createdAt: string
+}
+
+export function getDiscussionDocument(conversationId: string): Promise<DiscussionDocument> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/discussion-document`)
+}
+
 export function createHandoffDocument(conversationId: string): Promise<HandoffDocument> {
   return fetchJson(
     `/api/conversations/${routeId(conversationId)}/handoff-document`,

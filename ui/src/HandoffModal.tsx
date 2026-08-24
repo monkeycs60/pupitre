@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   createHandoffConversation,
   createHandoffDocument,
+  getDiscussionDocument,
+  type DiscussionDocument,
   type HandoffDocument,
 } from './api'
 import { PROVIDER_EFFORTS, PROVIDER_MODELS } from './modelOptions'
@@ -31,12 +33,12 @@ async function copyText(text: string): Promise<void> {
   if (!copied) throw new Error('copie refusée')
 }
 
-function downloadDocument(handoff: HandoffDocument): void {
-  const blob = new Blob([handoff.contentMd], { type: 'text/markdown;charset=utf-8' })
+function downloadDocument(artifact: Pick<HandoffDocument, 'contentMd' | 'filename'>): void {
+  const blob = new Blob([artifact.contentMd], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = handoff.filename
+  link.download = artifact.filename
   link.click()
   window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
@@ -46,6 +48,9 @@ function errorMessage(error: unknown): string {
 }
 
 export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalProps) {
+  const [activeDocument, setActiveDocument] = useState<'discussion' | 'handoff'>('discussion')
+  const [discussion, setDiscussion] = useState<DiscussionDocument | null>(null)
+  const [discussionError, setDiscussionError] = useState<string | null>(null)
   const [handoff, setHandoff] = useState<HandoffDocument | null>(null)
   const [provider, setProvider] = useState<Provider>(conversation.provider)
   const [model, setModel] = useState(conversation.model)
@@ -53,8 +58,16 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
   const [speed, setSpeed] = useState<ConversationSpeed>(conversation.speed ?? 'standard')
   const [isGenerating, setIsGenerating] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'discussion' | 'handoff' | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let ignore = false
+    void getDiscussionDocument(conversation.id)
+      .then((document) => { if (!ignore) setDiscussion(document) })
+      .catch((loadError: unknown) => { if (!ignore) setDiscussionError(errorMessage(loadError)) })
+    return () => { ignore = true }
+  }, [conversation.id])
 
   async function handleGenerate() {
     if (isGenerating || isCreating) return
@@ -69,12 +82,20 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
     }
   }
 
-  async function handleCopy() {
-    if (handoff === null) return
+  async function retryDiscussion() {
+    setDiscussionError(null)
     try {
-      await copyText(handoff.contentMd)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1_500)
+      setDiscussion(await getDiscussionDocument(conversation.id))
+    } catch (loadError: unknown) {
+      setDiscussionError(errorMessage(loadError))
+    }
+  }
+
+  async function handleCopy(document: DiscussionDocument | HandoffDocument, kind: 'discussion' | 'handoff') {
+    try {
+      await copyText(document.contentMd)
+      setCopied(kind)
+      window.setTimeout(() => setCopied(null), 1_500)
     } catch (copyError: unknown) {
       setError(errorMessage(copyError))
     }
@@ -138,21 +159,43 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
           </button>
         </header>
 
-        {handoff === null ? (
+        <div className="handoff-document-tabs" role="tablist" aria-label="Documents de transfert">
+          <button type="button" role="tab" aria-selected={activeDocument === 'discussion'} onClick={() => setActiveDocument('discussion')}>Discussion complète</button>
+          <button type="button" role="tab" aria-selected={activeDocument === 'handoff'} onClick={() => setActiveDocument('handoff')}>Handoff généré</button>
+        </div>
+
+        {activeDocument === 'discussion' ? (
           <div className="handoff-modal-body">
-            <p className="handoff-modal-note">
-              Le handoff conserve le débrief complet de la session. Il ne modifie pas le projet.
-            </p>
+            {discussion ? (
+              <>
+                <div className="handoff-preview" aria-label="Aperçu de la discussion complète">
+                  <Markdown>{discussion.contentMd}</Markdown>
+                </div>
+                <div className="handoff-modal-actions handoff-export-actions">
+                  <button type="button" className="secondary-button" onClick={() => void handleCopy(discussion, 'discussion')}>
+                    {copied === 'discussion' ? 'Copié' : 'Copier la discussion'}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => downloadDocument(discussion)}>Enregistrer</button>
+                </div>
+              </>
+            ) : discussionError ? (
+              <div>
+                <p className="modal-error" role="alert">{discussionError}</p>
+                <button type="button" className="secondary-button" onClick={() => void retryDiscussion()}>Réessayer</button>
+              </div>
+            ) : (
+              <p className="handoff-modal-note">Chargement de la discussion…</p>
+            )}
+          </div>
+        ) : handoff === null ? (
+          <div className="handoff-modal-body">
+            <p className="handoff-modal-note">Génère une synthèse opérationnelle pour reprendre le travail dans une nouvelle conversation.</p>
             <div className="handoff-modal-actions">
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => void handleGenerate()}
-                disabled={isGenerating}
-              >
-                {isGenerating ? 'Génération…' : 'Générer le document'}
+              <button type="button" className="primary-button" onClick={() => void handleGenerate()} disabled={isGenerating}>
+                {isGenerating ? 'Génération…' : 'Générer le handoff'}
               </button>
             </div>
+            {error !== null ? <p className="modal-error" role="alert">{error}</p> : null}
           </div>
         ) : (
           <form className="handoff-modal-body" onSubmit={(event) => void handleCreateConversation(event)}>
@@ -161,8 +204,8 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
             </div>
 
             <div className="handoff-modal-actions handoff-export-actions">
-              <button type="button" className="secondary-button" onClick={() => void handleCopy()}>
-                {copied ? 'Copié' : 'Copier'}
+              <button type="button" className="secondary-button" onClick={() => void handleCopy(handoff, 'handoff')}>
+                {copied === 'handoff' ? 'Copié' : 'Copier'}
               </button>
               <button type="button" className="secondary-button" onClick={() => downloadDocument(handoff)}>
                 Enregistrer
@@ -224,9 +267,6 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
           </form>
         )}
 
-        {handoff === null && error !== null ? (
-          <p className="modal-error handoff-modal-error" role="alert">{error}</p>
-        ) : null}
       </section>
     </div>
   )

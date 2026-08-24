@@ -2,7 +2,7 @@ import type { ServerWebSocket } from "bun";
 import { basename, extname, join } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { MediaAttachment, Provider, StoredEvent } from "./events";
+import type { AppEvent, MediaAttachment, Provider, StoredEvent } from "./events";
 import { isProvider } from "./events";
 import type { MediaStore } from "./media";
 import type { ConversationRunner } from "./runner";
@@ -335,6 +335,37 @@ function handoffDocument(title: string, contentMd: string): string {
     contentMd,
     "",
   ].join("\n");
+}
+
+const MAX_DISCUSSION_DOCUMENT_BYTES = 5 * 1024 * 1024;
+
+function discussionDocument(
+  title: string,
+  ticketInstruction: string | null,
+  events: AppEvent[],
+): string {
+  const sections = [`# Discussion — ${title}`, ""];
+  if (ticketInstruction?.trim()) {
+    sections.push("## Instruction du ticket", "", ticketInstruction.trim(), "");
+  }
+  sections.push("## Échanges", "");
+  for (const event of events) {
+    if (event.type === "user-message") {
+      sections.push("### Utilisateur", "", event.text, "");
+      const attachments = event.attachments ?? [];
+      const attachmentNames = new Set(attachments.map((item) => item.name));
+      const media = [
+        ...attachments.map((item) => item.originalName || item.name),
+        ...event.images.filter((name) => !attachmentNames.has(name)),
+      ];
+      if (media.length > 0) {
+        sections.push("Pièces jointes :", ...media.map((name) => `- ${name}`), "");
+      }
+    } else if (event.type === "text-final") {
+      sections.push("### Modèle", "", event.text, "");
+    }
+  }
+  return `${sections.join("\n").trimEnd()}\n`;
 }
 
 function memoryHttpError(error: unknown, fallback = "fichier mémoire inconnu"): never {
@@ -2792,6 +2823,28 @@ export function createServer(deps: ServerDeps) {
           const debrief = deps.debriefs.get(debriefId);
           if (!debrief) throw new HttpError(404, "débrief inconnu");
           return json(debrief);
+        }
+
+        const conversationDiscussionDocumentId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/discussion-document$/,
+        );
+        if (request.method === "GET" && conversationDiscussionDocumentId !== null) {
+          const source = deps.conversations.get(conversationDiscussionDocumentId);
+          if (!source) throw new HttpError(404, "conversation inconnue");
+          const contentMd = discussionDocument(
+            source.title,
+            source.ticket_instruction,
+            deps.conversations.listEvents(source.id),
+          );
+          if (Buffer.byteLength(contentMd, "utf8") > MAX_DISCUSSION_DOCUMENT_BYTES) {
+            throw new HttpError(413, "discussion trop volumineuse pour être exportée");
+          }
+          return json({
+            filename: `discussion-${safeFilename(source.title)}.md`,
+            contentMd,
+            createdAt: new Date().toISOString(),
+          });
         }
 
         const conversationHandoffDocumentId = routeId(

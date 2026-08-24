@@ -1267,26 +1267,32 @@
   line-height: 1.45;
 }
 
-/* --- Jauge de contexte (rendue dans l'en-tête de conversation) ------------ */
+/* --- Jauge de contexte compacte, dans le pied du dernier run -------------- */
 
-/* Carte de contexte de l'en-tête : anneau + « Contexte N% / Handoff conseillé »
-   + bouton « Passer la main ». Accent par défaut, orange près de la saturation. */
 .context-gauge {
+  position: relative;
   display: flex;
   flex: none;
   align-items: center;
-  gap: var(--space-3);
-  padding: 5px 11px;
+  margin-left: auto;
   color: var(--accent);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
-  border-radius: var(--r-md);
 }
 
 .context-gauge.is-near-limit {
   color: var(--warn);
-  background: var(--warn-soft);
-  border-color: rgba(240, 168, 82, 0.3);
+}
+
+.context-gauge-summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  outline: none;
 }
 
 .context-gauge-ring {
@@ -1300,114 +1306,7 @@
   display: block;
 }
 
-.context-gauge-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.25;
-}
-
-.context-gauge-value {
-  color: currentColor;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.context-gauge-status {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-/* Zone de survol : anneau + libellé, pour que le détail ne clignote pas quand
-   le curseur passe de l'un à l'autre. */
-.context-gauge-hover {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.context-gauge-detail {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 40;
-  width: 680px;
-  max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 24px);
-  overflow-y: auto;
-  padding: var(--space-4);
-  font-family: var(--font-sans);
-  /* Le panneau est survolable : on peut y promener la souris sans qu'il
-     disparaisse. Sa position est recalée par le composant pour rester dans la
-     fenêtre, même quand le workspace coupe les débordements. */
-  visibility: hidden;
-  background: var(--bg-overlay);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow-popover);
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease), visibility var(--dur-fast) var(--ease);
-}
-
-.context-gauge-hover:hover .context-gauge-detail,
-.context-gauge-hover:focus-within .context-gauge-detail,
-.context-gauge-detail:hover {
-  visibility: visible;
-  opacity: 1;
-}
-
-/* Pont invisible entre la jauge et le panneau : sans lui, le curseur quitte la
-   zone survolée en traversant la marge et le panneau se referme. */
-.context-gauge-detail::before {
-  position: absolute;
-  right: 0;
-  bottom: 100%;
-  left: 0;
-  height: var(--space-2);
-  content: '';
-}
-
-.context-gauge-detail-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: var(--space-2);
-  color: var(--text-strong);
-  font-size: var(--text-sm);
-}
-
-.context-gauge-detail-header span {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.context-gauge-detail p {
-  margin: var(--space-3) 0 0;
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-  line-height: 1.55;
-}
-
-.context-gauge-alert {
-  padding: var(--space-2) var(--space-3);
-  color: var(--text) !important;
-  background: var(--warn-soft);
-  border-left: 2px solid var(--warn);
-  border-radius: var(--r-xs);
-}
-
-.context-gauge-alert strong {
-  color: var(--warn);
-}
-
-.context-gauge-servers {
-  color: var(--text-strong);
-  font-family: var(--font-mono);
-}
-
-/* --- Anneau de répartition (contexte, coûts) ------------------------------ */
+/* --- Anneau de répartition (coûts) --------------------------------------- */
 
 .donut-chart {
   display: grid;
@@ -1543,18 +1442,25 @@
 }
 
 .context-gauge-handoff {
-  flex: none;
-  min-height: 26px;
-  padding: 0 10px;
+  position: absolute;
+  right: 0;
+  min-height: 24px;
+  padding: 0 8px;
   color: var(--accent);
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   font-weight: 600;
+  white-space: nowrap;
   text-decoration: none;
   background: transparent;
   border: 1px solid var(--accent-border);
   border-radius: var(--r-sm);
   cursor: pointer;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), visibility var(--dur-fast) var(--ease);
 }
 
 .context-gauge.is-near-limit .context-gauge-handoff {
@@ -1564,6 +1470,20 @@
 
 .context-gauge-handoff:hover {
   background: var(--accent-soft);
+}
+
+.context-gauge:hover .context-gauge-summary,
+.context-gauge:focus-within .context-gauge-summary {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.context-gauge:hover .context-gauge-handoff,
+.context-gauge:focus-within .context-gauge-handoff {
+  pointer-events: auto;
+  visibility: visible;
+  opacity: 1;
+  transform: none;
 }
 
 .context-gauge.is-near-limit .context-gauge-handoff:hover {
@@ -1597,50 +1517,6 @@
   line-height: 1.35;
 }
 
-/* Liste dépliable des serveurs MCP, sous l'anneau de contexte. */
-.context-gauge-servers-list {
-  margin-top: var(--space-3);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.context-gauge-servers-list summary {
-  cursor: pointer;
-}
-
-.context-gauge-servers-list ul {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px var(--space-3);
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.context-gauge-servers-list li {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  font-family: var(--font-mono);
-}
-
-.context-gauge-servers-list summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.context-gauge-server-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.context-gauge-server-cost {
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
 
 /* Filet de groupe : la couleur ne porte plus le regroupement, un trait le
    rappelle le long des lignes d'une même section. */

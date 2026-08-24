@@ -16,6 +16,7 @@ interface EventStreamProps {
   onImageLoad: () => void
   onSubtaskStatusChange?: (subtaskId: string, status: SubtaskStatus | null) => void
   onDebriefQuestion?: (block: DebriefBlock) => void
+  turnFooterAction?: ReactNode
 }
 
 /**
@@ -31,9 +32,11 @@ function EventStreamImpl({
   onImageLoad,
   onSubtaskStatusChange,
   onDebriefQuestion,
+  turnFooterAction,
 }: EventStreamProps) {
   const rendered: ReactNode[] = []
   const newestHtmlDocumentId = blocks.findLast((item) => item.kind === 'html-document')?.id
+  const newestTurnFooterId = blocks.findLast((item) => item.kind === 'turn-footer')?.id
   let index = 0
 
   while (index < blocks.length) {
@@ -93,6 +96,7 @@ function EventStreamImpl({
             block={block}
             onImageOpen={onImageOpen}
             onImageLoad={onImageLoad}
+            turnFooterAction={block.id === newestTurnFooterId ? turnFooterAction : undefined}
           />
       ),
     )

@@ -14,18 +14,14 @@ import type { Attachment, Conversation, DocumentArtifact, Project } from './type
 import type { ChangelogReview } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
-import { ContextGauge } from './ContextGauge'
 import { GitView } from './GitView'
 import {
-  getProjectContextProfile,
   getSettings,
   listProjectConversations,
-  listProjectMcpServers,
   listProjects,
   markConversationRead,
   setAppVisibility,
 } from './api'
-import type { ContextProfile, McpServerRef } from './api'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import { modelLabel } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
@@ -143,19 +139,6 @@ function App() {
   // Intitulés reconnus pour les blocs d'actions : chargés une fois, diffusés à
   // tout le rendu Markdown.
   const [actionFormat, setActionFormat] = useState<ActionFormat>(DEFAULT_ACTION_FORMAT)
-  /** Coût mesuré du bridge MCP `conductor`, calculé par le sidecar. */
-  const [conductorTokens, setConductorTokens] = useState(0)
-  /** Charge fixe mesurée : contexte d'un tour à vide. */
-  const [contextBaseline, setContextBaseline] = useState(0)
-  /** Poids mesurés des instructions et des serveurs MCP du projet ouvert. */
-  const [contextProfile, setContextProfile] = useState<ContextProfile>({
-    instructionsTokens: 0,
-    mcpTokens: 0,
-  })
-  /** Serveurs MCP configurés par l'utilisateur pour le projet ouvert. */
-  const [mcpServers, setMcpServers] = useState<McpServerRef[]>([])
-  /** Dernier poids mesuré par serveur, affiché dans le diagnostic de contexte. */
-  const [mcpWeights, setMcpWeights] = useState<Record<string, { tokens: number | null }>>({})
   /** Configuration du projet ouverte depuis le diagnostic de contexte. */
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false)
   const [restartStatus, setRestartStatus] = useState<'idle' | 'running' | 'error'>('idle')
@@ -239,8 +222,6 @@ function App() {
         if (settings.actionFormat) {
           setActionFormat({ ...DEFAULT_ACTION_FORMAT, ...settings.actionFormat })
         }
-        setConductorTokens(settings.conductorToolTokens ?? 0)
-        setContextBaseline(settings.contextBaseline ?? 0)
       })
       // Les intitulés par défaut suffisent : un réglage illisible ne doit pas
       // priver le chat de ses cases à cocher.
@@ -341,26 +322,6 @@ function App() {
       setSidebarWidth(MAX_SIDEBAR_WIDTH)
     }
   }
-
-  useEffect(() => {
-    const projectId = selectedProject?.id
-    if (projectId === undefined) {
-      setMcpServers([])
-      return
-    }
-    const controller = new AbortController()
-    void getProjectContextProfile(projectId, controller.signal)
-      .then(setContextProfile)
-      .catch(() => {})
-    void listProjectMcpServers(projectId, controller.signal)
-      .then((config) => {
-        setMcpServers(config.servers)
-        setMcpWeights(config.weights)
-      })
-      // L'inventaire MCP n'est qu'un confort d'affichage dans l'alerte.
-      .catch(() => {})
-    return () => controller.abort()
-  }, [selectedProject?.id])
 
   useEffect(() => {
     function syncHelpHash() {
@@ -864,19 +825,6 @@ function App() {
                 />
               ) : null}
               {selectedConversation !== null ? (
-                <ContextGauge
-                  conversation={selectedConversation}
-                  events={events}
-                  conductorTokens={conductorTokens}
-                  contextBaseline={contextBaseline}
-                  contextProfile={contextProfile}
-                  mcpServers={mcpServers}
-                  mcpWeights={mcpWeights}
-                  onOpenProjectSettings={() => setProjectSettingsOpen(true)}
-                  onHandoff={() => setShowHandoff(true)}
-                />
-              ) : null}
-              {selectedConversation !== null ? (
                 <div className="header-actions">
                   <button
                     type="button"
@@ -934,6 +882,7 @@ function App() {
               originKey={conversationSeed?.originKey ?? null}
               reviewStatus={fleet.reviewStatus}
               onOpenCode={handleGitSelect}
+              onHandoff={() => setShowHandoff(true)}
             />
             {showSwitchModel && selectedConversation !== null ? (
               <SwitchModelModal

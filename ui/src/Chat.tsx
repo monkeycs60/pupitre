@@ -26,6 +26,7 @@ import type {
   ReviewStatusSnapshot,
 } from './types'
 import { GuardianLine } from './GuardianLine'
+import { ContextGauge } from './ContextGauge'
 import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
 import { appendDebriefQuestionPrompt } from './debriefQuestion'
@@ -63,6 +64,7 @@ interface ChatProps {
   originKey?: string | null
   reviewStatus: ReviewStatusSnapshot | null
   onOpenCode: (flagId?: string) => void
+  onHandoff: () => void
 }
 
 interface LightboxImage {
@@ -126,6 +128,7 @@ export function Chat({
   originKey = null,
   reviewStatus,
   onOpenCode,
+  onHandoff,
 }: ChatProps) {
   const draftStorageKey = conversation === null
     ? newConversationDraftStorageKey(project.id, ticketId)
@@ -322,6 +325,9 @@ export function Chat({
                     onImageLoad={scrollToBottomIfFollowing}
                     onSubtaskStatusChange={handleSubtaskStatusChange}
                     onDebriefQuestion={handleDebriefQuestion}
+                    turnFooterAction={conversation !== null && !isRunning ? (
+                      <ContextGauge conversation={conversation} events={events} onHandoff={onHandoff} />
+                    ) : undefined}
                   />
                   {!isRunning && conversation !== null ? (
                     <GuardianLine

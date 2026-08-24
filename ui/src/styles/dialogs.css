@@ -249,6 +249,28 @@ input.field-mono {
   font-size: var(--text-sm);
 }
 
+.handoff-document-tabs {
+  display: flex;
+  gap: var(--space-4);
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.handoff-document-tabs button {
+  padding: var(--space-3) 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.handoff-document-tabs button[aria-selected='true'] {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+}
+
 .handoff-modal-body {
   display: grid;
   gap: var(--space-4);
