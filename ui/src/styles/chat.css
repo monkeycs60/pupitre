@@ -872,6 +872,11 @@
 
 /* Résumé de session : sur la barre de fin de tour, discret tant qu'il n'y a
    rien à cataloguer, accentué dès que des réponses attendent le changelog. */
+.turn-summary-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
 .turn-summary-button {
   display: inline-flex;
   flex: none;

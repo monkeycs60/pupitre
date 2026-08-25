@@ -2717,6 +2717,17 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        const pendingChangelogConversationId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/changelog-review$/,
+        );
+        if (request.method === "GET" && pendingChangelogConversationId !== null) {
+          if (!deps.conversations.get(pendingChangelogConversationId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          return json(requireChangelog(deps).latestProposed(pendingChangelogConversationId));
+        }
+
         const projectChangelogId = routeId(pathname, /^\/api\/projects\/([^/]+)\/changelog$/);
         if (request.method === "GET" && projectChangelogId !== null) {
           const domainId = url.searchParams.get("domainId") ?? undefined;

@@ -58,6 +58,16 @@ export class ChangelogStore {
     return row ? hydrateReview(row) : null;
   }
 
+  latestProposed(conversationId: string): ChangelogReview | null {
+    const row = this.db.query(`
+      SELECT * FROM changelog_reviews
+      WHERE conversation_id = ? AND status = 'proposé'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(conversationId) as Record<string, unknown> | null;
+    return row ? hydrateReview(row) : null;
+  }
+
   listByProject(projectId: string, domainId?: string): Array<Record<string, unknown>> {
     const rows = this.db.query(`
       SELECT dc.*, d.name AS domain_name, cr.conversation_id

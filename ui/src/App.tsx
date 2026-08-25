@@ -17,6 +17,7 @@ import { useQuotas } from './useQuotas'
 import { GitView } from './GitView'
 import {
   getSettings,
+  getPendingChangelogReview,
   listProjectConversations,
   listProjects,
   markConversationRead,
@@ -133,6 +134,7 @@ function App() {
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false)
   const [restartStatus, setRestartStatus] = useState<'idle' | 'running' | 'error'>('idle')
   const [changelogReview, setChangelogReview] = useState<ChangelogReview | null>(null)
+  const [pendingChangelogReview, setPendingChangelogReview] = useState<ChangelogReview | null>(null)
   const { events, connection, retryAt } = useConversationEvents(
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
@@ -150,6 +152,23 @@ function App() {
   const ticketLinks = useTicketLinks(selectedProject?.id)
   const sentryLinks = useSentryLinks(selectedProject?.id)
   useAppNotifications()
+
+  useEffect(() => {
+    let ignore = false
+    if (!selectedConversation?.id) {
+      setPendingChangelogReview(null)
+      return
+    }
+    void getPendingChangelogReview(selectedConversation.id)
+      .then((review) => { if (!ignore) setPendingChangelogReview(review) })
+      .catch(() => { if (!ignore) setPendingChangelogReview(null) })
+    return () => { ignore = true }
+  }, [selectedConversation?.id])
+
+  function handleChangelogReview(review: ChangelogReview) {
+    setPendingChangelogReview(review)
+    setChangelogReview(review)
+  }
 
   useEffect(() => {
     function handleRestartShortcut(event: KeyboardEvent) {
@@ -842,7 +861,8 @@ function App() {
               reviewStatus={fleet.reviewStatus}
               onOpenCode={handleGitSelect}
               onHandoff={() => setShowHandoff(true)}
-              onChangelogReview={setChangelogReview}
+              pendingChangelogReview={pendingChangelogReview}
+              onChangelogReview={handleChangelogReview}
               onSwitchModel={() => setShowSwitchModel(true)}
             />
             {showSwitchModel && selectedConversation !== null ? (
@@ -888,7 +908,11 @@ function App() {
         />
       ) : null}
       {changelogReview ? (
-        <ChangelogReviewDialog review={changelogReview} onClose={() => setChangelogReview(null)} />
+        <ChangelogReviewDialog
+          review={changelogReview}
+          onClose={() => setChangelogReview(null)}
+          onPublished={() => setPendingChangelogReview(null)}
+        />
       ) : null}
       {restartStatus !== 'idle' ? (
         <div className={`app-restart-status ${restartStatus === 'error' ? 'is-error' : ''}`} role={restartStatus === 'error' ? 'alert' : 'status'}>

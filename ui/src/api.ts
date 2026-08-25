@@ -898,6 +898,10 @@ export function publishChangelogReview(
   return fetchJson(`/api/changelog-reviews/${routeId(reviewId)}/publish`, jsonPost({ changes }))
 }
 
+export function getPendingChangelogReview(conversationId: string): Promise<ChangelogReview | null> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/changelog-review`)
+}
+
 export function listProjectChangelog(projectId: string, domainId?: string): Promise<DomainChangeRow[]> {
   const query = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
   return fetchJson(`/api/projects/${routeId(projectId)}/changelog${query}`)

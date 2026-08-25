@@ -203,7 +203,7 @@ export class DebriefRunner {
       provider: "codex" as const,
       model: "gpt-5.6-luna",
       effort: "high",
-      speed: undefined,
+      speed: "fast" as const,
     };
     const partials: string[] = [];
     for (const transcript of transcriptChunks) {

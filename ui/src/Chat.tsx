@@ -58,6 +58,7 @@ interface ChatProps {
   reviewStatus: ReviewStatusSnapshot | null
   onOpenCode: (flagId?: string) => void
   onHandoff: () => void
+  pendingChangelogReview: ChangelogReview | null
   onChangelogReview: (review: ChangelogReview) => void
   onSwitchModel: () => void
 }
@@ -93,9 +94,10 @@ export function hasUncataloguedWork(events: AppEvent[]): boolean {
   return events.slice(lastSummary + 1).some((event) => event.type === 'text-final')
 }
 
-function SessionSummaryAction({ conversationId, uncatalogued, onChangelogReview }: {
+function SessionSummaryAction({ conversationId, uncatalogued, pendingReview, onChangelogReview }: {
   conversationId: string
   uncatalogued: boolean
+  pendingReview: ChangelogReview | null
   onChangelogReview: (review: ChangelogReview) => void
 }) {
   const [isCreating, setIsCreating] = useState(false)
@@ -114,7 +116,14 @@ function SessionSummaryAction({ conversationId, uncatalogued, onChangelogReview 
   }
 
   return (
-    <button
+    <span className="turn-summary-actions">
+      {pendingReview ? (
+        <button type="button" className="turn-summary-button is-catalog" onClick={() => onChangelogReview(pendingReview)}>
+          Reprendre la validation
+          <span className="turn-summary-pill">{pendingReview.changes.filter((change) => change.selected).length}</span>
+        </button>
+      ) : null}
+      <button
       type="button"
       className={`turn-summary-button${uncatalogued ? ' is-catalog' : ''}`}
       onClick={() => void handleClick()}
@@ -131,7 +140,8 @@ function SessionSummaryAction({ conversationId, uncatalogued, onChangelogReview 
       </svg>
       {isCreating ? 'Résumé en cours…' : 'Résumé de session'}
       {!isCreating && uncatalogued ? <span className="turn-summary-pill">changelog</span> : null}
-    </button>
+      </button>
+    </span>
   )
 }
 
@@ -166,6 +176,7 @@ export function Chat({
   reviewStatus,
   onOpenCode,
   onHandoff,
+  pendingChangelogReview,
   onChangelogReview,
   onSwitchModel,
 }: ChatProps) {
@@ -323,11 +334,12 @@ export function Chat({
         <SessionSummaryAction
           conversationId={conversation.id}
           uncatalogued={uncatalogued}
+          pendingReview={pendingChangelogReview}
           onChangelogReview={onChangelogReview}
         />
       </>
     ) : undefined
-  ), [conversation, isRunning, events, uncatalogued, onHandoff, onChangelogReview])
+  ), [conversation, isRunning, events, uncatalogued, pendingChangelogReview, onHandoff, onChangelogReview])
 
   async function handleComposerAction(action: ComposerAction) {
     if (!conversation) return

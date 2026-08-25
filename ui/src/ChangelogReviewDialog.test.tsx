@@ -41,3 +41,18 @@ test('publie les corrections éditées après validation rapide', async () => {
   await waitFor(() => expect(close).toHaveBeenCalled())
   expect(((body?.changes as Array<{ title: string }>)[0]?.title)).toBe('Vue clarifiée')
 })
+
+test('fusionne deux propositions voisines en conservant leur contenu et leurs preuves', () => {
+  const mergeReview: ChangelogReview = {
+    ...review,
+    changes: [
+      review.changes[0]!,
+      { ...review.changes[0]!, id: 'c', groupId: 'g3', title: 'Seed idempotent', description: 'La répétition ne crée pas de doublons.', evidence: ['test seed'] },
+    ],
+  }
+  render(createElement(ChangelogReviewDialog, { review: mergeReview, onClose: () => {} }))
+  fireEvent.click(screen.getByRole('button', { name: 'Fusionner avec la précédente' }))
+  expect(screen.getAllByLabelText('Titre du changement')).toHaveLength(1)
+  expect((screen.getByLabelText('Description du changement') as HTMLTextAreaElement).value).toContain('Seed idempotent')
+  expect(screen.getByText('commit abc · test seed')).toBeTruthy()
+})

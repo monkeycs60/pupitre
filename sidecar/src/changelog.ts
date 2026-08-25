@@ -54,6 +54,7 @@ export class ChangelogService {
       provider: "codex",
       model: "gpt-5.6-luna",
       effort: "high",
+      speed: "fast",
       prompt: proposalPrompt(summary.content_md, domains, snapshot),
     });
     const parsed = parseProposal(raw, domains.map((domain) => ({ id: domain.id, name: domain.name })));
@@ -99,6 +100,7 @@ export class ChangelogService {
         provider: "codex",
         model: "gpt-5.6-luna",
         effort: "high",
+        speed: "fast",
         prompt: skillPrompt(domain.name, currentSkill, nextChangelog),
       })).trim();
       if (!managedBody || managedBody.length > 12_000 || managedBody.includes(MANAGED_START) || managedBody.includes(MANAGED_END)) {
@@ -120,12 +122,19 @@ export class ChangelogService {
   list(projectId: string, domainId?: string): Array<Record<string, unknown>> {
     return this.store.listByProject(projectId, domainId);
   }
+
+  latestProposed(conversationId: string): ChangelogReview | null {
+    return this.store.latestProposed(conversationId);
+  }
 }
 
 function proposalPrompt(summary: string, domains: Array<{ id: string; name: string }>, snapshot: ReturnType<GitProjectService["snapshot"]>): string {
   return [
     "Tu catalogues en français les modifications réellement réalisées pendant une séquence de développement.",
-    "Décompose un ticket en plusieurs entrées si plusieurs capacités ou changements durables ont été livrés.",
+    "Crée par défaut une seule entrée par capacité durable livrée.",
+    "Les garanties techniques d'une même capacité (par exemple idempotence, reprise après échec, validation et nettoyage) restent dans la même entrée : ce ne sont pas des changements autonomes.",
+    "Ne sépare deux entrées que si chacune décrit un comportement ou une capacité autonome qui resterait compréhensible et utile sans l'autre.",
+    "Ne découpe jamais par commit, fichier, étape d'implémentation ou nature ajout/modification/correction.",
     "Inclus les changements fonctionnels, métier, UI, UX, design, accessibilité, API, données, architecture, opérations et capacités d'agents.",
     "Exclus les intentions, plans, tentatives abandonnées et micro-ajustements sans effet durable.",
     "Les fichiers sales non prouvés par le résumé sont ambigus. Une entrée ambiguë doit avoir selected=false.",

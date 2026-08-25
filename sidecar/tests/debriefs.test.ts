@@ -78,7 +78,7 @@ test("un résumé de session ne conserve que les changements concrets", async ()
   });
   const broadcasts: unknown[] = [];
   let capturedPrompt = "";
-  let capturedModel: { provider: string; model: string; effort?: string } | null = null;
+  let capturedModel: { provider: string; model: string; effort?: string; speed?: string } | null = null;
   const runner = new DebriefRunner(
     new DebriefStore(db),
     conversations,
@@ -99,7 +99,7 @@ test("un résumé de session ne conserve que les changements concrets", async ()
   expect(capturedPrompt).toContain("résumé de session");
   expect(capturedPrompt).toContain("Ajoute le résumé court");
   expect(capturedModel).toEqual(expect.objectContaining({
-    provider: "codex", model: "gpt-5.6-luna", effort: "high",
+    provider: "codex", model: "gpt-5.6-luna", effort: "high", speed: "fast",
   }));
   expect(conversations.listEvents(conversation.id).at(-1)).toEqual(
     expect.objectContaining({ type: "session-summary-ref", summaryId: summary.id }),

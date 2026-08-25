@@ -30,7 +30,7 @@ function setup(generator: import("../src/debriefs").DebriefGenerator = async (in
 }
 
 test("propose avec Luna high et laisse les changements ambigus décochés", async () => {
-  let generation: { provider: string; model: string; effort?: string } | null = null;
+  let generation: { provider: string; model: string; effort?: string; speed?: string } | null = null;
   const context = setup(async (input) => {
     generation = input;
     return JSON.stringify([
@@ -42,12 +42,21 @@ test("propose avec Luna high et laisse les changements ambigus décochés", asyn
     id: "summary-1", conversation_id: context.conversation.id, event_id_from: 1,
     event_id_to: 4, content_md: "## Implémenté\n- Domaines visibles.", created_at: new Date().toISOString(),
   });
-  expect(generation).toEqual(expect.objectContaining({ provider: "codex", model: "gpt-5.6-luna", effort: "high" }));
+  expect(generation).toEqual(expect.objectContaining({ provider: "codex", model: "gpt-5.6-luna", effort: "high", speed: "fast" }));
   expect(review.changes.map((change) => change.selected)).toEqual([true, false]);
   expect(await context.service.propose(context.conversation.id, {
     id: "summary-1", conversation_id: context.conversation.id, event_id_from: 1,
     event_id_to: 4, content_md: "ignoré", created_at: review.createdAt,
   })).toEqual(review);
+  context.db.close();
+});
+
+test("retrouve la dernière validation non publiée d'une conversation", () => {
+  const context = setup();
+  const first = context.store.create({ conversationId: context.conversation.id, summaryId: "summary-1", eventIdFrom: 1, eventIdTo: 2, changes: [] });
+  const second = context.store.create({ conversationId: context.conversation.id, summaryId: "summary-2", eventIdFrom: 3, eventIdTo: 4, changes: [] });
+  context.store.publish(second.id, []);
+  expect(context.service.latestProposed(context.conversation.id)?.id).toBe(first.id);
   context.db.close();
 });
 
