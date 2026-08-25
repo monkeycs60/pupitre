@@ -1,5 +1,54 @@
 import { expect, test } from "bun:test";
-import { readClaudeUsage } from "../src/adapters/claude-usage";
+import { readClaudeUsage, refreshClaudeSession } from "../src/adapters/claude-usage";
+
+test("renouvelle réellement le jeton OAuth Claude et le persiste", async () => {
+  let credentials = {
+    untouched: "kept",
+    claudeAiOauth: {
+      accessToken: "expired",
+      refreshToken: "refresh-before",
+      expiresAt: 1,
+      scopes: ["user:inference", "user:profile"],
+    },
+  };
+  let requestBody: Record<string, unknown> | null = null;
+
+  const refreshed = await refreshClaudeSession({
+    readCredentials: () => structuredClone(credentials),
+    fetchToken: async (body) => {
+      requestBody = body;
+      return Response.json({
+        access_token: "renewed",
+        refresh_token: "refresh-after",
+        expires_in: 3_600,
+        refresh_token_expires_in: 86_400,
+        scope: "user:inference user:profile",
+      });
+    },
+    writeCredentials: (next) => {
+      credentials = next as typeof credentials;
+    },
+    now: () => 10_000,
+  });
+
+  expect(refreshed).toBe(true);
+  expect(requestBody).toMatchObject({
+    grant_type: "refresh_token",
+    refresh_token: "refresh-before",
+    client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+    scope: "user:inference user:profile",
+  });
+  expect(credentials).toEqual({
+    untouched: "kept",
+    claudeAiOauth: {
+      accessToken: "renewed",
+      refreshToken: "refresh-after",
+      expiresAt: 3_610_000,
+      refreshTokenExpiresAt: 86_410_000,
+      scopes: ["user:inference", "user:profile"],
+    },
+  });
+});
 
 test("renouvelle la session Claude et retente après un access token expiré", async () => {
   let token = "expired";
