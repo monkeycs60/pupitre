@@ -212,6 +212,56 @@ function mermaidSource(node: any): string | null {
   return code.children?.[0]?.value ?? null
 }
 
+async function copyText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+  const input = document.createElement('textarea')
+  input.value = text
+  input.style.position = 'fixed'
+  input.style.opacity = '0'
+  document.body.appendChild(input)
+  input.select()
+  const copied = document.execCommand('copy')
+  input.remove()
+  if (!copied) throw new Error('copie refusée')
+}
+
+function CopyablePre({ node, children, ...props }: any) {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const source = nodeText(node).replace(/\n$/, '')
+  const label = copyState === 'copied' ? 'Copié' : copyState === 'error' ? 'Copie impossible' : 'Copier le bloc'
+
+  return (
+    <div className="markdown-code-block">
+      <button
+        type="button"
+        className={`markdown-code-copy${copyState === 'copied' ? ' is-copied' : ''}`}
+        aria-label={label}
+        title={label}
+        onClick={() => {
+          void copyText(source)
+            .then(() => setCopyState('copied'))
+            .catch(() => setCopyState('error'))
+        }}
+      >
+        {copyState === 'copied' ? (
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3.5 8.5 6.5 11.5 12.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="5.25" y="5.25" width="7.5" height="7.5" rx="1.25" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M10.5 5.25V4.5A1.25 1.25 0 0 0 9.25 3.25H4.5A1.25 1.25 0 0 0 3.25 4.5v4.75A1.25 1.25 0 0 0 4.5 10.5h.75" stroke="currentColor" strokeWidth="1.2" />
+          </svg>
+        )}
+      </button>
+      <pre {...props}>{children}</pre>
+    </div>
+  )
+}
+
 const COMPONENTS = {
   /** Les tableaux larges défilent au lieu de déborder de la bulle. */
   table: ({ node: _node, ...props }: any) => (
@@ -234,7 +284,7 @@ const COMPONENTS = {
   pre: ({ node, children, ...props }: any) => {
     const chart = mermaidSource(node)
     if (chart !== null) return <Mermaid chart={chart} />
-    return <pre {...props}>{children}</pre>
+    return <CopyablePre node={node} {...props}>{children}</CopyablePre>
   },
 }
 

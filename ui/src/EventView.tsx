@@ -6,23 +6,13 @@ import { mediaUrl } from './transport'
 import { useNow } from './useNow'
 import { AttachmentPreview } from './AttachmentPreview'
 import { summarizeTurnError } from './turnError'
+import { toolPresentation } from './toolPresentation'
 
 interface EventViewProps {
   block: EventBlock
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
   turnFooterAction?: ReactNode
-}
-
-function formatPreValue(value: unknown): string {
-  if (typeof value === 'string') return value
-  if (value === undefined) return ''
-
-  try {
-    return JSON.stringify(value, null, 2) ?? String(value)
-  } catch {
-    return String(value)
-  }
 }
 
 export function ImageGallery({
@@ -223,38 +213,20 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: Ev
         </article>
       )
 
-    case 'tool':
+    case 'tool': {
+      const presentation = toolPresentation(block)
+      const running = block.output === undefined
       return (
-        <details className="tool-card">
-          <summary>
-            <span className="tool-card-chevron" aria-hidden="true" />
-            <span className="tool-card-name">{block.toolName}</span>
-            {block.output === undefined ? (
-              <span className="tool-card-state">en cours</span>
-            ) : null}
-          </summary>
-          <div className="tool-card-content">
-            <div className="tool-section">
-              <div className="tool-section-label">Entrée</div>
-              <pre>{formatPreValue(block.input)}</pre>
-            </div>
-            {block.output !== undefined ? (
-              <div className="tool-section">
-                <div className="tool-section-label">Sortie</div>
-                <pre>{block.output}</pre>
-              </div>
-            ) : (
-              <p className="tool-running">Exécution en cours…</p>
-            )}
-            <ImageGallery
-              images={block.images}
-              label={`Image produite par ${block.toolName}`}
-              onImageOpen={onImageOpen}
-              onImageLoad={onImageLoad}
-            />
-          </div>
-        </details>
+        <div className={`tool-activity${running ? ' is-running' : ''}`} role={running ? 'status' : undefined}>
+          <svg className="tool-activity-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2.75 3.25h3.5l1 1.25h6v8.25h-10.5z" stroke="currentColor" strokeWidth="1.15" strokeLinejoin="round" />
+            <path d="m6 7 1.5 1.5L6 10M9 10h2" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>{presentation.label}{running ? ' en cours' : ' terminée'}</span>
+          {presentation.detail ? <span className="tool-activity-detail" title={presentation.detail}>{presentation.detail}</span> : null}
+        </div>
       )
+    }
 
     case 'turn-footer': {
       return <TurnFooter block={block} action={turnFooterAction} />

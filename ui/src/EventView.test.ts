@@ -42,3 +42,26 @@ test('le pied de tour expose seulement le statut et la durée du run', () => {
   expect(document.body.textContent).not.toContain('+0 min')
   cleanup()
 })
+
+test('un outil est une activité autonome sans JSON ni sortie brute', () => {
+  const { container } = render(createElement(EventView, {
+    block: {
+      kind: 'tool',
+      id: 'tool-1',
+      toolId: '1',
+      toolName: 'Read',
+      input: { file_path: '/tmp/SKILL.md', secret: 'ne doit pas sortir' },
+      output: 'contenu technique à masquer',
+      images: [],
+    },
+    onImageOpen: () => {},
+    onImageLoad: () => {},
+  }))
+
+  expect(screen.getByText('Lecture terminée')).toBeTruthy()
+  expect(screen.getByText('SKILL.md')).toBeTruthy()
+  expect(container.querySelector('.tool-activity')).toBeTruthy()
+  expect(document.body.textContent).not.toContain('secret')
+  expect(document.body.textContent).not.toContain('contenu technique')
+  cleanup()
+})

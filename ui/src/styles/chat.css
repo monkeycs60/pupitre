@@ -319,9 +319,46 @@
   margin: 0;
 }
 
+.assistant-message .markdown-code-block {
+  position: relative;
+  margin: 0 0 var(--space-3);
+}
+
+.assistant-message .markdown-code-block pre {
+  margin: 0;
+}
+
+.markdown-code-copy {
+  position: absolute;
+  z-index: 1;
+  top: 7px;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-faint);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  opacity: 0.72;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+}
+
+.markdown-code-copy:hover,
+.markdown-code-copy:focus-visible {
+  color: var(--text);
+  background: var(--bg-hover);
+  opacity: 1;
+}
+
+.markdown-code-copy.is-copied { color: var(--ok); }
+
 .assistant-message pre {
   max-height: 360px;
-  padding: var(--space-3);
+  padding: var(--space-3) 46px var(--space-3) var(--space-3);
   overflow: auto;
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
@@ -368,159 +405,49 @@
   }
 }
 
-/* --- Cartes outil --------------------------------------------------------- */
+/* --- Activité des outils -------------------------------------------------- */
 
-.tool-batch {
-  margin: var(--space-1) 0 var(--space-3);
-  overflow: hidden;
-  background: color-mix(in srgb, var(--bg-raised) 72%, transparent);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-md);
-}
-
-.tool-batch > summary {
+.tool-activity {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 30px;
-  padding: var(--space-1) var(--space-3);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  list-style: none;
-  cursor: pointer;
-  user-select: none;
-}
-
-.tool-batch > summary::-webkit-details-marker { display: none; }
-.tool-batch > summary:hover { color: var(--text); background: var(--bg-hover); }
-.tool-batch[open] > summary .tool-card-chevron { transform: rotate(90deg); }
-
-.tool-batch-content {
-  display: grid;
-  gap: 0;
-  padding: 0 var(--space-2) var(--space-2);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.tool-batch-content .tool-card {
-  margin: var(--space-2) 0 0;
-}
-
-.tool-card {
-  margin: var(--space-1) 0 var(--space-4);
-  overflow: hidden;
-  background: var(--bg-raised);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-md);
-}
-
-.tool-card summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 32px;
-  padding: var(--space-1) var(--space-3);
+  min-width: 0;
+  min-height: 26px;
+  margin: 0 0 var(--space-1);
   color: var(--text-muted);
   font-size: var(--text-sm);
-  list-style: none;
-  cursor: pointer;
-  user-select: none;
-  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
 
-.tool-card summary::-webkit-details-marker {
-  display: none;
-}
-
-.tool-card summary:hover {
-  color: var(--text);
-  background: var(--bg-hover);
-}
-
-.tool-card-chevron {
+.tool-activity-icon {
   flex: none;
-  width: 0;
-  height: 0;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 5px solid var(--text-faint);
-  transition: transform var(--dur-fast) var(--ease);
+  color: var(--text-faint);
 }
 
-.tool-card[open] > summary .tool-card-chevron {
-  transform: rotate(90deg);
-}
-
-.tool-card-name {
+.tool-activity > span:first-of-type,
+.tool-activity-detail {
+  min-width: 0;
   overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tool-card-state {
-  flex: none;
-  margin-left: auto;
-  color: var(--accent);
-  font-size: var(--text-xs);
-}
-
-.tool-card-content {
-  display: grid;
-  gap: var(--space-3);
-  padding: 0 var(--space-3) var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.tool-card[open] .tool-card-content,
-.subtask-prompt[open] p {
-  animation: detail-reveal var(--dur) var(--ease);
-}
-
-@keyframes detail-reveal {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-.tool-section:first-child {
-  padding-top: var(--space-3);
-}
-
-.tool-section-label {
-  margin-bottom: var(--space-1);
+.tool-activity-detail {
   color: var(--text-faint);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.tool-section pre {
-  max-height: 260px;
-  padding: var(--space-2) var(--space-3);
-  margin: 0;
-  overflow: auto;
-  color: var(--text);
   font-family: var(--font-mono);
-  font-size: var(--text-code);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-sm);
+  font-size: var(--text-xs);
 }
 
-.tool-running {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+.tool-activity.is-running > span:first-of-type {
+  color: transparent;
+  background: linear-gradient(100deg, var(--text-faint) 20%, var(--text) 45%, var(--text-faint) 70%);
+  background-size: 220% 100%;
+  background-clip: text;
+  animation: tool-shimmer 1.8s linear infinite;
+}
+
+@keyframes tool-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -120% 0; }
 }
 
 /* --- Images du fil -------------------------------------------------------- */
@@ -1196,6 +1123,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .assistant-message.is-streaming > :last-child::after,
+  .tool-activity.is-running > span:first-of-type,
   .running-dots i {
     animation: none;
   }
