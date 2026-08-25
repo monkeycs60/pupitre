@@ -142,7 +142,8 @@ export class GitProjectService {
     }
 
     const existing = this.worktrees(cwd).find((item) => item.branch === branch);
-    if (existing) return existing;
+    if (existing && existsSync(existing.path)) return existing;
+    if (existing) this.runGit(cwd, ["worktree", "prune"]);
 
     const directory = join(this.worktreeRoot, projectId, branch.replaceAll("/", "-"));
     if (!resolve(directory).startsWith(resolve(this.worktreeRoot))) {

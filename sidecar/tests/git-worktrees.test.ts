@@ -123,6 +123,17 @@ test("réutilise le worktree existant d'une branche plutôt que d'échouer", () 
   expect(second.path).toBe(first.path);
 });
 
+test("recrée un worktree dont Git garde une inscription obsolète", () => {
+  const first = git.createWorktree(projectId, { branch: "ticket-42" });
+  rmSync(first.path, { recursive: true, force: true });
+
+  const recreated = git.createWorktree(projectId, { branch: "ticket-42" });
+
+  expect(recreated.path).toBe(first.path);
+  expect(existsSync(recreated.path)).toBe(true);
+  expect(recreated.branch).toBe("ticket-42");
+});
+
 test("s'attache à une branche déjà existante sans la recréer", () => {
   run("branch", "deja-la");
   const created = git.createWorktree(projectId, { branch: "deja-la" });
