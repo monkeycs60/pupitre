@@ -8,6 +8,7 @@ import { TestInventoryCard } from './TestInventoryCard'
 import { HtmlDocumentCard } from './HtmlDocumentCard'
 import { memo } from 'react'
 import type { ReactNode } from 'react'
+import type { EventBlock } from './eventBlocks'
 
 interface EventStreamProps {
   blocks: StreamBlock[]
@@ -40,6 +41,32 @@ function EventStreamImpl({
 
   while (index < blocks.length) {
     const block = blocks[index]
+    if (block.kind === 'tool') {
+      const tools: Array<Extract<EventBlock, { kind: 'tool' }>> = []
+      while (index < blocks.length && blocks[index].kind === 'tool') {
+        tools.push(blocks[index] as Extract<EventBlock, { kind: 'tool' }>)
+        index += 1
+      }
+      const running = tools.some((tool) => tool.output === undefined)
+      rendered.push(
+        <details
+          className="tool-activity-group"
+          key={`tool-activity-group-${tools[0].id}-${running ? 'running' : 'done'}`}
+          open={running}
+        >
+          <summary>
+            <span className="tool-activity-chevron" aria-hidden="true" />
+            <span>{tools.length} action{tools.length > 1 ? 's' : ''} {running ? 'en cours' : 'effectuée'}{!running && tools.length > 1 ? 's' : ''}</span>
+          </summary>
+          <div className="tool-activity-list">
+            {tools.map((tool) => (
+              <EventView key={tool.id} block={tool} onImageOpen={onImageOpen} onImageLoad={onImageLoad} />
+            ))}
+          </div>
+        </details>,
+      )
+      continue
+    }
     rendered.push(
       block.kind === 'subtask' ? (
           <SubtaskCard
