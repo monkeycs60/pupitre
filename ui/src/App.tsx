@@ -14,7 +14,6 @@ import type { Attachment, Conversation, DocumentArtifact, Project } from './type
 import type { ChangelogReview } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
-import { GitView } from './GitView'
 import {
   getSettings,
   getPendingChangelogReview,
@@ -48,7 +47,6 @@ import { DesignView } from './DesignView'
 import { DashboardView } from './DashboardView'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
-import { SurfaceSwitch } from './SurfaceSwitch'
 import { ConversationInstruction } from './ConversationInstruction'
 import { SentryLinkIcon, TicketLinkIcons } from './TicketLinkIcons'
 import { useSentryLinks, useTicketLinks } from './ticketLinks'
@@ -121,7 +119,6 @@ function App() {
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
   const [memoryDirty, setMemoryDirty] = useState(false)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
-  const [focusedFlagId, setFocusedFlagId] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const [locationRestored, setLocationRestored] = useState(false)
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
@@ -216,10 +213,6 @@ function App() {
       .then(() => setRailReadVersion((current) => current + 1))
       .catch(() => {})
   }, [workspaceView, selectedConversationId, selectedConversationDigestTurn, selectedConversationLastReadTurn])
-  const reviewOpenCount = fleet.reviewStatus
-    ? fleet.reviewStatus.openBySeverity.red + fleet.reviewStatus.openBySeverity.orange + fleet.reviewStatus.openBySeverity.grey
-    : 0
-
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
   }, [sidebarWidth])
@@ -461,14 +454,6 @@ function App() {
     setConversationListVersion((current) => current + 1)
   }
 
-  function handleGitSelect(flagId?: string) {
-    if (!confirmLeaveMemory()) return
-    if (selectedProject === null) return
-    setFocusedFlagId(flagId ?? null)
-    setWorkspaceView('git')
-    setShowSwitchModel(false)
-  }
-
   function handleCostsSelect() {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
@@ -570,7 +555,6 @@ function App() {
     if (!selectedConversation) return
     if (action === 'review') {
       await startReview({ conversationId: selectedConversation.id, scope: 'worktree' })
-      handleGitSelect()
       return
     }
     setWorkspaceView('conversations')
@@ -636,10 +620,7 @@ function App() {
         settings: 'Paramètres',
       }[workspaceView]
 
-  // Git est un calque de la conversation ouverte, pas une destination qui la
-  // remplace : sa liste reste visible pour préserver le contexte de travail.
   const showSidebar = workspaceView === 'conversations'
-    || (workspaceView === 'git' && selectedConversation !== null)
 
   return (
     <ActionFormatContext.Provider value={actionFormat}>
@@ -668,7 +649,6 @@ function App() {
         workspaceView={workspaceView}
         onConversationsSelect={handleConversationsSelect}
         onDashboardSelect={handleDashboardSelect}
-        onGitSelect={handleGitSelect}
         onDocumentsSelect={handleDocumentsSelect}
         onDesignSelect={handleDesignSelect}
         onCostsSelect={handleCostsSelect}
@@ -679,7 +659,6 @@ function App() {
         onHelpSelect={() => handleHelpSelect()}
         onProgressSelect={handleProgressSelect}
         onSettingsSelect={handleSettingsSelect}
-        pendingReviews={reviewOpenCount}
         fleetActive={fleet.items.length}
         activeProjectIds={[...new Set(fleet.items.map((item) => item.projectId))]}
       />
@@ -765,14 +744,6 @@ function App() {
             onStartConversation={handleStartFromTicket}
             onOpenSettings={() => setProjectSettingsOpen(true)}
           />
-        ) : workspaceView === 'git' ? (
-          <GitView
-            project={selectedProject}
-            conversation={selectedConversation}
-            focusedFlagId={focusedFlagId}
-            reviewStatus={fleet.reviewStatus}
-            onConversationBack={handleConversationsSelect}
-          />
         ) : workspaceView === 'costs' ? (
           <CostsView
             project={selectedProject}
@@ -824,13 +795,6 @@ function App() {
                 })()}
               </div>
               {selectedConversation !== null ? (
-                <SurfaceSwitch
-                  active="conversation"
-                  onConversation={handleConversationsSelect}
-                  onCode={() => handleGitSelect()}
-                />
-              ) : null}
-              {selectedConversation !== null ? (
                 <div className="header-actions">
                   <ResumeCommandButton conversation={selectedConversation} />
                 </div>
@@ -859,7 +823,6 @@ function App() {
               originType={conversationSeed?.originType ?? null}
               originKey={conversationSeed?.originKey ?? null}
               reviewStatus={fleet.reviewStatus}
-              onOpenCode={handleGitSelect}
               onHandoff={() => setShowHandoff(true)}
               pendingChangelogReview={pendingChangelogReview}
               onChangelogReview={handleChangelogReview}

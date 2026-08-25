@@ -164,6 +164,15 @@ if (process.argv.includes("--pupitre-mcp")) {
     quotas,
     undefined,
     subtasks,
+    (conversationId, review) => {
+      const event = {
+        type: "review-report-ref" as const,
+        reviewId: review.id,
+        createdAt: review.updated_at,
+      };
+      const id = conversations.appendEvent(conversationId, event);
+      events.broadcast(conversationId, { ...event, id });
+    },
   );
   const debriefs = new DebriefRunner(
     new DebriefStore(db),

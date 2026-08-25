@@ -15,7 +15,6 @@ interface RailProps {
   workspaceView: WorkspaceView
   onConversationsSelect: () => void
   onDashboardSelect: () => void
-  onGitSelect: () => void
   onDocumentsSelect: () => void
   onDesignSelect: () => void
   onCostsSelect: () => void
@@ -26,7 +25,6 @@ interface RailProps {
   onHelpSelect: () => void
   onProgressSelect: () => void
   onSettingsSelect: () => void
-  pendingReviews?: number
   /** Runs actifs (tours + sub-agents + routines), pour la pastille Fleet. */
   fleetActive?: number
   /** Projets ayant au moins un run actif dans Fleet. */
@@ -37,7 +35,6 @@ type NavName =
   | 'conversations'
   | 'fleet'
   | 'dashboard'
-  | 'git'
   | 'documents'
   | 'design'
   | 'progress'
@@ -57,14 +54,6 @@ const NAV_PATHS: Record<NavName, React.ReactNode> = {
   ),
   fleet: <path d="M2 8h3l1.5-4L9 12l1.5-4H14" />,
   dashboard: <path d="M2 3h5v5H2zM9 3h5v3H9zM9 8h5v5H9zM2 10h5v3H2z" />,
-  git: (
-    <>
-      <circle cx="5" cy="4" r="1.5" />
-      <circle cx="11" cy="12" r="1.5" />
-      <circle cx="5" cy="12" r="1.5" />
-      <path d="M5 5.5v5M6.5 4H8a3 3 0 0 1 3 3v3.5" />
-    </>
-  ),
   documents: (
     <>
       <path d="M3 2.5h6l3 3V14H3Z" />
@@ -153,7 +142,6 @@ export function Rail({
   workspaceView,
   onConversationsSelect,
   onDashboardSelect,
-  onGitSelect,
   onDocumentsSelect,
   onDesignSelect,
   onCostsSelect,
@@ -164,7 +152,6 @@ export function Rail({
   onHelpSelect,
   onProgressSelect,
   onSettingsSelect,
-  pendingReviews = 0,
   fleetActive = 0,
   activeProjectIds = [],
 }: RailProps) {
@@ -232,7 +219,6 @@ export function Rail({
     },
     { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive },
     { name: 'dashboard', label: 'Tableau de bord', view: 'dashboard', onClick: onDashboardSelect, needsProject: true },
-    { name: 'git', label: 'Git', view: 'git', onClick: onGitSelect, needsProject: true, badge: pendingReviews },
     { name: 'documents', label: 'Documents', view: 'documents', onClick: onDocumentsSelect },
     { name: 'design', label: 'Claude Design', view: 'design', onClick: onDesignSelect },
     { name: 'progress', label: 'Progression', view: 'progress', onClick: onProgressSelect },

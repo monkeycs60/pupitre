@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { dispatchAllFlags, dispatchGroupedFlags, getConversationDiff, listProjectReviews } from './api'
+import { getConversationDiff, listProjectReviews } from './api'
 import { isScanRunning } from './reviewStatus'
 import type { Conversation, Project, Review, ReviewStatusSnapshot } from './types'
 
@@ -7,12 +7,10 @@ interface GuardianLineProps {
   conversation: Conversation
   project: Project
   reviewStatus: ReviewStatusSnapshot | null
-  onOpenCode: (flagId?: string) => void
   onRelire: () => void
 }
 
 type Variant = 'idle' | 'running' | 'clean' | 'warn' | 'block' | 'stale'
-type CorrectionMode = 'grouped' | 'individual'
 type DiffState =
   | { status: 'pending' }
   | { status: 'error' }
@@ -61,12 +59,9 @@ function stateLabel(review: Review | null, verified: boolean, diffChanged: boole
   return `${findingsSummary(review)} · à relire`
 }
 
-export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, onRelire }: GuardianLineProps) {
+export function GuardianLine({ conversation, project, reviewStatus, onRelire }: GuardianLineProps) {
   const [review, setReview] = useState<Review | null>(null)
   const [liveDiff, setLiveDiff] = useState<DiffState>({ status: 'pending' })
-  const [correcting, setCorrecting] = useState(false)
-  const [correctionMode, setCorrectionMode] = useState<CorrectionMode>('grouped')
-  const [correctionError, setCorrectionError] = useState<string | null>(null)
   const running = isScanRunning(reviewStatus)
   const wasRunning = useRef(running)
   // Focus et visibilité peuvent relancer un chargement pendant qu'un autre
@@ -132,74 +127,12 @@ export function GuardianLine({ conversation, project, reviewStatus, onOpenCode, 
     ? `relit · zone ${reviewStatus.running.zoneDone}/${reviewStatus.running.zoneTotal}`
     : stateLabel(review, reviewedCurrentDiff, diffChanged)
   const variant = variantFor(review, running, unverified)
-  const openFlags = review?.flags.filter((flag) => flag.status === 'open') ?? []
-
-  async function correctOpenFlags() {
-    if (!review || openFlags.length === 0 || correcting) return
-    const scope = correctionMode === 'grouped'
-      ? `Lancer une correction groupée pour ${openFlags.length} erreur${openFlags.length > 1 ? 's' : ''} avec un seul agent ?`
-      : `Lancer ${openFlags.length} agents, un par erreur ?`
-    // Le diff a bougé depuis la relecture : les signalements peuvent porter sur
-    // du code qui n'existe plus. On le dit avant de lâcher un agent dessus.
-    const confirmation = diffChanged
-      ? `Le code a changé depuis la relecture : ces signalements peuvent être périmés.\n\n${scope}`
-      : scope
-    if (!window.confirm(confirmation)) return
-    setCorrecting(true)
-    setCorrectionError(null)
-    try {
-      const { flagIds } = correctionMode === 'grouped'
-        ? await dispatchGroupedFlags(review.id, ['red', 'orange', 'grey'])
-        : await dispatchAllFlags(review.id, ['red', 'orange', 'grey'])
-      // Le serveur seul sait ce qu'il a pris : un flag laissé de côté doit
-      // rester visiblement ouvert.
-      const dispatchedIds = new Set(flagIds)
-      setReview((current) => current === null ? null : {
-        ...current,
-        flags: current.flags.map((flag) => dispatchedIds.has(flag.id)
-          ? { ...flag, status: 'agent_running' }
-          : flag),
-      })
-    } catch (reason) {
-      setCorrectionError(reason instanceof Error ? reason.message : 'Impossible de lancer les corrections')
-    } finally {
-      setCorrecting(false)
-    }
-  }
-
   return <div className={`guardian-line is-${variant}`} id="guardian-line" role="group" aria-label="Gardien">
     <span className="guardian-line-status" aria-hidden="true">
       {running ? <span className="guardian-line-dots"><i /><i /><i /></span> : <GuardianShield />}
     </span>
     <strong className="guardian-line-title">Gardien</strong>
-    <span className="guardian-line-meta" title={correctionError ?? (diffChanged ? 'Le diff a changé depuis la relecture.' : reviewedCurrentDiff ? 'Déjà relu à ce stade précis.' : undefined)}>{correctionError ?? label}</span>
+    <span className="guardian-line-meta" title={diffChanged ? 'Le diff a changé depuis la relecture.' : reviewedCurrentDiff ? 'Déjà relu à ce stade précis.' : undefined}>{label}</span>
     <button type="button" className="guardian-line-action" onClick={onRelire} disabled={running}>Relire</button>
-    {openFlags.length > 0 ? (
-      <div className="guardian-line-correction">
-        {openFlags.length > 1 ? (
-          <select
-            className="guardian-line-correction-mode"
-            aria-label="Mode de correction"
-            value={correctionMode}
-            onChange={(event) => setCorrectionMode(event.target.value as CorrectionMode)}
-            disabled={running || correcting}
-            title="Correction groupée : un seul agent. Une par erreur : un agent par signalement."
-          >
-            <option value="grouped">Ensemble · 1 agent</option>
-            <option value="individual">Séparément · {openFlags.length} agents</option>
-          </select>
-        ) : null}
-        <button
-          type="button"
-          className="guardian-line-action guardian-line-correction-button"
-          aria-label={openFlags.length === 1 ? 'Corriger l’erreur' : `Corriger les ${openFlags.length} erreurs`}
-          onClick={() => void correctOpenFlags()}
-          disabled={running || correcting}
-        >
-          {correcting ? 'Lancement…' : 'Corriger'}
-        </button>
-      </div>
-    ) : null}
-    <button type="button" className="guardian-line-action" onClick={() => onOpenCode()}>Ouvrir le code</button>
   </div>
 }

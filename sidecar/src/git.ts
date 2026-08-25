@@ -14,6 +14,14 @@ const MAX_COMMITS = 200;
  */
 const SAFE_BRANCH = /^[A-Za-z0-9._/-]+$/;
 
+function normalizeRemoteUrl(value: string | null): string | null {
+  if (!value) return null;
+  const ssh = value.match(/^git@([^:]+):(.+)$/);
+  const web = ssh ? `https://${ssh[1]}/${ssh[2]}` : value.replace(/^ssh:\/\/git@/, "https://");
+  const normalized = web.replace(/\.git$/, "").replace(/\/$/, "");
+  return /^https?:\/\//.test(normalized) ? normalized : null;
+}
+
 export class GitProjectError extends Error {}
 
 export interface GitGuardianReview {
@@ -107,6 +115,15 @@ export interface GitCommitResult {
   sha: string;
   message: string;
   paths: string[];
+}
+
+export interface GitPushCommit {
+  sha: string;
+  subject: string;
+  authoredAt: string;
+  parent: string | null;
+  remoteUrl: string | null;
+  repositoryPath: string;
 }
 
 export interface GitTurnTracking {
@@ -316,6 +333,31 @@ export class GitProjectService {
       incoming,
       conflicts,
     };
+  }
+
+  conversationPushes(projectId: string, conversationId: string, requestedCwd?: string | null): GitPushCommit[] {
+    const cwd = this.workspacePath(projectId, requestedCwd);
+    if (!this.isGitRepository(cwd)) return [];
+    const pushed = new Set((this.optionalGit(cwd, ["rev-list", "--remotes"]) ?? "").split("\n").filter(Boolean));
+    const remoteUrl = normalizeRemoteUrl(this.optionalGit(cwd, ["remote", "get-url", "origin"])?.trim() ?? null);
+    const links = this.commitLinks(projectId);
+    const commits = this.parseCommits(this.runGit(cwd, [
+      "log", "-z", "--all", "--topo-order", `--max-count=${MAX_COMMITS}`,
+      "--date=iso-strict", "--format=%H%x00%P%x00%D%x00%an%x00%aI%x00%s",
+    ]));
+    return commits
+      .filter((commit) => pushed.has(commit.sha) && links.get(commit.sha)?.some((item) => item.id === conversationId))
+      .map((commit) => ({
+        sha: commit.sha,
+        subject: commit.subject,
+        authoredAt: commit.authoredAt,
+        parent: commit.parents[0] ?? null,
+        remoteUrl: remoteUrl
+          ? `${remoteUrl}${new URL(remoteUrl).hostname.includes("gitlab") ? "/-/commit/" : "/commit/"}${commit.sha}`
+          : null,
+        repositoryPath: cwd,
+      }))
+      .reverse();
   }
 
   async workingTreeDiff(projectId: string, requestedCwd?: string | null): Promise<GitDiff> {

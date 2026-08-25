@@ -8,6 +8,7 @@ import type {
   DashboardIntegration,
   GitDiff,
   GitCommitResult,
+  GitPushCommit,
   GitSnapshot,
   FleetItem,
   IntegrationType,
@@ -1027,6 +1028,10 @@ export function getConversationDiff(
   signal?: AbortSignal,
 ): Promise<GitDiff> {
   return fetchJson(`/api/conversations/${routeId(conversationId)}/diff`, { signal })
+}
+
+export function listConversationPushes(conversationId: string, signal?: AbortSignal): Promise<GitPushCommit[]> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/pushes`, { signal })
 }
 
 export function startReview(input: StartReviewInput): Promise<Review> {

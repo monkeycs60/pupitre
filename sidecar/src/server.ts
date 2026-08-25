@@ -3169,6 +3169,20 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        const conversationPushesId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/pushes$/,
+        );
+        if (request.method === "GET" && conversationPushesId !== null) {
+          const conversation = deps.conversations.get(conversationPushesId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          return json(deps.git.conversationPushes(
+            conversation.project_id,
+            conversation.id,
+            conversation.worktree_path,
+          ));
+        }
+
         const conversationHtmlDocumentsId = routeId(
           pathname,
           /^\/api\/conversations\/([^/]+)\/(?:html-documents|documents)$/,

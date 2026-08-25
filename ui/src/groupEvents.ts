@@ -52,6 +52,13 @@ export interface HtmlDocumentBlock {
   expiresAt: string | null
 }
 
+export interface ReviewReportBlock {
+  kind: 'review-report'
+  id: string
+  reviewId: string
+  createdAt: string
+}
+
 export type StreamBlock =
   | EventBlock
   | SubtaskBlock
@@ -59,6 +66,7 @@ export type StreamBlock =
   | SessionSummaryBlock
   | TestInventoryBlock
   | HtmlDocumentBlock
+  | ReviewReportBlock
 
 function lineCount(text: string): number {
   return text.length === 0 ? 0 : text.split('\n').length
@@ -411,6 +419,15 @@ export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): 
         }
         break
       }
+      case 'review-report-ref':
+        assistant = null
+        blocks.push({
+          kind: 'review-report',
+          id: `review-report-${eventKey}-${event.reviewId}`,
+          reviewId: event.reviewId,
+          createdAt: event.createdAt,
+        })
+        break
       case 'usage': {
         const footer = ensureTurnFooter()
         footer.usage = {

@@ -130,14 +130,9 @@ test('un diff modifié depuis la relecture signale la péremption', async () => 
     onRelire: () => undefined,
   }))
 
-  const button = await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })
   await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('à relire'))
   expect(document.getElementById('guardian-line')?.textContent).not.toContain('✓ relu')
-  expect((button as HTMLButtonElement).disabled).toBe(false)
-  const mode = screen.getByRole('combobox', { name: 'Mode de correction' }) as HTMLSelectElement
-  expect(mode.disabled).toBe(false)
-  fireEvent.change(mode, { target: { value: 'individual' } })
-  expect(mode.value).toBe('individual')
+  expect(screen.queryByRole('button', { name: /Corriger/ })).toBeNull()
 })
 
 test('un diff live illisible affiche la review mais la déclare à relire', async () => {
@@ -156,9 +151,9 @@ test('un diff live illisible affiche la review mais la déclare à relire', asyn
     onRelire: () => undefined,
   }))
 
-  expect(await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })).toBeDefined()
   // Un diff qu'on n'a pas pu lire ne prouve pas que la review tient encore.
   await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('2 rouges · à relire'))
+  expect(screen.queryByRole('button', { name: /Corriger/ })).toBeNull()
 })
 
 test('un rouge ouvert garde la priorité visuelle sur un diff périmé', async () => {
@@ -233,188 +228,4 @@ test('tant que le diff live n’est pas chargé, une review sans flag ne passe p
   expect(line?.textContent).toContain('rien à signaler')
   expect(line?.textContent).not.toContain('✓ relu')
   expect(line?.textContent).not.toContain('à relire')
-})
-
-test('propose par défaut une seule correction groupée', async () => {
-  const requests: Array<{ url: string, init?: RequestInit }> = []
-  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input)
-    requests.push({ url, init })
-    if (url.endsWith('/reviews')) return Response.json([review])
-    if (url.endsWith('/diff')) return Response.json({ diff: 'diff', files: [] })
-    if (url.endsWith('/dispatch-grouped')) return Response.json({ dispatched: 2, subtaskId: 'group-1', flagIds: ['flag-1', 'flag-2'] }, { status: 202 })
-    return Response.json({ error: 'route inattendue' }, { status: 404 })
-  }) as typeof fetch
-  window.confirm = mock(() => true)
-
-  render(createElement(GuardianLine, {
-    conversation,
-    project,
-    reviewStatus: null,
-    onOpenCode: () => undefined,
-    onRelire: () => undefined,
-  }))
-
-  const button = await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })
-  const mode = screen.getByRole('combobox', { name: 'Mode de correction' }) as HTMLSelectElement
-  expect(mode.value).toBe('grouped')
-  expect(mode.nextElementSibling).toBe(button)
-  fireEvent.click(button)
-
-  await waitFor(() => expect(requests.some(({ url }) => url.endsWith('/reviews/review-1/dispatch-grouped'))).toBe(true))
-  const dispatch = requests.find(({ url }) => url.endsWith('/reviews/review-1/dispatch-grouped'))
-  expect(dispatch?.init?.method).toBe('POST')
-  expect(JSON.parse(String(dispatch?.init?.body))).toEqual({ severities: ['red', 'orange', 'grey'] })
-  await waitFor(() => expect(screen.queryByRole('button', { name: 'Corriger les 2 erreurs' })).toBeNull())
-})
-
-test('permet de lancer un agent distinct par erreur', async () => {
-  const requests: string[] = []
-  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
-    const url = String(input)
-    requests.push(url)
-    if (url.endsWith('/reviews')) return Response.json([review])
-    if (url.endsWith('/diff')) return Response.json({ diff: 'diff', files: [] })
-    if (url.endsWith('/dispatch-all')) return Response.json({ dispatched: 2, flagIds: ['flag-1', 'flag-2'] }, { status: 202 })
-    return Response.json({ error: 'route inattendue' }, { status: 404 })
-  }) as typeof fetch
-  window.confirm = mock(() => true)
-
-  render(createElement(GuardianLine, {
-    conversation,
-    project,
-    reviewStatus: null,
-    onOpenCode: () => undefined,
-    onRelire: () => undefined,
-  }))
-
-  const mode = await screen.findByRole('combobox', { name: 'Mode de correction' })
-  fireEvent.change(mode, { target: { value: 'individual' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Corriger les 2 erreurs' }))
-
-  await waitFor(() => expect(requests.some((url) => url.endsWith('/reviews/review-1/dispatch-all'))).toBe(true))
-  expect(requests.some((url) => url.endsWith('/dispatch-grouped'))).toBe(false)
-})
-
-test('permet de corriger les signalements affichés quand le diff a bougé', async () => {
-  const requests: string[] = []
-  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
-    const url = String(input)
-    requests.push(url)
-    if (url.endsWith('/reviews')) return Response.json([review])
-    if (url.endsWith('/diff')) return Response.json({ diff: 'diff modifié', files: [] })
-    if (url.endsWith('/dispatch-grouped')) return Response.json({ dispatched: 2, subtaskId: 'group-1', flagIds: ['flag-1', 'flag-2'] }, { status: 202 })
-    return Response.json({ error: 'route inattendue' }, { status: 404 })
-  }) as typeof fetch
-  window.confirm = mock(() => true)
-
-  render(createElement(GuardianLine, {
-    conversation,
-    project,
-    reviewStatus: null,
-    onOpenCode: () => undefined,
-    onRelire: () => undefined,
-  }))
-
-  const button = await screen.findByRole('button', { name: 'Corriger les 2 erreurs' })
-  expect((button as HTMLButtonElement).disabled).toBe(false)
-  fireEvent.click(button)
-
-  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('à relire'))
-  await waitFor(() => expect(requests.some((url) => url.endsWith('/dispatch-grouped'))).toBe(true))
-})
-
-test('une confirmation refusée ne lance aucune correction', async () => {
-  const requests: string[] = []
-  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
-    const url = String(input)
-    requests.push(url)
-    if (url.endsWith('/reviews')) return Response.json([review])
-    if (url.endsWith('/diff')) return Response.json({ diff: 'diff', files: [] })
-    return Response.json({ error: 'route inattendue' }, { status: 404 })
-  }) as typeof fetch
-  window.confirm = mock(() => false)
-
-  render(createElement(GuardianLine, {
-    conversation,
-    project,
-    reviewStatus: null,
-    onOpenCode: () => undefined,
-    onRelire: () => undefined,
-  }))
-
-  fireEvent.click(await screen.findByRole('button', { name: 'Corriger les 2 erreurs' }))
-  await waitFor(() => expect(window.confirm).toHaveBeenCalled())
-  expect(requests.some((url) => url.includes('/dispatch'))).toBe(false)
-  expect(screen.getByRole('button', { name: 'Corriger les 2 erreurs' })).toBeDefined()
-})
-
-test('la confirmation prévient quand la review est caduque', async () => {
-  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
-    const url = String(input)
-    if (url.endsWith('/reviews')) return Response.json([review])
-    if (url.endsWith('/diff')) return Response.json({ diff: 'diff modifié', files: [] })
-    if (url.endsWith('/dispatch-grouped')) return Response.json({ dispatched: 2, subtaskId: 'group-1', flagIds: ['flag-1', 'flag-2'] }, { status: 202 })
-    return Response.json({ error: 'route inattendue' }, { status: 404 })
-  }) as typeof fetch
-  const confirm = mock(() => true)
-  window.confirm = confirm
-
-  render(createElement(GuardianLine, {
-    conversation,
-    project,
-    reviewStatus: null,
-    onOpenCode: () => undefined,
-    onRelire: () => undefined,
-  }))
-
-  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('à relire'))
-  fireEvent.click(screen.getByRole('button', { name: 'Corriger les 2 erreurs' }))
-  await waitFor(() => expect(confirm).toHaveBeenCalled())
-  expect(String(confirm.mock.calls[0]![0])).toContain('périmés')
-})
-
-test('un dispatch en échec laisse les signalements ouverts et affiche l’erreur', async () => {
-  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
-    const url = String(input)
-    if (url.endsWith('/reviews')) return Response.json([review])
-    if (url.endsWith('/diff')) return Response.json({ diff: 'diff', files: [] })
-    if (url.endsWith('/dispatch-grouped')) return Response.json({ error: 'moteur de sous-tâches indisponible' }, { status: 409 })
-    return Response.json({ error: 'route inattendue' }, { status: 404 })
-  }) as typeof fetch
-  window.confirm = mock(() => true)
-
-  render(createElement(GuardianLine, {
-    conversation,
-    project,
-    reviewStatus: null,
-    onOpenCode: () => undefined,
-    onRelire: () => undefined,
-  }))
-
-  fireEvent.click(await screen.findByRole('button', { name: 'Corriger les 2 erreurs' }))
-  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('moteur de sous-tâches indisponible'))
-  expect(screen.getByRole('button', { name: 'Corriger les 2 erreurs' })).toBeDefined()
-})
-
-test('un dispatch partiel ne bascule que les signalements confirmés', async () => {
-  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
-    const url = String(input)
-    if (url.endsWith('/reviews')) return Response.json([review])
-    if (url.endsWith('/diff')) return Response.json({ diff: 'diff', files: [] })
-    if (url.endsWith('/dispatch-grouped')) return Response.json({ dispatched: 1, subtaskId: 'group-1', flagIds: ['flag-1'] }, { status: 202 })
-    return Response.json({ error: 'route inattendue' }, { status: 404 })
-  }) as typeof fetch
-  window.confirm = mock(() => true)
-
-  render(createElement(GuardianLine, {
-    conversation,
-    project,
-    reviewStatus: null,
-    onOpenCode: () => undefined,
-    onRelire: () => undefined,
-  }))
-
-  fireEvent.click(await screen.findByRole('button', { name: 'Corriger les 2 erreurs' }))
-  expect(await screen.findByRole('button', { name: 'Corriger l’erreur' })).toBeDefined()
 })

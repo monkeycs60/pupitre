@@ -112,6 +112,7 @@ export class ReviewRunner {
     private quotas: QuotaTracker,
     scanner?: ReviewScanner,
     private subtasks?: Pick<SubtaskRunner, "start" | "waitResult">,
+    private report?: (conversationId: string, review: Review) => void,
   ) {
     this.scanner = scanner ?? ((input) => scanWithAdapters(input, this.quotas));
   }
@@ -367,6 +368,7 @@ export class ReviewRunner {
       this.markResolved(id, resolved);
       this.progress.delete(id);
       this.notifyStatus();
+      this.emitReport(id);
       return;
     }
     const scanDiff = filterUnchangedHunks(diff, unchanged);
@@ -376,6 +378,7 @@ export class ReviewRunner {
       this.markResolved(id, resolved);
       this.progress.delete(id);
       this.notifyStatus();
+      this.emitReport(id);
       return;
     }
 
@@ -384,7 +387,7 @@ export class ReviewRunner {
     this.notifyStatus();
     const flags: ReviewFlagInput[] = [];
     for (const [index, zone] of zones.entries()) {
-      const prompt = reviewPrompt(zone, index + 1, zones.length);
+      const prompt = reviewPrompt(zone, index + 1, zones.length, parent?.flags ?? []);
       flags.push(...await this.scanZone({
         cwd,
         provider: input.provider,
@@ -412,6 +415,12 @@ export class ReviewRunner {
     this.markResolved(id, resolvedWithoutResignal);
     this.progress.delete(id);
     this.notifyStatus();
+    this.emitReport(id);
+  }
+
+  private emitReport(reviewId: string): void {
+    const review = this.store.get(reviewId);
+    if (review) this.report?.(review.conversation_id, review);
   }
 
   private async executeDispatch(
@@ -996,10 +1005,21 @@ function nonEmptyString(value: unknown, field: string): string {
   return value.trim();
 }
 
-function reviewPrompt(diff: string, index: number, total: number): string {
+function reviewPrompt(diff: string, index: number, total: number, previousFlags: ReviewFlag[] = []): string {
+  const memory = previousFlags.length === 0
+    ? "Aucune relecture précédente."
+    : `Mémoire de la relecture précédente : ${JSON.stringify(previousFlags.map((flag) => ({
+      file: flag.file,
+      line: flag.line_start,
+      category: flag.category,
+      message: flag.message,
+      status: flag.status,
+    })))}`;
   return [
-    "Tu es le Gardien de Pupitre. Fais une review de risques, pas un résumé du diff.",
+    "Tu es le Gardien de Pupitre. Fais une review de maintenabilité, clarté et architecture, pas un résumé du diff ni une chasse au pinaillage.",
     `Zone ${index}/${total}. Analyse uniquement les lignes modifiées ci-dessous.`,
+    memory,
+    "Converge : ne re-signale pas un point déjà traité ou résolu, et ne transforme jamais les corrections du tour précédent en nouveau terrain de chasse. Rien à signaler est une conclusion légitime.",
     "Grille obligatoire : perte de données ; side effects sur modules partagés ;",
     "changement de contrat d'API ; migration ou schéma ; comportement modifié",
     "silencieusement ; gestion d'erreur supprimée ; secret ou credential ; absence",

@@ -36,6 +36,7 @@ import type { TaskAction } from './taskToggle'
 import { toggleAction, withTaskActions } from './taskDraft'
 import { newConversationDraftStorageKey } from './conversationDraft'
 import { ThreadSearch } from './ThreadSearch'
+import { PushTimeline } from './PushTimeline'
 
 interface ChatProps {
   events: AppEvent[]
@@ -56,7 +57,6 @@ interface ChatProps {
   originType?: 'sentry' | null
   originKey?: string | null
   reviewStatus: ReviewStatusSnapshot | null
-  onOpenCode: (flagId?: string) => void
   onHandoff: () => void
   pendingChangelogReview: ChangelogReview | null
   onChangelogReview: (review: ChangelogReview) => void
@@ -174,7 +174,6 @@ export function Chat({
   originType = null,
   originKey = null,
   reviewStatus,
-  onOpenCode,
   onHandoff,
   pendingChangelogReview,
   onChangelogReview,
@@ -345,7 +344,6 @@ export function Chat({
     if (!conversation) return
     if (action === 'review') {
       await startReview({ conversationId: conversation.id, scope: 'worktree' }).catch(() => {})
-      onOpenCode()
       return
     }
     if (action === 'test') {
@@ -404,13 +402,14 @@ export function Chat({
                     onSubtaskStatusChange={handleSubtaskStatusChange}
                     onDebriefQuestion={handleDebriefQuestion}
                     turnFooterAction={turnFooterAction}
+                    conversationId={conversation?.id}
                   />
+                  {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
                   {!isRunning && conversation !== null ? (
                     <GuardianLine
                       conversation={conversation}
                       project={project}
                       reviewStatus={reviewStatus}
-                      onOpenCode={onOpenCode}
                       onRelire={relire}
                     />
                   ) : null}

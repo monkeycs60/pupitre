@@ -102,6 +102,11 @@ export type AppEvent =
       completedAt: string;
       error?: string;
     }
+  | {
+      type: "review-report-ref";
+      reviewId: string;
+      createdAt: string;
+    }
   /** Titre et résumé régénérés après un tour : la sidebar se met à jour. */
   | {
       type: "conversation-digest";

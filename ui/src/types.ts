@@ -664,6 +664,15 @@ export interface GitCommit {
   guardian: GitGuardianReview[]
 }
 
+export interface GitPushCommit {
+  sha: string
+  subject: string
+  authoredAt: string
+  parent: string | null
+  remoteUrl: string | null
+  repositoryPath: string
+}
+
 export interface GitBranch {
   name: string
   fullName: string
@@ -869,6 +878,11 @@ export type AppEvent =
       guardianFlagIdsAcked: string[]
       completedAt: string
       error?: string
+    }
+  | {
+      type: 'review-report-ref'
+      reviewId: string
+      createdAt: string
     }
   // Introspection de quota native du provider (payload brut, interprété côté
   // sidecar par le QuotaTracker — cf. sidecar/src/events.ts).
