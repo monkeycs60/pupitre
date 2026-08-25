@@ -11,6 +11,7 @@ export interface TicketLinks {
   ticketKey: string
   externalUrl: string | null
   mergeRequestUrl: string | null
+  branch: string | null
 }
 
 function textValue(value: unknown): string | null {
@@ -19,10 +20,12 @@ function textValue(value: unknown): string | null {
 
 export function ticketLinksOf(ticket: TicketRow): TicketLinks {
   const mergeRequest = ticket.refs.find((ref) => ref.kind === 'mr')
+  const branch = ticket.refs.find((ref) => ref.kind === 'branch')
   return {
     ticketKey: ticket.key,
     externalUrl: ticket.external_url,
     mergeRequestUrl: mergeRequest ? textValue(mergeRequest.payload.url) : null,
+    branch: branch?.ref ?? null,
   }
 }
 
@@ -30,7 +33,7 @@ export function ticketLinksIndex(payload: Pick<DashboardPayload, 'tickets'>): Ma
   const index = new Map<string, TicketLinks>()
   for (const ticket of payload.tickets) {
     const links = ticketLinksOf(ticket)
-    if (links.externalUrl === null && links.mergeRequestUrl === null) continue
+    if (links.externalUrl === null && links.mergeRequestUrl === null && links.branch === null) continue
     index.set(ticket.key, links)
     index.set(ticket.id, links)
   }

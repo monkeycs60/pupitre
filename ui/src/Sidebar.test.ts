@@ -154,6 +154,7 @@ function renderSidebar(
   selectedConversation: Conversation | null = null,
   liveConversationMessageCount?: number,
   onConversationCreateFromContext?: (seed: { branch: string | null; originType?: 'sentry' | null; originKey?: string | null }) => void,
+  ticketLinks?: Map<string, { ticketKey: string; externalUrl: string | null; mergeRequestUrl: string | null; branch: string | null }>,
 ) {
   const onConversationSelect = mock(() => undefined)
   render(createElement(Sidebar, {
@@ -172,6 +173,7 @@ function renderSidebar(
     time: null,
     timeMode: 'user' as const,
     onTimeModeToggle: () => undefined,
+    ticketLinks,
   }))
   return onConversationSelect
 }
@@ -356,7 +358,12 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
     [ticketYesterday, ticketToday, recentUnticketed, sentryConversation],
   )
   const onCreate = mock(() => undefined)
-  renderSidebar([], null, undefined, onCreate)
+  renderSidebar([], null, undefined, onCreate, new Map([['TECH-1', {
+    ticketKey: 'TECH-1',
+    externalUrl: null,
+    mergeRequestUrl: null,
+    branch: 'feature/TECH-1',
+  }]]))
 
   await waitFor(() => expect(document.querySelectorAll('.conv-group-header').length).toBe(3))
   const headers = [...document.querySelectorAll('.conv-group-toggle > span')].map((element) => element.textContent)
@@ -370,6 +377,12 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
     branch: null,
     originType: 'sentry',
     originKey: 'REACTOR-B4S',
+  }))
+  fireEvent.click(screen.getByRole('button', { name: 'Nouvelle conversation dans TECH-1' }))
+  expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
+    ticketId: 'ticket-1',
+    ticketKey: 'TECH-1',
+    branch: 'feature/TECH-1',
   }))
 })
 
