@@ -204,7 +204,7 @@ export interface Project {
   id: string
   name: string
   path: string
-  permission_mode: string
+  permission_mode: PresetPermissionMode
   filesystem_scope: FilesystemScope
   pinned: boolean
   created_at: string

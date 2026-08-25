@@ -10,6 +10,7 @@ import {
   setProjectDefaultScoutPreset,
   setProjectDefaultReviewPreset,
   setProjectFilesystemScope,
+  setProjectPermissionMode,
   updateProjectMcpServers,
   verifyProjectMcpCost,
 } from './api'
@@ -18,7 +19,7 @@ import { formatCompact } from './formatCompact'
 import { ProviderMark } from './ProviderMark'
 import { DomainSettings } from './DomainSettings'
 import type { DashboardIntegration } from './types'
-import type { FilesystemScope, Preset, Project } from './types'
+import type { FilesystemScope, Preset, PresetPermissionMode, Project } from './types'
 
 interface ProjectSettingsDialogProps {
   project: Project
@@ -176,6 +177,7 @@ function integrationForm(items: DashboardIntegration[]): IntegrationsForm {
 
 export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsChanged }: ProjectSettingsDialogProps) {
   const [scope, setScope] = useState<FilesystemScope>(project.filesystem_scope)
+  const [permissionMode, setPermissionMode] = useState<PresetPermissionMode>(project.permission_mode)
   const [presets, setPresets] = useState<Preset[]>([])
   const [reviewPresetId, setReviewPresetId] = useState(() => projectPresetId(project.default_review_preset_id, project.default_preset_id))
   const [correctionPresetId, setCorrectionPresetId] = useState(() => projectPresetId(project.default_correction_preset_id, project.default_preset_id))
@@ -289,6 +291,12 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
   }
 
   async function handleSave() {
+    if (permissionMode === 'bypassPermissions' && project.permission_mode !== 'bypassPermissions') {
+      const confirmed = window.confirm(
+        `Activer YOLO pour « ${project.name} » ? Claude, Codex et Grok pourront agir sans demander de permissions.`,
+      )
+      if (!confirmed) return
+    }
     if (scope === 'full-system' && project.filesystem_scope !== 'full-system') {
       const confirmed = window.confirm(
         `Autoriser Claude et Codex à modifier tout le système pour « ${project.name} » ?`,
@@ -299,6 +307,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
     setError(null)
     try {
       let updated = await setProjectFilesystemScope(project.id, scope)
+      updated = await setProjectPermissionMode(project.id, permissionMode)
       updated = await setProjectDefaultReviewPreset(project.id, reviewPresetId || null)
       updated = await setProjectDefaultCorrectionPreset(project.id, correctionPresetId || null)
       updated = await setProjectDefaultScoutPreset(project.id, scoutPresetId || null)
@@ -420,6 +429,25 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
           <p>
             Ce réglage s’applique à toutes les conversations de ce projet. Les racines
             <code> ~/.claude</code>, <code> ~/.codex</code> et <code> ~/.grok</code> restent toujours accessibles.
+          </p>
+          <label htmlFor="project-permission-mode">
+            <strong>Autonomie par défaut</strong>
+            <select
+              id="project-permission-mode"
+              value={permissionMode}
+              disabled={saving}
+              onChange={(event) => setPermissionMode(event.target.value as PresetPermissionMode)}
+            >
+              <option value="default">Par défaut du provider</option>
+              <option value="acceptEdits">Éditions acceptées</option>
+              <option value="plan">Plan / lecture seule</option>
+              <option value="dontAsk">Autonome · sans demande</option>
+              <option value="bypassPermissions">YOLO · sans permissions</option>
+            </select>
+          </label>
+          <p>
+            Claude, Codex et Grok utilisent ce réglage lorsque la conversation est sur
+            « Hériter du projet ». Les surcharges de conversation restent inchangées.
           </p>
           {mcp !== null && mcp.servers.length > 0 ? (
             <div className="project-mcp">

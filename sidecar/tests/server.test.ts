@@ -720,6 +720,26 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
   expect(await fullFilesystem.json()).toEqual(expect.objectContaining({
     filesystem_scope: "full-system",
   }));
+  const projectPermission = await putJson(
+    `/api/projects/${project.id}/permission-mode`,
+    { permission_mode: "bypassPermissions" },
+  );
+  expect(projectPermission.status).toBe(200);
+  expect(await projectPermission.json()).toEqual(expect.objectContaining({
+    permission_mode: "bypassPermissions",
+  }));
+  expect((await putJson(
+    "/api/projects/projet-inconnu/permission-mode",
+    { permission_mode: "plan" },
+  )).status).toBe(404);
+  expect((await putJson(
+    `/api/projects/${project.id}/permission-mode`,
+    { permission_mode: "confirm-everything" },
+  )).status).toBe(400);
+  expect((await putJson(
+    `/api/projects/${project.id}/permission-mode`,
+    { permission_mode: null },
+  )).status).toBe(400);
   const selected = await putJson(`/api/projects/${project.id}/default-preset`, {
     presetId: preset.id,
   });

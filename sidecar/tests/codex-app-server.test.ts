@@ -288,6 +288,17 @@ test("full-system : le thread Codex passe en danger-full-access", async () => {
   expect(start.params.runtimeWorkspaceRoots).toBeUndefined();
 });
 
+test("YOLO force danger-full-access sans accès filesystem full-system", async () => {
+  const files = useFake();
+  await collect(newClient(), {
+    filesystemScope: "project-and-ai-roots",
+    permissionMode: "bypassPermissions",
+  });
+  const start = sentRequests(files.log).find((r) => r.method === "thread/start")!;
+  expect(start.params).toMatchObject({ sandbox: "danger-full-access" });
+  expect(start.params.runtimeWorkspaceRoots).toBeUndefined();
+});
+
 test("images jointes : passées en localImage dans l'input du tour", async () => {
   const files = useFake();
   await collect(newClient(), { images: ["/tmp/une.png"] });

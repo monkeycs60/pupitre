@@ -595,6 +595,16 @@ export function setProjectFilesystemScope(
   )
 }
 
+export function setProjectPermissionMode(
+  id: string,
+  permissionMode: PresetPermissionMode,
+): Promise<Project> {
+  return fetchJson(
+    `/api/projects/${routeId(id)}/permission-mode`,
+    jsonPut({ permission_mode: permissionMode }),
+  )
+}
+
 export function setProjectAutoRescan(
   id: string,
   enabled: boolean,

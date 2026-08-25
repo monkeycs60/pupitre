@@ -109,6 +109,66 @@ test("un tour persiste user-message + événements, capture le session id, diffu
     .toBe(streamedDeltas.map((event) => event.text).join(""));
 });
 
+test("la surcharge conversation reste prioritaire sur l'autonomie du projet", async () => {
+  const argsFile = join(dataDir, "claude-override-args");
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  projects.setPermissionMode(projectId, "bypassPermissions");
+  const conversation = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    permissionMode: "plan",
+    firstMessage: "priorité",
+  });
+
+  await runner.runTurn(conversation.id, "priorité", []);
+
+  const args = readFileSync(argsFile, "utf8");
+  expect(args).toContain("--permission-mode plan");
+  expect(args).not.toContain("--dangerously-skip-permissions");
+});
+
+test("Claude reçoit l'autonomie héritée du projet à chaque nouveau tour", async () => {
+  const argsFile = join(dataDir, "claude-inherited-args");
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  projects.setPermissionMode(projectId, "dontAsk");
+  const conversation = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    permissionMode: null,
+    firstMessage: "hérite",
+  });
+
+  await runner.runTurn(conversation.id, "hérite", []);
+  expect(readFileSync(argsFile, "utf8")).toContain("--permission-mode dontAsk");
+
+  projects.setPermissionMode(projectId, "bypassPermissions");
+  await runner.runTurn(conversation.id, "nouveau défaut", []);
+  expect(readFileSync(argsFile, "utf8")).toContain("--permission-mode bypassPermissions");
+});
+
+test("Grok reçoit l'autonomie héritée du projet", async () => {
+  const argsFile = join(dataDir, "grok-inherited-args");
+  process.env.PUPITRE_GROK_BIN = join(import.meta.dir, "fake-bins/fake-grok");
+  process.env.FAKE_GROK_ARGS_FILE = argsFile;
+  process.env.FAKE_GROK_PROMPT_FILE = join(dataDir, "grok-inherited-prompt");
+  projects.setPermissionMode(projectId, "bypassPermissions");
+  const conversation = convs.create({
+    projectId,
+    provider: "grok",
+    model: "grok-4.6",
+    permissionMode: null,
+    firstMessage: "hérite",
+  });
+
+  await runner.runTurn(conversation.id, "hérite", []);
+
+  const args = readFileSync(argsFile, "utf8");
+  expect(args).toContain("--permission-mode bypassPermissions");
+  expect(args).toContain("--always-approve");
+});
+
 test("mesure l'attente du premier retour et la durée totale du tour", async () => {
   const c = convs.create({
     projectId,

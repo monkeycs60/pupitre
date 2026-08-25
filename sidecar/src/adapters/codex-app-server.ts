@@ -443,8 +443,12 @@ export class CodexAppServerClient {
 
   private async openThread(opts: TurnOptions): Promise<string> {
     const scope = opts.filesystemScope ?? DEFAULT_FILESYSTEM_SCOPE;
-    const readOnly = opts.sandboxMode === "read-only";
-    const fullSystem = scope === "full-system" && !readOnly;
+    const sandbox = opts.sandboxMode ?? (
+      opts.permissionMode === "bypassPermissions" || scope === "full-system"
+        ? "danger-full-access"
+        : "workspace-write"
+    );
+    const fullSystem = sandbox === "danger-full-access";
     const settings = {
       model: opts.model,
       cwd: opts.cwd,
@@ -452,7 +456,7 @@ export class CodexAppServerClient {
       // Les tours normaux peuvent modifier les instructions et la mémoire
       // globales demandées par l'utilisateur. Les appels de review/debrief
       // passent explicitement `read-only` et ne suivent donc pas ce défaut.
-      sandbox: opts.sandboxMode ?? (fullSystem ? "danger-full-access" : "workspace-write"),
+      sandbox,
       ...(!fullSystem && this.experimentalApi
         ? {
           runtimeWorkspaceRoots: [

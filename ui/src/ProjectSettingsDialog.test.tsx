@@ -50,6 +50,7 @@ test('enregistre une intégration GitLab avec son motif de branche', async () =>
     if (url.endsWith('/api/projects/p1/integrations') && method === 'GET') return json([])
     if (url.endsWith('/api/projects/p1/domains') && method === 'GET') return json([])
     if (url.endsWith('/api/projects/p1/filesystem-scope')) return json(project)
+    if (url.endsWith('/api/projects/p1/permission-mode')) return json(project)
     if (url.endsWith('/api/projects/p1/default-review-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/default-correction-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/default-scout-preset')) return json(project)
@@ -93,4 +94,63 @@ test('enregistre une intégration GitLab avec son motif de branche', async () =>
 
 test('le corps des paramètres projet défile sans masquer les actions', () => {
   expect(dialogsCss).toMatch(/\.project-settings-body\s*\{[\s\S]*?flex:\s*1;[\s\S]*?min-height:\s*0;[\s\S]*?overflow-y:\s*auto;/)
+})
+
+test('initialise, modifie et sauvegarde l’autonomie projet avec confirmation YOLO', async () => {
+  const calls: Array<{ url: string; body: unknown }> = []
+  const confirm = mock(() => true)
+  window.confirm = confirm
+
+  globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input)
+    const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+    if (url.endsWith('/api/presets')) return json([])
+    if (url.endsWith('/api/projects/p1/mcp-servers')) return json({ servers: [], enabled: [], weights: {}, used: [] })
+    if (url.endsWith('/api/projects/p1/integrations') && method === 'GET') return json([])
+    if (url.endsWith('/api/projects/p1/domains') && method === 'GET') return json([])
+    if (method === 'PUT' && url.includes('/api/projects/p1/')) {
+      calls.push({ url, body: JSON.parse(String(init?.body)) })
+      return json({ ...project, permission_mode: 'bypassPermissions' })
+    }
+    throw new Error(`route inattendue: ${method} ${url}`)
+  }) as typeof fetch
+
+  render(createElement(ProjectSettingsDialog, {
+    project: { ...project, permission_mode: 'plan' },
+    onClose: () => {},
+    onUpdated: () => {},
+  }))
+
+  const selector = screen.getByLabelText('Autonomie par défaut') as HTMLSelectElement
+  expect(selector.value).toBe('plan')
+  fireEvent.change(selector, { target: { value: 'bypassPermissions' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+  await waitFor(() => expect(calls.some((call) => call.url.endsWith('/permission-mode'))).toBe(true))
+  expect(calls.find((call) => call.url.endsWith('/permission-mode'))?.body).toEqual({
+    permission_mode: 'bypassPermissions',
+  })
+  expect(confirm).toHaveBeenCalledTimes(1)
+})
+
+test('annuler la confirmation YOLO empêche la sauvegarde', async () => {
+  const confirm = mock(() => false)
+  window.confirm = confirm
+  const calls: string[] = []
+  globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input)
+    const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+    if (method === 'PUT') calls.push(url)
+    if (url.endsWith('/api/presets')) return json([])
+    if (url.endsWith('/api/projects/p1/mcp-servers')) return json({ servers: [], enabled: [], weights: {}, used: [] })
+    if (url.endsWith('/api/projects/p1/integrations')) return json([])
+    if (url.endsWith('/api/projects/p1/domains')) return json([])
+    throw new Error(`route inattendue: ${method} ${url}`)
+  }) as typeof fetch
+
+  render(createElement(ProjectSettingsDialog, { project, onClose: () => {}, onUpdated: () => {} }))
+  fireEvent.change(screen.getByLabelText('Autonomie par défaut'), { target: { value: 'bypassPermissions' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+  expect(confirm).toHaveBeenCalledTimes(1)
+  expect(calls).toHaveLength(0)
 })

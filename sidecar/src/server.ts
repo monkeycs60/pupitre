@@ -1959,6 +1959,23 @@ export function createServer(deps: ServerDeps) {
           return json(deps.projects.get(projectFilesystemScopeId));
         }
 
+        const projectPermissionModeId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/permission-mode$/,
+        );
+        if (request.method === "PUT" && projectPermissionModeId !== null) {
+          if (!deps.projects.get(projectPermissionModeId)) {
+            throw new HttpError(404, "projet inconnu");
+          }
+          const body = await readObject(request);
+          const permissionMode = optionalPresetPermissionMode(body);
+          if (permissionMode === undefined || permissionMode === null) {
+            throw new HttpError(400, "permission_mode manquant");
+          }
+          deps.projects.setPermissionMode(projectPermissionModeId, permissionMode);
+          return json(deps.projects.get(projectPermissionModeId));
+        }
+
         const projectAutoRescanId = routeId(
           pathname,
           /^\/api\/projects\/([^/]+)\/auto-rescan$/,

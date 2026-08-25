@@ -1,9 +1,10 @@
 import type { Database } from "bun:sqlite";
 import { normalizeFilesystemScope, type FilesystemScope } from "../access";
+import type { PresetPermissionMode } from "./presets";
 
 export interface Project {
   id: string; name: string; path: string;
-  permission_mode: string; pinned: boolean; created_at: string;
+  permission_mode: PresetPermissionMode; pinned: boolean; created_at: string;
   default_preset_id: string | null;
   default_review_preset_id: string | null;
   default_correction_preset_id: string | null;
@@ -86,8 +87,7 @@ export class ProjectStore {
     this.db.query("UPDATE projects SET default_scout_preset_id = ? WHERE id = ?").run(presetId, id);
   }
 
-  /** Applique une permission explicite portée par le preset par défaut. */
-  setPermissionMode(id: string, mode: string): void {
+  setPermissionMode(id: string, mode: PresetPermissionMode): void {
     this.db.query("UPDATE projects SET permission_mode = ? WHERE id = ?").run(mode, id);
   }
 
