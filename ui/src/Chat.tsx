@@ -31,7 +31,7 @@ import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
 import { appendDebriefQuestionPrompt } from './debriefQuestion'
 import type { DebriefBlock } from './groupEvents'
-import { TaskToggleContext } from './taskToggle'
+import { TaskSelectionContext, TaskToggleContext } from './taskToggle'
 import type { TaskAction } from './taskToggle'
 import { toggleAction, withTaskActions } from './taskDraft'
 import { newConversationDraftStorageKey } from './conversationDraft'
@@ -318,6 +318,11 @@ export function Chat({
     onConversationReadRef.current?.()
   }, [])
 
+  function handleMessageChange(next: string) {
+    setMessage(next)
+    if (next.length === 0) setSelectedActions([])
+  }
+
   const relire = useCallback(() => {
     if (!conversation) return
     void startReview({ conversationId: conversation.id, scope: 'worktree' }).catch(() => {})
@@ -395,24 +400,26 @@ export function Chat({
                 </p>
               ) : (
                 <TaskToggleContext.Provider value={handleTaskToggle}>
-                  <EventStream
-                    blocks={blocks}
-                    onImageOpen={handleImageOpen}
-                    onImageLoad={scrollToBottomIfFollowing}
-                    onSubtaskStatusChange={handleSubtaskStatusChange}
-                    onDebriefQuestion={handleDebriefQuestion}
-                    turnFooterAction={turnFooterAction}
-                    conversationId={conversation?.id}
-                  />
-                  {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
-                  {!isRunning && conversation !== null ? (
-                    <GuardianLine
-                      conversation={conversation}
-                      project={project}
-                      reviewStatus={reviewStatus}
-                      onRelire={relire}
+                  <TaskSelectionContext.Provider value={selectedActions}>
+                    <EventStream
+                      blocks={blocks}
+                      onImageOpen={handleImageOpen}
+                      onImageLoad={scrollToBottomIfFollowing}
+                      onSubtaskStatusChange={handleSubtaskStatusChange}
+                      onDebriefQuestion={handleDebriefQuestion}
+                      turnFooterAction={turnFooterAction}
+                      conversationId={conversation?.id}
                     />
-                  ) : null}
+                    {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
+                    {!isRunning && conversation !== null ? (
+                      <GuardianLine
+                        conversation={conversation}
+                        project={project}
+                        reviewStatus={reviewStatus}
+                        onRelire={relire}
+                      />
+                    ) : null}
+                  </TaskSelectionContext.Provider>
                 </TaskToggleContext.Provider>
               )}
             </div>
@@ -427,7 +434,7 @@ export function Chat({
             onConversationCreated={handleConversationCreated}
             onProjectUpdated={onProjectUpdated}
             message={message}
-            onMessageChange={setMessage}
+            onMessageChange={handleMessageChange}
             focusRequest={focusRequest}
             providerLabel={conversation
               ? `${modelLabel(conversation.model)} · ${conversation.effort ?? 'default'}${conversation.speed === 'fast' ? ' · rapide' : ''}`

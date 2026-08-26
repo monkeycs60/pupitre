@@ -72,7 +72,11 @@ export function toggleAction(
   checked: boolean,
 ): TaskAction[] {
   const others = actions.filter(
-    (current) => !(current.index === action.index && current.kind === action.kind),
+    (current) => !(
+      current.scope === action.scope
+      && current.index === action.index
+      && current.kind === action.kind
+    ),
   )
   return checked ? [...others, action] : others
 }

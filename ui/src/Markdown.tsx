@@ -2,7 +2,7 @@ import { Children, createContext, isValidElement, memo, useContext, useMemo, use
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import Mermaid from './Mermaid'
-import { TaskToggleContext } from './taskToggle'
+import { TaskSelectionContext, TaskToggleContext } from './taskToggle'
 import type { SectionKind } from './taskToggle'
 import { ActionFormatContext, headingKind } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
@@ -44,23 +44,6 @@ function nodeText(node: any): string {
   if (typeof node.value === 'string') return node.value
   if (!Array.isArray(node.children)) return ''
   return node.children.map(nodeText).join('')
-}
-
-function storedTaskState(key: string, fallback: boolean): boolean {
-  try {
-    const stored = window.localStorage.getItem(key)
-    return stored === null ? fallback : stored === '1'
-  } catch {
-    return fallback
-  }
-}
-
-function saveTaskState(key: string, checked: boolean): void {
-  try {
-    window.localStorage.setItem(key, checked ? '1' : '0')
-  } catch {
-    // Le rendu reste utilisable si le contexte Tauri bloque le stockage local.
-  }
 }
 
 /**
@@ -136,24 +119,56 @@ function isPassiveClick(event: any): boolean {
   return selection !== null && !selection.isCollapsed
 }
 
+export function taskChoices(label: string, kind: SectionKind): string[] {
+  if (kind !== 'do-this' || !label.includes(' OU ')) return []
+  const choices = label.split(' OU ').map((choice) => choice.trim()).filter(Boolean)
+  return choices.length >= 2 ? choices : []
+}
+
 function MarkdownTaskItem({ node, children, props }: { node: any; children: any; props: any }) {
   const scope = useContext(MARKDOWN_SCOPE)
   const index = useContext(TASK_INDEX)
   const kind = sectionAt(useContext(SECTIONS), node?.position?.start?.line ?? 0)
   const label = nodeText(node).trim()
-  // Clé stable : message + section + rang, indépendante de la formulation.
-  const key = `pupitre:markdown-task:${scope}:${kind}:${index}`
+  const choices = taskChoices(label, kind)
   const input = node.children.find((child: any) => child.tagName === 'input')
-  const [checked, setChecked] = useState(() => storedTaskState(key, Boolean(input.properties?.checked)))
-  // Cocher pousse l'action dans le composeur ; décocher l'en retire.
   const onToggle = useContext(TaskToggleContext)
+  const selections = useContext(TaskSelectionContext)
+  const selected = selections.find((action) => (
+    action.scope === scope && action.kind === kind && action.index === index
+  ))
+  const [localChecked, setLocalChecked] = useState(Boolean(input.properties?.checked))
+  const checked = onToggle ? selected !== undefined : localChecked
   const toggle = () => {
     const next = !checked
-    setChecked(next)
-    saveTaskState(key, next)
-    onToggle?.({ index, label, kind }, next)
+    if (!onToggle) setLocalChecked(next)
+    onToggle?.({ scope, index, label, kind }, next)
   }
   const { checkbox, body } = splitCheckbox(children)
+  if (choices.length > 0) {
+    return (
+      <li {...props} className={`${props.className ?? ''} markdown-task-item markdown-task-choice`.trim()}>
+        <span className="markdown-task-number" aria-hidden="true">{index}</span>
+        <span className="markdown-task-choice-options">
+          {choices.map((choice) => {
+            const choiceLabel = `${label}\nRéponse choisie : ${choice}`
+            const isSelected = selected?.label === choiceLabel
+            return (
+              <button
+                key={choice}
+                type="button"
+                className={isSelected ? 'is-selected' : ''}
+                aria-pressed={isSelected}
+                onClick={() => onToggle?.({ scope, index, label: choiceLabel, kind }, !isSelected)}
+              >
+                {choice}
+              </button>
+            )
+          })}
+        </span>
+      </li>
+    )
+  }
   return (
     <TASK_CONTEXT.Provider value={{ checked, label, toggle }}>
       <li
