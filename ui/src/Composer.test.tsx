@@ -35,20 +35,24 @@ const project: Project = {
 
 const quotas: QuotaSnapshot = { claude: null, codex: null, grok: null }
 
-function renderComposer(isRunning: boolean) {
-  render(createElement(Composer, {
+function composerProps(isRunning: boolean, message = '') {
+  return {
     conversationId: 'conversation-1',
     project,
     quotas,
     isRunning,
     onConversationCreated: () => undefined,
     onProjectUpdated: () => undefined,
-    message: '',
+    message,
     onMessageChange: () => undefined,
     focusRequest: 0,
     providerLabel: 'codex · GPT-5.6 Luna · xhigh · rapide',
     provider: 'codex',
-  }))
+  } as const
+}
+
+function renderComposer(isRunning: boolean) {
+  render(createElement(Composer, composerProps(isRunning)))
 }
 
 test('ne superpose pas le faux placeholder avec celui du tour orientable', () => {
@@ -64,4 +68,21 @@ test('affiche le faux placeholder quand aucun tour ne court', () => {
   expect(document.querySelector('.composer-placeholder')?.textContent).toContain('Écris ton message, ou')
   expect(document.querySelector('.composer-placeholder')?.textContent).toContain('@ pour un outil')
   expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('')
+})
+
+test('agrandit le champ avec son contenu puis le rend scrollable à sa hauteur maximale', () => {
+  const view = render(createElement(Composer, composerProps(false)))
+  const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+  Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 148 })
+
+  view.rerender(createElement(Composer, composerProps(false, 'Un message sur plusieurs lignes')))
+
+  expect(textarea.style.height).toBe('148px')
+  expect(textarea.style.overflowY).toBe('hidden')
+
+  Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 260 })
+  view.rerender(createElement(Composer, composerProps(false, 'Un message encore plus long')))
+
+  expect(textarea.style.height).toBe('200px')
+  expect(textarea.style.overflowY).toBe('auto')
 })

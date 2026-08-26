@@ -867,7 +867,8 @@
   min-height: 64px;
   max-height: 200px;
   padding: var(--space-2) var(--space-3);
-  resize: vertical;
+  overflow-y: hidden;
+  resize: none;
   color: var(--text);
   font-size: var(--text-base);
   line-height: 1.55;

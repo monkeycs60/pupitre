@@ -230,6 +230,10 @@
   border-radius: 12px 12px 4px 12px;
 }
 
+.user-message > p {
+  margin: 0;
+}
+
 .message-steering-label {
   display: block;
   margin-bottom: 6px;

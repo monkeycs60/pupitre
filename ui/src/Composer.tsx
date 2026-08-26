@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
   ChangeEvent,
   ClipboardEvent,
@@ -56,6 +56,14 @@ interface UploadedAttachment {
 }
 
 const IMAGE_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.svg', '.webp'])
+const COMPOSER_MIN_HEIGHT = 64
+const COMPOSER_MAX_HEIGHT = 200
+
+function resizeComposerTextarea(area: HTMLTextAreaElement) {
+  area.style.height = 'auto'
+  area.style.height = `${Math.max(COMPOSER_MIN_HEIGHT, Math.min(area.scrollHeight, COMPOSER_MAX_HEIGHT))}px`
+  area.style.overflowY = area.scrollHeight > COMPOSER_MAX_HEIGHT ? 'auto' : 'hidden'
+}
 
 function imageMimeFromName(name: string): string | null {
   const extension = name.slice(name.lastIndexOf('.')).toLowerCase()
@@ -237,6 +245,11 @@ export function Composer({
     (!isRunning || canSteer) &&
     configReady
   const paletteItems = useComposerPaletteItems(trigger, project.id, conversationId !== null)
+
+  useLayoutEffect(() => {
+    const area = textareaRef.current
+    if (area !== null) resizeComposerTextarea(area)
+  }, [message])
 
   function syncPaletteTrigger(value: string, cursor: number) {
     const next = paletteTrigger(value, cursor)
