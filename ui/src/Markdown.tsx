@@ -119,10 +119,20 @@ function isPassiveClick(event: any): boolean {
   return selection !== null && !selection.isCollapsed
 }
 
-export function taskChoices(label: string, kind: SectionKind): string[] {
-  if (kind !== 'do-this' || !label.includes(' OU ')) return []
-  const choices = label.split(' OU ').map((choice) => choice.trim()).filter(Boolean)
-  return choices.length >= 2 ? choices : []
+export interface TaskChoiceGroup {
+  prompt: string | null
+  choices: string[]
+}
+
+export function taskChoices(label: string, kind: SectionKind): TaskChoiceGroup | null {
+  if (kind !== 'do-this' || !label.includes(' OU ')) return null
+  const separator = label.lastIndexOf(':')
+  const prompt = separator === -1 ? null : label.slice(0, separator).trim()
+  const choiceSource = separator === -1 ? label : label.slice(separator + 1)
+  const choices = choiceSource.split(' OU ').map((choice) => choice.trim()).filter(Boolean)
+  if (choices.length < 2) return null
+  if (prompt === null) choices[0] = choices[0].replace(/^Choisis\s+/iu, '')
+  return { prompt, choices }
 }
 
 function MarkdownTaskItem({ node, children, props }: { node: any; children: any; props: any }) {
@@ -130,7 +140,7 @@ function MarkdownTaskItem({ node, children, props }: { node: any; children: any;
   const index = useContext(TASK_INDEX)
   const kind = sectionAt(useContext(SECTIONS), node?.position?.start?.line ?? 0)
   const label = nodeText(node).trim()
-  const choices = taskChoices(label, kind)
+  const choiceGroup = taskChoices(label, kind)
   const input = node.children.find((child: any) => child.tagName === 'input')
   const onToggle = useContext(TaskToggleContext)
   const selections = useContext(TaskSelectionContext)
@@ -145,26 +155,31 @@ function MarkdownTaskItem({ node, children, props }: { node: any; children: any;
     onToggle?.({ scope, index, label, kind }, next)
   }
   const { checkbox, body } = splitCheckbox(children)
-  if (choices.length > 0) {
+  if (choiceGroup !== null) {
     return (
       <li {...props} className={`${props.className ?? ''} markdown-task-item markdown-task-choice`.trim()}>
         <span className="markdown-task-number" aria-hidden="true">{index}</span>
-        <span className="markdown-task-choice-options">
-          {choices.map((choice) => {
-            const choiceLabel = `${label}\nRéponse choisie : ${choice}`
-            const isSelected = selected?.label === choiceLabel
-            return (
-              <button
-                key={choice}
-                type="button"
-                className={isSelected ? 'is-selected' : ''}
-                aria-pressed={isSelected}
-                onClick={() => onToggle?.({ scope, index, label: choiceLabel, kind }, !isSelected)}
-              >
-                {choice}
-              </button>
-            )
-          })}
+        <span className="markdown-task-choice-content">
+          {choiceGroup.prompt ? <span className="markdown-task-choice-prompt">{choiceGroup.prompt}</span> : null}
+          <span className="markdown-task-choice-options">
+            {choiceGroup.choices.map((choice) => {
+              const choiceLabel = choiceGroup.prompt
+                ? `Réponse à « ${choiceGroup.prompt} » : ${choice}`
+                : `Réponse choisie : ${choice}`
+              const isSelected = selected?.label === choiceLabel
+              return (
+                <button
+                  key={choice}
+                  type="button"
+                  className={isSelected ? 'is-selected' : ''}
+                  aria-pressed={isSelected}
+                  onClick={() => onToggle?.({ scope, index, label: choiceLabel, kind }, !isSelected)}
+                >
+                  {choice}
+                </button>
+              )
+            })}
+          </span>
         </span>
       </li>
     )

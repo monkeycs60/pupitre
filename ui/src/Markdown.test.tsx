@@ -28,9 +28,19 @@ describe('Markdown images', () => {
 
 describe('Markdown actions', () => {
   test('réserve OU en majuscules aux choix des TODO', () => {
-    expect(taskChoices('Je le fais OU tu le fais', 'do-this')).toEqual(['Je le fais', 'tu le fais'])
-    expect(taskChoices('Je le fais ou tu le fais', 'do-this')).toEqual([])
-    expect(taskChoices('Piste A OU piste B', 'follow-up')).toEqual([])
+    expect(taskChoices('Qui réalise le commit : je le fais OU tu le fais', 'do-this')).toEqual({
+      prompt: 'Qui réalise le commit',
+      choices: ['je le fais', 'tu le fais'],
+    })
+    expect(taskChoices('Je le fais ou tu le fais', 'do-this')).toBeNull()
+    expect(taskChoices('Piste A OU piste B', 'follow-up')).toBeNull()
+  })
+
+  test('nettoie le préfixe Choisis des anciennes réponses sans question séparée', () => {
+    expect(taskChoices('Choisis Section A OU Section B', 'do-this')).toEqual({
+      prompt: null,
+      choices: ['Section A', 'Section B'],
+    })
   })
 
   test('affiche les alternatives comme boutons et remonte le choix', () => {
@@ -38,18 +48,19 @@ describe('Markdown actions', () => {
     render(
       <TaskToggleContext.Provider value={toggle}>
         <TaskSelectionContext.Provider value={[]}>
-          <Markdown scope="message-42">{'TODO\n\n1. Je committe OU tu le fais'}</Markdown>
+          <Markdown scope="message-42">{'TODO\n\n1. Qui réalise le commit : je committe OU tu le fais'}</Markdown>
         </TaskSelectionContext.Provider>
       </TaskToggleContext.Provider>,
     )
 
     expect(screen.queryByRole('checkbox')).toBeNull()
+    expect(screen.getByText('Qui réalise le commit')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'tu le fais' }))
     expect(toggle).toHaveBeenCalledWith({
       scope: 'message-42',
       index: 1,
       kind: 'do-this',
-      label: 'Je committe OU tu le fais\nRéponse choisie : tu le fais',
+      label: 'Réponse à « Qui réalise le commit » : tu le fais',
     }, true)
   })
 })
