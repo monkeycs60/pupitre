@@ -301,6 +301,13 @@ export const Sidebar = memo(function Sidebar({
     return byConversation
   }, [activeFleet])
   const activeConversationIds = useMemo(() => new Set(activeByConversation.keys()), [activeByConversation])
+  /** Entrées et sorties du flottant, à l'exclusion de ce qui s'y passe : un
+   *  tour qui se termine écrit `answered_turn` avant de quitter le flottant,
+   *  donc la liste rechargée ici voit toujours l'état final. */
+  const fleetMembership = useMemo(
+    () => activeFleet.map((item) => item.id).sort().join(','),
+    [activeFleet],
+  )
   const activeDomains = useMemo(() => projectDomains.filter((domain) => domain.status === 'actif'), [projectDomains])
   const proposedDomainCount = useMemo(() => projectDomains.filter((domain) => domain.status === 'proposé').length, [projectDomains])
   const displayedActiveConversationIds = useMemo(() => {
@@ -367,7 +374,7 @@ export const Sidebar = memo(function Sidebar({
     return () => {
       ignore = true
     }
-  }, [selectedProject, conversationListVersion, conversationScope, domainRevision])
+  }, [selectedProject, conversationListVersion, conversationScope, domainRevision, fleetMembership])
 
   useEffect(() => {
     restoreProjectIdRef.current = selectedProject?.id ?? null

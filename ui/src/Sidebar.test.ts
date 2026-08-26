@@ -388,6 +388,59 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   }))
 })
 
+test('un tour qui quitte le flottant fait apparaître la conversation à lire', async () => {
+  const conversation: Conversation = {
+    ...startedConversation,
+    id: 'conversation-en-fond',
+    title: 'Conversation en fond',
+    answered_turn: 0,
+    last_read_turn: 0,
+  }
+  const listed: Conversation[] = [conversation]
+  const activeItem: FleetItem = {
+    id: 'turn-en-fond',
+    kind: 'turn',
+    projectId: project.id,
+    projectName: project.name,
+    conversationId: conversation.id,
+    title: conversation.title,
+    provider: conversation.provider,
+    model: conversation.model,
+    startedAt: '2026-08-08T09:05:00.000Z',
+    lastEvent: 'outil · lecture',
+  }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), listed)
+  const props = {
+    selectedProject: project,
+    selectedConversation: null,
+    onProjectSelect: () => undefined,
+    onConversationSelect: () => undefined,
+    onConversationCreate: () => undefined,
+    conversationListVersion: 0,
+    quotas: { snapshot: { claude: null, codex: null, grok: null } },
+    runningSubtasks: 0,
+    workspaceView: 'conversations' as const,
+    time: null,
+    timeMode: 'user' as const,
+    onTimeModeToggle: () => undefined,
+  }
+  const { rerender } = render(createElement(Sidebar, { ...props, activeFleet: [activeItem] }))
+
+  await waitFor(() => {
+    expect(document.querySelector('.navigation-row')?.className).toContain('conv-row-state-live')
+  })
+
+  // Le tour se termine : le sidecar a écrit `answered_turn` avant de retirer
+  // l'entrée du flottant.
+  listed[0] = { ...conversation, answered_turn: 1 }
+  rerender(createElement(Sidebar, { ...props, activeFleet: [] }))
+
+  await waitFor(() => {
+    expect(document.querySelector('.navigation-row')?.className).toContain('conv-row-state-unread')
+  })
+  expect(screen.getByText('1 à lire')).toBeTruthy()
+})
+
 test('revenir sur un projet rouvre sa dernière conversation', async () => {
   const conversation: Conversation = {
     ...startedConversation,
