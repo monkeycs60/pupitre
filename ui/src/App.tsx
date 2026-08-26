@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -24,27 +24,16 @@ import {
 } from './api'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
-import { SkillsLibrary } from './SkillsLibrary'
-import { RoutinesView } from './RoutinesView'
 import { useAppNotifications } from './useAppNotifications'
-import { FleetView } from './FleetView'
 import { CommandPalette } from './CommandPalette'
 import { createSessionSummary, createTestInventory, startReview } from './api'
 import type { SkillSummary } from './types'
-import { CostsView } from './CostsView'
-import { MemoryView } from './MemoryView'
 import { ResumeCommandButton } from './ResumeCommandButton'
-import { HelpView } from './HelpView'
 import type { AppEvent, WorkspaceView } from './types'
 import { useTimeTracking } from './useTimeTracking'
 import { useFleet } from './useFleet'
 import { countConversationMessages } from './conversationMessageCount'
-import { ProgressView } from './ProgressView'
-import { AppSettingsView } from './AppSettingsView'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
-import { DocumentsView } from './DocumentsView'
-import { DesignView } from './DesignView'
-import { DashboardView } from './DashboardView'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { ConversationInstruction } from './ConversationInstruction'
@@ -59,6 +48,18 @@ import {
   restoreProject,
   writeLastActiveLocation,
 } from './restoreLocation'
+
+const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
+const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
+const FleetView = lazy(() => import('./FleetView').then((module) => ({ default: module.FleetView })))
+const CostsView = lazy(() => import('./CostsView').then((module) => ({ default: module.CostsView })))
+const MemoryView = lazy(() => import('./MemoryView').then((module) => ({ default: module.MemoryView })))
+const HelpView = lazy(() => import('./HelpView').then((module) => ({ default: module.HelpView })))
+const ProgressView = lazy(() => import('./ProgressView').then((module) => ({ default: module.ProgressView })))
+const AppSettingsView = lazy(() => import('./AppSettingsView').then((module) => ({ default: module.AppSettingsView })))
+const DocumentsView = lazy(() => import('./DocumentsView').then((module) => ({ default: module.DocumentsView })))
+const DesignView = lazy(() => import('./DesignView').then((module) => ({ default: module.DesignView })))
+const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
 
 const DEFAULT_SIDEBAR_WIDTH = 296
 const MIN_SIDEBAR_WIDTH = 240
@@ -706,6 +707,7 @@ function App() {
       ) : null}
 
       <section className="workspace" aria-label={titlebarView ?? 'Conversation'}>
+        <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
         {workspaceView === 'documents' ? (
           <DocumentsView
             currentProject={selectedProject}
@@ -851,6 +853,7 @@ function App() {
             ) : null}
           </>
         )}
+        </Suspense>
       </section>
       <CommandPalette
         open={paletteOpen}

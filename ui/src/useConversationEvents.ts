@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getConversationEvents, getSubtaskEvents } from './api'
+import { getConversationEventPage, getSubtaskEventPage } from './api'
 import { reconnectDelayMs } from './backoff'
 import { appendLiveEvent, mergeReplayAndBuffer } from './mergeEvents'
 import type { StoredEvent } from './types'
@@ -22,16 +22,57 @@ export interface ConversationEvents {
 // C'est la seule différence entre les deux flux : `kind` la porte.
 export type EventsKind = 'conversation' | 'subtask'
 
+const replayCache = new Map<string, StoredEvent[]>()
+const MAX_CACHED_REPLAYS = 12
+
+function cacheKey(id: string, kind: EventsKind): string {
+  return `${kind}:${id}`
+}
+
+function cacheReplay(key: string, events: StoredEvent[]): void {
+  replayCache.delete(key)
+  replayCache.set(key, events)
+  if (replayCache.size > MAX_CACHED_REPLAYS) {
+    replayCache.delete(replayCache.keys().next().value as string)
+  }
+}
+
+function mergeLatestPage(
+  replay: StoredEvent[],
+  visible: StoredEvent[],
+  pending: StoredEvent[],
+): StoredEvent[] {
+  if (replay.length === 0) {
+    let next = visible
+    for (const event of pending) next = appendLiveEvent(next, event)
+    return next
+  }
+  const firstReplayId = replay[0]?.id ?? Number.POSITIVE_INFINITY
+  const older = visible.filter((event) => event.id < firstReplayId)
+  return [...older, ...mergeReplayAndBuffer(replay, [...visible, ...pending])]
+}
+
+function prependHistoricalPage(page: StoredEvent[], current: StoredEvent[]): StoredEvent[] {
+  const byId = new Map(page.map((event) => [event.id, event]))
+  for (const event of current) byId.set(event.id, event)
+  return [...byId.values()].sort((left, right) => left.id - right.id)
+}
+
 export function useConversationEvents(
   conversationId: string | null,
   kind: EventsKind = 'conversation',
 ): ConversationEvents {
-  const [events, setEvents] = useState<StoredEvent[]>([])
+  const selectedKey = conversationId === null ? null : cacheKey(conversationId, kind)
+  const [eventState, setEventState] = useState<{ key: string | null; events: StoredEvent[] }>(() => ({
+    key: selectedKey,
+    events: selectedKey === null ? [] : replayCache.get(selectedKey) ?? [],
+  }))
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const [retryAt, setRetryAt] = useState<number | null>(null)
 
   useEffect(() => {
-    setEvents([])
+    const key = conversationId === null ? null : cacheKey(conversationId, kind)
+    setEventState({ key, events: key === null ? [] : replayCache.get(key) ?? [] })
     setConnection('connecting')
     setRetryAt(null)
     if (conversationId === null) return
@@ -40,7 +81,24 @@ export function useConversationEvents(
     let socket: WebSocket | null = null
     let abortController: AbortController | null = null
     let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let olderPageTimer: ReturnType<typeof setTimeout> | undefined
+    let frame: number | null = null
+    let frameBuffer: StoredEvent[] = []
     let failedAttempts = 0
+
+    function flushFrame() {
+      frame = null
+      const pending = frameBuffer
+      frameBuffer = []
+      if (pending.length === 0) return
+      setEventState((current) => {
+        const base = current.key === key ? current.events : replayCache.get(key!) ?? []
+        let next = base
+        for (const event of pending) next = appendLiveEvent(next, event)
+        if (key !== null) cacheReplay(key, next)
+        return { key, events: next }
+      })
+    }
 
     function connect(id: string) {
       let buffer: StoredEvent[] | null = []
@@ -95,25 +153,49 @@ export function useConversationEvents(
         }
 
         if (buffer !== null) buffer.push(event)
-        else setEvents((current) => appendLiveEvent(current, event))
+        else {
+          frameBuffer.push(event)
+          frame ??= requestAnimationFrame(flushFrame)
+        }
       })
 
       currentSocket.addEventListener('close', dropAndRetry)
       currentSocket.addEventListener('error', dropAndRetry)
 
-      const fetchReplay =
-        kind === 'subtask' ? getSubtaskEvents : getConversationEvents
+      const fetchReplayPage = kind === 'subtask'
+        ? getSubtaskEventPage
+        : getConversationEventPage
 
-      void fetchReplay(id, controller.signal)
-        .then((replay) => {
+      void fetchReplayPage(id, null, controller.signal)
+        .then((page) => {
           if (controller.signal.aborted || disposed) return
 
           const pending = buffer ?? []
           buffer = null
-          setEvents((current) =>
-            mergeReplayAndBuffer(replay, [...current, ...pending]),
-          )
+          setEventState((current) => {
+            const visible = current.key === key ? current.events : replayCache.get(key!) ?? []
+            const next = mergeLatestPage(page.events, visible, pending)
+            if (key !== null) cacheReplay(key, next)
+            return { key, events: next }
+          })
           failedAttempts = 0
+
+          const loadOlder = (before: number | null) => {
+            if (before === null || controller.signal.aborted || disposed) return
+            void fetchReplayPage(id, before, controller.signal).then((older) => {
+              if (controller.signal.aborted || disposed) return
+              setEventState((current) => {
+                const visible = current.key === key ? current.events : replayCache.get(key!) ?? []
+                const next = prependHistoricalPage(older.events, visible)
+                if (key !== null) cacheReplay(key, next)
+                return { key, events: next }
+              })
+              olderPageTimer = setTimeout(() => loadOlder(older.nextBefore), 16)
+            }).catch((error: unknown) => {
+              if (!controller.signal.aborted && !disposed) console.error(error)
+            })
+          }
+          olderPageTimer = setTimeout(() => loadOlder(page.nextBefore), 16)
         })
         .catch((error: unknown) => {
           if (controller.signal.aborted || disposed) return
@@ -127,10 +209,15 @@ export function useConversationEvents(
     return () => {
       disposed = true
       clearTimeout(retryTimer)
+      clearTimeout(olderPageTimer)
+      if (frame !== null) cancelAnimationFrame(frame)
       abortController?.abort()
       socket?.close()
     }
   }, [conversationId, kind])
 
+  const events = eventState.key === selectedKey
+    ? eventState.events
+    : selectedKey === null ? [] : replayCache.get(selectedKey) ?? []
   return { events, connection, retryAt }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
   associateConversationDomain,
   dissociateConversationDomain,
@@ -100,6 +100,7 @@ const SCOPE_PLACEHOLDERS: Record<ConversationScope, string> = {
   archived: 'Filtrer les archives…',
   trash: 'Filtrer la corbeille…',
 }
+const conversationListCache = new Map<string, Conversation[]>()
 type ConversationRowState = 'live' | 'unread' | 'read'
 
 function conversationRowState(
@@ -223,7 +224,7 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
     .sort((left, right) => left.key === 'pinned' ? -1 : right.key === 'pinned' ? 1 : (right.latestUpdatedAt ?? 0) - (left.latestUpdatedAt ?? 0))
 }
 
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   selectedProject,
   selectedConversation,
   onProjectSelect,
@@ -271,32 +272,30 @@ export function Sidebar({
   // La seconde n'alimente que le chrono des conversations live ; au repos, ce
   // tick re-rendait toute la sidebar (groupes, tris, previews) chaque seconde.
   const now = useNow(activeFleet.length > 0 || runningSubtasks > 0 ? 1_000 : 30_000)
-  const activeByConversation = new Map<string, FleetItem>()
-  for (const item of activeFleet) {
-    if (!activeByConversation.has(item.conversationId)) activeByConversation.set(item.conversationId, item)
-  }
-  const activeConversationIds = new Set(activeByConversation.keys())
-  const activeDomains = projectDomains.filter((domain) => domain.status === 'actif')
-  const proposedDomainCount = projectDomains.filter((domain) => domain.status === 'proposé').length
-  if (workspaceView === 'conversations' && selectedConversation !== null && runningSubtasks > 0) {
-    activeConversationIds.add(selectedConversation.id)
-  }
-  useEffect(() => {
-    setConversations([])
-    setWorkflows([])
-    setProjectDomains([])
-  }, [selectedProject?.id, conversationScope])
-
+  const activeByConversation = useMemo(() => {
+    const byConversation = new Map<string, FleetItem>()
+    for (const item of activeFleet) {
+      if (!byConversation.has(item.conversationId)) byConversation.set(item.conversationId, item)
+    }
+    return byConversation
+  }, [activeFleet])
+  const activeConversationIds = useMemo(() => new Set(activeByConversation.keys()), [activeByConversation])
+  const activeDomains = useMemo(() => projectDomains.filter((domain) => domain.status === 'actif'), [projectDomains])
+  const proposedDomainCount = useMemo(() => projectDomains.filter((domain) => domain.status === 'proposé').length, [projectDomains])
+  const displayedActiveConversationIds = useMemo(() => {
+    const ids = new Set(activeConversationIds)
+    if (workspaceView === 'conversations' && selectedConversation !== null && runningSubtasks > 0) ids.add(selectedConversation.id)
+    return ids
+  }, [activeConversationIds, workspaceView, selectedConversation, runningSubtasks])
   useEffect(() => {
     let ignore = false
     if (selectedProject === null) return
 
-    void Promise.all([
-      listProjectConversations(selectedProject.id, conversationScope),
-      listProjectWorkflows(selectedProject.id),
-      listProjectDomains(selectedProject.id).catch(() => [] as ProjectDomain[]),
-    ])
-      .then(([items, loadedWorkflows, loadedDomains]) => {
+    const listKey = `${selectedProject.id}:${conversationScope}`
+    const cached = conversationListCache.get(listKey)
+    if (cached) setConversations(cached)
+    void listProjectConversations(selectedProject.id, conversationScope)
+      .then((items) => {
         if (!ignore) {
           const scopedItems = items
           const currentSelectedConversation = selectedConversationRef.current
@@ -310,9 +309,9 @@ export function Sidebar({
               ? { ...item, last_read_turn: selectedLoadedConversation.digest_turn }
               : item)
             : scopedItems
-          setConversations(pinnedFirst(nextItems))
-          setWorkflows(loadedWorkflows)
-          setProjectDomains(loadedDomains)
+          const ordered = pinnedFirst(nextItems)
+          conversationListCache.set(listKey, ordered)
+          setConversations(ordered)
           if (shouldMarkSelectedRead) {
             void markConversationRead(
               selectedLoadedConversation.id,
@@ -324,6 +323,12 @@ export function Sidebar({
       .catch((loadError: unknown) => {
         if (!ignore) setError(errorMessage(loadError))
       })
+    void listProjectWorkflows(selectedProject.id)
+      .then((items) => { if (!ignore) setWorkflows(items) })
+      .catch(() => {})
+    void listProjectDomains(selectedProject.id)
+      .then((items) => { if (!ignore) setProjectDomains(items) })
+      .catch(() => { if (!ignore) setProjectDomains([]) })
 
     return () => {
       ignore = true
@@ -527,6 +532,14 @@ export function Sidebar({
   }
 
 
+  const conversationGroups = useMemo(() => {
+    const query = filterText.trim().toLowerCase()
+    const filtered = query
+      ? conversations.filter((item) => item.title.toLowerCase().includes(query))
+      : conversations
+    return groupConversations(filtered)
+  }, [conversations, filterText])
+
   return (
     <aside className="sidebar">
       <div className="conv-sidebar-header">
@@ -669,17 +682,13 @@ export function Sidebar({
           ) : conversations.length === 0 ? (
             <p className="list-empty">Aucune conversation</p>
           ) : (() => {
-            const query = filterText.trim().toLowerCase()
-            const filtered = query
-              ? conversations.filter((item) => item.title.toLowerCase().includes(query))
-              : conversations
-            if (filtered.length === 0) {
+            if (conversationGroups.length === 0) {
               return <p className="list-empty">Aucune conversation ne correspond</p>
             }
-            return groupConversations(filtered).map((group) => {
+            return conversationGroups.map((group) => {
               const isCollapsed = collapsedGroups.has(group.key)
               const unread = group.items.filter((conversation) => (
-                conversationRowState(conversation, activeConversationIds) === 'unread'
+                conversationRowState(conversation, displayedActiveConversationIds) === 'unread'
               )).length
               const groupLinks = group.ticketKey ? ticketLinks?.get(group.ticketKey) : undefined
               const groupSentryUrl = group.sentryKey ? sentryLinks?.get(group.sentryKey) : undefined
@@ -727,7 +736,7 @@ export function Sidebar({
                 const isSelected = (workspaceView === 'conversations' || workspaceView === 'git')
                   && selectedConversation?.id === conversation.id
                 const activeItem = activeByConversation.get(conversation.id)
-                const state = conversationRowState(conversation, activeConversationIds)
+                const state = conversationRowState(conversation, displayedActiveConversationIds)
                 const branch = branchOfWorktree(conversation.worktree_path)
                 const messageCount = isSelected ? liveConversationMessageCount : undefined
                 return (
@@ -1000,4 +1009,4 @@ export function Sidebar({
       </div>
     </aside>
   )
-}
+})

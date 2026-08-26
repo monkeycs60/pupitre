@@ -113,7 +113,17 @@ export class ReviewStore {
     const rows = this.db.query(`
       SELECT * FROM reviews WHERE project_id = ? ORDER BY created_at DESC
     `).all(projectId) as any[];
-    return rows.map((row) => this.hydrate(row));
+    return this.hydrateMany(rows);
+  }
+
+  listSummariesByProject(projectId: string): Review[] {
+    const rows = this.db.query(`
+      SELECT id, project_id, conversation_id, git_ref_base, git_ref_head,
+             status, review_provider, review_model, review_effort, review_speed,
+             error, created_at, updated_at, code_provider, scope, parent_review_id
+      FROM reviews WHERE project_id = ? ORDER BY created_at DESC
+    `).all(projectId) as any[];
+    return this.hydrateMany(rows.map((row) => ({ ...row, diff_text: "" })));
   }
 
   latestDone(projectId: string, scope: string): Review | null {
@@ -153,10 +163,13 @@ export class ReviewStore {
   }
 
   listTestingFlags(projectId: string): ReviewFlag[] {
-    return this.listByProject(projectId).flatMap((review) => review.flags).filter((flag) => {
-      if (flag.status !== "open" && flag.status !== "countered") return false;
-      return flag.test_gap;
-    });
+    return (this.db.query(`
+      SELECT f.*, COALESCE(f.code_provider, r.code_provider, c.provider) AS code_provider
+      FROM review_flags f
+      JOIN reviews r ON r.id = f.review_id
+      JOIN conversations c ON c.id = r.conversation_id
+      WHERE r.project_id = ? AND f.status IN ('open', 'countered') AND f.is_test_gap = 1
+    `).all(projectId) as any[]).map(hydrateFlag);
   }
 
   ackFlags(ids: string[]): string[] {
@@ -388,20 +401,38 @@ export class ReviewStore {
   }
 
   private hydrate(row: any): Review {
+    return this.hydrateMany([row])[0]!;
+  }
+
+  private hydrateMany(rows: any[]): Review[] {
+    if (rows.length === 0) return [];
+    const reviewPlaceholders = rows.map(() => "?").join(", ");
     const flags = (this.db.query(`
-      SELECT f.*, COALESCE(f.code_provider, ?, c.provider) AS code_provider
+      SELECT f.*, COALESCE(f.code_provider, r.code_provider, c.provider) AS code_provider
       FROM review_flags f
       JOIN reviews r ON r.id = f.review_id
       JOIN conversations c ON c.id = r.conversation_id
-      WHERE f.review_id = ?
+      WHERE f.review_id IN (${reviewPlaceholders})
       ORDER BY CASE severity WHEN 'red' THEN 0 WHEN 'orange' THEN 1 ELSE 2 END,
                file ASC, line_start ASC
-    `).all(row.code_provider, row.id) as any[]).map(hydrateFlag);
-    return {
-      ...row,
-      flags,
-      code_provider: row.code_provider ?? this.conversationProvider(row.conversation_id),
-    } as Review;
+    `).all(...rows.map((item) => item.id)) as any[]).map(hydrateFlag);
+    const flagsByReview = new Map<string, ReviewFlag[]>();
+    for (const flag of flags) {
+      const grouped = flagsByReview.get(flag.review_id) ?? [];
+      grouped.push(flag);
+      flagsByReview.set(flag.review_id, grouped);
+    }
+    const conversationIds = [...new Set(rows.map((item) => item.conversation_id as string))];
+    const providers = new Map((this.db.query(`
+      SELECT id, provider FROM conversations
+      WHERE id IN (${conversationIds.map(() => "?").join(", ")})
+    `).all(...conversationIds) as Array<{ id: string; provider: Provider }>)
+      .map((conversation) => [conversation.id, conversation.provider]));
+    return rows.map((item) => ({
+      ...item,
+      flags: flagsByReview.get(item.id) ?? [],
+      code_provider: item.code_provider ?? providers.get(item.conversation_id) ?? "codex",
+    } as Review));
   }
 
 

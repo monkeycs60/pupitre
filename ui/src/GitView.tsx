@@ -5,6 +5,7 @@ import {
   getConversationDiff,
   getProjectGit,
   getProjectGitDiff,
+  getReview,
   listProjectReviews,
   startReview,
 } from './api'
@@ -337,10 +338,13 @@ function HistoryTab({ project, conversation, snapshot, reviews, onReviewStarted 
 
   useEffect(() => {
     if (!selectedCommit) { setDetailDiff(''); return }
-    if (commitReview) { setDetailDiff(commitReview.diff_text); return }
+    if (commitReview?.diff_text) { setDetailDiff(commitReview.diff_text); return }
     const controller = new AbortController()
-    void getProjectGitDiff(project.id, selectedCommit.parents[0] ?? `${selectedCommit.sha}^`, selectedCommit.sha, conversation.id, controller.signal)
-      .then((loaded) => { if (!controller.signal.aborted) setDetailDiff(loaded.diff) })
+    const load = commitReview
+      ? getReview(commitReview.id, controller.signal).then((loaded) => loaded.diff_text)
+      : getProjectGitDiff(project.id, selectedCommit.parents[0] ?? `${selectedCommit.sha}^`, selectedCommit.sha, conversation.id, controller.signal).then((loaded) => loaded.diff)
+    void load
+      .then((diff) => { if (!controller.signal.aborted) setDetailDiff(diff) })
       .catch((reason) => { if (!controller.signal.aborted) setError(errorMessage(reason)) })
     return () => controller.abort()
   }, [project.id, conversation.id, selectedCommit, commitReview])
@@ -399,7 +403,14 @@ export function GitView({ project, conversation, focusedFlagId = null, reviewSta
     if (signal?.aborted) return
     setSnapshot(loadedSnapshot)
     setLive(loadedLive)
-    setReviews(loadedReviews)
+    const currentSummary = loadedReviews.find((item) => item.conversation_id === conversation.id && item.scope === 'worktree' && item.status !== 'running')
+    const currentDetail = currentSummary && !currentSummary.diff_text
+      ? await getReview(currentSummary.id, signal)
+      : currentSummary ?? null
+    if (signal?.aborted) return
+    setReviews(currentDetail
+      ? loadedReviews.map((item) => item.id === currentDetail.id ? currentDetail : item)
+      : loadedReviews)
   }, [project.id, conversation?.id])
 
   useEffect(() => {

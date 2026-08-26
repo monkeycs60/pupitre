@@ -220,12 +220,15 @@ export function guardianAckCount(events: ReadonlyArray<AppEvent>): number {
 }
 
 /** Regroupe les événements bruts d'une conversation en blocs affichables. */
-export function groupEvents(events: ReadonlyArray<AppEvent & { id?: number }>): StreamBlock[] {
+export function groupEvents(
+  events: ReadonlyArray<AppEvent & { id?: number }>,
+  initialTurnNumber = 0,
+): StreamBlock[] {
   const blocks: StreamBlock[] = []
   const tools = new Map<string, Extract<EventBlock, { kind: 'tool' }>>()
   const testInventories = new Map<string, TestInventoryBlock>()
   let assistant: Extract<EventBlock, { kind: 'assistant' }> | null = null
-  let turnNumber = 0
+  let turnNumber = initialTurnNumber
   let turnFooter: Extract<EventBlock, { kind: 'turn-footer' }> | null = null
   let turnFiles = new Map<string, { added: number; removed: number }>()
 

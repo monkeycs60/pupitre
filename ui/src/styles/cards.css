@@ -318,6 +318,8 @@
 /* --- Sous-tâches déléguées ------------------------------------------------ */
 
 .subtask-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
   margin: var(--space-1) 0 var(--space-4);
   overflow: hidden;
   background: var(--bg-raised);

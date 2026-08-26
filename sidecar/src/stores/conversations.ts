@@ -193,6 +193,18 @@ export class ConversationStore {
     }));
   }
 
+  unreadCountsByProject(): Record<string, number> {
+    const rows = this.db.query(`
+      SELECT project_id, COUNT(*) AS count
+      FROM conversations
+      WHERE deleted_at IS NULL
+        AND archived = 0
+        AND digest_turn > last_read_turn
+      GROUP BY project_id
+    `).all() as Array<{ project_id: string; count: number | bigint }>;
+    return Object.fromEntries(rows.map((row) => [row.project_id, Number(row.count)]));
+  }
+
   /** Renommage manuel : fige le titre, la régénération automatique s'arrête là. */
   rename(id: string, title: string): Conversation | null {
     const nextTitle = title.trim().slice(0, TITLE_MAX);
@@ -511,6 +523,87 @@ export class ConversationStore {
       }
     }
     return events;
+  }
+
+  /**
+   * Replay destiné à l'interface. Les limites de quota vivent dans leur canal
+   * dédié et chaque `text-final` remplace les deltas qui le précèdent ; les
+   * garder dans le transcript multipliait le JSON et le travail React sans
+   * ajouter d'information visible. Les deltas postérieurs au dernier final
+   * restent présents pour restaurer un tour interrompu en plein streaming.
+   */
+  listReplayEvents(conversationId: string): StoredEvent[] {
+    const rows = this.db.query(`
+      WITH last_final AS (
+        SELECT COALESCE(MAX(id), 0) AS id
+        FROM events
+        WHERE conversation_id = ?
+          AND json_valid(payload)
+          AND json_extract(payload, '$.type') = 'text-final'
+      )
+      SELECT events.id, events.payload
+      FROM events, last_final
+      WHERE events.conversation_id = ?
+        AND (
+          NOT json_valid(events.payload)
+          OR json_extract(events.payload, '$.type') != 'rate-limit'
+        )
+        AND (
+          NOT json_valid(events.payload)
+          OR json_extract(events.payload, '$.type') != 'text-delta'
+          OR events.id > last_final.id
+        )
+      ORDER BY events.id
+    `).all(conversationId, conversationId) as Array<{ id: number | bigint; payload: string }>;
+    const events: StoredEvent[] = [];
+    for (const row of rows) {
+      try {
+        events.push({ ...JSON.parse(row.payload), id: Number(row.id) });
+      } catch (error) {
+        console.error("Événement de conversation corrompu, ligne ignorée", error);
+      }
+    }
+    return events;
+  }
+
+  listReplayEventPage(
+    conversationId: string,
+    before: number | null,
+    limit: number,
+  ): { events: StoredEvent[]; nextBefore: number | null } {
+    const rows = this.db.query(`
+      WITH last_final AS (
+        SELECT COALESCE(MAX(id), 0) AS id
+        FROM events
+        WHERE conversation_id = ?
+          AND json_valid(payload)
+          AND json_extract(payload, '$.type') = 'text-final'
+      )
+      SELECT events.id, events.payload
+      FROM events, last_final
+      WHERE events.conversation_id = ?
+        AND (? IS NULL OR events.id < ?)
+        AND (NOT json_valid(events.payload) OR json_extract(events.payload, '$.type') != 'rate-limit')
+        AND (
+          NOT json_valid(events.payload)
+          OR json_extract(events.payload, '$.type') != 'text-delta'
+          OR events.id > last_final.id
+        )
+      ORDER BY events.id DESC
+      LIMIT ?
+    `).all(conversationId, conversationId, before, before, limit) as Array<{ id: number | bigint; payload: string }>;
+    const events: StoredEvent[] = [];
+    for (const row of rows.reverse()) {
+      try {
+        events.push({ ...JSON.parse(row.payload), id: Number(row.id) });
+      } catch (error) {
+        console.error("Événement de conversation corrompu, ligne ignorée", error);
+      }
+    }
+    return {
+      events,
+      nextBefore: rows.length === limit ? Number(rows[0]!.id) : null,
+    };
   }
 
   /** Le dernier événement seul : le snapshot fleet le lit chaque seconde,

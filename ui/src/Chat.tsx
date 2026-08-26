@@ -7,7 +7,7 @@ import {
   useState,
 } from 'react'
 import { EventStream } from './EventStream'
-import { groupEvents } from './groupEvents'
+import { useGroupedEvents } from './useGroupedEvents'
 import { retryCountdownSeconds } from './backoff'
 import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
@@ -182,11 +182,12 @@ export function Chat({
   const draftStorageKey = conversation === null
     ? newConversationDraftStorageKey(project.id, ticketId)
     : `pupitre:draft:${conversation.id}`
-  const blocks = useMemo(() => groupEvents(events), [events])
+  const blocks = useGroupedEvents(conversation?.id ?? null, events)
   const isRunning = lastStatusIsRunning(events)
   const uncatalogued = useMemo(() => hasUncataloguedWork(events), [events])
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
+  const scrollFrameRef = useRef<number | null>(null)
   const onConversationReadRef = useRef(onConversationRead)
   onConversationReadRef.current = onConversationRead
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
@@ -274,15 +275,21 @@ export function Chat({
   }, [selectedActions])
 
   function handleScroll() {
-    const viewport = viewportRef.current
-    if (viewport === null) return
-
-    const distanceFromBottom =
-      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
-    followsBottomRef.current = distanceFromBottom <= 64
-    setAtBottom(followsBottomRef.current)
-    if (followsBottomRef.current) onConversationRead?.()
+    if (scrollFrameRef.current !== null) return
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null
+      const viewport = viewportRef.current
+      if (viewport === null) return
+      const followsBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 64
+      followsBottomRef.current = followsBottom
+      setAtBottom((current) => current === followsBottom ? current : followsBottom)
+      if (followsBottom) onConversationReadRef.current?.()
+    })
   }
+
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current)
+  }, [])
 
   useEffect(() => {
     function handleSearchShortcut(event: globalThis.KeyboardEvent) {

@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, memo, useEffect, useState } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
-import { createProject, listProjectConversations, listProjects } from './api'
+import { createProject, getUnreadConversationCounts, listProjects } from './api'
 import type { Project, WorkspaceView } from './types'
 
 /** Rail vertical (56 px) : bascule de projet + navigation globale.
@@ -133,7 +133,7 @@ function pathBasename(path: string): string {
   return trimmed.split(/[\\/]/).pop() || path
 }
 
-export function Rail({
+export const Rail = memo(function Rail({
   selectedProject,
   projectListVersion,
   conversationListVersion = 0,
@@ -172,16 +172,9 @@ export function Rail({
         if (ignore) return
         const ordered = pinnedFirst(items)
         setProjects(ordered)
-        void Promise.all(ordered.map(async (project) => {
-          try {
-            const conversations = await listProjectConversations(project.id)
-            return [project.id, conversations.filter((conversation) => conversation.digest_turn > (conversation.last_read_turn ?? 0)).length] as const
-          } catch {
-            return [project.id, 0] as const
-          }
-        })).then((entries) => {
-          if (!ignore) setUnreadByProject(Object.fromEntries(entries))
-        })
+        void getUnreadConversationCounts().then((counts) => {
+          if (!ignore) setUnreadByProject(counts)
+        }).catch(() => {})
       })
       .catch(() => {})
     return () => {
@@ -312,4 +305,4 @@ export function Rail({
       </div>
     </nav>
   )
-}
+})

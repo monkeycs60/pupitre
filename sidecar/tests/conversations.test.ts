@@ -262,6 +262,52 @@ test("appendEvent + listEvents rejouent dans l'ordre", () => {
   expect(convs.listEvents(c.id).map((e: any) => e.text)).toEqual(["a", "b"]);
 });
 
+test("listReplayEvents retire les quotas et les deltas remplacés sans perdre le streaming courant", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  convs.appendEvent(c.id, { type: "user-message", text: "x", images: [] });
+  convs.appendEvent(c.id, { type: "text-delta", text: "ancienne " });
+  convs.appendEvent(c.id, { type: "text-delta", text: "réponse" });
+  const finalId = convs.appendEvent(c.id, { type: "text-final", text: "ancienne réponse" });
+  convs.appendEvent(c.id, { type: "rate-limit", provider: "claude", payload: { reset: 1 } });
+  const liveDeltaId = convs.appendEvent(c.id, { type: "text-delta", text: "en cours" });
+
+  expect(convs.listReplayEvents(c.id)).toEqual([
+    expect.objectContaining({ type: "user-message", text: "x" }),
+    { id: finalId, type: "text-final", text: "ancienne réponse" },
+    { id: liveDeltaId, type: "text-delta", text: "en cours" },
+  ]);
+});
+
+test("listReplayEventPage sert la fin du fil puis remonte par curseur sans doublon", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  for (let index = 0; index < 120; index += 1) {
+    convs.appendEvent(c.id, { type: "text-final", text: `réponse ${index}` });
+  }
+
+  const latest = convs.listReplayEventPage(c.id, null, 50);
+  expect(latest.events).toHaveLength(50);
+  expect(latest.events.at(-1)).toMatchObject({ text: "réponse 119" });
+  expect(latest.nextBefore).not.toBeNull();
+  const older = convs.listReplayEventPage(c.id, latest.nextBefore, 50);
+  expect(older.events).toHaveLength(50);
+  expect(older.events.at(-1)!.id).toBeLessThan(latest.events[0]!.id);
+});
+
+test("agrège les compteurs non lus de tous les projets", () => {
+  const otherProjectId = new ProjectStore(db).create({ name: "q", path: "/tmp/q" }).id;
+  const read = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "lu" });
+  const unread = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "non lu" });
+  const otherUnread = convs.create({ projectId: otherProjectId, provider: "claude", model: "opus", firstMessage: "ailleurs" });
+  db.query("UPDATE conversations SET digest_turn = 2, last_read_turn = 2 WHERE id = ?").run(read.id);
+  db.query("UPDATE conversations SET digest_turn = 3, last_read_turn = 1 WHERE id = ?").run(unread.id);
+  db.query("UPDATE conversations SET digest_turn = 1 WHERE id = ?").run(otherUnread.id);
+
+  expect(convs.unreadCountsByProject()).toEqual({
+    [projectId]: 1,
+    [otherProjectId]: 1,
+  });
+});
+
 test("compte une seule réponse assistant par tour malgré plusieurs text-final", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
   convs.appendEvent(c.id, { type: "user-message", text: "x", images: [] });

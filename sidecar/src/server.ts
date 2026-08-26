@@ -1070,9 +1070,12 @@ export function createServer(deps: ServerDeps) {
   const fleetSockets = new Set<ServerWebSocket<WebSocketData>>();
   const ticketSockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   let fleetTimer: ReturnType<typeof setInterval> | null = null;
+  let lastFleetMessage: string | null = null;
   const currentFleet = () => fleetSnapshot(deps);
   const broadcastFleet = () => {
     const message = JSON.stringify(currentFleet());
+    if (message === lastFleetMessage) return;
+    lastFleetMessage = message;
     for (const socket of fleetSockets) {
       try {
         socket.send(message);
@@ -2017,6 +2020,10 @@ export function createServer(deps: ServerDeps) {
           }
           const listed = deps.conversations.listByProject(projectConversationsId, scope);
           return json(deps.domains ? deps.domains.decorateConversations(listed) : listed);
+        }
+
+        if (request.method === "GET" && pathname === "/api/conversations/unread-counts") {
+          return json(deps.conversations.unreadCountsByProject());
         }
 
         const projectCostsId = routeId(pathname, /^\/api\/projects\/([^/]+)\/costs$/);
@@ -3145,7 +3152,18 @@ export function createServer(deps: ServerDeps) {
           if (!deps.conversations.get(conversationEventsId)) {
             throw new HttpError(404, "conversation inconnue");
           }
-          return json(deps.conversations.listEvents(conversationEventsId));
+          const limit = url.searchParams.get("limit");
+          if (limit !== null) {
+            const parsedLimit = Number.parseInt(limit, 10);
+            const beforeValue = url.searchParams.get("before");
+            const before = beforeValue === null ? null : Number.parseInt(beforeValue, 10);
+            if (!Number.isInteger(parsedLimit) || parsedLimit < 50 || parsedLimit > 1_000
+              || (beforeValue !== null && (!Number.isInteger(before) || before! <= 0))) {
+              throw new HttpError(400, "pagination invalide");
+            }
+            return json(deps.conversations.listReplayEventPage(conversationEventsId, before, parsedLimit));
+          }
+          return json(deps.conversations.listReplayEvents(conversationEventsId));
         }
 
         const conversationDiffId = routeId(
@@ -3407,7 +3425,7 @@ export function createServer(deps: ServerDeps) {
           if (!deps.projects.get(projectReviewsId)) {
             throw new HttpError(404, "projet inconnu");
           }
-          return json(deps.reviews.listByProject(projectReviewsId));
+          return json(deps.reviews.listSummariesByProject(projectReviewsId));
         }
 
         const projectReviewStatusId = routeId(
@@ -3569,6 +3587,17 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        if (request.method === "GET" && pathname === "/api/subtasks/batch") {
+          const ids = [...new Set((url.searchParams.get("ids") ?? "").split(",").filter(Boolean))];
+          if (ids.length === 0 || ids.length > 100) {
+            throw new HttpError(400, "liste de sous-tâches invalide");
+          }
+          return json(Object.fromEntries(ids.flatMap((id) => {
+            const result = deps.subtasks.result(id);
+            return result ? [[id, result]] : [];
+          })));
+        }
+
         const subtaskEventsId = routeId(
           pathname,
           /^\/api\/subtasks\/([^/]+)\/events$/,
@@ -3578,7 +3607,18 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(404, "sous-tâche inconnue");
           }
           // Même table, même replay que pour une conversation.
-          return json(deps.conversations.listEvents(subtaskEventsId));
+          const limit = url.searchParams.get("limit");
+          if (limit !== null) {
+            const parsedLimit = Number.parseInt(limit, 10);
+            const beforeValue = url.searchParams.get("before");
+            const before = beforeValue === null ? null : Number.parseInt(beforeValue, 10);
+            if (!Number.isInteger(parsedLimit) || parsedLimit < 50 || parsedLimit > 1_000
+              || (beforeValue !== null && (!Number.isInteger(before) || before! <= 0))) {
+              throw new HttpError(400, "pagination invalide");
+            }
+            return json(deps.conversations.listReplayEventPage(subtaskEventsId, before, parsedLimit));
+          }
+          return json(deps.conversations.listReplayEvents(subtaskEventsId));
         }
 
         const subtaskCancelId = routeId(
@@ -3752,7 +3792,8 @@ export function createServer(deps: ServerDeps) {
         }
         if (socket.data.channel === "fleet") {
           fleetSockets.add(socket);
-          socket.send(JSON.stringify(currentFleet()));
+          const message = JSON.stringify(currentFleet());
+          socket.send(message);
           fleetTimer ??= setInterval(broadcastFleet, 1_000);
           return;
         }

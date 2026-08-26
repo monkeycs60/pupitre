@@ -172,6 +172,10 @@ export class ReviewRunner {
     return this.store.listByProject(projectId);
   }
 
+  listSummariesByProject(projectId: string): Review[] {
+    return this.store.listSummariesByProject(projectId);
+  }
+
   getFlag(id: string): ReviewFlag | null {
     return this.store.getFlag(id);
   }
@@ -597,12 +601,11 @@ export class ReviewRunner {
       }
     }
     const linked = this.store.linkedCommitShas(projectId, conversationId);
-    const reachable: string[] = [];
-    for (const sha of linked) {
-      if (await gitSucceeds(cwd, ["merge-base", "--is-ancestor", sha, head])) {
-        reachable.push(sha);
-      }
-    }
+    const reachability = await Promise.all(linked.map(async (sha) => ({
+      sha,
+      reachable: await gitSucceeds(cwd, ["merge-base", "--is-ancestor", sha, head]),
+    })));
+    const reachable = reachability.flatMap((item) => item.reachable ? [item.sha] : []);
     if (reachable.length === 0) return head;
 
     const common = reachable.length === 1

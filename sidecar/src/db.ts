@@ -496,6 +496,8 @@ export function openDb(dir: string = dataDir()): Database {
   }
   addColumn(db, "conversations", "message_count INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "last_read_turn INTEGER NOT NULL DEFAULT 0");
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_project_state
+    ON conversations(project_id, archived, deleted_at, pinned, updated_at DESC)`);
   addColumn(db, "conversations", "created_on_branch TEXT NULL");
   addColumn(db, "conversations", "origin_type TEXT NULL");
   addColumn(db, "conversations", "origin_key TEXT NULL");

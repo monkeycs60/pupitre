@@ -1412,7 +1412,7 @@ test("les événements WS gardent des ids croissants après compaction du replay
     if (index > 0) expect(event.id).toBeGreaterThan(live[index - 1]!.id);
     // Les text-delta restent fins en WS puis sont compactés en DB après le tour.
     // Tous les autres événements conservent leur ligne et leur id à l'identique.
-    if (event.type !== "text-delta") {
+    if (event.type !== "text-delta" && event.type !== "rate-limit") {
       expect(stored.find((candidate) => candidate.id === event.id)).toEqual(event);
     }
   }

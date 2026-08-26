@@ -824,6 +824,10 @@ export function listProjectConversations(
   return fetchJson(`/api/projects/${routeId(projectId)}/conversations?scope=${scope}`)
 }
 
+export function getUnreadConversationCounts(): Promise<Record<string, number>> {
+  return fetchJson('/api/conversations/unread-counts')
+}
+
 export function getProjectCosts(
   projectId: string,
   month: string,
@@ -1022,6 +1026,24 @@ export function getConversationEvents(
   )
 }
 
+export interface EventPage {
+  events: StoredEvent[]
+  nextBefore: number | null
+}
+
+export async function getConversationEventPage(
+  conversationId: string,
+  before: number | null,
+  signal?: AbortSignal,
+): Promise<EventPage> {
+  const cursor = before === null ? '' : `&before=${before}`
+  const page = await fetchJson<EventPage | StoredEvent[]>(
+    `/api/conversations/${routeId(conversationId)}/events?limit=400${cursor}`,
+    { signal },
+  )
+  return Array.isArray(page) ? { events: page, nextBefore: null } : page
+}
+
 /** Le diff exact que lit le Gardien pour scanner cette conversation. */
 export function getConversationDiff(
   conversationId: string,
@@ -1130,11 +1152,50 @@ export async function dispatchGroupedFlags(
   return { subtaskId: payload.subtaskId, dispatched: payload.dispatched, flagIds: dispatchedFlagIds(payload) }
 }
 
+interface PendingSubtaskRequest {
+  id: string
+  signal?: AbortSignal
+  resolve: (result: SubtaskResult) => void
+  reject: (error: unknown) => void
+}
+
+let pendingSubtasks: PendingSubtaskRequest[] = []
+let subtaskBatchScheduled = false
+
+function flushSubtaskBatch(): void {
+  subtaskBatchScheduled = false
+  const pending = pendingSubtasks
+  pendingSubtasks = []
+  const active = pending.filter((request) => !request.signal?.aborted)
+  for (const request of pending) {
+    if (request.signal?.aborted) request.reject(new DOMException('Aborted', 'AbortError'))
+  }
+  if (active.length === 0) return
+  const ids = [...new Set(active.map((request) => request.id))]
+  void fetchJson<Record<string, SubtaskResult>>(
+    `/api/subtasks/batch?ids=${ids.map(routeId).join(',')}`,
+  ).then((results) => {
+    for (const request of active) {
+      const result = results[request.id]
+      if (result) request.resolve(result)
+      else request.reject(new ApiError(404, 'sous-tâche inconnue'))
+    }
+  }).catch((error: unknown) => {
+    for (const request of active) request.reject(error)
+  })
+}
+
 export function getSubtask(
   subtaskId: string,
   signal?: AbortSignal,
 ): Promise<SubtaskResult> {
-  return fetchJson(`/api/subtasks/${routeId(subtaskId)}`, { signal })
+  return new Promise((resolve, reject) => {
+    pendingSubtasks.push({ id: subtaskId, signal, resolve, reject })
+    if (!subtaskBatchScheduled) {
+      subtaskBatchScheduled = true
+      queueMicrotask(flushSubtaskBatch)
+    }
+  })
 }
 
 // Les events d'une sous-tâche vivent dans la même table que ceux d'une
@@ -1145,6 +1206,19 @@ export function getSubtaskEvents(
   signal?: AbortSignal,
 ): Promise<StoredEvent[]> {
   return fetchJson(`/api/subtasks/${routeId(subtaskId)}/events`, { signal })
+}
+
+export async function getSubtaskEventPage(
+  subtaskId: string,
+  before: number | null,
+  signal?: AbortSignal,
+): Promise<EventPage> {
+  const cursor = before === null ? '' : `&before=${before}`
+  const page = await fetchJson<EventPage | StoredEvent[]>(
+    `/api/subtasks/${routeId(subtaskId)}/events?limit=400${cursor}`,
+    { signal },
+  )
+  return Array.isArray(page) ? { events: page, nextBefore: null } : page
 }
 
 export function cancelSubtask(subtaskId: string): Promise<void> {

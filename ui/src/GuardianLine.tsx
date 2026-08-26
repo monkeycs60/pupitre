@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getConversationDiff, listProjectReviews } from './api'
+import { getConversationDiff, getReview, listProjectReviews } from './api'
 import { isScanRunning } from './reviewStatus'
 import type { Conversation, Project, Review, ReviewStatusSnapshot } from './types'
 
@@ -75,9 +75,13 @@ export function GuardianLine({ conversation, project, reviewStatus, onRelire }: 
     const seq = loadSeq.current
     const outdated = () => signal?.aborted === true || seq !== loadSeq.current
     void listProjectReviews(project.id, signal)
-      .then((reviews) => {
+      .then(async (reviews) => {
         if (outdated()) return
-        setReview(reviews.find((item) => item.conversation_id === conversation.id && item.scope === 'worktree' && item.status !== 'running') ?? null)
+        const summary = reviews.find((item) => item.conversation_id === conversation.id && item.scope === 'worktree' && item.status !== 'running') ?? null
+        const detail = summary === null || summary.diff_text
+          ? summary
+          : await getReview(summary.id, signal)
+        if (!outdated()) setReview(detail)
       })
       .catch(() => {})
     void getConversationDiff(conversation.id, signal)

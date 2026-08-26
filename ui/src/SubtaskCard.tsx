@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { cancelSubtask, getSubtask } from './api'
 import { EventStream } from './EventStream'
 import { groupEvents, type SubtaskBlock } from './groupEvents'
@@ -129,8 +129,8 @@ export function SubtaskCard({
     return () => onStatusChange?.(block.subtaskId, null)
   }, [block.subtaskId, status, onStatusChange])
 
-  const blocks = groupEvents(events)
-  const tokens = totalTokens(events)
+  const blocks = useMemo(() => groupEvents(events), [events])
+  const tokens = useMemo(() => totalTokens(events), [events])
   const duration = elapsedMs(subtask, isRunning, now)
   const failure = subtaskFailure(status, events, snapshot?.error ?? null)
 
