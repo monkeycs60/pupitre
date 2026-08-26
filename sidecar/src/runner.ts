@@ -350,6 +350,13 @@ export class ConversationRunner {
           conversation_id: conversationId,
         });
       }
+      try {
+        this.convs.markAnswered(conversationId);
+      } catch (error) {
+        // Le tour est rendu : un marqueur de lecture perdu ne doit pas le
+        // transformer en échec.
+        console.error("Marquage du tour répondu impossible", error);
+      }
       const activeTurn = this.active.get(conversationId);
       this.active.delete(conversationId);
       activeTurn?.finish();

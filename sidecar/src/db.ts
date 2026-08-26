@@ -68,6 +68,7 @@ export function openDb(dir: string = dataDir()): Database {
       cli_session_id TEXT, pinned INTEGER NOT NULL DEFAULT 0,
       message_count INTEGER NOT NULL DEFAULT 0,
       last_read_turn INTEGER NOT NULL DEFAULT 0,
+      answered_turn INTEGER NOT NULL DEFAULT 0,
       created_on_branch TEXT NULL,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
@@ -496,6 +497,7 @@ export function openDb(dir: string = dataDir()): Database {
   }
   addColumn(db, "conversations", "message_count INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "last_read_turn INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "conversations", "answered_turn INTEGER NOT NULL DEFAULT 0");
   db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_project_state
     ON conversations(project_id, archived, deleted_at, pinned, updated_at DESC)`);
   addColumn(db, "conversations", "created_on_branch TEXT NULL");

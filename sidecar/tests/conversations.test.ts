@@ -298,9 +298,9 @@ test("agrège les compteurs non lus de tous les projets", () => {
   const read = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "lu" });
   const unread = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "non lu" });
   const otherUnread = convs.create({ projectId: otherProjectId, provider: "claude", model: "opus", firstMessage: "ailleurs" });
-  db.query("UPDATE conversations SET digest_turn = 2, last_read_turn = 2 WHERE id = ?").run(read.id);
-  db.query("UPDATE conversations SET digest_turn = 3, last_read_turn = 1 WHERE id = ?").run(unread.id);
-  db.query("UPDATE conversations SET digest_turn = 1 WHERE id = ?").run(otherUnread.id);
+  db.query("UPDATE conversations SET answered_turn = 2, last_read_turn = 2 WHERE id = ?").run(read.id);
+  db.query("UPDATE conversations SET answered_turn = 3, last_read_turn = 1 WHERE id = ?").run(unread.id);
+  db.query("UPDATE conversations SET answered_turn = 1 WHERE id = ?").run(otherUnread.id);
 
   expect(convs.unreadCountsByProject()).toEqual({
     [projectId]: 1,
@@ -308,9 +308,22 @@ test("agrège les compteurs non lus de tous les projets", () => {
   });
 });
 
-test("marque lu jusqu'au digest courant sans tour explicite", () => {
+test("un tour répondu rend la conversation à lire, sans attendre le digest", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
-  db.query("UPDATE conversations SET digest_turn = 7, last_read_turn = 2 WHERE id = ?").run(c.id);
+  convs.appendEvent(c.id, { type: "user-message", text: "x", images: [] });
+  convs.appendEvent(c.id, { type: "text-final", text: "réponse" });
+
+  expect(convs.unreadCountsByProject()[projectId]).toBeUndefined();
+  convs.markAnswered(c.id);
+
+  expect(convs.get(c.id)!.answered_turn).toBe(1);
+  expect(convs.get(c.id)!.digest_turn).toBe(0);
+  expect(convs.unreadCountsByProject()[projectId]).toBe(1);
+});
+
+test("marque lu jusqu'au dernier tour répondu sans tour explicite", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  db.query("UPDATE conversations SET answered_turn = 7, last_read_turn = 2 WHERE id = ?").run(c.id);
 
   expect(convs.markRead(c.id)!.last_read_turn).toBe(7);
   expect(convs.unreadCountsByProject()[projectId]).toBeUndefined();
@@ -318,7 +331,7 @@ test("marque lu jusqu'au digest courant sans tour explicite", () => {
 
 test("ne recule jamais le tour lu", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
-  db.query("UPDATE conversations SET digest_turn = 3, last_read_turn = 9 WHERE id = ?").run(c.id);
+  db.query("UPDATE conversations SET answered_turn = 3, last_read_turn = 9 WHERE id = ?").run(c.id);
 
   expect(convs.markRead(c.id)!.last_read_turn).toBe(9);
   expect(convs.markRead(c.id, 4)!.last_read_turn).toBe(9);

@@ -267,6 +267,9 @@ export interface Conversation {
   title_locked: boolean
   digest_turn: number
   message_count?: number
+  /** Dernier tour dont la réponse est arrivée à son terme ; au-delà de
+   *  `last_read_turn`, la conversation est à lire. */
+  answered_turn?: number
   last_read_turn?: number
   archived: boolean
   deleted_at: string | null

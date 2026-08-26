@@ -72,6 +72,7 @@ const startedConversation: Conversation = {
   pinned: false,
   title_locked: false,
   digest_turn: 0,
+  answered_turn: 0,
   archived: false,
   deleted_at: null,
   created_at: '2026-08-08T09:00:00.000Z',
@@ -83,6 +84,7 @@ const defaultFetch = globalThis.fetch
 afterEach(() => {
   cleanup()
   globalThis.fetch = defaultFetch
+  localStorage.clear()
 })
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -273,12 +275,12 @@ test('affiche le loading state et les réglages dans le détail d’une conversa
   expect(screen.getByText('effort: high · vitesse: 1.5x')).toBeTruthy()
 })
 
-test('marque comme lue la conversation ouverte quand la sidebar reçoit son dernier digest', async () => {
+test('marque comme lue la conversation ouverte quand la sidebar recharge sa liste', async () => {
   const conversation: Conversation = {
     ...startedConversation,
     id: 'conversation-open',
     title: 'Conversation ouverte',
-    digest_turn: 4,
+    answered_turn: 4,
     last_read_turn: 2,
   }
   const api = installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation])
@@ -386,6 +388,34 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   }))
 })
 
+test('revenir sur un projet rouvre sa dernière conversation', async () => {
+  const conversation: Conversation = {
+    ...startedConversation,
+    id: 'conversation-reprise',
+    title: 'Conversation à reprendre',
+  }
+  localStorage.setItem('pupitre:last-conversation:pupitre', conversation.id)
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation])
+  const onConversationSelect = renderSidebar()
+
+  await waitFor(() => expect(onConversationSelect).toHaveBeenCalledTimes(1))
+  expect((onConversationSelect.mock.calls[0] as unknown as [Conversation])[0].id).toBe(conversation.id)
+})
+
+test('aucune reprise quand la dernière conversation a quitté la liste active', async () => {
+  const conversation: Conversation = {
+    ...startedConversation,
+    id: 'conversation-presente',
+    title: 'Toujours là',
+  }
+  localStorage.setItem('pupitre:last-conversation:pupitre', 'conversation-archivee')
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation])
+  const onConversationSelect = renderSidebar()
+
+  await waitFor(() => expect(document.querySelector('.navigation-row')).not.toBeNull())
+  expect(onConversationSelect).toHaveBeenCalledTimes(0)
+})
+
 test('replier un groupe cache ses conversations et garde le compte des non-lues', async () => {
   const unreadTicket: Conversation = {
     ...startedConversation,
@@ -393,7 +423,7 @@ test('replier un groupe cache ses conversations et garde le compte des non-lues'
     title: 'Ticket non lu',
     ticket_id: 'ticket-1',
     ticket_key: 'TECH-1',
-    digest_turn: 3,
+    answered_turn: 3,
     last_read_turn: 1,
   }
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [unreadTicket])

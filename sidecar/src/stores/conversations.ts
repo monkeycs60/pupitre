@@ -15,6 +15,10 @@ export interface Conversation {
   title_locked: boolean;
   /** Numéro de tour du dernier digest généré (0 = aucun). */
   digest_turn: number;
+  /** Numéro du dernier tour dont la réponse est arrivée à son terme (0 = aucun).
+   *  C'est lui, et non le digest, qui rend une conversation « à lire » : le
+   *  digest ne se régénère que tous les 4 puis 10 tours. */
+  answered_turn: number;
   message_count: number; last_read_turn: number;
   archived: boolean; deleted_at: string | null;
   continued_from: string | null;
@@ -152,6 +156,7 @@ export class ConversationStore {
       pinned: !!row.pinned,
       title_locked: !!row.title_locked,
       digest_turn: row.digest_turn ?? 0,
+      answered_turn: row.answered_turn ?? 0,
       message_count: row.message_count ?? 0,
       last_read_turn: row.last_read_turn ?? 0,
       orchestrator: !!row.orchestrator,
@@ -184,6 +189,7 @@ export class ConversationStore {
       pinned: !!r.pinned,
       title_locked: !!r.title_locked,
       digest_turn: r.digest_turn ?? 0,
+      answered_turn: r.answered_turn ?? 0,
       message_count: r.message_count ?? 0,
       last_read_turn: r.last_read_turn ?? 0,
       orchestrator: !!r.orchestrator,
@@ -199,7 +205,7 @@ export class ConversationStore {
       FROM conversations
       WHERE deleted_at IS NULL
         AND archived = 0
-        AND digest_turn > last_read_turn
+        AND answered_turn > last_read_turn
       GROUP BY project_id
     `).all() as Array<{ project_id: string; count: number | bigint }>;
     return Object.fromEntries(rows.map((row) => [row.project_id, Number(row.count)]));
@@ -288,16 +294,22 @@ export class ConversationStore {
     this.db.query("UPDATE conversations SET pinned = ? WHERE id = ?").run(pinned ? 1 : 0, id);
   }
 
-  /** Sans tour explicite, la conversation est lue jusqu'à son digest courant :
-   *  l'UI ne connaît pas toujours le nombre de tours, sa page d'événements
-   *  pouvant ne couvrir que la fin du fil. */
+  /** Sans tour explicite, la conversation est lue jusqu'à son dernier tour
+   *  répondu : l'UI ne connaît pas toujours le nombre de tours, sa page
+   *  d'événements pouvant ne couvrir que la fin du fil. */
   markRead(id: string, lastReadTurn?: number): Conversation | null {
     this.db.query(
       `UPDATE conversations
-       SET last_read_turn = MAX(last_read_turn, COALESCE(?, digest_turn))
+       SET last_read_turn = MAX(last_read_turn, COALESCE(?, answered_turn))
        WHERE id = ?`,
     ).run(lastReadTurn ?? null, id);
     return this.get(id);
+  }
+
+  /** Fin de tour : la conversation devient « à lire » pour qui ne la regarde pas. */
+  markAnswered(id: string): void {
+    this.db.query("UPDATE conversations SET answered_turn = ? WHERE id = ?")
+      .run(this.turnCount(id), id);
   }
 
   /**

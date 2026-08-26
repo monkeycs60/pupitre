@@ -44,6 +44,9 @@ interface SidebarProps {
   onConversationCreateFromContext?: (seed: { ticketId?: string | null; branch: string | null; ticketKey?: string | null; originType?: 'sentry' | null; originKey?: string | null }) => void
   onConversationClosed?: () => void
   onConversationRead?: () => void
+  /** Composer ouvert pour une conversation qui n'existe pas encore : rien ne
+   *  doit alors être restauré à sa place. */
+  isCreatingConversation?: boolean
   conversationListVersion: number
   quotas: Quotas
   /** Sous-tâches en cours dans la conversation ouverte (cf. App). */
@@ -101,6 +104,16 @@ const SCOPE_PLACEHOLDERS: Record<ConversationScope, string> = {
   trash: 'Filtrer la corbeille…',
 }
 const conversationListCache = new Map<string, Conversation[]>()
+const LAST_CONVERSATION_KEY = 'pupitre:last-conversation:'
+
+function readLastConversationId(projectId: string): string | null {
+  try {
+    return localStorage.getItem(`${LAST_CONVERSATION_KEY}${projectId}`)
+  } catch {
+    return null
+  }
+}
+
 type ConversationRowState = 'live' | 'unread' | 'read'
 
 function conversationRowState(
@@ -108,7 +121,7 @@ function conversationRowState(
   activeConversationIds: Set<string>,
 ): ConversationRowState {
   if (activeConversationIds.has(conversation.id)) return 'live'
-  return conversation.digest_turn > (conversation.last_read_turn ?? 0) ? 'unread' : 'read'
+  return (conversation.answered_turn ?? 0) > (conversation.last_read_turn ?? 0) ? 'unread' : 'read'
 }
 
 function conversationMessageCount(conversation: Conversation, liveCount?: number): number {
@@ -232,6 +245,7 @@ export const Sidebar = memo(function Sidebar({
   onConversationCreate,
   onConversationCreateFromContext,
   onConversationClosed,
+  isCreatingConversation = false,
   onConversationRead,
   conversationListVersion,
   quotas,
@@ -271,6 +285,11 @@ export const Sidebar = memo(function Sidebar({
   workspaceViewRef.current = workspaceView
   const onConversationReadRef = useRef(onConversationRead)
   onConversationReadRef.current = onConversationRead
+  const isCreatingConversationRef = useRef(isCreatingConversation)
+  isCreatingConversationRef.current = isCreatingConversation
+  /** Armé au changement de projet, consommé au premier chargement de liste
+   *  qui suit : fermer une conversation ne doit pas la faire revenir. */
+  const restoreProjectIdRef = useRef<string | null>(selectedProject?.id ?? null)
   // La seconde n'alimente que le chrono des conversations live ; au repos, ce
   // tick re-rendait toute la sidebar (groupes, tris, previews) chaque seconde.
   const now = useNow(activeFleet.length > 0 || runningSubtasks > 0 ? 1_000 : 30_000)
@@ -305,10 +324,10 @@ export const Sidebar = memo(function Sidebar({
             ? scopedItems.find((item) => item.id === currentSelectedConversation.id)
             : undefined
           const shouldMarkSelectedRead = selectedLoadedConversation !== undefined
-            && selectedLoadedConversation.digest_turn > (selectedLoadedConversation.last_read_turn ?? 0)
+            && (selectedLoadedConversation.answered_turn ?? 0) > (selectedLoadedConversation.last_read_turn ?? 0)
           const nextItems = shouldMarkSelectedRead
             ? scopedItems.map((item) => item.id === selectedLoadedConversation.id
-              ? { ...item, last_read_turn: selectedLoadedConversation.digest_turn }
+              ? { ...item, last_read_turn: selectedLoadedConversation.answered_turn ?? 0 }
               : item)
             : scopedItems
           const ordered = pinnedFirst(nextItems)
@@ -317,8 +336,21 @@ export const Sidebar = memo(function Sidebar({
           if (shouldMarkSelectedRead) {
             void markConversationRead(
               selectedLoadedConversation.id,
-              selectedLoadedConversation.digest_turn,
+              selectedLoadedConversation.answered_turn ?? 0,
             ).then(() => onConversationReadRef.current?.()).catch(() => {})
+          }
+          if (
+            restoreProjectIdRef.current === selectedProject.id
+            && conversationScope === 'active'
+            && currentSelectedConversation === null
+            && !isCreatingConversationRef.current
+          ) {
+            restoreProjectIdRef.current = null
+            const storedId = readLastConversationId(selectedProject.id)
+            const stored = storedId === null
+              ? undefined
+              : ordered.find((item) => item.id === storedId)
+            if (stored !== undefined) handleConversationSelect(stored)
           }
         }
       })
@@ -338,6 +370,7 @@ export const Sidebar = memo(function Sidebar({
   }, [selectedProject, conversationListVersion, conversationScope, domainRevision])
 
   useEffect(() => {
+    restoreProjectIdRef.current = selectedProject?.id ?? null
     setSidebarTab('conversations')
     setFilterText('')
     setWorkflowFilterText('')
@@ -351,6 +384,17 @@ export const Sidebar = memo(function Sidebar({
       setCollapsedGroups(new Set())
     }
   }, [selectedProject?.id])
+
+  // Revenir sur un projet, c'est reprendre son fil : la dernière conversation
+  // ouverte y est retenue par projet.
+  useEffect(() => {
+    if (selectedProject === null || selectedConversation === null) return
+    try {
+      localStorage.setItem(`${LAST_CONVERSATION_KEY}${selectedProject.id}`, selectedConversation.id)
+    } catch {
+      // Le choix reste en mémoire si le stockage local est bloqué.
+    }
+  }, [selectedProject?.id, selectedConversation?.id])
 
   function toggleGroupCollapsed(groupKey: string) {
     setCollapsedGroups((current) => {
@@ -375,7 +419,7 @@ export const Sidebar = memo(function Sidebar({
   }
 
   function handleConversationSelect(conversation: Conversation) {
-    const lastReadTurn = Math.max(conversation.last_read_turn ?? 0, conversation.digest_turn)
+    const lastReadTurn = Math.max(conversation.last_read_turn ?? 0, conversation.answered_turn ?? 0)
     const updated = { ...conversation, last_read_turn: lastReadTurn }
     setConversations((current) => current.map((item) => item.id === conversation.id ? updated : item))
     onConversationSelect(updated)

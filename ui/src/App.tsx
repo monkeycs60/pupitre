@@ -182,8 +182,11 @@ function App() {
   // Le digest est régénéré côté sidecar après un tour : on rafraîchit le titre
   // affiché sans recharger la conversation.
   const digest = lastDigest(events)
-  const digestCount = useMemo(
-    () => events.reduce((total, event) => event.type === 'conversation-digest' ? total + 1 : total, 0),
+  const answeredCount = useMemo(
+    () => events.reduce(
+      (total, event) => event.type === 'status' && event.state !== 'running' ? total + 1 : total,
+      0,
+    ),
     [events],
   )
   const digestTitle = digest?.title
@@ -191,7 +194,7 @@ function App() {
   const digestDomains = digest?.domains
   const digestProposedDomainCount = digest?.proposedDomainCount
   const selectedConversationId = selectedConversation?.id
-  const selectedConversationDigestTurn = selectedConversation?.digest_turn
+  const selectedConversationAnsweredTurn = selectedConversation?.answered_turn ?? 0
   const selectedConversationLastReadTurn = selectedConversation?.last_read_turn ?? 0
   useEffect(() => {
     if (digestTitle === undefined || digestSummary === undefined) return
@@ -210,15 +213,40 @@ function App() {
   }, [digestTitle, digestSummary, digestDomains, digestProposedDomainCount])
 
   useEffect(() => {
-    if (workspaceView !== 'conversations' || selectedConversationId === undefined || selectedConversationDigestTurn === undefined) return
-    if (selectedConversationDigestTurn <= selectedConversationLastReadTurn) return
+    if (workspaceView !== 'conversations' || selectedConversationId === undefined) return
+    if (selectedConversationAnsweredTurn <= selectedConversationLastReadTurn) return
     setSelectedConversation((current) => current === null
       ? current
-      : { ...current, last_read_turn: Math.max(current.last_read_turn ?? 0, selectedConversationDigestTurn) })
-    void markConversationRead(selectedConversationId, selectedConversationDigestTurn)
+      : { ...current, last_read_turn: Math.max(current.last_read_turn ?? 0, selectedConversationAnsweredTurn) })
+    void markConversationRead(selectedConversationId, selectedConversationAnsweredTurn)
       .then(() => setRailReadVersion((current) => current + 1))
       .catch(() => {})
-  }, [workspaceView, selectedConversationId, selectedConversationDigestTurn, selectedConversationLastReadTurn])
+  }, [workspaceView, selectedConversationId, selectedConversationAnsweredTurn, selectedConversationLastReadTurn])
+  // Un tour qui se termine rend la conversation à lire pour tout le monde ;
+  // celui qui l'a sous les yeux, fenêtre au premier plan, l'a justement lue.
+  useEffect(() => {
+    if (answeredCount === 0 || workspaceView !== 'conversations' || selectedConversationId === undefined) return
+    if (!document.hasFocus()) return
+    handleConversationRead()
+  }, [answeredCount, workspaceView, selectedConversationId])
+
+  useEffect(() => {
+    function handleWindowFocus() {
+      if (workspaceView !== 'conversations') return
+      handleConversationRead()
+    }
+    window.addEventListener('focus', handleWindowFocus)
+    return () => window.removeEventListener('focus', handleWindowFocus)
+  }, [workspaceView, selectedConversationId, answeredCount])
+
+  // Le rail agrège les non-lus de TOUS les projets : sans ce rafraîchissement,
+  // un tour qui se termine ailleurs restait invisible jusqu'au prochain
+  // rechargement de la liste du projet courant.
+  const fleetMembership = fleet.items.map((item) => item.id).sort().join(',')
+  useEffect(() => {
+    setRailReadVersion((current) => current + 1)
+  }, [fleetMembership])
+
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
   }, [sidebarWidth])
@@ -423,19 +451,24 @@ function App() {
   /**
    * Le nombre de tours n'est pas déductible ici : la page d'événements chargée
    * peut ne couvrir que la fin du fil. Le sidecar cale donc lui-même la lecture
-   * sur le digest courant, et le digest est justement ce qui rend une
-   * conversation non lue — d'où la clé de synchronisation.
+   * sur son dernier tour répondu, et c'est ce tour qui rend une conversation
+   * à lire — d'où la clé de synchronisation.
    */
   function handleConversationRead() {
     if (selectedConversation === null) return
-    const syncKey = `${selectedConversation.id}:${digestCount}`
+    const syncKey = `${selectedConversation.id}:${answeredCount}`
     if (readSyncKeyRef.current === syncKey) return
     readSyncKeyRef.current = syncKey
     void markConversationRead(selectedConversation.id)
       .then((updated) => {
         setSelectedConversation((current) => current === null || current.id !== updated.id
           ? current
-          : { ...current, last_read_turn: updated.last_read_turn, digest_turn: updated.digest_turn })
+          : {
+              ...current,
+              last_read_turn: updated.last_read_turn,
+              answered_turn: updated.answered_turn,
+              digest_turn: updated.digest_turn,
+            })
         setRailReadVersion((current) => current + 1)
       })
       .catch(() => { readSyncKeyRef.current = null })
@@ -687,6 +720,7 @@ function App() {
         onConversationCreate={handleConversationCreate}
         onConversationCreateFromContext={handleStartFromContext}
         onConversationClosed={handleConversationClosed}
+        isCreatingConversation={isCreatingConversation}
         onConversationRead={() => setRailReadVersion((current) => current + 1)}
         conversationListVersion={conversationListVersion}
         quotas={quotas}
