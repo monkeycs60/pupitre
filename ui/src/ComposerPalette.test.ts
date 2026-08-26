@@ -25,6 +25,10 @@ describe('paletteTrigger', () => {
     expect(paletteTrigger('corrige $vat', 12)).toEqual({ mode: 'skills', anchor: 8, query: 'vat' })
   })
 
+  test('un @ en cours de frappe ouvre les outils avec la requête', () => {
+    expect(paletteTrigger('ouvre @chr', 10)).toEqual({ mode: 'tools', anchor: 6, query: 'chr' })
+  })
+
   test('le / ne déclenche les actions qu’en tête de message', () => {
     expect(paletteTrigger('/res', 4)).toEqual({ mode: 'actions', anchor: 0, query: 'res' })
     expect(paletteTrigger('voir /res', 9)).toBeNull()

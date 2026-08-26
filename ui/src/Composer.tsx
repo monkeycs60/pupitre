@@ -18,7 +18,7 @@ import { buildCreateConversationInput } from './conversationDraft'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { ProviderMark } from './ProviderMark'
 import { ComposerPalette, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
-import type { ComposerAction, ComposerPaletteTrigger } from './ComposerPalette'
+import type { ComposerAction, ComposerPaletteTrigger, ComposerToolItem } from './ComposerPalette'
 import type { Attachment, Conversation, Project, Provider, QuotaSnapshot, SkillSummary } from './types'
 import { PROVIDER_MODELS } from './modelOptions'
 import { mediaUrl } from './transport'
@@ -277,6 +277,23 @@ export function Composer({
     })
   }
 
+  function handleToolPick(tool: ComposerToolItem) {
+    if (trigger === null) return
+    const cursor = textareaRef.current?.selectionStart ?? message.length
+    const inserted = `@${tool.label} `
+    onMessageChange(`${message.slice(0, trigger.anchor)}${inserted}${message.slice(cursor)}`)
+    setTrigger(null)
+    dismissedAnchorRef.current = null
+    const caret = trigger.anchor + inserted.length
+    requestAnimationFrame(() => {
+      const area = textareaRef.current
+      if (area !== null) {
+        area.focus()
+        area.setSelectionRange(caret, caret)
+      }
+    })
+  }
+
   function handlePaletteAction(action: ComposerAction) {
     if (trigger === null) return
     const cursor = textareaRef.current?.selectionStart ?? message.length
@@ -504,6 +521,7 @@ export function Composer({
         event.preventDefault()
         const index = Math.min(paletteIndex, paletteItems.count - 1)
         if (trigger.mode === 'skills') handleSkillPick(paletteItems.skills[index]!)
+        else if (trigger.mode === 'tools') handleToolPick(paletteItems.tools[index]!)
         else handlePaletteAction(paletteItems.actions[index]!.id)
         return
       }
@@ -603,6 +621,7 @@ export function Composer({
               selectedIndex={Math.min(paletteIndex, Math.max(0, paletteItems.count - 1))}
               onSelectedIndexChange={setPaletteIndex}
               onSkillPick={handleSkillPick}
+              onToolPick={handleToolPick}
               onAction={handlePaletteAction}
               hasConversation={conversationId !== null}
             />
@@ -631,7 +650,8 @@ export function Composer({
           {message === '' && !isRunning ? (
             <div className="composer-placeholder" aria-hidden="true">
               Écris ton message, ou <span className="composer-ph-key">/</span> pour une action,{' '}
-              <span className="composer-ph-key">$</span> pour un skill
+              <span className="composer-ph-key">$</span> pour un skill,{' '}
+              <span className="composer-ph-key">@</span> pour un outil
             </div>
           ) : null}
         </div>

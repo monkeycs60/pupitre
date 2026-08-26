@@ -3,14 +3,15 @@ import { listSkills } from './api'
 import type { SkillProvenance, SkillSummary } from './types'
 
 /**
- * Popover unique du composer, deux déclencheurs : `$` liste les skills
+ * Popover unique du composer, trois déclencheurs : `$` liste les skills,
+ * `@` les outils
  * (sélection = insertion de l'invocation dans le message), `/` en tête de
  * message liste les actions de la conversation (sélection = exécution).
  * La palette globale Ctrl K reste une surface distincte : ici on complète le
  * message en cours, on ne navigue pas dans l'application.
  */
 
-export type ComposerPaletteMode = 'skills' | 'actions'
+export type ComposerPaletteMode = 'skills' | 'actions' | 'tools'
 
 export interface ComposerPaletteTrigger {
   mode: ComposerPaletteMode
@@ -26,6 +27,16 @@ export interface ComposerActionItem {
   label: string
   detail: string
 }
+
+export interface ComposerToolItem {
+  id: 'chrome'
+  label: string
+  detail: string
+}
+
+export const COMPOSER_TOOLS: ComposerToolItem[] = [
+  { id: 'chrome', label: 'chrome', detail: 'Piloter Chrome avec l’intégration du fournisseur' },
+]
 
 export const COMPOSER_ACTIONS: ComposerActionItem[] = [
   { id: 'summary', label: 'Résumé de session', detail: 'Lister les changements et les éléments à terminer' },
@@ -70,6 +81,9 @@ export function paletteTrigger(message: string, cursor: number): ComposerPalette
   if (token.startsWith('$') && token.length <= 48) {
     return { mode: 'skills', anchor: tokenStart, query: token.slice(1) }
   }
+  if (token.startsWith('@') && token.length <= 48) {
+    return { mode: 'tools', anchor: tokenStart, query: token.slice(1) }
+  }
   if (token.startsWith('/') && tokenStart === 0 && token.length <= 48) {
     return { mode: 'actions', anchor: 0, query: token.slice(1) }
   }
@@ -90,6 +104,7 @@ export function rankSkills(skills: SkillSummary[], projectId: string): SkillSumm
 export interface ComposerPaletteItems {
   skills: SkillSummary[]
   actions: ComposerActionItem[]
+  tools: ComposerToolItem[]
   count: number
   totalSkills: number
 }
@@ -131,10 +146,19 @@ export function useComposerPaletteItems(
       : [],
     [trigger?.mode, trigger?.query, hasConversation],
   )
+  const toolItems = useMemo(
+    () => trigger?.mode === 'tools'
+      ? COMPOSER_TOOLS.filter((tool) => matches(trigger.query, tool.label, tool.detail))
+      : [],
+    [trigger?.mode, trigger?.query],
+  )
   return {
     skills: skillItems,
     actions: actionItems,
-    count: trigger?.mode === 'skills' ? skillItems.length : actionItems.length,
+    tools: toolItems,
+    count: trigger?.mode === 'skills'
+      ? skillItems.length
+      : trigger?.mode === 'tools' ? toolItems.length : actionItems.length,
     totalSkills: ranked.length,
   }
 }
@@ -145,6 +169,7 @@ interface ComposerPaletteProps {
   selectedIndex: number
   onSelectedIndexChange: (index: number) => void
   onSkillPick: (skill: SkillSummary) => void
+  onToolPick: (tool: ComposerToolItem) => void
   onAction: (action: ComposerAction) => void
   hasConversation: boolean
 }
@@ -155,6 +180,7 @@ export function ComposerPalette({
   selectedIndex,
   onSelectedIndexChange,
   onSkillPick,
+  onToolPick,
   onAction,
   hasConversation,
 }: ComposerPaletteProps) {
@@ -167,12 +193,13 @@ export function ComposerPalette({
   }, [selectedIndex])
 
   return (
-    <div className="composer-palette" role="dialog" aria-label={trigger.mode === 'skills' ? 'Skills disponibles' : 'Actions de la conversation'}>
+    <div className="composer-palette" role="dialog" aria-label={trigger.mode === 'skills' ? 'Skills disponibles' : trigger.mode === 'tools' ? 'Outils disponibles' : 'Actions de la conversation'}>
       <div className="composer-palette-list" role="listbox" ref={listRef}>
         {items.count === 0 ? (
           <p className="composer-palette-empty">
             {trigger.mode === 'skills'
               ? 'Aucun skill ne correspond.'
+              : trigger.mode === 'tools' ? 'Aucun outil ne correspond.'
               : hasConversation ? 'Aucune action ne correspond.' : 'Les actions demandent une conversation ouverte.'}
           </p>
         ) : null}
@@ -191,6 +218,19 @@ export function ComposerPalette({
             <span className="composer-palette-description">{skill.description || skill.name}</span>
             <span className="composer-palette-source">{PROVENANCE_LABELS[skill.provenance]}</span>
           </button>
+        )) : trigger.mode === 'tools' ? items.tools.map((tool, index) => (
+          <button
+            type="button"
+            key={tool.id}
+            className={`composer-palette-row${index === selectedIndex ? ' is-selected' : ''}`}
+            role="option"
+            aria-selected={index === selectedIndex}
+            onMouseEnter={() => onSelectedIndexChange(index)}
+            onMouseDown={(event) => { event.preventDefault(); onToolPick(tool) }}
+          >
+            <span className="composer-palette-invocation">@{tool.label}</span>
+            <span className="composer-palette-description">{tool.detail}</span>
+          </button>
         )) : items.actions.map((action, index) => (
           <button
             type="button"
@@ -208,10 +248,12 @@ export function ComposerPalette({
       </div>
       <footer className="composer-palette-footer">
         <span><kbd>↑↓</kbd> naviguer</span>
-        <span><kbd>⏎</kbd> {trigger.mode === 'skills' ? 'insérer' : 'lancer'}</span>
+        <span><kbd>⏎</kbd> {trigger.mode === 'actions' ? 'lancer' : 'insérer'}</span>
         <span><kbd>Échap</kbd> fermer</span>
         <span className="composer-palette-count">
-          {trigger.mode === 'skills' ? `${items.count} / ${items.totalSkills} skills` : `${items.count} action${items.count > 1 ? 's' : ''}`}
+          {trigger.mode === 'skills'
+            ? `${items.count} / ${items.totalSkills} skills`
+            : trigger.mode === 'tools' ? `${items.count} outil${items.count > 1 ? 's' : ''}` : `${items.count} action${items.count > 1 ? 's' : ''}`}
         </span>
       </footer>
     </div>

@@ -16,3 +16,11 @@ describe('Markdown code blocks', () => {
     expect(writeText).toHaveBeenCalledWith('Notice à recopier')
   })
 })
+
+describe('Markdown images', () => {
+  test('sert les images importées par la route média du sidecar', () => {
+    render(<Markdown>{'![Capture](/media/capture.png)'}</Markdown>)
+
+    expect(screen.getByRole('img', { name: 'Capture' }).getAttribute('src')).toBe('/media/capture.png')
+  })
+})

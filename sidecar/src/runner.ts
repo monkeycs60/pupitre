@@ -15,6 +15,8 @@ import { claudeServerDefinitions } from "./mcp-inventory";
 import type { ActionFormat } from "./response-format";
 import { conversationCwd } from "./workspace";
 import type { SteerFn } from "./adapters/types";
+import { withToolMentions } from "./tool-mentions";
+import { importLocalMarkdownImages } from "./assistant-media";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -143,10 +145,11 @@ export class ConversationRunner {
     const conv = this.convs.get(conversationId);
     const project = conv ? this.projects.get(conv.project_id) : null;
     if (!conv || !project) return false;
-    const augmented = this.skills?.augmentPrompt(prompt, project.id, {
+    const toolPrompt = withToolMentions(prompt, conv.provider);
+    const augmented = this.skills?.augmentPrompt(toolPrompt, project.id, {
       cwd: conversationCwd(project, conv),
       projectPath: project.path,
-    }) ?? prompt;
+    }) ?? toolPrompt;
     const accepted = await steer({
       prompt: augmented + attachmentPrompt(attachments, this.media),
       images: imageNames.map((name) => this.media.absolutePath(name)),
@@ -201,6 +204,7 @@ export class ConversationRunner {
     };
     const startedAtMs = Date.now();
     let firstResponseAt: string | undefined;
+    const importedAssistantImages = new Map<string, string>();
 
     const persist = (event: AppEvent) => {
       // Les events de quota restent des events de conversation (replay intact)
@@ -219,7 +223,18 @@ export class ConversationRunner {
       persistSteer: persist,
     });
 
-    const emit = (event: AppEvent) => {
+    const emit = (incoming: AppEvent) => {
+      const event = incoming.type === "text-final"
+        ? {
+            ...incoming,
+            text: importLocalMarkdownImages(
+              incoming.text,
+              this.media,
+              ["/tmp", project.path, conversationCwd(project, conv)],
+              importedAssistantImages,
+            ),
+          }
+        : incoming;
       if (
         firstResponseAt === undefined
         && (event.type === "text-delta"
@@ -280,11 +295,12 @@ export class ConversationRunner {
       }
       const permissionMode = conv.permission_mode ?? project.permission_mode;
       const cwd = conversationCwd(project, conv)
+      const toolPrompt = withToolMentions(prompt, conv.provider);
       const providerPrompt = (options.preamble ? `${options.preamble}\n\n---\n\n` : "")
-        + (this.skills?.augmentPrompt(prompt, project.id, {
+        + (this.skills?.augmentPrompt(toolPrompt, project.id, {
           cwd: conversationCwd(project, conv),
           projectPath: project.path,
-        }) ?? prompt)
+        }) ?? toolPrompt)
         + attachmentPrompt(attachments, this.media);
       const opts = {
         cwd,

@@ -62,5 +62,6 @@ test('affiche le faux placeholder quand aucun tour ne court', () => {
   renderComposer(false)
 
   expect(document.querySelector('.composer-placeholder')?.textContent).toContain('Écris ton message, ou')
+  expect(document.querySelector('.composer-placeholder')?.textContent).toContain('@ pour un outil')
   expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('')
 })

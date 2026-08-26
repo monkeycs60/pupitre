@@ -6,6 +6,7 @@ import { TaskToggleContext } from './taskToggle'
 import type { SectionKind } from './taskToggle'
 import { ActionFormatContext, headingKind } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
+import { mediaUrl } from './transport'
 
 /** GFM : tableaux, listes de tâches, barré, autolinks. */
 const REMARK_PLUGINS = [remarkGfm]
@@ -263,6 +264,12 @@ function CopyablePre({ node, children, ...props }: any) {
 }
 
 const COMPONENTS = {
+  img: ({ node: _node, src, ...props }: any) => {
+    const mediaName = typeof src === 'string' && src.startsWith('/media/')
+      ? decodeURIComponent(src.slice('/media/'.length))
+      : null
+    return <img {...props} src={mediaName === null ? src : mediaUrl(mediaName)} />
+  },
   /** Les tableaux larges défilent au lieu de déborder de la bulle. */
   table: ({ node: _node, ...props }: any) => (
     <div className="markdown-table-wrap">
