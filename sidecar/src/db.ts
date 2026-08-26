@@ -277,6 +277,12 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_commit_links_origin
       ON commit_links(project_id, commit_sha);
+    CREATE TABLE IF NOT EXISTS conversation_push_acknowledgements (
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      commit_sha TEXT NOT NULL,
+      acknowledged_at TEXT NOT NULL,
+      PRIMARY KEY (conversation_id, commit_sha)
+    );
     CREATE TABLE IF NOT EXISTS test_inventories (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,

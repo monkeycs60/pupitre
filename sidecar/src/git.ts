@@ -341,12 +341,17 @@ export class GitProjectService {
     const pushed = new Set((this.optionalGit(cwd, ["rev-list", "--remotes"]) ?? "").split("\n").filter(Boolean));
     const remoteUrl = normalizeRemoteUrl(this.optionalGit(cwd, ["remote", "get-url", "origin"])?.trim() ?? null);
     const links = this.commitLinks(projectId);
+    const acknowledged = new Set((this.db.query(`
+      SELECT commit_sha FROM conversation_push_acknowledgements WHERE conversation_id = ?
+    `).all(conversationId) as Array<{ commit_sha: string }>).map((row) => row.commit_sha));
     const commits = this.parseCommits(this.runGit(cwd, [
       "log", "-z", "--all", "--topo-order", `--max-count=${MAX_COMMITS}`,
       "--date=iso-strict", "--format=%H%x00%P%x00%D%x00%an%x00%aI%x00%s",
     ]));
     return commits
-      .filter((commit) => pushed.has(commit.sha) && links.get(commit.sha)?.some((item) => item.id === conversationId))
+      .filter((commit) => pushed.has(commit.sha)
+        && !acknowledged.has(commit.sha)
+        && links.get(commit.sha)?.some((item) => item.id === conversationId))
       .map((commit) => ({
         sha: commit.sha,
         subject: commit.subject,
@@ -358,6 +363,19 @@ export class GitProjectService {
         repositoryPath: cwd,
       }))
       .reverse();
+  }
+
+  acknowledgeConversationPush(projectId: string, conversationId: string, sha: string): void {
+    const linked = this.db.query(`
+      SELECT 1 FROM commit_links
+      WHERE project_id = ? AND conversation_id = ? AND commit_sha = ?
+    `).get(projectId, conversationId, sha);
+    if (!linked) throw new Error("push inconnu pour cette conversation");
+    this.db.query(`
+      INSERT OR IGNORE INTO conversation_push_acknowledgements
+        (conversation_id, commit_sha, acknowledged_at)
+      VALUES (?, ?, ?)
+    `).run(conversationId, sha, new Date().toISOString());
   }
 
   async workingTreeDiff(projectId: string, requestedCwd?: string | null): Promise<GitDiff> {

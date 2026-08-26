@@ -843,22 +843,25 @@
 .review-report-card.is-loading, .review-report-card.is-error { padding: var(--space-3) var(--space-4); color: var(--text-muted); font-size: var(--text-sm); }
 
 .push-timeline { display: grid; gap: var(--space-2); margin: var(--space-4) 0; }
-.push-card { overflow: hidden; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-md); }
-.push-card-main { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-3); align-items: center; width: 100%; padding: var(--space-3) var(--space-4); color: var(--text); text-align: left; background: transparent; border: 0; cursor: pointer; }
+.push-card { position: relative; overflow: hidden; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-md); }
+.push-card-main { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-3); align-items: center; width: 100%; padding: var(--space-3) 52px var(--space-3) var(--space-4); color: var(--text); text-align: left; background: transparent; border: 0; cursor: pointer; }
 .push-card-main:hover:not(:disabled) { background: var(--bg-hover); }
 .push-card-main > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }
 .push-card-main strong { overflow: hidden; color: var(--text-strong); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
 .push-card-main small { color: var(--text-muted); font: var(--text-xs) var(--font-mono); }
 .push-card-icon { color: var(--ok); font-size: 18px; }
 .push-card-open { color: var(--accent-text); font-size: var(--text-xs); }
+.push-card-ack { position: absolute; top: 10px; right: 12px; display: grid; place-items: center; width: 28px; height: 28px; color: var(--ok); font-size: 15px; background: var(--bg-raised); border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--border)); border-radius: var(--r-sm); cursor: pointer; }
+.push-card-ack:hover:not(:disabled) { color: var(--text-strong); background: var(--ok-soft); border-color: var(--ok); }
+.push-card-ack:disabled { cursor: default; opacity: .55; }
 .push-card footer { display: flex; gap: var(--space-3); padding: var(--space-2) var(--space-4); border-top: 1px solid var(--border-subtle); }
 .push-card footer a { color: var(--text-muted); font-size: var(--text-xs); text-decoration: none; }
 .push-card footer a:hover { color: var(--text); }
 .push-diff-overlay { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 4vh 4vw; background: rgb(0 0 0 / .62); animation: review-report-enter var(--dur-fast) var(--ease) both; }
-.push-diff-overlay > section { display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(1120px, 100%); height: min(840px, 92vh); overflow: hidden; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); }
+.push-diff-overlay > section { display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(1120px, 100%); height: min(840px, 92vh); overflow: hidden; background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); }
 .push-diff-overlay header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
 .push-diff-overlay header > div { display: grid; gap: 2px; }
 .push-diff-overlay header strong { color: var(--text-strong); font-size: var(--text-sm); }
 .push-diff-overlay header span { color: var(--text-muted); font: var(--text-xs) var(--font-mono); }
 .push-diff-overlay header button { color: var(--text-muted); background: transparent; border: 0; cursor: pointer; }
-.push-diff-content { overflow: auto; }
+.push-diff-content { overflow: auto; background: var(--bg-raised); }

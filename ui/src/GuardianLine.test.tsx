@@ -114,6 +114,36 @@ test('signale une relecture du diff exact sans empêcher de relire', async () =>
   expect(relireCount).toBe(1)
 })
 
+test('recharge le rapport quand les compteurs Gardien changent après une correction', async () => {
+  let currentReview = review
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/reviews')) return Response.json([currentReview])
+    if (url.endsWith('/diff')) return Response.json({ diff: 'diff corrigé', files: [] })
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+
+  const initialStatus = { openBySeverity: { red: 2, orange: 0, grey: 0 }, running: null }
+  const view = render(createElement(GuardianLine, {
+    conversation, project, reviewStatus: initialStatus, onRelire: () => undefined,
+  }))
+  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('2 rouges'))
+
+  currentReview = {
+    ...review,
+    diff_text: 'diff corrigé',
+    flags: review.flags.map((flag) => ({ ...flag, status: 'treated' as const })),
+  }
+  view.rerender(createElement(GuardianLine, {
+    conversation,
+    project,
+    reviewStatus: { openBySeverity: { red: 0, orange: 0, grey: 0 }, running: null },
+    onRelire: () => undefined,
+  }))
+
+  await waitFor(() => expect(document.getElementById('guardian-line')?.textContent).toContain('✓ relu · rien à signaler'))
+})
+
 test('un diff modifié depuis la relecture signale la péremption', async () => {
   globalThis.fetch = mock(async (input: RequestInfo | URL) => {
     const url = String(input)

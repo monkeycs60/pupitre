@@ -1057,6 +1057,10 @@ export function listConversationPushes(conversationId: string, signal?: AbortSig
   return fetchJson(`/api/conversations/${routeId(conversationId)}/pushes`, { signal })
 }
 
+export function acknowledgeConversationPush(conversationId: string, sha: string): Promise<{ ok: true }> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/pushes/${routeId(sha)}/ack`, jsonPost({}))
+}
+
 export function startReview(input: StartReviewInput): Promise<Review> {
   return fetchJson('/api/reviews', jsonPost(input))
 }

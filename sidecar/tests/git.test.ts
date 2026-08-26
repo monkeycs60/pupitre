@@ -316,3 +316,17 @@ test("compte les commits liés par projet", () => {
   expect(gitView.linkedCommitCount()).toBe(2);
   expect(gitView.linkedCommitCount("projet-inconnu")).toBe(0);
 });
+
+test("un push acquitté disparaît durablement de la conversation", () => {
+  const pushed = commit("push.ts", "export const pushed = true\n", "push visible");
+  git("update-ref", "refs/remotes/origin/main", pushed);
+  gitView.recordCommitLinks(projectId, conversationId, [pushed]);
+
+  expect(gitView.conversationPushes(projectId, conversationId).map((item) => item.sha)).toContain(pushed);
+
+  gitView.acknowledgeConversationPush(projectId, conversationId, pushed);
+
+  expect(gitView.conversationPushes(projectId, conversationId)).toEqual([]);
+  expect(() => gitView.acknowledgeConversationPush(projectId, conversationId, "inconnu"))
+    .toThrow("push inconnu");
+});

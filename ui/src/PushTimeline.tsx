@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getProjectGitDiff, listConversationPushes } from './api'
+import { acknowledgeConversationPush, getProjectGitDiff, listConversationPushes } from './api'
 import type { GitPushCommit } from './types'
 import { DiffViewer } from './DiffViewer'
 import { ExternalLink } from './externalLink'
@@ -10,6 +10,7 @@ export function PushTimeline({ projectId, conversationId }: { projectId: string,
   const [pushes, setPushes] = useState<GitPushCommit[]>([])
   const [opened, setOpened] = useState<{ commit: GitPushCommit, diff: string } | null>(null)
   const [loadingSha, setLoadingSha] = useState<string | null>(null)
+  const [acknowledgingSha, setAcknowledgingSha] = useState<string | null>(null)
 
   const refresh = useCallback((signal?: AbortSignal) => {
     void listConversationPushes(conversationId, signal).then(setPushes).catch(() => {})
@@ -40,6 +41,15 @@ export function PushTimeline({ projectId, conversationId }: { projectId: string,
     } finally { setLoadingSha(null) }
   }
 
+  async function acknowledge(commit: GitPushCommit) {
+    setAcknowledgingSha(commit.sha)
+    try {
+      await acknowledgeConversationPush(conversationId, commit.sha)
+      setPushes((current) => current.filter((item) => item.sha !== commit.sha))
+      if (opened?.commit.sha === commit.sha) setOpened(null)
+    } finally { setAcknowledgingSha(null) }
+  }
+
   if (pushes.length === 0) return null
   return <>
     <div className="push-timeline" aria-label="Pushes de la conversation">
@@ -49,6 +59,7 @@ export function PushTimeline({ projectId, conversationId }: { projectId: string,
           <span><strong>{commit.subject}</strong><small>Push · {shortSha(commit.sha)}</small></span>
           <span className="push-card-open">{loadingSha === commit.sha ? 'Chargement…' : 'Voir le diff'}</span>
         </button>
+        <button type="button" className="push-card-ack" aria-label={`Acquitter le push ${commit.subject}`} title="Masquer ce push" disabled={acknowledgingSha === commit.sha} onClick={() => void acknowledge(commit)}>✓</button>
         <footer>
           {commit.remoteUrl ? <ExternalLink href={commit.remoteUrl}>Ouvrir sur le remote</ExternalLink> : null}
           <ExternalLink href={`vscode://file/${commit.repositoryPath}`}>Ouvrir dans VS Code</ExternalLink>

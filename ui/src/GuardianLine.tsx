@@ -118,6 +118,13 @@ export function GuardianLine({ conversation, project, reviewStatus, onRelire }: 
     wasRunning.current = running
   }, [running, loadReview])
 
+  const openStatus = reviewStatus
+    ? `${reviewStatus.openBySeverity.red}:${reviewStatus.openBySeverity.orange}:${reviewStatus.openBySeverity.grey}`
+    : ''
+  useEffect(() => {
+    if (!running) loadReview()
+  }, [openStatus, running, loadReview])
+
   // Un commit ou une écriture après la relecture rend le verdict caduc : la
   // ligne ne doit pas rester verte sur un diff que le Gardien n'a pas lu. Un
   // diff qu'on n'a pas pu lire ne prouve rien non plus — pas plus qu'un diff

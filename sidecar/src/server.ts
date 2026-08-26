@@ -950,6 +950,16 @@ function routeId(pathname: string, pattern: RegExp): string | null {
   }
 }
 
+function routePair(pathname: string, pattern: RegExp): [string, string] | null {
+  const match = pathname.match(pattern);
+  if (!match?.[1] || !match[2]) return null;
+  try {
+    return [decodeURIComponent(match[1]), decodeURIComponent(match[2])];
+  } catch {
+    throw new HttpError(400, "identifiant invalide");
+  }
+}
+
 function sentryRepositoryPath(projectPath: string, sentryProject: unknown): string {
   if (typeof sentryProject !== "string" || !/^[A-Za-z0-9._-]+$/.test(sentryProject)) return projectPath;
   const candidate = join(projectPath, "apps", sentryProject);
@@ -3202,6 +3212,25 @@ export function createServer(deps: ServerDeps) {
             conversation.id,
             conversation.worktree_path,
           ));
+        }
+
+        const conversationPushAck = routePair(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/pushes\/([^/]+)\/ack$/,
+        );
+        if (request.method === "POST" && conversationPushAck !== null) {
+          const [conversationId, sha] = conversationPushAck;
+          const conversation = deps.conversations.get(conversationId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          try {
+            deps.git.acknowledgeConversationPush(conversation.project_id, conversation.id, sha);
+          } catch (error) {
+            if (error instanceof Error && error.message.includes("push inconnu")) {
+              throw new HttpError(404, error.message);
+            }
+            throw error;
+          }
+          return json({ ok: true });
         }
 
         const conversationHtmlDocumentsId = routeId(
