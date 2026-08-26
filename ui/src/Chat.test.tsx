@@ -12,7 +12,7 @@ mock.module('@tauri-apps/api/webview', () => ({
   })),
 }))
 
-const { cleanup, render, screen, waitFor } = await import('@testing-library/react')
+const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { Chat } = await import('./Chat')
 
 const defaultFetch = globalThis.fetch
@@ -90,4 +90,37 @@ test('une nouvelle conversation sans ticket conserve le brouillon du projet', as
   await waitFor(() => {
     expect(screen.getByLabelText('Message')).toHaveProperty('value', 'brouillon normal à reprendre')
   })
+})
+
+test('une activité dans la conversation la signale comme lue', async () => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/api/presets')) return Response.json([])
+    if (url.includes('/api/projects/project-1/git')) {
+      return Response.json({ branches: [], worktrees: [], commits: [], currentBranch: 'main' })
+    }
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+  const onConversationRead = mock(() => undefined)
+
+  render(createElement(Chat, {
+    events: [],
+    connection: 'open',
+    retryAt: null,
+    conversation: null,
+    project,
+    quotas,
+    onConversationCreated: () => undefined,
+    onProjectUpdated: () => undefined,
+    onConversationRead,
+    reviewStatus: null,
+    onOpenCode: () => undefined,
+  }))
+
+  const composer = await screen.findByLabelText('Message')
+  expect(onConversationRead).toHaveBeenCalledTimes(0)
+  fireEvent.pointerDown(composer)
+  expect(onConversationRead).toHaveBeenCalledTimes(1)
+  fireEvent.keyDown(composer, { key: 'a' })
+  expect(onConversationRead).toHaveBeenCalledTimes(2)
 })

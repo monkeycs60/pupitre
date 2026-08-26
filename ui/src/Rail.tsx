@@ -243,7 +243,10 @@ export const Rail = memo(function Rail({
           const unread = unreadByProject[project.id] ?? 0
           return (
             <div className="rail-project" key={project.id}>
-              <span className={`rail-project-bar ${active ? 'is-active' : ''}`} aria-hidden="true" />
+              <span
+                className={`rail-project-bar ${active ? 'is-active' : ''} ${!active && unread > 0 ? 'is-unread' : ''}`}
+                aria-hidden="true"
+              />
               <button
                 type="button"
                 className={`rail-avatar ${current ? 'is-current' : ''} ${project.id !== selectedProject?.id && activeProjectIds.includes(project.id) ? 'is-live' : ''}`}
@@ -256,7 +259,7 @@ export const Rail = memo(function Rail({
                 <span className="rail-project-label">{project.name}</span>
               </button>
               {unread > 0 ? (
-                <span className="rail-avatar-badge" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>
+                <span className="rail-project-count" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>
               ) : null}
             </div>
           )
@@ -297,7 +300,9 @@ export const Rail = memo(function Rail({
                 <span
                   className={`rail-badge ${item.name === 'fleet' ? 'is-live' : ''} ${item.name === 'conversations' ? 'is-unread' : ''}`}
                   aria-hidden="true"
-                >{item.name === 'conversations' ? item.badge : null}</span>
+                >{item.name === 'conversations'
+                  ? <span className="rail-badge-count">{item.badge > 99 ? '99+' : item.badge}</span>
+                  : null}</span>
               ) : null}
             </button>
           </Fragment>

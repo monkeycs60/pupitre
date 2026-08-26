@@ -344,6 +344,15 @@ body.is-resizing-documents-list {
   opacity: 1;
 }
 
+/* Non-lus du projet : la barre de gauche, déjà le repère d'état du rail, sert
+   aussi de signal. Le compte, lui, n'apparaît qu'au dépliage — un chiffre dans
+   une pastille de 15 px sur l'avatar était illisible. */
+.rail-project-bar.is-unread {
+  height: 12px;
+  opacity: 1;
+  background: var(--unread);
+}
+
 .rail-avatar {
   display: grid;
   grid-template-columns: 38px minmax(0, 0fr);
@@ -397,27 +406,28 @@ body.is-resizing-documents-list {
   animation: rail-live 1.8s var(--ease) infinite;
 }
 
-/* Non-lus du projet : pastille flottante sur l'avatar, lisible sans ouvrir
-   la sidebar du projet. */
-.rail-avatar-badge {
+.rail-project-count {
   position: absolute;
-  top: -3px;
-  left: 32px;
+  top: 50%;
+  right: 14px;
   z-index: 1;
-  display: grid;
-  place-items: center;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 4px;
-  box-sizing: border-box;
-  color: var(--on-accent);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  background: var(--streak);
-  border: 2px solid var(--bg-rail);
+  padding: 1px 6px;
+  color: var(--unread);
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  background: var(--unread-soft);
   border-radius: var(--r-full);
+  opacity: 0;
+  transform: translateY(-50%);
   pointer-events: none;
+  transition: opacity 100ms var(--ease);
+}
+
+.rail.is-label-expanded .rail-project-count {
+  opacity: 1;
 }
 
 .rail-add {
@@ -482,6 +492,10 @@ body.is-resizing-documents-list {
 .rail.is-label-expanded .rail-project-label {
   max-width: 132px;
   opacity: 1;
+}
+
+.rail.is-label-expanded .rail-project:has(.rail-project-count) .rail-project-label {
+  max-width: 98px;
 }
 
 .rail.is-label-expanded .rail-add {
@@ -622,26 +636,20 @@ body.is-resizing-documents-list {
   animation: livepulse 1.4s var(--ease) infinite;
 }
 
+/* Rail replié : le non-lu est un point, comme dans la liste des conversations.
+   Le chiffre attend le dépliage, où la ligne a la place de le porter. */
 .rail-badge.is-unread {
-  top: 2px;
-  right: -10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: auto;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 3px;
-  color: var(--bg-rail);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1;
-  text-align: center;
-  background: var(--streak);
-  border: 1px solid var(--bg-rail);
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  background: var(--unread);
+  box-shadow: 0 0 0 2px var(--bg-rail);
   transform: none;
+}
+
+.rail-badge-count {
+  display: none;
 }
 
 .rail-nav-button:has(.rail-badge.is-unread) {
@@ -651,7 +659,22 @@ body.is-resizing-documents-list {
 .rail.is-label-expanded .rail-badge.is-unread {
   top: 50%;
   right: 10px;
+  width: auto;
+  height: auto;
+  padding: 1px 6px;
+  color: var(--unread);
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  background: var(--unread-soft);
+  box-shadow: none;
   transform: translateY(-50%);
+}
+
+.rail.is-label-expanded .rail-badge-count {
+  display: inline;
 }
 
 @keyframes rail-live {

@@ -2635,6 +2635,9 @@ export function createServer(deps: ServerDeps) {
           }
           const body = await readObject(request);
           const lastReadTurn = body.lastReadTurn;
+          if (lastReadTurn === undefined || lastReadTurn === null) {
+            return json(deps.conversations.markRead(conversationReadId));
+          }
           if (
             typeof lastReadTurn !== "number"
             || !Number.isInteger(lastReadTurn)

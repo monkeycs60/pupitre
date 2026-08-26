@@ -375,7 +375,11 @@ export function Chat({
   }
   return (
     <>
-      <div className="chat-layout">
+      <div
+        className="chat-layout"
+        onPointerDownCapture={() => onConversationReadRef.current?.()}
+        onKeyDownCapture={() => onConversationReadRef.current?.()}
+      >
         <div className="chat-main">
           {connection === 'reconnecting' ? (
             <ReconnectBanner retryAt={retryAt} />

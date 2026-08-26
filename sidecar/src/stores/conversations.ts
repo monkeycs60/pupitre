@@ -288,12 +288,15 @@ export class ConversationStore {
     this.db.query("UPDATE conversations SET pinned = ? WHERE id = ?").run(pinned ? 1 : 0, id);
   }
 
-  markRead(id: string, lastReadTurn: number): Conversation | null {
+  /** Sans tour explicite, la conversation est lue jusqu'à son digest courant :
+   *  l'UI ne connaît pas toujours le nombre de tours, sa page d'événements
+   *  pouvant ne couvrir que la fin du fil. */
+  markRead(id: string, lastReadTurn?: number): Conversation | null {
     this.db.query(
       `UPDATE conversations
-       SET last_read_turn = MAX(last_read_turn, ?)
+       SET last_read_turn = MAX(last_read_turn, COALESCE(?, digest_turn))
        WHERE id = ?`,
-    ).run(lastReadTurn, id);
+    ).run(lastReadTurn ?? null, id);
     return this.get(id);
   }
 

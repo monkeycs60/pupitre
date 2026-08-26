@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -113,6 +113,7 @@ function App() {
   const [newConversationAttachments, setNewConversationAttachments] = useState<Attachment[]>([])
   const [conversationListVersion, setConversationListVersion] = useState(0)
   const [railReadVersion, setRailReadVersion] = useState(0)
+  const readSyncKeyRef = useRef<string | null>(null)
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [showHandoff, setShowHandoff] = useState(false)
@@ -181,6 +182,10 @@ function App() {
   // Le digest est régénéré côté sidecar après un tour : on rafraîchit le titre
   // affiché sans recharger la conversation.
   const digest = lastDigest(events)
+  const digestCount = useMemo(
+    () => events.reduce((total, event) => event.type === 'conversation-digest' ? total + 1 : total, 0),
+    [events],
+  )
   const digestTitle = digest?.title
   const digestSummary = digest?.summary
   const digestDomains = digest?.domains
@@ -415,16 +420,25 @@ function App() {
     setConversationListVersion((current) => current + 1)
   }
 
+  /**
+   * Le nombre de tours n'est pas déductible ici : la page d'événements chargée
+   * peut ne couvrir que la fin du fil. Le sidecar cale donc lui-même la lecture
+   * sur le digest courant, et le digest est justement ce qui rend une
+   * conversation non lue — d'où la clé de synchronisation.
+   */
   function handleConversationRead() {
     if (selectedConversation === null) return
-    const lastReadTurn = selectedConversation.digest_turn
-    if (lastReadTurn <= (selectedConversation.last_read_turn ?? 0)) return
-    setSelectedConversation((current) => current === null
-      ? current
-      : { ...current, last_read_turn: Math.max(current.last_read_turn ?? 0, lastReadTurn) })
-    void markConversationRead(selectedConversation.id, lastReadTurn)
-      .then(() => setRailReadVersion((current) => current + 1))
-      .catch(() => {})
+    const syncKey = `${selectedConversation.id}:${digestCount}`
+    if (readSyncKeyRef.current === syncKey) return
+    readSyncKeyRef.current = syncKey
+    void markConversationRead(selectedConversation.id)
+      .then((updated) => {
+        setSelectedConversation((current) => current === null || current.id !== updated.id
+          ? current
+          : { ...current, last_read_turn: updated.last_read_turn, digest_turn: updated.digest_turn })
+        setRailReadVersion((current) => current + 1)
+      })
+      .catch(() => { readSyncKeyRef.current = null })
   }
 
   function handleConversationCreated(conversation: Conversation) {

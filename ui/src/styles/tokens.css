@@ -49,6 +49,10 @@
   --ok-soft: rgba(78, 201, 165, 0.12);
   --streak: #f0b64a;
   --streak-soft: rgba(240, 182, 74, 0.12);
+  /* Non-lu : une seule teinte pour les trois échelles (projet, vue, groupe).
+     Le point ambre, la barre ambre et le compteur ambre sont le même signal. */
+  --unread: #f0b64a;
+  --unread-soft: rgba(240, 182, 74, 0.13);
   /* Providers */
   --prov-codex: #4ec9a5;
   --prov-codex-soft: rgba(78, 201, 165, 0.12);

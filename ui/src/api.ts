@@ -972,13 +972,14 @@ export function setConversationPinned(
   )
 }
 
+/** Sans `lastReadTurn`, le sidecar marque lu jusqu'au digest courant. */
 export function markConversationRead(
   conversationId: string,
-  lastReadTurn: number,
+  lastReadTurn?: number,
 ): Promise<Conversation> {
   return fetchJson(
     `/api/conversations/${routeId(conversationId)}/read`,
-    jsonPost({ lastReadTurn }),
+    jsonPost({ lastReadTurn: lastReadTurn ?? null }),
   )
 }
 

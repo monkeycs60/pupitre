@@ -308,6 +308,22 @@ test("agrège les compteurs non lus de tous les projets", () => {
   });
 });
 
+test("marque lu jusqu'au digest courant sans tour explicite", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  db.query("UPDATE conversations SET digest_turn = 7, last_read_turn = 2 WHERE id = ?").run(c.id);
+
+  expect(convs.markRead(c.id)!.last_read_turn).toBe(7);
+  expect(convs.unreadCountsByProject()[projectId]).toBeUndefined();
+});
+
+test("ne recule jamais le tour lu", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  db.query("UPDATE conversations SET digest_turn = 3, last_read_turn = 9 WHERE id = ?").run(c.id);
+
+  expect(convs.markRead(c.id)!.last_read_turn).toBe(9);
+  expect(convs.markRead(c.id, 4)!.last_read_turn).toBe(9);
+});
+
 test("compte une seule réponse assistant par tour malgré plusieurs text-final", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
   convs.appendEvent(c.id, { type: "user-message", text: "x", images: [] });
