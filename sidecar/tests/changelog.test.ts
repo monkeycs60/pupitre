@@ -51,6 +51,47 @@ test("propose avec Luna high et laisse les changements ambigus décochés", asyn
   context.db.close();
 });
 
+test("ne fournit au générateur que les commits liés et cités par le résumé", async () => {
+  let prompt = "";
+  const context = setup(async (input) => {
+    prompt = input.prompt;
+    return "[]";
+  });
+  writeFileSync(join(context.root, "feature.txt"), "session\n");
+  Bun.spawnSync(["git", "-C", context.root, "add", "feature.txt"]);
+  Bun.spawnSync(["git", "-C", context.root, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "feat: changement de la session"]);
+  const sessionSha = Bun.spawnSync(["git", "-C", context.root, "rev-parse", "HEAD"]).stdout.toString().trim();
+  writeFileSync(join(context.root, "old.txt"), "ancien\n");
+  Bun.spawnSync(["git", "-C", context.root, "add", "old.txt"]);
+  Bun.spawnSync(["git", "-C", context.root, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "feat: ancien changement sans rapport"]);
+  const unrelatedSha = Bun.spawnSync(["git", "-C", context.root, "rev-parse", "HEAD"]).stdout.toString().trim();
+  writeFileSync(join(context.root, "dirty.txt"), "sale\n");
+  const git = new GitProjectService(context.db, new ProjectStore(context.db));
+  git.recordCommitLinks(context.project.id, context.conversation.id, [sessionSha, unrelatedSha]);
+
+  await context.service.propose(context.conversation.id, {
+    id: "summary-sources", conversation_id: context.conversation.id, event_id_from: 1,
+    event_id_to: 4, content_md: `## Implémenté\n- Commit \`${sessionSha.slice(0, 7)}\` créé.`, created_at: new Date().toISOString(),
+  });
+
+  expect(prompt).toContain(sessionSha);
+  expect(prompt).not.toContain(unrelatedSha);
+  expect(prompt).not.toContain("dirty.txt");
+  expect(prompt).toContain("Une capacité transversale reçoit un seul domaine principal");
+  context.db.close();
+});
+
+test("ne conserve qu'un domaine principal pour une capacité transversale", () => {
+  const domains = [{ id: "contacts", name: "Contacts" }, { id: "notes", name: "Notes & souvenirs" }];
+  const changes = parseProposal(JSON.stringify([
+    { domainId: "contacts", groupKey: "undated-events", nature: "modification", title: "Les événements sans date deviennent visibles.", description: "Ils apparaissent dans la fiche contact.", impact: "Aucun événement n'est perdu.", evidence: ["commit abc"], ambiguous: false },
+    { domainId: "notes", groupKey: "undated-events", nature: "modification", title: "Les événements sans date deviennent visibles.", description: "Ils apparaissent dans la timeline.", impact: "Aucun événement n'est perdu.", evidence: ["commit abc"], ambiguous: false },
+  ]), domains);
+
+  expect(changes).toHaveLength(1);
+  expect(changes[0]?.domainId).toBe("contacts");
+});
+
 test("retrouve la dernière validation non publiée d'une conversation", () => {
   const context = setup();
   const first = context.store.create({ conversationId: context.conversation.id, summaryId: "summary-1", eventIdFrom: 1, eventIdTo: 2, changes: [] });

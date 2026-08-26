@@ -21,14 +21,16 @@ const review: ChangelogReview = {
 
 test('présélectionne les changements certains et isole les ambiguïtés', () => {
   render(createElement(ChangelogReviewDialog, { review, onClose: () => {} }))
-  expect(screen.getByText('Modifications certaines')).toBeTruthy()
+  expect(screen.getByText('Dashboard · Ajout')).toBeTruthy()
+  expect(screen.getByText('Vue ajoutée')).toBeTruthy()
   expect(screen.getByText('Attribution incertaine (1)')).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'Publier 1 changement(s)' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Publier 1 changement' })).toBeTruthy()
   const boxes = screen.getAllByRole('checkbox') as HTMLInputElement[]
   expect(boxes.map((box) => box.checked)).toEqual([true, false])
+  expect((screen.getAllByText('Modifier')[0]!.closest('details') as HTMLDetailsElement).open).toBe(false)
 })
 
-test('publie les corrections éditées après validation rapide', async () => {
+test('replie les détails puis publie la phrase éditée', async () => {
   let body: Record<string, unknown> | null = null
   globalThis.fetch = mock(async (_input, init) => {
     body = JSON.parse(String(init?.body))
@@ -36,23 +38,16 @@ test('publie les corrections éditées après validation rapide', async () => {
   }) as typeof fetch
   const close = mock(() => {})
   render(createElement(ChangelogReviewDialog, { review, onClose: close }))
+  fireEvent.click(screen.getAllByText('Modifier')[0]!)
   fireEvent.change(screen.getAllByLabelText('Titre du changement')[0]!, { target: { value: 'Vue clarifiée' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Publier 1 changement(s)' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Publier 1 changement' }))
   await waitFor(() => expect(close).toHaveBeenCalled())
-  expect(((body?.changes as Array<{ title: string }>)[0]?.title)).toBe('Vue clarifiée')
+  const publishedChanges = body?.changes as Array<{ title: string }> | undefined
+  expect(publishedChanges?.[0]?.title).toBe('Vue clarifiée')
 })
 
-test('fusionne deux propositions voisines en conservant leur contenu et leurs preuves', () => {
-  const mergeReview: ChangelogReview = {
-    ...review,
-    changes: [
-      review.changes[0]!,
-      { ...review.changes[0]!, id: 'c', groupId: 'g3', title: 'Seed idempotent', description: 'La répétition ne crée pas de doublons.', evidence: ['test seed'] },
-    ],
-  }
-  render(createElement(ChangelogReviewDialog, { review: mergeReview, onClose: () => {} }))
-  fireEvent.click(screen.getByRole('button', { name: 'Fusionner avec la précédente' }))
-  expect(screen.getAllByLabelText('Titre du changement')).toHaveLength(1)
-  expect((screen.getByLabelText('Description du changement') as HTMLTextAreaElement).value).toContain('Seed idempotent')
-  expect(screen.getByText('commit abc · test seed')).toBeTruthy()
+test('ne montre aucun contrôle de fusion ou de scission', () => {
+  render(createElement(ChangelogReviewDialog, { review, onClose: () => {} }))
+  expect(screen.queryByText('Fusionner avec la précédente')).toBeNull()
+  expect(screen.queryByText('Scinder')).toBeNull()
 })

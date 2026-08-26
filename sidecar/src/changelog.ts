@@ -49,13 +49,17 @@ export class ChangelogService {
         eventIdFrom: summary.event_id_from, eventIdTo: summary.event_id_to, changes: [] });
     }
     const snapshot = this.git.snapshot(project.id, conversation.worktree_path);
+    const commits = snapshot.commits.filter((commit) =>
+      commit.conversations.some(({ id }) => id === conversationId)
+      && summary.content_md.toLowerCase().includes(commit.sha.slice(0, 7).toLowerCase())
+    );
     const raw = await this.generator({
       cwd: conversationCwd(project, conversation),
       provider: "codex",
       model: "gpt-5.6-luna",
       effort: "high",
       speed: "fast",
-      prompt: proposalPrompt(summary.content_md, domains, snapshot),
+      prompt: proposalPrompt(summary.content_md, domains, commits),
     });
     const parsed = parseProposal(raw, domains.map((domain) => ({ id: domain.id, name: domain.name })));
     return this.store.create({ conversationId, summaryId: summary.id,
@@ -128,7 +132,7 @@ export class ChangelogService {
   }
 }
 
-function proposalPrompt(summary: string, domains: Array<{ id: string; name: string }>, snapshot: ReturnType<GitProjectService["snapshot"]>): string {
+function proposalPrompt(summary: string, domains: Array<{ id: string; name: string }>, commits: ReturnType<GitProjectService["snapshot"]>["commits"]): string {
   return [
     "Tu catalogues en français les modifications réellement réalisées pendant une séquence de développement.",
     "Crée par défaut une seule entrée par capacité durable livrée.",
@@ -137,16 +141,16 @@ function proposalPrompt(summary: string, domains: Array<{ id: string; name: stri
     "Ne découpe jamais par commit, fichier, étape d'implémentation ou nature ajout/modification/correction.",
     "Inclus les changements fonctionnels, métier, UI, UX, design, accessibilité, API, données, architecture, opérations et capacités d'agents.",
     "Exclus les intentions, plans, tentatives abandonnées et micro-ajustements sans effet durable.",
-    "Les fichiers sales non prouvés par le résumé sont ambigus. Une entrée ambiguë doit avoir selected=false.",
+    "Le résumé validé est la source principale. Les commits fournis ne servent qu'à préciser les changements explicitement cités par ce résumé.",
+    "N'attribue jamais à la session un autre commit ou un fichier de travail non cité.",
     "Retourne uniquement un tableau JSON. Chaque objet contient domainId, nature, title, description, impact, evidence, ambiguous.",
-    "nature vaut ajout, modification, correction ou retrait. evidence est un tableau de chaînes courtes.",
-    "Une modification transversale est répétée pour chaque domaine concerné avec le même groupKey et une formulation adaptée.",
+    "title est une phrase complète, concise et compréhensible seule par un utilisateur du produit.",
+    "description et impact apportent des précisions utiles à la mémoire sans paraphraser title. nature vaut ajout, modification, correction ou retrait. evidence est un tableau de chaînes courtes.",
+    "Une capacité transversale reçoit un seul domaine principal : ne la duplique jamais pour plusieurs domaines.",
     "Retourne [] si rien de notable n'est réalisé.",
     `DOMAINES: ${JSON.stringify(domains)}`,
     `RÉSUMÉ VALIDÉ PAR LA SESSION:\n${summary}`,
-    `GIT HEAD: ${snapshot.head ?? "aucun"}`,
-    `COMMITS RÉCENTS: ${JSON.stringify(snapshot.commits.slice(0, 12).map(({ sha, subject, conversations }) => ({ sha, subject, conversations })))}`,
-    `FICHIERS MODIFIÉS: ${JSON.stringify(snapshot.dirtyFiles)}`,
+    `COMMITS CITÉS DE LA SESSION: ${JSON.stringify(commits.map(({ sha, subject }) => ({ sha, subject })))}`,
   ].join("\n\n");
 }
 
@@ -156,8 +160,8 @@ export function parseProposal(raw: string, domains: Array<{ id: string; name: st
   const values = JSON.parse(match[0]) as unknown;
   if (!Array.isArray(values) || values.length > 20) throw new Error("propositions changelog invalides");
   const names = new Map(domains.map((domain) => [domain.id, domain.name]));
-  const groups = new Map<string, string>();
-  return values.map((value, index) => {
+  const groups = new Set<string>();
+  return values.map((value, index): ChangeProposal | null => {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("proposition invalide");
     const item = value as Record<string, unknown>;
     const domainId = String(item.domainId ?? "");
@@ -165,18 +169,18 @@ export function parseProposal(raw: string, domains: Array<{ id: string; name: st
     const nature = item.nature as ChangeNature;
     if (!domainName || !VALID_NATURES.has(nature)) throw new Error("domaine ou nature invalide");
     const groupKey = String(item.groupKey ?? `${domainId}-${index}`);
-    const groupId = groups.get(groupKey) ?? crypto.randomUUID();
-    groups.set(groupKey, groupId);
+    if (groups.has(groupKey)) return null;
+    groups.add(groupKey);
     const ambiguous = item.ambiguous === true;
     return validateChange({
-      id: crypto.randomUUID(), groupId, domainId, domainName, nature,
+      id: crypto.randomUUID(), groupId: crypto.randomUUID(), domainId, domainName, nature,
       title: String(item.title ?? "").trim(),
       description: String(item.description ?? "").trim(),
       impact: String(item.impact ?? "").trim(),
       evidence: Array.isArray(item.evidence) ? item.evidence.map(String).slice(0, 12) : [],
       ambiguous, selected: !ambiguous,
     });
-  });
+  }).filter((change): change is ChangeProposal => change !== null);
 }
 
 function validateChange(change: ChangeProposal): ChangeProposal {
