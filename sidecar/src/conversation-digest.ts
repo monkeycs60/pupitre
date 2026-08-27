@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { killGroup, spawnGroup } from "./process-group";
 import {
   isDomainKind,
   normalizeDomainName,
@@ -115,14 +115,14 @@ function extractJson(text: string): unknown {
 function runClaude(prompt: string, cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const bin = process.env.PUPITRE_CLAUDE_BIN ?? "claude";
-    const child = spawn(
+    const child = spawnGroup(
       bin,
       ["-p", "--output-format", "json", "--model", DIGEST_MODEL, "--", prompt],
       { cwd, stdio: ["ignore", "pipe", "pipe"] },
     );
     let stdout = "";
     let stderr = "";
-    const timer = setTimeout(() => child.kill("SIGKILL"), DIGEST_TIMEOUT_MS);
+    const timer = setTimeout(() => killGroup(child, "SIGKILL"), DIGEST_TIMEOUT_MS);
     timer.unref();
     child.stdout.on("data", (chunk) => (stdout += chunk));
     child.stderr.on("data", (chunk) => (stderr += chunk));

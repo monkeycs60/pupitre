@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { killGroup, spawnGroup } from "./process-group";
 
 /**
  * Vérification par la mesure, plutôt que par l'estimation.
@@ -30,10 +30,10 @@ function probeTurn(cwd: string, model: string, mcpConfig: string | null): Promis
     if (mcpConfig !== null) args.push("--strict-mcp-config", "--mcp-config", mcpConfig);
     args.push("--", PROBE_PROMPT);
 
-    const child = spawn(bin, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawnGroup(bin, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
-    const timer = setTimeout(() => child.kill("SIGKILL"), PROBE_TIMEOUT_MS);
+    const timer = setTimeout(() => killGroup(child, "SIGKILL"), PROBE_TIMEOUT_MS);
     timer.unref();
     child.stdout.on("data", (chunk) => (stdout += chunk));
     child.stderr.on("data", (chunk) => (stderr += chunk));

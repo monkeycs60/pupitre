@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
+import { killGroup, spawnGroup } from "../process-group";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -354,25 +355,13 @@ export class CodexAppServerClient {
     // `detached` isole l'app-server dans son propre groupe de process : c'est ce
     // qui permet de tuer d'un coup ses serveurs MCP (npx, plugins…), sinon
     // orphelins à chaque arrêt — le « bloat » observé en dizaines de process.
-    const child = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"], detached: true });
+    const child = spawnGroup(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
     this.proc = child;
     const killTree = () => {
-      const pid = child.pid;
-      if (pid === undefined) return;
-      try {
-        process.kill(-pid, "SIGTERM");
-      } catch {
-        child.kill();
-      }
+      if (!killGroup(child, "SIGTERM")) return;
       // Filet : un app-server sourd à SIGTERM (ou un MCP qui l'ignore) est
       // achevé sans bloquer l'arrêt du sidecar.
-      const forceKill = setTimeout(() => {
-        try {
-          process.kill(-pid, "SIGKILL");
-        } catch {
-          // Groupe déjà terminé : rien à achever.
-        }
-      }, 1_500);
+      const forceKill = setTimeout(() => killGroup(child, "SIGKILL"), 1_500);
       forceKill.unref?.();
     };
 

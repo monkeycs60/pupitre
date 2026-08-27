@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { killGroup, spawnGroup } from "./process-group";
 import { createInterface } from "node:readline";
 
 /**
@@ -24,21 +24,6 @@ const DEFAULT_HANDSHAKE_TIMEOUT_MS = 20_000;
 function handshakeTimeoutMs(): number {
   const raw = Number(process.env.PUPITRE_MCP_PROBE_TIMEOUT_MS);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HANDSHAKE_TIMEOUT_MS;
-}
-
-/** npx laisse un `sh`/`node` derrière : tuer le pid lancé ne suffit pas. */
-function killProcessTree(child: ReturnType<typeof spawn>): void {
-  const pid = child.pid;
-  if (pid === undefined) return;
-  try {
-    process.kill(-pid, "SIGKILL");
-  } catch {
-    try {
-      child.kill("SIGKILL");
-    } catch {
-      // Déjà mort.
-    }
-  }
 }
 
 const CHARS_PER_TOKEN = 4;
@@ -75,14 +60,11 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
       resolve({ name, tokens: null, toolCount: 0, error: "serveur non stdio" });
       return;
     }
-    const child = spawn(command, definition.args ?? [], {
+    const child = spawnGroup(command, definition.args ?? [], {
       // On hérite de l'environnement : beaucoup de serveurs ont besoin de PATH,
       // HOME ou d'un token déjà exporté par le shell de l'utilisateur.
       env: { ...process.env, ...(definition.env ?? {}) },
       stdio: ["pipe", "pipe", "ignore"],
-      // Groupe dédié : `npx mcp-remote` fork un sh+node qui ignore le SIGKILL
-      // du parent. Sans ça, chaque sonde laisse des ClickUp/Mongo orphelins.
-      detached: true,
     });
 
     let settled = false;
@@ -91,7 +73,7 @@ function probeStdio(name: string, definition: ServerDefinition): Promise<McpServ
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      killProcessTree(child);
+      killGroup(child, "SIGKILL");
       resolve(result);
     };
 
