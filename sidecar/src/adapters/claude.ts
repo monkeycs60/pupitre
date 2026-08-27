@@ -1,4 +1,5 @@
 import { parseClaudeLine } from "./claude-parser";
+import { claudeSessions, persistenceEnabled } from "./claude-session";
 import { spawnJsonl } from "./spawn-jsonl";
 import type { TurnOptions, EmitFn } from "./types";
 import { claudeMcpConfigArg } from "../conductor";
@@ -74,6 +75,25 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
       "mcp__pupitre__publish_document,mcp__pupitre__publish_html_document,mcp__pupitre__read_sibling_conversation",
     );
   }
+  const line = (prompt: string, images: string[]) =>
+    JSON.stringify(userMessage(prompt, images));
+
+  if (persistenceEnabled()) {
+    // `-r` reste hors des args : il ne sert qu'au démarrage d'un process neuf,
+    // et le pool le rajoute lui-même quand il en ouvre un.
+    return claudeSessions.runTurn({
+      bin,
+      args,
+      cwd: opts.cwd,
+      cliSessionId: opts.cliSessionId,
+      line: line(opts.prompt, opts.images),
+      steerLine: line,
+      emit,
+      signal: opts.signal,
+      registerSteer: opts.registerSteer,
+    });
+  }
+
   if (opts.cliSessionId) args.push("-r", opts.cliSessionId);
 
   return spawnJsonl({
@@ -84,9 +104,9 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     emit,
     signal: opts.signal,
     streamingInput: {
-      initialLine: JSON.stringify(userMessage(opts.prompt, opts.images)),
+      initialLine: line(opts.prompt, opts.images),
       registerWrite: (writeLine) => opts.registerSteer?.(async (input) => writeLine(
-        JSON.stringify(userMessage(input.prompt, input.images)),
+        line(input.prompt, input.images),
       )),
     },
   });

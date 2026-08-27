@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Reste vivant et répond à chaque ligne reçue : simule le mode session du CLI.
+# Trace son pid au démarrage pour que le test compte les lancements réels.
+printf '%s\n' "$$" >> "${FAKE_PERSISTENT_PIDS:-/dev/null}"
+printf '%s\n' "$@" >> "${FAKE_PERSISTENT_ARGS:-/dev/null}"
+printf '{"type":"system","subtype":"init","session_id":"%s","model":"faux"}\n' \
+  "${FAKE_SESSION_ID:-S-persistant}"
+while IFS= read -r ligne; do
+  printf '{"type":"assistant","message":{"content":[{"type":"text","text":"recu"}]}}\n'
+  printf '{"type":"result","subtype":"success","result":"ok"}\n'
+done

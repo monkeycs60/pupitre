@@ -11,6 +11,7 @@ import { QuotaTracker } from "./quotas";
 import { QuotaRefresher } from "./quota-refresh";
 import { authenticateQuotaProvider } from "./quota-auth";
 import { SubtaskRunner } from "./subtasks";
+import { claudeSessions } from "./adapters/claude-session";
 import { codexAppServer } from "./adapters/codex-app-server";
 import { runConductorMcp } from "./conductor-mcp";
 import { runPupitreMcp } from "./pupitre-mcp";
@@ -229,6 +230,7 @@ if (process.argv.includes("--pupitre-mcp")) {
       changelog.stop();
       clearInterval(htmlDocumentSweepTimer);
       runner.abortAll();
+      claudeSessions.shutdown();
       codexAppServer.shutdown();
     } finally {
       process.exit(cause === "requested" ? 0 : KILLED_EXIT_CODE);
