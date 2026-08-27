@@ -13,6 +13,7 @@ import {
 export const CHANGELOG_BATCH_SIZE = 10;
 export const CHANGELOG_BACKFILL_CONCURRENCY = 8;
 export const CHANGELOG_BACKFILL_VERSION = 2;
+export const CHANGELOG_ENRICHMENT_ATTEMPTS = 3;
 export const CHANGELOG_REFRESH_INTERVAL_MS = 2 * 60 * 60_000;
 export const CHANGELOG_SINCE = "2026-01-01T00:00:00Z";
 
@@ -162,26 +163,29 @@ export class ChangelogService {
     const worker = async () => {
       while (nextBatch < batches.length) {
         const batch = batches[nextBatch++]!;
-        try {
-          const raw = await this.generateWithSlot({
-            cwd: path,
-            provider: "codex",
-            model: "gpt-5.6-luna",
-            effort: "medium",
-            speed: "standard",
-            prompt: enrichmentPrompt(batch, activeDomains),
-          });
-          const enriched = parseEnrichments(
-            raw,
-            batch.map((entry) => ({
-              repositoryPath: entry.repository_path,
-              sha: entry.commit_sha,
-            })),
-            activeDomains.map((domain) => domain.id),
-          );
-          this.store.enrich(projectId, enriched, this.now().toISOString());
-        } catch (error) {
-          failures.push(error);
+        for (let attempt = 1; attempt <= CHANGELOG_ENRICHMENT_ATTEMPTS; attempt += 1) {
+          try {
+            const raw = await this.generateWithSlot({
+              cwd: path,
+              provider: "codex",
+              model: "gpt-5.6-luna",
+              effort: "medium",
+              speed: "standard",
+              prompt: enrichmentPrompt(batch, activeDomains),
+            });
+            const enriched = parseEnrichments(
+              raw,
+              batch.map((entry) => ({
+                repositoryPath: entry.repository_path,
+                sha: entry.commit_sha,
+              })),
+              activeDomains.map((domain) => domain.id),
+            );
+            this.store.enrich(projectId, enriched, this.now().toISOString());
+            break;
+          } catch (error) {
+            if (attempt === CHANGELOG_ENRICHMENT_ATTEMPTS) failures.push(error);
+          }
         }
       }
     };
@@ -320,7 +324,7 @@ function enrichmentPrompt(
     "Pour chaque commit fourni, écris une seule phrase concise en français qui décrit le résultat produit ou technique durable.",
     "Choisis au plus un domaine existant. Utilise null si aucun domaine ne convient. N'invente pas de domaine.",
     "Retourne uniquement un tableau JSON avec exactement un objet par commit, dans le même ordre.",
-    '{"repositoryPath":".","sha":"...","domainId":"..."|null,"productMessage":"..."}',
+    '{"domainId":"..."|null,"productMessage":"..."}',
     `DOMAINES: ${JSON.stringify(domains)}`,
     `COMMITS: ${JSON.stringify(entries.map((entry) => ({
       sha: entry.commit_sha,
@@ -354,18 +358,16 @@ export function parseEnrichments(
       throw new Error("entrée de changelog invalide");
     }
     const item = value as Record<string, unknown>;
-    const repositoryPath = String(item.repositoryPath ?? "").trim();
-    const sha = String(item.sha ?? "").trim();
     const domainId = item.domainId === null ? null : String(item.domainId ?? "").trim();
     const productMessage = String(item.productMessage ?? "").trim();
-    if (
-      repositoryPath !== expected[index]!.repositoryPath
-      || sha !== expected[index]!.sha
-      || (domainId !== null && !domains.has(domainId))
-      || !productMessage
-    ) {
+    if (!productMessage) {
       throw new Error("entrée de changelog incohérente");
     }
-    return { repositoryPath, sha, domainId, productMessage: productMessage.slice(0, 280) };
+    return {
+      repositoryPath: expected[index]!.repositoryPath,
+      sha: expected[index]!.sha,
+      domainId: domainId !== null && domains.has(domainId) ? domainId : null,
+      productMessage: productMessage.slice(0, 280),
+    };
   });
 }

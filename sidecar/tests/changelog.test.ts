@@ -6,6 +6,7 @@ import {
   CHANGELOG_BACKFILL_CONCURRENCY,
   CHANGELOG_BACKFILL_VERSION,
   CHANGELOG_BATCH_SIZE,
+  CHANGELOG_ENRICHMENT_ATTEMPTS,
   CHANGELOG_REFRESH_INTERVAL_MS,
   ChangelogService,
   parseEnrichments,
@@ -195,7 +196,14 @@ test("les backfills simultanés utilisent au plus huit générations Luna au tot
 });
 
 test("une réponse invalide conserve le catalogue brut pour une reprise ultérieure", async () => {
-  const context = setup({ commits: commits(2), generator: async () => "[]" });
+  let attempts = 0;
+  const context = setup({
+    commits: commits(2),
+    generator: async () => {
+      attempts += 1;
+      return "[]";
+    },
+  });
 
   const payload = await context.service.refreshNow(context.project.id);
 
@@ -203,20 +211,40 @@ test("une réponse invalide conserve le catalogue brut pour une reprise ultérie
   expect(payload.entries.every((entry) => entry.enrichment_status === "pending")).toBe(true);
   expect(payload.state.status).toBe("error");
   expect(payload.state.error).toContain("incomplet");
+  expect(attempts).toBe(CHANGELOG_ENRICHMENT_ATTEMPTS);
   context.db.close();
 });
 
-test("valide strictement les SHA, domaines et phrases du lot", () => {
+test("associe les réponses par position sans dépendre des identifiants répétés par Luna", () => {
   expect(parseEnrichments(
-    '[{"repositoryPath":".","sha":"abc","domainId":null,"productMessage":"Une amélioration visible."}]',
+    '[{"repositoryPath":"mauvais","sha":"court","domainId":"inconnu","productMessage":"Une amélioration visible."}]',
     [{ repositoryPath: ".", sha: "abc" }],
     [],
   )).toEqual([{ repositoryPath: ".", sha: "abc", domainId: null, productMessage: "Une amélioration visible." }]);
   expect(() => parseEnrichments(
-    '[{"repositoryPath":".","sha":"autre","domainId":null,"productMessage":"Texte"}]',
+    '[{"domainId":null,"productMessage":""}]',
     [{ repositoryPath: ".", sha: "abc" }],
     [],
   )).toThrow("incohérente");
+});
+
+test("retente automatiquement un lot Luna structurellement invalide", async () => {
+  let attempts = 0;
+  const context = setup({
+    commits: commits(1),
+    generator: async () => {
+      attempts += 1;
+      if (attempts === 1) return "[]";
+      return '[{"domainId":null,"productMessage":"Le second essai aboutit."}]';
+    },
+  });
+
+  const payload = await context.service.refreshNow(context.project.id);
+
+  expect(attempts).toBe(2);
+  expect(payload.state.status).toBe("idle");
+  expect(payload.entries[0]?.product_message).toBe("Le second essai aboutit.");
+  context.db.close();
 });
 
 test("lit les commits Git depuis le 1er janvier avec leur branche et leur sujet original", async () => {
