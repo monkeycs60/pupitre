@@ -238,6 +238,7 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE TABLE IF NOT EXISTS project_changelog_entries (
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      repository_path TEXT NOT NULL DEFAULT '.',
       commit_sha TEXT NOT NULL,
       branch TEXT NOT NULL,
       subject TEXT NOT NULL,
@@ -248,7 +249,7 @@ export function openDb(dir: string = dataDir()): Database {
         CHECK (enrichment_status IN ('pending', 'enriched')),
       imported_at TEXT NOT NULL,
       enriched_at TEXT NULL,
-      PRIMARY KEY (project_id, commit_sha)
+      PRIMARY KEY (project_id, repository_path, commit_sha)
     );
     CREATE INDEX IF NOT EXISTS idx_project_changelog_entries_date
       ON project_changelog_entries(project_id, committed_at DESC);
@@ -487,6 +488,7 @@ export function openDb(dir: string = dataDir()): Database {
       ended_at TEXT NOT NULL
     );
   `);
+  migrateProjectChangelogEntries(db);
   dropEventsForeignKey(db);
   migrateDocuments(db);
   addColumn(db, "conversations", "effort TEXT NULL");
@@ -556,6 +558,7 @@ export function openDb(dir: string = dataDir()): Database {
   if (addedDefaultScoutPreset) db.exec("UPDATE projects SET default_scout_preset_id = default_preset_id WHERE default_scout_preset_id IS NULL");
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
   addColumn(db, "projects", "auto_rescan INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "project_changelog_state", "backfill_version INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "reviews", "code_provider TEXT NULL");
   addColumn(db, "reviews", "review_speed TEXT NOT NULL DEFAULT 'standard'");
   addColumn(db, "review_flags", "code_provider TEXT NULL");
@@ -725,6 +728,48 @@ function addColumn(db: Database, table: string, definition: string): boolean {
     }
     return false;
   }
+}
+
+function migrateProjectChangelogEntries(db: Database): void {
+  const columns = db.query("PRAGMA table_info(project_changelog_entries)").all() as Array<{
+    name: string;
+    pk: number;
+  }>;
+  const repositoryColumn = columns.find((column) => column.name === "repository_path");
+  const primaryKey = columns.filter((column) => column.pk > 0)
+    .sort((left, right) => left.pk - right.pk)
+    .map((column) => column.name);
+  if (repositoryColumn && primaryKey.join(",") === "project_id,repository_path,commit_sha") return;
+
+  db.exec(`
+    CREATE TABLE project_changelog_entries_v2 (
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      repository_path TEXT NOT NULL DEFAULT '.',
+      commit_sha TEXT NOT NULL,
+      branch TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      committed_at TEXT NOT NULL,
+      domain_id TEXT NULL REFERENCES domains(id) ON DELETE SET NULL,
+      product_message TEXT NULL,
+      enrichment_status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (enrichment_status IN ('pending', 'enriched')),
+      imported_at TEXT NOT NULL,
+      enriched_at TEXT NULL,
+      PRIMARY KEY (project_id, repository_path, commit_sha)
+    );
+    INSERT INTO project_changelog_entries_v2
+      (project_id, repository_path, commit_sha, branch, subject, committed_at,
+       domain_id, product_message, enrichment_status, imported_at, enriched_at)
+    SELECT project_id, '.', commit_sha, branch, subject, committed_at,
+           domain_id, product_message, enrichment_status, imported_at, enriched_at
+    FROM project_changelog_entries;
+    DROP TABLE project_changelog_entries;
+    ALTER TABLE project_changelog_entries_v2 RENAME TO project_changelog_entries;
+    CREATE INDEX idx_project_changelog_entries_date
+      ON project_changelog_entries(project_id, committed_at DESC);
+    CREATE INDEX idx_project_changelog_entries_pending
+      ON project_changelog_entries(project_id, enrichment_status, committed_at DESC);
+  `);
 }
 
 function widenProviderCheck(db: Database, table: string): void {

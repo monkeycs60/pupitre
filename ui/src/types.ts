@@ -499,6 +499,7 @@ export interface SessionSummary {
 
 export interface ProjectChangelogEntry {
   project_id: string
+  repository_path: string
   commit_sha: string
   branch: string
   subject: string
@@ -518,6 +519,7 @@ export interface ProjectChangelogState {
   last_refreshed_at: string | null
   next_refresh_at: string | null
   error: string | null
+  backfill_version: number
 }
 
 export interface ProjectChangelogPayload {

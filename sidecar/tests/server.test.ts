@@ -309,6 +309,8 @@ cat "${fixture}"
     domains,
     async () => "[]",
     async () => [],
+    undefined,
+    async (root) => [{ path: root, relativePath: "." }],
   );
   const integrationsRefresher = new IntegrationsRefresher(
     { integrations, tickets, conversations, projects },

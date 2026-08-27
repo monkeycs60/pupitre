@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 import type { DebriefGenerator } from "./debriefs";
 import type { DomainStore } from "./stores/domains";
 import type { ProjectStore } from "./stores/projects";
@@ -10,13 +11,31 @@ import {
 } from "./stores/changelog";
 
 export const CHANGELOG_BATCH_SIZE = 10;
+export const CHANGELOG_BACKFILL_CONCURRENCY = 8;
+export const CHANGELOG_BACKFILL_VERSION = 2;
 export const CHANGELOG_REFRESH_INTERVAL_MS = 2 * 60 * 60_000;
 export const CHANGELOG_SINCE = "2026-01-01T00:00:00Z";
 
-type GitHistoryReader = (cwd: string, since: string) => Promise<GitChangelogCommit[]>;
+export interface GitRepository {
+  path: string;
+  relativePath: string;
+}
+
+export interface GitHistoryOptions {
+  repositoryPath: string;
+  since?: string;
+  limit?: number;
+  authorEmails?: string[];
+}
+
+type GitHistoryReader = (cwd: string, options: GitHistoryOptions) => Promise<GitChangelogCommit[]>;
+type GitRepositoryFinder = (cwd: string) => Promise<GitRepository[]>;
+type GitEmailReader = (cwd: string) => Promise<string | null>;
 
 export class ChangelogService {
   private active = new Set<string>();
+  private activeEnrichments = 0;
+  private enrichmentWaiters: Array<() => void> = [];
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -26,6 +45,8 @@ export class ChangelogService {
     private generator: DebriefGenerator,
     private history: GitHistoryReader = readGitHistory,
     private now: () => Date = () => new Date(),
+    private repositories: GitRepositoryFinder = discoverGitRepositories,
+    private email: GitEmailReader = readGitEmail,
   ) {}
 
   start(): void {
@@ -84,32 +105,35 @@ export class ChangelogService {
 
   private async refresh(projectId: string, path: string): Promise<void> {
     try {
-      const commits = await this.history(path, CHANGELOG_SINCE);
-      this.store.import(projectId, commits, this.now().toISOString());
-      const pending = this.store.pending(projectId, CHANGELOG_BATCH_SIZE);
-      if (pending.length > 0) {
-        const activeDomains = this.domains.listByProject(projectId)
-          .filter((domain) => domain.status === "actif");
-        const raw = await this.generator({
-          cwd: path,
-          provider: "codex",
-          model: "gpt-5.6-luna",
-          effort: "medium",
-          speed: "standard",
-          prompt: enrichmentPrompt(pending, activeDomains),
-        });
-        const enriched = parseEnrichments(
-          raw,
-          pending.map((entry) => entry.commit_sha),
-          activeDomains.map((domain) => domain.id),
-        );
-        this.store.enrich(projectId, enriched, this.now().toISOString());
+      const state = this.store.state(projectId);
+      const backfill = state.backfill_version < CHANGELOG_BACKFILL_VERSION;
+      const repositories = await this.repositories(path);
+      if (repositories.length === 0) throw new Error("aucun dépôt Git trouvé");
+      const authorEmails = repositories.length > 1
+        ? [...new Set((await Promise.all(repositories.map((repository) => this.email(repository.path))))
+          .filter((value): value is string => Boolean(value)))]
+        : [];
+      if (repositories.length > 1 && authorEmails.length === 0) {
+        throw new Error("identité Git introuvable pour le projet multi-dépôt");
       }
+      const commits = (await Promise.all(repositories.map((repository) => this.history(
+        repository.path,
+        {
+          repositoryPath: repository.relativePath,
+          since: backfill ? CHANGELOG_SINCE : undefined,
+          limit: backfill ? undefined : CHANGELOG_BATCH_SIZE,
+          authorEmails,
+        },
+      )))).flat();
+      if (backfill) this.store.reconcile(projectId, commits);
+      this.store.import(projectId, commits, this.now().toISOString());
+      await this.enrichPending(projectId, path, backfill);
       const refreshedAt = this.now();
       this.store.markFinished(
         projectId,
         refreshedAt.toISOString(),
         new Date(refreshedAt.getTime() + CHANGELOG_REFRESH_INTERVAL_MS).toISOString(),
+        backfill ? CHANGELOG_BACKFILL_VERSION : undefined,
       );
     } catch (error) {
       const failedAt = this.now();
@@ -118,6 +142,71 @@ export class ChangelogService {
         error instanceof Error ? error.message : "actualisation du changelog impossible",
         new Date(failedAt.getTime() + CHANGELOG_REFRESH_INTERVAL_MS).toISOString(),
       );
+    }
+  }
+
+  private async enrichPending(projectId: string, path: string, backfill: boolean): Promise<void> {
+    const pending = this.store.pending(
+      projectId,
+      backfill ? Number.MAX_SAFE_INTEGER : CHANGELOG_BATCH_SIZE,
+    );
+    if (pending.length === 0) return;
+    const activeDomains = this.domains.listByProject(projectId)
+      .filter((domain) => domain.status === "actif");
+    const batches = Array.from(
+      { length: Math.ceil(pending.length / CHANGELOG_BATCH_SIZE) },
+      (_, index) => pending.slice(index * CHANGELOG_BATCH_SIZE, (index + 1) * CHANGELOG_BATCH_SIZE),
+    );
+    const failures: unknown[] = [];
+    let nextBatch = 0;
+    const worker = async () => {
+      while (nextBatch < batches.length) {
+        const batch = batches[nextBatch++]!;
+        try {
+          const raw = await this.generateWithSlot({
+            cwd: path,
+            provider: "codex",
+            model: "gpt-5.6-luna",
+            effort: "medium",
+            speed: "standard",
+            prompt: enrichmentPrompt(batch, activeDomains),
+          });
+          const enriched = parseEnrichments(
+            raw,
+            batch.map((entry) => ({
+              repositoryPath: entry.repository_path,
+              sha: entry.commit_sha,
+            })),
+            activeDomains.map((domain) => domain.id),
+          );
+          this.store.enrich(projectId, enriched, this.now().toISOString());
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+    };
+    await Promise.all(Array.from(
+      { length: Math.min(backfill ? CHANGELOG_BACKFILL_CONCURRENCY : 1, batches.length) },
+      worker,
+    ));
+    if (failures.length > 0) {
+      const first = failures[0];
+      throw first instanceof Error ? first : new Error("enrichissement du changelog impossible");
+    }
+  }
+
+  private async generateWithSlot(input: Parameters<DebriefGenerator>[0]): Promise<string> {
+    if (this.activeEnrichments < CHANGELOG_BACKFILL_CONCURRENCY) {
+      this.activeEnrichments += 1;
+    } else {
+      await new Promise<void>((resolve) => this.enrichmentWaiters.push(resolve));
+    }
+    try {
+      return await this.generator(input);
+    } finally {
+      const next = this.enrichmentWaiters.shift();
+      if (next) next();
+      else this.activeEnrichments -= 1;
     }
   }
 
@@ -139,11 +228,60 @@ async function runGit(cwd: string, args: string[]): Promise<string> {
   return stdout;
 }
 
-export async function readGitHistory(cwd: string, since: string): Promise<GitChangelogCommit[]> {
-  const raw = await runGit(cwd, [
-    "log", "-z", "--all", "--source", "--topo-order", `--since=${since}`,
-    "--date=iso-strict", "--format=%H%x00%S%x00%cI%x00%s",
+export async function discoverGitRepositories(root: string): Promise<GitRepository[]> {
+  if (!existsSync(join(root, ".git"))) return [];
+  const repositories: GitRepository[] = [];
+  const ignored = new Set([
+    ".git", ".cache", ".next", "build", "coverage", "dist", "node_modules", "target",
   ]);
+  const visit = (directory: string) => {
+    if (existsSync(join(directory, ".git"))) {
+      const relativePath = relative(root, directory).split(sep).join("/") || ".";
+      repositories.push({ path: directory, relativePath });
+    }
+    let entries;
+    try {
+      entries = readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.isSymbolicLink() || ignored.has(entry.name)) continue;
+      visit(join(directory, entry.name));
+    }
+  };
+  visit(resolve(root));
+  return repositories.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+}
+
+export async function readGitEmail(cwd: string): Promise<string | null> {
+  try {
+    const value = (await runGit(cwd, ["config", "--get", "user.email"])).trim().toLowerCase();
+    return value || null;
+  } catch {
+    return null;
+  }
+}
+
+function escapeExtendedRegex(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+}
+
+export async function readGitHistory(
+  cwd: string,
+  options: GitHistoryOptions,
+): Promise<GitChangelogCommit[]> {
+  const args = [
+    "log", "-z", "--branches", "--remotes", "--source", "--topo-order",
+    "--date=iso-strict", "--format=%H%x00%S%x00%cI%x00%s",
+  ];
+  if (options.since) args.push(`--since=${options.since}`);
+  if (options.limit !== undefined) args.push(`--max-count=${options.limit}`);
+  if (options.authorEmails && options.authorEmails.length > 0) {
+    const emailPattern = options.authorEmails.map(escapeExtendedRegex).join("|");
+    args.push("--extended-regexp", "--regexp-ignore-case", `--author=<(${emailPattern})>`);
+  }
+  const raw = await runGit(cwd, args);
   const fields = raw.split("\0");
   if (fields.at(-1) === "") fields.pop();
   if (fields.length % 4 !== 0) throw new Error("historique Git illisible");
@@ -155,6 +293,7 @@ export async function readGitHistory(cwd: string, since: string): Promise<GitCha
     const subject = fields[index + 3]!.trim();
     if (!sha || !committedAt) continue;
     commits.push({
+      repositoryPath: options.repositoryPath,
       sha,
       branch: source
         .replace(/^refs\/heads\//, "")
@@ -167,7 +306,13 @@ export async function readGitHistory(cwd: string, since: string): Promise<GitCha
 }
 
 function enrichmentPrompt(
-  entries: Array<{ commit_sha: string; branch: string; subject: string; committed_at: string }>,
+  entries: Array<{
+    repository_path: string;
+    commit_sha: string;
+    branch: string;
+    subject: string;
+    committed_at: string;
+  }>,
   domains: Array<{ id: string; name: string; kind: string }>,
 ): string {
   return [
@@ -175,10 +320,11 @@ function enrichmentPrompt(
     "Pour chaque commit fourni, écris une seule phrase concise en français qui décrit le résultat produit ou technique durable.",
     "Choisis au plus un domaine existant. Utilise null si aucun domaine ne convient. N'invente pas de domaine.",
     "Retourne uniquement un tableau JSON avec exactement un objet par commit, dans le même ordre.",
-    '{"sha":"...","domainId":"..."|null,"productMessage":"..."}',
+    '{"repositoryPath":".","sha":"...","domainId":"..."|null,"productMessage":"..."}',
     `DOMAINES: ${JSON.stringify(domains)}`,
     `COMMITS: ${JSON.stringify(entries.map((entry) => ({
       sha: entry.commit_sha,
+      repositoryPath: entry.repository_path,
       branch: entry.branch,
       subject: entry.subject,
       committedAt: entry.committed_at,
@@ -188,13 +334,18 @@ function enrichmentPrompt(
 
 export function parseEnrichments(
   raw: string,
-  expectedShas: string[],
+  expected: Array<{ repositoryPath: string; sha: string }>,
   allowedDomainIds: string[],
-): Array<{ sha: string; domainId: string | null; productMessage: string }> {
+): Array<{
+  repositoryPath: string;
+  sha: string;
+  domainId: string | null;
+  productMessage: string;
+}> {
   const match = raw.trim().match(/\[[\s\S]*\]/);
   if (!match) throw new Error("enrichissement du changelog invalide");
   const parsed = JSON.parse(match[0]) as unknown;
-  if (!Array.isArray(parsed) || parsed.length !== expectedShas.length) {
+  if (!Array.isArray(parsed) || parsed.length !== expected.length) {
     throw new Error("lot de changelog incomplet");
   }
   const domains = new Set(allowedDomainIds);
@@ -203,12 +354,18 @@ export function parseEnrichments(
       throw new Error("entrée de changelog invalide");
     }
     const item = value as Record<string, unknown>;
+    const repositoryPath = String(item.repositoryPath ?? "").trim();
     const sha = String(item.sha ?? "").trim();
     const domainId = item.domainId === null ? null : String(item.domainId ?? "").trim();
     const productMessage = String(item.productMessage ?? "").trim();
-    if (sha !== expectedShas[index] || (domainId !== null && !domains.has(domainId)) || !productMessage) {
+    if (
+      repositoryPath !== expected[index]!.repositoryPath
+      || sha !== expected[index]!.sha
+      || (domainId !== null && !domains.has(domainId))
+      || !productMessage
+    ) {
       throw new Error("entrée de changelog incohérente");
     }
-    return { sha, domainId, productMessage: productMessage.slice(0, 280) };
+    return { repositoryPath, sha, domainId, productMessage: productMessage.slice(0, 280) };
   });
 }

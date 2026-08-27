@@ -241,11 +241,16 @@ test('affiche le changelog compact, son échéance au survol et permet une actua
     if (url.endsWith('/changelog')) {
       return Response.json({
         entries: [{
-          project_id: 'p1', commit_sha: 'e8ac32b123456789', branch: 'main',
+          project_id: 'p1', repository_path: '.', commit_sha: 'e8ac32b123456789', branch: 'main',
           subject: 'feat: show undated contact events', committed_at: '2026-08-27T10:00:00Z',
           domain_id: 'contacts', domain_name: 'Contacts',
           product_message: 'Les événements sans date apparaissent dans la fiche contact.',
           enrichment_status: 'enriched', imported_at: '2026-08-27T10:01:00Z', enriched_at: '2026-08-27T10:02:00Z',
+        }, {
+          project_id: 'p1', repository_path: 'apps/reactor', commit_sha: 'd887678123456789', branch: 'feature/TECH-24128',
+          subject: 'fix: type suppressed source errors', committed_at: '2026-08-26T18:31:00Z',
+          domain_id: null, domain_name: null, product_message: null,
+          enrichment_status: 'pending', imported_at: '2026-08-27T10:01:00Z', enriched_at: null,
         }],
         state: {
           project_id: 'p1', status: 'idle', last_started_at: '2026-08-27T10:00:00Z',
@@ -266,6 +271,7 @@ test('affiche le changelog compact, son échéance au survol et permet une actua
   expect(screen.getByText('feat: show undated contact events')).toBeTruthy()
   expect(screen.getByText('main')).toBeTruthy()
   expect(screen.getByText('e8ac32b')).toBeTruthy()
+  expect(screen.getAllByText('reactor')).toHaveLength(2)
 
   const menuButton = screen.getByRole('button', { name: /Changelog/ })
   expect(menuButton.getAttribute('title')).toContain('Prochaine actualisation dans')

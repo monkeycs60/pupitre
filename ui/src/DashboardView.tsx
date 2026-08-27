@@ -158,6 +158,7 @@ export function DashboardView({
     .filter((item): item is ProjectChangelogEntry & { domain_id: string; domain_name: string } => Boolean(item.domain_id && item.domain_name))
     .map((item) => [item.domain_id, item.domain_name])).entries()], [changelog])
   const visibleChangelog = changelogDomain ? changelog.filter((item) => item.domain_id === changelogDomain) : changelog
+  const changelogHasMultipleRepositories = new Set(changelog.map((item) => item.repository_path)).size > 1
   const sortedTickets = useMemo(() => [...(data?.tickets ?? [])].sort((left, right) => {
     const comparison = sort.key === 'ticket'
       ? left.key.localeCompare(right.key, 'fr', { numeric: true })
@@ -456,7 +457,7 @@ export function DashboardView({
             <div><h2 className="dashboard-section-title">Changelog</h2><p>{changelogTiming(changelogState, now)}</p></div>
             {changelogDomains.length > 1 ? <select aria-label="Filtrer le changelog par domaine" value={changelogDomain} onChange={(event) => setChangelogDomain(event.target.value)}><option value="">Tous les domaines</option>{changelogDomains.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : null}
           </div>
-          {visibleChangelog.length === 0 ? <div className="dashboard-empty"><strong>Aucun commit importé</strong><p>Le premier passage reprendra automatiquement l’historique depuis le 1er janvier 2026.</p></div> : <ol className="dashboard-changelog-list">{visibleChangelog.slice(0, 100).map((item) => <li key={item.commit_sha}><div><span className="dashboard-pill">{item.domain_name ?? 'À enrichir'}</span><span className="dashboard-branch-label"><BranchIcon />{item.branch}</span><code>{item.commit_sha.slice(0, 7)}</code><time>{new Date(item.committed_at).toLocaleDateString('fr-FR')}</time></div><strong>{item.product_message ?? item.subject}</strong>{item.product_message ? <small>{item.subject}</small> : <small>Enrichissement en attente</small>}</li>)}</ol>}
+          {visibleChangelog.length === 0 ? <div className="dashboard-empty"><strong>Aucun commit importé</strong><p>Le premier passage reprendra automatiquement l’historique depuis le 1er janvier 2026.</p></div> : <ol className="dashboard-changelog-list">{visibleChangelog.slice(0, 100).map((item) => <li key={`${item.repository_path}:${item.commit_sha}`}><div><span className="dashboard-pill">{item.domain_name ?? 'À enrichir'}</span>{changelogHasMultipleRepositories ? <span className="dashboard-repository-label">{item.repository_path === '.' ? project.name : item.repository_path.split('/').at(-1)}</span> : null}<span className="dashboard-branch-label"><BranchIcon />{item.branch}</span><code>{item.commit_sha.slice(0, 7)}</code><time>{new Date(item.committed_at).toLocaleDateString('fr-FR')}</time></div><strong>{item.product_message ?? item.subject}</strong>{item.product_message ? <small>{item.subject}</small> : <small>Enrichissement en attente</small>}</li>)}</ol>}
         </section>
 
         {data && data.environments.length > 0 ? (
