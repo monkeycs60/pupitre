@@ -94,3 +94,54 @@ exec sleep 30
     { type: "status", state: "error", error: "annulé" },
   ]);
 }, 7_000);
+
+/** `kill(pid, 0)` reste vrai sur un zombie : laisser le temps au reaping. */
+async function attendreLaMort(pid: number, timeoutMs = 3_000): Promise<boolean> {
+  const limite = performance.now() + timeoutMs;
+  while (performance.now() < limite) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
+}
+
+test("l'abort tue les petits-enfants du provider, pas seulement le provider", async () => {
+  const events: AppEvent[] = [];
+  const controller = new AbortController();
+  let petitFils = 0;
+  let signalReady!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    signalReady = resolve;
+  });
+
+  const turn = spawnJsonl({
+    bin: "/bin/sh",
+    // `sleep` tient le rôle d'un serveur MCP : enfant du provider, donc hors de
+    // portée d'un signal visant le seul pid du provider.
+    args: ["-c", 'sleep 30 & printf "PID=%s\\n" "$!"; wait'],
+    cwd: "/tmp",
+    parseLine: (line) => {
+      const match = line.match(/^PID=(\d+)$/);
+      if (match) {
+        petitFils = Number(match[1]);
+        signalReady();
+      }
+      return [];
+    },
+    emit: (event) => events.push(event),
+    signal: controller.signal,
+  });
+
+  await ready;
+  expect(petitFils).toBeGreaterThan(0);
+  expect(() => process.kill(petitFils, 0)).not.toThrow();
+
+  controller.abort();
+  await turn;
+
+  expect(await attendreLaMort(petitFils)).toBe(true);
+}, 10_000);

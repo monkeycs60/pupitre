@@ -118,6 +118,17 @@ export class ConversationRunner {
     }));
   }
 
+  /**
+   * Annule tous les tours en vol et rend la main aussitôt : l'appelant est
+   * l'arrêt du sidecar, qui sort avant qu'un `await` puisse se résoudre. Les
+   * signaux partent quand même, `process.kill` étant synchrone.
+   */
+  abortAll(): number {
+    const turns = [...this.active.values()];
+    for (const turn of turns) turn.controller.abort();
+    return turns.length;
+  }
+
   async cancelTurn(conversationId: string): Promise<boolean> {
     const turn = this.active.get(conversationId);
     if (!turn) return false;

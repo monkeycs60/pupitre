@@ -31,6 +31,10 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
       cwd: opts.cwd,
       stdio: [opts.streamingInput ? "pipe" : "ignore", "pipe", "pipe"],
       env: opts.env ? { ...process.env, ...opts.env } : undefined,
+      // Les serveurs MCP du provider sont ses enfants : un signal envoyé au
+      // seul pid du provider les laisse vivants, simplement reparentés. Le
+      // groupe dédié les rend joignables par `process.kill(-pid)`.
+      detached: true,
     });
     let sawTerminal = false;
     let settled = false;
@@ -62,17 +66,30 @@ export function spawnJsonl(opts: SpawnJsonlOptions): Promise<void> {
       resolve();
     };
 
+    // Un pid négatif vise le groupe entier. Le groupe survit au provider
+    // lui-même tant qu'un serveur MCP y tourne, donc l'échec du signal de
+    // groupe est le seul indice fiable qu'il ne reste rien à tuer.
+    const signalTree = (signal: NodeJS.Signals): boolean => {
+      if (child.pid === undefined) return false;
+      try {
+        process.kill(-child.pid, signal);
+        return true;
+      } catch {
+        return child.kill(signal);
+      }
+    };
+
     const abort = () => {
       if (settled) return;
       aborted = true;
       sawTerminal = true;
       opts.emit({ type: "status", state: "error", error: "annulé" });
-      if (!child.kill()) {
+      if (!signalTree("SIGTERM")) {
         settle();
         return;
       }
       killTimer = setTimeout(() => {
-        if (!settled) child.kill("SIGKILL");
+        if (!settled) signalTree("SIGKILL");
       }, 3_000);
       killTimer.unref();
     };

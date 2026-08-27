@@ -29,3 +29,14 @@ test("le superviseur Tauri ne considère volontaire que le code 0", () => {
   expect(supervisor).toContain("if payload.code == Some(0)");
   expect(supervisor).toContain("intentional_exit = true");
 });
+
+test("l'arrêt annule les tours en vol avant de sortir", () => {
+  const source = read("sidecar/src/index.ts");
+
+  // Les serveurs MCP d'un tour vivent dans le groupe du provider : sortir sans
+  // avoir signalé ce groupe les laisse orphelins, et ils s'accumulent.
+  const abort = source.indexOf("runner.abortAll()");
+  const exit = source.indexOf('process.exit(cause === "requested"');
+  expect(abort).toBeGreaterThan(-1);
+  expect(exit).toBeGreaterThan(abort);
+});

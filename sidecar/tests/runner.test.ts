@@ -483,3 +483,38 @@ test("cancelTurn annule le process actif et déverrouille la conversation", asyn
     error: "annulé",
   });
 });
+
+test("abortAll annule tous les tours en vol et rend la main sans attendre", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-abort-all-"));
+  const hangingBin = join(dir, "fake-claude-hanging");
+  writeFileSync(hangingBin, "#!/bin/sh\nexec sleep 30\n");
+  chmodSync(hangingBin, 0o755);
+  process.env.PUPITRE_CLAUDE_BIN = hangingBin;
+
+  const first = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "a",
+  });
+  const second = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    firstMessage: "b",
+  });
+
+  const turns = [
+    runner.runTurn(first.id, "bloque", []),
+    runner.runTurn(second.id, "bloque", []),
+  ];
+  expect(runner.activeTurns()).toHaveLength(2);
+
+  // L'arrêt du sidecar sort avant qu'un `await` se résolve : le compte doit
+  // être connu au retour, pas après.
+  expect(runner.abortAll()).toBe(2);
+  await Promise.all(turns);
+
+  expect(runner.isRunning(first.id)).toBe(false);
+  expect(runner.isRunning(second.id)).toBe(false);
+});

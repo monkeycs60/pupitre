@@ -206,9 +206,9 @@ if (process.argv.includes("--pupitre-mcp")) {
   );
   // Arrêt propre partagé : éviction par un sidecar plus récent (POST
   // /api/shutdown), SIGTERM de Tauri à la fermeture de l'app, Ctrl-C en dev.
-  // Sans lui, l'app-server codex et sa flotte de serveurs MCP survivent en
-  // orphelins — et un vieux sidecar qui garde le port fait tourner l'UI sur du
-  // code périmé.
+  // Sans lui, l'app-server codex, les tours provider en vol et leurs flottes de
+  // serveurs MCP survivent en orphelins — et un vieux sidecar qui garde le port
+  // fait tourner l'UI sur du code périmé.
   let stopping = false;
   const htmlDocumentSweepTimer = setInterval(
     () => htmlDocuments.sweepExpired(),
@@ -228,6 +228,7 @@ if (process.argv.includes("--pupitre-mcp")) {
       integrationsRefresher.stop();
       changelog.stop();
       clearInterval(htmlDocumentSweepTimer);
+      runner.abortAll();
       codexAppServer.shutdown();
     } finally {
       process.exit(cause === "requested" ? 0 : KILLED_EXIT_CODE);
