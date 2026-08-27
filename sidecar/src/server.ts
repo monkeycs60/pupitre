@@ -86,11 +86,7 @@ import {
 import type { IntegrationSecretStore } from "./stores/integration-secrets";
 import type { SentryStore } from "./stores/sentry";
 import { redactSentryValue } from "./sentry-redaction";
-import {
-  ChangelogConflictError,
-  SkillRootAmbiguousError,
-  type ChangelogService,
-} from "./changelog";
+import type { ChangelogService } from "./changelog";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -2698,17 +2694,11 @@ export function createServer(deps: ServerDeps) {
           }
           try {
             const summary = await deps.debriefs.generateSessionSummary(conversationSessionSummaryId);
-            const review = deps.changelog
-              ? await deps.changelog.propose(conversationSessionSummaryId, summary)
-              : null;
-            return json({ ...summary, summary, review }, 201);
+            return json(summary, 201);
           } catch (error) {
-            if (error instanceof NoNewSessionSummaryEventsError && deps.changelog) {
+            if (error instanceof NoNewSessionSummaryEventsError) {
               const latest = deps.debriefs.latestSessionSummary(conversationSessionSummaryId);
-              if (latest) {
-                const review = await deps.changelog.propose(conversationSessionSummaryId, latest);
-                return json({ ...latest, summary: latest, review }, 200);
-              }
+              if (latest) return json(latest, 200);
             }
             if (
               error instanceof DebriefAlreadyRunningError
@@ -2723,35 +2713,18 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
-        const changelogReviewId = routeId(pathname, /^\/api\/changelog-reviews\/([^/]+)\/publish$/);
-        if (request.method === "POST" && changelogReviewId !== null) {
-          const body = await readObject(request);
-          if (!Array.isArray(body.changes)) throw new HttpError(400, "champ changes invalide");
-          try {
-            return json(await requireChangelog(deps).publish(changelogReviewId, body.changes as never[]));
-          } catch (error) {
-            if (error instanceof ChangelogConflictError || error instanceof SkillRootAmbiguousError) {
-              throw new HttpError(409, error.message);
-            }
-            throw error;
-          }
-        }
-
-        const pendingChangelogConversationId = routeId(
-          pathname,
-          /^\/api\/conversations\/([^/]+)\/changelog-review$/,
-        );
-        if (request.method === "GET" && pendingChangelogConversationId !== null) {
-          if (!deps.conversations.get(pendingChangelogConversationId)) {
-            throw new HttpError(404, "conversation inconnue");
-          }
-          return json(requireChangelog(deps).latestProposed(pendingChangelogConversationId));
-        }
-
         const projectChangelogId = routeId(pathname, /^\/api\/projects\/([^/]+)\/changelog$/);
         if (request.method === "GET" && projectChangelogId !== null) {
           const domainId = url.searchParams.get("domainId") ?? undefined;
           return json(requireChangelog(deps).list(projectChangelogId, domainId));
+        }
+
+        const projectChangelogRefreshId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/changelog\/refresh$/,
+        );
+        if (request.method === "POST" && projectChangelogRefreshId !== null) {
+          return json(requireChangelog(deps).trigger(projectChangelogRefreshId), 202);
         }
 
         const conversationTestInventoryId = routeId(

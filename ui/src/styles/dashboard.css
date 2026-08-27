@@ -53,6 +53,25 @@
   gap: var(--space-3);
 }
 
+.dashboard-changelog-menu { position: relative; }
+.dashboard-changelog-dropdown {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  min-width: 230px;
+  padding: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+}
+.dashboard-changelog-dropdown button { padding: 8px 10px; color: var(--text); text-align: left; background: transparent; border: 0; border-radius: var(--r-sm); cursor: pointer; }
+.dashboard-changelog-dropdown button:hover:not(:disabled) { background: var(--bg-hover); }
+.dashboard-changelog-dropdown button:disabled { color: var(--text-faint); cursor: default; }
+.dashboard-changelog-dropdown small { padding: 7px 10px 4px; color: var(--text-faint); border-top: 1px solid var(--border-subtle); }
+
 .dashboard-connection {
   display: inline-flex;
   align-items: center;
@@ -101,9 +120,13 @@
 .dashboard-changelog-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
 .dashboard-changelog-list li { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-subtle); }
 .dashboard-changelog-list li > div { display: flex; gap: 6px; align-items: center; }
+.dashboard-changelog-list li > div > code { color: var(--text-faint); font-size: 11px; }
+.dashboard-branch-label { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 11px; }
+.dashboard-branch-label svg { width: 12px; height: 12px; }
 .dashboard-changelog-list time { margin-left: auto; color: var(--text-faint); font-size: 11px; }
 .dashboard-changelog-list p, .dashboard-changelog-list small { margin: 0; }
 .dashboard-changelog-list p { color: var(--text-muted); }
+.dashboard-changelog-list small { color: var(--text-faint); font-family: var(--font-mono); }
 
 .dashboard-section-head {
   display: flex;

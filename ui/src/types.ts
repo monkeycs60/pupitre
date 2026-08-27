@@ -497,52 +497,32 @@ export interface SessionSummary {
   created_at: string
 }
 
-export type ChangeNature = 'ajout' | 'modification' | 'correction' | 'retrait'
-
-export interface ChangeProposal {
-  id: string
-  groupId: string
-  domainId: string
-  domainName: string
-  nature: ChangeNature
-  title: string
-  description: string
-  impact: string
-  evidence: string[]
-  ambiguous: boolean
-  selected: boolean
+export interface ProjectChangelogEntry {
+  project_id: string
+  commit_sha: string
+  branch: string
+  subject: string
+  committed_at: string
+  domain_id: string | null
+  domain_name: string | null
+  product_message: string | null
+  enrichment_status: 'pending' | 'enriched'
+  imported_at: string
+  enriched_at: string | null
 }
 
-export interface ChangelogReview {
-  id: string
-  conversationId: string
-  summaryId: string
-  eventIdFrom: number
-  eventIdTo: number
-  status: 'proposé' | 'publié'
-  changes: ChangeProposal[]
-  createdAt: string
-  publishedAt: string | null
+export interface ProjectChangelogState {
+  project_id: string
+  status: 'idle' | 'running' | 'error'
+  last_started_at: string | null
+  last_refreshed_at: string | null
+  next_refresh_at: string | null
+  error: string | null
 }
 
-export interface SessionSummaryResult {
-  summary: SessionSummary
-  review: ChangelogReview | null
-}
-
-export interface DomainChangeRow {
-  id: string
-  group_id: string
-  review_id: string
-  domain_id: string
-  domain_name: string
-  conversation_id: string
-  nature: ChangeNature
-  title: string
-  description: string
-  impact: string
-  evidence: string[]
-  created_at: string
+export interface ProjectChangelogPayload {
+  entries: ProjectChangelogEntry[]
+  state: ProjectChangelogState
 }
 
 // Miroir de sidecar/src/quotas.ts : forme normalisée des providers.

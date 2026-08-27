@@ -916,8 +916,7 @@
   font-family: var(--font-mono);
 }
 
-/* Résumé de session : sur la barre de fin de tour, discret tant qu'il n'y a
-   rien à cataloguer, accentué dès que des réponses attendent le changelog. */
+/* Résumé de session : accentué lorsque de nouvelles réponses restent à résumer. */
 .turn-summary-actions {
   display: inline-flex;
   gap: 6px;
@@ -963,19 +962,6 @@
   color: var(--accent-bright);
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   border-color: var(--accent-border);
-}
-
-/* Le nom du bouton ne change jamais ; la pastille dit qu'en plus du résumé,
-   la revue de changelog s'ouvrira. */
-.turn-summary-pill {
-  padding: 0 6px;
-  color: var(--on-accent);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 15px;
-  background: var(--streak);
-  border-radius: var(--r-full);
 }
 
 /* Le Gardien reste dans le flux : une seule ligne d'état. */

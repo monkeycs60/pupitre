@@ -34,6 +34,9 @@ import { HtmlDocumentService } from "../src/html-documents";
 import { IntegrationStore } from "../src/stores/integrations";
 import { IntegrationsRefresher } from "../src/integrations/refresher";
 import { TicketStore } from "../src/stores/tickets";
+import { DomainStore } from "../src/stores/domains";
+import { ChangelogStore } from "../src/stores/changelog";
+import { ChangelogService } from "../src/changelog";
 
 interface TestServer {
   baseUrl: string;
@@ -299,6 +302,14 @@ cat "${fixture}"
   );
   const integrations = new IntegrationStore(db);
   const tickets = new TicketStore(db);
+  const domains = new DomainStore(db);
+  const changelog = new ChangelogService(
+    new ChangelogStore(db),
+    projects,
+    domains,
+    async () => "[]",
+    async () => [],
+  );
   const integrationsRefresher = new IntegrationsRefresher(
     { integrations, tickets, conversations, projects },
     { clickUpClient: () => null, gitLabClient: () => null },
@@ -344,6 +355,8 @@ cat "${fixture}"
     htmlDocuments,
     integrations,
     tickets,
+    domains,
+    changelog,
     integrationsRefresher,
     shutdown: () => {
       shutdownCount += 1;
@@ -1775,9 +1788,10 @@ test("Résumé session reste court et le handoff expose un document réutilisabl
     {},
   );
   expect(summaryResponse.status).toBe(201);
-  const summary = await summaryResponse.json() as { content_md: string };
+  const summary = await summaryResponse.json() as { content_md: string; review?: unknown };
   expect(summary.content_md).toContain("## Implémenté");
   expect(summary.content_md).not.toContain("## Décisions et pourquoi");
+  expect(summary.review).toBeUndefined();
 
   const documentResponse = await postJson(
     `/api/conversations/${conversation.id}/handoff-document`,
@@ -1807,6 +1821,28 @@ test("Résumé session reste court et le handoff expose un document réutilisabl
     continued_from: conversation.id,
     handoff_pending: false,
   }));
+});
+
+test("le changelog projet se consulte et se déclenche sans créer de conversation", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const before = current.deps.conversations.listByProject(project.id).length;
+
+  const refresh = await postJson(`/api/projects/${project.id}/changelog/refresh`, {});
+  expect(refresh.status).toBe(202);
+  expect(await refresh.json()).toEqual(expect.objectContaining({ status: "running" }));
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const probe = await fetch(`${current.baseUrl}/api/projects/${project.id}/changelog`);
+    const probePayload = await probe.json() as { state: { status: string } };
+    if (probePayload.state.status === "idle") break;
+    await Bun.sleep(10);
+  }
+  const response = await fetch(`${current.baseUrl}/api/projects/${project.id}/changelog`);
+  const payload = await response.json() as { entries: unknown[]; state: { next_refresh_at: string | null } };
+  expect(payload.entries).toEqual([]);
+  expect(payload.state.next_refresh_at).not.toBeNull();
+  expect(current.deps.conversations.listByProject(project.id)).toHaveLength(before);
 });
 
 test("Tester inventorie les scopes puis exécute le choix avec un résultat inline", async () => {

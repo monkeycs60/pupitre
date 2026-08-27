@@ -1,7 +1,8 @@
 # Changelog par domaine et documentation produit vivante
 
 **Date :** 24 août 2026  
-**Statut :** validé — à relire avant planification
+**Statut :** remplacé le 27 août 2026 par
+[`2026-08-27-project-changelog-design.md`](./2026-08-27-project-changelog-design.md)
 
 ## Objectif
 

@@ -1,246 +1,214 @@
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
-import type { DebriefGenerator, SessionSummary } from "./debriefs";
-import type { GitProjectService } from "./git";
-import type { ConversationStore } from "./stores/conversations";
+import { existsSync } from "node:fs";
+import type { DebriefGenerator } from "./debriefs";
 import type { DomainStore } from "./stores/domains";
 import type { ProjectStore } from "./stores/projects";
 import {
   ChangelogStore,
-  type ChangeNature,
-  type ChangeProposal,
-  type ChangelogReview,
+  type GitChangelogCommit,
+  type ProjectChangelogPayload,
+  type ProjectChangelogState,
 } from "./stores/changelog";
-import { conversationCwd } from "./workspace";
 
-const VALID_NATURES = new Set<ChangeNature>(["ajout", "modification", "correction", "retrait"]);
-const MANAGED_START = "<!-- pupitre:domain-memory:start -->";
-const MANAGED_END = "<!-- pupitre:domain-memory:end -->";
+export const CHANGELOG_BATCH_SIZE = 10;
+export const CHANGELOG_REFRESH_INTERVAL_MS = 2 * 60 * 60_000;
+export const CHANGELOG_SINCE = "2026-01-01T00:00:00Z";
 
-export class ChangelogConflictError extends Error {}
-export class SkillRootAmbiguousError extends Error {}
-
-export interface PublishedChangelog {
-  review: ChangelogReview;
-  files: string[];
-}
+type GitHistoryReader = (cwd: string, since: string) => Promise<GitChangelogCommit[]>;
 
 export class ChangelogService {
+  private active = new Set<string>();
+  private timer: ReturnType<typeof setInterval> | null = null;
+
   constructor(
     private store: ChangelogStore,
-    private conversations: ConversationStore,
     private projects: ProjectStore,
     private domains: DomainStore,
-    private git: GitProjectService,
     private generator: DebriefGenerator,
+    private history: GitHistoryReader = readGitHistory,
+    private now: () => Date = () => new Date(),
   ) {}
 
-  async propose(conversationId: string, summary: SessionSummary): Promise<ChangelogReview> {
-    const existing = this.store.getBySummary(summary.id);
-    if (existing) return existing;
-    const conversation = this.conversations.get(conversationId);
-    if (!conversation) throw new Error("conversation inconnue");
-    const project = this.projects.get(conversation.project_id);
+  start(): void {
+    if (this.timer !== null) return;
+    setTimeout(() => this.triggerDueProjects(), 250).unref?.();
+    this.timer = setInterval(() => this.triggerDueProjects(), 60_000);
+    this.timer.unref?.();
+  }
+
+  stop(): void {
+    if (this.timer === null) return;
+    clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  list(projectId: string, domainId?: string): ProjectChangelogPayload {
+    this.requireProject(projectId);
+    return { entries: this.store.list(projectId, domainId), state: this.store.state(projectId) };
+  }
+
+  status(projectId: string): ProjectChangelogState {
+    this.requireProject(projectId);
+    return this.store.state(projectId);
+  }
+
+  trigger(projectId: string): ProjectChangelogState {
+    const project = this.requireProject(projectId);
+    if (this.active.has(projectId)) return this.store.state(projectId);
+    this.active.add(projectId);
+    this.store.markRunning(projectId, this.now().toISOString());
+    void this.refresh(project.id, project.path).finally(() => this.active.delete(projectId));
+    return this.store.state(projectId);
+  }
+
+  async refreshNow(projectId: string): Promise<ProjectChangelogPayload> {
+    const project = this.requireProject(projectId);
+    if (this.active.has(projectId)) return this.list(projectId);
+    this.active.add(projectId);
+    this.store.markRunning(projectId, this.now().toISOString());
+    try {
+      await this.refresh(project.id, project.path);
+      return this.list(projectId);
+    } finally {
+      this.active.delete(projectId);
+    }
+  }
+
+  private triggerDueProjects(): void {
+    const now = this.now().getTime();
+    for (const project of this.projects.list()) {
+      if (!existsSync(project.path) || this.active.has(project.id)) continue;
+      const next = this.store.state(project.id).next_refresh_at;
+      if (next === null || Date.parse(next) <= now) this.trigger(project.id);
+    }
+  }
+
+  private async refresh(projectId: string, path: string): Promise<void> {
+    try {
+      const commits = await this.history(path, CHANGELOG_SINCE);
+      this.store.import(projectId, commits, this.now().toISOString());
+      const pending = this.store.pending(projectId, CHANGELOG_BATCH_SIZE);
+      if (pending.length > 0) {
+        const activeDomains = this.domains.listByProject(projectId)
+          .filter((domain) => domain.status === "actif");
+        const raw = await this.generator({
+          cwd: path,
+          provider: "codex",
+          model: "gpt-5.6-luna",
+          effort: "medium",
+          speed: "standard",
+          prompt: enrichmentPrompt(pending, activeDomains),
+        });
+        const enriched = parseEnrichments(
+          raw,
+          pending.map((entry) => entry.commit_sha),
+          activeDomains.map((domain) => domain.id),
+        );
+        this.store.enrich(projectId, enriched, this.now().toISOString());
+      }
+      const refreshedAt = this.now();
+      this.store.markFinished(
+        projectId,
+        refreshedAt.toISOString(),
+        new Date(refreshedAt.getTime() + CHANGELOG_REFRESH_INTERVAL_MS).toISOString(),
+      );
+    } catch (error) {
+      const failedAt = this.now();
+      this.store.markError(
+        projectId,
+        error instanceof Error ? error.message : "actualisation du changelog impossible",
+        new Date(failedAt.getTime() + CHANGELOG_REFRESH_INTERVAL_MS).toISOString(),
+      );
+    }
+  }
+
+  private requireProject(projectId: string) {
+    const project = this.projects.get(projectId);
     if (!project) throw new Error("projet inconnu");
-    const domains = this.domains.forConversation(conversationId, { visibleOnly: true });
-    if (domains.length === 0) {
-      return this.store.create({ conversationId, summaryId: summary.id,
-        eventIdFrom: summary.event_id_from, eventIdTo: summary.event_id_to, changes: [] });
-    }
-    const snapshot = this.git.snapshot(project.id, conversation.worktree_path);
-    const commits = snapshot.commits.filter((commit) =>
-      commit.conversations.some(({ id }) => id === conversationId)
-      && summary.content_md.toLowerCase().includes(commit.sha.slice(0, 7).toLowerCase())
-    );
-    const raw = await this.generator({
-      cwd: conversationCwd(project, conversation),
-      provider: "codex",
-      model: "gpt-5.6-luna",
-      effort: "high",
-      speed: "fast",
-      prompt: proposalPrompt(summary.content_md, domains, commits),
-    });
-    const parsed = parseProposal(raw, domains.map((domain) => ({ id: domain.id, name: domain.name })));
-    return this.store.create({ conversationId, summaryId: summary.id,
-      eventIdFrom: summary.event_id_from, eventIdTo: summary.event_id_to, changes: parsed });
-  }
-
-  async publish(reviewId: string, changes: ChangeProposal[]): Promise<PublishedChangelog> {
-    const review = this.store.get(reviewId);
-    if (!review) throw new Error("validation changelog inconnue");
-    if (review.status === "publié") return { review, files: [] };
-    const conversation = this.conversations.get(review.conversationId)!;
-    const project = this.projects.get(conversation.project_id)!;
-    const workspace = conversationCwd(project, conversation);
-    const selected = changes.filter((change) => change.selected).map(validateChange);
-    const byDomain = new Map<string, ChangeProposal[]>();
-    for (const change of selected) {
-      const domain = this.domains.get(change.domainId);
-      if (!domain || domain.project_id !== project.id || domain.status !== "actif") {
-        throw new Error("domaine actif invalide");
-      }
-      byDomain.set(change.domainId, [...(byDomain.get(change.domainId) ?? []), change]);
-    }
-    const writes: Array<{ path: string; content: string; domainId: string; root: string; skill: boolean }> = [];
-    for (const [domainId, domainChanges] of byDomain) {
-      const domain = this.domains.get(domainId)!;
-      const root = detectSkillRoot(workspace, domain.name, this.store.publication(domainId)?.skill_root);
-      const directory = join(root, slug(domain.name));
-      const changelogPath = join(directory, "CHANGELOG.md");
-      const skillPath = join(directory, "SKILL.md");
-      const changelog = existsSync(changelogPath)
-        ? readFileSync(changelogPath, "utf8")
-        : `# Catalogue — ${domain.name}\n`;
-      const additions = domainChanges.filter((change) => !changelog.includes(`pupitre-change:${change.id}`));
-      const nextChangelog = additions.length === 0 ? changelog : `${changelog.trimEnd()}\n\n${additions.map(changeMarkdown).join("\n\n")}\n`;
-      const currentSkill = existsSync(skillPath) ? readFileSync(skillPath, "utf8") : initialSkill(domain.name);
-      const previous = this.store.publication(domainId);
-      if (previous?.skill_sha256 && sha(currentSkill) !== previous.skill_sha256) {
-        throw new ChangelogConflictError(`le skill « ${domain.name} » a été modifié depuis la dernière publication`);
-      }
-      const managedBody = (await this.generator({
-        cwd: conversationCwd(project, conversation),
-        provider: "codex",
-        model: "gpt-5.6-luna",
-        effort: "high",
-        speed: "fast",
-        prompt: skillPrompt(domain.name, currentSkill, nextChangelog),
-      })).trim();
-      if (!managedBody || managedBody.length > 12_000 || managedBody.includes(MANAGED_START) || managedBody.includes(MANAGED_END)) {
-        throw new Error(`synthèse du skill « ${domain.name} » invalide`);
-      }
-      const nextSkill = updateManagedSkill(currentSkill, managedBody);
-      writes.push({ path: changelogPath, content: nextChangelog, domainId, root, skill: false });
-      writes.push({ path: skillPath, content: nextSkill, domainId, root, skill: true });
-    }
-    for (const write of writes) {
-      mkdirSync(dirname(write.path), { recursive: true });
-      writeFileSync(write.path, write.content, "utf8");
-      if (write.skill) this.store.savePublication(write.domainId, rootConvention(write.root), sha(write.content));
-    }
-    this.store.publish(reviewId, selected);
-    return { review: this.store.get(reviewId)!, files: writes.map((write) => write.path) };
-  }
-
-  list(projectId: string, domainId?: string): Array<Record<string, unknown>> {
-    return this.store.listByProject(projectId, domainId);
-  }
-
-  latestProposed(conversationId: string): ChangelogReview | null {
-    return this.store.latestProposed(conversationId);
+    return project;
   }
 }
 
-function proposalPrompt(summary: string, domains: Array<{ id: string; name: string }>, commits: ReturnType<GitProjectService["snapshot"]>["commits"]): string {
+async function runGit(cwd: string, args: string[]): Promise<string> {
+  const child = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (exitCode !== 0) throw new Error(stderr.trim() || "lecture de l'historique Git impossible");
+  return stdout;
+}
+
+export async function readGitHistory(cwd: string, since: string): Promise<GitChangelogCommit[]> {
+  const raw = await runGit(cwd, [
+    "log", "-z", "--all", "--source", "--topo-order", `--since=${since}`,
+    "--date=iso-strict", "--format=%H%x00%S%x00%cI%x00%s",
+  ]);
+  const fields = raw.split("\0");
+  if (fields.at(-1) === "") fields.pop();
+  if (fields.length % 4 !== 0) throw new Error("historique Git illisible");
+  const commits: GitChangelogCommit[] = [];
+  for (let index = 0; index < fields.length; index += 4) {
+    const sha = fields[index]!.trim();
+    const source = fields[index + 1]!.trim();
+    const committedAt = fields[index + 2]!.trim();
+    const subject = fields[index + 3]!.trim();
+    if (!sha || !committedAt) continue;
+    commits.push({
+      sha,
+      branch: source
+        .replace(/^refs\/heads\//, "")
+        .replace(/^refs\/remotes\//, "") || "HEAD",
+      subject: subject || "Commit sans message",
+      committedAt,
+    });
+  }
+  return commits;
+}
+
+function enrichmentPrompt(
+  entries: Array<{ commit_sha: string; branch: string; subject: string; committed_at: string }>,
+  domains: Array<{ id: string; name: string; kind: string }>,
+): string {
   return [
-    "Tu catalogues en français les modifications réellement réalisées pendant une séquence de développement.",
-    "Crée par défaut une seule entrée par capacité durable livrée.",
-    "Les garanties techniques d'une même capacité (par exemple idempotence, reprise après échec, validation et nettoyage) restent dans la même entrée : ce ne sont pas des changements autonomes.",
-    "Ne sépare deux entrées que si chacune décrit un comportement ou une capacité autonome qui resterait compréhensible et utile sans l'autre.",
-    "Ne découpe jamais par commit, fichier, étape d'implémentation ou nature ajout/modification/correction.",
-    "Inclus les changements fonctionnels, métier, UI, UX, design, accessibilité, API, données, architecture, opérations et capacités d'agents.",
-    "Exclus les intentions, plans, tentatives abandonnées et micro-ajustements sans effet durable.",
-    "Le résumé validé est la source principale. Les commits fournis ne servent qu'à préciser les changements explicitement cités par ce résumé.",
-    "N'attribue jamais à la session un autre commit ou un fichier de travail non cité.",
-    "Retourne uniquement un tableau JSON. Chaque objet contient domainId, nature, title, description, impact, evidence, ambiguous.",
-    "title est une phrase complète, concise et compréhensible seule par un utilisateur du produit.",
-    "description et impact apportent des précisions utiles à la mémoire sans paraphraser title. nature vaut ajout, modification, correction ou retrait. evidence est un tableau de chaînes courtes.",
-    "Une capacité transversale reçoit un seul domaine principal : ne la duplique jamais pour plusieurs domaines.",
-    "Retourne [] si rien de notable n'est réalisé.",
+    "Tu enrichis un changelog produit à partir de commits Git déjà réalisés.",
+    "Pour chaque commit fourni, écris une seule phrase concise en français qui décrit le résultat produit ou technique durable.",
+    "Choisis au plus un domaine existant. Utilise null si aucun domaine ne convient. N'invente pas de domaine.",
+    "Retourne uniquement un tableau JSON avec exactement un objet par commit, dans le même ordre.",
+    '{"sha":"...","domainId":"..."|null,"productMessage":"..."}',
     `DOMAINES: ${JSON.stringify(domains)}`,
-    `RÉSUMÉ VALIDÉ PAR LA SESSION:\n${summary}`,
-    `COMMITS CITÉS DE LA SESSION: ${JSON.stringify(commits.map(({ sha, subject }) => ({ sha, subject })))}`,
+    `COMMITS: ${JSON.stringify(entries.map((entry) => ({
+      sha: entry.commit_sha,
+      branch: entry.branch,
+      subject: entry.subject,
+      committedAt: entry.committed_at,
+    })))}`,
   ].join("\n\n");
 }
 
-export function parseProposal(raw: string, domains: Array<{ id: string; name: string }>): ChangeProposal[] {
+export function parseEnrichments(
+  raw: string,
+  expectedShas: string[],
+  allowedDomainIds: string[],
+): Array<{ sha: string; domainId: string | null; productMessage: string }> {
   const match = raw.trim().match(/\[[\s\S]*\]/);
-  if (!match) throw new Error("propositions changelog invalides : tableau JSON absent");
-  const values = JSON.parse(match[0]) as unknown;
-  if (!Array.isArray(values) || values.length > 20) throw new Error("propositions changelog invalides");
-  const names = new Map(domains.map((domain) => [domain.id, domain.name]));
-  const groups = new Set<string>();
-  return values.map((value, index): ChangeProposal | null => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("proposition invalide");
+  if (!match) throw new Error("enrichissement du changelog invalide");
+  const parsed = JSON.parse(match[0]) as unknown;
+  if (!Array.isArray(parsed) || parsed.length !== expectedShas.length) {
+    throw new Error("lot de changelog incomplet");
+  }
+  const domains = new Set(allowedDomainIds);
+  return parsed.map((value, index) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("entrée de changelog invalide");
+    }
     const item = value as Record<string, unknown>;
-    const domainId = String(item.domainId ?? "");
-    const domainName = names.get(domainId);
-    const nature = item.nature as ChangeNature;
-    if (!domainName || !VALID_NATURES.has(nature)) throw new Error("domaine ou nature invalide");
-    const groupKey = String(item.groupKey ?? `${domainId}-${index}`);
-    if (groups.has(groupKey)) return null;
-    groups.add(groupKey);
-    const ambiguous = item.ambiguous === true;
-    return validateChange({
-      id: crypto.randomUUID(), groupId: crypto.randomUUID(), domainId, domainName, nature,
-      title: String(item.title ?? "").trim(),
-      description: String(item.description ?? "").trim(),
-      impact: String(item.impact ?? "").trim(),
-      evidence: Array.isArray(item.evidence) ? item.evidence.map(String).slice(0, 12) : [],
-      ambiguous, selected: !ambiguous,
-    });
-  }).filter((change): change is ChangeProposal => change !== null);
-}
-
-function validateChange(change: ChangeProposal): ChangeProposal {
-  if (!change.title || !change.description || !change.impact) throw new Error("entrée changelog incomplète");
-  if (!VALID_NATURES.has(change.nature)) throw new Error("nature changelog invalide");
-  return { ...change, title: change.title.slice(0, 160), description: change.description.slice(0, 1200), impact: change.impact.slice(0, 600) };
-}
-
-function detectSkillRoot(projectPath: string, domainName: string, saved?: string): string {
-  if (saved === ".claude/skills" || saved === ".agents/skills") return join(projectPath, saved);
-  const roots = [join(projectPath, ".claude/skills"), join(projectPath, ".agents/skills")];
-  const existingDomain = roots.filter((root) => existsSync(join(root, slug(domainName), "SKILL.md")));
-  if (existingDomain.length === 1) return existingDomain[0]!;
-  if (existingDomain.length > 1) throw new SkillRootAmbiguousError("plusieurs skills canoniques existent pour ce domaine");
-  const existingRoots = roots.filter(existsSync);
-  if (existingRoots.length === 1) return existingRoots[0]!;
-  if (existingRoots.length > 1) throw new SkillRootAmbiguousError("plusieurs racines de skills existent dans le projet");
-  return roots[0]!;
-}
-
-function rootConvention(root: string): string {
-  return root.endsWith(".agents/skills") ? ".agents/skills" : ".claude/skills";
-}
-
-function slug(name: string): string {
-  return name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "domaine";
-}
-
-function changeMarkdown(change: ChangeProposal): string {
-  return [`## ${new Date().toISOString().slice(0, 10)} — ${change.title}`,
-    `<!-- pupitre-change:${change.id} group:${change.groupId} -->`,
-    `**Nature :** ${change.nature}`, "", change.description, "", `**Impact :** ${change.impact}`,
-    ...(change.evidence.length ? ["", "**Preuves :**", ...change.evidence.map((item) => `- ${item}`)] : []),
-  ].join("\n");
-}
-
-function initialSkill(name: string): string {
-  return `---\nname: ${slug(name)}\ndescription: Connaissance vivante du domaine ${name}.\n---\n\n# ${name}\n`;
-}
-
-function updateManagedSkill(skill: string, body: string): string {
-  const managed = [MANAGED_START, body.trim(), "", `Catalogue détaillé : [CHANGELOG.md](./${basename("CHANGELOG.md")}).`, MANAGED_END].join("\n");
-  const pattern = new RegExp(`${MANAGED_START}[\\s\\S]*?${MANAGED_END}`);
-  if (pattern.test(skill)) return `${skill.replace(pattern, managed).trimEnd()}\n`;
-  return `${skill.trimEnd()}\n\n${managed}\n`;
-}
-
-function skillPrompt(domainName: string, currentSkill: string, changelog: string): string {
-  return [
-    `Tu mets à jour la mémoire opérationnelle du domaine « ${domainName} » à partir de modifications réalisées et validées.`,
-    "Retourne uniquement la section Markdown gérée, sans frontmatter, sans balises HTML et sans fence.",
-    "Synthétise l'état actuel, la direction observable, les capacités récentes et les liens avec architecture, skills, MCP ou outils uniquement lorsqu'ils sont établis par les sources.",
-    "N'invente aucune intention. Ne recopie pas exhaustivement le catalogue. Reste sous 1200 mots.",
-    "Utilise les titres utiles parmi : ## État actuel, ## Direction observable, ## Repères techniques, ## Outils et domaines connexes, ## Changements récents.",
-    `SKILL_MD_ACTUEL:\n${currentSkill}`,
-    `CATALOGUE_VALIDÉ:\n${changelog}`,
-  ].join("\n\n");
-}
-
-function sha(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
+    const sha = String(item.sha ?? "").trim();
+    const domainId = item.domainId === null ? null : String(item.domainId ?? "").trim();
+    const productMessage = String(item.productMessage ?? "").trim();
+    if (sha !== expectedShas[index] || (domainId !== null && !domains.has(domainId)) || !productMessage) {
+      throw new Error("entrée de changelog incohérente");
+    }
+    return { sha, domainId, productMessage: productMessage.slice(0, 280) };
+  });
 }

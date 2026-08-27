@@ -18,7 +18,6 @@ import type { ComposerAction } from './ComposerPalette'
 import type {
   AppEvent,
   Attachment,
-  ChangelogReview,
   Conversation,
   Project,
   QuotaSnapshot,
@@ -58,8 +57,6 @@ interface ChatProps {
   originKey?: string | null
   reviewStatus: ReviewStatusSnapshot | null
   onHandoff: () => void
-  pendingChangelogReview: ChangelogReview | null
-  onChangelogReview: (review: ChangelogReview) => void
   onSwitchModel: () => void
 }
 
@@ -84,9 +81,8 @@ function lastStatusIsRunning(events: AppEvent[]): boolean {
   return false
 }
 
-/** Des réponses sont arrivées depuis le dernier résumé : le bouton de fin de
- *  tour passe en mode « Cataloguer » (résumé + revue de changelog). */
-export function hasUncataloguedWork(events: AppEvent[]): boolean {
+/** Des réponses sont arrivées depuis le dernier résumé de session. */
+export function hasUnsummarizedWork(events: AppEvent[]): boolean {
   let lastSummary = -1
   for (let index = events.length - 1; index >= 0; index -= 1) {
     if (events[index]?.type === 'session-summary-ref') { lastSummary = index; break }
@@ -94,11 +90,9 @@ export function hasUncataloguedWork(events: AppEvent[]): boolean {
   return events.slice(lastSummary + 1).some((event) => event.type === 'text-final')
 }
 
-function SessionSummaryAction({ conversationId, uncatalogued, pendingReview, onChangelogReview }: {
+function SessionSummaryAction({ conversationId, unsummarized }: {
   conversationId: string
-  uncatalogued: boolean
-  pendingReview: ChangelogReview | null
-  onChangelogReview: (review: ChangelogReview) => void
+  unsummarized: boolean
 }) {
   const [isCreating, setIsCreating] = useState(false)
 
@@ -106,8 +100,7 @@ function SessionSummaryAction({ conversationId, uncatalogued, pendingReview, onC
     if (isCreating) return
     setIsCreating(true)
     try {
-      const result = await createSessionSummary(conversationId)
-      if (result.review) onChangelogReview(result.review)
+      await createSessionSummary(conversationId)
     } catch {
       // Le fil affiche déjà l'erreur du sidecar ; le bouton redevient actif.
     } finally {
@@ -117,20 +110,12 @@ function SessionSummaryAction({ conversationId, uncatalogued, pendingReview, onC
 
   return (
     <span className="turn-summary-actions">
-      {pendingReview ? (
-        <button type="button" className="turn-summary-button is-catalog" onClick={() => onChangelogReview(pendingReview)}>
-          Reprendre la validation
-          <span className="turn-summary-pill">{pendingReview.changes.filter((change) => change.selected).length}</span>
-        </button>
-      ) : null}
       <button
       type="button"
-      className={`turn-summary-button${uncatalogued ? ' is-catalog' : ''}`}
+      className={`turn-summary-button${unsummarized ? ' is-catalog' : ''}`}
       onClick={() => void handleClick()}
       disabled={isCreating}
-      title={uncatalogued
-        ? 'Résumer la session et cataloguer les changements dans le changelog'
-        : 'Résumer la session dans le fil'}
+      title="Résumer la session dans le fil"
     >
       <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <g stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
@@ -139,7 +124,6 @@ function SessionSummaryAction({ conversationId, uncatalogued, pendingReview, onC
         </g>
       </svg>
       {isCreating ? 'Résumé en cours…' : 'Résumé de session'}
-      {!isCreating && uncatalogued ? <span className="turn-summary-pill">changelog</span> : null}
       </button>
     </span>
   )
@@ -175,8 +159,6 @@ export function Chat({
   originKey = null,
   reviewStatus,
   onHandoff,
-  pendingChangelogReview,
-  onChangelogReview,
   onSwitchModel,
 }: ChatProps) {
   const draftStorageKey = conversation === null
@@ -184,7 +166,7 @@ export function Chat({
     : `pupitre:draft:${conversation.id}`
   const blocks = useGroupedEvents(conversation?.id ?? null, events)
   const isRunning = lastStatusIsRunning(events)
-  const uncatalogued = useMemo(() => hasUncataloguedWork(events), [events])
+  const unsummarized = useMemo(() => hasUnsummarizedWork(events), [events])
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
   const scrollFrameRef = useRef<number | null>(null)
@@ -344,13 +326,11 @@ export function Chat({
         <ContextGauge conversation={conversation} events={events} onHandoff={onHandoff} />
         <SessionSummaryAction
           conversationId={conversation.id}
-          uncatalogued={uncatalogued}
-          pendingReview={pendingChangelogReview}
-          onChangelogReview={onChangelogReview}
+          unsummarized={unsummarized}
         />
       </>
     ) : undefined
-  ), [conversation, isRunning, events, uncatalogued, pendingChangelogReview, onHandoff, onChangelogReview])
+  ), [conversation, isRunning, events, unsummarized, onHandoff])
 
   async function handleComposerAction(action: ComposerAction) {
     if (!conversation) return
@@ -370,8 +350,7 @@ export function Chat({
       onHandoff()
       return
     }
-    const result = await createSessionSummary(conversation.id).catch(() => null)
-    if (result?.review) onChangelogReview(result.review)
+    await createSessionSummary(conversation.id).catch(() => null)
   }
   return (
     <>

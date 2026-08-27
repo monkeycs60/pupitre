@@ -89,7 +89,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const sentry = new SentryStore(db);
   const git = new GitProjectService(db, projects);
   const changelog = new ChangelogService(
-    new ChangelogStore(db), conversations, projects, domains, git,
+    new ChangelogStore(db), projects, domains,
     (input) => generateWithAdapters(input, quotas),
   );
   const time = new TimeTrackingService(db, projects, git);
@@ -226,6 +226,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     try {
       quotaRefresher.stop();
       integrationsRefresher.stop();
+      changelog.stop();
       clearInterval(htmlDocumentSweepTimer);
       codexAppServer.shutdown();
     } finally {
@@ -273,6 +274,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     htmlDocuments,
   }), port);
   routines.start();
+  changelog.start();
 
   // Les deux relevés de quota sont des lectures gratuites : on part d'un état
   // frais et on le tient à jour en fond (cf. QuotaRefresher).

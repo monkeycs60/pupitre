@@ -1,134 +1,146 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ChangelogConflictError, ChangelogService, parseProposal } from "../src/changelog";
+import {
+  CHANGELOG_BATCH_SIZE,
+  CHANGELOG_REFRESH_INTERVAL_MS,
+  ChangelogService,
+  parseEnrichments,
+  readGitHistory,
+} from "../src/changelog";
 import { openDb } from "../src/db";
-import { GitProjectService } from "../src/git";
-import { ChangelogStore } from "../src/stores/changelog";
-import { ConversationStore } from "../src/stores/conversations";
+import { ChangelogStore, type GitChangelogCommit } from "../src/stores/changelog";
 import { DomainStore } from "../src/stores/domains";
 import { ProjectStore } from "../src/stores/projects";
 
-function setup(generator: import("../src/debriefs").DebriefGenerator = async (input) => input.prompt.includes("SKILL_MD_ACTUEL")
-  ? "## État actuel\n\nLe domaine reflète les changements validés.\n\n## Changements récents\n\n- Mise à jour cataloguée."
-  : "[]") {
+function setup(options: {
+  commits?: GitChangelogCommit[];
+  generator?: import("../src/debriefs").DebriefGenerator;
+} = {}) {
   const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-project-"));
-  Bun.spawnSync(["git", "init", "-q", root]);
   const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-changelog-db-")));
   const projects = new ProjectStore(db);
-  const conversations = new ConversationStore(db);
   const domains = new DomainStore(db);
   const project = projects.create({ name: "Test", path: root });
-  const conversation = conversations.create({ projectId: project.id, provider: "codex", model: "gpt-test", firstMessage: "Travail" });
-  const domain = domains.create(project.id, { name: "Tableau de bord", kind: "métier", status: "actif" });
-  domains.associate(conversation.id, domain.id, "manuel");
+  const domain = domains.create(project.id, { name: "Contacts", kind: "métier", status: "actif" });
+  const commits = options.commits ?? [];
+  const generator = options.generator ?? (async (input) => {
+    const batch = JSON.parse(input.prompt.split("COMMITS: ")[1]!) as Array<{ sha: string }>;
+    return JSON.stringify(batch.map(({ sha }) => ({
+      sha,
+      domainId: domain.id,
+      productMessage: `Résultat produit pour ${sha}.`,
+    })));
+  });
+  const now = new Date("2026-08-27T10:00:00.000Z");
   const store = new ChangelogStore(db);
-  const service = new ChangelogService(store, conversations, projects, domains,
-    new GitProjectService(db, projects), generator);
-  return { db, root, project, conversation, domain, store, service };
+  const service = new ChangelogService(
+    store,
+    projects,
+    domains,
+    generator,
+    async () => commits,
+    () => new Date(now),
+  );
+  return { db, root, project, domain, store, service, now };
 }
 
-test("propose avec Luna high et laisse les changements ambigus décochés", async () => {
-  let generation: { provider: string; model: string; effort?: string; speed?: string } | null = null;
-  const context = setup(async (input) => {
-    generation = input;
-    return JSON.stringify([
-      { domainId: context.domain.id, groupKey: "ui", nature: "modification", title: "En-tête clarifié", description: "Les domaines sont visibles dans l’en-tête.", impact: "Le contexte reste lisible.", evidence: ["commit abc"], ambiguous: false },
-      { domainId: context.domain.id, groupKey: "css", nature: "correction", title: "Espacement incertain", description: "Un fichier CSS préexistant a changé.", impact: "Attribution à confirmer.", evidence: ["ui.css"], ambiguous: true },
-    ]);
+function commits(count: number): GitChangelogCommit[] {
+  return Array.from({ length: count }, (_, index) => ({
+    sha: String(index + 1).padStart(40, "0"),
+    branch: index % 2 === 0 ? "main" : "feature/contacts",
+    subject: `feat: changement ${index + 1}`,
+    committedAt: new Date(Date.UTC(2026, 7, index + 1)).toISOString(),
+  }));
+}
+
+test("importe tout l'historique mais enrichit au plus dix commits avec Luna medium standard", async () => {
+  let generation: import("../src/debriefs").DebriefGenerationInput | null = null;
+  const history = commits(12);
+  const context = setup({
+    commits: history,
+    generator: async (input) => {
+      generation = input;
+      const batch = JSON.parse(input.prompt.split("COMMITS: ")[1]!) as Array<{ sha: string }>;
+      return JSON.stringify(batch.map(({ sha }) => ({
+        sha,
+        domainId: context.domain.id,
+        productMessage: `Les contacts bénéficient du changement ${sha.slice(-2)}.`,
+      })));
+    },
   });
-  const review = await context.service.propose(context.conversation.id, {
-    id: "summary-1", conversation_id: context.conversation.id, event_id_from: 1,
-    event_id_to: 4, content_md: "## Implémenté\n- Domaines visibles.", created_at: new Date().toISOString(),
-  });
-  expect(generation).toEqual(expect.objectContaining({ provider: "codex", model: "gpt-5.6-luna", effort: "high", speed: "fast" }));
-  expect(review.changes.map((change) => change.selected)).toEqual([true, false]);
-  expect(await context.service.propose(context.conversation.id, {
-    id: "summary-1", conversation_id: context.conversation.id, event_id_from: 1,
-    event_id_to: 4, content_md: "ignoré", created_at: review.createdAt,
-  })).toEqual(review);
+
+  const payload = await context.service.refreshNow(context.project.id);
+
+  expect(payload.entries).toHaveLength(12);
+  expect(payload.entries.filter((entry) => entry.enrichment_status === "enriched")).toHaveLength(CHANGELOG_BATCH_SIZE);
+  expect(payload.entries.filter((entry) => entry.enrichment_status === "pending")).toHaveLength(2);
+  expect(generation).toEqual(expect.objectContaining({
+    cwd: context.root,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    effort: "medium",
+    speed: "standard",
+  }));
+  expect(payload.state.next_refresh_at).toBe(
+    new Date(context.now.getTime() + CHANGELOG_REFRESH_INTERVAL_MS).toISOString(),
+  );
   context.db.close();
 });
 
-test("ne fournit au générateur que les commits liés et cités par le résumé", async () => {
-  let prompt = "";
-  const context = setup(async (input) => {
-    prompt = input.prompt;
-    return "[]";
-  });
-  writeFileSync(join(context.root, "feature.txt"), "session\n");
-  Bun.spawnSync(["git", "-C", context.root, "add", "feature.txt"]);
-  Bun.spawnSync(["git", "-C", context.root, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "feat: changement de la session"]);
-  const sessionSha = Bun.spawnSync(["git", "-C", context.root, "rev-parse", "HEAD"]).stdout.toString().trim();
-  writeFileSync(join(context.root, "old.txt"), "ancien\n");
-  Bun.spawnSync(["git", "-C", context.root, "add", "old.txt"]);
-  Bun.spawnSync(["git", "-C", context.root, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "feat: ancien changement sans rapport"]);
-  const unrelatedSha = Bun.spawnSync(["git", "-C", context.root, "rev-parse", "HEAD"]).stdout.toString().trim();
-  writeFileSync(join(context.root, "dirty.txt"), "sale\n");
-  const git = new GitProjectService(context.db, new ProjectStore(context.db));
-  git.recordCommitLinks(context.project.id, context.conversation.id, [sessionSha, unrelatedSha]);
+test("reprend les commits en attente au passage suivant sans dupliquer l'import", async () => {
+  const context = setup({ commits: commits(12) });
 
-  await context.service.propose(context.conversation.id, {
-    id: "summary-sources", conversation_id: context.conversation.id, event_id_from: 1,
-    event_id_to: 4, content_md: `## Implémenté\n- Commit \`${sessionSha.slice(0, 7)}\` créé.`, created_at: new Date().toISOString(),
-  });
+  await context.service.refreshNow(context.project.id);
+  const second = await context.service.refreshNow(context.project.id);
 
-  expect(prompt).toContain(sessionSha);
-  expect(prompt).not.toContain(unrelatedSha);
-  expect(prompt).not.toContain("dirty.txt");
-  expect(prompt).toContain("Une capacité transversale reçoit un seul domaine principal");
+  expect(second.entries).toHaveLength(12);
+  expect(second.entries.every((entry) => entry.enrichment_status === "enriched")).toBe(true);
   context.db.close();
 });
 
-test("ne conserve qu'un domaine principal pour une capacité transversale", () => {
-  const domains = [{ id: "contacts", name: "Contacts" }, { id: "notes", name: "Notes & souvenirs" }];
-  const changes = parseProposal(JSON.stringify([
-    { domainId: "contacts", groupKey: "undated-events", nature: "modification", title: "Les événements sans date deviennent visibles.", description: "Ils apparaissent dans la fiche contact.", impact: "Aucun événement n'est perdu.", evidence: ["commit abc"], ambiguous: false },
-    { domainId: "notes", groupKey: "undated-events", nature: "modification", title: "Les événements sans date deviennent visibles.", description: "Ils apparaissent dans la timeline.", impact: "Aucun événement n'est perdu.", evidence: ["commit abc"], ambiguous: false },
-  ]), domains);
+test("une réponse invalide conserve le catalogue brut pour une reprise ultérieure", async () => {
+  const context = setup({ commits: commits(2), generator: async () => "[]" });
 
-  expect(changes).toHaveLength(1);
-  expect(changes[0]?.domainId).toBe("contacts");
-});
+  const payload = await context.service.refreshNow(context.project.id);
 
-test("retrouve la dernière validation non publiée d'une conversation", () => {
-  const context = setup();
-  const first = context.store.create({ conversationId: context.conversation.id, summaryId: "summary-1", eventIdFrom: 1, eventIdTo: 2, changes: [] });
-  const second = context.store.create({ conversationId: context.conversation.id, summaryId: "summary-2", eventIdFrom: 3, eventIdTo: 4, changes: [] });
-  context.store.publish(second.id, []);
-  expect(context.service.latestProposed(context.conversation.id)?.id).toBe(first.id);
+  expect(payload.entries).toHaveLength(2);
+  expect(payload.entries.every((entry) => entry.enrichment_status === "pending")).toBe(true);
+  expect(payload.state.status).toBe("error");
+  expect(payload.state.error).toContain("incomplet");
   context.db.close();
 });
 
-test("publie immédiatement un catalogue et enrichit le skill sans doublon", async () => {
-  const context = setup();
-  const [change] = parseProposal(JSON.stringify([{ domainId: context.domain.id, groupKey: "domaines", nature: "ajout", title: "Domaines visibles", description: "Les domaines actifs apparaissent dans l’en-tête.", impact: "Le contexte produit est immédiatement visible.", evidence: ["commit f7641f4"], ambiguous: false }]), [{ id: context.domain.id, name: context.domain.name }]);
-  const review = context.store.create({ conversationId: context.conversation.id, summaryId: "summary-1", eventIdFrom: 1, eventIdTo: 2, changes: [change!] });
-
-  const published = await context.service.publish(review.id, [change!]);
-  const changelogPath = join(context.root, ".claude/skills/tableau-de-bord/CHANGELOG.md");
-  const skillPath = join(context.root, ".claude/skills/tableau-de-bord/SKILL.md");
-  expect(published.files).toContain(changelogPath);
-  expect(readFileSync(changelogPath, "utf8")).toContain("Domaines visibles");
-  expect(readFileSync(skillPath, "utf8")).toContain("## État actuel");
-  expect((await context.service.publish(review.id, [change!])).files).toEqual([]);
-  expect(readFileSync(changelogPath, "utf8").match(/pupitre-change:/g)).toHaveLength(1);
-  context.db.close();
+test("valide strictement les SHA, domaines et phrases du lot", () => {
+  expect(parseEnrichments(
+    '[{"sha":"abc","domainId":null,"productMessage":"Une amélioration visible."}]',
+    ["abc"],
+    [],
+  )).toEqual([{ sha: "abc", domainId: null, productMessage: "Une amélioration visible." }]);
+  expect(() => parseEnrichments(
+    '[{"sha":"autre","domainId":null,"productMessage":"Texte"}]',
+    ["abc"],
+    [],
+  )).toThrow("incohérente");
 });
 
-test("refuse d’écraser un skill modifié humainement", async () => {
-  const context = setup();
-  const makeReview = (summaryId: string, title: string) => {
-    const [change] = parseProposal(JSON.stringify([{ domainId: context.domain.id, nature: "ajout", title, description: "Description durable.", impact: "Impact durable.", evidence: [], ambiguous: false }]), [{ id: context.domain.id, name: context.domain.name }]);
-    return { change: change!, review: context.store.create({ conversationId: context.conversation.id, summaryId, eventIdFrom: 1, eventIdTo: 2, changes: [change!] }) };
+test("lit les commits Git depuis le 1er janvier avec leur branche et leur sujet original", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-git-"));
+  Bun.spawnSync(["git", "init", "-q", "-b", "main", root]);
+  const commit = (name: string, date: string) => {
+    writeFileSync(join(root, `${name}.txt`), name);
+    Bun.spawnSync(["git", "-C", root, "add", "."]);
+    Bun.spawnSync([
+      "git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.com",
+      "commit", "-qm", `feat: ${name}`,
+    ], { env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } });
   };
-  const first = makeReview("summary-1", "Premier changement");
-  await context.service.publish(first.review.id, [first.change]);
-  const skillPath = join(context.root, ".claude/skills/tableau-de-bord/SKILL.md");
-  writeFileSync(skillPath, `${readFileSync(skillPath, "utf8")}\nInstruction humaine.\n`);
-  const second = makeReview("summary-2", "Second changement");
-  await expect(context.service.publish(second.review.id, [second.change])).rejects.toThrow(ChangelogConflictError);
-  expect(readFileSync(skillPath, "utf8")).toContain("Instruction humaine");
-  context.db.close();
+  commit("ancien", "2025-12-31T10:00:00Z");
+  commit("nouveau", "2026-01-02T10:00:00Z");
+
+  const history = await readGitHistory(root, "2026-01-01T00:00:00Z");
+
+  expect(history).toHaveLength(1);
+  expect(history[0]).toEqual(expect.objectContaining({ branch: "main", subject: "feat: nouveau" }));
 });

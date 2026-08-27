@@ -6,7 +6,7 @@ import type { DashboardPayload, Project } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
-const { cleanup, fireEvent, render, screen } = await import('@testing-library/react')
+const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { DashboardView } = await import('./DashboardView')
 const dashboardCss = readFileSync(new URL('./styles/dashboard.css', import.meta.url), 'utf8')
 
@@ -224,4 +224,53 @@ test('traduit et colore les états GitLab ambigus', async () => {
   expect(waiting.getAttribute('title')).toContain('pas encore calculé')
   expect(conflicts.classList.contains('is-danger')).toBe(true)
   expect(screen.getAllByText('Échec').every((item) => item.classList.contains('is-danger'))).toBe(true)
+})
+
+test('affiche le changelog compact, son échéance au survol et permet une actualisation manuelle', async () => {
+  const nextRefresh = new Date(Date.now() + 90 * 60_000).toISOString()
+  const refreshRequests: string[] = []
+  globalThis.fetch = mock(async (input) => {
+    const url = String(input)
+    if (url.endsWith('/changelog/refresh')) {
+      refreshRequests.push(url)
+      return Response.json({
+        project_id: 'p1', status: 'running', last_started_at: new Date().toISOString(),
+        last_refreshed_at: null, next_refresh_at: nextRefresh, error: null,
+      }, { status: 202 })
+    }
+    if (url.endsWith('/changelog')) {
+      return Response.json({
+        entries: [{
+          project_id: 'p1', commit_sha: 'e8ac32b123456789', branch: 'main',
+          subject: 'feat: show undated contact events', committed_at: '2026-08-27T10:00:00Z',
+          domain_id: 'contacts', domain_name: 'Contacts',
+          product_message: 'Les événements sans date apparaissent dans la fiche contact.',
+          enrichment_status: 'enriched', imported_at: '2026-08-27T10:01:00Z', enriched_at: '2026-08-27T10:02:00Z',
+        }],
+        state: {
+          project_id: 'p1', status: 'idle', last_started_at: '2026-08-27T10:00:00Z',
+          last_refreshed_at: '2026-08-27T10:02:00Z', next_refresh_at: nextRefresh, error: null,
+        },
+      })
+    }
+    return Response.json(withGitlab)
+  }) as typeof fetch
+  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
+  render(createElement(DashboardView, {
+    project,
+    onConversationSelect: () => {},
+    onStartConversation: () => {},
+  }))
+
+  expect(await screen.findByText('Les événements sans date apparaissent dans la fiche contact.')).toBeTruthy()
+  expect(screen.getByText('feat: show undated contact events')).toBeTruthy()
+  expect(screen.getByText('main')).toBeTruthy()
+  expect(screen.getByText('e8ac32b')).toBeTruthy()
+
+  const menuButton = screen.getByRole('button', { name: /Changelog/ })
+  expect(menuButton.getAttribute('title')).toContain('Prochaine actualisation dans')
+  fireEvent.click(menuButton)
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Actualiser le changelog' }))
+
+  await waitFor(() => expect(refreshRequests).toHaveLength(1))
 })

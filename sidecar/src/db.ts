@@ -236,6 +236,32 @@ export function openDb(dir: string = dataDir()): Database {
       skill_sha256 TEXT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS project_changelog_entries (
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      commit_sha TEXT NOT NULL,
+      branch TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      committed_at TEXT NOT NULL,
+      domain_id TEXT NULL REFERENCES domains(id) ON DELETE SET NULL,
+      product_message TEXT NULL,
+      enrichment_status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (enrichment_status IN ('pending', 'enriched')),
+      imported_at TEXT NOT NULL,
+      enriched_at TEXT NULL,
+      PRIMARY KEY (project_id, commit_sha)
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_changelog_entries_date
+      ON project_changelog_entries(project_id, committed_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_project_changelog_entries_pending
+      ON project_changelog_entries(project_id, enrichment_status, committed_at DESC);
+    CREATE TABLE IF NOT EXISTS project_changelog_state (
+      project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK (status IN ('idle', 'running', 'error')),
+      last_started_at TEXT NULL,
+      last_refreshed_at TEXT NULL,
+      next_refresh_at TEXT NULL,
+      error TEXT NULL
+    );
     CREATE TABLE IF NOT EXISTS sentry_issues (
       id TEXT PRIMARY KEY,
       integration_id TEXT NOT NULL REFERENCES project_integrations(id) ON DELETE CASCADE,

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BranchIcon } from './BranchIcon'
-import { listProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
+import { listProjectChangelog, refreshProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
 import type {
   DashboardIntegration,
-  DomainChangeRow,
   Project,
+  ProjectChangelogEntry,
+  ProjectChangelogState,
   ReviewRequest,
   TicketConversationSummary,
   TicketRef,
@@ -13,6 +14,7 @@ import type {
 import { useDashboard } from './useDashboard'
 import { SentryInbox } from './SentryInbox'
 import { ExternalLink } from './externalLink'
+import { useNow } from './useNow'
 
 interface DashboardViewProps {
   project: Project
@@ -114,6 +116,20 @@ function bannerTone(integration: DashboardIntegration): string {
   return ' is-warn'
 }
 
+function changelogTiming(state: ProjectChangelogState | null, now: number): string {
+  if (state?.status === 'running') return 'Actualisation en cours'
+  if (!state?.next_refresh_at) return 'Jamais actualisé'
+  const remaining = Date.parse(state.next_refresh_at) - now
+  if (remaining <= 0) return 'Actualisation imminente'
+  const minutes = Math.ceil(remaining / 60_000)
+  const delay = minutes < 60
+    ? `${minutes} min`
+    : `${Math.floor(minutes / 60)} h ${minutes % 60} min`
+  return state.status === 'error'
+    ? `Dernière actualisation en échec · prochain essai dans ${delay}`
+    : `Prochaine actualisation dans ${delay}`
+}
+
 export function DashboardView({
   project,
   onConversationSelect,
@@ -127,15 +143,20 @@ export function DashboardView({
   const [instructionSaving, setInstructionSaving] = useState(false)
   const [instructionError, setInstructionError] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: 'ticket' | 'status'; direction: 'asc' | 'desc' }>({ key: 'ticket', direction: 'asc' })
-  const [changelog, setChangelog] = useState<DomainChangeRow[]>([])
+  const [changelog, setChangelog] = useState<ProjectChangelogEntry[]>([])
+  const [changelogState, setChangelogState] = useState<ProjectChangelogState | null>(null)
   const [changelogDomain, setChangelogDomain] = useState('')
+  const [changelogMenuOpen, setChangelogMenuOpen] = useState(false)
+  const now = useNow(30_000)
   const hasGitlab = data?.integrations.some((integration) => integration.type === 'gitlab') ?? false
   const degradedIntegrations = data?.integrations.filter((integration) => integration.status !== 'ok') ?? []
   const tableClassName = useMemo(
     () => `dashboard-table${hasGitlab ? ' dashboard-table--with-gitlab' : ''}`,
     [hasGitlab],
   )
-  const changelogDomains = useMemo(() => [...new Map(changelog.map((item) => [item.domain_id, item.domain_name])).entries()], [changelog])
+  const changelogDomains = useMemo(() => [...new Map(changelog
+    .filter((item): item is ProjectChangelogEntry & { domain_id: string; domain_name: string } => Boolean(item.domain_id && item.domain_name))
+    .map((item) => [item.domain_id, item.domain_name])).entries()], [changelog])
   const visibleChangelog = changelogDomain ? changelog.filter((item) => item.domain_id === changelogDomain) : changelog
   const sortedTickets = useMemo(() => [...(data?.tickets ?? [])].sort((left, right) => {
     const comparison = sort.key === 'ticket'
@@ -146,16 +167,45 @@ export function DashboardView({
 
   useEffect(() => {
     let cancelled = false
-    void listProjectChangelog(project.id).then((items) => {
-      if (!cancelled && Array.isArray(items)) setChangelog(items)
+    void listProjectChangelog(project.id).then((payload) => {
+      if (!cancelled && Array.isArray(payload.entries)) {
+        setChangelog(payload.entries)
+        setChangelogState(payload.state)
+      }
     }).catch(() => {})
     return () => { cancelled = true }
   }, [project.id])
+
+  useEffect(() => {
+    let cancelled = false
+    const delay = changelogState?.status === 'running' ? 2_000 : 30_000
+    const timer = setInterval(() => {
+      void listProjectChangelog(project.id).then((payload) => {
+        if (!cancelled && Array.isArray(payload.entries)) {
+          setChangelog(payload.entries)
+          setChangelogState(payload.state)
+        }
+      }).catch(() => {})
+    }, delay)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [project.id, changelogState?.status])
 
   async function handleRefresh() {
     try {
       await refreshProjectDashboard(project.id)
     } catch {}
+  }
+
+  async function handleChangelogRefresh() {
+    setChangelogMenuOpen(false)
+    try {
+      setChangelogState(await refreshProjectChangelog(project.id))
+    } catch {}
+  }
+
+  function showChangelog() {
+    setChangelogMenuOpen(false)
+    document.getElementById('project-changelog')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function handleSort(key: 'ticket' | 'status') {
@@ -196,6 +246,32 @@ export function DashboardView({
             <span className={`dashboard-connection ${connected ? 'is-live' : ''}`}>
               <i aria-hidden="true" /> {connected ? 'temps réel' : 'reconnexion'}
             </span>
+            <div
+              className="dashboard-changelog-menu"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChangelogMenuOpen(false)
+              }}
+            >
+              <button
+                type="button"
+                className="secondary-button"
+                aria-haspopup="menu"
+                aria-expanded={changelogMenuOpen}
+                title={changelogTiming(changelogState, now)}
+                onClick={() => setChangelogMenuOpen((open) => !open)}
+              >
+                Changelog <span aria-hidden="true">⌄</span>
+              </button>
+              {changelogMenuOpen ? (
+                <div className="dashboard-changelog-dropdown" role="menu">
+                  <button type="button" role="menuitem" onClick={showChangelog}>Voir le changelog</button>
+                  <button type="button" role="menuitem" disabled={changelogState?.status === 'running'} onClick={() => void handleChangelogRefresh()}>
+                    {changelogState?.status === 'running' ? 'Actualisation en cours…' : 'Actualiser le changelog'}
+                  </button>
+                  <small>{changelogTiming(changelogState, now)}</small>
+                </div>
+              ) : null}
+            </div>
             <button type="button" className="secondary-button" onClick={() => void handleRefresh()}>
               Rafraîchir
             </button>
@@ -375,12 +451,12 @@ export function DashboardView({
 
         <SentryInbox projectId={project.id} onConfigure={onOpenSettings} onConversationSelect={onConversationSelect} />
 
-        <section className="dashboard-section dashboard-changelog">
+        <section id="project-changelog" className="dashboard-section dashboard-changelog">
           <div className="dashboard-section-head">
-            <div><h2 className="dashboard-section-title">Changelog</h2><p>Modifications réalisées et validées par domaine.</p></div>
+            <div><h2 className="dashboard-section-title">Changelog</h2><p>{changelogTiming(changelogState, now)}</p></div>
             {changelogDomains.length > 1 ? <select aria-label="Filtrer le changelog par domaine" value={changelogDomain} onChange={(event) => setChangelogDomain(event.target.value)}><option value="">Tous les domaines</option>{changelogDomains.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : null}
           </div>
-          {visibleChangelog.length === 0 ? <div className="dashboard-empty"><strong>Aucun changement validé</strong><p>Utilise « Résumé session » depuis une conversation reliée à un domaine.</p></div> : <ol className="dashboard-changelog-list">{visibleChangelog.slice(0, 40).map((item) => <li key={item.id}><div><span className="dashboard-pill">{item.domain_name}</span><span className="dashboard-pill">{item.nature}</span><time>{new Date(item.created_at).toLocaleDateString('fr-FR')}</time></div><strong>{item.title}</strong><p>{item.description}</p><small>{item.impact}</small></li>)}</ol>}
+          {visibleChangelog.length === 0 ? <div className="dashboard-empty"><strong>Aucun commit importé</strong><p>Le premier passage reprendra automatiquement l’historique depuis le 1er janvier 2026.</p></div> : <ol className="dashboard-changelog-list">{visibleChangelog.slice(0, 100).map((item) => <li key={item.commit_sha}><div><span className="dashboard-pill">{item.domain_name ?? 'À enrichir'}</span><span className="dashboard-branch-label"><BranchIcon />{item.branch}</span><code>{item.commit_sha.slice(0, 7)}</code><time>{new Date(item.committed_at).toLocaleDateString('fr-FR')}</time></div><strong>{item.product_message ?? item.subject}</strong>{item.product_message ? <small>{item.subject}</small> : <small>Enrichissement en attente</small>}</li>)}</ol>}
         </section>
 
         {data && data.environments.length > 0 ? (

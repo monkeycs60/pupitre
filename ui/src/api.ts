@@ -30,10 +30,9 @@ import type {
   ReviewStatusSnapshot,
   Routine,
   RoutineRun,
-  SessionSummaryResult,
-  ChangeProposal,
-  ChangelogReview,
-  DomainChangeRow,
+  SessionSummary,
+  ProjectChangelogPayload,
+  ProjectChangelogState,
   AppNotification,
   SkillDetail,
   SkillSummary,
@@ -889,27 +888,20 @@ export function createDebrief(conversationId: string): Promise<Debrief> {
   )
 }
 
-export function createSessionSummary(conversationId: string): Promise<SessionSummaryResult> {
+export function createSessionSummary(conversationId: string): Promise<SessionSummary> {
   return fetchJson(
     `/api/conversations/${routeId(conversationId)}/session-summary`,
     jsonPost({}),
   )
 }
 
-export function publishChangelogReview(
-  reviewId: string,
-  changes: ChangeProposal[],
-): Promise<{ review: ChangelogReview; files: string[] }> {
-  return fetchJson(`/api/changelog-reviews/${routeId(reviewId)}/publish`, jsonPost({ changes }))
-}
-
-export function getPendingChangelogReview(conversationId: string): Promise<ChangelogReview | null> {
-  return fetchJson(`/api/conversations/${routeId(conversationId)}/changelog-review`)
-}
-
-export function listProjectChangelog(projectId: string, domainId?: string): Promise<DomainChangeRow[]> {
+export function listProjectChangelog(projectId: string, domainId?: string): Promise<ProjectChangelogPayload> {
   const query = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
   return fetchJson(`/api/projects/${routeId(projectId)}/changelog${query}`)
+}
+
+export function refreshProjectChangelog(projectId: string): Promise<ProjectChangelogState> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/changelog/refresh`, jsonPost({}))
 }
 
 export interface HandoffDocument {

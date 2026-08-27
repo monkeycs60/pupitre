@@ -11,12 +11,10 @@ import { Titlebar } from './Titlebar'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
 import type { Attachment, Conversation, DocumentArtifact, Project } from './types'
-import type { ChangelogReview } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import {
   getSettings,
-  getPendingChangelogReview,
   listProjectConversations,
   listProjects,
   markConversationRead,
@@ -40,7 +38,6 @@ import { ConversationInstruction } from './ConversationInstruction'
 import { SentryLinkIcon, TicketLinkIcons } from './TicketLinkIcons'
 import { useSentryLinks, useTicketLinks } from './ticketLinks'
 import { isAppRestartShortcut, restartApp } from './appRestart'
-import { ChangelogReviewDialog } from './ChangelogReviewDialog'
 import {
   locationForSelection,
   readLastActiveLocation,
@@ -132,8 +129,6 @@ function App() {
   /** Configuration du projet ouverte depuis le diagnostic de contexte. */
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false)
   const [restartStatus, setRestartStatus] = useState<'idle' | 'running' | 'error'>('idle')
-  const [changelogReview, setChangelogReview] = useState<ChangelogReview | null>(null)
-  const [pendingChangelogReview, setPendingChangelogReview] = useState<ChangelogReview | null>(null)
   const { events, connection, retryAt } = useConversationEvents(
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
@@ -151,23 +146,6 @@ function App() {
   const ticketLinks = useTicketLinks(selectedProject?.id)
   const sentryLinks = useSentryLinks(selectedProject?.id)
   useAppNotifications()
-
-  useEffect(() => {
-    let ignore = false
-    if (!selectedConversation?.id) {
-      setPendingChangelogReview(null)
-      return
-    }
-    void getPendingChangelogReview(selectedConversation.id)
-      .then((review) => { if (!ignore) setPendingChangelogReview(review) })
-      .catch(() => { if (!ignore) setPendingChangelogReview(null) })
-    return () => { ignore = true }
-  }, [selectedConversation?.id])
-
-  function handleChangelogReview(review: ChangelogReview) {
-    setPendingChangelogReview(review)
-    setChangelogReview(review)
-  }
 
   useEffect(() => {
     function handleRestartShortcut(event: KeyboardEvent) {
@@ -608,8 +586,7 @@ function App() {
     setWorkspaceView('conversations')
     if (action === 'test') await createTestInventory(selectedConversation.id)
     else {
-      const result = await createSessionSummary(selectedConversation.id)
-      if (result.review) setChangelogReview(result.review)
+      await createSessionSummary(selectedConversation.id)
     }
   }
 
@@ -874,8 +851,6 @@ function App() {
               originKey={conversationSeed?.originKey ?? null}
               reviewStatus={fleet.reviewStatus}
               onHandoff={() => setShowHandoff(true)}
-              pendingChangelogReview={pendingChangelogReview}
-              onChangelogReview={handleChangelogReview}
               onSwitchModel={() => setShowSwitchModel(true)}
             />
             {showSwitchModel && selectedConversation !== null ? (
@@ -919,13 +894,6 @@ function App() {
           project={selectedProject}
           onClose={() => setProjectSettingsOpen(false)}
           onUpdated={handleProjectUpdated}
-        />
-      ) : null}
-      {changelogReview ? (
-        <ChangelogReviewDialog
-          review={changelogReview}
-          onClose={() => setChangelogReview(null)}
-          onPublished={() => setPendingChangelogReview(null)}
         />
       ) : null}
       {restartStatus !== 'idle' ? (
