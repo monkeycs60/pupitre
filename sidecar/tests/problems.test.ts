@@ -71,10 +71,10 @@ test("sauvegarde puis traite une capture avec Luna medium fast", async () => {
   }));
   expect(calls[0]?.prompt).toContain("TECH-42");
   expect(calls[0]?.prompt).toContain("deux sujets dans le même collage");
-  expect(store.listProject(projectId, "open").problems).toEqual([
-    expect.objectContaining({ title: "Clarifier la copie", ticket_id: null }),
-    expect.objectContaining({ title: "Le bouton ne répond pas", ticket_id: ticket.id }),
-  ]);
+  const byTitle = new Map(store.listProject(projectId, "open").problems
+    .map((problem) => [problem.title, problem]));
+  expect(byTitle.get("Clarifier la copie")?.ticket_id).toBeNull();
+  expect(byTitle.get("Le bouton ne répond pas")?.ticket_id).toBe(ticket.id);
 });
 
 test("une sortie invalide garde le texte et ne crée aucun résultat partiel", async () => {

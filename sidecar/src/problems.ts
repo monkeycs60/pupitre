@@ -15,14 +15,22 @@ const PUBLIC_ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 export class ProblemService {
   private tail = Promise.resolve();
+  private listeners = new Set<(projectId: string) => void>();
 
   constructor(
     private store: ProblemStore,
     private projects: ProjectStore,
     private tickets: TicketStore,
     private generator: DebriefGenerator,
-    private onChange: (projectId: string) => void = () => {},
-  ) {}
+    onChange?: (projectId: string) => void,
+  ) {
+    if (onChange) this.listeners.add(onChange);
+  }
+
+  subscribe(listener: (projectId: string) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
 
   capture(projectId: string, rawText: string): ProblemCapture {
     if (!this.projects.get(projectId)) throw new Error("projet inconnu");
@@ -32,7 +40,7 @@ export class ProblemService {
       throw new Error("le texte dépasse la limite de 50 000 caractères");
     }
     const capture = this.store.createCapture(projectId, text);
-    this.onChange(projectId);
+    this.changed(projectId);
     return capture;
   }
 
@@ -45,7 +53,7 @@ export class ProblemService {
   retry(captureId: string): ProblemCapture {
     const capture = this.store.queueAgain(captureId);
     if (!capture || capture.status !== "queued") throw new Error("capture non relançable");
-    this.onChange(capture.project_id);
+    this.changed(capture.project_id);
     void this.processCapture(capture.id);
     return capture;
   }
@@ -58,7 +66,7 @@ export class ProblemService {
   private async runCapture(captureId: string): Promise<void> {
     const capture = this.store.markProcessing(captureId);
     if (!capture) return;
-    this.onChange(capture.project_id);
+    this.changed(capture.project_id);
     try {
       const project = this.projects.get(capture.project_id);
       if (!project) throw new Error("projet inconnu");
@@ -88,8 +96,12 @@ export class ProblemService {
         error instanceof Error ? error.message : "traitement de la capture impossible",
       );
     } finally {
-      this.onChange(capture.project_id);
+      this.changed(capture.project_id);
     }
+  }
+
+  private changed(projectId: string): void {
+    for (const listener of this.listeners) listener(projectId);
   }
 }
 

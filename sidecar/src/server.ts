@@ -87,6 +87,8 @@ import type { IntegrationSecretStore } from "./stores/integration-secrets";
 import type { SentryStore } from "./stores/sentry";
 import { redactSentryValue } from "./sentry-redaction";
 import type { ChangelogService } from "./changelog";
+import type { ProblemStore } from "./stores/problems";
+import type { ProblemService } from "./problems";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -133,6 +135,8 @@ export interface ServerDeps {
   tickets: TicketStore;
   domains?: DomainStore;
   changelog?: ChangelogService;
+  problemStore?: ProblemStore;
+  problems?: ProblemService;
   integrationSecrets?: IntegrationSecretStore;
   sentry?: SentryStore;
   integrationsRefresher: IntegrationsRefresher;
@@ -1111,7 +1115,7 @@ export function createServer(deps: ServerDeps) {
   const broadcastDashboard = (projectId: string) => {
     const subscribers = ticketSockets.get(projectId);
     if (!subscribers || subscribers.size === 0) return;
-    const message = JSON.stringify(dashboardPayload(projectId, deps.integrations, deps.tickets));
+    const message = JSON.stringify(dashboardPayload(projectId, deps.integrations, deps.tickets, deps.problemStore));
     for (const socket of subscribers) {
       try {
         socket.send(message);
@@ -1121,6 +1125,7 @@ export function createServer(deps: ServerDeps) {
     }
     if (subscribers.size === 0) ticketSockets.delete(projectId);
   };
+  deps.problems?.subscribe(broadcastDashboard);
   deps.events.subscribe((conversationId, event) => {
     const message = JSON.stringify(event);
     for (const socket of sockets.get(conversationId) ?? []) {
@@ -1545,7 +1550,7 @@ export function createServer(deps: ServerDeps) {
         );
         if (request.method === "GET" && projectIntegrationsId !== null) {
           if (!deps.projects.get(projectIntegrationsId)) throw new HttpError(404, "projet inconnu");
-          return json(dashboardPayload(projectIntegrationsId, deps.integrations, deps.tickets).integrations);
+          return json(dashboardPayload(projectIntegrationsId, deps.integrations, deps.tickets, deps.problemStore).integrations);
         }
 
         const projectIntegrationMatch = pathname.match(
@@ -1596,7 +1601,7 @@ export function createServer(deps: ServerDeps) {
         const projectDashboardId = routeId(pathname, /^\/api\/projects\/([^/]+)\/dashboard$/);
         if (request.method === "GET" && projectDashboardId !== null) {
           if (!deps.projects.get(projectDashboardId)) throw new HttpError(404, "projet inconnu");
-          return json(dashboardPayload(projectDashboardId, deps.integrations, deps.tickets));
+          return json(dashboardPayload(projectDashboardId, deps.integrations, deps.tickets, deps.problemStore));
         }
 
         const projectDashboardRefreshId = routeId(
@@ -1607,6 +1612,90 @@ export function createServer(deps: ServerDeps) {
           if (!deps.projects.get(projectDashboardRefreshId)) throw new HttpError(404, "projet inconnu");
           void deps.integrationsRefresher.refreshProject(projectDashboardRefreshId, { forceSentry: true }).catch(() => {});
           return empty(202);
+        }
+
+        const projectProblemsId = routeId(pathname, /^\/api\/projects\/([^/]+)\/problems$/);
+        if (request.method === "GET" && projectProblemsId !== null) {
+          if (!deps.projects.get(projectProblemsId)) throw new HttpError(404, "projet inconnu");
+          if (!deps.problemStore) throw new HttpError(501, "problématiques non câblées");
+          const status = url.searchParams.get("status") ?? "open";
+          if (status !== "open" && status !== "closed" && status !== "all") {
+            throw new HttpError(400, "statut de problématique invalide");
+          }
+          return json(deps.problemStore.listProject(projectProblemsId, status));
+        }
+
+        const projectProblemCapturesId = routeId(
+          pathname,
+          /^\/api\/projects\/([^/]+)\/problem-captures$/,
+        );
+        if (request.method === "POST" && projectProblemCapturesId !== null) {
+          if (!deps.projects.get(projectProblemCapturesId)) throw new HttpError(404, "projet inconnu");
+          if (!deps.problems) throw new HttpError(501, "problématiques non câblées");
+          const body = await readObject(request);
+          try {
+            const capture = deps.problems.capture(projectProblemCapturesId, requiredString(body, "text"));
+            void deps.problems.processCapture(capture.id);
+            return json(capture, 202);
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            throw new HttpError(400, error instanceof Error ? error.message : "capture invalide");
+          }
+        }
+
+        const retryProblemCaptureId = routeId(
+          pathname,
+          /^\/api\/problem-captures\/([^/]+)\/retry$/,
+        );
+        if (request.method === "POST" && retryProblemCaptureId !== null) {
+          if (!deps.problems) throw new HttpError(501, "problématiques non câblées");
+          try {
+            return json(deps.problems.retry(retryProblemCaptureId));
+          } catch (error) {
+            throw new HttpError(409, error instanceof Error ? error.message : "capture non relançable");
+          }
+        }
+
+        const problemTicketId = routeId(pathname, /^\/api\/problems\/([^/]+)\/ticket$/);
+        if (request.method === "PUT" && problemTicketId !== null) {
+          if (!deps.problemStore) throw new HttpError(501, "problématiques non câblées");
+          const body = await readObject(request);
+          const ticketId = body.ticketId;
+          if (ticketId !== null && typeof ticketId !== "string") {
+            throw new HttpError(400, "ticket invalide");
+          }
+          try {
+            const problem = deps.problemStore.setTicket(problemTicketId, ticketId);
+            if (!problem) throw new HttpError(404, "problématique inconnue");
+            broadcastDashboard(problem.project_id);
+            return json(problem);
+          } catch (error) {
+            if (error instanceof HttpError) throw error;
+            throw new HttpError(400, error instanceof Error ? error.message : "ticket invalide");
+          }
+        }
+
+        const problemAction = pathname.match(/^\/api\/problems\/([^/]+)\/(close|reopen)$/);
+        if (request.method === "POST" && problemAction) {
+          if (!deps.problemStore) throw new HttpError(501, "problématiques non câblées");
+          const problemId = decodeURIComponent(problemAction[1]!);
+          const problem = problemAction[2] === "close"
+            ? deps.problemStore.close(problemId)
+            : deps.problemStore.reopen(problemId);
+          if (!problem) throw new HttpError(404, "problématique inconnue");
+          broadcastDashboard(problem.project_id);
+          return json(problem);
+        }
+
+        const deleteProblemId = routeId(pathname, /^\/api\/problems\/([^/]+)$/);
+        if (request.method === "DELETE" && deleteProblemId !== null) {
+          if (!deps.problemStore) throw new HttpError(501, "problématiques non câblées");
+          const problem = deps.problemStore.get(deleteProblemId);
+          if (!problem || !deps.problemStore.delete(problem.id)) {
+            throw new HttpError(404, "problématique inconnue");
+          }
+          broadcastDashboard(problem.project_id);
+          return empty(204);
         }
 
         const projectDomainsId = routeId(pathname, /^\/api\/projects\/([^/]+)\/domains$/);
@@ -2490,11 +2579,42 @@ export function createServer(deps: ServerDeps) {
           const ticketId = optionalTrimmed(body, "ticketId");
           const originType = optionalTrimmed(body, "originType");
           const originKey = optionalTrimmed(body, "originKey");
-          if (originType !== null && originType !== "sentry") throw new HttpError(400, "origine invalide");
-          if (originType === "sentry" && originKey === null) throw new HttpError(400, "clé Sentry requise");
+          if (originType !== null && originType !== "sentry" && originType !== "problem") {
+            throw new HttpError(400, "origine invalide");
+          }
+          if (originType !== null && originKey === null) throw new HttpError(400, "clé d'origine requise");
           let ticket = ticketId ? deps.tickets.get(ticketId) : null;
           if (ticketId && (!ticket || ticket.project_id !== projectId)) {
             throw new HttpError(404, "ticket inconnu");
+          }
+          let problemPreamble: string | null = null;
+          if (originType === "problem" && originKey) {
+            const problem = deps.problemStore?.getByPublicId(originKey);
+            if (!problem || problem.project_id !== projectId) {
+              throw new HttpError(404, "problématique inconnue");
+            }
+            const problemPlanIndex = body.problemPlanIndex;
+            if (!Number.isInteger(problemPlanIndex) || Number(problemPlanIndex) < 0) {
+              throw new HttpError(400, "proposition de problématique invalide");
+            }
+            const plan = problem.plans[Number(problemPlanIndex)];
+            if (!plan) throw new HttpError(404, "proposition de problématique inconnue");
+            ticket = problem.ticket_id ? deps.tickets.get(problem.ticket_id) : null;
+            problemPreamble = [
+              `# Problématique ${problem.public_id} — ${problem.title}`,
+              "",
+              "## Contexte",
+              problem.context,
+              "",
+              "## Résolution attendue",
+              problem.resolution,
+              "",
+              "## Conversation proposée",
+              `${plan.title}\n\n${plan.instruction}`,
+              "",
+              "## Convention de commit",
+              `Tout commit qui résout cette problématique doit inclure exactement [${problem.public_id}] dans son message.`,
+            ].join("\n");
           }
           let effectiveBranch = branch ?? (ticket ? deps.tickets.branchesOf(ticket.id)[0] ?? null : null);
           if (!ticket && effectiveBranch) {
@@ -2550,13 +2670,14 @@ export function createServer(deps: ServerDeps) {
             createdOnBranch: sentryStartPoint ?? snapshot.currentBranch,
             ticketId: ticket?.id ?? null,
             ticketInstruction: ticket?.instruction ?? null,
-            originType: originType as "sentry" | null,
+            originType: originType as "sentry" | "problem" | null,
             originKey,
             firstMessage: message.trim() || "Image jointe",
           });
-          const preamble = ticket
+          const ticketPreamble = ticket
             ? await ticketBriefFor(deps, ticket, conversation.id)
-            : undefined;
+            : null;
+          const preamble = [ticketPreamble, problemPreamble].filter(Boolean).join("\n\n---\n\n");
           void deps.runner.runTurn(
             conversation.id,
             message,
@@ -3804,7 +3925,7 @@ export function createServer(deps: ServerDeps) {
             ticketSockets.set(projectId, subscribers);
           }
           subscribers.add(socket);
-          socket.send(JSON.stringify(dashboardPayload(projectId, deps.integrations, deps.tickets)));
+          socket.send(JSON.stringify(dashboardPayload(projectId, deps.integrations, deps.tickets, deps.problemStore)));
           return;
         }
         const { conversationId } = socket.data;

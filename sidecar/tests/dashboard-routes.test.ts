@@ -34,12 +34,16 @@ import { IntegrationStore } from "../src/stores/integrations";
 import { TicketStore } from "../src/stores/tickets";
 import { DomainStore } from "../src/stores/domains";
 import { IntegrationsRefresher } from "../src/integrations/refresher";
+import { ProblemStore } from "../src/stores/problems";
+import { ProblemService } from "../src/problems";
 
 interface TestServer {
   baseUrl: string;
   db: Database;
   server: ReturnType<typeof createServer>;
   deps: ServerDeps;
+  problemStore: ProblemStore;
+  problems: ProblemService;
 }
 
 let current: TestServer | undefined;
@@ -217,6 +221,19 @@ beforeEach(() => {
     { integrations, tickets, conversations, projects },
     { clickUpClient: () => null, gitLabClient: () => null },
   );
+  const problemStore = new ProblemStore(db);
+  const problems = new ProblemService(
+    problemStore,
+    projects,
+    tickets,
+    async () => JSON.stringify([{
+      title: "Bouton inactif",
+      context: "Le bouton ne répond pas au clic.",
+      resolution: "Corriger le gestionnaire de clic.",
+      ticketKey: null,
+      conversations: [{ title: "Corriger le bouton", instruction: "Reproduire puis corriger." }],
+    }]),
+  );
   const deps: ServerDeps = {
     port: 0,
     projects,
@@ -250,6 +267,8 @@ beforeEach(() => {
     tickets,
     domains,
     integrationsRefresher,
+    problemStore,
+    problems,
   };
   const server = createServer(deps);
   current = {
@@ -257,6 +276,8 @@ beforeEach(() => {
     db,
     server,
     deps,
+    problemStore,
+    problems,
   };
 });
 
@@ -355,6 +376,96 @@ test("dashboard : tickets, instruction, refresh et canal WS", async () => {
   const refresh = await postJson(`/api/projects/${project.id}/dashboard/refresh`, {});
   expect(refresh.status).toBe(202);
   await waiter.event;
+});
+
+test("problématiques : capture asynchrone, liste et cycle de vie HTTP", async () => {
+  const project = await createProject(`/tmp/problems-routes-${crypto.randomUUID()}`);
+
+  const created = await postJson(`/api/projects/${project.id}/problem-captures`, {
+    text: "Le bouton principal ne répond plus.",
+  });
+  expect(created.status).toBe(202);
+  const capture = await created.json() as { id: string };
+
+  const deadline = Date.now() + 2_000;
+  let payload: {
+    captures: Array<{ id: string; status: string }>;
+    problems: Array<{ id: string; public_id: string; status: string }>;
+  } = { captures: [], problems: [] };
+  while (Date.now() < deadline) {
+    payload = await fetch(`${current!.baseUrl}/api/projects/${project.id}/problems?status=all`)
+      .then((response) => response.json());
+    if (payload.problems.length === 1) break;
+    await Bun.sleep(10);
+  }
+  expect(payload.captures.find((item) => item.id === capture.id)).toBeUndefined();
+  expect(payload.problems).toHaveLength(1);
+  const problem = payload.problems[0]!;
+
+  const closed = await postJson(`/api/problems/${problem.id}/close`, {});
+  expect(closed.status).toBe(200);
+  expect((await closed.json() as { status: string }).status).toBe("closed");
+  const reopened = await postJson(`/api/problems/${problem.id}/reopen`, {});
+  expect((await reopened.json() as { status: string }).status).toBe("open");
+  const removed = await fetch(`${current!.baseUrl}/api/problems/${problem.id}`, { method: "DELETE" });
+  expect(removed.status).toBe(204);
+});
+
+test("une conversation problem reçoit du serveur le contexte, le ticket et le marqueur Git", async () => {
+  const repoPath = mkdtempSync(join(tmpdir(), "pupitre-problem-conversation-"));
+  runGit(repoPath, "init", "-q", "-b", "main");
+  runGit(repoPath, "config", "user.email", "api@example.test");
+  runGit(repoPath, "config", "user.name", "API Git");
+  writeFileSync(join(repoPath, "README.md"), "base\n");
+  runGit(repoPath, "add", "README.md");
+  runGit(repoPath, "commit", "-qm", "base");
+  const project = await createProject(repoPath);
+  const ticket = current!.deps.tickets.upsert(project.id, {
+    key: "TECH-88",
+    source: "clickup",
+    title: "Bouton principal",
+    status: "todo",
+    externalUrl: null,
+  });
+  const capture = current!.problemStore.createCapture(project.id, "capture source");
+  current!.problemStore.completeCapture(capture.id, [{
+    publicId: "PB-7K3M9Q",
+    title: "Bouton inactif",
+    context: "Le bouton principal ne répond pas.",
+    resolution: "Restaurer le clic sans régression.",
+    ticketId: ticket.id,
+    plans: [{ title: "Corriger le bouton", instruction: "Reproduire puis corriger le gestionnaire." }],
+  }]);
+  const promptLog = join(repoPath, "problem-prompt.log");
+  process.env.PUPITRE_FAKE_PROMPT_LOG = promptLog;
+
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "claude-fable-5",
+    message: "Je commence",
+    originType: "problem",
+    originKey: "PB-7K3M9Q",
+    problemPlanIndex: 0,
+  });
+  expect(created.status).toBe(201);
+  const conversation = await created.json() as {
+    id: string;
+    ticket_id: string | null;
+    origin_type: string | null;
+    origin_key: string | null;
+  };
+  expect(conversation).toMatchObject({
+    ticket_id: ticket.id,
+    origin_type: "problem",
+    origin_key: "PB-7K3M9Q",
+  });
+  await waitForRunnerIdle(conversation.id);
+  const sent = readFileSync(promptLog, "utf8");
+  expect(sent).toContain("Le bouton principal ne répond pas.");
+  expect(sent).toContain("Restaurer le clic sans régression.");
+  expect(sent).toContain("Reproduire puis corriger le gestionnaire.");
+  expect(sent).toContain("[PB-7K3M9Q]");
 });
 
 test("dashboard : Mes tickets ne contient que les tâches ClickUp actuellement attribuées", async () => {

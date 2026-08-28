@@ -2,6 +2,7 @@ import type { EnvironmentState } from "./integrations/refresher";
 import type { GitLabMergeRequest } from "./integrations/gitlab";
 import type { IntegrationStatus, IntegrationStore, IntegrationType } from "./stores/integrations";
 import type { TicketRow, TicketStore } from "./stores/tickets";
+import type { ProblemProjectPayload, ProblemStore } from "./stores/problems";
 
 export interface DashboardPayload {
   projectId: string;
@@ -18,12 +19,14 @@ export interface DashboardPayload {
   tickets: TicketRow[];
   environments: EnvironmentState[];
   toReview: Array<GitLabMergeRequest & { project: string }>;
+  problems: ProblemProjectPayload;
 }
 
 export function dashboardPayload(
   projectId: string,
   integrations: IntegrationStore,
   tickets: TicketStore,
+  problems?: ProblemStore,
 ): DashboardPayload {
   const items = integrations.listByProject(projectId);
   const gitlab = items.find((item) => item.type === "gitlab");
@@ -49,5 +52,10 @@ export function dashboardPayload(
     toReview: Array.isArray(gitlab?.snapshot.toReview)
       ? gitlab.snapshot.toReview as Array<GitLabMergeRequest & { project: string }>
       : [],
+    problems: problems?.listProject(projectId, "all") ?? {
+      projectId,
+      captures: [],
+      problems: [],
+    },
   };
 }

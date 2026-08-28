@@ -31,7 +31,7 @@ export interface Conversation {
   ticket_id: string | null;
   ticket_key?: string | null;
   ticket_instruction: string | null;
-  origin_type?: "sentry" | null;
+  origin_type?: "sentry" | "problem" | null;
   origin_key?: string | null;
   /** Reçoit le bridge MCP `conductor` (délégation de sous-tâches). */
   orchestrator: boolean;
@@ -98,7 +98,7 @@ export class ConversationStore {
     createdOnBranch?: string | null;
     ticketId?: string | null;
     ticketInstruction?: string | null;
-    originType?: "sentry" | null;
+    originType?: "sentry" | "problem" | null;
     originKey?: string | null;
     firstMessage: string;
   }): Conversation {

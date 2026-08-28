@@ -279,6 +279,8 @@ if (process.argv.includes("--pupitre-mcp")) {
     tickets,
     domains,
     changelog,
+    problemStore,
+    problems,
     integrationSecrets,
     sentry,
     integrationsRefresher,
