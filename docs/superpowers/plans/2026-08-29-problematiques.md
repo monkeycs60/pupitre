@@ -34,7 +34,7 @@
 - Produces: `ProblemStore`, `ProblemCapture`, `Problem`, `ProblemPlan`, `ProblemDraft`.
 - Produces: `createCapture`, `queuedCaptures`, `markProcessing`, `completeCapture`, `markError`, `listProject`, `setTicket`, `close`, `reopen`, `delete`.
 
-- [ ] **Step 1: Write the failing store tests**
+- [x] **Step 1: Write the failing store tests**
 
 ```ts
 test("persiste le collage avant ses résultats puis écrit le lot atomiquement", () => {
@@ -57,12 +57,12 @@ test("ferme, rouvre, change le ticket du même projet et supprime", () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `cd sidecar && bun test tests/problems-store.test.ts`
 Expected: FAIL because `stores/problems.ts` does not exist.
 
-- [ ] **Step 3: Add schema and minimal store**
+- [x] **Step 3: Add schema and minimal store**
 
 ```sql
 CREATE TABLE IF NOT EXISTS problem_captures (
@@ -83,12 +83,12 @@ CREATE TABLE IF NOT EXISTS problems (
 
 `completeCapture` wraps all inserts and the capture transition in one SQLite transaction. `setTicket` refuses a ticket from another project. `close` is idempotent; `reopen` clears both closure fields.
 
-- [ ] **Step 4: Run store tests to verify GREEN**
+- [x] **Step 4: Run store tests to verify GREEN**
 
 Run: `cd sidecar && bun test tests/problems-store.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add sidecar/src/db.ts sidecar/src/stores/problems.ts sidecar/tests/problems-store.test.ts
@@ -106,7 +106,7 @@ git commit -m "feat(problems): persist captures and problem lifecycle"
 - Consumes: `ProblemStore`, `ProjectStore`, `TicketStore`, `DebriefGenerator`.
 - Produces: `ProblemService.capture(projectId, rawText)`, `processCapture(captureId)`, `retry(captureId)`, `resume()`, `parseProblemDrafts(raw, tickets)`, `problemPublicId()`.
 
-- [ ] **Step 1: Write failing parser and service tests**
+- [x] **Step 1: Write failing parser and service tests**
 
 ```ts
 test("sauvegarde puis traite une capture avec Luna medium fast", async () => {
@@ -130,12 +130,12 @@ test("une sortie invalide garde le texte et ne crée aucun résultat partiel", a
 })
 ```
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `cd sidecar && bun test tests/problems.test.ts`
 Expected: FAIL because `ProblemService` is missing.
 
-- [ ] **Step 3: Implement validator, queue and recovery**
+- [x] **Step 3: Implement validator, queue and recovery**
 
 ```ts
 export class ProblemService {
@@ -150,12 +150,12 @@ export function problemPublicId(random?: () => number): string
 
 The queue is a single promise chain. `capture` validates the project and the 1..50,000 character range, calls `store.createCapture`, schedules work and returns without awaiting the provider. The parser extracts one JSON array, enforces 1..20 rows, title/context/resolution limits, 1..5 plans and resolves ticket keys through a `Map`.
 
-- [ ] **Step 4: Run service tests to verify GREEN**
+- [x] **Step 4: Run service tests to verify GREEN**
 
 Run: `cd sidecar && bun test tests/problems.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add sidecar/src/problems.ts sidecar/src/index.ts sidecar/tests/problems.test.ts
@@ -176,7 +176,7 @@ git commit -m "feat(problems): structure captures asynchronously with Luna"
 - Consumes: `ProblemService`, `ProblemStore`.
 - Produces: routes exactes de la spécification, `DashboardPayload.problems`, origine conversation `problem`, `problemPlanIndex`.
 
-- [ ] **Step 1: Write failing route tests**
+- [x] **Step 1: Write failing route tests**
 
 ```ts
 test("capture, liste et relance par HTTP", async () => {
@@ -198,21 +198,21 @@ test("une conversation problem prend le contexte et le ticket depuis le serveur"
 })
 ```
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `cd sidecar && bun test tests/problems-routes.test.ts tests/conversations.test.ts`
 Expected: FAIL with 404 and invalid origin.
 
-- [ ] **Step 3: Implement routes and server-owned preamble**
+- [x] **Step 3: Implement routes and server-owned preamble**
 
 Extend `ServerDeps` with `problems` and `problemStore`. Build dashboard snapshots with `problems: store.listProject(projectId, "all")`. Accept `originType` in `"sentry" | "problem"`; for `problem`, resolve `originKey` and `problemPlanIndex`, force its ticket, and prepend the structured context and exact commit marker instruction.
 
-- [ ] **Step 4: Run route tests to verify GREEN**
+- [x] **Step 4: Run route tests to verify GREEN**
 
 Run: `cd sidecar && bun test tests/problems-routes.test.ts tests/conversations.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add sidecar/src/server.ts sidecar/src/dashboard.ts sidecar/src/stores/conversations.ts sidecar/src/index.ts sidecar/tests/problems-routes.test.ts sidecar/tests/conversations.test.ts
@@ -236,7 +236,7 @@ git commit -m "feat(problems): expose lifecycle and conversation context"
 - Produces: `problemIdsInCommit(message)`, `ProblemStore.closeFromCommit(projectId, message, sha)`.
 - Changes: `GitProjectService.finishTurn` returns new SHAs; `GitChangelogCommit.message` carries the full message.
 
-- [ ] **Step 1: Write failing exact-match and integration tests**
+- [x] **Step 1: Write failing exact-match and integration tests**
 
 ```ts
 test("ferme chaque ID exact du même projet une seule fois", () => {
@@ -251,21 +251,21 @@ test("readGitHistory conserve aussi le corps du commit", async () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run: `cd sidecar && bun test tests/problem-commits.test.ts tests/changelog.test.ts tests/runner.test.ts`
 Expected: FAIL because messages and detector are missing.
 
-- [ ] **Step 3: Implement one idempotent detector and both hooks**
+- [x] **Step 3: Implement one idempotent detector and both hooks**
 
 Use the literal regex `/\[\b(PB-[0-9A-HJKMNP-TV-Z]{6})\b\]/g` without fuzzy matching. `finishTurn` returns the recorded SHA list and the runner gives each full message to `closeFromCommit`. `ChangelogService.refresh` invokes the same callback for imported commits after persistence.
 
-- [ ] **Step 4: Run Git tests to verify GREEN**
+- [x] **Step 4: Run Git tests to verify GREEN**
 
 Run: `cd sidecar && bun test tests/problem-commits.test.ts tests/git.test.ts tests/changelog.test.ts tests/runner.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add sidecar/src/git.ts sidecar/src/runner.ts sidecar/src/changelog.ts sidecar/src/stores/changelog.ts sidecar/src/index.ts sidecar/tests/problem-commits.test.ts sidecar/tests/git.test.ts sidecar/tests/changelog.test.ts sidecar/tests/runner.test.ts
@@ -287,7 +287,7 @@ git commit -m "feat(problems): close problem IDs observed in commits"
 - Produces: UI types matching sidecar, API functions, `ProblemsPanel`.
 - Changes: dashboard tab union gains `problems`; header gains `Capturer`.
 
-- [ ] **Step 1: Write failing component and dashboard tests**
+- [x] **Step 1: Write failing component and dashboard tests**
 
 ```tsx
 test("capture en deux gestes puis montre le traitement", async () => {
@@ -305,21 +305,21 @@ test("ferme, rouvre, supprime et corrige le ticket depuis une carte", async () =
 })
 ```
 
-- [ ] **Step 2: Run UI tests to verify RED**
+- [x] **Step 2: Run UI tests to verify RED**
 
 Run: `cd ui && bun test src/ProblemsPanel.test.tsx src/DashboardView.test.tsx`
 Expected: FAIL because the component and fifth tab are missing.
 
-- [ ] **Step 3: Implement accessible modal, tab and actions**
+- [x] **Step 3: Implement accessible modal, tab and actions**
 
 Keep interaction-driven requests in event handlers, not effects. Derive filtered problems during render. The modal uses a controlled textarea, `maxLength={50_000}`, `aria-modal`, visible shortcut hint and disabled submit for whitespace-only text. The panel renders pending/error captures before cards and confirms only permanent deletion.
 
-- [ ] **Step 4: Run UI tests to verify GREEN**
+- [x] **Step 4: Run UI tests to verify GREEN**
 
 Run: `cd ui && bun test src/ProblemsPanel.test.tsx src/DashboardView.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ui/src/types.ts ui/src/api.ts ui/src/ProblemsPanel.tsx ui/src/ProblemsPanel.test.tsx ui/src/DashboardView.tsx ui/src/DashboardView.test.tsx ui/src/styles/dashboard.css
@@ -343,7 +343,7 @@ git commit -m "feat(problems): add capture and dashboard catalogue"
 - Produces: `ProblemSuggestions` limited to five, sorted unlaunched then newest.
 - Changes: conversation seed gains `originType: "problem"`, `originKey`, `problemPlanIndex`, prefilled draft and ticket.
 
-- [ ] **Step 1: Write failing suggestion tests**
+- [x] **Step 1: Write failing suggestion tests**
 
 ```tsx
 test("propose cinq problématiques non lancées en priorité", () => {
@@ -356,21 +356,21 @@ test("propose cinq problématiques non lancées en priorité", () => {
 })
 ```
 
-- [ ] **Step 2: Run UI tests to verify RED**
+- [x] **Step 2: Run UI tests to verify RED**
 
 Run: `cd ui && bun test src/ProblemSuggestions.test.tsx src/Chat.test.tsx`
 Expected: FAIL because suggestions and problem origin types are missing.
 
-- [ ] **Step 3: Implement derived suggestions and seed propagation**
+- [x] **Step 3: Implement derived suggestions and seed propagation**
 
 Fetch the project list only while the new-conversation screen is mounted using the existing abortable data-loading pattern. Do not synchronize derived selection with an effect: the click handler writes the seed, draft and ticket together. `Composer` forwards `problemPlanIndex` in `CreateConversationInput`.
 
-- [ ] **Step 4: Run UI tests to verify GREEN**
+- [x] **Step 4: Run UI tests to verify GREEN**
 
 Run: `cd ui && bun test src/ProblemSuggestions.test.tsx src/Chat.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ui/src/ProblemSuggestions.tsx ui/src/ProblemSuggestions.test.tsx ui/src/App.tsx ui/src/Chat.tsx ui/src/Composer.tsx ui/src/conversationDraft.ts ui/src/api.ts ui/src/styles/chat.css ui/src/Chat.test.tsx
@@ -387,11 +387,11 @@ git commit -m "feat(problems): resurface work when starting conversations"
 - Consumes: all prior tasks.
 - Produces: user-facing help and verified delivery.
 
-- [ ] **Step 1: Document the exact user flow**
+- [x] **Step 1: Document the exact user flow**
 
 Add sections describing `Capturer`, `Ctrl + Entrée`, error retry, problem actions, suggestions in Nouvelle conversation and `[PB-XXXXXX]` closure.
 
-- [ ] **Step 2: Run fresh full verification**
+- [x] **Step 2: Run fresh full verification**
 
 Run: `cd sidecar && bun test`
 Expected: all sidecar tests pass with 0 failures.
@@ -399,11 +399,11 @@ Expected: all sidecar tests pass with 0 failures.
 Run: `cd ui && bun test && bun run build`
 Expected: all UI tests pass with 0 failures and Vite exits 0.
 
-- [ ] **Step 3: Verify the running UI in the browser**
+- [x] **Step 3: Verify the running UI in the browser**
 
 Open `http://localhost:5173`, measure that five dashboard tabs exist, open the capture modal, verify the 50,000-character limit and `Ctrl + Entrée` hint, then capture the dashboard. Because the live sidecar cannot be restarted from this conversation, use the current UI for DOM assertions and report that backend activation requires an app restart.
 
-- [ ] **Step 4: Review repository state and commit documentation**
+- [x] **Step 4: Review repository state and commit documentation**
 
 Run: `git diff --check && git status --short && git log --oneline --max-count=10`
 

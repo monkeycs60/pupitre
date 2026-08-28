@@ -6,6 +6,7 @@ import {
 } from "./stores/problems";
 import type { ProjectStore } from "./stores/projects";
 import type { Ticket, TicketStore } from "./stores/tickets";
+import { projectCwd } from "./workspace";
 export { problemIdsInCommit } from "./problem-id";
 
 export const MAX_CAPTURE_CHARS = 50_000;
@@ -79,7 +80,7 @@ export class ProblemService {
       if (!project) throw new Error("projet inconnu");
       const tickets = this.tickets.listActive(project.id);
       const raw = await this.generator({
-        cwd: project.path,
+        cwd: projectCwd(project),
         provider: "codex",
         model: "gpt-5.6-luna",
         effort: "medium",

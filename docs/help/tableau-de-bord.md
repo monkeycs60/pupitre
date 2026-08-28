@@ -34,6 +34,36 @@ cas, Pupitre retrouve ou crée le **worktree partagé** de la branche, injecte u
 brief de reprise court, puis laisse l'agent creuser une conversation soeur au
 besoin avec `read_sibling_conversation`.
 
+## Capturer des problématiques
+
+Le bouton **Capturer** accepte un collage brut : bugs, retours, questions et
+idées peuvent être mélangés. Collez le texte puis utilisez **Ctrl + Entrée**.
+Pupitre conserve immédiatement le collage, l'envoie à Luna pour le structurer,
+puis affiche le résultat dans l'onglet **Problématiques**. Une capture en échec
+reste visible et peut être relancée avec **Réessayer**.
+
+Chaque problématique contient son contexte, la résolution attendue et une à
+cinq propositions de conversation. Vous pouvez rattacher un ticket ClickUp,
+lancer une proposition, fermer, rouvrir ou supprimer la problématique. Les
+éléments fermés sont disponibles avec le filtre **Fermées**.
+
+Lancer une proposition ouvre le compositeur avec son titre, sa consigne et son
+identifiant `[PB-XXXXXX]`. Le contexte complet est reconstruit par le sidecar :
+le texte du compositeur reste modifiable sans perdre les informations de la
+problématique.
+
+## Retrouver le travail à lancer
+
+L'écran **Nouvelle conversation** remonte au-dessus du compositeur jusqu'à cinq
+problématiques ouvertes. Celles qui n'ont encore aucune conversation sont
+prioritaires, puis les plus récentes. **Voir toutes** ouvre directement leur
+onglet dans le tableau de bord.
+
+Quand un commit résout une problématique, incluez exactement son identifiant
+entre crochets, par exemple `[PB-7K3M9Q]`. Pupitre ferme alors la problématique
+et mémorise le SHA, que le commit soit détecté dans une conversation ou lors du
+rafraîchissement du changelog.
+
 ## Domaines
 
 Un **domaine** est un label métier (Match AI, onboarding…) ou technique
@@ -53,7 +83,7 @@ recherche.
 
 ## Limites
 
-Cette vue couvre **Mes tickets**, **Environnements**, **À relire**, les notes
+Cette vue couvre **Mes tickets**, **Problématiques**, **Environnements**, **À relire**, les notes
 locales, le groupement des conversations par ticket, l'inbox **Sentry** et les
 **domaines**.
 

@@ -281,7 +281,8 @@
 .problem-capture-dialog { width: min(680px, calc(100vw - 32px)); }
 .problem-capture-dialog textarea { width: 100%; min-height: 240px; padding: 12px; resize: vertical; color: var(--text); font: inherit; line-height: 1.5; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--r-sm); }
 .problem-capture-dialog textarea:focus-visible { border-color: var(--accent-border); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
-.problem-capture-dialog .dialog-footer small { margin-right: auto; color: var(--text-faint); }
+.problem-capture-meta { display: flex; align-items: center; gap: 4px; color: var(--text-faint); font-size: var(--text-xs); }
+.problem-capture-meta > span:first-child { margin-right: auto; }
 .problem-capture-dialog kbd { padding: 1px 4px; font: 10px/1.4 var(--font-mono); background: var(--bg-overlay); border: 1px solid var(--border); border-radius: 3px; }
 
 .sentry-subtitle { margin: 4px 0 0; color: var(--text-faint); font-size: var(--text-xs); }
