@@ -597,7 +597,14 @@ body.is-resizing-documents-list {
   transition: max-width 120ms var(--ease), opacity 100ms var(--ease);
 }
 
+.rail-nav-label > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .rail-nav-shortcut {
+  flex: none;
   color: var(--text-faint);
   font: inherit;
   font-size: 9px;

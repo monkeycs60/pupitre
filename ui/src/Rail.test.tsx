@@ -1,12 +1,14 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
+import { readFileSync } from 'node:fs'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, render, screen } = await import('@testing-library/react')
 const { Rail } = await import('./Rail')
 const defaultFetch = globalThis.fetch
+const railCss = readFileSync(new URL('./styles/shell.css', import.meta.url), 'utf8')
 
 afterEach(() => {
   cleanup()
@@ -40,4 +42,6 @@ test('affiche le raccourci à côté de chaque destination concernée', async ()
   expect(screen.getByText('Ctrl Maj T')).toBeTruthy()
   expect(screen.getByText('Ctrl Maj D')).toBeTruthy()
   expect(screen.getByText('Ctrl Maj G')).toBeTruthy()
+  expect(railCss).toMatch(/\.rail-nav-label\s*>\s*span\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*hidden;/)
+  expect(railCss).toMatch(/\.rail-nav-shortcut\s*\{[\s\S]*?flex:\s*none;/)
 })
