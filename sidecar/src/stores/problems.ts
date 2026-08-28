@@ -35,6 +35,7 @@ export interface Problem {
   closed_commit_sha: string | null;
   created_at: string;
   updated_at: string;
+  conversation_count: number;
 }
 
 export interface ProblemDraft {
@@ -171,7 +172,10 @@ export class ProblemStore {
 
   listProject(projectId: string, status: ProblemListStatus = "open"): ProblemProjectPayload {
     const rows = this.db.query(`
-      SELECT * FROM problems
+      SELECT problems.*,
+        (SELECT COUNT(*) FROM conversations
+         WHERE origin_type = 'problem' AND origin_key = problems.public_id) AS conversation_count
+      FROM problems
       WHERE project_id = ? ${status === "all" ? "" : "AND status = ?"}
       ORDER BY created_at DESC, id DESC
     `).all(...(status === "all" ? [projectId] : [projectId, status])) as Record<string, unknown>[];
@@ -275,5 +279,6 @@ function hydrateProblem(row: Record<string, unknown>): Problem {
     closed_commit_sha: row.closed_commit_sha === null ? null : String(row.closed_commit_sha),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
+    conversation_count: Number(row.conversation_count ?? 0),
   };
 }

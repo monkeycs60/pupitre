@@ -184,6 +184,106 @@
   font-weight: 600;
 }
 
+.problems-panel .dashboard-section-head p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.problems-filter {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+
+.problems-filter button {
+  padding: 5px 9px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.problems-filter button[aria-pressed='true'] {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+.problem-capture {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 11px 14px;
+  margin-bottom: var(--space-3);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+.problem-capture.is-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border-subtle));
+}
+
+.problem-capture strong { color: var(--text-strong); font-size: var(--text-sm); }
+.problem-capture p { margin: 3px 0 0; color: var(--text-muted); font-size: var(--text-xs); }
+.problem-processing { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: var(--r-full); animation: problem-spin 0.8s linear infinite; }
+
+@keyframes problem-spin { to { transform: rotate(360deg); } }
+
+.problems-list { display: grid; gap: 10px; }
+
+.problem-card {
+  overflow: hidden;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+.problem-card > header { padding: 13px 14px; border-bottom: 1px solid var(--border-subtle); }
+.problem-card > header > div { display: flex; align-items: center; gap: 8px; color: var(--text-faint); font-size: 11px; }
+.problem-card h3 { margin: 5px 0 0; color: var(--text-strong); font-size: var(--text-base); }
+.problem-id { color: var(--text-muted); font: 600 11px/1 var(--font-mono); }
+.problem-ticket { color: var(--accent-bright); font: 600 11px/1 var(--font-mono); }
+
+.problem-copy {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  padding: 13px 14px;
+}
+
+.problem-copy strong, .problem-plans strong { color: var(--text); font-size: var(--text-xs); }
+.problem-copy p, .problem-plans p { margin: 4px 0 0; color: var(--text-muted); font-size: var(--text-sm); line-height: 1.45; }
+.problem-plans { padding: 0; margin: 0; list-style: none; border-top: 1px solid var(--border-subtle); }
+.problem-plans li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: 11px 14px; border-bottom: 1px solid var(--border-subtle); }
+.problem-plans li > div { min-width: 0; }
+
+.problem-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 9px 14px;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.problem-actions label, .problem-actions > div { display: flex; align-items: center; gap: 8px; }
+.problem-actions select { max-width: 280px; padding: 5px 8px; color: var(--text); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--r-sm); }
+.problem-closed-sha code { color: var(--text-muted); }
+.problem-capture-dialog { width: min(680px, calc(100vw - 32px)); }
+.problem-capture-dialog textarea { width: 100%; min-height: 240px; padding: 12px; resize: vertical; color: var(--text); font: inherit; line-height: 1.5; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--r-sm); }
+.problem-capture-dialog textarea:focus-visible { border-color: var(--accent-border); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.problem-capture-dialog .dialog-footer small { margin-right: auto; color: var(--text-faint); }
+.problem-capture-dialog kbd { padding: 1px 4px; font: 10px/1.4 var(--font-mono); background: var(--bg-overlay); border: 1px solid var(--border); border-radius: 3px; }
+
 .sentry-subtitle { margin: 4px 0 0; color: var(--text-faint); font-size: var(--text-xs); }
 .sentry-actions { display: flex; align-items: center; gap: var(--space-3); color: var(--text-muted); font-size: var(--text-sm); }
 .sentry-actions label { display: inline-flex; align-items: center; gap: var(--space-1); }
@@ -591,4 +691,7 @@
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .problem-copy { grid-template-columns: 1fr; }
+  .problem-plans li, .problem-actions { align-items: flex-start; flex-direction: column; }
 }

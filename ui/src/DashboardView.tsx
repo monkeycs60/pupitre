@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { BranchIcon } from './BranchIcon'
-import { listProjectChangelog, refreshProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
+import { createProblemCapture, listProjectChangelog, refreshProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
 import type {
   DashboardIntegration,
   Project,
@@ -15,18 +15,21 @@ import { useDashboard } from './useDashboard'
 import { SentryInbox } from './SentryInbox'
 import { ExternalLink } from './externalLink'
 import { useNow } from './useNow'
+import { ProblemsPanel, type ProblemConversationSeed } from './ProblemsPanel'
 
 interface DashboardViewProps {
   project: Project
   onConversationSelect: (conversationId: string) => void
   onStartConversation: (seed: { ticketId: string; branch: string | null; ticketKey: string }) => void
+  onStartProblem?: (seed: ProblemConversationSeed) => void
   onOpenSettings?: () => void
 }
 
-type DashboardTab = 'tickets' | 'sentry' | 'changelog' | 'environments'
+type DashboardTab = 'tickets' | 'problems' | 'sentry' | 'changelog' | 'environments'
 
 const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
   { id: 'tickets', label: 'Mes tickets' },
+  { id: 'problems', label: 'Problématiques' },
   { id: 'sentry', label: 'Issues Sentry' },
   { id: 'changelog', label: 'Changelog' },
   { id: 'environments', label: 'Environnements' },
@@ -152,6 +155,7 @@ export function DashboardView({
   project,
   onConversationSelect,
   onStartConversation,
+  onStartProblem,
   onOpenSettings,
 }: DashboardViewProps) {
   const { data, connected, error } = useDashboard(project.id)
@@ -166,6 +170,10 @@ export function DashboardView({
   const [changelogDomain, setChangelogDomain] = useState('')
   const [changelogMenuOpen, setChangelogMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<DashboardTab>(() => storedDashboardTab(project.id))
+  const [captureOpen, setCaptureOpen] = useState(false)
+  const [captureText, setCaptureText] = useState('')
+  const [captureSaving, setCaptureSaving] = useState(false)
+  const [captureError, setCaptureError] = useState<string | null>(null)
   const now = useNow(30_000)
   const hasGitlab = data?.integrations.some((integration) => integration.type === 'gitlab') ?? false
   const degradedIntegrations = data?.integrations.filter((integration) => integration.status !== 'ok') ?? []
@@ -214,6 +222,23 @@ export function DashboardView({
     try {
       await refreshProjectDashboard(project.id)
     } catch {}
+  }
+
+  async function handleCapture(rawText = captureText) {
+    const text = rawText.trim()
+    if (!text || captureSaving) return
+    setCaptureSaving(true)
+    setCaptureError(null)
+    selectTab('problems')
+    try {
+      await createProblemCapture(project.id, text)
+      setCaptureText('')
+      setCaptureOpen(false)
+    } catch (captureFailure) {
+      setCaptureError(captureFailure instanceof Error ? captureFailure.message : 'Capture impossible.')
+    } finally {
+      setCaptureSaving(false)
+    }
   }
 
   async function handleChangelogRefresh() {
@@ -287,6 +312,9 @@ export function DashboardView({
             <span className={`dashboard-connection ${connected ? 'is-live' : ''}`}>
               <i aria-hidden="true" /> {connected ? 'temps réel' : 'reconnexion'}
             </span>
+            <button type="button" className="primary-button" onClick={() => { setCaptureError(null); setCaptureOpen(true) }}>
+              Capturer
+            </button>
             <div
               className="dashboard-changelog-menu"
               onBlur={(event) => {
@@ -516,6 +544,15 @@ export function DashboardView({
           </div>
         ) : null}
 
+        {activeTab === 'problems' ? (
+          <ProblemsPanel
+            payload={data?.problems ?? { projectId: project.id, captures: [], problems: [] }}
+            tickets={data?.tickets ?? []}
+            onChanged={() => {}}
+            onStartConversation={(seed) => onStartProblem?.(seed)}
+          />
+        ) : null}
+
         {activeTab === 'changelog' ? (
         <section id="dashboard-panel-changelog" role="tabpanel" aria-labelledby="dashboard-tab-changelog" className="dashboard-section dashboard-changelog">
           <div className="dashboard-section-head">
@@ -602,6 +639,36 @@ export function DashboardView({
               <textarea id="ticket-instruction" autoFocus rows={8} value={instructionDraft} onChange={(event) => setInstructionDraft(event.target.value)} placeholder="Ex. Vérifier la rétrocompatibilité de l’API avant toute modification…" />
               {instructionError ? <p className="modal-error" role="alert">{instructionError}</p> : null}
               <footer className="modal-actions"><button type="button" className="secondary-button" onClick={() => setInstructionTicket(null)}>Annuler</button><button type="submit" className="primary-button" disabled={instructionSaving}>{instructionSaving ? 'Enregistrement…' : 'Enregistrer'}</button></footer>
+            </form>
+          </section>
+        </div>
+      ) : null}
+      {captureOpen ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setCaptureOpen(false)} onKeyDown={(event) => { if (event.key === 'Escape') setCaptureOpen(false) }}>
+          <section className="modal review-dialog problem-capture-dialog" role="dialog" aria-modal="true" aria-labelledby="problem-capture-title" onMouseDown={(event) => event.stopPropagation()}>
+            <header className="modal-header">
+              <div><h2 id="problem-capture-title">Capturer des problématiques</h2><p>Colle le vrac tel quel. Luna fera le tri.</p></div>
+              <button type="button" className="modal-close" onClick={() => setCaptureOpen(false)} aria-label="Fermer">×</button>
+            </header>
+            <form className="review-dialog-form problem-capture-form" onSubmit={(event) => { event.preventDefault(); void handleCapture() }}>
+              <label htmlFor="problem-capture-text">Texte à structurer</label>
+              <textarea
+                id="problem-capture-text"
+                autoFocus
+                rows={12}
+                maxLength={50_000}
+                value={captureText}
+                placeholder="Colle ici bugs, retours, questions et idées, même mélangés…"
+                onChange={(event) => setCaptureText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || !event.ctrlKey) return
+                  event.preventDefault()
+                  void handleCapture(event.currentTarget.value)
+                }}
+              />
+              <div className="problem-capture-meta"><span>{captureText.length.toLocaleString('fr-FR')} / 50 000</span><kbd>Ctrl</kbd><span>+</span><kbd>Entrée</kbd></div>
+              {captureError ? <p className="modal-error" role="alert">{captureError}</p> : null}
+              <footer className="modal-actions"><button type="button" className="secondary-button" onClick={() => setCaptureOpen(false)}>Annuler</button><button type="submit" className="primary-button" disabled={captureSaving || !captureText.trim()}>{captureSaving ? 'Ajout…' : 'Ajouter'}</button></footer>
             </form>
           </section>
         </div>

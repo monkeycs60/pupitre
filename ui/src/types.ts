@@ -374,6 +374,48 @@ export interface ReviewRequest {
   draft: boolean
 }
 
+export type ProblemCaptureStatus = 'queued' | 'processing' | 'done' | 'error'
+export type ProblemStatus = 'open' | 'closed'
+
+export interface ProblemPlan {
+  title: string
+  instruction: string
+}
+
+export interface ProblemCapture {
+  id: string
+  project_id: string
+  raw_text: string
+  status: ProblemCaptureStatus
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Problem {
+  id: string
+  public_id: string
+  capture_id: string
+  project_id: string
+  ticket_id: string | null
+  title: string
+  context: string
+  resolution: string
+  plans: ProblemPlan[]
+  status: ProblemStatus
+  closed_at: string | null
+  closed_commit_sha: string | null
+  conversation_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ProblemProjectPayload {
+  projectId: string
+  captures: ProblemCapture[]
+  problems: Problem[]
+}
+
 export interface DashboardPayload {
   projectId: string
   refreshedAt: string
@@ -381,6 +423,7 @@ export interface DashboardPayload {
   tickets: TicketRow[]
   environments: EnvironmentState[]
   toReview: ReviewRequest[]
+  problems?: ProblemProjectPayload
 }
 
 export type SentryLifecycle = 'new' | 'active' | 'quiet' | 'resolved_remote'

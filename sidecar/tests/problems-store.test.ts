@@ -46,9 +46,19 @@ test("persiste le collage avant ses résultats puis écrit le lot atomiquement",
     expect.objectContaining({
       public_id: "PB-7K3M9Q",
       status: "open",
+      conversation_count: 0,
       plans: [{ title: "Corriger le bug", instruction: "Diagnostiquer puis corriger." }],
     }),
   ]);
+
+  const now = new Date().toISOString();
+  db.query(`
+    INSERT INTO conversations
+      (id, project_id, title, summary, provider, model, origin_type, origin_key, created_at, updated_at)
+    VALUES (?, ?, ?, '', 'codex', 'gpt-5.6', 'problem', 'PB-7K3M9Q', ?, ?)
+  `).run(crypto.randomUUID(), projectId, "Conversation problème", now, now);
+
+  expect(store.listProject(projectId, "open").problems[0]?.conversation_count).toBe(1);
 });
 
 test("une écriture de lot invalide ne termine pas la capture à moitié", () => {

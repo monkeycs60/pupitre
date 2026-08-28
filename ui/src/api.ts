@@ -48,6 +48,9 @@ import type {
   HtmlDocument,
   SentryInboxPayload,
   SentryIssue,
+  Problem,
+  ProblemCapture,
+  ProblemProjectPayload,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -733,6 +736,38 @@ export function getProjectDashboard(
 
 export function refreshProjectDashboard(projectId: string): Promise<void> {
   return fetchVoid(`/api/projects/${routeId(projectId)}/dashboard/refresh`, jsonPost({}))
+}
+
+export function createProblemCapture(projectId: string, text: string): Promise<ProblemCapture> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/problem-captures`, jsonPost({ text }))
+}
+
+export function listProjectProblems(
+  projectId: string,
+  status: 'open' | 'closed' | 'all' = 'open',
+  signal?: AbortSignal,
+): Promise<ProblemProjectPayload> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/problems?status=${status}`, { signal })
+}
+
+export function retryProblemCapture(captureId: string): Promise<ProblemCapture> {
+  return fetchJson(`/api/problem-captures/${routeId(captureId)}/retry`, jsonPost({}))
+}
+
+export function updateProblemTicket(problemId: string, ticketId: string | null): Promise<Problem> {
+  return fetchJson(`/api/problems/${routeId(problemId)}/ticket`, jsonPut({ ticketId }))
+}
+
+export function closeProblem(problemId: string): Promise<Problem> {
+  return fetchJson(`/api/problems/${routeId(problemId)}/close`, jsonPost({}))
+}
+
+export function reopenProblem(problemId: string): Promise<Problem> {
+  return fetchJson(`/api/problems/${routeId(problemId)}/reopen`, jsonPost({}))
+}
+
+export function deleteProblem(problemId: string): Promise<void> {
+  return fetchVoid(`/api/problems/${routeId(problemId)}`, { method: 'DELETE' })
 }
 
 export function getSentryInbox(projectId: string, signal?: AbortSignal): Promise<SentryInboxPayload> {

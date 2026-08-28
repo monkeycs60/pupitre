@@ -111,13 +111,14 @@ test('rend une ligne par ticket, la colonne Déployé avec GitLab, et le bandeau
   expect(screen.getByText('preprod')).toBeTruthy()
 })
 
-test('sépare le tableau en quatre onglets et mémorise le dernier onglet du projet', async () => {
+test('sépare le tableau en cinq onglets et mémorise le dernier onglet du projet', async () => {
   mount(withGitlab)
 
   await screen.findByText('TECH-24657')
   const tabs = screen.getAllByRole('tab')
   expect(tabs.map((tab) => tab.textContent)).toEqual([
     'Mes tickets',
+    'Problématiques',
     'Issues Sentry',
     'Changelog',
     'Environnements',
@@ -126,8 +127,8 @@ test('sépare le tableau en quatre onglets et mémorise le dernier onglet du pro
   expect(screen.queryByRole('heading', { name: 'Environnements' })).toBeNull()
 
   fireEvent.keyDown(screen.getByRole('tab', { name: 'Mes tickets' }), { key: 'ArrowRight' })
-  expect(screen.getByRole('tab', { name: 'Issues Sentry' }).getAttribute('aria-selected')).toBe('true')
-  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Issues Sentry' }))
+  expect(screen.getByRole('tab', { name: 'Problématiques' }).getAttribute('aria-selected')).toBe('true')
+  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Problématiques' }))
 
   fireEvent.click(screen.getByRole('tab', { name: 'Environnements' }))
 
@@ -140,6 +141,21 @@ test('sépare le tableau en quatre onglets et mémorise le dernier onglet du pro
 
   expect(await screen.findByRole('heading', { name: 'Environnements' })).toBeTruthy()
   expect(screen.getByRole('tab', { name: 'Environnements' }).getAttribute('aria-selected')).toBe('true')
+})
+
+test('capture un collage avec Ctrl Entrée puis ouvre les problématiques', async () => {
+  mount(withGitlab)
+  fireEvent.click(await screen.findByRole('button', { name: 'Capturer' }))
+  const textarea = screen.getByRole('textbox', { name: 'Texte à structurer' })
+  expect(textarea.getAttribute('maxlength')).toBe('50000')
+  fireEvent.change(textarea, { target: { value: 'deux sujets collés' } })
+  fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+
+  expect(window.localStorage.getItem('pupitre:dashboard-tab:p1')).toBe('problems')
+  expect(globalThis.fetch).toHaveBeenCalledWith(
+    '/api/projects/p1/problem-captures',
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ text: 'deux sujets collés' }) }),
+  )
 })
 
 test('Nouvelle conv. transmet ticket et branche ; sans GitLab la colonne Déployé disparaît', async () => {
