@@ -38,6 +38,7 @@ export class ChangelogService {
   private activeEnrichments = 0;
   private enrichmentWaiters: Array<() => void> = [];
   private timer: ReturnType<typeof setInterval> | null = null;
+  private commitListeners = new Set<(projectId: string, commits: GitChangelogCommit[]) => void>();
 
   constructor(
     private store: ChangelogStore,
@@ -49,6 +50,11 @@ export class ChangelogService {
     private repositories: GitRepositoryFinder = discoverGitRepositories,
     private email: GitEmailReader = readGitEmail,
   ) {}
+
+  subscribeCommits(listener: (projectId: string, commits: GitChangelogCommit[]) => void): () => void {
+    this.commitListeners.add(listener);
+    return () => this.commitListeners.delete(listener);
+  }
 
   start(): void {
     if (this.timer !== null) return;
@@ -128,6 +134,7 @@ export class ChangelogService {
       )))).flat();
       if (backfill) this.store.reconcile(projectId, commits);
       this.store.import(projectId, commits, this.now().toISOString());
+      for (const listener of this.commitListeners) listener(projectId, commits);
       await this.enrichPending(projectId, path, backfill);
       const refreshedAt = this.now();
       this.store.markFinished(
@@ -277,7 +284,7 @@ export async function readGitHistory(
 ): Promise<GitChangelogCommit[]> {
   const args = [
     "log", "-z", "--branches", "--remotes", "--source", "--topo-order",
-    "--date=iso-strict", "--format=%H%x00%S%x00%cI%x00%s",
+    "--date=iso-strict", "--format=%H%x00%S%x00%cI%x00%s%x00%B",
   ];
   if (options.since) args.push(`--since=${options.since}`);
   if (options.limit !== undefined) args.push(`--max-count=${options.limit}`);
@@ -288,13 +295,14 @@ export async function readGitHistory(
   const raw = await runGit(cwd, args);
   const fields = raw.split("\0");
   if (fields.at(-1) === "") fields.pop();
-  if (fields.length % 4 !== 0) throw new Error("historique Git illisible");
+  if (fields.length % 5 !== 0) throw new Error("historique Git illisible");
   const commits: GitChangelogCommit[] = [];
-  for (let index = 0; index < fields.length; index += 4) {
+  for (let index = 0; index < fields.length; index += 5) {
     const sha = fields[index]!.trim();
     const source = fields[index + 1]!.trim();
     const committedAt = fields[index + 2]!.trim();
     const subject = fields[index + 3]!.trim();
+    const message = fields[index + 4]!.trim();
     if (!sha || !committedAt) continue;
     commits.push({
       repositoryPath: options.repositoryPath,
@@ -303,6 +311,7 @@ export async function readGitHistory(
         .replace(/^refs\/heads\//, "")
         .replace(/^refs\/remotes\//, "") || "HEAD",
       subject: subject || "Commit sans message",
+      message: message || subject || "Commit sans message",
       committedAt,
     });
   }

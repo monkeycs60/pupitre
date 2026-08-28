@@ -8,6 +8,7 @@ export interface GitChangelogCommit {
   sha: string;
   branch: string;
   subject: string;
+  message?: string;
   committedAt: string;
 }
 

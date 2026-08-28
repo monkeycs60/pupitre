@@ -6,6 +6,7 @@ import {
 } from "./stores/problems";
 import type { ProjectStore } from "./stores/projects";
 import type { Ticket, TicketStore } from "./stores/tickets";
+export { problemIdsInCommit } from "./problem-id";
 
 export const MAX_CAPTURE_CHARS = 50_000;
 export const MAX_PROBLEMS_PER_CAPTURE = 20;
@@ -61,6 +62,12 @@ export class ProblemService {
   async resume(): Promise<void> {
     const pending = this.store.recoverCaptures();
     await Promise.all(pending.map((capture) => this.processCapture(capture.id)));
+  }
+
+  closeFromCommit(projectId: string, message: string, sha: string): number {
+    const closed = this.store.closeFromCommit(projectId, message, sha);
+    if (closed > 0) this.changed(projectId);
+    return closed;
   }
 
   private async runCapture(captureId: string): Promise<void> {

@@ -135,6 +135,7 @@ export interface GitTurnTracking {
 
 export class GitProjectService {
   private activeTurns = new Map<string, Set<GitTurnTracking>>();
+  private commitListeners = new Set<(projectId: string, shas: string[]) => void>();
 
   private readonly worktreeRoot: string;
 
@@ -496,6 +497,15 @@ export class GitProjectService {
     return tracking;
   }
 
+  subscribeCommits(listener: (projectId: string, shas: string[]) => void): () => void {
+    this.commitListeners.add(listener);
+    return () => this.commitListeners.delete(listener);
+  }
+
+  commitMessage(projectId: string, sha: string): string {
+    return this.runGit(this.projectPath(projectId), ["show", "-s", "--format=%B", sha]).trim();
+  }
+
   finishTurn(tracking: GitTurnTracking, conversationId: string): void {
     const active = this.activeTurns.get(tracking.projectId);
     active?.delete(tracking);
@@ -522,6 +532,7 @@ export class GitProjectService {
       for (const sha of shas) insert.run(sha, projectId, conversationId, now);
     });
     record();
+    for (const listener of this.commitListeners) listener(projectId, shas);
   }
 
   /** Un COUNT plutôt que des stats détaillées : l'ancienne version lançait

@@ -272,6 +272,22 @@ test("lit les commits Git depuis le 1er janvier avec leur branche et leur sujet 
   }));
 });
 
+test("conserve le message Git complet pour les détecteurs de cycle de vie", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-message-"));
+  Bun.spawnSync(["git", "init", "-q", "-b", "main", root]);
+  writeFileSync(join(root, "change.txt"), "change");
+  Bun.spawnSync(["git", "-C", root, "add", "."]);
+  Bun.spawnSync([
+    "git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.com",
+    "commit", "-qm", "fix: bouton", "-m", "Résout [PB-7K3M9Q] dans le corps.",
+  ]);
+
+  const history = await readGitHistory(root, { repositoryPath: ".", limit: 1 });
+
+  expect(history[0]?.subject).toBe("fix: bouton");
+  expect(history[0]?.message).toContain("Résout [PB-7K3M9Q] dans le corps.");
+});
+
 test("découvre la racine et les dépôts Git imbriqués sans parcourir node_modules", async () => {
   const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-repositories-"));
   mkdirSync(join(root, ".git"));

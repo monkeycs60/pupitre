@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { problemIdsInCommit } from "../problem-id";
 
 export type ProblemCaptureStatus = "queued" | "processing" | "done" | "error";
 export type ProblemStatus = "open" | "closed";
@@ -215,6 +216,24 @@ export class ProblemStore {
       WHERE id = ? AND status = 'closed'
     `).run(new Date().toISOString(), id);
     return this.get(id);
+  }
+
+  closeFromCommit(projectId: string, message: string, commitSha: string): number {
+    const ids = problemIdsInCommit(message);
+    if (ids.length === 0) return 0;
+    const close = this.db.query(`
+      UPDATE problems
+      SET status = 'closed', closed_at = ?, closed_commit_sha = ?, updated_at = ?
+      WHERE project_id = ? AND public_id = ? AND status = 'open'
+    `);
+    const now = new Date().toISOString();
+    return this.db.transaction(() => {
+      let closed = 0;
+      for (const publicId of ids) {
+        closed += close.run(now, commitSha, now, projectId, publicId).changes;
+      }
+      return closed;
+    })();
   }
 
   delete(id: string): boolean {

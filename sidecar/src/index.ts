@@ -102,6 +102,22 @@ if (process.argv.includes("--pupitre-mcp")) {
     new ChangelogStore(db), projects, domains,
     (input) => generateWithAdapters(input, quotas),
   );
+  const closeProblemsFromCommits = (
+    projectId: string,
+    commits: Array<{ sha: string; message?: string; subject?: string }>,
+  ) => {
+    for (const commit of commits) {
+      const message = commit.message ?? commit.subject;
+      if (message) problems.closeFromCommit(projectId, message, commit.sha);
+    }
+  };
+  git.subscribeCommits((projectId, shas) => {
+    closeProblemsFromCommits(projectId, shas.map((sha) => ({
+      sha,
+      message: git.commitMessage(projectId, sha),
+    })));
+  });
+  changelog.subscribeCommits(closeProblemsFromCommits);
   const time = new TimeTrackingService(db, projects, git);
   // Reprise d'historique : exacte pour les tours, approchée pour la présence.
   // Ne s'exécute qu'une fois, puis se marque terminée dans `settings`.
