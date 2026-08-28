@@ -124,3 +124,58 @@ test('une activité dans la conversation la signale comme lue', async () => {
   fireEvent.keyDown(composer, { key: 'a' })
   expect(onConversationRead).toHaveBeenCalledTimes(2)
 })
+
+test('fait remonter une proposition de problématique depuis une nouvelle conversation', async () => {
+  localStorage.setItem('pupitre:draft:new:project-1', 'brouillon générique parasite')
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/api/presets')) return Response.json([])
+    if (url.includes('/api/projects/project-1/git')) {
+      return Response.json({ branches: [], worktrees: [], commits: [], currentBranch: 'main' })
+    }
+    if (url.includes('/api/projects/project-1/problems')) {
+      return Response.json({
+        projectId: 'project-1',
+        captures: [],
+        problems: [{
+          id: 'problem-1', public_id: 'PB-ABC123', capture_id: 'capture-1', project_id: 'project-1',
+          ticket_id: 'ticket-1', title: 'Réparer la capture', context: 'Le contexte', resolution: 'La résolution',
+          plans: [{ title: 'Corriger', instruction: 'Diagnostiquer puis corriger.' }], status: 'open',
+          closed_at: null, closed_commit_sha: null, conversation_count: 0,
+          created_at: '2026-08-29T10:00:00Z', updated_at: '2026-08-29T10:00:00Z',
+        }],
+      })
+    }
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+  const onStartProblem = mock(() => {})
+
+  render(createElement(Chat, {
+    events: [],
+    connection: 'open',
+    retryAt: null,
+    conversation: null,
+    project,
+    quotas,
+    onConversationCreated: () => undefined,
+    onProjectUpdated: () => undefined,
+    initialMessage: 'Corriger\n\nDiagnostiquer puis corriger.\n\n[PB-ABC123]',
+    originType: 'problem',
+    originKey: 'PB-ABC123',
+    problemPlanIndex: 0,
+    onStartProblem,
+    onSeeAllProblems: () => undefined,
+    reviewStatus: null,
+    onHandoff: () => undefined,
+    onSwitchModel: () => undefined,
+  }))
+
+  expect(screen.getByLabelText('Message')).toHaveProperty(
+    'value',
+    'Corriger\n\nDiagnostiquer puis corriger.\n\n[PB-ABC123]',
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Lancer Corriger' }))
+  expect(onStartProblem).toHaveBeenCalledWith(expect.objectContaining({
+    originType: 'problem', originKey: 'PB-ABC123', problemPlanIndex: 0,
+  }))
+})

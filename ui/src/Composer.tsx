@@ -43,8 +43,9 @@ interface ComposerProps {
   initialConfig?: Partial<ConversationConfig>
   initialAttachments?: Attachment[]
   ticketId?: string | null
-  originType?: 'sentry' | null
+  originType?: 'sentry' | 'problem' | null
   originKey?: string | null
+  problemPlanIndex?: number | null
   /** Actions `/` du popover (résumé, test, review) : exécutées par le parent,
    *  qui tient les callbacks de revue et d'ouverture du code. */
   onAction?: (action: ComposerAction) => void | Promise<void>
@@ -204,6 +205,7 @@ export function Composer({
   ticketId = null,
   originType = null,
   originKey = null,
+  problemPlanIndex = null,
   onAction,
 }: ComposerProps) {
   const isNewConversation = conversationId === null
@@ -480,6 +482,7 @@ export function Composer({
           ticketId,
           originType,
           originKey,
+          problemPlanIndex,
           message: trimmedMessage,
           images: imageNames,
           attachments: attachmentInputs,

@@ -15,8 +15,9 @@ interface ConversationDraft {
   /** Branche saisie par l'utilisateur ; vide = travailler dans le dépôt. */
   branch?: string | null
   ticketId?: string | null
-  originType?: 'sentry' | null
+  originType?: 'sentry' | 'problem' | null
   originKey?: string | null
+  problemPlanIndex?: number | null
   message: string
   images: string[]
   attachments?: Attachment[]
@@ -25,8 +26,13 @@ interface ConversationDraft {
 export function newConversationDraftStorageKey(
   projectId: string,
   ticketId?: string | null,
+  originType?: 'sentry' | 'problem' | null,
+  originKey?: string | null,
+  problemPlanIndex?: number | null,
 ): string {
-  const scope = ticketId === null || ticketId === undefined
+  const scope = originType && originKey
+    ? `new:${projectId}:origin:${originType}:${originKey}${originType === 'problem' ? `:plan:${problemPlanIndex ?? 0}` : ''}`
+    : ticketId === null || ticketId === undefined
     ? `new:${projectId}`
     : `new:${projectId}:ticket:${ticketId}`
   return `pupitre:draft:${scope}`
@@ -49,7 +55,11 @@ export function buildCreateConversationInput(
     subagentEffort: draft.subagentEffort ?? null,
     branch: draft.branch?.trim() || null,
     ticketId: draft.ticketId ?? null,
-    ...(draft.originType ? { originType: draft.originType, originKey: draft.originKey ?? null } : {}),
+    ...(draft.originType ? {
+      originType: draft.originType,
+      originKey: draft.originKey ?? null,
+      ...(draft.originType === 'problem' ? { problemPlanIndex: draft.problemPlanIndex ?? null } : {}),
+    } : {}),
     message: draft.message,
     images: draft.images,
     attachments: draft.attachments ?? [],

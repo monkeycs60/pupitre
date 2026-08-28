@@ -14,6 +14,7 @@ mock.module('@tauri-apps/api/webview', () => ({
 
 const { cleanup, render, screen } = await import('@testing-library/react')
 const { Composer } = await import('./Composer')
+const { buildCreateConversationInput } = await import('./conversationDraft')
 
 afterEach(() => {
   cleanup()
@@ -85,4 +86,22 @@ test('agrandit le champ avec son contenu puis le rend scrollable à sa hauteur m
 
   expect(textarea.style.height).toBe('200px')
   expect(textarea.style.overflowY).toBe('auto')
+})
+
+test('conserve le plan de problématique dans le contrat de création', () => {
+  const input = buildCreateConversationInput({
+    projectId: project.id,
+    provider: 'codex',
+    model: 'gpt-5.6',
+    effort: 'high',
+    speed: 'standard',
+    orchestrator: true,
+    originType: 'problem',
+    originKey: 'PB-ABC123',
+    problemPlanIndex: 2,
+    message: 'Corriger le bug\n\n[PB-ABC123]',
+    images: [],
+  })
+
+  expect(input).toMatchObject({ originType: 'problem', originKey: 'PB-ABC123', problemPlanIndex: 2 })
 })

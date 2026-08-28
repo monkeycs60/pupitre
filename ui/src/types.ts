@@ -258,7 +258,7 @@ export interface Conversation {
   ticket_instruction: string | null
   domains?: ConversationDomain[]
   proposed_domain_count?: number
-  origin_type?: 'sentry' | null
+  origin_type?: 'sentry' | 'problem' | null
   origin_key?: string | null
   cli_session_id: string | null
   preset_id?: string | null

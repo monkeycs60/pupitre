@@ -46,6 +46,7 @@ import {
   writeLastActiveLocation,
 } from './restoreLocation'
 import { navigationViewForShortcut, type NavigationShortcutView } from './navigationShortcuts'
+import type { ProblemConversationSeed } from './ProblemsPanel'
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
@@ -104,8 +105,9 @@ function App() {
     ticketId?: string | null
     ticketKey?: string | null
     branch: string | null
-    originType?: 'sentry' | null
+    originType?: 'sentry' | 'problem' | null
     originKey?: string | null
+    problemPlanIndex?: number | null
   } | null>(null)
   const [newConversationDraft, setNewConversationDraft] = useState('')
   const [newConversationAttachments, setNewConversationAttachments] = useState<Attachment[]>([])
@@ -421,7 +423,7 @@ function App() {
     setWorkspaceView('conversations')
   }
 
-  function handleStartFromContext(seed: { ticketId?: string | null; branch: string | null; ticketKey?: string | null; originType?: 'sentry' | null; originKey?: string | null }) {
+  function handleStartFromContext(seed: { ticketId?: string | null; branch: string | null; ticketKey?: string | null; originType?: 'sentry' | 'problem' | null; originKey?: string | null }) {
     if (!confirmLeaveMemory() || selectedProject === null) return
     setConversationSeed(seed)
     setSelectedConversation(null)
@@ -430,6 +432,29 @@ function App() {
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
     setWorkspaceView('conversations')
+  }
+
+  function handleStartProblem(seed: ProblemConversationSeed) {
+    if (!confirmLeaveMemory() || selectedProject === null) return
+    setConversationSeed({
+      ticketId: seed.problem.ticket_id,
+      branch: null,
+      originType: seed.originType,
+      originKey: seed.originKey,
+      problemPlanIndex: seed.problemPlanIndex,
+    })
+    setSelectedConversation(null)
+    setNewConversationDraft(`${seed.plan.title}\n\n${seed.plan.instruction}\n\n[${seed.problem.public_id}]`)
+    setNewConversationAttachments([])
+    setIsCreatingConversation(true)
+    setShowSwitchModel(false)
+    setWorkspaceView('conversations')
+  }
+
+  function handleSeeAllProblems() {
+    if (selectedProject === null) return
+    window.localStorage.setItem(`pupitre:dashboard-tab:${selectedProject.id}`, 'problems')
+    setWorkspaceView('dashboard')
   }
 
   function handleConversationClosed() {
@@ -791,6 +816,7 @@ function App() {
             project={selectedProject}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
             onStartConversation={handleStartFromTicket}
+            onStartProblem={handleStartProblem}
             onOpenSettings={() => setProjectSettingsOpen(true)}
           />
         ) : workspaceView === 'costs' ? (
@@ -871,6 +897,9 @@ function App() {
               ticketId={conversationSeed?.ticketId ?? null}
               originType={conversationSeed?.originType ?? null}
               originKey={conversationSeed?.originKey ?? null}
+              problemPlanIndex={conversationSeed?.problemPlanIndex ?? null}
+              onStartProblem={handleStartProblem}
+              onSeeAllProblems={handleSeeAllProblems}
               reviewStatus={fleet.reviewStatus}
               onHandoff={() => setShowHandoff(true)}
               onSwitchModel={() => setShowSwitchModel(true)}

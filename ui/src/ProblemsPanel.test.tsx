@@ -44,15 +44,19 @@ const payload: ProblemProjectPayload = {
 }
 
 test('affiche les captures en erreur et les problématiques ouvertes avec leur plan', () => {
+  const onStartConversation = mock(() => {})
   render(createElement(ProblemsPanel, {
-    payload, tickets: [ticket], onChanged: () => {}, onStartConversation: () => {},
+    payload, tickets: [ticket], onChanged: () => {}, onStartConversation,
   }))
 
   expect(screen.getByText('Traitement en échec')).toBeTruthy()
   expect(screen.getByText('sortie invalide')).toBeTruthy()
   expect(screen.getByRole('heading', { name: 'Le bouton ne répond pas' })).toBeTruthy()
   expect(screen.getByText('TECH-42')).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'Lancer Corriger le bouton' })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Lancer Corriger le bouton' }))
+  expect(onStartConversation).toHaveBeenCalledWith(expect.objectContaining({
+    originType: 'problem', originKey: 'PB-7K3M9Q', problemPlanIndex: 0,
+  }))
   expect(screen.queryByText('Ancienne problématique')).toBeNull()
 })
 

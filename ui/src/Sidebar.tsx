@@ -41,7 +41,7 @@ interface SidebarProps {
   onProjectSelect: (project: Project) => void
   onConversationSelect: (conversation: Conversation) => void
   onConversationCreate: () => void
-  onConversationCreateFromContext?: (seed: { ticketId?: string | null; branch: string | null; ticketKey?: string | null; originType?: 'sentry' | null; originKey?: string | null }) => void
+  onConversationCreateFromContext?: (seed: { ticketId?: string | null; branch: string | null; ticketKey?: string | null; originType?: 'sentry' | 'problem' | null; originKey?: string | null }) => void
   onConversationClosed?: () => void
   onConversationRead?: () => void
   /** Composer ouvert pour une conversation qui n'existe pas encore : rien ne

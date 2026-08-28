@@ -78,8 +78,9 @@ export interface CreateConversationInput {
   /** Fait naître la conversation sur cette branche, dans un worktree dédié. */
   branch?: string | null
   ticketId?: string | null
-  originType?: 'sentry' | null
+  originType?: 'sentry' | 'problem' | null
   originKey?: string | null
+  problemPlanIndex?: number | null
   message: string
   images?: string[]
   attachments?: Attachment[]

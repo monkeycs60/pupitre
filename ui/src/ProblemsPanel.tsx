@@ -12,6 +12,9 @@ export interface ProblemConversationSeed {
   problem: Problem
   plan: ProblemPlan
   planIndex: number
+  originType: 'problem'
+  originKey: string
+  problemPlanIndex: number
 }
 
 interface ProblemsPanelProps {
@@ -117,7 +120,14 @@ export function ProblemsPanel({
                         <button
                           type="button"
                           className="primary-button"
-                          onClick={() => onStartConversation({ problem, plan, planIndex })}
+                          onClick={() => onStartConversation({
+                            problem,
+                            plan,
+                            planIndex,
+                            originType: 'problem',
+                            originKey: problem.public_id,
+                            problemPlanIndex: planIndex,
+                          })}
                         >
                           Lancer {plan.title}
                         </button>

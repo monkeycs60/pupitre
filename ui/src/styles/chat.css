@@ -21,12 +21,53 @@
   min-height: 0;
 }
 
+.problem-suggestions {
+  flex: none;
+  width: min(calc(100% - 2 * var(--space-6)), 840px);
+  max-height: 230px;
+  margin: 0 auto var(--space-1);
+  overflow-y: auto;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+.problem-suggestions > header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 8px 11px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.problem-suggestions > header > div { display: flex; align-items: baseline; gap: 8px; }
+.problem-suggestions > header strong { color: var(--text-strong); font-size: var(--text-xs); }
+.problem-suggestions > header span { color: var(--text-faint); font-size: 11px; }
+.problem-suggestions ul { padding: 0; margin: 0; list-style: none; }
+.problem-suggestions li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 42px; padding: 6px 11px; border-bottom: 1px solid var(--border-subtle); }
+.problem-suggestions li:last-child { border-bottom: 0; }
+.problem-suggestions li > div:first-child { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.problem-suggestions li > div:first-child strong { overflow: hidden; color: var(--text); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
+.problem-suggestion-actions { display: flex; flex: none; gap: 5px; }
+.problem-suggestion-actions button { min-height: 28px; padding: 3px 8px; font-size: 11px; }
+
 .events-view {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--bg-workspace);
+}
+
+@media (max-width: 900px) {
+  .problem-suggestions { width: min(calc(100% - 2 * var(--space-4)), 840px); }
+  .problem-suggestions li { align-items: flex-start; flex-direction: column; }
+  .problem-suggestion-actions { flex-wrap: wrap; }
 }
 
 /* --- Recherche flottante dans le fil ------------------------------------- */
