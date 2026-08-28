@@ -183,6 +183,35 @@ export function openDb(dir: string = dataDir()): Database {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_ticket_notes_ticket ON ticket_notes(ticket_id, created_at);
+    CREATE TABLE IF NOT EXISTS problem_captures (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      raw_text TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('queued', 'processing', 'done', 'error')),
+      error TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_problem_captures_project
+      ON problem_captures(project_id, status, created_at DESC);
+    CREATE TABLE IF NOT EXISTS problems (
+      id TEXT PRIMARY KEY,
+      public_id TEXT NOT NULL UNIQUE,
+      capture_id TEXT NOT NULL REFERENCES problem_captures(id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      ticket_id TEXT NULL REFERENCES tickets(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      context TEXT NOT NULL,
+      resolution TEXT NOT NULL,
+      plans_json TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+      closed_at TEXT NULL,
+      closed_commit_sha TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_problems_project
+      ON problems(project_id, status, created_at DESC);
     CREATE TABLE IF NOT EXISTS domains (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
