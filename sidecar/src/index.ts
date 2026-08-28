@@ -44,6 +44,8 @@ import { ChangelogService } from "./changelog";
 import { IntegrationSecretStore } from "./stores/integration-secrets";
 import { SentryStore } from "./stores/sentry";
 import { SentryClient } from "./integrations/sentry";
+import { ProblemStore } from "./stores/problems";
+import { ProblemService } from "./problems";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -88,6 +90,13 @@ if (process.argv.includes("--pupitre-mcp")) {
   const domains = new DomainStore(db);
   const integrationSecrets = new IntegrationSecretStore(db);
   const sentry = new SentryStore(db);
+  const problemStore = new ProblemStore(db);
+  const problems = new ProblemService(
+    problemStore,
+    projects,
+    tickets,
+    (input) => generateWithAdapters(input, quotas),
+  );
   const git = new GitProjectService(db, projects);
   const changelog = new ChangelogService(
     new ChangelogStore(db), projects, domains,
@@ -278,6 +287,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   }), port);
   routines.start();
   changelog.start();
+  void problems.resume();
 
   // Les deux relevés de quota sont des lectures gratuites : on part d'un état
   // frais et on le tient à jour en fond (cf. QuotaRefresher).

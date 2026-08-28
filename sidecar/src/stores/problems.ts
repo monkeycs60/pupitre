@@ -80,13 +80,22 @@ export class ProblemStore {
     `).all() as Record<string, unknown>[]).map(hydrateCapture);
   }
 
-  markProcessing(id: string): ProblemCapture | null {
+  recoverCaptures(): ProblemCapture[] {
     this.db.query(`
+      UPDATE problem_captures
+      SET status = 'queued', error = NULL, updated_at = ?
+      WHERE status = 'processing'
+    `).run(new Date().toISOString());
+    return this.queuedCaptures();
+  }
+
+  markProcessing(id: string): ProblemCapture | null {
+    const result = this.db.query(`
       UPDATE problem_captures
       SET status = 'processing', error = NULL, updated_at = ?
       WHERE id = ? AND status = 'queued'
     `).run(new Date().toISOString(), id);
-    return this.getCapture(id);
+    return result.changes > 0 ? this.getCapture(id) : null;
   }
 
   queueAgain(id: string): ProblemCapture | null {
