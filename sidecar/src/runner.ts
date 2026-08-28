@@ -16,7 +16,7 @@ import type { ActionFormat } from "./response-format";
 import { conversationCwd } from "./workspace";
 import type { SteerFn } from "./adapters/types";
 import { withToolMentions } from "./tool-mentions";
-import { importLocalMarkdownImages } from "./assistant-media";
+import { assistantImageRoots, importLocalMarkdownImages } from "./assistant-media";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -241,7 +241,11 @@ export class ConversationRunner {
             text: importLocalMarkdownImages(
               incoming.text,
               this.media,
-              ["/tmp", project.path, conversationCwd(project, conv)],
+              assistantImageRoots({
+                filesystemScope: project.filesystem_scope,
+                projectPath: project.path,
+                conversationPath: conversationCwd(project, conv),
+              }),
               importedAssistantImages,
             ),
           }

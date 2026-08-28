@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { BranchIcon } from './BranchIcon'
 import { listProjectChangelog, refreshProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
 import type {
@@ -21,6 +21,24 @@ interface DashboardViewProps {
   onConversationSelect: (conversationId: string) => void
   onStartConversation: (seed: { ticketId: string; branch: string | null; ticketKey: string }) => void
   onOpenSettings?: () => void
+}
+
+type DashboardTab = 'tickets' | 'sentry' | 'changelog' | 'environments'
+
+const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
+  { id: 'tickets', label: 'Mes tickets' },
+  { id: 'sentry', label: 'Issues Sentry' },
+  { id: 'changelog', label: 'Changelog' },
+  { id: 'environments', label: 'Environnements' },
+]
+
+function dashboardTabStorageKey(projectId: string): string {
+  return `pupitre:dashboard-tab:${projectId}`
+}
+
+function storedDashboardTab(projectId: string): DashboardTab {
+  const stored = window.localStorage.getItem(dashboardTabStorageKey(projectId))
+  return DASHBOARD_TABS.some((tab) => tab.id === stored) ? stored as DashboardTab : 'tickets'
 }
 
 const INTEGRATION_LABEL: Record<string, string> = {
@@ -147,6 +165,7 @@ export function DashboardView({
   const [changelogState, setChangelogState] = useState<ProjectChangelogState | null>(null)
   const [changelogDomain, setChangelogDomain] = useState('')
   const [changelogMenuOpen, setChangelogMenuOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<DashboardTab>(() => storedDashboardTab(project.id))
   const now = useNow(30_000)
   const hasGitlab = data?.integrations.some((integration) => integration.type === 'gitlab') ?? false
   const degradedIntegrations = data?.integrations.filter((integration) => integration.status !== 'ok') ?? []
@@ -206,7 +225,28 @@ export function DashboardView({
 
   function showChangelog() {
     setChangelogMenuOpen(false)
-    document.getElementById('project-changelog')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    selectTab('changelog')
+  }
+
+  function selectTab(tab: DashboardTab) {
+    setActiveTab(tab)
+    window.localStorage.setItem(dashboardTabStorageKey(project.id), tab)
+  }
+
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, tab: DashboardTab) {
+    const index = DASHBOARD_TABS.findIndex((candidate) => candidate.id === tab)
+    let nextIndex: number | null = null
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % DASHBOARD_TABS.length
+    else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + DASHBOARD_TABS.length) % DASHBOARD_TABS.length
+    else if (event.key === 'Home') nextIndex = 0
+    else if (event.key === 'End') nextIndex = DASHBOARD_TABS.length - 1
+    if (nextIndex === null) return
+    event.preventDefault()
+    const nextTab = DASHBOARD_TABS[nextIndex]!
+    event.currentTarget.parentElement
+      ?.querySelector<HTMLButtonElement>(`#dashboard-tab-${nextTab.id}`)
+      ?.focus()
+    selectTab(nextTab.id)
   }
 
   function handleSort(key: 'ticket' | 'status') {
@@ -295,7 +335,26 @@ export function DashboardView({
           </p>
         ))}
 
-        <section className="dashboard-section">
+        <div className="dashboard-tabs" role="tablist" aria-label="Sections du tableau de bord">
+          {DASHBOARD_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              id={`dashboard-tab-${tab.id}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`dashboard-panel-${tab.id}`}
+              tabIndex={activeTab === tab.id ? 0 : -1}
+              onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
+              onClick={() => selectTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'tickets' ? (
+        <section id="dashboard-panel-tickets" role="tabpanel" aria-labelledby="dashboard-tab-tickets" className="dashboard-section">
           <div className="dashboard-section-head">
             <h2 className="dashboard-section-title">Mes tickets</h2>
           </div>
@@ -449,23 +508,32 @@ export function DashboardView({
             </div>
           )}
         </section>
+        ) : null}
 
-        <SentryInbox projectId={project.id} onConfigure={onOpenSettings} onConversationSelect={onConversationSelect} />
+        {activeTab === 'sentry' ? (
+          <div id="dashboard-panel-sentry" role="tabpanel" aria-labelledby="dashboard-tab-sentry">
+            <SentryInbox projectId={project.id} onConfigure={onOpenSettings} onConversationSelect={onConversationSelect} />
+          </div>
+        ) : null}
 
-        <section id="project-changelog" className="dashboard-section dashboard-changelog">
+        {activeTab === 'changelog' ? (
+        <section id="dashboard-panel-changelog" role="tabpanel" aria-labelledby="dashboard-tab-changelog" className="dashboard-section dashboard-changelog">
           <div className="dashboard-section-head">
             <div><h2 className="dashboard-section-title">Changelog</h2><p>{changelogTiming(changelogState, now)}</p></div>
             {changelogDomains.length > 1 ? <select aria-label="Filtrer le changelog par domaine" value={changelogDomain} onChange={(event) => setChangelogDomain(event.target.value)}><option value="">Tous les domaines</option>{changelogDomains.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : null}
           </div>
           {visibleChangelog.length === 0 ? <div className="dashboard-empty"><strong>Aucun commit importé</strong><p>Le premier passage reprendra automatiquement l’historique depuis le 1er janvier 2026.</p></div> : <ol className="dashboard-changelog-list">{visibleChangelog.slice(0, 100).map((item) => <li key={`${item.repository_path}:${item.commit_sha}`}><div><span className="dashboard-pill">{item.domain_name ?? 'À enrichir'}</span>{changelogHasMultipleRepositories ? <span className="dashboard-repository-label">{item.repository_path === '.' ? project.name : item.repository_path.split('/').at(-1)}</span> : null}<span className="dashboard-branch-label"><BranchIcon />{item.branch}</span><code>{item.commit_sha.slice(0, 7)}</code><time>{new Date(item.committed_at).toLocaleDateString('fr-FR')}</time></div><strong>{item.product_message ?? item.subject}</strong>{item.product_message ? <small>{item.subject}</small> : <small>Enrichissement en attente</small>}</li>)}</ol>}
         </section>
+        ) : null}
 
-        {data && data.environments.length > 0 ? (
-          <section className="dashboard-section">
+        {activeTab === 'environments' ? (
+          <section id="dashboard-panel-environments" role="tabpanel" aria-labelledby="dashboard-tab-environments" className="dashboard-section">
             <div className="dashboard-section-head">
               <h2 className="dashboard-section-title">Environnements</h2>
             </div>
-            <div className="dashboard-envs" role="region" aria-label="Environnements">
+            {data === null ? null : data.environments.length === 0 ? (
+              <div className="dashboard-empty"><strong>Aucun environnement détecté</strong><p>Les derniers déploiements apparaîtront ici.</p></div>
+            ) : <div className="dashboard-envs" role="region" aria-label="Environnements">
               <div className="dashboard-env-row dashboard-head">
                 <span>Environnement</span>
                 <span>Branche</span>
@@ -496,11 +564,11 @@ export function DashboardView({
                   <span>{relative(environment.deployedAt)}</span>
                 </div>
               ))}
-            </div>
+            </div>}
           </section>
         ) : null}
 
-        {data && data.toReview.length > 0 ? (
+        {activeTab === 'tickets' && data && data.toReview.length > 0 ? (
           <section className="dashboard-section">
             <div className="dashboard-section-head">
               <h2 className="dashboard-section-title">À relire</h2>

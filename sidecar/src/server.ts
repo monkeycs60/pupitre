@@ -4,7 +4,7 @@ import { existsSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { AppEvent, MediaAttachment, Provider, StoredEvent } from "./events";
 import { isProvider } from "./events";
-import type { MediaStore } from "./media";
+import { configuredByteLimit, DEFAULT_MEDIA_MAX_BYTES, type MediaStore } from "./media";
 import type { ConversationRunner } from "./runner";
 import type { Conversation, ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
@@ -246,7 +246,6 @@ const MODELS_BY_PROVIDER = {
   grok: ["grok-4.6", "grok-4.5"],
 } as const satisfies Record<Provider, readonly string[]>;
 const SPEEDS = ["standard", "fast"] as const;
-const DEFAULT_MEDIA_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MESSAGE_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
 const REVIEW_COOLDOWN_MS = 10_000;
 
@@ -436,15 +435,10 @@ function optionalImages(body: Record<string, unknown>): string[] {
   return value as string[];
 }
 
-function byteLimit(envName: string, fallback: number): number {
-  const value = Number(process.env[envName]);
-  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
-}
-
 function validatedImages(body: Record<string, unknown>, media: MediaStore): string[] {
   const images = optionalImages(body);
-  const mediaLimit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
-  const totalLimit = byteLimit(
+  const mediaLimit = configuredByteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
+  const totalLimit = configuredByteLimit(
     "PUPITRE_MESSAGE_MEDIA_MAX_BYTES",
     DEFAULT_MESSAGE_MEDIA_MAX_BYTES,
   );
@@ -479,8 +473,8 @@ function validatedAttachments(
   media: MediaStore,
 ): MediaAttachment[] {
   const attachments = optionalAttachments(body);
-  const mediaLimit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
-  const totalLimit = byteLimit(
+  const mediaLimit = configuredByteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
+  const totalLimit = configuredByteLimit(
     "PUPITRE_MESSAGE_MEDIA_MAX_BYTES",
     DEFAULT_MESSAGE_MEDIA_MAX_BYTES,
   );
@@ -3660,7 +3654,7 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "POST" && pathname === "/api/media/import") {
           const body = await readObject(request);
           const sourcePath = droppedFilePath(requiredString(body, "path"));
-          const limit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
+          const limit = configuredByteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
           let stat: ReturnType<typeof statSync>;
           try {
             stat = statSync(sourcePath);
@@ -3682,7 +3676,7 @@ export function createServer(deps: ServerDeps) {
         }
 
         if (request.method === "POST" && pathname === "/api/media") {
-          const limit = byteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
+          const limit = configuredByteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES);
           const declaredLength = Number(request.headers.get("content-length"));
           if (Number.isFinite(declaredLength) && declaredLength > limit) {
             throw new HttpError(413, "fichier trop volumineux");

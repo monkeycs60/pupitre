@@ -580,6 +580,10 @@ body.is-resizing-documents-list {
 }
 
 .rail-nav-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
   min-width: 0;
   max-width: 0;
   overflow: hidden;
@@ -591,6 +595,14 @@ body.is-resizing-documents-list {
   white-space: nowrap;
   opacity: 0;
   transition: max-width 120ms var(--ease), opacity 100ms var(--ease);
+}
+
+.rail-nav-shortcut {
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .rail.is-label-expanded .rail-nav-button {

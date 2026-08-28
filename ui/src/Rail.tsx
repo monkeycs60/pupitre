@@ -2,6 +2,7 @@ import { Fragment, memo, useEffect, useState } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { createProject, getUnreadConversationCounts, listProjects } from './api'
 import type { Project, WorkspaceView } from './types'
+import { navigationShortcutLabel } from './navigationShortcuts'
 
 /** Rail vertical (56 px) : bascule de projet + navigation globale.
  *  Remplace la liste de projets et le tiroir « Outils » de l'ancienne sidebar. */
@@ -202,6 +203,7 @@ export const Rail = memo(function Rail({
     onClick: () => void
     needsProject?: boolean
     badge?: number
+    shortcut?: string | null
   }> = [
     {
       name: 'conversations',
@@ -209,11 +211,12 @@ export const Rail = memo(function Rail({
       view: 'conversations',
       onClick: onConversationsSelect,
       badge: selectedProject ? unreadByProject[selectedProject.id] ?? 0 : 0,
+      shortcut: navigationShortcutLabel('conversations'),
     },
-    { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive },
-    { name: 'dashboard', label: 'Tableau de bord', view: 'dashboard', onClick: onDashboardSelect, needsProject: true },
-    { name: 'documents', label: 'Documents', view: 'documents', onClick: onDocumentsSelect },
-    { name: 'design', label: 'Claude Design', view: 'design', onClick: onDesignSelect },
+    { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive, shortcut: navigationShortcutLabel('fleet') },
+    { name: 'dashboard', label: 'Tableau de bord', view: 'dashboard', onClick: onDashboardSelect, needsProject: true, shortcut: navigationShortcutLabel('dashboard') },
+    { name: 'documents', label: 'Documents', view: 'documents', onClick: onDocumentsSelect, shortcut: navigationShortcutLabel('documents') },
+    { name: 'design', label: 'Claude Design', view: 'design', onClick: onDesignSelect, shortcut: navigationShortcutLabel('design') },
     { name: 'progress', label: 'Progression', view: 'progress', onClick: onProgressSelect },
     { name: 'costs', label: 'Coûts & quotas', view: 'costs', onClick: onCostsSelect, needsProject: true },
     { name: 'library', label: 'Skills', view: 'library', onClick: onLibrarySelect },
@@ -290,12 +293,15 @@ export const Rail = memo(function Rail({
               className={`rail-nav-button ${workspaceView === item.view ? 'is-active' : ''}`}
               onClick={item.onClick}
               disabled={item.needsProject && selectedProject === null}
-              title={item.label}
+              title={item.shortcut ? `${item.label} · ${item.shortcut}` : item.label}
               aria-label={`${item.label}${item.name === 'conversations' && item.badge ? `, ${item.badge} à lire` : ''}`}
               aria-current={workspaceView === item.view ? 'true' : undefined}
             >
               <RailIcon name={item.name} />
-              <span className="rail-nav-label">{item.label}</span>
+              <span className="rail-nav-label">
+                <span>{item.label}</span>
+                {item.shortcut ? <kbd className="rail-nav-shortcut">{item.shortcut}</kbd> : null}
+              </span>
               {item.badge && item.badge > 0 ? (
                 <span
                   className={`rail-badge ${item.name === 'fleet' ? 'is-live' : ''} ${item.name === 'conversations' ? 'is-unread' : ''}`}

@@ -526,6 +526,11 @@
   object-fit: contain;
 }
 
+.assistant-message .markdown-image-button {
+  display: block;
+  margin: var(--space-3) 0;
+}
+
 .event-attachments {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));

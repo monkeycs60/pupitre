@@ -45,6 +45,7 @@ import {
   restoreProject,
   writeLastActiveLocation,
 } from './restoreLocation'
+import { navigationViewForShortcut, type NavigationShortcutView } from './navigationShortcuts'
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
@@ -111,6 +112,7 @@ function App() {
   const [conversationListVersion, setConversationListVersion] = useState(0)
   const [railReadVersion, setRailReadVersion] = useState(0)
   const readSyncKeyRef = useRef<string | null>(null)
+  const navigationShortcutRef = useRef<(view: NavigationShortcutView) => void>(() => {})
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [showHandoff, setShowHandoff] = useState(false)
@@ -157,6 +159,17 @@ function App() {
     window.addEventListener('keydown', handleRestartShortcut)
     return () => window.removeEventListener('keydown', handleRestartShortcut)
   }, [restartStatus])
+
+  useEffect(() => {
+    function handleNavigationShortcut(event: KeyboardEvent) {
+      const view = navigationViewForShortcut(event)
+      if (view === null) return
+      event.preventDefault()
+      navigationShortcutRef.current(view)
+    }
+    window.addEventListener('keydown', handleNavigationShortcut)
+    return () => window.removeEventListener('keydown', handleNavigationShortcut)
+  }, [])
   // Le digest est régénéré côté sidecar après un tour : on rafraîchit le titre
   // affiché sans recharger la conversation.
   const digest = lastDigest(events)
@@ -530,6 +543,14 @@ function App() {
     setShowSwitchModel(false)
   }
 
+  navigationShortcutRef.current = (view) => {
+    if (view === 'conversations') handleConversationsSelect()
+    else if (view === 'fleet') handleFleetSelect()
+    else if (view === 'dashboard') handleDashboardSelect()
+    else if (view === 'documents') handleDocumentsSelect()
+    else handleDesignSelect()
+  }
+
   function handleMemorySelect() {
     setWorkspaceView('memory')
     setShowSwitchModel(false)
@@ -766,6 +787,7 @@ function App() {
           </div>
         ) : workspaceView === 'dashboard' ? (
           <DashboardView
+            key={selectedProject.id}
             project={selectedProject}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
             onStartConversation={handleStartFromTicket}

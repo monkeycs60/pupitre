@@ -208,7 +208,7 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: Ev
           {/* Le caret de streaming est un ::after du dernier bloc rendu : il
               suit le texte au caractère près au lieu de flotter dessous. */}
           <div className={`message-bubble assistant-message${block.streaming ? ' is-streaming' : ''}`}>
-            <Markdown scope={block.id}>{block.text}</Markdown>
+            <Markdown scope={block.id} onImageOpen={onImageOpen} onImageLoad={onImageLoad}>{block.text}</Markdown>
           </div>
         </article>
       )

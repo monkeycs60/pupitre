@@ -24,6 +24,15 @@ describe('Markdown images', () => {
 
     expect(screen.getByRole('img', { name: 'Capture' }).getAttribute('src')).toBe('/media/capture.png')
   })
+
+  test('affiche une capture de réponse comme une vignette agrandissable', () => {
+    const onImageOpen = mock(() => {})
+    render(<Markdown onImageOpen={onImageOpen}>{'![Écran vérifié](/media/capture.png)'}</Markdown>)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir écran vérifié' }))
+
+    expect(onImageOpen).toHaveBeenCalledWith('/media/capture.png', 'Écran vérifié')
+  })
 })
 
 describe('Markdown actions', () => {

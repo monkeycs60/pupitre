@@ -25,6 +25,10 @@ interface SectionRange {
 }
 
 const MARKDOWN_SCOPE = createContext('global')
+const MARKDOWN_IMAGE_CONTEXT = createContext<{
+  onOpen?: (src: string, alt: string) => void
+  onLoad?: () => void
+}>({})
 const TASK_CONTEXT = createContext<TaskContextValue | null>(null)
 /** Rang de l'élément dans sa liste, fourni par NumberedList. */
 const TASK_INDEX = createContext(1)
@@ -234,6 +238,27 @@ function MarkdownTaskInput({ node: _node, ...props }: any) {
   )
 }
 
+function MarkdownImage({ node: _node, src, alt, ...props }: any) {
+  const { onOpen, onLoad } = useContext(MARKDOWN_IMAGE_CONTEXT)
+  const mediaName = typeof src === 'string' && src.startsWith('/media/')
+    ? decodeURIComponent(src.slice('/media/'.length))
+    : null
+  const resolvedSrc = mediaName === null ? src : mediaUrl(mediaName)
+  const label = typeof alt === 'string' && alt.trim() ? alt.trim() : 'image'
+  const image = <img {...props} src={resolvedSrc} alt={alt} onLoad={onLoad} />
+  if (!onOpen || typeof resolvedSrc !== 'string') return image
+  return (
+    <button
+      type="button"
+      className="event-image-button markdown-image-button"
+      aria-label={`Agrandir ${label.toLocaleLowerCase('fr-FR')}`}
+      onClick={() => onOpen(resolvedSrc, label)}
+    >
+      {image}
+    </button>
+  )
+}
+
 /** Texte brut d'un bloc ```mermaid, ou null si ce n'en est pas un. */
 function mermaidSource(node: any): string | null {
   const code = node?.children?.[0]
@@ -294,12 +319,7 @@ function CopyablePre({ node, children, ...props }: any) {
 }
 
 const COMPONENTS = {
-  img: ({ node: _node, src, ...props }: any) => {
-    const mediaName = typeof src === 'string' && src.startsWith('/media/')
-      ? decodeURIComponent(src.slice('/media/'.length))
-      : null
-    return <img {...props} src={mediaName === null ? src : mediaUrl(mediaName)} />
-  },
+  img: MarkdownImage,
   /** Les tableaux larges défilent au lieu de déborder de la bulle. */
   table: ({ node: _node, ...props }: any) => (
     <div className="markdown-table-wrap">
@@ -328,7 +348,17 @@ const COMPONENTS = {
 /** Rendu Markdown unique de l'app : tout passe par ici pour rester cohérent. */
 export default memo(MarkdownImpl)
 
-function MarkdownImpl({ children, scope }: { children: string; scope?: string }) {
+function MarkdownImpl({
+  children,
+  scope,
+  onImageOpen,
+  onImageLoad,
+}: {
+  children: string
+  scope?: string
+  onImageOpen?: (src: string, alt: string) => void
+  onImageLoad?: () => void
+}) {
   const format = useContext(ActionFormatContext)
   const { source, sections } = useMemo(
     () => normalizeActionChecklists(children, format),
@@ -338,11 +368,13 @@ function MarkdownImpl({ children, scope }: { children: string; scope?: string })
     // `scope` identifie le message : l'état des cases survit alors à une
     // reformulation du texte, là où un hash du contenu le réinitialisait.
     <MARKDOWN_SCOPE.Provider value={scope ?? hash(source)}>
-      <SECTIONS.Provider value={sections}>
-        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={COMPONENTS}>
-          {source}
-        </ReactMarkdown>
-      </SECTIONS.Provider>
+      <MARKDOWN_IMAGE_CONTEXT.Provider value={{ onOpen: onImageOpen, onLoad: onImageLoad }}>
+        <SECTIONS.Provider value={sections}>
+          <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={COMPONENTS}>
+            {source}
+          </ReactMarkdown>
+        </SECTIONS.Provider>
+      </MARKDOWN_IMAGE_CONTEXT.Provider>
     </MARKDOWN_SCOPE.Provider>
   )
 }

@@ -23,6 +23,7 @@ class SilentSocket {
 
 afterEach(() => {
   cleanup()
+  window.localStorage.clear()
   globalThis.fetch = defaultFetch
   globalThis.WebSocket = DefaultSocket
 })
@@ -106,17 +107,39 @@ test('rend une ligne par ticket, la colonne Déployé avec GitLab, et le bandeau
   expect(screen.getByText(/GitLab/).textContent).toContain('dégradée')
   expect(screen.getByText('Échec')).toBeTruthy()
   expect(screen.getByText('Fusionnable')).toBeTruthy()
+  fireEvent.click(screen.getByRole('tab', { name: 'Environnements' }))
   expect(screen.getByText('preprod')).toBeTruthy()
 })
 
-test('place les issues Sentry entre Mes tickets et Environnements', async () => {
+test('sépare le tableau en quatre onglets et mémorise le dernier onglet du projet', async () => {
   mount(withGitlab)
 
   await screen.findByText('TECH-24657')
-  const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)
+  const tabs = screen.getAllByRole('tab')
+  expect(tabs.map((tab) => tab.textContent)).toEqual([
+    'Mes tickets',
+    'Issues Sentry',
+    'Changelog',
+    'Environnements',
+  ])
+  expect(screen.getByRole('tab', { name: 'Mes tickets' }).getAttribute('aria-selected')).toBe('true')
+  expect(screen.queryByRole('heading', { name: 'Environnements' })).toBeNull()
 
-  expect(headings.indexOf('Mes tickets')).toBeLessThan(headings.indexOf('Issues Sentry'))
-  expect(headings.indexOf('Issues Sentry')).toBeLessThan(headings.indexOf('Environnements'))
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Mes tickets' }), { key: 'ArrowRight' })
+  expect(screen.getByRole('tab', { name: 'Issues Sentry' }).getAttribute('aria-selected')).toBe('true')
+  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Issues Sentry' }))
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Environnements' }))
+
+  expect(await screen.findByRole('heading', { name: 'Environnements' })).toBeTruthy()
+  expect(screen.queryByText('TECH-24657')).toBeNull()
+  expect(window.localStorage.getItem('pupitre:dashboard-tab:p1')).toBe('environments')
+
+  cleanup()
+  mount(withGitlab)
+
+  expect(await screen.findByRole('heading', { name: 'Environnements' })).toBeTruthy()
+  expect(screen.getByRole('tab', { name: 'Environnements' }).getAttribute('aria-selected')).toBe('true')
 })
 
 test('Nouvelle conv. transmet ticket et branche ; sans GitLab la colonne Déployé disparaît', async () => {
@@ -267,11 +290,12 @@ test('affiche le changelog compact, son échéance au survol et permet une actua
     onStartConversation: () => {},
   }))
 
+  fireEvent.click(screen.getByRole('tab', { name: 'Changelog' }))
   expect(await screen.findByText('Les événements sans date apparaissent dans la fiche contact.')).toBeTruthy()
   expect(screen.getByText('feat: show undated contact events')).toBeTruthy()
   expect(screen.getByText('main')).toBeTruthy()
   expect(screen.getByText('e8ac32b')).toBeTruthy()
-  expect(screen.getAllByText('reactor')).toHaveLength(2)
+  expect(screen.getByText('reactor')).toBeTruthy()
 
   const menuButton = screen.getByRole('button', { name: /Changelog/ })
   expect(menuButton.getAttribute('title')).toContain('Prochaine actualisation dans')
