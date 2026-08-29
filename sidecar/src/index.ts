@@ -45,6 +45,7 @@ import { IntegrationSecretStore } from "./stores/integration-secrets";
 import { SentryStore } from "./stores/sentry";
 import { SentryClient } from "./integrations/sentry";
 import { ProblemStore } from "./stores/problems";
+import { ProblemMissionStore } from "./stores/problem-missions";
 import { ProblemService } from "./problems";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
@@ -91,6 +92,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const integrationSecrets = new IntegrationSecretStore(db);
   const sentry = new SentryStore(db);
   const problemStore = new ProblemStore(db);
+  const problemMissions = new ProblemMissionStore(db);
   const problems = new ProblemService(
     problemStore,
     projects,
@@ -296,6 +298,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     domains,
     changelog,
     problemStore,
+    problemMissions,
     problems,
     integrationSecrets,
     sentry,

@@ -87,7 +87,8 @@ import type { IntegrationSecretStore } from "./stores/integration-secrets";
 import type { SentryStore } from "./stores/sentry";
 import { redactSentryValue } from "./sentry-redaction";
 import type { ChangelogService } from "./changelog";
-import type { ProblemStore } from "./stores/problems";
+import type { Problem, ProblemStore } from "./stores/problems";
+import type { ProblemMissionStore } from "./stores/problem-missions";
 import type { ProblemService } from "./problems";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
@@ -136,6 +137,7 @@ export interface ServerDeps {
   domains?: DomainStore;
   changelog?: ChangelogService;
   problemStore?: ProblemStore;
+  problemMissions?: ProblemMissionStore;
   problems?: ProblemService;
   integrationSecrets?: IntegrationSecretStore;
   sentry?: SentryStore;
@@ -1066,6 +1068,31 @@ function routineInput(
     orchestrator,
     enabled: optionalBoolean(body, "enabled", enabledFallback),
   };
+}
+
+function missionProblemPreamble(problems: Problem[], missionTitle: string): string {
+  const sections = problems.map((problem) => [
+    `## ${problem.public_id} — ${problem.title}`,
+    "",
+    `**Contexte**\n${problem.context}`,
+    "",
+    `**Résolution attendue**\n${problem.resolution}`,
+    "",
+    "### Axes à traiter dans cette conversation",
+    ...problem.plans.flatMap((plan, index) => [
+      `${index + 1}. **${plan.title}**`,
+      `   ${plan.instruction}`,
+    ]),
+    "",
+    `**Convention de commit** — Tout commit qui résout cette problématique doit inclure exactement [${problem.public_id}] dans son message.`,
+  ].join("\n"));
+  return [
+    `# Mission — ${missionTitle}`,
+    "",
+    "Traite ensemble les problématiques suivantes et couvre chacun de leurs axes.",
+    "",
+    sections.join("\n\n---\n\n"),
+  ].join("\n");
 }
 
 export function createServer(deps: ServerDeps) {
@@ -2577,18 +2604,58 @@ export function createServer(deps: ServerDeps) {
           // crée alors un worktree, où tous ses agents travailleront (ADR 0001).
           const branch = optionalTrimmed(body, "branch");
           const ticketId = optionalTrimmed(body, "ticketId");
-          const originType = optionalTrimmed(body, "originType");
-          const originKey = optionalTrimmed(body, "originKey");
+          let originType = optionalTrimmed(body, "originType");
+          let originKey = optionalTrimmed(body, "originKey");
           if (originType !== null && originType !== "sentry" && originType !== "problem") {
             throw new HttpError(400, "origine invalide");
           }
-          if (originType !== null && originKey === null) throw new HttpError(400, "clé d'origine requise");
+          const requestedProblemIds = body.problemIds;
+          let missionProblems: Problem[] | null = null;
+          let missionTitle: string | null = null;
+          if (requestedProblemIds !== undefined) {
+            if (!deps.problemStore || !deps.problemMissions) {
+              throw new HttpError(501, "missions de problématiques non câblées");
+            }
+            if (!Array.isArray(requestedProblemIds)
+              || requestedProblemIds.length < 1
+              || requestedProblemIds.length > 20
+              || requestedProblemIds.some((id) => typeof id !== "string" || !id.trim())) {
+              throw new HttpError(400, "liste de problématiques invalide");
+            }
+            const problemIds = requestedProblemIds.map((id) => String(id).trim());
+            if (new Set(problemIds).size !== problemIds.length) {
+              throw new HttpError(400, "les problématiques doivent être distinctes");
+            }
+            missionProblems = problemIds
+              .map((id) => deps.problemStore!.get(id))
+              .filter((problem): problem is Problem => problem !== null);
+            if (missionProblems.length !== problemIds.length
+              || missionProblems.some((problem) => problem.project_id !== projectId)) {
+              throw new HttpError(404, "problématique inconnue");
+            }
+            if (missionProblems.some((problem) => problem.status !== "open")) {
+              throw new HttpError(409, "une problématique est déjà fermée");
+            }
+            missionTitle = optionalTrimmed(body, "missionTitle") ?? missionProblems[0]!.title;
+            originType = "problem";
+            originKey = null;
+          }
+          if (missionProblems === null && originType !== null && originKey === null) {
+            throw new HttpError(400, "clé d'origine requise");
+          }
           let ticket = ticketId ? deps.tickets.get(ticketId) : null;
           if (ticketId && (!ticket || ticket.project_id !== projectId)) {
             throw new HttpError(404, "ticket inconnu");
           }
           let problemPreamble: string | null = null;
-          if (originType === "problem" && originKey) {
+          if (missionProblems !== null) {
+            const commonTicketId = missionProblems[0]?.ticket_id ?? null;
+            ticket = commonTicketId !== null
+              && missionProblems.every((problem) => problem.ticket_id === commonTicketId)
+              ? deps.tickets.get(commonTicketId)
+              : null;
+            problemPreamble = missionProblemPreamble(missionProblems, missionTitle!);
+          } else if (originType === "problem" && originKey) {
             const problem = deps.problemStore?.getByPublicId(originKey);
             if (!problem || problem.project_id !== projectId) {
               throw new HttpError(404, "problématique inconnue");
@@ -2655,7 +2722,7 @@ export function createServer(deps: ServerDeps) {
             }
           }
           const snapshot = deps.git.snapshot(projectId);
-          const conversation = deps.conversations.create({
+          let conversation = deps.conversations.create({
             worktreePath,
             projectId,
             provider: provider as Provider,
@@ -2674,6 +2741,19 @@ export function createServer(deps: ServerDeps) {
             originKey,
             firstMessage: message.trim() || "Image jointe",
           });
+          if (missionProblems !== null) {
+            const mission = deps.problemMissions!.create({
+              projectId,
+              conversationId: conversation.id,
+              title: missionTitle!,
+              problemIds: missionProblems.map((problem) => problem.id),
+            });
+            conversation = deps.conversations.setOrigin(
+              conversation.id,
+              "problem",
+              missionProblems.length === 1 ? missionProblems[0]!.public_id : mission.public_id,
+            )!;
+          }
           const ticketPreamble = ticket
             ? await ticketBriefFor(deps, ticket, conversation.id)
             : null;

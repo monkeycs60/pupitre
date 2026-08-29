@@ -212,6 +212,27 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_problems_project
       ON problems(project_id, status, created_at DESC);
+    CREATE TABLE IF NOT EXISTS problem_missions (
+      id TEXT PRIMARY KEY,
+      public_id TEXT NOT NULL UNIQUE,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      conversation_id TEXT NOT NULL UNIQUE REFERENCES conversations(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_problem_missions_project
+      ON problem_missions(project_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS problem_mission_items (
+      mission_id TEXT NOT NULL REFERENCES problem_missions(id) ON DELETE CASCADE,
+      problem_id TEXT NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (mission_id, problem_id),
+      UNIQUE (mission_id, position)
+    );
+    CREATE INDEX IF NOT EXISTS idx_problem_mission_items_problem
+      ON problem_mission_items(problem_id, mission_id);
     CREATE TABLE IF NOT EXISTS domains (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

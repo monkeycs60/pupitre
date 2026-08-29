@@ -181,8 +181,15 @@ export class ProblemStore {
         (SELECT ref FROM ticket_refs
          WHERE ticket_id = problems.ticket_id AND kind = 'branch'
          ORDER BY seen_at DESC LIMIT 1) AS ticket_branch,
-        (SELECT COUNT(*) FROM conversations
-         WHERE origin_type = 'problem' AND origin_key = problems.public_id) AS conversation_count
+        ((SELECT COUNT(*) FROM conversations
+          WHERE origin_type = 'problem' AND origin_key = problems.public_id
+            AND NOT EXISTS (
+              SELECT 1 FROM problem_missions WHERE conversation_id = conversations.id
+            ))
+         +
+         (SELECT COUNT(*) FROM problem_mission_items
+          JOIN problem_missions ON problem_missions.id = problem_mission_items.mission_id
+          WHERE problem_mission_items.problem_id = problems.id)) AS conversation_count
       FROM problems
       LEFT JOIN tickets ON tickets.id = problems.ticket_id
       WHERE problems.project_id = ? ${status === "all" ? "" : "AND problems.status = ?"}

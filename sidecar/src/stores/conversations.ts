@@ -148,6 +148,13 @@ export class ConversationStore {
     return this.get(id);
   }
 
+  setOrigin(id: string, originType: "sentry" | "problem" | null, originKey: string | null): Conversation | null {
+    this.db.query(
+      "UPDATE conversations SET origin_type = ?, origin_key = ?, updated_at = ? WHERE id = ?",
+    ).run(originType, originKey, new Date().toISOString(), id);
+    return this.get(id);
+  }
+
   get(id: string): Conversation | null {
     const row = this.db.query("SELECT * FROM conversations WHERE id = ?").get(id) as any;
     return row ? {

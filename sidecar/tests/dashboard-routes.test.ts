@@ -36,6 +36,7 @@ import { DomainStore } from "../src/stores/domains";
 import { IntegrationsRefresher } from "../src/integrations/refresher";
 import { ProblemStore } from "../src/stores/problems";
 import { ProblemService } from "../src/problems";
+import { ProblemMissionStore } from "../src/stores/problem-missions";
 
 interface TestServer {
   baseUrl: string;
@@ -43,6 +44,7 @@ interface TestServer {
   server: ReturnType<typeof createServer>;
   deps: ServerDeps;
   problemStore: ProblemStore;
+  problemMissions: ProblemMissionStore;
   problems: ProblemService;
 }
 
@@ -222,6 +224,7 @@ beforeEach(() => {
     { clickUpClient: () => null, gitLabClient: () => null },
   );
   const problemStore = new ProblemStore(db);
+  const problemMissions = new ProblemMissionStore(db);
   const problems = new ProblemService(
     problemStore,
     projects,
@@ -234,7 +237,7 @@ beforeEach(() => {
       conversations: [{ title: "Corriger le bouton", instruction: "Reproduire puis corriger." }],
     }]),
   );
-  const deps: ServerDeps = {
+  const deps = {
     port: 0,
     projects,
     conversations,
@@ -268,8 +271,9 @@ beforeEach(() => {
     domains,
     integrationsRefresher,
     problemStore,
+    problemMissions,
     problems,
-  };
+  } satisfies ServerDeps & { problemMissions: ProblemMissionStore };
   const server = createServer(deps);
   current = {
     baseUrl: `http://127.0.0.1:${server.port}`,
@@ -277,6 +281,7 @@ beforeEach(() => {
     server,
     deps,
     problemStore,
+    problemMissions,
     problems,
   };
 });
@@ -466,6 +471,73 @@ test("une conversation problem reçoit du serveur le contexte, le ticket et le m
   expect(sent).toContain("Restaurer le clic sans régression.");
   expect(sent).toContain("Reproduire puis corriger le gestionnaire.");
   expect(sent).toContain("[PB-7K3M9Q]");
+});
+
+test("une mission lance tous les axes de plusieurs problématiques dans une conversation", async () => {
+  const repoPath = mkdtempSync(join(tmpdir(), "pupitre-problem-mission-"));
+  runGit(repoPath, "init", "-q", "-b", "main");
+  runGit(repoPath, "config", "user.email", "api@example.test");
+  runGit(repoPath, "config", "user.name", "API Git");
+  writeFileSync(join(repoPath, "README.md"), "base\n");
+  runGit(repoPath, "add", "README.md");
+  runGit(repoPath, "commit", "-qm", "base");
+  const project = await createProject(repoPath);
+  const ticket = current!.deps.tickets.upsert(project.id, {
+    key: "TECH-99",
+    source: "clickup",
+    title: "Mesure Match AI",
+    status: "todo",
+    externalUrl: null,
+  });
+  const capture = current!.problemStore.createCapture(project.id, "capture groupée");
+  const problems = current!.problemStore.completeCapture(capture.id, [
+    {
+      publicId: "PB-MATCH1",
+      title: "Mesurer les recommandations",
+      context: "Comprendre les clics.",
+      resolution: "Attribuer chaque recommandation.",
+      ticketId: ticket.id,
+      plans: [
+        { title: "Instrumenter PostHog", instruction: "Tracer la carte cliquée." },
+        { title: "Mesurer le funnel", instruction: "Relier le clic au partenariat." },
+      ],
+    },
+    {
+      publicId: "PB-MATCH2",
+      title: "Prouver la valeur business",
+      context: "Suivre les partenariats dans le temps.",
+      resolution: "Calculer durée et revenu.",
+      ticketId: ticket.id,
+      plans: [{ title: "Cycle de vie", instruction: "Mesurer durée, conversion et chiffre." }],
+    },
+  ]);
+  const promptLog = join(repoPath, "mission-prompt.log");
+  process.env.PUPITRE_FAKE_PROMPT_LOG = promptLog;
+
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "claude-fable-5",
+    message: "Lancer la mesure Match AI",
+    problemIds: problems.map((problem) => problem.id),
+    missionTitle: "Prouver la valeur de Match AI",
+  });
+
+  expect(created.status).toBe(201);
+  const conversation = await created.json() as { id: string; ticket_id: string | null; origin_key: string | null };
+  expect(conversation.ticket_id).toBe(ticket.id);
+  expect(conversation.origin_key).toMatch(/^MS-/);
+  expect(current!.problemMissions.getByConversation(conversation.id)).toMatchObject({
+    title: "Prouver la valeur de Match AI",
+    problem_count: 2,
+  });
+  await waitForRunnerIdle(conversation.id);
+  const sent = readFileSync(promptLog, "utf8");
+  expect(sent).toContain("Instrumenter PostHog");
+  expect(sent).toContain("Mesurer le funnel");
+  expect(sent).toContain("Cycle de vie");
+  expect(sent).toContain("[PB-MATCH1]");
+  expect(sent).toContain("[PB-MATCH2]");
 });
 
 test("dashboard : Mes tickets ne contient que les tâches ClickUp actuellement attribuées", async () => {
