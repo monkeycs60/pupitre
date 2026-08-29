@@ -61,6 +61,36 @@ test("persiste le collage avant ses résultats puis écrit le lot atomiquement",
   expect(store.listProject(projectId, "open").problems[0]?.conversation_count).toBe(1);
 });
 
+test("expose le ticket et sa branche dans le contexte de reprise", () => {
+  const ticket = tickets.upsert(projectId, {
+    key: "TECH-42",
+    source: "clickup",
+    title: "Mesurer Match AI",
+    status: "todo",
+    externalUrl: null,
+  });
+  tickets.upsertRef(ticket.id, {
+    kind: "branch",
+    ref: "feature/TECH-42-match-ai",
+    payload: {},
+  });
+  const capture = store.createCapture(projectId, "Mesure Match AI");
+  store.completeCapture(capture.id, [{
+    publicId: "PB-MATCH1",
+    title: "Prouver la valeur de Match AI",
+    context: "Relier les recommandations aux partenariats.",
+    resolution: "Mesurer le cycle complet.",
+    ticketId: ticket.id,
+    plans: [{ title: "Instrumenter", instruction: "Ajouter les événements." }],
+  }]);
+
+  expect(store.listProject(projectId).problems[0]).toMatchObject({
+    ticket_key: "TECH-42",
+    ticket_title: "Mesurer Match AI",
+    ticket_branch: "feature/TECH-42-match-ai",
+  });
+});
+
 test("une écriture de lot invalide ne termine pas la capture à moitié", () => {
   const capture = store.createCapture(projectId, "Deux résultats");
 

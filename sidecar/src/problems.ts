@@ -176,10 +176,12 @@ function boundedText(value: unknown, label: string, max: number): string {
 function problemPrompt(projectName: string, rawText: string, tickets: Ticket[]): string {
   return [
     "Tu structures une capture de travail brute en problématiques actionnables.",
-    "Découpe les sujets sans les fusionner. Retourne uniquement un tableau JSON de 1 à 20 objets.",
+    "Regroupe dans une même problématique les éléments qui servent le même résultat métier, la même chaîne de mesure ou la même zone fonctionnelle.",
+    "Transforme leurs étapes et livrables proches en axes complémentaires dans conversations. Ne crée plusieurs problématiques que si leurs résultats peuvent être livrés et validés séparément.",
+    "Évite de dupliquer entre plusieurs objets un même contexte, une même métrique ou un même dashboard. Retourne uniquement un tableau JSON de 1 à 20 objets.",
     "Chaque objet suit exactement ce format :",
     '{"title":"...","context":"...","resolution":"...","ticketKey":"TECH-1"|null,"conversations":[{"title":"...","instruction":"..."}]}',
-    "Propose entre 1 et 5 conversations autonomes. N'invente jamais une clé de ticket.",
+    "Propose entre 1 et 5 axes complémentaires. N'invente jamais une clé de ticket.",
     `PROJET: ${projectName}`,
     `TICKETS: ${JSON.stringify(tickets.map((ticket) => ({
       key: ticket.key,

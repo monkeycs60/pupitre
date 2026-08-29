@@ -26,6 +26,9 @@ export interface Problem {
   capture_id: string;
   project_id: string;
   ticket_id: string | null;
+  ticket_key: string | null;
+  ticket_title: string | null;
+  ticket_branch: string | null;
   title: string;
   context: string;
   resolution: string;
@@ -173,11 +176,17 @@ export class ProblemStore {
   listProject(projectId: string, status: ProblemListStatus = "open"): ProblemProjectPayload {
     const rows = this.db.query(`
       SELECT problems.*,
+        tickets.key AS ticket_key,
+        tickets.title AS ticket_title,
+        (SELECT ref FROM ticket_refs
+         WHERE ticket_id = problems.ticket_id AND kind = 'branch'
+         ORDER BY seen_at DESC LIMIT 1) AS ticket_branch,
         (SELECT COUNT(*) FROM conversations
          WHERE origin_type = 'problem' AND origin_key = problems.public_id) AS conversation_count
       FROM problems
-      WHERE project_id = ? ${status === "all" ? "" : "AND status = ?"}
-      ORDER BY created_at DESC, id DESC
+      LEFT JOIN tickets ON tickets.id = problems.ticket_id
+      WHERE problems.project_id = ? ${status === "all" ? "" : "AND problems.status = ?"}
+      ORDER BY problems.created_at DESC, problems.id DESC
     `).all(...(status === "all" ? [projectId] : [projectId, status])) as Record<string, unknown>[];
     const captures = (this.db.query(`
       SELECT * FROM problem_captures
@@ -270,6 +279,9 @@ function hydrateProblem(row: Record<string, unknown>): Problem {
     capture_id: String(row.capture_id),
     project_id: String(row.project_id),
     ticket_id: row.ticket_id === null ? null : String(row.ticket_id),
+    ticket_key: row.ticket_key === null || row.ticket_key === undefined ? null : String(row.ticket_key),
+    ticket_title: row.ticket_title === null || row.ticket_title === undefined ? null : String(row.ticket_title),
+    ticket_branch: row.ticket_branch === null || row.ticket_branch === undefined ? null : String(row.ticket_branch),
     title: String(row.title),
     context: String(row.context),
     resolution: String(row.resolution),

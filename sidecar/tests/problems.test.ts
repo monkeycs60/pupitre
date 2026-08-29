@@ -71,6 +71,9 @@ test("sauvegarde puis traite une capture avec Luna medium fast", async () => {
   }));
   expect(calls[0]?.prompt).toContain("TECH-42");
   expect(calls[0]?.prompt).toContain("deux sujets dans le même collage");
+  expect(calls[0]?.prompt).toContain("même résultat métier");
+  expect(calls[0]?.prompt).toContain("axes complémentaires");
+  expect(calls[0]?.prompt).toContain("livrés et validés séparément");
   const byTitle = new Map(store.listProject(projectId, "open").problems
     .map((problem) => [problem.title, problem]));
   expect(byTitle.get("Clarifier la copie")?.ticket_id).toBeNull();
