@@ -15,13 +15,13 @@ import { useDashboard } from './useDashboard'
 import { SentryInbox } from './SentryInbox'
 import { ExternalLink } from './externalLink'
 import { useNow } from './useNow'
-import { ProblemsPanel, type ProblemConversationSeed } from './ProblemsPanel'
+import { ProblemsPanel, type ProblemMissionSeed } from './ProblemsPanel'
 
 interface DashboardViewProps {
   project: Project
   onConversationSelect: (conversationId: string) => void
   onStartConversation: (seed: { ticketId: string; branch: string | null; ticketKey: string }) => void
-  onStartProblem?: (seed: ProblemConversationSeed) => void
+  onStartProblem?: (seed: ProblemMissionSeed) => void
   onOpenSettings?: () => void
 }
 

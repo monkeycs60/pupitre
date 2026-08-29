@@ -6,22 +6,18 @@ import {
   retryProblemCapture,
   updateProblemTicket,
 } from './api'
-import type { Problem, ProblemPlan, ProblemProjectPayload, TicketRow } from './types'
+import type { Problem, ProblemProjectPayload, TicketRow } from './types'
 
-export interface ProblemConversationSeed {
-  problem: Problem
-  plan: ProblemPlan
-  planIndex: number
-  originType: 'problem'
-  originKey: string
-  problemPlanIndex: number
+export interface ProblemMissionSeed {
+  problems: Problem[]
+  missionTitle: string
 }
 
 interface ProblemsPanelProps {
   payload: ProblemProjectPayload
   tickets: TicketRow[]
   onChanged: () => void
-  onStartConversation: (seed: ProblemConversationSeed) => void
+  onStartConversation: (seed: ProblemMissionSeed) => void
 }
 
 export function ProblemsPanel({
@@ -33,6 +29,8 @@ export function ProblemsPanel({
   const [filter, setFilter] = useState<'open' | 'closed'>('open')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [missionTitle, setMissionTitle] = useState('')
   const visibleProblems = payload.problems.filter((problem) => problem.status === filter)
   const ticketsById = new Map(tickets.map((ticket) => [ticket.id, ticket]))
 
@@ -50,6 +48,23 @@ export function ProblemsPanel({
     }
   }
 
+  function changeFilter(nextFilter: 'open' | 'closed') {
+    setFilter(nextFilter)
+    setSelectedIds(new Set())
+    setMissionTitle('')
+  }
+
+  function toggleProblem(problem: Problem) {
+    const next = new Set(selectedIds)
+    if (next.has(problem.id)) next.delete(problem.id)
+    else next.add(problem.id)
+    setSelectedIds(next)
+    if (next.size < 2) setMissionTitle('')
+    else if (!missionTitle.trim()) setMissionTitle(`Mission · ${next.size} problématiques`)
+  }
+
+  const selectedProblems = visibleProblems.filter((problem) => selectedIds.has(problem.id))
+
   return (
     <section
       id="dashboard-panel-problems"
@@ -63,12 +78,34 @@ export function ProblemsPanel({
           <p>Du vrac capturé au travail prêt à lancer.</p>
         </div>
         <div className="problems-filter" role="group" aria-label="Filtrer les problématiques">
-          <button type="button" aria-pressed={filter === 'open'} onClick={() => setFilter('open')}>Ouvertes</button>
-          <button type="button" aria-pressed={filter === 'closed'} onClick={() => setFilter('closed')}>Fermées</button>
+          <button type="button" aria-pressed={filter === 'open'} onClick={() => changeFilter('open')}>Ouvertes</button>
+          <button type="button" aria-pressed={filter === 'closed'} onClick={() => changeFilter('closed')}>Fermées</button>
         </div>
       </div>
 
       {error ? <p className="dashboard-banner is-danger" role="alert">{error}</p> : null}
+
+      {selectedProblems.length >= 2 ? (
+        <div className="problem-group-bar" aria-label="Regrouper les problématiques sélectionnées">
+          <strong>{selectedProblems.length} sélectionnées</strong>
+          <label>
+            <span>Titre</span>
+            <input
+              aria-label="Titre de la mission"
+              value={missionTitle}
+              onChange={(event) => setMissionTitle(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={!missionTitle.trim()}
+            onClick={() => onStartConversation({ problems: selectedProblems, missionTitle: missionTitle.trim() })}
+          >
+            Lancer ensemble
+          </button>
+        </div>
+      ) : null}
 
       {payload.captures.map((capture) => (
         <article key={capture.id} className={`problem-capture is-${capture.status}`}>
@@ -101,6 +138,15 @@ export function ProblemsPanel({
             return (
               <article key={problem.id} className="problem-card">
                 <header>
+                  {problem.status === 'open' ? (
+                    <input
+                      type="checkbox"
+                      className="problem-select"
+                      aria-label={`Sélectionner ${problem.public_id}`}
+                      checked={selectedIds.has(problem.id)}
+                      onChange={() => toggleProblem(problem)}
+                    />
+                  ) : null}
                   <div>
                     <span className="problem-id">{problem.public_id}</span>
                     {ticket ? <span className="problem-ticket">{ticket.key}</span> : null}
@@ -116,25 +162,21 @@ export function ProblemsPanel({
                   {problem.plans.map((plan, planIndex) => (
                     <li key={`${problem.id}:${planIndex}`}>
                       <div><strong>{plan.title}</strong><p>{plan.instruction}</p></div>
-                      {problem.status === 'open' ? (
-                        <button
-                          type="button"
-                          className="primary-button"
-                          onClick={() => onStartConversation({
-                            problem,
-                            plan,
-                            planIndex,
-                            originType: 'problem',
-                            originKey: problem.public_id,
-                            problemPlanIndex: planIndex,
-                          })}
-                        >
-                          Lancer {plan.title}
-                        </button>
-                      ) : null}
                     </li>
                   ))}
                 </ol>
+                {problem.status === 'open' ? (
+                  <div className="problem-launch-row">
+                    <span>{problem.plans.length} axe{problem.plans.length > 1 ? 's' : ''}</span>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() => onStartConversation({ problems: [problem], missionTitle: problem.title })}
+                    >
+                      Lancer tous les axes
+                    </button>
+                  </div>
+                ) : null}
                 <footer className="problem-actions">
                   {problem.status === 'open' ? (
                     <label>

@@ -35,6 +35,15 @@ const payload: ProblemProjectPayload = {
     status: 'open', closed_at: null, closed_commit_sha: null, conversation_count: 0,
     created_at: '2026-08-29T09:00:00Z', updated_at: '2026-08-29T09:00:00Z',
   }, {
+    id: 'problem-3', public_id: 'PB-MATCH2', capture_id: 'capture-ok', project_id: 'p1',
+    ticket_id: 't1', title: 'Mesurer la valeur créée', context: 'Le revenu reste inconnu.',
+    resolution: 'Relier partenariats et chiffre.', plans: [
+      { title: 'Attribuer', instruction: 'Relier la source.' },
+      { title: 'Calculer', instruction: 'Calculer le revenu.' },
+    ],
+    status: 'open', closed_at: null, closed_commit_sha: null, conversation_count: 0,
+    created_at: '2026-08-29T09:30:00Z', updated_at: '2026-08-29T09:30:00Z',
+  }, {
     id: 'problem-2', public_id: 'PB-ABC123', capture_id: 'capture-old', project_id: 'p1',
     ticket_id: null, title: 'Ancienne problématique', context: 'Contexte clos.', resolution: 'Déjà fait.',
     plans: [{ title: 'Vérifier', instruction: 'Contrôler le résultat.' }], status: 'closed',
@@ -43,7 +52,7 @@ const payload: ProblemProjectPayload = {
   }],
 }
 
-test('affiche les captures en erreur et les problématiques ouvertes avec leur plan', () => {
+test('affiche une seule action qui lance tous les axes de la problématique', () => {
   const onStartConversation = mock(() => {})
   render(createElement(ProblemsPanel, {
     payload, tickets: [ticket], onChanged: () => {}, onStartConversation,
@@ -52,12 +61,35 @@ test('affiche les captures en erreur et les problématiques ouvertes avec leur p
   expect(screen.getByText('Traitement en échec')).toBeTruthy()
   expect(screen.getByText('sortie invalide')).toBeTruthy()
   expect(screen.getByRole('heading', { name: 'Le bouton ne répond pas' })).toBeTruthy()
-  expect(screen.getByText('TECH-42')).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Lancer Corriger le bouton' }))
-  expect(onStartConversation).toHaveBeenCalledWith(expect.objectContaining({
-    originType: 'problem', originKey: 'PB-7K3M9Q', problemPlanIndex: 0,
-  }))
+  expect(screen.getAllByText('TECH-42')).toHaveLength(2)
+  expect(screen.getAllByRole('button', { name: 'Lancer tous les axes' })).toHaveLength(2)
+  fireEvent.click(screen.getAllByRole('button', { name: 'Lancer tous les axes' })[0]!)
+  expect(onStartConversation).toHaveBeenCalledWith({
+    problems: [expect.objectContaining({ public_id: 'PB-7K3M9Q' })],
+    missionTitle: 'Le bouton ne répond pas',
+  })
   expect(screen.queryByText('Ancienne problématique')).toBeNull()
+})
+
+test('regroupe manuellement plusieurs problématiques avec un titre modifiable', () => {
+  const onStartConversation = mock(() => {})
+  render(createElement(ProblemsPanel, {
+    payload, tickets: [ticket], onChanged: () => {}, onStartConversation,
+  }))
+
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Sélectionner PB-7K3M9Q' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Sélectionner PB-MATCH2' }))
+  const title = screen.getByRole('textbox', { name: 'Titre de la mission' })
+  fireEvent.change(title, { target: { value: 'Prouver Match AI' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Lancer ensemble' }))
+
+  expect(onStartConversation).toHaveBeenCalledWith({
+    problems: expect.arrayContaining([
+      expect.objectContaining({ id: 'problem-1' }),
+      expect.objectContaining({ id: 'problem-3' }),
+    ]),
+    missionTitle: 'Prouver Match AI',
+  })
 })
 
 test('filtre les problèmes fermés et expose le SHA de clôture', () => {

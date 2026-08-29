@@ -18,6 +18,8 @@ interface ConversationDraft {
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
   problemPlanIndex?: number | null
+  problemIds?: string[]
+  missionTitle?: string
   message: string
   images: string[]
   attachments?: Attachment[]
@@ -29,8 +31,11 @@ export function newConversationDraftStorageKey(
   originType?: 'sentry' | 'problem' | null,
   originKey?: string | null,
   problemPlanIndex?: number | null,
+  problemIds?: string[],
 ): string {
-  const scope = originType && originKey
+  const scope = problemIds?.length
+    ? `new:${projectId}:problems:${[...problemIds].sort().join(',')}`
+    : originType && originKey
     ? `new:${projectId}:origin:${originType}:${originKey}${originType === 'problem' ? `:plan:${problemPlanIndex ?? 0}` : ''}`
     : ticketId === null || ticketId === undefined
     ? `new:${projectId}`
@@ -59,6 +64,10 @@ export function buildCreateConversationInput(
       originType: draft.originType,
       originKey: draft.originKey ?? null,
       ...(draft.originType === 'problem' ? { problemPlanIndex: draft.problemPlanIndex ?? null } : {}),
+    } : {}),
+    ...(draft.problemIds?.length ? {
+      problemIds: draft.problemIds,
+      missionTitle: draft.missionTitle?.trim() || undefined,
     } : {}),
     message: draft.message,
     images: draft.images,

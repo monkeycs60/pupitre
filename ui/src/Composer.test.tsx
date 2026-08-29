@@ -88,7 +88,7 @@ test('agrandit le champ avec son contenu puis le rend scrollable à sa hauteur m
   expect(textarea.style.overflowY).toBe('auto')
 })
 
-test('conserve le plan de problématique dans le contrat de création', () => {
+test('conserve la mission de problématiques dans le contrat de création', () => {
   const input = buildCreateConversationInput({
     projectId: project.id,
     provider: 'codex',
@@ -96,12 +96,11 @@ test('conserve le plan de problématique dans le contrat de création', () => {
     effort: 'high',
     speed: 'standard',
     orchestrator: true,
-    originType: 'problem',
-    originKey: 'PB-ABC123',
-    problemPlanIndex: 2,
+    problemIds: ['problem-1', 'problem-2'],
+    missionTitle: 'Prouver Match AI',
     message: 'Corriger le bug\n\n[PB-ABC123]',
     images: [],
   })
 
-  expect(input).toMatchObject({ originType: 'problem', originKey: 'PB-ABC123', problemPlanIndex: 2 })
+  expect(input).toMatchObject({ problemIds: ['problem-1', 'problem-2'], missionTitle: 'Prouver Match AI' })
 })

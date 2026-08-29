@@ -398,6 +398,9 @@ export interface Problem {
   capture_id: string
   project_id: string
   ticket_id: string | null
+  ticket_key?: string | null
+  ticket_title?: string | null
+  ticket_branch?: string | null
   title: string
   context: string
   resolution: string

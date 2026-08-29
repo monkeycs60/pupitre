@@ -37,7 +37,7 @@ import { newConversationDraftStorageKey } from './conversationDraft'
 import { ThreadSearch } from './ThreadSearch'
 import { PushTimeline } from './PushTimeline'
 import { ProblemSuggestionsLoader } from './ProblemSuggestions'
-import type { ProblemConversationSeed } from './ProblemsPanel'
+import type { ProblemMissionSeed } from './ProblemsPanel'
 
 interface ChatProps {
   events: AppEvent[]
@@ -58,7 +58,9 @@ interface ChatProps {
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
   problemPlanIndex?: number | null
-  onStartProblem?: (seed: ProblemConversationSeed) => void
+  problemIds?: string[]
+  missionTitle?: string
+  onStartProblem?: (seed: ProblemMissionSeed) => void
   onSeeAllProblems?: () => void
   reviewStatus: ReviewStatusSnapshot | null
   onHandoff: () => void
@@ -163,6 +165,8 @@ export function Chat({
   originType = null,
   originKey = null,
   problemPlanIndex = null,
+  problemIds,
+  missionTitle,
   onStartProblem,
   onSeeAllProblems,
   reviewStatus,
@@ -170,7 +174,7 @@ export function Chat({
   onSwitchModel,
 }: ChatProps) {
   const draftStorageKey = conversation === null
-    ? newConversationDraftStorageKey(project.id, ticketId, originType, originKey, problemPlanIndex)
+    ? newConversationDraftStorageKey(project.id, ticketId, originType, originKey, problemPlanIndex, problemIds)
     : `pupitre:draft:${conversation.id}`
   const blocks = useGroupedEvents(conversation?.id ?? null, events)
   const isRunning = lastStatusIsRunning(events)
@@ -452,6 +456,8 @@ export function Chat({
             originType={originType}
             originKey={originKey}
             problemPlanIndex={problemPlanIndex}
+            problemIds={problemIds}
+            missionTitle={missionTitle}
             onAction={(action) => void handleComposerAction(action)}
           />
         </div>

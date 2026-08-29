@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listProjectProblems } from './api'
 import type { Problem } from './types'
-import type { ProblemConversationSeed } from './ProblemsPanel'
+import type { ProblemMissionSeed } from './ProblemsPanel'
 
 interface ProblemSuggestionsProps {
   problems: Problem[]
-  onSelect: (seed: ProblemConversationSeed) => void
+  onSelect: (seed: ProblemMissionSeed) => void
   onSeeAll: () => void
 }
 
 interface ProblemSuggestionsLoaderProps {
   projectId: string
-  onSelect: (seed: ProblemConversationSeed) => void
+  onSelect: (seed: ProblemMissionSeed) => void
   onSeeAll: () => void
 }
 
@@ -35,26 +35,21 @@ export function ProblemSuggestions({ problems, onSelect, onSeeAll }: ProblemSugg
       <ul>
         {suggestions.map((problem) => (
           <li key={problem.id}>
-            <div><span className="problem-id">{problem.public_id}</span><strong>{problem.title}</strong></div>
-            <div className="problem-suggestion-actions">
-              {problem.plans.map((plan, planIndex) => (
-                <button
-                  key={`${problem.id}:${planIndex}`}
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => onSelect({
-                    problem,
-                    plan,
-                    planIndex,
-                    originType: 'problem',
-                    originKey: problem.public_id,
-                    problemPlanIndex: planIndex,
-                  })}
-                >
-                  Lancer {plan.title}
-                </button>
-              ))}
+            <div className="problem-suggestion-copy">
+              <div><span className="problem-id">{problem.public_id}</span><strong>{problem.title}</strong></div>
+              <div className="problem-suggestion-meta">
+                {problem.ticket_key ? <span>{problem.ticket_key} · {problem.ticket_title}</span> : <span>Sans ticket</span>}
+                {problem.ticket_branch ? <code>{problem.ticket_branch}</code> : null}
+                <span>{problem.plans.length} axe{problem.plans.length > 1 ? 's' : ''}</span>
+              </div>
             </div>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => onSelect({ problems: [problem], missionTitle: problem.title })}
+            >
+              Lancer
+            </button>
           </li>
         ))}
       </ul>

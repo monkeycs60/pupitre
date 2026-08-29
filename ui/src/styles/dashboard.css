@@ -239,6 +239,25 @@
 
 .problems-list { display: grid; gap: 10px; }
 
+.problem-group-bar {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: auto minmax(240px, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 9px 12px;
+  margin-bottom: 10px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-md);
+}
+.problem-group-bar > strong { color: var(--text-strong); font-size: var(--text-xs); }
+.problem-group-bar label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.problem-group-bar label span { color: var(--text-faint); font-size: 11px; }
+.problem-group-bar input { width: 100%; min-width: 0; padding: 6px 8px; color: var(--text); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--r-sm); }
+
 .problem-card {
   overflow: hidden;
   background: var(--bg-subtle);
@@ -246,7 +265,8 @@
   border-radius: 10px;
 }
 
-.problem-card > header { padding: 13px 14px; border-bottom: 1px solid var(--border-subtle); }
+.problem-card > header { position: relative; padding: 13px 14px 13px 42px; border-bottom: 1px solid var(--border-subtle); }
+.problem-select { position: absolute; top: 15px; left: 14px; accent-color: var(--accent); }
 .problem-card > header > div { display: flex; align-items: center; gap: 8px; color: var(--text-faint); font-size: 11px; }
 .problem-card h3 { margin: 5px 0 0; color: var(--text-strong); font-size: var(--text-base); }
 .problem-id { color: var(--text-muted); font: 600 11px/1 var(--font-mono); }
@@ -264,6 +284,8 @@
 .problem-plans { padding: 0; margin: 0; list-style: none; border-top: 1px solid var(--border-subtle); }
 .problem-plans li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: 11px 14px; border-bottom: 1px solid var(--border-subtle); }
 .problem-plans li > div { min-width: 0; }
+.problem-launch-row { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: 9px 14px; border-bottom: 1px solid var(--border-subtle); }
+.problem-launch-row > span { color: var(--text-faint); font-size: 11px; }
 
 .problem-actions {
   display: flex;
@@ -664,6 +686,7 @@
 }
 
 @media (max-width: 980px) {
+  .problem-group-bar { grid-template-columns: 1fr; }
   .dashboard-scroll {
     padding-right: var(--space-4);
     padding-left: var(--space-4);

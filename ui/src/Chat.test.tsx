@@ -174,8 +174,9 @@ test('fait remonter une proposition de problématique depuis une nouvelle conver
     'value',
     'Corriger\n\nDiagnostiquer puis corriger.\n\n[PB-ABC123]',
   )
-  fireEvent.click(await screen.findByRole('button', { name: 'Lancer Corriger' }))
-  expect(onStartProblem).toHaveBeenCalledWith(expect.objectContaining({
-    originType: 'problem', originKey: 'PB-ABC123', problemPlanIndex: 0,
-  }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Lancer' }))
+  expect(onStartProblem).toHaveBeenCalledWith({
+    problems: [expect.objectContaining({ public_id: 'PB-ABC123' })],
+    missionTitle: 'Réparer la capture',
+  })
 })

@@ -17,10 +17,15 @@ function problem(index: number, conversationCount: number): Problem {
     capture_id: 'capture-1',
     project_id: 'project-1',
     ticket_id: index === 2 ? 'ticket-2' : null,
+    ticket_key: index === 2 ? 'TECH-42' : null,
+    ticket_title: index === 2 ? 'Mesurer Match AI côté annonceur' : null,
+    ticket_branch: index === 2 ? 'feature/TECH-42-match-ai' : null,
     title: `Problème ${index}`,
     context: `Contexte ${index}`,
     resolution: `Résolution ${index}`,
-    plans: [{ title: `Plan ${index}`, instruction: `Consigne ${index}` }],
+    plans: index === 2
+      ? [{ title: 'Instrumenter', instruction: 'Tracer.' }, { title: 'Mesurer', instruction: 'Calculer.' }]
+      : [{ title: `Plan ${index}`, instruction: `Consigne ${index}` }],
     status: 'open',
     closed_at: null,
     closed_commit_sha: null,
@@ -37,14 +42,16 @@ test('propose cinq problématiques non lancées en priorité', () => {
 
   render(createElement(ProblemSuggestions, { problems, onSelect, onSeeAll }))
 
-  expect(screen.getAllByRole('button', { name: /^Lancer/ })).toHaveLength(5)
+  expect(screen.getAllByRole('button', { name: 'Lancer' })).toHaveLength(5)
   expect(screen.queryByText('Problème 1')).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Lancer Plan 2' }))
-  expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({
-    originType: 'problem',
-    originKey: 'PB-ABC122',
-    problemPlanIndex: 0,
-  }))
+  expect(screen.getByText('TECH-42 · Mesurer Match AI côté annonceur')).toBeTruthy()
+  expect(screen.getByText('feature/TECH-42-match-ai')).toBeTruthy()
+  expect(screen.getByText('2 axes')).toBeTruthy()
+  fireEvent.click(screen.getAllByRole('button', { name: 'Lancer' })[4]!)
+  expect(onSelect).toHaveBeenCalledWith({
+    problems: [expect.objectContaining({ public_id: 'PB-ABC122' })],
+    missionTitle: 'Problème 2',
+  })
   fireEvent.click(screen.getByRole('button', { name: 'Voir toutes' }))
   expect(onSeeAll).toHaveBeenCalledTimes(1)
 })

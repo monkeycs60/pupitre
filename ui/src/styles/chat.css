@@ -51,10 +51,12 @@
 .problem-suggestions ul { padding: 0; margin: 0; list-style: none; }
 .problem-suggestions li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 42px; padding: 6px 11px; border-bottom: 1px solid var(--border-subtle); }
 .problem-suggestions li:last-child { border-bottom: 0; }
-.problem-suggestions li > div:first-child { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.problem-suggestions li > div:first-child strong { overflow: hidden; color: var(--text); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
-.problem-suggestion-actions { display: flex; flex: none; gap: 5px; }
-.problem-suggestion-actions button { min-height: 28px; padding: 3px 8px; font-size: 11px; }
+.problem-suggestion-copy { display: grid; gap: 4px; min-width: 0; }
+.problem-suggestion-copy > div:first-child { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.problem-suggestion-copy > div:first-child strong { color: var(--text); font-size: var(--text-sm); white-space: normal; }
+.problem-suggestion-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; color: var(--text-faint); font-size: 10px; }
+.problem-suggestion-meta code { color: var(--text-muted); font: 10px/1.3 var(--font-mono); }
+.problem-suggestions li > button { flex: none; min-height: 28px; padding: 3px 10px; font-size: 11px; }
 
 .events-view {
   flex: 1;
@@ -67,7 +69,7 @@
 @media (max-width: 900px) {
   .problem-suggestions { width: min(calc(100% - 2 * var(--space-4)), 840px); }
   .problem-suggestions li { align-items: flex-start; flex-direction: column; }
-  .problem-suggestion-actions { flex-wrap: wrap; }
+  .problem-suggestions li > button { align-self: flex-end; }
 }
 
 /* --- Recherche flottante dans le fil ------------------------------------- */

@@ -46,6 +46,8 @@ interface ComposerProps {
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
   problemPlanIndex?: number | null
+  problemIds?: string[]
+  missionTitle?: string
   /** Actions `/` du popover (résumé, test, review) : exécutées par le parent,
    *  qui tient les callbacks de revue et d'ouverture du code. */
   onAction?: (action: ComposerAction) => void | Promise<void>
@@ -206,6 +208,8 @@ export function Composer({
   originType = null,
   originKey = null,
   problemPlanIndex = null,
+  problemIds,
+  missionTitle,
   onAction,
 }: ComposerProps) {
   const isNewConversation = conversationId === null
@@ -483,6 +487,8 @@ export function Composer({
           originType,
           originKey,
           problemPlanIndex,
+          problemIds,
+          missionTitle,
           message: trimmedMessage,
           images: imageNames,
           attachments: attachmentInputs,

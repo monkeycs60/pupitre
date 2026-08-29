@@ -46,7 +46,7 @@ import {
   writeLastActiveLocation,
 } from './restoreLocation'
 import { navigationViewForShortcut, type NavigationShortcutView } from './navigationShortcuts'
-import type { ProblemConversationSeed } from './ProblemsPanel'
+import type { ProblemMissionSeed } from './ProblemsPanel'
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
@@ -88,6 +88,15 @@ function lastDigest(events: AppEvent[]): Extract<AppEvent, { type: 'conversation
   return null
 }
 
+export function problemMissionDraft(seed: ProblemMissionSeed): string {
+  const sections = seed.problems.map((problem) => [
+    `${problem.public_id} — ${problem.title}`,
+    ...problem.plans.map((plan) => `- ${plan.title} : ${plan.instruction}`),
+  ].join('\n'))
+  const markers = seed.problems.map((problem) => `[${problem.public_id}]`).join(' ')
+  return [`Mission : ${seed.missionTitle}`, ...sections, markers].join('\n\n')
+}
+
 function App() {
   useEffect(() => {
     const reportVisibility = () => {
@@ -108,6 +117,8 @@ function App() {
     originType?: 'sentry' | 'problem' | null
     originKey?: string | null
     problemPlanIndex?: number | null
+    problemIds?: string[]
+    missionTitle?: string
   } | null>(null)
   const [newConversationDraft, setNewConversationDraft] = useState('')
   const [newConversationAttachments, setNewConversationAttachments] = useState<Attachment[]>([])
@@ -434,17 +445,27 @@ function App() {
     setWorkspaceView('conversations')
   }
 
-  function handleStartProblem(seed: ProblemConversationSeed) {
+  function handleStartProblem(seed: ProblemMissionSeed) {
     if (!confirmLeaveMemory() || selectedProject === null) return
+    const first = seed.problems[0]
+    if (!first) return
+    const commonTicketId = first.ticket_id !== null
+      && seed.problems.every((problem) => problem.ticket_id === first.ticket_id)
+      ? first.ticket_id
+      : null
+    const commonBranch = first.ticket_branch
+      && seed.problems.every((problem) => problem.ticket_branch === first.ticket_branch)
+      ? first.ticket_branch
+      : null
     setConversationSeed({
-      ticketId: seed.problem.ticket_id,
-      branch: null,
-      originType: seed.originType,
-      originKey: seed.originKey,
-      problemPlanIndex: seed.problemPlanIndex,
+      ticketId: commonTicketId,
+      ticketKey: commonTicketId ? first.ticket_key ?? null : null,
+      branch: commonBranch,
+      problemIds: seed.problems.map((problem) => problem.id),
+      missionTitle: seed.missionTitle,
     })
     setSelectedConversation(null)
-    setNewConversationDraft(`${seed.plan.title}\n\n${seed.plan.instruction}\n\n[${seed.problem.public_id}]`)
+    setNewConversationDraft(problemMissionDraft(seed))
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
@@ -898,6 +919,8 @@ function App() {
               originType={conversationSeed?.originType ?? null}
               originKey={conversationSeed?.originKey ?? null}
               problemPlanIndex={conversationSeed?.problemPlanIndex ?? null}
+              problemIds={conversationSeed?.problemIds}
+              missionTitle={conversationSeed?.missionTitle}
               onStartProblem={handleStartProblem}
               onSeeAllProblems={handleSeeAllProblems}
               reviewStatus={fleet.reviewStatus}

@@ -81,6 +81,8 @@ export interface CreateConversationInput {
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
   problemPlanIndex?: number | null
+  problemIds?: string[]
+  missionTitle?: string
   message: string
   images?: string[]
   attachments?: Attachment[]
