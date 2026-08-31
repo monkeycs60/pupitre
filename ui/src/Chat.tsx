@@ -38,6 +38,8 @@ import { ThreadSearch } from './ThreadSearch'
 import { PushTimeline } from './PushTimeline'
 import { ProblemSuggestionsLoader } from './ProblemSuggestions'
 import type { ProblemMissionSeed } from './problemMission'
+import { collectConversationAssets } from './conversationAssets'
+import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
 
 interface ChatProps {
   events: AppEvent[]
@@ -189,6 +191,7 @@ export function Chat({
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
   const [message, setMessage] = useState(() => readDraft(draftStorageKey) ?? initialMessage)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [assetsOpen, setAssetsOpen] = useState(false)
   const [atBottom, setAtBottom] = useState(true)
   const [focusRequest, setFocusRequest] = useState(0)
   /** Actions *DO THIS* cochées dans le fil, source de la consigne composée. */
@@ -199,6 +202,7 @@ export function Chat({
   const [subtaskStatuses, setSubtaskStatuses] = useState<
     Record<string, SubtaskStatus>
   >({})
+  const conversationAssets = useMemo(() => collectConversationAssets(events), [events])
 
   useEffect(() => {
     try {
@@ -386,6 +390,15 @@ export function Chat({
               onClose={() => setSearchOpen(false)}
               contentVersion={events.length}
             />
+            {!searchOpen ? (
+              <ConversationAssetsDrawer
+                assets={conversationAssets}
+                open={assetsOpen}
+                onOpen={() => setAssetsOpen(true)}
+                onClose={() => setAssetsOpen(false)}
+                onImageOpen={handleImageOpen}
+              />
+            ) : null}
             {!atBottom ? (
               <button type="button" className="thread-jump" onClick={jumpToBottom} title="Aller au dernier message">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
