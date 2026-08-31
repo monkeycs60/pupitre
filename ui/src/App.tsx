@@ -46,7 +46,7 @@ import {
   writeLastActiveLocation,
 } from './restoreLocation'
 import { navigationViewForShortcut, type NavigationShortcutView } from './navigationShortcuts'
-import type { ProblemMissionSeed } from './ProblemsPanel'
+import { problemMissionDraft, type ProblemMissionSeed } from './problemMission'
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
@@ -88,15 +88,6 @@ function lastDigest(events: AppEvent[]): Extract<AppEvent, { type: 'conversation
   return null
 }
 
-export function problemMissionDraft(seed: ProblemMissionSeed): string {
-  const sections = seed.problems.map((problem) => [
-    `${problem.public_id} — ${problem.title}`,
-    ...problem.plans.map((plan) => `- ${plan.title} : ${plan.instruction}`),
-  ].join('\n'))
-  const markers = seed.problems.map((problem) => `[${problem.public_id}]`).join(' ')
-  return [`Mission : ${seed.missionTitle}`, ...sections, markers].join('\n\n')
-}
-
 function App() {
   useEffect(() => {
     const reportVisibility = () => {
@@ -118,6 +109,7 @@ function App() {
     originKey?: string | null
     problemPlanIndex?: number | null
     problemIds?: string[]
+    problemPlanIndices?: Record<string, number[]>
     missionTitle?: string
   } | null>(null)
   const [newConversationDraft, setNewConversationDraft] = useState('')
@@ -462,6 +454,7 @@ function App() {
       ticketKey: commonTicketId ? first.ticket_key ?? null : null,
       branch: commonBranch,
       problemIds: seed.problems.map((problem) => problem.id),
+      problemPlanIndices: seed.planIndices,
       missionTitle: seed.missionTitle,
     })
     setSelectedConversation(null)
@@ -920,6 +913,7 @@ function App() {
               originKey={conversationSeed?.originKey ?? null}
               problemPlanIndex={conversationSeed?.problemPlanIndex ?? null}
               problemIds={conversationSeed?.problemIds}
+              problemPlanIndices={conversationSeed?.problemPlanIndices}
               missionTitle={conversationSeed?.missionTitle}
               onStartProblem={handleStartProblem}
               onSeeAllProblems={handleSeeAllProblems}

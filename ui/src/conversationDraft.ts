@@ -19,6 +19,8 @@ interface ConversationDraft {
   originKey?: string | null
   problemPlanIndex?: number | null
   problemIds?: string[]
+  /** Axes retenus par problématique ; absent = tous les axes. */
+  problemPlanIndices?: Record<string, number[]>
   missionTitle?: string
   message: string
   images: string[]
@@ -67,6 +69,7 @@ export function buildCreateConversationInput(
     } : {}),
     ...(draft.problemIds?.length ? {
       problemIds: draft.problemIds,
+      problemPlanIndices: draft.problemPlanIndices,
       missionTitle: draft.missionTitle?.trim() || undefined,
     } : {}),
     message: draft.message,

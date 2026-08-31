@@ -37,7 +37,7 @@ import { newConversationDraftStorageKey } from './conversationDraft'
 import { ThreadSearch } from './ThreadSearch'
 import { PushTimeline } from './PushTimeline'
 import { ProblemSuggestionsLoader } from './ProblemSuggestions'
-import type { ProblemMissionSeed } from './ProblemsPanel'
+import type { ProblemMissionSeed } from './problemMission'
 
 interface ChatProps {
   events: AppEvent[]
@@ -59,6 +59,7 @@ interface ChatProps {
   originKey?: string | null
   problemPlanIndex?: number | null
   problemIds?: string[]
+  problemPlanIndices?: Record<string, number[]>
   missionTitle?: string
   onStartProblem?: (seed: ProblemMissionSeed) => void
   onSeeAllProblems?: () => void
@@ -166,6 +167,7 @@ export function Chat({
   originKey = null,
   problemPlanIndex = null,
   problemIds,
+  problemPlanIndices,
   missionTitle,
   onStartProblem,
   onSeeAllProblems,
@@ -457,6 +459,7 @@ export function Chat({
             originKey={originKey}
             problemPlanIndex={problemPlanIndex}
             problemIds={problemIds}
+            problemPlanIndices={problemPlanIndices}
             missionTitle={missionTitle}
             onAction={(action) => void handleComposerAction(action)}
           />

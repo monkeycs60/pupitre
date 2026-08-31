@@ -82,6 +82,7 @@ export interface CreateConversationInput {
   originKey?: string | null
   problemPlanIndex?: number | null
   problemIds?: string[]
+  problemPlanIndices?: Record<string, number[]>
   missionTitle?: string
   message: string
   images?: string[]

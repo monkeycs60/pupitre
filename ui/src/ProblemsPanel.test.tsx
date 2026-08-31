@@ -1,7 +1,7 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
-import type { ProblemProjectPayload, TicketRow } from './types'
+import type { ProblemProjectPayload, Project, TicketRow } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
@@ -15,6 +15,17 @@ afterEach(() => {
   globalThis.fetch = defaultFetch
   window.confirm = defaultConfirm
 })
+
+const project = {
+  id: 'p1', name: 'Pupitre', path: '/tmp/p1', permission_mode: null, filesystem_scope: 'project',
+  pinned: false, created_at: '', default_preset_id: 'preset-1', auto_rescan: false,
+} as unknown as Project
+
+const preset = {
+  id: 'preset-1', name: 'Fable', provider: 'claude', model: 'claude-fable-5', effort: 'high',
+  speed: null, orchestrator: true, permission_mode: null, review_provider: 'claude',
+  review_model: 'claude-fable-5', review_effort: 'high', built_in: false, created_at: '', updated_at: '',
+}
 
 const ticket = {
   id: 't1', project_id: 'p1', key: 'TECH-42', source: 'clickup', title: 'Bouton', status: 'todo',
@@ -55,7 +66,7 @@ const payload: ProblemProjectPayload = {
 test('affiche une seule action qui lance tous les axes de la problématique', () => {
   const onStartConversation = mock(() => {})
   render(createElement(ProblemsPanel, {
-    payload, tickets: [ticket], onChanged: () => {}, onStartConversation,
+    project, payload, tickets: [ticket], onChanged: () => {}, onStartConversation, onConversationSelect: () => {},
   }))
 
   expect(screen.getByText('Traitement en échec')).toBeTruthy()
@@ -63,10 +74,13 @@ test('affiche une seule action qui lance tous les axes de la problématique', ()
   expect(screen.getByRole('heading', { name: 'Le bouton ne répond pas' })).toBeTruthy()
   expect(screen.getAllByText('TECH-42')).toHaveLength(2)
   expect(screen.getAllByRole('button', { name: 'Lancer tous les axes' })).toHaveLength(2)
-  fireEvent.click(screen.getAllByRole('button', { name: 'Lancer tous les axes' })[0]!)
+  fireEvent.click(screen.getAllByRole('button', { name: 'Choisir le mode de lancement' })[0]!)
+  fireEvent.click(screen.getByRole('menuitem', { name: /Ouvrir en conversation/ }))
   expect(onStartConversation).toHaveBeenCalledWith({
     problems: [expect.objectContaining({ public_id: 'PB-7K3M9Q' })],
+    planIndices: { 'problem-1': [0] },
     missionTitle: 'Le bouton ne répond pas',
+    mode: 'conversation',
   })
   expect(screen.queryByText('Ancienne problématique')).toBeNull()
 })
@@ -74,27 +88,30 @@ test('affiche une seule action qui lance tous les axes de la problématique', ()
 test('regroupe manuellement plusieurs problématiques avec un titre modifiable', () => {
   const onStartConversation = mock(() => {})
   render(createElement(ProblemsPanel, {
-    payload, tickets: [ticket], onChanged: () => {}, onStartConversation,
+    project, payload, tickets: [ticket], onChanged: () => {}, onStartConversation, onConversationSelect: () => {},
   }))
 
   fireEvent.click(screen.getByRole('checkbox', { name: 'Sélectionner PB-7K3M9Q' }))
   fireEvent.click(screen.getByRole('checkbox', { name: 'Sélectionner PB-MATCH2' }))
   const title = screen.getByRole('textbox', { name: 'Titre de la mission' })
   fireEvent.change(title, { target: { value: 'Prouver Match AI' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Lancer ensemble' }))
+  fireEvent.click(screen.getAllByRole('button', { name: 'Choisir le mode de lancement' })[0]!)
+  fireEvent.click(screen.getByRole('menuitem', { name: /Ouvrir en conversation/ }))
 
   expect(onStartConversation).toHaveBeenCalledWith({
     problems: expect.arrayContaining([
       expect.objectContaining({ id: 'problem-1' }),
       expect.objectContaining({ id: 'problem-3' }),
     ]),
+    planIndices: { 'problem-1': [0], 'problem-3': [0, 1] },
     missionTitle: 'Prouver Match AI',
+    mode: 'conversation',
   })
 })
 
 test('filtre les problèmes fermés et expose le SHA de clôture', () => {
   render(createElement(ProblemsPanel, {
-    payload, tickets: [ticket], onChanged: () => {}, onStartConversation: () => {},
+    project, payload, tickets: [ticket], onChanged: () => {}, onStartConversation: () => {}, onConversationSelect: () => {},
   }))
 
   fireEvent.click(screen.getByRole('button', { name: 'Fermées' }))
@@ -113,7 +130,7 @@ test('relance, ferme, corrige le ticket et supprime avec confirmation', async ()
   window.confirm = () => true
   const changed = mock(() => {})
   render(createElement(ProblemsPanel, {
-    payload, tickets: [ticket], onChanged: changed, onStartConversation: () => {},
+    project, payload, tickets: [ticket], onChanged: changed, onStartConversation: () => {}, onConversationSelect: () => {},
   }))
 
   fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
@@ -131,4 +148,54 @@ test('relance, ferme, corrige le ticket et supprime avec confirmation', async ()
     { url: '/api/problems/problem-1/close', method: 'POST' },
     { url: '/api/problems/problem-1', method: 'DELETE' },
   ]))
+})
+
+test('désélectionner un axe le retire de la mission et de son décompte', () => {
+  const onStartConversation = mock(() => {})
+  render(createElement(ProblemsPanel, {
+    project, payload, tickets: [ticket], onChanged: () => {}, onStartConversation, onConversationSelect: () => {},
+  }))
+
+  expect(screen.getByText('2/2 axes')).toBeTruthy()
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Axe Attribuer de PB-MATCH2' }))
+
+  expect(screen.getByText('1/2 axes')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Lancer 1 axe' })).toBeTruthy()
+  fireEvent.click(screen.getAllByRole('button', { name: 'Choisir le mode de lancement' })[1]!)
+  fireEvent.click(screen.getByRole('menuitem', { name: /Ouvrir en conversation/ }))
+
+  expect(onStartConversation).toHaveBeenCalledWith({
+    problems: [expect.objectContaining({ id: 'problem-3' })],
+    planIndices: { 'problem-3': [1] },
+    missionTitle: 'Mesurer la valeur créée',
+    mode: 'conversation',
+  })
+})
+
+test('le lancement agentique crée la conversation sur le preset par défaut et l’ouvre', async () => {
+  const requests: Array<{ url: string; body: Record<string, unknown> }> = []
+  globalThis.fetch = mock(async (input, init) => {
+    const url = String(input)
+    if (url === '/api/presets') return Response.json([preset])
+    requests.push({ url, body: JSON.parse(String(init?.body ?? '{}')) })
+    return Response.json({ id: 'conv-9' })
+  }) as typeof fetch
+  const opened = mock((_id: string) => {})
+  render(createElement(ProblemsPanel, {
+    project, payload, tickets: [ticket], onChanged: () => {}, onStartConversation: () => {}, onConversationSelect: opened,
+  }))
+
+  fireEvent.click(screen.getAllByRole('button', { name: 'Lancer tous les axes' })[0]!)
+
+  await waitFor(() => expect(opened).toHaveBeenCalledWith('conv-9'))
+  expect(requests[0]!.url).toBe('/api/conversations')
+  expect(requests[0]!.body).toMatchObject({
+    projectId: 'p1',
+    presetId: 'preset-1',
+    model: 'claude-fable-5',
+    problemIds: ['problem-1'],
+    problemPlanIndices: { 'problem-1': [0] },
+    missionTitle: 'Le bouton ne répond pas',
+  })
+  expect(String(requests[0]!.body.message)).toContain('Corriger le bouton')
 })

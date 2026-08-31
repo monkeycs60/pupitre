@@ -15,7 +15,8 @@ import { useDashboard } from './useDashboard'
 import { SentryInbox } from './SentryInbox'
 import { ExternalLink } from './externalLink'
 import { useNow } from './useNow'
-import { ProblemsPanel, type ProblemMissionSeed } from './ProblemsPanel'
+import { ProblemsPanel } from './ProblemsPanel'
+import type { ProblemMissionSeed } from './problemMission'
 
 interface DashboardViewProps {
   project: Project
@@ -546,6 +547,8 @@ export function DashboardView({
 
         {activeTab === 'problems' ? (
           <ProblemsPanel
+            project={project}
+            onConversationSelect={onConversationSelect}
             payload={data?.problems ?? { projectId: project.id, captures: [], problems: [] }}
             tickets={data?.tickets ?? []}
             onChanged={() => {}}

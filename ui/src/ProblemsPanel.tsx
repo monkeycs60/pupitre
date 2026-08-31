@@ -1,35 +1,99 @@
 import { useState } from 'react'
 import {
   closeProblem,
+  createConversation,
   deleteProblem,
+  listPresets,
   reopenProblem,
   retryProblemCapture,
   updateProblemTicket,
 } from './api'
-import type { Problem, ProblemProjectPayload, TicketRow } from './types'
+import { configOf } from './ConfigPanel'
+import { buildCreateConversationInput } from './conversationDraft'
+import { problemMissionDraft, type ProblemMissionMode, type ProblemMissionSeed } from './problemMission'
+import type { Problem, ProblemProjectPayload, Project, TicketRow } from './types'
 
-export interface ProblemMissionSeed {
-  problems: Problem[]
-  missionTitle: string
-}
+export type { ProblemMissionSeed } from './problemMission'
 
 interface ProblemsPanelProps {
+  project: Project
   payload: ProblemProjectPayload
   tickets: TicketRow[]
   onChanged: () => void
   onStartConversation: (seed: ProblemMissionSeed) => void
+  onConversationSelect: (conversationId: string) => void
+}
+
+interface MissionLaunchProps {
+  label: string
+  disabled: boolean
+  busy: boolean
+  onLaunch: (mode: ProblemMissionMode) => void
+}
+
+function MissionLaunch({ label, disabled, busy, onLaunch }: MissionLaunchProps) {
+  const [open, setOpen] = useState(false)
+
+  function pick(mode: ProblemMissionMode) {
+    setOpen(false)
+    onLaunch(mode)
+  }
+
+  return (
+    <div
+      className="problem-launch-menu"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false)
+      }}
+    >
+      <button
+        type="button"
+        className="primary-button"
+        disabled={disabled || busy}
+        onClick={() => pick('agent')}
+      >
+        {busy ? 'Lancement…' : label}
+      </button>
+      <button
+        type="button"
+        className="primary-button problem-launch-caret"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Choisir le mode de lancement"
+        disabled={disabled || busy}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span aria-hidden="true">⌄</span>
+      </button>
+      {open ? (
+        <div className="problem-launch-dropdown" role="menu">
+          <button type="button" role="menuitem" onClick={() => pick('agent')}>
+            Lancer en agentique
+            <small>La conversation démarre seule, sans passer par le composer.</small>
+          </button>
+          <button type="button" role="menuitem" onClick={() => pick('conversation')}>
+            Ouvrir en conversation
+            <small>Brouillon prérempli : tu choisis la config puis tu envoies.</small>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 export function ProblemsPanel({
+  project,
   payload,
   tickets,
   onChanged,
   onStartConversation,
+  onConversationSelect,
 }: ProblemsPanelProps) {
   const [filter, setFilter] = useState<'open' | 'closed'>('open')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [excludedAxes, setExcludedAxes] = useState<Record<string, number[]>>({})
   const [missionTitle, setMissionTitle] = useState('')
   const visibleProblems = payload.problems.filter((problem) => problem.status === filter)
   const ticketsById = new Map(tickets.map((ticket) => [ticket.id, ticket]))
@@ -63,7 +127,70 @@ export function ProblemsPanel({
     else if (!missionTitle.trim()) setMissionTitle(`Mission · ${next.size} problématiques`)
   }
 
+  function axesOf(problem: Problem): number[] {
+    const excluded = excludedAxes[problem.id] ?? []
+    return problem.plans
+      .map((_, index) => index)
+      .filter((index) => !excluded.includes(index))
+  }
+
+  function toggleAxis(problem: Problem, index: number) {
+    const excluded = excludedAxes[problem.id] ?? []
+    setExcludedAxes({
+      ...excludedAxes,
+      [problem.id]: excluded.includes(index)
+        ? excluded.filter((candidate) => candidate !== index)
+        : [...excluded, index],
+    })
+  }
+
+  function planIndicesOf(problems: Problem[]): Record<string, number[]> {
+    return Object.fromEntries(problems.map((problem) => [problem.id, axesOf(problem)]))
+  }
+
+  /**
+   * Le lancement agentique n'ouvre pas le composer : la conversation naît avec
+   * le preset par défaut du projet et son premier tour part immédiatement.
+   */
+  async function launchAgent(seed: ProblemMissionSeed) {
+    const presets = await listPresets()
+    const preset = presets.find((candidate) => candidate.id === project.default_preset_id)
+      ?? presets.find((candidate) => candidate.id === 'builtin-speed')
+      ?? presets[0]
+    if (!preset) throw new Error('Aucun preset disponible pour lancer la mission.')
+    const first = seed.problems[0]!
+    const sharedTicketId = first.ticket_id !== null
+      && seed.problems.every((problem) => problem.ticket_id === first.ticket_id)
+      ? first.ticket_id
+      : null
+    const sharedBranch = first.ticket_branch
+      && seed.problems.every((problem) => problem.ticket_branch === first.ticket_branch)
+      ? first.ticket_branch
+      : null
+    const conversation = await createConversation(buildCreateConversationInput({
+      projectId: project.id,
+      ...configOf(preset),
+      branch: sharedBranch,
+      ticketId: sharedTicketId,
+      problemIds: seed.problems.map((problem) => problem.id),
+      problemPlanIndices: seed.planIndices,
+      missionTitle: seed.missionTitle,
+      message: problemMissionDraft(seed),
+      images: [],
+    }))
+    onConversationSelect(conversation.id)
+  }
+
+  function launch(seed: ProblemMissionSeed, mode: ProblemMissionMode) {
+    if (mode === 'conversation') {
+      onStartConversation({ ...seed, mode })
+      return
+    }
+    void mutate(`launch:${seed.problems.map((problem) => problem.id).join(',')}`, () => launchAgent(seed))
+  }
+
   const selectedProblems = visibleProblems.filter((problem) => selectedIds.has(problem.id))
+  const groupAxisCount = selectedProblems.reduce((total, problem) => total + axesOf(problem).length, 0)
 
   return (
     <section
@@ -87,7 +214,7 @@ export function ProblemsPanel({
 
       {selectedProblems.length >= 2 ? (
         <div className="problem-group-bar" aria-label="Regrouper les problématiques sélectionnées">
-          <strong>{selectedProblems.length} sélectionnées</strong>
+          <strong>{selectedProblems.length} sélectionnées · {groupAxisCount} axe{groupAxisCount > 1 ? 's' : ''}</strong>
           <label>
             <span>Titre</span>
             <input
@@ -96,14 +223,16 @@ export function ProblemsPanel({
               onChange={(event) => setMissionTitle(event.target.value)}
             />
           </label>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={!missionTitle.trim()}
-            onClick={() => onStartConversation({ problems: selectedProblems, missionTitle: missionTitle.trim() })}
-          >
-            Lancer ensemble
-          </button>
+          <MissionLaunch
+            label="Lancer ensemble"
+            busy={busy === `launch:${selectedProblems.map((problem) => problem.id).join(',')}`}
+            disabled={!missionTitle.trim() || groupAxisCount === 0}
+            onLaunch={(mode) => launch({
+              problems: selectedProblems,
+              planIndices: planIndicesOf(selectedProblems),
+              missionTitle: missionTitle.trim(),
+            }, mode)}
+          />
         </div>
       ) : null}
 
@@ -135,6 +264,7 @@ export function ProblemsPanel({
         <div className="problems-list">
           {visibleProblems.map((problem) => {
             const ticket = problem.ticket_id ? ticketsById.get(problem.ticket_id) : undefined
+            const axes = axesOf(problem)
             return (
               <article key={problem.id} className="problem-card">
                 <header>
@@ -161,20 +291,37 @@ export function ProblemsPanel({
                 <ol className="problem-plans">
                   {problem.plans.map((plan, planIndex) => (
                     <li key={`${problem.id}:${planIndex}`}>
-                      <div><strong>{plan.title}</strong><p>{plan.instruction}</p></div>
+                      {problem.status === 'open' ? (
+                        <label className="problem-axis">
+                          <input
+                            type="checkbox"
+                            aria-label={`Axe ${plan.title} de ${problem.public_id}`}
+                            checked={axes.includes(planIndex)}
+                            onChange={() => toggleAxis(problem, planIndex)}
+                          />
+                          <div><strong>{plan.title}</strong><p>{plan.instruction}</p></div>
+                        </label>
+                      ) : (
+                        <div><strong>{plan.title}</strong><p>{plan.instruction}</p></div>
+                      )}
                     </li>
                   ))}
                 </ol>
                 {problem.status === 'open' ? (
                   <div className="problem-launch-row">
-                    <span>{problem.plans.length} axe{problem.plans.length > 1 ? 's' : ''}</span>
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={() => onStartConversation({ problems: [problem], missionTitle: problem.title })}
-                    >
-                      Lancer tous les axes
-                    </button>
+                    <span>{axes.length}/{problem.plans.length} axe{problem.plans.length > 1 ? 's' : ''}</span>
+                    <MissionLaunch
+                      label={axes.length === problem.plans.length
+                        ? 'Lancer tous les axes'
+                        : `Lancer ${axes.length} axe${axes.length > 1 ? 's' : ''}`}
+                      busy={busy === `launch:${problem.id}`}
+                      disabled={axes.length === 0}
+                      onLaunch={(mode) => launch({
+                        problems: [problem],
+                        planIndices: { [problem.id]: axes },
+                        missionTitle: problem.title,
+                      }, mode)}
+                    />
                   </div>
                 ) : null}
                 <footer className="problem-actions">

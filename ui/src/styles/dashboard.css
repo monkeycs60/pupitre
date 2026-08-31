@@ -287,6 +287,31 @@
 .problem-launch-row { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: 9px 14px; border-bottom: 1px solid var(--border-subtle); }
 .problem-launch-row > span { color: var(--text-faint); font-size: 11px; }
 
+.problem-axis { display: flex; align-items: flex-start; gap: 10px; min-width: 0; cursor: pointer; }
+.problem-axis input { margin-top: 2px; accent-color: var(--accent); }
+.problem-axis input:not(:checked) ~ div strong, .problem-axis input:not(:checked) ~ div p { color: var(--text-faint); }
+
+.problem-launch-menu { position: relative; display: flex; align-items: stretch; gap: 1px; }
+.problem-launch-menu > .primary-button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.problem-launch-caret { padding-right: 8px; padding-left: 8px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.problem-launch-dropdown {
+  /* La carte coupe ce qui déborde : le menu s'ouvre donc vers le haut. */
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 6px);
+  display: grid;
+  min-width: 280px;
+  padding: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-popover);
+}
+.problem-launch-dropdown button { display: grid; gap: 2px; padding: 8px 10px; color: var(--text); font-size: var(--text-sm); text-align: left; background: transparent; border: 0; border-radius: var(--r-sm); cursor: pointer; }
+.problem-launch-dropdown button:hover { background: var(--bg-hover); }
+.problem-launch-dropdown small { color: var(--text-faint); font-size: 11px; }
+
 .problem-actions {
   display: flex;
   align-items: center;

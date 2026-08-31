@@ -473,7 +473,7 @@ test("une conversation problem reçoit du serveur le contexte, le ticket et le m
   expect(sent).toContain("[PB-7K3M9Q]");
 });
 
-test("une mission lance tous les axes de plusieurs problématiques dans une conversation", async () => {
+test("une mission ne prépare que les axes retenus des problématiques groupées", async () => {
   const repoPath = mkdtempSync(join(tmpdir(), "pupitre-problem-mission-"));
   runGit(repoPath, "init", "-q", "-b", "main");
   runGit(repoPath, "config", "user.email", "api@example.test");
@@ -520,6 +520,7 @@ test("une mission lance tous les axes de plusieurs problématiques dans une conv
     model: "claude-fable-5",
     message: "Lancer la mesure Match AI",
     problemIds: problems.map((problem) => problem.id),
+    problemPlanIndices: { [problems[0]!.id]: [1] },
     missionTitle: "Prouver la valeur de Match AI",
   });
 
@@ -533,7 +534,7 @@ test("une mission lance tous les axes de plusieurs problématiques dans une conv
   });
   await waitForRunnerIdle(conversation.id);
   const sent = readFileSync(promptLog, "utf8");
-  expect(sent).toContain("Instrumenter PostHog");
+  expect(sent).not.toContain("Instrumenter PostHog");
   expect(sent).toContain("Mesurer le funnel");
   expect(sent).toContain("Cycle de vie");
   expect(sent).toContain("[PB-MATCH1]");

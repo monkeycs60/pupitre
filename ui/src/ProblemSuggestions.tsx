@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listProjectProblems } from './api'
 import type { Problem } from './types'
-import type { ProblemMissionSeed } from './ProblemsPanel'
+import type { ProblemMissionSeed } from './problemMission'
 
 interface ProblemSuggestionsProps {
   problems: Problem[]

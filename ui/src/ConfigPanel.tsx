@@ -55,7 +55,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Une erreur est survenue.'
 }
 
-function configOf(preset: Preset): ConversationConfig {
+export function configOf(preset: Preset): ConversationConfig {
   return {
     presetId: preset.id,
     provider: preset.provider,

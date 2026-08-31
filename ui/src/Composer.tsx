@@ -47,6 +47,7 @@ interface ComposerProps {
   originKey?: string | null
   problemPlanIndex?: number | null
   problemIds?: string[]
+  problemPlanIndices?: Record<string, number[]>
   missionTitle?: string
   /** Actions `/` du popover (résumé, test, review) : exécutées par le parent,
    *  qui tient les callbacks de revue et d'ouverture du code. */
@@ -209,6 +210,7 @@ export function Composer({
   originKey = null,
   problemPlanIndex = null,
   problemIds,
+  problemPlanIndices,
   missionTitle,
   onAction,
 }: ComposerProps) {
@@ -488,6 +490,7 @@ export function Composer({
           originKey,
           problemPlanIndex,
           problemIds,
+          problemPlanIndices,
           missionTitle,
           message: trimmedMessage,
           images: imageNames,

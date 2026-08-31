@@ -1070,7 +1070,19 @@ function routineInput(
   };
 }
 
-function missionProblemPreamble(problems: Problem[], missionTitle: string): string {
+/** Axes retenus pour une problématique ; sans sélection, tous ses axes. */
+function missionPlans(problem: Problem, planIndices: Map<string, number[]> | null) {
+  const indices = planIndices?.get(problem.id);
+  return indices === undefined
+    ? problem.plans
+    : indices.map((index) => problem.plans[index]!);
+}
+
+function missionProblemPreamble(
+  problems: Problem[],
+  missionTitle: string,
+  planIndices: Map<string, number[]> | null,
+): string {
   const sections = problems.map((problem) => [
     `## ${problem.public_id} — ${problem.title}`,
     "",
@@ -1079,7 +1091,7 @@ function missionProblemPreamble(problems: Problem[], missionTitle: string): stri
     `**Résolution attendue**\n${problem.resolution}`,
     "",
     "### Axes à traiter dans cette conversation",
-    ...problem.plans.flatMap((plan, index) => [
+    ...missionPlans(problem, planIndices).flatMap((plan, index) => [
       `${index + 1}. **${plan.title}**`,
       `   ${plan.instruction}`,
     ]),
@@ -2612,6 +2624,7 @@ export function createServer(deps: ServerDeps) {
           const requestedProblemIds = body.problemIds;
           let missionProblems: Problem[] | null = null;
           let missionTitle: string | null = null;
+          let missionPlanIndices: Map<string, number[]> | null = null;
           if (requestedProblemIds !== undefined) {
             if (!deps.problemStore || !deps.problemMissions) {
               throw new HttpError(501, "missions de problématiques non câblées");
@@ -2636,6 +2649,28 @@ export function createServer(deps: ServerDeps) {
             if (missionProblems.some((problem) => problem.status !== "open")) {
               throw new HttpError(409, "une problématique est déjà fermée");
             }
+            const requestedPlanIndices = body.problemPlanIndices;
+            if (requestedPlanIndices !== undefined) {
+              if (typeof requestedPlanIndices !== "object"
+                || requestedPlanIndices === null
+                || Array.isArray(requestedPlanIndices)) {
+                throw new HttpError(400, "axes de problématiques invalides");
+              }
+              missionPlanIndices = new Map();
+              for (const problem of missionProblems) {
+                const indices = (requestedPlanIndices as Record<string, unknown>)[problem.id];
+                if (indices === undefined) continue;
+                if (!Array.isArray(indices)
+                  || indices.length === 0
+                  || indices.some((index) => !Number.isInteger(index)
+                    || Number(index) < 0
+                    || Number(index) >= problem.plans.length)
+                  || new Set(indices.map(Number)).size !== indices.length) {
+                  throw new HttpError(400, "axes de problématiques invalides");
+                }
+                missionPlanIndices.set(problem.id, indices.map(Number));
+              }
+            }
             missionTitle = optionalTrimmed(body, "missionTitle") ?? missionProblems[0]!.title;
             originType = "problem";
             originKey = null;
@@ -2654,7 +2689,7 @@ export function createServer(deps: ServerDeps) {
               && missionProblems.every((problem) => problem.ticket_id === commonTicketId)
               ? deps.tickets.get(commonTicketId)
               : null;
-            problemPreamble = missionProblemPreamble(missionProblems, missionTitle!);
+            problemPreamble = missionProblemPreamble(missionProblems, missionTitle!, missionPlanIndices);
           } else if (originType === "problem" && originKey) {
             const problem = deps.problemStore?.getByPublicId(originKey);
             if (!problem || problem.project_id !== projectId) {
