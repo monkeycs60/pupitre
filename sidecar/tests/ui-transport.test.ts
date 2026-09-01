@@ -6,6 +6,18 @@ import {
   webSocketUrl,
 } from "../../ui/src/transport";
 
+test("la webview lit le port injecté par l'instance dev", () => {
+  const previousWindow = globalThis.window;
+  Object.assign(globalThis, { window: { __PUPITRE__: { instance: "dev", port: 4821 } } });
+  try {
+    expect(httpUrl("/api/health", "tauri:")).toBe("http://127.0.0.1:4821/api/health");
+    expect(webSocketUrl("/ws?channel=fleet", { protocol: "tauri:", host: "localhost" }))
+      .toBe("ws://127.0.0.1:4821/ws?channel=fleet");
+  } finally {
+    Object.assign(globalThis, { window: previousWindow });
+  }
+});
+
 test("la webview Tauri appelle directement le sidecar de production", () => {
   expect(httpUrl("/api/health", "tauri:")).toBe("http://127.0.0.1:4820/api/health");
   expect(mediaUrl("capture.png", "tauri:")).toBe(

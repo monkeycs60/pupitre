@@ -1,5 +1,20 @@
-const SIDECAR_HTTP_ORIGIN = 'http://127.0.0.1:4820'
-const SIDECAR_WS_ORIGIN = 'ws://127.0.0.1:4820'
+interface PupitreRuntime {
+  instance?: 'stable' | 'dev'
+  port?: number
+}
+
+function runtime(): PupitreRuntime {
+  return (typeof window !== 'undefined'
+    && (window as typeof window & { __PUPITRE__?: PupitreRuntime }).__PUPITRE__) || {}
+}
+
+export function sidecarPort(): number {
+  const port = runtime().port
+  return Number.isInteger(port) ? port as number : 4820
+}
+
+const httpOrigin = () => `http://127.0.0.1:${sidecarPort()}`
+const wsOrigin = () => `ws://127.0.0.1:${sidecarPort()}`
 
 interface LocationLike {
   protocol: string
@@ -12,7 +27,7 @@ export function hasTauriRuntime(): boolean {
 }
 
 export function httpUrl(path: string, protocol = location.protocol): string {
-  return protocol === 'tauri:' ? `${SIDECAR_HTTP_ORIGIN}${path}` : path
+  return protocol === 'tauri:' ? `${httpOrigin()}${path}` : path
 }
 
 export function mediaUrl(name: string, protocol = location.protocol): string {
@@ -56,7 +71,7 @@ export function webSocketUrl(
 ): string {
   // En dev, la WebView Tauri est servie par Vite en http: mais peut joindre le
   // sidecar directement. Éviter le proxy WS supprime ses EPIPE au montage HMR.
-  if (current.protocol === 'tauri:' || tauriRuntime) return `${SIDECAR_WS_ORIGIN}${path}`
+  if (current.protocol === 'tauri:' || tauriRuntime) return `${wsOrigin()}${path}`
   const scheme = current.protocol === 'https:' ? 'wss' : 'ws'
   return `${scheme}://${current.host}${path}`
 }

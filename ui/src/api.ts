@@ -51,6 +51,7 @@ import type {
   Problem,
   ProblemCapture,
   ProblemProjectPayload,
+  InstanceHealth,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -180,6 +181,10 @@ export class ApiError extends Error {
     this.name = 'ApiError'
     this.status = status
   }
+}
+
+export function fetchHealth(signal?: AbortSignal): Promise<InstanceHealth> {
+  return fetchJson('/api/health', { signal })
 }
 
 // En développement, Vite peut répondre 502/503 pendant que Tauri compile puis

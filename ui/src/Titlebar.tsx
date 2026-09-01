@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { getCurrentWindow, type Window } from '@tauri-apps/api/window'
 import type { TimeSnapshot } from './types'
 import { formatActiveDuration } from './formatActiveDuration'
+import type { InstanceHealth } from './types'
+import { InstanceBadge } from './InstanceBadge'
 
 type ResizeDirection = Parameters<Window['startResizeDragging']>[0]
 
@@ -14,6 +16,8 @@ interface TitlebarProps {
   crumbs?: Array<string | null | undefined>
   onSearch?: () => void
   time?: TimeSnapshot | null
+  instance?: InstanceHealth | null
+  onRestart?: () => Promise<void>
 }
 
 const RESIZE_HANDLES: ReadonlyArray<[string, ResizeDirection]> = [
@@ -37,7 +41,7 @@ function activeLabel(snapshot: TimeSnapshot | null | undefined): string | null {
   return formatActiveDuration(snapshot.user.todayMs)
 }
 
-export function Titlebar({ crumbs, onSearch, time }: TitlebarProps) {
+export function Titlebar({ crumbs, onSearch, time, instance, onRestart }: TitlebarProps) {
   const visibleCrumbs = (crumbs ?? []).filter(
     (crumb): crumb is string => typeof crumb === 'string' && crumb.length > 0,
   )
@@ -80,6 +84,7 @@ export function Titlebar({ crumbs, onSearch, time }: TitlebarProps) {
       </div>
 
       <div className="titlebar-right">
+        {onRestart ? <InstanceBadge health={instance ?? null} onRestart={onRestart} /> : null}
         {activity ? (
           <span className="titlebar-streak" title="Temps actif aujourd'hui">
             <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">

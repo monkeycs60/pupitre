@@ -125,6 +125,32 @@ body.is-resizing-documents-list {
   border-radius: var(--r-full);
 }
 
+.titlebar-instance {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+}
+
+button.titlebar-instance {
+  cursor: pointer;
+}
+
+.titlebar-instance.is-dev {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.titlebar-instance.is-stale {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+}
+
 .titlebar-drag {
   display: flex;
   flex: 1;

@@ -47,6 +47,7 @@ import {
 } from './restoreLocation'
 import { navigationViewForShortcut, type NavigationShortcutView } from './navigationShortcuts'
 import { problemMissionDraft, type ProblemMissionSeed } from './problemMission'
+import { useInstance } from './useInstance'
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
@@ -150,6 +151,7 @@ function App() {
     workspaceView === 'progress' ? null : selectedConversation?.id ?? null,
   )
   const fleet = useFleet(selectedProject?.id)
+  const instance = useInstance(fleet.connected)
   const ticketLinks = useTicketLinks(selectedProject?.id)
   const sentryLinks = useSentryLinks(selectedProject?.id)
   useAppNotifications()
@@ -724,6 +726,8 @@ function App() {
         crumbs={[selectedProject?.name, titlebarView]}
         onSearch={() => setPaletteOpen(true)}
         time={time.snapshot}
+        instance={instance}
+        onRestart={restartApp}
       />
       <Rail
         selectedProject={selectedProject}

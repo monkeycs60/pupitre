@@ -949,4 +949,15 @@ export interface HtmlDocument {
   matchCount: number
 }
 
+export interface InstanceHealth {
+  ok: true
+  instance: 'stable' | 'dev'
+  port: number
+  pid: number
+  appPid: number
+  startedAt: string
+  build: { sha: string; dirty: boolean; source: 'build' | 'git' }
+  staleSources: number
+}
+
 export type DocumentArtifact = HtmlDocument
