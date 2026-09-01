@@ -3,7 +3,7 @@ export type ConversationSpeed = 'standard' | 'fast'
 export type PresetPermissionMode =
   'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'bypassPermissions'
 export type FilesystemScope = 'project-and-ai-roots' | 'full-system'
-export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'costs' | 'memory' | 'help' | 'progress' | 'dashboard' | 'settings'
+export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'attention' | 'costs' | 'memory' | 'help' | 'progress' | 'dashboard' | 'settings'
 
 /** Joignabilité de claude.ai, renvoyée par `GET /api/design/reachability`.
  *
@@ -200,6 +200,24 @@ export interface AppNotification {
   created_at: string
 }
 
+export type AttentionTarget =
+  | { kind: 'conversation'; projectId: string; conversationId: string }
+  | { kind: 'problem-axis'; projectId: string; problemId: string; planIndex: number }
+
+export interface AttentionItem {
+  id: string
+  type: string
+  project_id: string
+  source_key: string
+  severity: 'info' | 'warning' | 'error'
+  title: string
+  body: string
+  target: AttentionTarget
+  condition_version: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -382,6 +400,27 @@ export interface ProblemPlan {
   instruction: string
 }
 
+export type ProblemAxisStatus = 'pending' | 'running' | 'interrupted' | 'failed' | 'awaiting_validation' | 'completed' | 'abandoned'
+export type ProblemProgressStatus = 'open' | Exclude<ProblemAxisStatus, 'pending'>
+
+export interface ProblemAxisRun {
+  id: string
+  problem_id: string
+  plan_index: number
+  mission_id: string | null
+  conversation_id: string | null
+  status: Exclude<ProblemAxisStatus, 'pending'>
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProblemAxisState {
+  plan_index: number
+  status: ProblemAxisStatus
+  run: ProblemAxisRun | null
+}
+
 export interface ProblemCapture {
   id: string
   project_id: string
@@ -409,6 +448,8 @@ export interface Problem {
   closed_at: string | null
   closed_commit_sha: string | null
   conversation_count: number
+  axis_states?: ProblemAxisState[]
+  progress_status?: ProblemProgressStatus
   created_at: string
   updated_at: string
 }

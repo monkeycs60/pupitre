@@ -28,7 +28,14 @@ async function showNotification(item: AppNotification): Promise<void> {
   let permission = Notification.permission
   if (permission === 'default') permission = await Notification.requestPermission()
   if (permission !== 'granted') return
-  new Notification(item.title, { body: item.body, tag: `pupitre-${item.id}` })
+  const notification = new Notification(item.title, { body: item.body, tag: `pupitre-${item.id}` })
+  notification.onclick = () => {
+    window.focus()
+    if (item.conversation_id) {
+      window.dispatchEvent(new CustomEvent('pupitre:open-conversation', { detail: { conversationId: item.conversation_id } }))
+    }
+    notification.close()
+  }
 }
 
 /** Synchronise le canal persistant du sidecar avec les notifications natives. */

@@ -46,6 +46,9 @@ import { SentryStore } from "./stores/sentry";
 import { SentryClient } from "./integrations/sentry";
 import { ProblemStore } from "./stores/problems";
 import { ProblemMissionStore } from "./stores/problem-missions";
+import { ProblemAxisRunStore } from "./stores/problem-axis-runs";
+import { AttentionItemStore } from "./stores/attention-items";
+import { ConversationLinkStore } from "./stores/conversation-links";
 import { ProblemService } from "./problems";
 import { backgroundJobsEnabled, readInstance } from "./instance";
 import { PromotionRunner } from "./promotion";
@@ -96,6 +99,9 @@ if (process.argv.includes("--pupitre-mcp")) {
   const sentry = new SentryStore(db);
   const problemStore = new ProblemStore(db);
   const problemMissions = new ProblemMissionStore(db);
+  const problemAxisRuns = new ProblemAxisRunStore(db);
+  const attention = new AttentionItemStore(db);
+  const conversationLinks = new ConversationLinkStore(db);
   const problems = new ProblemService(
     problemStore,
     projects,
@@ -181,6 +187,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     undefined,
     () => actionFormat(settings.get("actionFormat")),
     domains,
+    problemAxisRuns,
   );
   // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
   // tournent en parallèle du tour parent qui les a demandées.
@@ -301,6 +308,9 @@ if (process.argv.includes("--pupitre-mcp")) {
     changelog,
     problemStore,
     problemMissions,
+    problemAxisRuns,
+    attention,
+    conversationLinks,
     problems,
     integrationSecrets,
     sentry,

@@ -48,6 +48,7 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
   const [promotion, setPromotion] = useState<PromotionState | null>(null)
   const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
   const [allowDirty, setAllowDirty] = useState(false)
+  const [longTaskThreshold, setLongTaskThreshold] = useState(120)
 
   useEffect(() => {
     let ignore = false
@@ -55,6 +56,7 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
       .then((settings) => {
         if (ignore) return
         setScope(settings.filesystemScope ?? DEFAULT_SCOPE)
+        setLongTaskThreshold(settings.longTaskThresholdSeconds ?? 120)
         const stored = { ...DEFAULT_ACTION_FORMAT, ...(settings.actionFormat ?? {}) }
         setFormat(stored)
         setTodoDraft(stored.todoHeadings.join(', '))
@@ -191,6 +193,21 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
     }
   }
 
+  async function handleLongTaskThresholdSave() {
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      const settings = await updateSettings({ longTaskThresholdSeconds: longTaskThreshold })
+      setLongTaskThreshold(settings.longTaskThresholdSeconds ?? longTaskThreshold)
+      setSaved(true)
+    } catch (saveError: unknown) {
+      setError(errorMessage(saveError))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <section className="settings-view" aria-labelledby="app-settings-title">
       <header className="settings-view-header">
@@ -280,6 +297,33 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
         </p>
         {saved ? <p className="settings-success" role="status">Paramètre enregistré.</p> : null}
         {error ? <p className="modal-error" role="alert">{error}</p> : null}
+      </div>
+
+      <div className="settings-card">
+        <div>
+          <h2>Notifications de fin de tâche</h2>
+          <p>Notifier quand une tâche interactive dépasse cette durée.</p>
+        </div>
+        <label className="settings-select-label" htmlFor="app-long-task-threshold">
+          Seuil en secondes
+          <input
+            id="app-long-task-threshold"
+            type="number"
+            min={10}
+            max={86400}
+            value={longTaskThreshold}
+            disabled={loading || saving}
+            onChange={(event) => setLongTaskThreshold(Number(event.target.value))}
+          />
+        </label>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={loading || saving}
+          onClick={() => void handleLongTaskThresholdSave()}
+        >
+          Enregistrer le seuil
+        </button>
       </div>
 
       <div className="settings-card">

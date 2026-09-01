@@ -13,7 +13,6 @@ export const FLEET_HISTORY_LIMIT = 20
  */
 export interface FleetHistoryItem extends FleetItem {
   leftActiveAt: string
-  needsAttention: boolean
 }
 
 function isFleetItem(value: unknown): value is FleetItem {
@@ -34,7 +33,7 @@ function isFleetItem(value: unknown): value is FleetItem {
 function isFleetHistoryItem(value: unknown): value is FleetHistoryItem {
   return isFleetItem(value)
     && typeof (value as FleetHistoryItem).leftActiveAt === 'string'
-    && typeof (value as FleetHistoryItem).needsAttention === 'boolean'
+
 }
 
 function storage(): Storage | null {
@@ -95,23 +94,9 @@ export function rememberDepartedFleetRuns(
     .map((item): FleetHistoryItem => ({
       ...item,
       leftActiveAt,
-      needsAttention: true,
     }))
 
   return [...departed.reverse(), ...retained].slice(0, FLEET_HISTORY_LIMIT)
-}
-
-export function markFleetHistoryHandled(
-  history: FleetHistoryItem[],
-  id: string,
-): FleetHistoryItem[] {
-  let changed = false
-  const next = history.map((item) => {
-    if (item.id !== id || !item.needsAttention) return item
-    changed = true
-    return { ...item, needsAttention: false }
-  })
-  return changed ? next : history
 }
 
 function parseFleetSnapshot(value: unknown): FleetItem[] | null {
@@ -123,7 +108,6 @@ export interface FleetState {
   items: FleetItem[]
   history: FleetHistoryItem[]
   connected: boolean
-  markAsHandled: (id: string) => void
   reviewStatus: ReviewStatusSnapshot | null
 }
 
@@ -227,15 +211,7 @@ export function useFleet(projectId?: string): FleetState {
     }
   }, [projectId])
 
-  function markAsHandled(id: string) {
-    const nextHistory = markFleetHistoryHandled(historyRef.current, id)
-    if (nextHistory === historyRef.current) return
-    historyRef.current = nextHistory
-    setHistory(nextHistory)
-    persistFleetHistory(nextHistory)
-  }
-
-  return { items, history, connected, reviewStatus, markAsHandled }
+  return { items, history, connected, reviewStatus }
 }
 
 function isReviewStatusEvent(value: unknown): value is ReviewStatusEvent {

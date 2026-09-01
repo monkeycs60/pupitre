@@ -3,7 +3,6 @@ import type { FormEvent } from 'react'
 import {
   createRoutine,
   deleteRoutine,
-  getSettings,
   listPresets,
   listProjects,
   listProjectWorkflows,
@@ -11,7 +10,6 @@ import {
   listRoutines,
   runRoutine,
   updateRoutine,
-  updateSettings,
   type RoutineInput,
 } from './api'
 import type { Preset, Project, Routine, RoutineRun, Workflow } from './types'
@@ -87,7 +85,6 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
   const [prompt, setPrompt] = useState('')
   const [presetId, setPresetId] = useState('builtin-speed')
   const [enabled, setEnabled] = useState(true)
-  const [longTaskThreshold, setLongTaskThreshold] = useState(120)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const selectedSchedulePreset = SCHEDULE_PRESETS.some((preset) => preset.value === schedule) ? schedule : 'custom'
@@ -99,12 +96,11 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
 
   useEffect(() => {
     let ignore = false
-    void Promise.all([listProjects(), listPresets(), getSettings()])
-      .then(([loadedProjects, loadedPresets, settings]) => {
+    void Promise.all([listProjects(), listPresets()])
+      .then(([loadedProjects, loadedPresets]) => {
         if (ignore) return
         setProjects(loadedProjects)
         setPresets(loadedPresets)
-        setLongTaskThreshold(settings.longTaskThresholdSeconds ?? 120)
       })
       .catch((loadError: unknown) => !ignore && setError(errorMessage(loadError)))
     return () => { ignore = true }
@@ -287,19 +283,6 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
     }
   }
 
-  async function saveLongTaskThreshold() {
-    setBusy('threshold')
-    setError(null)
-    try {
-      const settings = await updateSettings({ longTaskThresholdSeconds: longTaskThreshold })
-      setLongTaskThreshold(settings.longTaskThresholdSeconds ?? longTaskThreshold)
-    } catch (settingsError) {
-      setError(errorMessage(settingsError))
-    } finally {
-      setBusy(null)
-    }
-  }
-
   return (
     <section className="routines-view" aria-labelledby="routines-title">
       <header className="routines-header">
@@ -316,19 +299,6 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
               {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </label>
-          <label className="threshold-setting" title="Notifier à la fin d’une tâche interactive qui dépasse cette durée.">
-            <span>Notif tâche ≥</span>
-            <input type="number" min={10} max={86400} value={longTaskThreshold} onChange={(event) => setLongTaskThreshold(Number(event.target.value))} />
-          </label>
-          <button
-            type="button"
-            className="text-button threshold-save"
-            onClick={() => void saveLongTaskThreshold()}
-            disabled={busy === 'threshold'}
-            title="Enregistrer le seuil de notification"
-          >
-            {busy === 'threshold' ? 'Enregistrement…' : 'Enregistrer'}
-          </button>
           <button type="button" className="header-action" onClick={startCreate}>Nouvelle routine</button>
         </div>
       </header>

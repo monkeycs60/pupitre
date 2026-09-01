@@ -48,6 +48,9 @@ import {
 import { navigationViewForShortcut, type NavigationShortcutView } from './navigationShortcuts'
 import { problemMissionDraft, type ProblemMissionSeed } from './problemMission'
 import { useInstance } from './useInstance'
+import { useAttention } from './useAttention'
+import { AttentionInbox } from './AttentionInbox'
+import type { AttentionTarget } from './types'
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
@@ -151,10 +154,34 @@ function App() {
     workspaceView === 'progress' ? null : selectedConversation?.id ?? null,
   )
   const fleet = useFleet(selectedProject?.id)
+  const attention = useAttention(selectedProject?.id)
   const instance = useInstance(fleet.connected)
   const ticketLinks = useTicketLinks(selectedProject?.id)
   const sentryLinks = useSentryLinks(selectedProject?.id)
   useAppNotifications()
+
+  useEffect(() => {
+    const openConversation = (event: Event) => {
+      const conversationId = (event as CustomEvent<{ conversationId?: string }>).detail?.conversationId
+      if (!conversationId) return
+      void listProjects().then(async (projects) => {
+        for (const project of projects) {
+          const conversations = await listProjectConversations(project.id)
+          if (conversations.some((conversation) => conversation.id === conversationId)) {
+            await handleRoutineConversationSelect(project.id, conversationId)
+            return
+          }
+        }
+      })
+    }
+    window.addEventListener('pupitre:open-conversation', openConversation)
+    return () => window.removeEventListener('pupitre:open-conversation', openConversation)
+  })
+
+  useEffect(() => {
+    if (workspaceView === 'help' || !window.location.hash.startsWith('#help/')) return
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+  }, [workspaceView])
 
   useEffect(() => {
     function handleRestartShortcut(event: KeyboardEvent) {
@@ -578,6 +605,26 @@ function App() {
     setShowSwitchModel(false)
   }
 
+  function handleAttentionSelect() {
+    if (!confirmLeaveMemory()) return
+    setWorkspaceView('attention')
+    setShowSwitchModel(false)
+  }
+
+  function handleAttentionOpen(target: AttentionTarget) {
+    if (target.kind === 'conversation') {
+      void handleRoutineConversationSelect(target.projectId, target.conversationId)
+      return
+    }
+    const project = selectedProject?.id === target.projectId
+      ? selectedProject
+      : null
+    if (project) {
+      window.localStorage.setItem(`pupitre:dashboard-tab:${project.id}`, 'problems')
+      setWorkspaceView('dashboard')
+    }
+  }
+
   function handleDesignSelect() {
     if (!confirmLeaveMemory()) return
     setWorkspaceView('design')
@@ -701,6 +748,7 @@ function App() {
         library: 'Skills',
         routines: 'Routines',
         fleet: 'Fleet',
+        attention: 'Inbox',
         memory: 'Mémoire',
         help: 'Aide',
         progress: 'Progression',
@@ -744,11 +792,13 @@ function App() {
         onLibrarySelect={handleLibrarySelect}
         onRoutinesSelect={handleRoutinesSelect}
         onFleetSelect={handleFleetSelect}
+        onAttentionSelect={handleAttentionSelect}
         onMemorySelect={handleMemorySelect}
         onHelpSelect={() => handleHelpSelect()}
         onProgressSelect={handleProgressSelect}
         onSettingsSelect={handleSettingsSelect}
         fleetActive={fleet.items.length}
+        attentionCount={attention.items.length}
         activeProjectIds={[...new Set(fleet.items.map((item) => item.projectId))]}
       />
       {showSidebar ? (
@@ -815,6 +865,15 @@ function App() {
         ) : workspaceView === 'fleet' ? (
           <FleetView
             onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
+          />
+        ) : workspaceView === 'attention' ? (
+          <AttentionInbox
+            items={attention.items}
+            loading={attention.loading}
+            error={attention.error}
+            projectName={selectedProject?.name}
+            onOpen={handleAttentionOpen}
+            onAcknowledge={attention.acknowledge}
           />
         ) : workspaceView === 'memory' ? (
           <MemoryView onDirtyChange={setMemoryDirty} />

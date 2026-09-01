@@ -36,12 +36,11 @@ function initials(name: string): string {
   return (words[0][0] + words[1][0]).toUpperCase()
 }
 
-type FleetTab = 'active' | 'pending' | 'recent'
+type FleetTab = 'active' | 'recent'
 
 const TAB_LABEL: Record<FleetTab, string> = {
   active: 'Actifs',
-  pending: 'À traiter',
-  recent: 'Récemment terminés',
+  recent: 'Historique',
 }
 
 function isHistoryItem(item: FleetItem | FleetHistoryItem): item is FleetHistoryItem {
@@ -70,15 +69,12 @@ function groupByProject(items: (FleetItem | FleetHistoryItem)[]): FleetGroup[] {
 }
 
 export function FleetView({ onConversationSelect }: FleetViewProps) {
-  const { items, history, connected, markAsHandled } = useFleet()
+  const { items, history, connected } = useFleet()
   const [tab, setTab] = useState<FleetTab>('active')
   const now = useNow(1_000)
-  const pending = history.filter((item) => item.needsAttention)
   const visibleItems: FleetItem[] | FleetHistoryItem[] = tab === 'active'
     ? items
-    : tab === 'pending'
-      ? pending
-      : history
+    : history
   const historical = tab !== 'active'
   const groups = useMemo(() => groupByProject(visibleItems), [visibleItems])
 
@@ -94,7 +90,6 @@ export function FleetView({ onConversationSelect }: FleetViewProps) {
   }, [items])
 
   function openConversation(item: FleetItem | FleetHistoryItem) {
-    if (isHistoryItem(item)) markAsHandled(item.id)
     onConversationSelect(item.projectId, item.conversationId)
   }
 
@@ -102,10 +97,6 @@ export function FleetView({ onConversationSelect }: FleetViewProps) {
     active: {
       title: 'Aucun run actif',
       body: 'Les tours, sous-tâches, reviews et routines apparaîtront ici dès leur lancement.',
-    },
-    pending: {
-      title: 'Rien à traiter',
-      body: 'Les runs sortis du flux actif apparaîtront ici jusqu’à l’ouverture de leur conversation.',
     },
     recent: {
       title: 'Aucun run récent',
@@ -142,7 +133,7 @@ export function FleetView({ onConversationSelect }: FleetViewProps) {
 
         <nav className="fleet-tabs" aria-label="Filtrer les runs Fleet" role="tablist">
           {(Object.keys(TAB_LABEL) as FleetTab[]).map((tabId) => {
-            const count = tabId === 'active' ? items.length : tabId === 'pending' ? pending.length : history.length
+            const count = tabId === 'active' ? items.length : history.length
             return (
               <button
                 type="button"
@@ -178,7 +169,7 @@ export function FleetView({ onConversationSelect }: FleetViewProps) {
               <div className="fleet-cards">
                 {group.items.map((item) => (
                   <article
-                    className={`fleet-card is-${item.kind}${historical ? ' is-history' : ''}${isHistoryItem(item) && item.needsAttention ? ' is-attention' : ''}`}
+                    className={`fleet-card is-${item.kind}${historical ? ' is-history' : ''}`}
                     key={item.id}
                   >
                     <div className="fleet-card-top">
@@ -199,9 +190,6 @@ export function FleetView({ onConversationSelect }: FleetViewProps) {
                         Ouvrir →
                       </button>
                     </div>
-                    {historical ? (
-                      <p className="fleet-known-limit">Le backend ne fournit pas de résultat final pour ce run.</p>
-                    ) : null}
                   </article>
                 ))}
               </div>

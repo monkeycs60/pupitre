@@ -127,7 +127,7 @@ test("le passage suivant ne demande que les dix derniers commits sans dupliquer 
   context.db.close();
 });
 
-test("un projet multi-dépôt filtre l'auteur et distingue les mêmes SHA par dépôt", async () => {
+test("un projet multi-dépôt filtre l'auteur et déduplique les mêmes SHA", async () => {
   const seen: Array<{ cwd: string; authorEmails?: string[] }> = [];
   const shared = "a".repeat(40);
   const context = setup({
@@ -150,8 +150,8 @@ test("un projet multi-dépôt filtre l'auteur et distingue les mêmes SHA par d�
 
   const payload = await context.service.refreshNow(context.project.id);
 
-  expect(payload.entries).toHaveLength(2);
-  expect(payload.entries.map((entry) => entry.repository_path).sort()).toEqual([".", "apps/reactor"]);
+  expect(payload.entries).toHaveLength(1);
+  expect(payload.entries[0]?.repository_path).toBe(".");
   expect(seen).toHaveLength(2);
   expect(seen.every((call) => call.authorEmails?.includes("clement.serizay@affilae.com"))).toBe(true);
   context.db.close();
@@ -321,7 +321,7 @@ test("filtre l'historique Git par email d'auteur", async () => {
   expect(history.map((entry) => entry.subject)).toEqual(["feat: Clement"]);
 });
 
-test("migre le catalogue historique vers une clé dépôt plus SHA", () => {
+test("migre le catalogue historique vers une clé projet plus SHA", () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-changelog-migration-"));
   let db = openDb(dir);
   const project = new ProjectStore(db).create({ name: "Migration", path: dir });
@@ -361,7 +361,7 @@ test("migre le catalogue historique vers une clé dépôt plus SHA", () => {
     .sort((left, right) => left.pk - right.pk)
     .map((column) => column.name);
   expect(entry?.repository_path).toBe(".");
-  expect(primaryKey).toEqual(["project_id", "repository_path", "commit_sha"]);
+  expect(primaryKey).toEqual(["project_id", "commit_sha"]);
   expect(new ChangelogStore(db).state(project.id).backfill_version).toBe(0);
   db.close();
 });

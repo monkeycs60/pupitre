@@ -89,6 +89,9 @@ import { redactSentryValue } from "./sentry-redaction";
 import type { ChangelogService } from "./changelog";
 import type { Problem, ProblemStore } from "./stores/problems";
 import type { ProblemMissionStore } from "./stores/problem-missions";
+import type { ProblemAxisRunStore } from "./stores/problem-axis-runs";
+import type { AttentionItemStore } from "./stores/attention-items";
+import type { ConversationLinkStore } from "./stores/conversation-links";
 import type { ProblemService } from "./problems";
 import { buildInfo, readInstance, staleSourcesSince, type InstanceInfo } from "./instance";
 import { PromotionConflictError, type PromotionRunner } from "./promotion";
@@ -142,6 +145,9 @@ export interface ServerDeps {
   changelog?: ChangelogService;
   problemStore?: ProblemStore;
   problemMissions?: ProblemMissionStore;
+  problemAxisRuns?: ProblemAxisRunStore;
+  attention?: AttentionItemStore;
+  conversationLinks?: ConversationLinkStore;
   problems?: ProblemService;
   integrationSecrets?: IntegrationSecretStore;
   sentry?: SentryStore;
@@ -1717,6 +1723,22 @@ export function createServer(deps: ServerDeps) {
           return empty(202);
         }
 
+        if (request.method === "GET" && pathname === "/api/attention") {
+          if (!deps.attention) throw new HttpError(501, "Inbox non câblée");
+          deps.attention.synchronizeProblemAxes();
+          const projectId = url.searchParams.get("projectId");
+          if (projectId && !deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
+          return json(deps.attention.list(projectId));
+        }
+
+        const acknowledgeAttentionId = routeId(pathname, /^\/api\/attention\/([^/]+)\/acknowledge$/);
+        if (request.method === "POST" && acknowledgeAttentionId !== null) {
+          if (!deps.attention) throw new HttpError(501, "Inbox non câblée");
+          const item = deps.attention.acknowledge(acknowledgeAttentionId);
+          if (!item) throw new HttpError(404, "signal inconnu");
+          return json(item);
+        }
+
         const projectProblemsId = routeId(pathname, /^\/api\/projects\/([^/]+)\/problems$/);
         if (request.method === "GET" && projectProblemsId !== null) {
           if (!deps.projects.get(projectProblemsId)) throw new HttpError(404, "projet inconnu");
@@ -1788,6 +1810,22 @@ export function createServer(deps: ServerDeps) {
           if (!problem) throw new HttpError(404, "problématique inconnue");
           broadcastDashboard(problem.project_id);
           return json(problem);
+        }
+
+        const axisRunAction = pathname.match(/^\/api\/problem-axis-runs\/([^/]+)\/(validate|abandon)$/);
+        if (request.method === "POST" && axisRunAction) {
+          if (!deps.problemAxisRuns || !deps.problemStore) {
+            throw new HttpError(501, "cycle de vie des problématiques non câblé");
+          }
+          const run = deps.problemAxisRuns.get(decodeURIComponent(axisRunAction[1]!));
+          if (!run) throw new HttpError(404, "exécution d'axe inconnue");
+          const updated = deps.problemAxisRuns.transition(
+            run.id,
+            axisRunAction[2] === "validate" ? "completed" : "abandoned",
+          );
+          const problem = deps.problemStore.get(run.problem_id);
+          if (problem) broadcastDashboard(problem.project_id);
+          return json(updated);
         }
 
         const deleteProblemId = routeId(pathname, /^\/api\/problems\/([^/]+)$/);
@@ -2852,6 +2890,20 @@ export function createServer(deps: ServerDeps) {
               "problem",
               missionProblems.length === 1 ? missionProblems[0]!.public_id : mission.public_id,
             )!;
+            if (deps.problemAxisRuns) {
+              for (const problem of missionProblems) {
+                const selected = missionPlanIndices?.get(problem.id)
+                  ?? problem.plans.map((_, index) => index);
+                for (const planIndex of selected) {
+                  deps.problemAxisRuns.create({
+                    problemId: problem.id,
+                    planIndex,
+                    missionId: mission.id,
+                    conversationId: conversation.id,
+                  });
+                }
+              }
+            }
           }
           const ticketPreamble = ticket
             ? await ticketBriefFor(deps, ticket, conversation.id)
@@ -2866,6 +2918,67 @@ export function createServer(deps: ServerDeps) {
           )
             .catch((error) => console.error("Échec du tour", error));
           return json(conversation, 201);
+        }
+
+        const conversationSidequestsId = routeId(pathname, /^\/api\/conversations\/([^/]+)\/sidequests$/);
+        if (conversationSidequestsId !== null && request.method === "POST") {
+          if (!deps.conversationLinks) throw new HttpError(501, "sidequests non câblées");
+          const source = deps.conversations.get(conversationSidequestsId);
+          if (!source) throw new HttpError(404, "conversation source inconnue");
+          const body = await readObject(request);
+          const instruction = requiredString(body, "instruction").trim();
+          if (!instruction) throw new HttpError(400, "consigne de sidequest requise");
+          const requestedModel = optionalTrimmed(body, "model");
+          const selectedPreset = requestedModel
+            ? deps.presets.list().find((preset) => preset.model === requestedModel || preset.id === requestedModel || preset.name.toLocaleLowerCase() === requestedModel.toLocaleLowerCase())
+            : null;
+          if (requestedModel && !selectedPreset) throw new HttpError(400, `modèle inconnu : ${requestedModel}`);
+          const project = deps.projects.get(source.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const sourceContext = deps.conversations.digestSource(source.id, 2).latest.join("\n\n");
+          const prompt = [
+            instruction,
+            "[Contexte compact de la conversation source]",
+            sourceContext || `${source.title} — ${source.summary}`,
+            `Tu travailles dans le même worktree et sur la même branche que la conversation source : ${source.worktree_path ?? project.path} · ${source.created_on_branch ?? "branche courante"}.`,
+          ].join("\n\n");
+          const conversation = deps.conversations.create({
+            projectId: source.project_id,
+            provider: selectedPreset?.provider ?? source.provider,
+            model: selectedPreset?.model ?? source.model,
+            presetId: selectedPreset?.id ?? source.preset_id,
+            effort: selectedPreset?.effort ?? source.effort,
+            speed: selectedPreset?.speed ?? source.speed,
+            permissionMode: source.permission_mode,
+            orchestrator: source.orchestrator,
+            subagentPresetId: source.subagent_preset_id,
+            subagentEffort: source.subagent_effort,
+            worktreePath: source.worktree_path,
+            createdOnBranch: source.created_on_branch,
+            ticketId: source.ticket_id,
+            ticketInstruction: source.ticket_instruction,
+            originType: source.origin_type,
+            originKey: source.origin_key,
+            firstMessage: instruction,
+          });
+          const sourceEventId = typeof body.sourceEventId === "number" && Number.isInteger(body.sourceEventId)
+            ? body.sourceEventId
+            : null;
+          const link = deps.conversationLinks.createSidequest({
+            sourceConversationId: source.id,
+            sourceEventId,
+            targetConversationId: conversation.id,
+            label: instruction,
+          });
+          void deps.runner.runTurn(conversation.id, prompt).catch((error) => console.error("Échec sidequest", error));
+          return json({ conversation, link }, 201);
+        }
+        if (conversationSidequestsId !== null && request.method === "GET") {
+          if (!deps.conversationLinks) throw new HttpError(501, "sidequests non câblées");
+          return json({
+            origin: deps.conversationLinks.byTarget(conversationSidequestsId),
+            sidequests: deps.conversationLinks.fromSource(conversationSidequestsId),
+          });
         }
 
         const conversationModelId = routeId(

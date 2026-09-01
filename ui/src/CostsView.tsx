@@ -69,6 +69,12 @@ function currentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+function previousMonth(value: string): string {
+  const [year, month] = value.split('-').map(Number)
+  const date = new Date(year, month - 2, 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
 function tokens(value: number): string {
   return value.toLocaleString('fr-FR')
 }
@@ -159,7 +165,13 @@ export function CostsView({ project, onConversationSelect }: CostsViewProps) {
     const controller = new AbortController()
     setError(null)
     void getProjectCosts(project.id, month, controller.signal)
-      .then(setReport)
+      .then((nextReport) => {
+        if (month === currentMonth() && nextReport.totalTokens === 0) {
+          setMonth(previousMonth(month))
+          return
+        }
+        setReport(nextReport)
+      })
       .catch((loadError: unknown) => {
         if (!controller.signal.aborted) setError(loadError instanceof Error ? loadError.message : 'Coûts indisponibles')
       })

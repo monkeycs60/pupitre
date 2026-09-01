@@ -339,12 +339,6 @@
 
 .fleet-card-open:hover { color: var(--accent-hover); }
 
-.fleet-known-limit {
-  margin: 0;
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-
 .fleet-empty {
   max-width: 1120px;
   margin: 0 auto;

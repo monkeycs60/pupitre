@@ -233,6 +233,54 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_problem_mission_items_problem
       ON problem_mission_items(problem_id, mission_id);
+    CREATE TABLE IF NOT EXISTS problem_axis_runs (
+      id TEXT PRIMARY KEY,
+      problem_id TEXT NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+      plan_index INTEGER NOT NULL,
+      mission_id TEXT NULL REFERENCES problem_missions(id) ON DELETE CASCADE,
+      conversation_id TEXT NULL REFERENCES conversations(id) ON DELETE SET NULL,
+      status TEXT NOT NULL CHECK (status IN (
+        'running', 'interrupted', 'failed', 'awaiting_validation', 'completed', 'abandoned'
+      )),
+      error TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_problem_axis_runs_problem
+      ON problem_axis_runs(problem_id, plan_index, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_problem_axis_runs_mission
+      ON problem_axis_runs(mission_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_problem_axis_runs_conversation
+      ON problem_axis_runs(conversation_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS attention_items (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      source_key TEXT NOT NULL,
+      severity TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'error')),
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      target_json TEXT NOT NULL DEFAULT '{}',
+      condition_version TEXT NOT NULL,
+      acknowledged_version TEXT NULL,
+      resolved_at TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (type, source_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_attention_items_open
+      ON attention_items(project_id, resolved_at, updated_at DESC);
+    CREATE TABLE IF NOT EXISTS conversation_links (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL CHECK (kind IN ('sidequest')),
+      source_conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      source_event_id INTEGER NULL,
+      target_conversation_id TEXT NOT NULL UNIQUE REFERENCES conversations(id) ON DELETE CASCADE,
+      label TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_conversation_links_source
+      ON conversation_links(source_conversation_id, created_at DESC);
     CREATE TABLE IF NOT EXISTS domains (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -299,7 +347,7 @@ export function openDb(dir: string = dataDir()): Database {
         CHECK (enrichment_status IN ('pending', 'enriched')),
       imported_at TEXT NOT NULL,
       enriched_at TEXT NULL,
-      PRIMARY KEY (project_id, repository_path, commit_sha)
+      PRIMARY KEY (project_id, commit_sha)
     );
     CREATE INDEX IF NOT EXISTS idx_project_changelog_entries_date
       ON project_changelog_entries(project_id, committed_at DESC);
@@ -789,7 +837,7 @@ function migrateProjectChangelogEntries(db: Database): void {
   const primaryKey = columns.filter((column) => column.pk > 0)
     .sort((left, right) => left.pk - right.pk)
     .map((column) => column.name);
-  if (repositoryColumn && primaryKey.join(",") === "project_id,repository_path,commit_sha") return;
+  if (repositoryColumn && primaryKey.join(",") === "project_id,commit_sha") return;
 
   db.exec(`
     CREATE TABLE project_changelog_entries_v2 (
@@ -805,14 +853,15 @@ function migrateProjectChangelogEntries(db: Database): void {
         CHECK (enrichment_status IN ('pending', 'enriched')),
       imported_at TEXT NOT NULL,
       enriched_at TEXT NULL,
-      PRIMARY KEY (project_id, repository_path, commit_sha)
+      PRIMARY KEY (project_id, commit_sha)
     );
-    INSERT INTO project_changelog_entries_v2
+    INSERT OR IGNORE INTO project_changelog_entries_v2
       (project_id, repository_path, commit_sha, branch, subject, committed_at,
        domain_id, product_message, enrichment_status, imported_at, enriched_at)
     SELECT project_id, '.', commit_sha, branch, subject, committed_at,
            domain_id, product_message, enrichment_status, imported_at, enriched_at
-    FROM project_changelog_entries;
+    FROM project_changelog_entries
+    ORDER BY CASE enrichment_status WHEN 'enriched' THEN 0 ELSE 1 END, imported_at;
     DROP TABLE project_changelog_entries;
     ALTER TABLE project_changelog_entries_v2 RENAME TO project_changelog_entries;
     CREATE INDEX idx_project_changelog_entries_date

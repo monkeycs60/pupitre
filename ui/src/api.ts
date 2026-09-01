@@ -34,6 +34,7 @@ import type {
   ProjectChangelogPayload,
   ProjectChangelogState,
   AppNotification,
+  AttentionItem,
   SkillDetail,
   SkillSummary,
   StoredEvent,
@@ -49,6 +50,7 @@ import type {
   SentryInboxPayload,
   SentryIssue,
   Problem,
+  ProblemAxisRun,
   ProblemCapture,
   ProblemProjectPayload,
   InstanceHealth,
@@ -572,6 +574,15 @@ export function getNotificationCursor(): Promise<{ cursor: number }> {
   return fetchJson('/api/notifications/cursor')
 }
 
+export function listAttentionItems(projectId?: string | null, signal?: AbortSignal): Promise<AttentionItem[]> {
+  const query = projectId ? `?projectId=${routeId(projectId)}` : ''
+  return fetchJson(`/api/attention${query}`, { signal })
+}
+
+export function acknowledgeAttentionItem(id: string): Promise<AttentionItem> {
+  return fetchJson(`/api/attention/${routeId(id)}/acknowledge`, jsonPost({}))
+}
+
 export function createProject(input: CreateProjectInput): Promise<Project> {
   return fetchJson('/api/projects', jsonPost(input))
 }
@@ -792,6 +803,14 @@ export function reopenProblem(problemId: string): Promise<Problem> {
   return fetchJson(`/api/problems/${routeId(problemId)}/reopen`, jsonPost({}))
 }
 
+export function validateProblemAxisRun(runId: string): Promise<ProblemAxisRun> {
+  return fetchJson(`/api/problem-axis-runs/${routeId(runId)}/validate`, jsonPost({}))
+}
+
+export function abandonProblemAxisRun(runId: string): Promise<ProblemAxisRun> {
+  return fetchJson(`/api/problem-axis-runs/${routeId(runId)}/abandon`, jsonPost({}))
+}
+
 export function deleteProblem(problemId: string): Promise<void> {
   return fetchVoid(`/api/problems/${routeId(problemId)}`, { method: 'DELETE' })
 }
@@ -900,6 +919,13 @@ export function createConversation(
   input: CreateConversationInput,
 ): Promise<Conversation> {
   return fetchJson('/api/conversations', jsonPost(input))
+}
+
+export function createSidequest(
+  sourceConversationId: string,
+  input: { instruction: string; model?: string },
+): Promise<{ conversation: Conversation }> {
+  return fetchJson(`/api/conversations/${routeId(sourceConversationId)}/sidequests`, jsonPost(input))
 }
 
 export function sendMessage(

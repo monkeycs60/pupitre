@@ -7,11 +7,31 @@ import {
   reopenProblem,
   retryProblemCapture,
   updateProblemTicket,
+  validateProblemAxisRun,
+  abandonProblemAxisRun,
 } from './api'
 import { configOf } from './ConfigPanel'
 import { buildCreateConversationInput } from './conversationDraft'
 import { problemMissionDraft, type ProblemMissionMode, type ProblemMissionSeed } from './problemMission'
 import type { Problem, ProblemProjectPayload, Project, TicketRow } from './types'
+
+const AXIS_STATUS_LABEL = {
+  pending: 'À lancer',
+  running: 'En cours',
+  interrupted: 'Interrompu',
+  failed: 'En échec',
+  awaiting_validation: 'À valider',
+  completed: 'Terminé',
+  abandoned: 'Abandonné',
+} as const
+
+function axisStates(problem: Problem) {
+  return problem.axis_states ?? problem.plans.map((_, planIndex) => ({
+    plan_index: planIndex,
+    status: problem.status === 'closed' ? 'completed' as const : 'pending' as const,
+    run: null,
+  }))
+}
 
 export type { ProblemMissionSeed } from './problemMission'
 
@@ -129,8 +149,9 @@ export function ProblemsPanel({
 
   function axesOf(problem: Problem): number[] {
     const excluded = excludedAxes[problem.id] ?? []
-    return problem.plans
-      .map((_, index) => index)
+    return axisStates(problem)
+      .filter((axis) => axis.status === 'pending' || axis.status === 'interrupted' || axis.status === 'failed' || axis.status === 'awaiting_validation')
+      .map((axis) => axis.plan_index)
       .filter((index) => !excluded.includes(index))
   }
 
@@ -265,6 +286,7 @@ export function ProblemsPanel({
           {visibleProblems.map((problem) => {
             const ticket = problem.ticket_id ? ticketsById.get(problem.ticket_id) : undefined
             const axes = axesOf(problem)
+            const states = axisStates(problem)
             return (
               <article key={problem.id} className="problem-card">
                 <header>
@@ -291,7 +313,7 @@ export function ProblemsPanel({
                 <ol className="problem-plans">
                   {problem.plans.map((plan, planIndex) => (
                     <li key={`${problem.id}:${planIndex}`}>
-                      {problem.status === 'open' ? (
+                      {problem.status === 'open' && states[planIndex]?.status !== 'completed' && states[planIndex]?.status !== 'abandoned' && states[planIndex]?.status !== 'running' ? (
                         <label className="problem-axis">
                           <input
                             type="checkbox"
@@ -304,6 +326,26 @@ export function ProblemsPanel({
                       ) : (
                         <div><strong>{plan.title}</strong><p>{plan.instruction}</p></div>
                       )}
+                      <div className="problem-axis-state">
+                        <span className={`is-${states[planIndex]?.status ?? 'pending'}`}>
+                          {AXIS_STATUS_LABEL[states[planIndex]?.status ?? 'pending']}
+                        </span>
+                        {states[planIndex]?.run?.conversation_id ? (
+                          <button type="button" className="text-button" onClick={() => onConversationSelect(states[planIndex]!.run!.conversation_id!)}>Ouvrir</button>
+                        ) : null}
+                        {states[planIndex]?.status === 'awaiting_validation' && states[planIndex]?.run ? (
+                          <button type="button" className="text-button" onClick={() => void mutate(
+                            `axis:validate:${states[planIndex]!.run!.id}`,
+                            () => validateProblemAxisRun(states[planIndex]!.run!.id),
+                          )}>Valider</button>
+                        ) : null}
+                        {states[planIndex]?.run && !['completed', 'abandoned'].includes(states[planIndex]!.status) ? (
+                          <button type="button" className="text-button" onClick={() => void mutate(
+                            `axis:abandon:${states[planIndex]!.run!.id}`,
+                            () => abandonProblemAxisRun(states[planIndex]!.run!.id),
+                          )}>Abandonner</button>
+                        ) : null}
+                      </div>
                     </li>
                   ))}
                 </ol>

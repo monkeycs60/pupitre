@@ -47,6 +47,8 @@ test("persiste le collage avant ses résultats puis écrit le lot atomiquement",
       public_id: "PB-7K3M9Q",
       status: "open",
       conversation_count: 0,
+      progress_status: "open",
+      axis_states: [expect.objectContaining({ plan_index: 0, status: "pending" })],
       plans: [{ title: "Corriger le bug", instruction: "Diagnostiquer puis corriger." }],
     }),
   ]);

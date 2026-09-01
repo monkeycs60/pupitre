@@ -43,6 +43,7 @@ export function ConversationAssetsDrawer({
   }, [open, onClose])
 
   if (!open) {
+    if (assets.length === 0) return null
     const countLabel = `${assets.length} pièce${assets.length > 1 ? 's' : ''} jointe${assets.length > 1 ? 's' : ''}`
     return (
       <button

@@ -101,7 +101,7 @@ export function DocumentsView({
   onConversationSelect,
   onUseInConversation,
 }: DocumentsViewProps) {
-  const [scope, setScope] = useState<'project' | 'all'>(currentProject ? 'project' : 'all')
+  const [scope, setScope] = useState<'project' | 'all'>('all')
   const [kind, setKind] = useState<'all' | 'html' | 'pdf'>('all')
   const [query, setQuery] = useState('')
   const [documents, setDocuments] = useState<DocumentArtifact[]>([])

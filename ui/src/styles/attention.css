@@ -1,0 +1,16 @@
+.attention-view { height: 100%; overflow: auto; padding: 28px 32px 56px; background: var(--surface-base); }
+.attention-header { display: flex; align-items: flex-start; justify-content: space-between; max-width: 980px; margin: 0 auto 24px; }
+.attention-header h1 { margin: 0; color: var(--text-strong); font-size: 24px; }
+.attention-header p { margin: 5px 0 0; color: var(--text-muted); }
+.attention-count { display: grid; min-width: 34px; height: 34px; place-items: center; border: 1px solid var(--border); border-radius: 10px; color: var(--text-strong); font-weight: 700; }
+.attention-list, .attention-empty, .attention-error { max-width: 980px; margin-inline: auto; }
+.attention-list { display: grid; gap: 10px; }
+.attention-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 15px 16px; border: 1px solid var(--border-subtle); border-left: 3px solid var(--warning); border-radius: 10px; background: var(--surface-raised); }
+.attention-card.is-error { border-left-color: var(--danger); }
+.attention-card-copy > span { color: var(--text-faint); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.attention-card h2 { margin: 3px 0; color: var(--text-strong); font-size: 14px; }
+.attention-card p { margin: 0; color: var(--text-muted); font-size: 12px; }
+.attention-card-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.attention-empty { padding: 60px 20px; text-align: center; color: var(--text-muted); }
+.attention-empty p { margin: 6px 0 0; }
+.attention-error { margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }

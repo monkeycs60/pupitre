@@ -17,7 +17,9 @@ interface ProblemSuggestionsLoaderProps {
 
 export function ProblemSuggestions({ problems, onSelect, onSeeAll }: ProblemSuggestionsProps) {
   const suggestions = useMemo(() => [...problems]
-    .filter((problem) => problem.status === 'open')
+    .filter((problem) => problem.status === 'open' && (problem.axis_states === undefined || problem.axis_states.some((axis) => (
+      axis.status === 'interrupted' || axis.status === 'failed' || axis.status === 'awaiting_validation'
+    ))))
     .sort((left, right) => {
       const launchPriority = Number(left.conversation_count > 0) - Number(right.conversation_count > 0)
       return launchPriority || Date.parse(right.created_at) - Date.parse(left.created_at)
@@ -40,13 +42,16 @@ export function ProblemSuggestions({ problems, onSelect, onSeeAll }: ProblemSugg
               <div className="problem-suggestion-meta">
                 {problem.ticket_key ? <span>{problem.ticket_key} · {problem.ticket_title}</span> : <span>Sans ticket</span>}
                 {problem.ticket_branch ? <code>{problem.ticket_branch}</code> : null}
-                <span>{problem.plans.length} axe{problem.plans.length > 1 ? 's' : ''}</span>
+                <span>{problem.axis_states ? `${problem.axis_states.filter((axis) => ['interrupted', 'failed', 'awaiting_validation'].includes(axis.status)).length} axe${problem.axis_states.filter((axis) => ['interrupted', 'failed', 'awaiting_validation'].includes(axis.status)).length > 1 ? 's' : ''} à reprendre` : `${problem.plans.length} axe${problem.plans.length > 1 ? 's' : ''}`}</span>
               </div>
             </div>
             <button
               type="button"
               className="secondary-button"
-              onClick={() => onSelect({ problems: [problem], missionTitle: problem.title })}
+              onClick={() => onSelect(problem.axis_states ? {
+                problems: [problem], missionTitle: problem.title,
+                planIndices: { [problem.id]: problem.axis_states.filter((axis) => ['interrupted', 'failed', 'awaiting_validation'].includes(axis.status)).map((axis) => axis.plan_index) },
+              } : { problems: [problem], missionTitle: problem.title })}
             >
               Lancer
             </button>

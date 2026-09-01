@@ -80,7 +80,7 @@ export class ChangelogStore {
   }
 
   reconcile(projectId: string, commits: GitChangelogCommit[]): number {
-    const expected = new Set(commits.map((commit) => `${commit.repositoryPath}\0${commit.sha}`));
+    const expected = new Set(commits.map((commit) => commit.sha));
     const existing = this.db.query(`
       SELECT repository_path, commit_sha
       FROM project_changelog_entries
@@ -88,13 +88,13 @@ export class ChangelogStore {
     `).all(projectId) as Array<{ repository_path: string; commit_sha: string }>;
     const remove = this.db.query(`
       DELETE FROM project_changelog_entries
-      WHERE project_id = ? AND repository_path = ? AND commit_sha = ?
+      WHERE project_id = ? AND commit_sha = ?
     `);
     let removed = 0;
     this.db.transaction(() => {
       for (const entry of existing) {
-        if (expected.has(`${entry.repository_path}\0${entry.commit_sha}`)) continue;
-        removed += Number(remove.run(projectId, entry.repository_path, entry.commit_sha).changes > 0);
+        if (expected.has(entry.commit_sha)) continue;
+        removed += Number(remove.run(projectId, entry.commit_sha).changes > 0);
       }
     })();
     return removed;
@@ -129,7 +129,7 @@ export class ChangelogStore {
     const update = this.db.query(`
       UPDATE project_changelog_entries
       SET domain_id = ?, product_message = ?, enrichment_status = 'enriched', enriched_at = ?
-      WHERE project_id = ? AND repository_path = ? AND commit_sha = ?
+      WHERE project_id = ? AND commit_sha = ?
         AND enrichment_status = 'pending'
     `);
     this.db.transaction(() => {
@@ -139,7 +139,6 @@ export class ChangelogStore {
           value.productMessage,
           enrichedAt,
           projectId,
-          value.repositoryPath,
           value.sha,
         );
       }

@@ -2,9 +2,7 @@
 import { expect, test } from "bun:test";
 import {
   FLEET_HISTORY_LIMIT,
-  markFleetHistoryHandled,
   rememberDepartedFleetRuns,
-  type FleetHistoryItem,
 } from "../../ui/src/useFleet";
 import type { FleetItem } from "../../ui/src/types";
 
@@ -23,14 +21,6 @@ function item(id: string, lastEvent = "outil terminé"): FleetItem {
   };
 }
 
-function historyEntry(id: string, needsAttention = true): FleetHistoryItem {
-  return {
-    ...item(id),
-    leftActiveAt: "2026-08-07T10:01:00.000Z",
-    needsAttention,
-  };
-}
-
 test("un run sorti du snapshot est mémorisé avec son dernier état connu", () => {
   const previous = [item("one", "réponse du modèle")];
   const history = rememberDepartedFleetRuns(
@@ -45,7 +35,6 @@ test("un run sorti du snapshot est mémorisé avec son dernier état connu", () 
       id: "one",
       lastEvent: "réponse du modèle",
       leftActiveAt: "2026-08-07T10:02:00.000Z",
-      needsAttention: true,
     }),
   ]);
 });
@@ -67,20 +56,6 @@ test("un snapshot répété ne duplique pas un run et le retour actif retire l'e
   expect(repeated).toEqual(first);
   expect(rememberDepartedFleetRuns([], [item("one")], repeated, "2026-08-07T10:04:00.000Z"))
     .toEqual([]);
-});
-
-test("l'acquittement local ne change pas le dernier état observé", () => {
-  const history = [historyEntry("one")];
-
-  expect(markFleetHistoryHandled(history, "one")).toEqual([
-    expect.objectContaining({
-      id: "one",
-      lastEvent: "outil terminé",
-      needsAttention: false,
-    }),
-  ]);
-  expect(history[0]?.needsAttention).toBe(true);
-  expect(markFleetHistoryHandled(history, "missing")).toBe(history);
 });
 
 test("l'historique reste court", () => {

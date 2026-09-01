@@ -11,6 +11,6 @@ export function compileDomainCatalog(domains:DomainDefinition[],tickets:Ticket[]
 export function classifySentryIssue(issue:{title?:string;transaction?:string|null;culprit?:string|null},frames:string[],catalog:DomainCatalog):SentryRelevance {
  const hay=[issue.title,issue.transaction,issue.culprit,...frames].filter(Boolean).join(" ").toLowerCase();const reasons:RelevanceReason[]=[];
  for(const d of catalog.domains){const matches=d.signals.filter(s=>s.length>=4&&hay.includes(s));if(matches.some(s=>s.includes("/")||s.endsWith(".js")||s.endsWith(".tsx")||hay.includes(`/${s}/`))||matches.length>=2)reasons.push(...matches.slice(0,3).map(signal=>({domain:d.name,signal})));}
- for(const t of catalog.tickets){const match=t.signals.find(s=>hay.includes(s));if(match)reasons.push({domain:`Ticket ${t.key}`,signal:match});}
+ for(const t of catalog.tickets){const matches=t.signals.filter(s=>hay.includes(s));const explicit=hay.includes(t.key.toLowerCase());if(explicit||matches.length>=2){reasons.push({domain:`Ticket ${t.key}`,signal:explicit?t.key:matches.slice(0,2).join(" + ")});}}
  return {matched:reasons.length>0,reasons};
 }

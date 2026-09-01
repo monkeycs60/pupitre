@@ -1,5 +1,11 @@
 import type { Database } from "bun:sqlite";
 import { problemIdsInCommit } from "../problem-id";
+import {
+  ProblemAxisRunStore,
+  projectProblemProgress,
+  type ProblemAxisState,
+  type ProblemProgressStatus,
+} from "./problem-axis-runs";
 
 export type ProblemCaptureStatus = "queued" | "processing" | "done" | "error";
 export type ProblemStatus = "open" | "closed";
@@ -39,6 +45,8 @@ export interface Problem {
   created_at: string;
   updated_at: string;
   conversation_count: number;
+  axis_states: ProblemAxisState[];
+  progress_status: ProblemProgressStatus;
 }
 
 export interface ProblemDraft {
@@ -163,14 +171,14 @@ export class ProblemStore {
     const row = this.db.query(
       "SELECT * FROM problems WHERE id = ?",
     ).get(id) as Record<string, unknown> | null;
-    return row ? hydrateProblem(row) : null;
+    return row ? this.withAxisStates(hydrateProblem(row)) : null;
   }
 
   getByPublicId(publicId: string): Problem | null {
     const row = this.db.query(
       "SELECT * FROM problems WHERE public_id = ?",
     ).get(publicId) as Record<string, unknown> | null;
-    return row ? hydrateProblem(row) : null;
+    return row ? this.withAxisStates(hydrateProblem(row)) : null;
   }
 
   listProject(projectId: string, status: ProblemListStatus = "open"): ProblemProjectPayload {
@@ -200,7 +208,7 @@ export class ProblemStore {
       WHERE project_id = ? AND status IN ('queued', 'processing', 'error')
       ORDER BY created_at DESC, id DESC
     `).all(projectId) as Record<string, unknown>[]).map(hydrateCapture);
-    return { projectId, captures, problems: rows.map(hydrateProblem) };
+    return { projectId, captures, problems: rows.map(hydrateProblem).map((problem) => this.withAxisStates(problem)) };
   }
 
   setTicket(id: string, ticketId: string | null): Problem | null {
@@ -226,6 +234,7 @@ export class ProblemStore {
       SET status = 'closed', closed_at = ?, closed_commit_sha = ?, updated_at = ?
       WHERE id = ? AND status = 'open'
     `).run(now, commitSha, now, id);
+    if (commitSha) new ProblemAxisRunStore(this.db).completeProblem(id);
     return this.get(id);
   }
 
@@ -250,7 +259,9 @@ export class ProblemStore {
     return this.db.transaction(() => {
       let closed = 0;
       for (const publicId of ids) {
+        const problem = this.getByPublicId(publicId);
         closed += close.run(now, commitSha, now, projectId, publicId).changes;
+        if (problem?.project_id === projectId) new ProblemAxisRunStore(this.db).completeProblem(problem.id);
       }
       return closed;
     })();
@@ -263,7 +274,16 @@ export class ProblemStore {
   private problemsForCapture(captureId: string): Problem[] {
     return (this.db.query(`
       SELECT * FROM problems WHERE capture_id = ? ORDER BY created_at, id
-    `).all(captureId) as Record<string, unknown>[]).map(hydrateProblem);
+    `).all(captureId) as Record<string, unknown>[]).map(hydrateProblem).map((problem) => this.withAxisStates(problem));
+  }
+
+  private withAxisStates(problem: Problem): Problem {
+    const axisStates = new ProblemAxisRunStore(this.db).statesForProblem(
+      problem.id,
+      problem.plans.length,
+      problem.status === "closed",
+    );
+    return { ...problem, axis_states: axisStates, progress_status: projectProblemProgress(axisStates) };
   }
 }
 
@@ -299,5 +319,7 @@ function hydrateProblem(row: Record<string, unknown>): Problem {
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
     conversation_count: Number(row.conversation_count ?? 0),
+    axis_states: [],
+    progress_status: row.status === "closed" ? "completed" : "open",
   };
 }

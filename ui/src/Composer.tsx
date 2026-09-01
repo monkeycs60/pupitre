@@ -10,6 +10,7 @@ import {
   ApiError,
   cancelConversation,
   createConversation,
+  createSidequest,
   importMediaPath,
   sendMessage,
   uploadMedia,
@@ -24,6 +25,7 @@ import { PROVIDER_MODELS } from './modelOptions'
 import { mediaUrl } from './transport'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { parseSidequestDirective } from './sidequestDirective'
 
 interface ComposerProps {
   conversationId: string | null
@@ -498,6 +500,14 @@ export function Composer({
         }))
         onConversationCreated(conversation)
       } else {
+        const sidequest = parseSidequestDirective(trimmedMessage)
+        if (sidequest) {
+          const created = await createSidequest(conversationId, sidequest)
+          onMessageChange('')
+          setAttachments([])
+          onConversationCreated(created.conversation)
+          return
+        }
         await sendMessage(conversationId, {
           message: trimmedMessage,
           images: imageNames,

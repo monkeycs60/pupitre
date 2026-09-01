@@ -22,12 +22,14 @@ interface RailProps {
   onLibrarySelect: () => void
   onRoutinesSelect: () => void
   onFleetSelect: () => void
+  onAttentionSelect: () => void
   onMemorySelect: () => void
   onHelpSelect: () => void
   onProgressSelect: () => void
   onSettingsSelect: () => void
   /** Runs actifs (tours + sub-agents + routines), pour la pastille Fleet. */
   fleetActive?: number
+  attentionCount?: number
   /** Projets ayant au moins un run actif dans Fleet. */
   activeProjectIds?: string[]
 }
@@ -35,6 +37,7 @@ interface RailProps {
 type NavName =
   | 'conversations'
   | 'fleet'
+  | 'attention'
   | 'dashboard'
   | 'documents'
   | 'design'
@@ -54,6 +57,7 @@ const NAV_PATHS: Record<NavName, React.ReactNode> = {
     </>
   ),
   fleet: <path d="M2 8h3l1.5-4L9 12l1.5-4H14" />,
+  attention: <path d="M4 6.5a4 4 0 0 1 8 0v2.3l1.2 2H2.8l1.2-2ZM6.5 12.5h3" />,
   dashboard: <path d="M2 3h5v5H2zM9 3h5v3H9zM9 8h5v5H9zM2 10h5v3H2z" />,
   documents: (
     <>
@@ -149,11 +153,13 @@ export const Rail = memo(function Rail({
   onLibrarySelect,
   onRoutinesSelect,
   onFleetSelect,
+  onAttentionSelect,
   onMemorySelect,
   onHelpSelect,
   onProgressSelect,
   onSettingsSelect,
   fleetActive = 0,
+  attentionCount = 0,
   activeProjectIds = [],
 }: RailProps) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -204,6 +210,7 @@ export const Rail = memo(function Rail({
     needsProject?: boolean
     badge?: number
     shortcut?: string | null
+    group: 'work' | 'supervision' | 'library' | 'system'
   }> = [
     {
       name: 'conversations',
@@ -212,18 +219,20 @@ export const Rail = memo(function Rail({
       onClick: onConversationsSelect,
       badge: selectedProject ? unreadByProject[selectedProject.id] ?? 0 : 0,
       shortcut: navigationShortcutLabel('conversations'),
+      group: 'work',
     },
-    { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive, shortcut: navigationShortcutLabel('fleet') },
-    { name: 'dashboard', label: 'Tableau de bord', view: 'dashboard', onClick: onDashboardSelect, needsProject: true, shortcut: navigationShortcutLabel('dashboard') },
-    { name: 'documents', label: 'Documents', view: 'documents', onClick: onDocumentsSelect, shortcut: navigationShortcutLabel('documents') },
-    { name: 'design', label: 'Claude Design', view: 'design', onClick: onDesignSelect, shortcut: navigationShortcutLabel('design') },
-    { name: 'progress', label: 'Progression', view: 'progress', onClick: onProgressSelect },
-    { name: 'costs', label: 'Coûts & quotas', view: 'costs', onClick: onCostsSelect, needsProject: true },
-    { name: 'library', label: 'Skills', view: 'library', onClick: onLibrarySelect },
-    { name: 'memory', label: 'Mémoire', view: 'memory', onClick: onMemorySelect },
-    { name: 'routines', label: 'Routines', view: 'routines', onClick: onRoutinesSelect },
-    { name: 'help', label: 'Aide', view: 'help', onClick: onHelpSelect },
-    { name: 'settings', label: 'Réglages', view: 'settings', onClick: onSettingsSelect },
+    { name: 'dashboard', label: 'Tableau de bord', view: 'dashboard', onClick: onDashboardSelect, needsProject: true, shortcut: navigationShortcutLabel('dashboard'), group: 'work' },
+    { name: 'attention', label: 'Inbox', view: 'attention', onClick: onAttentionSelect, badge: attentionCount, group: 'supervision' },
+    { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive, shortcut: navigationShortcutLabel('fleet'), group: 'supervision' },
+    { name: 'documents', label: 'Documents', view: 'documents', onClick: onDocumentsSelect, shortcut: navigationShortcutLabel('documents'), group: 'library' },
+    { name: 'library', label: 'Skills', view: 'library', onClick: onLibrarySelect, group: 'library' },
+    { name: 'memory', label: 'Mémoire', view: 'memory', onClick: onMemorySelect, group: 'library' },
+    { name: 'routines', label: 'Routines', view: 'routines', onClick: onRoutinesSelect, group: 'library' },
+    { name: 'costs', label: 'Coûts & quotas', view: 'costs', onClick: onCostsSelect, needsProject: true, group: 'system' },
+    { name: 'progress', label: 'Progression', view: 'progress', onClick: onProgressSelect, group: 'system' },
+    { name: 'settings', label: 'Réglages', view: 'settings', onClick: onSettingsSelect, group: 'system' },
+    { name: 'help', label: 'Aide', view: 'help', onClick: onHelpSelect, group: 'system' },
+    ...(window.__TAURI__ ? [{ name: 'design' as const, label: 'Claude Design', view: 'design' as const, onClick: onDesignSelect, shortcut: navigationShortcutLabel('design'), group: 'work' as const }] : []),
   ]
 
   return (
@@ -285,9 +294,9 @@ export const Rail = memo(function Rail({
       <div className="rail-divider" aria-hidden="true" />
 
       <div className="rail-nav">
-        {nav.map((item) => (
+        {nav.map((item, index) => (
           <Fragment key={item.name}>
-            {item.name === 'progress' ? <div className="rail-nav-divider" aria-hidden="true" /> : null}
+            {index > 0 && nav[index - 1]?.group !== item.group ? <div className="rail-nav-divider" aria-hidden="true" /> : null}
             <button
               type="button"
               className={`rail-nav-button ${workspaceView === item.view ? 'is-active' : ''}`}
@@ -304,9 +313,9 @@ export const Rail = memo(function Rail({
               </span>
               {item.badge && item.badge > 0 ? (
                 <span
-                  className={`rail-badge ${item.name === 'fleet' ? 'is-live' : ''} ${item.name === 'conversations' ? 'is-unread' : ''}`}
+                  className={`rail-badge ${item.name === 'fleet' ? 'is-live' : ''} ${item.name === 'conversations' || item.name === 'attention' ? 'is-unread' : ''}`}
                   aria-hidden="true"
-                >{item.name === 'conversations'
+                >{item.name === 'conversations' || item.name === 'attention'
                   ? <span className="rail-badge-count">{item.badge > 99 ? '99+' : item.badge}</span>
                   : null}</span>
               ) : null}

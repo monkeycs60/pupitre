@@ -17,6 +17,7 @@ import { conversationCwd } from "./workspace";
 import type { SteerFn } from "./adapters/types";
 import { withToolMentions } from "./tool-mentions";
 import { assistantImageRoots, importLocalMarkdownImages } from "./assistant-media";
+import type { ProblemAxisRunStore } from "./stores/problem-axis-runs";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -27,6 +28,7 @@ interface ActiveTurn {
   startedAt: string;
   steerReady: Promise<SteerFn> | null;
   persistSteer: (event: Extract<AppEvent, { type: "user-message" }>) => void;
+  cancelledByUser: boolean;
 }
 
 function attachmentPrompt(
@@ -103,6 +105,7 @@ export class ConversationRunner {
     /** Lu à chaque tour : le réglage peut changer sans redémarrer le sidecar. */
     private actionFormat: () => ActionFormat = () => DEFAULT_ACTION_FORMAT,
     private domains?: DomainStore,
+    private problemAxisRuns?: ProblemAxisRunStore,
   ) {
     sweepOrphanedRuns(convs);
   }
@@ -132,6 +135,7 @@ export class ConversationRunner {
   async cancelTurn(conversationId: string): Promise<boolean> {
     const turn = this.active.get(conversationId);
     if (!turn) return false;
+    turn.cancelledByUser = true;
     turn.controller.abort();
     await turn.done;
     return true;
@@ -232,6 +236,7 @@ export class ConversationRunner {
       startedAt,
       steerReady,
       persistSteer: persist,
+      cancelledByUser: false,
     });
 
     const emit = (incoming: AppEvent) => {
@@ -373,6 +378,13 @@ export class ConversationRunner {
         console.error("Marquage du tour répondu impossible", error);
       }
       const activeTurn = this.active.get(conversationId);
+      if (activeTurn?.cancelledByUser) {
+        this.problemAxisRuns?.transitionConversation(conversationId, "interrupted");
+      } else if (outcome.state === "done") {
+        this.problemAxisRuns?.transitionConversation(conversationId, "awaiting_validation");
+      } else {
+        this.problemAxisRuns?.transitionConversation(conversationId, "failed", outcome.error ?? null);
+      }
       this.active.delete(conversationId);
       activeTurn?.finish();
       releaseActivity();

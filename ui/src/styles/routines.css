@@ -87,8 +87,6 @@
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-.threshold-setting input { width: 72px; }
-.threshold-save { align-self: end; min-height: 30px; }
 
 .routines-error {
   padding: var(--space-2) var(--space-4);
