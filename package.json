@@ -1,8 +1,11 @@
 {
   "name": "pupitre",
   "scripts": {
-    "dev:sidecar": "bun run --cwd sidecar src/index.ts",
-    "dev:sidecar:watch": "bun run --cwd sidecar --watch src/index.ts",
+    "dev": "bun run scripts/dev.ts",
+    "dev:sidecar": "bun run scripts/dev.ts --sidecar",
+    "dev:sidecar:watch": "bun run scripts/dev.ts --sidecar --watch",
+    "dev:data:refresh": "bun run scripts/refresh-dev-data.ts",
+    "promote": "bun run scripts/promote.ts",
     "typecheck:sidecar": "bun run --cwd sidecar typecheck",
     "build:sidecar": "bun run scripts/build-sidecar.ts",
     "prepare:tauri-dev": "bun run scripts/prepare-tauri-dev.ts",
