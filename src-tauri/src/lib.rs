@@ -17,6 +17,39 @@ use tauri_plugin_shell::{
 /// sidecar. Sans cette distinction, fermer la fenêtre Claude Design couperait
 /// le backend de toute l'application.
 const MAIN_WINDOW_LABEL: &str = "main";
+const SIGTERM: i32 = 15;
+
+#[derive(Clone)]
+struct InstanceEnv {
+    name: String,
+    port: u16,
+    data_dir: Option<String>,
+}
+
+fn read_instance_env() -> InstanceEnv {
+    let name = std::env::var("PUPITRE_INSTANCE").unwrap_or_else(|_| "stable".into());
+    let default_port = if name == "dev" { 4821 } else { 4820 };
+    let port = std::env::var("PUPITRE_PORT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(default_port);
+    InstanceEnv {
+        name,
+        port,
+        data_dir: std::env::var("PUPITRE_DATA_DIR").ok(),
+    }
+}
+
+fn sidecar_env(instance: &InstanceEnv) -> Vec<(String, String)> {
+    let mut vars = vec![
+        ("PUPITRE_INSTANCE".into(), instance.name.clone()),
+        ("PUPITRE_PORT".into(), instance.port.to_string()),
+    ];
+    if let Some(data_dir) = &instance.data_dir {
+        vars.push(("PUPITRE_DATA_DIR".into(), data_dir.clone()));
+    }
+    vars
+}
 
 const DESIGN_WINDOW_LABEL: &str = "design";
 
@@ -248,6 +281,8 @@ fn spawn_sidecar(
     app: &tauri::AppHandle,
 ) -> Result<(tauri::async_runtime::Receiver<CommandEvent>, CommandChild), tauri_plugin_shell::Error>
 {
+    let instance = read_instance_env();
+    let vars = sidecar_env(&instance);
     #[cfg(debug_assertions)]
     {
         let repository_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -263,11 +298,12 @@ fn spawn_sidecar(
                 sidecar_directory.to_string_lossy().into_owned(),
                 "src/index.ts".to_string(),
             ])
+            .envs(vars)
             .spawn();
     }
 
     #[cfg(not(debug_assertions))]
-    app.shell().sidecar("pupitre-sidecar")?.spawn()
+    app.shell().sidecar("pupitre-sidecar")?.envs(vars).spawn()
 }
 
 /// Redémarre le backend supervisé sans fermer la fenêtre principale. Le
@@ -567,13 +603,20 @@ fn build_main_popup<R: tauri::Runtime>(
 /// ci-dessous reprennent une à une celles que portait la configuration.
 fn build_main_window(app: &tauri::AppHandle) -> Result<(), tauri::Error> {
     let popup_app = app.clone();
+    let instance = read_instance_env();
+    let title = if instance.name == "dev" { "Pupitre · dev" } else { "Pupitre" };
+    let initialization_script = format!(
+        "window.__PUPITRE__ = {{ instance: {:?}, port: {} }};",
+        instance.name, instance.port
+    );
     tauri::WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, tauri::WebviewUrl::default())
-        .title("Pupitre")
+        .title(title)
         .inner_size(1280.0, 800.0)
         .min_inner_size(960.0, 600.0)
         .resizable(true)
         .fullscreen(false)
         .decorations(false)
+        .initialization_script(initialization_script)
         .on_download(handle_main_download)
         .on_new_window(move |url, features| build_main_popup(&popup_app, url, features))
         .build()?;
@@ -732,6 +775,15 @@ pub fn run() {
             )?;
 
             app.manage(SidecarProcess::default());
+            {
+                let handle = app.handle().clone();
+                gtk::glib::unix_signal_add_local(SIGTERM, move || {
+                    use tauri_plugin_window_state::{AppHandleExt, StateFlags};
+                    let _ = handle.save_window_state(StateFlags::all());
+                    handle.exit(0);
+                    gtk::glib::ControlFlow::Break
+                });
+            }
             supervise_sidecar(app.handle().clone());
             build_main_window(app.handle())?;
             Ok(())

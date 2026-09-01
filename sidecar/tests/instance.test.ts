@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -89,4 +89,12 @@ test("compte uniquement les sources TypeScript modifiées après le démarrage",
   utimesSync(ignored, new Date(startedAt + 1_000), new Date(startedAt + 1_000));
   expect(staleSourcesSince(startedAt, dir, { source: "git", sha: "test", dirty: false })).toBe(1);
   expect(staleSourcesSince(startedAt, dir, { source: "build", sha: "test", dirty: false })).toBe(0);
+});
+
+test("Rust conserve les mêmes défauts d'instance que le sidecar", () => {
+  const rust = readFileSync(join(import.meta.dir, "..", "..", "src-tauri", "src", "lib.rs"), "utf8");
+  const reader = rust.match(/fn read_instance_env\(\)[\s\S]*?\n}/)?.[0] ?? "";
+  expect(reader).toContain('name == "dev"');
+  expect(reader).toContain("4821");
+  expect(reader).toContain("4820");
 });

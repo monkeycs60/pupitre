@@ -9,22 +9,22 @@ const applicationsDirectory = join(
   process.env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'),
   'applications',
 )
-const desktopFile = join(applicationsDirectory, 'fr.clementserizay.pupitre.desktop')
+const desktopFile = join(applicationsDirectory, 'fr.clementserizay.pupitre.dev.desktop')
 
 mkdirSync(applicationsDirectory, { recursive: true })
 writeFileSync(
   desktopFile,
   `[Desktop Entry]
 Type=Application
-Name=Pupitre (développement)
+Name=Pupitre (dev)
 Comment=Espace de travail pour agents IA
-Exec=${join(root, 'target', 'debug', 'app')}
+Exec=env PUPITRE_INSTANCE=dev ${join(root, 'src-tauri', 'target', 'debug', 'app')}
 Icon=${join(root, 'src-tauri', 'icons', 'icon.png')}
 Terminal=false
 Categories=Development;
 StartupNotify=true
-StartupWMClass=fr.clementserizay.pupitre
-X-GNOME-WMClass=fr.clementserizay.pupitre
+StartupWMClass=fr.clementserizay.pupitre.dev
+X-GNOME-WMClass=fr.clementserizay.pupitre.dev
 `,
 )
 
