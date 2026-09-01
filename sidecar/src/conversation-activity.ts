@@ -21,6 +21,12 @@ export class ConversationActivity {
     return this.active.has(conversationId);
   }
 
+  activeCount(kinds?: readonly ConversationActivityKind[]): number {
+    if (!kinds) return this.active.size;
+    const selected = new Set(kinds);
+    return [...this.active.values()].filter((kind) => selected.has(kind)).length;
+  }
+
   acquire(conversationId: string, kind: ConversationActivityKind): () => void {
     const current = this.active.get(conversationId);
     if (current) throw new ConversationBusyError(current);

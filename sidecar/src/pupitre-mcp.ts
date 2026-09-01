@@ -2,6 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { defaultPort, readInstance } from "./instance";
 
 function numberFromEnv(key: string, fallback: number): number {
   const value = Number(process.env[key]);
@@ -15,7 +16,7 @@ function conversationId(explicit?: string): string {
 }
 
 function baseUrl(): string {
-  return `http://127.0.0.1:${numberFromEnv("PUPITRE_PORT", 4820)}`;
+  return `http://127.0.0.1:${numberFromEnv("PUPITRE_PORT", defaultPort(readInstance().name))}`;
 }
 
 async function errorMessage(response: Response): Promise<string> {

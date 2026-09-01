@@ -1,4 +1,4 @@
-import { dataDir, openDb } from "./db";
+import { openDb } from "./db";
 import { MediaStore } from "./media";
 import { ConversationRunner } from "./runner";
 import { claimServer, ConversationEventBus, createServer } from "./server";
@@ -47,6 +47,7 @@ import { SentryClient } from "./integrations/sentry";
 import { ProblemStore } from "./stores/problems";
 import { ProblemMissionStore } from "./stores/problem-missions";
 import { ProblemService } from "./problems";
+import { backgroundJobsEnabled, readInstance } from "./instance";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -56,7 +57,8 @@ if (process.argv.includes("--pupitre-mcp")) {
 } else if (process.argv.includes("--conductor-mcp")) {
   await runConductorMcp();
 } else {
-  const dir = dataDir();
+  const instance = readInstance();
+  const dir = instance.dataDir;
   const db = openDb(dir);
   const projects = new ProjectStore(db);
   const presets = new PresetStore(db);
@@ -156,11 +158,7 @@ if (process.argv.includes("--pupitre-mcp")) {
       },
     },
   );
-  const configuredPort = process.env.PUPITRE_PORT;
-  const port = configuredPort === undefined ? 4820 : Number(configuredPort);
-  if (configuredPort?.trim() === "" || !Number.isInteger(port) || port < 0 || port > 65_535) {
-    throw new Error("PUPITRE_PORT invalide");
-  }
+  const port = instance.port;
 
   let server: ReturnType<typeof createServer>;
   const runner = new ConversationRunner(
@@ -268,6 +266,7 @@ if (process.argv.includes("--pupitre-mcp")) {
 
   server = await claimServer(() => createServer({
     port,
+    instance,
     shutdown: () => shutdownGracefully("requested"),
     projects,
     conversations,
@@ -306,14 +305,15 @@ if (process.argv.includes("--pupitre-mcp")) {
     time,
     htmlDocuments,
   }), port);
-  routines.start();
-  changelog.start();
   void problems.resume();
-
-  // Les deux relevés de quota sont des lectures gratuites : on part d'un état
-  // frais et on le tient à jour en fond (cf. QuotaRefresher).
-  quotaRefresher.start();
-  integrationsRefresher.start();
+  if (backgroundJobsEnabled()) {
+    routines.start();
+    changelog.start();
+    quotaRefresher.start();
+    integrationsRefresher.start();
+  } else {
+    console.log("instance dev : tâches de fond désactivées (PUPITRE_BACKGROUND_JOBS=on pour les activer)");
+  }
 
   console.log(`pupitre sidecar prêt sur http://localhost:${server.port}`);
 }

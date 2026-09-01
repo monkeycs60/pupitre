@@ -20,6 +20,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { defaultPort, readInstance } from "./instance";
 
 const DEFAULT_POLL_MS = 2_000;
 const DEFAULT_TIMEOUT_MS = 15 * 60_000;
@@ -32,7 +33,7 @@ function numberFromEnv(key: string, fallback: number): number {
 }
 
 function baseUrl(): string {
-  return `http://127.0.0.1:${numberFromEnv("PUPITRE_PORT", 4820)}`;
+  return `http://127.0.0.1:${numberFromEnv("PUPITRE_PORT", defaultPort(readInstance().name))}`;
 }
 
 function pollMs(): number {

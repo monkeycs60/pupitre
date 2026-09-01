@@ -1,12 +1,12 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { countConversationMessages } from "./message-count";
 import { MESSAGE_COUNT_MIGRATION_KEY, SettingsStore, SPEED_REVIEW_MIGRATION_KEY } from "./stores/settings";
+import { defaultDataDir, readInstance } from "./instance";
 
 export function dataDir(): string {
-  return process.env.PUPITRE_DATA_DIR ?? join(homedir(), ".local/share/pupitre");
+  return process.env.PUPITRE_DATA_DIR ?? defaultDataDir(readInstance().name);
 }
 
 export function openDb(dir: string = dataDir()): Database {

@@ -68,6 +68,10 @@ export class DebriefRunner {
     return this.active.has(conversationId);
   }
 
+  activeCount(): number {
+    return this.active.size;
+  }
+
   get(id: string): Debrief | null {
     return this.store.get(id);
   }

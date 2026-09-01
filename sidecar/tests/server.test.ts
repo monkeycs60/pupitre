@@ -37,6 +37,7 @@ import { TicketStore } from "../src/stores/tickets";
 import { DomainStore } from "../src/stores/domains";
 import { ChangelogStore } from "../src/stores/changelog";
 import { ChangelogService } from "../src/changelog";
+import type { InstanceInfo } from "../src/instance";
 
 interface TestServer {
   baseUrl: string;
@@ -319,6 +320,7 @@ cat "${fixture}"
   let shutdownCount = 0;
   const deps: ServerDeps = {
     port: 0,
+    instance: { name: "dev", port: 0, dataDir: dir } satisfies InstanceInfo,
     projects,
     conversations,
     media,
@@ -429,7 +431,7 @@ test("claimServer évince un sidecar périmé qui tient le port", async () => {
   try {
     expect(server.port).toBe(contestedPort);
     const health = await fetch(`http://127.0.0.1:${contestedPort}/api/health`);
-    expect(await health.json()).toEqual({ ok: true });
+    expect(await health.json()).toEqual(expect.objectContaining({ ok: true }));
   } finally {
     server.stop(true);
   }
@@ -465,7 +467,25 @@ test("health, création et liste des projets, avec 400 pour un path inexistant",
   if (!current) throw new Error("serveur de test non démarré");
   const health = await fetch(`${current.baseUrl}/api/health`);
   expect(health.status).toBe(200);
-  expect(await health.json()).toEqual({ ok: true });
+  expect(await health.json()).toEqual(expect.objectContaining({
+    ok: true,
+    instance: "dev",
+    port: current.server.port,
+    pid: process.pid,
+    appPid: process.ppid,
+  }));
+
+  const activity = await fetch(`${current.baseUrl}/api/activity`);
+  expect(activity.status).toBe(200);
+  expect(await activity.json()).toEqual({
+    busy: false,
+    turns: 0,
+    subtasks: 0,
+    reviews: 0,
+    routines: 0,
+    debriefs: 0,
+    testers: 0,
+  });
 
   const invalid = await postJson("/api/projects", {
     name: "absent",

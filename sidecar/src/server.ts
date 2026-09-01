@@ -90,6 +90,7 @@ import type { ChangelogService } from "./changelog";
 import type { Problem, ProblemStore } from "./stores/problems";
 import type { ProblemMissionStore } from "./stores/problem-missions";
 import type { ProblemService } from "./problems";
+import { readInstance, type InstanceInfo } from "./instance";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -108,6 +109,7 @@ export class ConversationEventBus {
 
 export interface ServerDeps {
   port: number;
+  instance?: InstanceInfo;
   projects: ProjectStore;
   conversations: ConversationStore;
   media: MediaStore;
@@ -1108,6 +1110,8 @@ function missionProblemPreamble(
 }
 
 export function createServer(deps: ServerDeps) {
+  const instance = deps.instance ?? readInstance({ ...process.env, PUPITRE_PORT: String(deps.port) });
+  const startedAt = new Date().toISOString();
   const sockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
   const fleetSockets = new Set<ServerWebSocket<WebSocketData>>();
@@ -1207,7 +1211,31 @@ export function createServer(deps: ServerDeps) {
         const { pathname } = url;
 
         if (request.method === "GET" && pathname === "/api/health") {
-          return json({ ok: true });
+          return json({
+            ok: true,
+            instance: instance.name,
+            port: server.port ?? deps.port,
+            pid: process.pid,
+            appPid: process.ppid,
+            startedAt,
+            build: null,
+            staleSources: 0,
+          });
+        }
+
+        if (request.method === "GET" && pathname === "/api/activity") {
+          const counts = {
+            turns: 0,
+            subtasks: 0,
+            reviews: 0,
+            routines: 0,
+            debriefs: deps.debriefs.activeCount(),
+            testers: deps.runner.activity.activeCount(["test-inventory", "test-scope"]),
+          };
+          for (const item of currentFleet()) {
+            counts[`${item.kind}s` as "turns" | "subtasks" | "reviews" | "routines"] += 1;
+          }
+          return json({ busy: Object.values(counts).some((count) => count > 0), ...counts });
         }
 
         // N'ouvre jamais la fenêtre et ne la bloque jamais : dit seulement si
