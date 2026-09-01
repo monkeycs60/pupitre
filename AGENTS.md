@@ -12,11 +12,10 @@
 
 ## Chantier backend : le sidecar en développement
 
-- Le sidecar lancé par `bunx tauri dev` n'a pas de `--watch` : une modification sous `sidecar/` dort sur le disque jusqu'à ce que le process redémarre. `bun run dev:sidecar` (racine) le relance au premier plan sans recompiler le Rust ; `bun run dev:sidecar:watch` y ajoute le redémarrage à chaque sauvegarde.
-- **Si tu réponds depuis une conversation Pupitre, ne lance ni l'un ni l'autre** : ces commandes réclament le port 4820 et arrêtent le sidecar qui diffuse ta réponse. L'utilisateur perdrait le tour. La prise de port n'est jamais anodine, y compris au premier lancement.
-- Dans ce cas, édite le sidecar, vérifie par `bun test` dans `sidecar/` (qui n'a besoin d'aucun sidecar vivant), et signale dans le bloc TODO que le changement exige un redémarrage pour être actif, en donnant la commande.
-- `dev:sidecar` te revient pleinement hors conversation Pupitre, dans un terminal où rien ne diffuse. Pour trancher, remonte l'arbre des processus depuis ton shell : un ancêtre `target/debug/app` ou le sidecar signifie que tu réponds depuis Pupitre.
-- Le binaire Tauri supervise le sidecar et le relance quand il meurt, **sauf s'il sort avec le code 0** — qui signifie « évincé par une instance plus récente ». Le sidecar sort 143 sur un signal reçu, donc tuer le process suffit à le recharger depuis les sources, sans jamais prendre le port. C'est le redémarrage le plus sûr.
+- Le port 4820 appartient à l'instance stable et ne doit jamais être pris par un script de développement. `bun run dev:sidecar` et `bun run dev:sidecar:watch` visent exclusivement l'instance dev sur 4821, avec les données séparées de `~/.local/share/pupitre-dev`.
+- Ces commandes sont utilisables depuis une conversation Pupitre stable : redémarrer la dev ne coupe aucun tour de la stable. Une modification backend se vérifie avec la dev et le front Vite sur `http://localhost:5173`.
+- Le sidecar dev lancé par Tauri n'a pas de watch automatique. Utilise `dev:sidecar` pour choisir le moment du redémarrage ou `dev:sidecar:watch` pour le relancer à chaque sauvegarde.
+- Aucun changement de source n'atteint la stable sans promotion. Seul l'utilisateur déclenche `bun run promote` ou le bouton « Promouvoir cette version » dans les réglages de la dev.
 
 ## Vérifier dans le navigateur, pas seulement dans les tests
 

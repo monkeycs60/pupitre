@@ -2,35 +2,20 @@
 
 ## Chantier backend : le sidecar en développement
 
-Le sidecar lancé par `bunx tauri dev` n'a pas de `--watch` : une modification
-sous `sidecar/` dort sur le disque jusqu'à ce que le process redémarre.
-`bun run dev:sidecar` (racine) relance le sidecar au premier plan sans
-recompiler le Rust ; `bun run dev:sidecar:watch` y ajoute le redémarrage à
-chaque sauvegarde.
+Le port 4820 appartient à l'instance stable et ne doit jamais être pris par un
+script de développement. `bun run dev:sidecar` et
+`bun run dev:sidecar:watch` visent l'instance dev sur 4821, avec les données
+séparées de `~/.local/share/pupitre-dev`.
 
-**Si tu réponds depuis une conversation Pupitre, ne lance ni l'un ni l'autre.**
-Ces commandes réclament le port 4820 et arrêtent le sidecar en place — c'est-à-dire
-celui qui diffuse ta réponse en cours. L'utilisateur perdrait le tour, et toi la
-main. La prise de port n'est jamais anodine, y compris au premier lancement.
+Ces commandes sont utilisables depuis une conversation Pupitre stable :
+redémarrer la dev ne coupe aucun tour stable. Une modification backend se
+vérifie avec la dev et le front Vite sur `http://localhost:5173`.
 
-Dans ce cas, procède ainsi :
-
-- édite le sidecar et vérifie-le par `bun test` dans `sidecar/`, qui n'a besoin
-  d'aucun sidecar vivant ;
-- signale dans le bloc TODO que le changement backend exige un redémarrage pour
-  être actif, en donnant la commande.
-
-`dev:sidecar` te revient en revanche pleinement hors conversation Pupitre — dans
-un terminal, où rien ne diffuse. Pour savoir où tu es, remonte l'arbre des
-processus depuis ton shell : un ancêtre `target/debug/app` ou le sidecar
-lui-même signifie que tu réponds depuis Pupitre.
-
-Le binaire Tauri supervise le sidecar et le relance quand il meurt, **sauf s'il
-sort avec le code 0**, qui signifie « évincé par une instance plus récente ».
-Un `kill` manuel produisait autrefois ce code : l'app restait alors sans backend
-sans rien dire. Le sidecar sort désormais 143 sur un signal reçu, donc tuer le
-process suffit à le recharger depuis les sources — c'est le redémarrage le plus
-sûr, il ne prend jamais le port.
+Le sidecar dev lancé par Tauri n'a pas de watch automatique. `dev:sidecar`
+laisse choisir le moment du redémarrage ; `dev:sidecar:watch` relance à chaque
+sauvegarde. Aucun changement de source n'atteint la stable sans promotion.
+Seul l'utilisateur déclenche `bun run promote` ou le bouton « Promouvoir cette
+version » dans les réglages de la dev.
 
 ## Vérifier dans le navigateur, pas seulement dans les tests
 

@@ -4,6 +4,27 @@ Pupitre pilote les CLIs Claude Code et Codex par conversations rattachées à de
 
 ## Language
 
+### Instances
+
+**Instance stable** :
+La version compilée et figée de Pupitre utilisée au quotidien, sur le port 4820
+et les données `~/.local/share/pupitre`.
+_Avoid_ : prod, release
+
+**Instance dev** :
+La version issue des sources vivantes, dédiée au développement de Pupitre, sur
+le port 4821 et les données `~/.local/share/pupitre-dev`.
+_Avoid_ : staging, sandbox
+
+**Promotion** :
+La construction puis la bascule atomique d'une version dev vers l'instance
+stable, après attente de ses activités en cours.
+_Avoid_ : déploiement, mise en prod
+
+**Pastille d'instance** :
+L'indicateur de la barre de titre qui nomme l'instance, le SHA du sidecar et la
+présence éventuelle de sources périmées.
+
 ### Gardien
 
 **Gardien** :

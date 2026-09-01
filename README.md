@@ -226,39 +226,55 @@ Depuis un fil ouvert, la modale « Changer de modèle » distingue deux opérati
 - [Bun](https://bun.sh) ≥ 1.3, Rust ≥ 1.77 (+ deps Tauri Linux : `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`…)
 - `claude` (Claude Code), `codex` (Codex CLI) et `grok` (Grok Build) installés **et authentifiés** sur leurs abonnements
 
-## Démarrage (dev)
+## Deux instances
+
+| Instance | Port | Données | Lancement |
+| --- | ---: | --- | --- |
+| stable | 4820 | `~/.local/share/pupitre` | lanceur **Pupitre** |
+| dev | 4821 | `~/.local/share/pupitre-dev` | `bun run dev` ou lanceur **Pupitre (dev)** |
+
+La stable utilise des binaires compilés et reste disponible pendant le chantier.
+La dev exécute les sources vivantes et désactive par défaut les routines et
+rafraîchissements partagés. La pastille de la barre de titre indique l'instance,
+le SHA du sidecar et, en dev, si les sources ont changé depuis son démarrage.
+
+## Démarrage de la dev
 
 ```bash
 bun install
-bunx tauri dev        # compile la coquille, lance vite + sidecar, ouvre la fenêtre
+bun run dev           # instance dev : Tauri, Vite et sidecar sur 4821
 ```
 
 Ou sans fenêtre native :
 
 ```bash
-bun run --cwd sidecar dev    # sidecar sur :4820
+bun run dev:sidecar          # sidecar dev sur :4821
 bun run --cwd ui dev         # UI sur :5173, proxy vers le sidecar
 ```
 
-### Reprendre la main sur le sidecar pendant un chantier backend
+### Données et redémarrage du sidecar dev
 
 ```bash
-bun run dev:sidecar          # sidecar sans --watch : redémarre quand TU le décides
-bun run dev:sidecar:watch    # redémarrage à chaque sauvegarde (l'ancien comportement)
+bun run dev:data:refresh     # copie cohérente de la stable vers la dev, dev arrêtée
+bun run dev:sidecar          # redémarrage choisi, port 4821
+bun run dev:sidecar:watch    # redémarrage à chaque sauvegarde, port 4821
 ```
 
-Lancé alors que l'app tourne déjà, `dev:sidecar` réclame le port 4820 : il demande
-au sidecar de Tauri de s'arrêter (`POST /api/shutdown`), et Tauri ne le relance pas
-puisqu'un exit 0 est considéré comme volontaire. L'UI parle donc ensuite à *ton*
-sidecar, au premier plan, logs visibles.
+Les deux dossiers ne doivent jamais être partagés : chaque démarrage nettoie les
+runs orphelins de sa propre base. Les binaires CLI restent surchargeables avec
+`PUPITRE_CLAUDE_BIN` et `PUPITRE_CODEX_BIN`.
 
-L'intérêt du mode sans `--watch` est le contrôle du moment : chaque redémarrage tue
-les tours en vol, y compris une conversation en cours de réponse. En `--watch`, une
-simple sauvegarde suffit à la perdre ; sans lui, on édite autant qu'on veut et on
-redémarre entre deux tours. À l'inverse, garder un vieux sidecar sur le port fait
-tourner l'UI sur du code périmé, et les correctifs semblent ne jamais s'appliquer.
+### Promotion et rollback
 
-Données dans `~/.local/share/pupitre` (override : `PUPITRE_DATA_DIR`). Binaires CLI overridables pour tester sans quota : `PUPITRE_CLAUDE_BIN` / `PUPITRE_CODEX_BIN` (voir `sidecar/tests/fake-bins/`).
+```bash
+bun run promote                 # construit, attend la stable, installe et relance
+bun run promote -- --rollback   # revient à la release précédente
+```
+
+La promotion est aussi disponible dans **Paramètres > Instance** de la dev. Elle
+attend la fin des tours, installe sans `sudo` sous
+`~/.local/opt/pupitre/releases/`, bascule le lien `current`, vérifie le SHA puis
+conserve les trois dernières releases.
 
 Par défaut, l'app-server Codex lancé par Pupitre conserve les plugins et MCP
 utilisateur, mais borne à 5 secondes le handshake de chaque MCP classique : un
