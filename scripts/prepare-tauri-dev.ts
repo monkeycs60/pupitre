@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { devDesktopEntry } from './dev-env'
 
 if (process.platform !== 'linux') process.exit(0)
 
@@ -14,18 +15,7 @@ const desktopFile = join(applicationsDirectory, 'fr.clementserizay.pupitre.dev.d
 mkdirSync(applicationsDirectory, { recursive: true })
 writeFileSync(
   desktopFile,
-  `[Desktop Entry]
-Type=Application
-Name=Pupitre (dev)
-Comment=Espace de travail pour agents IA
-Exec=env PUPITRE_INSTANCE=dev ${join(root, 'src-tauri', 'target', 'debug', 'app')}
-Icon=${join(root, 'src-tauri', 'icons', 'icon.png')}
-Terminal=false
-Categories=Development;
-StartupNotify=true
-StartupWMClass=fr.clementserizay.pupitre.dev
-X-GNOME-WMClass=fr.clementserizay.pupitre.dev
-`,
+  devDesktopEntry(root, Bun.which('bun') ?? process.execPath),
 )
 
 console.log(`Lanceur de développement Pupitre enregistré : ${desktopFile}`)
