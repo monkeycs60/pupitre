@@ -147,8 +147,8 @@ button.titlebar-instance {
 }
 
 .titlebar-instance.is-stale {
-  color: var(--warning);
-  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
 }
 
 .titlebar-drag {

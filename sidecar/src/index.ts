@@ -48,6 +48,7 @@ import { ProblemStore } from "./stores/problems";
 import { ProblemMissionStore } from "./stores/problem-missions";
 import { ProblemService } from "./problems";
 import { backgroundJobsEnabled, readInstance } from "./instance";
+import { PromotionRunner } from "./promotion";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -159,6 +160,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     },
   );
   const port = instance.port;
+  const promotion = instance.name === "dev" ? new PromotionRunner() : undefined;
 
   let server: ReturnType<typeof createServer>;
   const runner = new ConversationRunner(
@@ -267,6 +269,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   server = await claimServer(() => createServer({
     port,
     instance,
+    promotion,
     shutdown: () => shutdownGracefully("requested"),
     projects,
     conversations,

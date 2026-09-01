@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
-import { getSettings, updateIntegrationTokens, updateSettings } from './api'
-import type { FilesystemScope } from './types'
+import {
+  cancelPromotion,
+  getPromotion,
+  getSettings,
+  getStableHealth,
+  startPromotion,
+  updateIntegrationTokens,
+  updateSettings,
+} from './api'
+import type { FilesystemScope, InstanceHealth, PromotionState } from './types'
 import { DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 
@@ -14,7 +22,9 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible de charger les paramètres.'
 }
 
-export function AppSettingsView() {
+const PROMOTION_STEPS = ['preflight', 'build', 'stage', 'drain', 'switch', 'launch', 'verify', 'prune']
+
+export function AppSettingsView({ instance = null }: { instance?: InstanceHealth | null }) {
   const [scope, setScope] = useState<FilesystemScope>(DEFAULT_SCOPE)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -35,6 +45,9 @@ export function AppSettingsView() {
     clickup: '',
     gitlab: '',
   })
+  const [promotion, setPromotion] = useState<PromotionState | null>(null)
+  const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
+  const [allowDirty, setAllowDirty] = useState(false)
 
   useEffect(() => {
     let ignore = false
@@ -61,6 +74,40 @@ export function AppSettingsView() {
       ignore = true
     }
   }, [])
+
+  useEffect(() => {
+    if (instance?.instance !== 'dev') return
+    let ignore = false
+    let timer: ReturnType<typeof setInterval> | undefined
+    async function refresh() {
+      const [nextPromotion, nextStable] = await Promise.all([getPromotion(), getStableHealth()])
+      if (ignore) return
+      setPromotion(nextPromotion)
+      setStableHealth('running' in nextStable ? null : nextStable)
+      if (nextPromotion.state === 'running' && timer === undefined) {
+        timer = setInterval(() => void refresh(), 1_000)
+      } else if (nextPromotion.state !== 'running' && timer !== undefined) {
+        clearInterval(timer)
+        timer = undefined
+      }
+    }
+    void refresh().catch((loadError: unknown) => {
+      if (!ignore) setError(errorMessage(loadError))
+    })
+    return () => {
+      ignore = true
+      if (timer !== undefined) clearInterval(timer)
+    }
+  }, [instance?.instance])
+
+  async function promote(options: { force?: boolean; skipBuild?: boolean } = {}) {
+    setError(null)
+    try {
+      setPromotion(await startPromotion(options))
+    } catch (promotionError: unknown) {
+      setError(errorMessage(promotionError))
+    }
+  }
 
   async function handleScopeChange(next: FilesystemScope) {
     if (next === scope) return
@@ -153,6 +200,59 @@ export function AppSettingsView() {
           <p>Les valeurs ici servent de défaut aux nouveaux projets.</p>
         </div>
       </header>
+
+      {instance?.instance === 'dev' ? (
+        <div className="settings-card" id="settings-instance">
+          <div>
+            <h2>Instance</h2>
+            <p>Cette instance (dev) : <code>{instance.build.sha}{instance.build.dirty ? '*' : ''}</code></p>
+            <p>
+              Instance stable : {stableHealth
+                ? <><code>{stableHealth.build.sha}</code> · démarrée le {new Date(stableHealth.startedAt).toLocaleString('fr-FR')}</>
+                : 'non lancée'}
+            </p>
+          </div>
+          {instance.build.dirty ? (
+            <label className="settings-checkbox-label">
+              <input type="checkbox" checked={allowDirty} onChange={(event) => setAllowDirty(event.target.checked)} />
+              Autoriser un arbre modifié
+            </label>
+          ) : null}
+          <div className="settings-token-actions">
+            <button
+              type="button"
+              className="primary-button"
+              disabled={promotion?.state === 'running' || (instance.build.dirty && !allowDirty)}
+              onClick={() => void promote()}
+            >
+              Promouvoir cette version
+            </button>
+            {promotion?.state === 'running' ? (
+              <>
+                <button type="button" className="secondary-button" onClick={() => void cancelPromotion().then(setPromotion)}>Annuler</button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void cancelPromotion().then(() => promote({ force: true, skipBuild: true }))}
+                >
+                  Forcer la bascule
+                </button>
+              </>
+            ) : null}
+          </div>
+          {instance.build.dirty && !allowDirty ? <p className="settings-help">Valider ou remiser les changements d’abord.</p> : null}
+          {promotion ? (
+            <ol className="settings-promotion-steps">
+              {PROMOTION_STEPS.map((step) => {
+                const last = [...promotion.events].reverse().find((event) => event.step === step)
+                return <li key={step} className={promotion.steps[step] ? `is-${promotion.steps[step]}` : ''}>
+                  <strong>{step}</strong>{last ? ` · ${last.message}` : ''}
+                </li>
+              })}
+            </ol>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="settings-card">
         <div>

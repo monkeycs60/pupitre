@@ -823,7 +823,7 @@ function App() {
         ) : workspaceView === 'progress' ? (
           <ProgressView snapshot={time.snapshot} />
         ) : workspaceView === 'settings' ? (
-          <AppSettingsView />
+          <AppSettingsView instance={instance} />
         ) : selectedProject === null ? (
           <div className="empty-state">
             <p>Sélectionnez un projet pour commencer.</p>
@@ -960,6 +960,8 @@ function App() {
         onSkillLaunch={handlePaletteSkillLaunch}
         onViewSelect={handlePaletteViewSelect}
         onAction={handlePaletteAction}
+        instance={instance}
+        onPromotionSelect={handleSettingsSelect}
       />
       {projectSettingsOpen && selectedProject ? (
         <ProjectSettingsDialog

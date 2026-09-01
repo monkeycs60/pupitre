@@ -11,6 +11,7 @@ import {
 } from './api'
 import type {
   Conversation,
+  InstanceHealth,
   Project,
   ProjectDomain,
   SearchResult,
@@ -32,6 +33,8 @@ interface CommandPaletteProps {
   onSkillLaunch: (skill: SkillSummary) => void
   onViewSelect: (view: Extract<WorkspaceView, 'dashboard' | 'fleet' | 'routines' | 'documents' | 'library' | 'memory' | 'help'>) => void
   onAction: (action: PaletteAction) => void | Promise<void>
+  instance?: InstanceHealth | null
+  onPromotionSelect?: () => void
 }
 
 interface PaletteItem {
@@ -70,6 +73,8 @@ export function CommandPalette({
   onSkillLaunch,
   onViewSelect,
   onAction,
+  instance,
+  onPromotionSelect,
 }: CommandPaletteProps) {
   // La palette est globale, donc elle peut s'ouvrir par-dessus le panneau Claude
   // Design. Ce panneau est une webview, une surface de l'OS : sans ce masquage,
@@ -156,6 +161,15 @@ export function CommandPalette({
   const items = useMemo<PaletteItem[]>(() => {
     const next: PaletteItem[] = []
     const add = (item: PaletteItem) => next.push(item)
+    if (instance?.instance === 'dev' && onPromotionSelect && matches(query, 'Promouvoir cette version', 'Instance stable')) {
+      add({
+        id: 'action-promote',
+        group: 'Action',
+        label: 'Promouvoir cette version',
+        detail: 'Ouvrir les réglages de l’instance dev',
+        run: onPromotionSelect,
+      })
+    }
     const views = [
       ['dashboard', 'Tableau de bord', 'Tickets, MR, environnements'],
       ['fleet', 'Fleet', 'Runs actifs tous projets'],
@@ -244,7 +258,7 @@ export function CommandPalette({
       }
     }
     return next
-  }, [conversations, currentConversation, currentProject, onAction, onConversationSelect, onProjectSelect, onSkillLaunch, onViewSelect, projects, query, results, skills, workflows])
+  }, [conversations, currentConversation, currentProject, instance, onAction, onConversationSelect, onProjectSelect, onPromotionSelect, onSkillLaunch, onViewSelect, projects, query, results, skills, workflows])
 
   async function execute(item: PaletteItem) {
     if (busyId) return

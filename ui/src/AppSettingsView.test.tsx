@@ -20,6 +20,47 @@ afterEach(() => {
   globalThis.fetch = defaultFetch
 })
 
+const stableHealth = {
+  ok: true as const,
+  instance: 'stable' as const,
+  port: 4820,
+  pid: 10,
+  appPid: 9,
+  startedAt: '2026-09-01T09:12:00.000Z',
+  build: { sha: 'abc1234', dirty: false, source: 'build' as const },
+  staleSources: 0,
+}
+
+test('masque la promotion dans l’instance stable', async () => {
+  globalThis.fetch = mock(async () => json({})) as typeof fetch
+  render(createElement(AppSettingsView, { instance: stableHealth }))
+  await screen.findByText('Paramètres globaux')
+  expect(screen.queryByRole('heading', { name: 'Instance' })).toBeNull()
+})
+
+test('affiche la promotion en dev et bloque un arbre modifié', async () => {
+  globalThis.fetch = mock(async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input)
+    if (url.endsWith('/api/settings')) return json({})
+    if (url.endsWith('/api/promotion/stable')) return json({ running: false })
+    if (url.endsWith('/api/promotion')) return json({
+      state: 'idle', sha: null, startedAt: null, finishedAt: null, steps: {}, events: [],
+    })
+    throw new Error(`route inattendue: ${url}`)
+  }) as typeof fetch
+  render(createElement(AppSettingsView, {
+    instance: {
+      ...stableHealth,
+      instance: 'dev',
+      port: 4821,
+      build: { ...stableHealth.build, dirty: true, source: 'git' },
+    },
+  }))
+  expect(await screen.findByRole('heading', { name: 'Instance' })).toBeTruthy()
+  expect((screen.getByRole('button', { name: 'Promouvoir cette version' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(screen.getByText(/Valider ou remiser/)).toBeTruthy()
+})
+
 test('enregistre puis efface un token d’intégration sans jamais le relire', async () => {
   const writes: Array<Record<string, unknown>> = []
   let settings = {

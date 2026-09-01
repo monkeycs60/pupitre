@@ -52,6 +52,7 @@ import type {
   ProblemCapture,
   ProblemProjectPayload,
   InstanceHealth,
+  PromotionState,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -185,6 +186,22 @@ export class ApiError extends Error {
 
 export function fetchHealth(signal?: AbortSignal): Promise<InstanceHealth> {
   return fetchJson('/api/health', { signal })
+}
+
+export function getPromotion(signal?: AbortSignal): Promise<PromotionState> {
+  return fetchJson('/api/promotion', { signal })
+}
+
+export function getStableHealth(signal?: AbortSignal): Promise<InstanceHealth | { running: false }> {
+  return fetchJson('/api/promotion/stable', { signal })
+}
+
+export function startPromotion(options: { force?: boolean; timeoutMinutes?: number; skipBuild?: boolean } = {}): Promise<PromotionState> {
+  return fetchJson('/api/promotion', jsonPost(options))
+}
+
+export function cancelPromotion(): Promise<PromotionState> {
+  return fetchJson('/api/promotion', { method: 'DELETE' })
 }
 
 // En développement, Vite peut répondre 502/503 pendant que Tauri compile puis

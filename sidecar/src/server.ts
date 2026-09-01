@@ -91,6 +91,7 @@ import type { Problem, ProblemStore } from "./stores/problems";
 import type { ProblemMissionStore } from "./stores/problem-missions";
 import type { ProblemService } from "./problems";
 import { buildInfo, readInstance, staleSourcesSince, type InstanceInfo } from "./instance";
+import { PromotionConflictError, type PromotionRunner } from "./promotion";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -110,6 +111,7 @@ export class ConversationEventBus {
 export interface ServerDeps {
   port: number;
   instance?: InstanceInfo;
+  promotion?: PromotionRunner;
   projects: ProjectStore;
   conversations: ConversationStore;
   media: MediaStore;
@@ -1238,6 +1240,38 @@ export function createServer(deps: ServerDeps) {
             counts[`${item.kind}s` as "turns" | "subtasks" | "reviews" | "routines"] += 1;
           }
           return json({ busy: Object.values(counts).some((count) => count > 0), ...counts });
+        }
+
+        if (pathname === "/api/promotion" && !deps.promotion) {
+          throw new HttpError(404, "promotion indisponible sur cette instance");
+        }
+        if (request.method === "GET" && pathname === "/api/promotion") {
+          return json(deps.promotion!.snapshot());
+        }
+        if (request.method === "POST" && pathname === "/api/promotion") {
+          const body = await readObject(request);
+          try {
+            return json(deps.promotion!.start({
+              force: body.force === true,
+              skipBuild: body.skipBuild === true,
+              timeoutMinutes: typeof body.timeoutMinutes === "number" ? body.timeoutMinutes : undefined,
+            }), 202);
+          } catch (error) {
+            if (error instanceof PromotionConflictError) throw new HttpError(409, error.message);
+            throw error;
+          }
+        }
+        if (request.method === "DELETE" && pathname === "/api/promotion") {
+          try {
+            return json(deps.promotion!.cancel());
+          } catch (error) {
+            if (error instanceof PromotionConflictError) throw new HttpError(409, error.message);
+            throw error;
+          }
+        }
+        if (request.method === "GET" && pathname === "/api/promotion/stable") {
+          if (!deps.promotion) throw new HttpError(404, "promotion indisponible sur cette instance");
+          return json(await deps.promotion.stableHealth());
         }
 
         // N'ouvre jamais la fenêtre et ne la bloque jamais : dit seulement si

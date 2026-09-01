@@ -960,4 +960,21 @@ export interface InstanceHealth {
   staleSources: number
 }
 
+export type PromotionStepStatus = 'running' | 'done' | 'failed'
+export interface PromotionEvent {
+  step: string
+  status: PromotionStepStatus
+  message: string
+  at?: string
+  activity?: Record<string, unknown>
+}
+export interface PromotionState {
+  state: 'idle' | 'running' | 'done' | 'failed'
+  sha: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  steps: Record<string, PromotionStepStatus>
+  events: PromotionEvent[]
+}
+
 export type DocumentArtifact = HtmlDocument
