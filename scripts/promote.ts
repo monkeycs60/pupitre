@@ -157,18 +157,18 @@ function stageRelease(version: ReleaseVersion): string {
 async function drainStable(
   options: PromotionOptions,
   report: ReturnType<typeof reporter>,
-): Promise<void> {
-  if (options.force) {
-    report('drain', 'done', 'attente ignorée (--force)')
-    return
-  }
+): Promise<boolean> {
   const currentHealth = await fetchJson<Health>(`${options.stableOrigin}/api/health`)
   if (!currentHealth) {
     report('drain', 'done', 'instance stable non lancée')
-    return
+    return false
   }
   if (!validStableHealth(currentHealth, options.stableOrigin)) {
     throw new Error('Le port stable ne présente pas une instance stable valide.')
+  }
+  if (options.force) {
+    report('drain', 'done', 'attente ignorée (--force)')
+    return true
   }
   const deadline = Date.now() + options.timeoutMinutes * 60_000
   let previous = ''
@@ -184,7 +184,7 @@ async function drainStable(
     consecutiveFailures = 0
     if (!activity.busy) {
       report('drain', 'done', 'instance stable inactive')
-      return
+      return true
     }
     const serialized = JSON.stringify(activity)
     if (serialized !== previous) {
@@ -301,9 +301,9 @@ async function promote(options: PromotionOptions): Promise<void> {
     const target = join(releasesDir, targetName)
     const version = parseVersion(readFileSync(join(target, 'VERSION.json'), 'utf8'))
     report('drain', 'running', 'attente de la stable avant rollback')
-    await drainStable(options, report)
+    const stablePresent = await drainStable(options, report)
     report('switch', 'running', `rollback vers ${version.sha}`)
-    await stopStable(options.stableOrigin, false, options.force)
+    await stopStable(options.stableOrigin, stablePresent, options.force)
     activateRelease(target)
     let launchedPid: number | null = null
     try {
@@ -348,9 +348,9 @@ async function promote(options: PromotionOptions): Promise<void> {
   const release = stageRelease(version)
   report('stage', 'done', basename(release))
   report('drain', 'running', 'attente de la stable')
-  await drainStable(options, report)
+  const stablePresent = await drainStable(options, report)
   report('switch', 'running', 'bascule vers la nouvelle release')
-  await stopStable(options.stableOrigin, false, options.force)
+  await stopStable(options.stableOrigin, stablePresent, options.force)
   const previousRelease = currentReleaseName()
   activateRelease(release)
   let launchedPid: number | null = null
