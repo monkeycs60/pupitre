@@ -7,6 +7,7 @@ test("renouvelle réellement le jeton OAuth Claude et le persiste", async () => 
     claudeAiOauth: {
       accessToken: "expired",
       refreshToken: "refresh-before",
+      refreshTokenExpiresAt: undefined as number | undefined,
       expiresAt: 1,
       scopes: ["user:inference", "user:profile"],
     },

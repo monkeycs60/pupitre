@@ -37,9 +37,11 @@ export function importLocalMarkdownImages(
   });
 
   return markdown.replace(MARKDOWN_IMAGE, (match, prefix: string, angledPath: string | undefined, plainPath: string | undefined, suffix: string) => {
+    const matchedPath = angledPath ?? plainPath;
+    if (!matchedPath) return match;
     let rawPath: string;
     try {
-      rawPath = decodeURIComponent((angledPath ?? plainPath).replace(/\\([\\()])/gu, "$1"));
+      rawPath = decodeURIComponent(matchedPath.replace(/\\([\\()])/gu, "$1"));
     } catch {
       return match;
     }

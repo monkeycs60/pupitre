@@ -108,7 +108,8 @@ export async function refreshClaudeSession(
     const now = deps.now ?? Date.now;
     const before = read();
     const oauth = before?.claudeAiOauth;
-    const refreshToken = oauth?.refreshToken;
+    if (!oauth) return false;
+    const refreshToken = oauth.refreshToken;
     if (typeof refreshToken !== "string" || refreshToken === "") return false;
     const scopes = Array.isArray(oauth.scopes)
       ? oauth.scopes.filter((scope): scope is string => typeof scope === "string")

@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import { toggleAction, withTaskActions } from "../../ui/src/taskDraft";
 
-const A2 = { index: 2, label: "Compile et vérifie", kind: "do-this" as const };
-const A4 = { index: 4, label: "Lance bun test", kind: "do-this" as const };
-const F1 = { index: 1, label: "Bouton tout cocher", kind: "follow-up" as const };
-const F3 = { index: 3, label: "Persister l'état en base", kind: "follow-up" as const };
+const A2 = { scope: "test", index: 2, label: "Compile et vérifie", kind: "do-this" as const };
+const A4 = { scope: "test", index: 4, label: "Lance bun test", kind: "do-this" as const };
+const F1 = { scope: "test", index: 1, label: "Bouton tout cocher", kind: "follow-up" as const };
+const F3 = { scope: "test", index: 3, label: "Persister l'état en base", kind: "follow-up" as const };
 
 test("une seule action donne une consigne au singulier", () => {
   expect(withTaskActions("", [A2])).toBe(

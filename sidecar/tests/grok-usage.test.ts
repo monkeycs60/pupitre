@@ -32,7 +32,7 @@ test("renouvelle le jeton OIDC Grok expiré et le persiste", async () => {
   });
 
   expect(refreshed).toBe(true);
-  expect(tokenRequest).toEqual({
+  expect(tokenRequest as { url: string; body: string } | null).toEqual({
     url: "https://auth.x.ai/oauth2/token",
     body: "grant_type=refresh_token&refresh_token=refresh-before&client_id=client",
   });

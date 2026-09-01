@@ -492,7 +492,7 @@ test("une mission ne prépare que les axes retenus des problématiques groupées
   const capture = current!.problemStore.createCapture(project.id, "capture groupée");
   const problems = current!.problemStore.completeCapture(capture.id, [
     {
-      publicId: "PB-MATCH1",
+      publicId: "PB-ROUTE1",
       title: "Mesurer les recommandations",
       context: "Comprendre les clics.",
       resolution: "Attribuer chaque recommandation.",
@@ -503,7 +503,7 @@ test("une mission ne prépare que les axes retenus des problématiques groupées
       ],
     },
     {
-      publicId: "PB-MATCH2",
+      publicId: "PB-ROUTE2",
       title: "Prouver la valeur business",
       context: "Suivre les partenariats dans le temps.",
       resolution: "Calculer durée et revenu.",
@@ -513,6 +513,7 @@ test("une mission ne prépare que les axes retenus des problématiques groupées
   ]);
   const promptLog = join(repoPath, "mission-prompt.log");
   process.env.PUPITRE_FAKE_PROMPT_LOG = promptLog;
+  const multiPlanProblem = problems.find((problem) => problem.plans.length === 2)!;
 
   const created = await postJson("/api/conversations", {
     projectId: project.id,
@@ -520,7 +521,7 @@ test("une mission ne prépare que les axes retenus des problématiques groupées
     model: "claude-fable-5",
     message: "Lancer la mesure Match AI",
     problemIds: problems.map((problem) => problem.id),
-    problemPlanIndices: { [problems[0]!.id]: [1] },
+    problemPlanIndices: { [multiPlanProblem.id]: [1] },
     missionTitle: "Prouver la valeur de Match AI",
   });
 
@@ -537,8 +538,8 @@ test("une mission ne prépare que les axes retenus des problématiques groupées
   expect(sent).not.toContain("Instrumenter PostHog");
   expect(sent).toContain("Mesurer le funnel");
   expect(sent).toContain("Cycle de vie");
-  expect(sent).toContain("[PB-MATCH1]");
-  expect(sent).toContain("[PB-MATCH2]");
+  expect(sent).toContain("[PB-ROUTE1]");
+  expect(sent).toContain("[PB-ROUTE2]");
 });
 
 test("dashboard : Mes tickets ne contient que les tâches ClickUp actuellement attribuées", async () => {
