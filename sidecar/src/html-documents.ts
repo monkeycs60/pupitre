@@ -8,7 +8,6 @@ import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { AppEvent, StoredEvent } from "./events";
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
@@ -167,6 +166,12 @@ function plainTextFromHtml(content: string): string {
 }
 
 async function plainTextFromPdf(bytes: Uint8Array): Promise<string> {
+  // pdfjs initialise ses primitives graphiques au chargement, même pour une extraction
+  // de texte ; Bun compilé n'expose pas DOMMatrix et ne doit pas empêcher le sidecar de démarrer.
+  if (!("DOMMatrix" in globalThis)) {
+    Object.assign(globalThis, { DOMMatrix: class DOMMatrix {} });
+  }
+  const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const task = getDocument({ data: bytes, verbosity: 0 });
   try {
     const pdf = await task.promise;
