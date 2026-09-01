@@ -24,12 +24,19 @@ test('parse un VERSION.json valide et refuse un contrat incomplet', () => {
 })
 
 test('sélectionne la release immédiatement antérieure pour le rollback', () => {
-  const releases = ['aaa-20260901-100000', 'bbb-20260901-110000', 'ccc-20260901-120000']
+  const releases = ['fff-20260901-100000', '111-20260901-110000', 'aaa-20260901-120000']
   expect(selectRollbackRelease(releases, releases[2])).toBe(releases[1])
   expect(selectRollbackRelease(releases, releases[1])).toBe(releases[0])
   expect(() => selectRollbackRelease(releases, releases[0])).toThrow(/précédente/)
 })
 
 test('purge les anciennes releases sans supprimer la courante', () => {
-  expect(releasesToPrune(['a', 'b', 'c', 'd', 'e'], 'b', 3)).toEqual(['a'])
+  const releases = [
+    'fff-20260901-100000',
+    '111-20260901-110000',
+    'eee-20260901-120000',
+    '222-20260901-130000',
+    'ddd-20260901-140000',
+  ]
+  expect(releasesToPrune(releases, releases[1], 3)).toEqual([releases[0]])
 })

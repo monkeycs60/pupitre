@@ -26,6 +26,8 @@ interface PromotionOptions {
 }
 interface Health {
   ok: true
+  instance: 'stable' | 'dev'
+  port: number
   appPid: number
   build?: { sha: string; source: 'build' | 'git' } | null
 }
@@ -56,17 +58,22 @@ export function parseVersion(raw: string): ReleaseVersion {
 }
 
 export function selectRollbackRelease(releases: string[], current: string): string {
-  const ordered = [...releases].sort()
+  const ordered = [...releases].sort(compareReleaseDates)
   const index = ordered.indexOf(current)
   if (index <= 0) throw new Error('Aucune release précédente disponible')
   return ordered[index - 1]
 }
 
 export function releasesToPrune(releases: string[], current: string, keep = 3): string[] {
-  const ordered = [...releases].sort()
+  const ordered = [...releases].sort(compareReleaseDates)
   const retained = new Set(ordered.slice(-keep))
   retained.add(current)
   return ordered.filter((release) => !retained.has(release))
+}
+
+function compareReleaseDates(left: string, right: string): number {
+  const timestamp = (value: string) => value.match(/(\d{8}-\d{6})$/)?.[1] ?? ''
+  return timestamp(left).localeCompare(timestamp(right)) || left.localeCompare(right)
 }
 
 function parseOptions(args: string[]): PromotionOptions {
@@ -147,16 +154,32 @@ function stageRelease(version: ReleaseVersion): string {
   return release
 }
 
-async function drainStable(options: PromotionOptions, report: ReturnType<typeof reporter>): Promise<void> {
+async function drainStable(
+  options: PromotionOptions,
+  report: ReturnType<typeof reporter>,
+  stableWasRunning: boolean,
+): Promise<void> {
   if (options.force) {
     report('drain', 'done', 'attente ignorée (--force)')
     return
   }
+  if (!stableWasRunning) {
+    report('drain', 'done', 'instance stable non lancée')
+    return
+  }
   const deadline = Date.now() + options.timeoutMinutes * 60_000
   let previous = ''
+  let consecutiveFailures = 0
   while (Date.now() < deadline) {
     const activity = await fetchJson<Activity>(`${options.stableOrigin}/api/activity`)
-    if (!activity || !activity.busy) {
+    if (!activity) {
+      consecutiveFailures += 1
+      if (consecutiveFailures >= 3) throw new Error('activité de la stable inaccessible pendant le drain')
+      await Bun.sleep(2_000)
+      continue
+    }
+    consecutiveFailures = 0
+    if (!activity.busy) {
       report('drain', 'done', 'instance stable inactive')
       return
     }
@@ -170,8 +193,18 @@ async function drainStable(options: PromotionOptions, report: ReturnType<typeof 
   throw new Error(`la stable est encore active après ${options.timeoutMinutes} min`)
 }
 
-async function stopStable(health: Health | null, origin: string): Promise<void> {
-  if (!health) return
+function validStableHealth(health: Health | null, origin: string): health is Health {
+  const expectedPort = Number(new URL(origin).port || (origin.startsWith('https:') ? 443 : 80))
+  return health?.ok === true && health.instance === 'stable' && health.port === expectedPort
+}
+
+async function stopStable(origin: string, required: boolean): Promise<void> {
+  const health = await fetchJson<Health>(`${origin}/api/health`)
+  if (!health) {
+    if (required) throw new Error('La santé de la stable est inaccessible avant la bascule.')
+    return
+  }
+  if (!validStableHealth(health, origin)) throw new Error('Le processus sur le port stable n’est pas une instance stable valide.')
   if (!Number.isInteger(health.appPid) || health.appPid <= 1) {
     throw new Error('La stable doit être fermée manuellement : son appPid est indisponible.')
   }
@@ -184,6 +217,11 @@ async function stopStable(health: Health | null, origin: string): Promise<void> 
     await Bun.sleep(250)
   }
   try { process.kill(health.appPid, 'SIGKILL') } catch {}
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (!(await fetchJson<Health>(`${origin}/api/health`))) return
+    await Bun.sleep(250)
+  }
+  throw new Error('La stable ne s’est pas arrêtée après SIGKILL.')
 }
 
 function activateRelease(release: string): void {
@@ -211,7 +249,7 @@ X-GNOME-WMClass=fr.clementserizay.pupitre
 `)
 }
 
-function launchStable(): void {
+function launchStable(): number {
   const child = Bun.spawn([join(currentLink, 'app')], {
     cwd: installRoot,
     env: cleanEnv(process.env),
@@ -221,6 +259,7 @@ function launchStable(): void {
     stderr: 'ignore',
   })
   child.unref()
+  return child.pid
 }
 
 async function verifyStable(origin: string, sha: string): Promise<void> {
@@ -243,6 +282,8 @@ async function promote(options: PromotionOptions): Promise<void> {
   const report = reporter(options.json)
   if (process.env.PUPITRE_INSTANCE === 'stable') throw new Error('Une promotion ne peut pas partir de la stable.')
   const stableHealth = await fetchJson<Health>(`${options.stableOrigin}/api/health`)
+  const stableWasRunning = validStableHealth(stableHealth, options.stableOrigin)
+  if (stableHealth && !stableWasRunning) throw new Error('Le port stable ne présente pas une instance stable valide.')
 
   if (options.rollback) {
     const current = currentReleaseName()
@@ -251,14 +292,29 @@ async function promote(options: PromotionOptions): Promise<void> {
     const target = join(releasesDir, targetName)
     const version = parseVersion(readFileSync(join(target, 'VERSION.json'), 'utf8'))
     report('drain', 'running', 'attente de la stable avant rollback')
-    await drainStable(options, report)
+    await drainStable(options, report, stableWasRunning)
     report('switch', 'running', `rollback vers ${version.sha}`)
-    await stopStable(stableHealth, options.stableOrigin)
+    await stopStable(options.stableOrigin, stableWasRunning)
     activateRelease(target)
     report('switch', 'done', `release ${targetName} activée`)
-    launchStable()
+    const launchedPid = launchStable()
     report('launch', 'done', 'stable relancée')
-    await verifyStable(options.stableOrigin, version.sha)
+    try {
+      await verifyStable(options.stableOrigin, version.sha)
+    } catch (error) {
+      const runningHealth = await fetchJson<Health>(`${options.stableOrigin}/api/health`)
+      if (runningHealth) await stopStable(options.stableOrigin, false)
+      else {
+        try { process.kill(launchedPid, 'SIGTERM') } catch {}
+        await Bun.sleep(500)
+      }
+      const previousPath = join(releasesDir, current)
+      const previousVersion = parseVersion(readFileSync(join(previousPath, 'VERSION.json'), 'utf8'))
+      activateRelease(previousPath)
+      launchStable()
+      await verifyStable(options.stableOrigin, previousVersion.sha)
+      throw new Error(`rollback vers ${version.sha} annulé, stable restaurée : ${error instanceof Error ? error.message : String(error)}`)
+    }
     report('verify', 'done', `stable vérifiée sur ${version.sha}`)
     return
   }
@@ -267,7 +323,7 @@ async function promote(options: PromotionOptions): Promise<void> {
   const sha = gitOutput('rev-parse', '--short', 'HEAD')
   const dirty = gitOutput('status', '--porcelain').length > 0
   const version = { sha, dirty, builtAt: new Date().toISOString() }
-  report('preflight', 'done', `${sha}${dirty ? ' (arbre modifié)' : ''}`)
+  report('preflight', 'done', `${sha}${dirty ? ' (arbre modifié)' : ''}`, { sha })
 
   if (!options.skipBuild) {
     report('build', 'running', 'construction des binaires release')
@@ -282,16 +338,35 @@ async function promote(options: PromotionOptions): Promise<void> {
   const release = stageRelease(version)
   report('stage', 'done', basename(release))
   report('drain', 'running', 'attente de la stable')
-  await drainStable(options, report)
+  await drainStable(options, report, stableWasRunning)
   report('switch', 'running', 'bascule vers la nouvelle release')
-  await stopStable(stableHealth, options.stableOrigin)
+  await stopStable(options.stableOrigin, stableWasRunning)
+  const previousRelease = currentReleaseName()
   activateRelease(release)
   writeDesktopFile()
   report('switch', 'done', `${sha} activé`)
-  launchStable()
+  const launchedPid = launchStable()
   report('launch', 'done', 'stable relancée')
-  await verifyStable(options.stableOrigin, sha)
-  report('verify', 'done', `stable vérifiée sur ${sha}`)
+  try {
+    await verifyStable(options.stableOrigin, sha)
+    report('verify', 'done', `stable vérifiée sur ${sha}`)
+  } catch (error) {
+    if (!previousRelease) throw error
+    report('rollback', 'running', `restauration automatique de ${previousRelease}`)
+    const runningHealth = await fetchJson<Health>(`${options.stableOrigin}/api/health`)
+    if (runningHealth) await stopStable(options.stableOrigin, false)
+    else {
+      try { process.kill(launchedPid, 'SIGTERM') } catch {}
+      await Bun.sleep(500)
+    }
+    const previousPath = join(releasesDir, previousRelease)
+    const previousVersion = parseVersion(readFileSync(join(previousPath, 'VERSION.json'), 'utf8'))
+    activateRelease(previousPath)
+    launchStable()
+    await verifyStable(options.stableOrigin, previousVersion.sha)
+    report('rollback', 'done', `stable restaurée sur ${previousVersion.sha}`)
+    throw new Error(`promotion de ${sha} annulée, stable restaurée : ${error instanceof Error ? error.message : String(error)}`)
+  }
   pruneReleases(basename(release))
   report('prune', 'done', 'trois dernières releases conservées')
 }
