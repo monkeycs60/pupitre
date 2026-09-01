@@ -90,7 +90,7 @@ import type { ChangelogService } from "./changelog";
 import type { Problem, ProblemStore } from "./stores/problems";
 import type { ProblemMissionStore } from "./stores/problem-missions";
 import type { ProblemService } from "./problems";
-import { readInstance, type InstanceInfo } from "./instance";
+import { buildInfo, readInstance, staleSourcesSince, type InstanceInfo } from "./instance";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -1111,7 +1111,9 @@ function missionProblemPreamble(
 
 export function createServer(deps: ServerDeps) {
   const instance = deps.instance ?? readInstance({ ...process.env, PUPITRE_PORT: String(deps.port) });
-  const startedAt = new Date().toISOString();
+  const startedAtMs = Date.now();
+  const startedAt = new Date(startedAtMs).toISOString();
+  const build = buildInfo();
   const sockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
   const fleetSockets = new Set<ServerWebSocket<WebSocketData>>();
@@ -1218,8 +1220,8 @@ export function createServer(deps: ServerDeps) {
             pid: process.pid,
             appPid: process.ppid,
             startedAt,
-            build: null,
-            staleSources: 0,
+            build,
+            staleSources: staleSourcesSince(startedAtMs),
           });
         }
 
