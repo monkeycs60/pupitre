@@ -28,7 +28,7 @@ const stableDb = join(stableDir, 'pupitre.db')
 const devDb = join(devDir, 'pupitre.db')
 if (!existsSync(stableDb)) throw new Error(`Base stable introuvable : ${stableDb}`)
 mkdirSync(devDir, { recursive: true })
-rmSync(devDb, { force: true })
+for (const suffix of ['', '-wal', '-shm']) rmSync(`${devDb}${suffix}`, { force: true })
 
 const db = new Database(stableDb, { readonly: true })
 try {
