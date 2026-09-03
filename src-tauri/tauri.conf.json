@@ -14,7 +14,7 @@
     "security": {
       "csp": {
         "default-src": "'self'",
-        "connect-src": "'self' ipc: http://ipc.localhost http://127.0.0.1:4820 ws://127.0.0.1:4820",
+        "connect-src": "'self' ipc: http://ipc.localhost http: ws:",
         "frame-src": "'self' http://127.0.0.1:4820",
         "img-src": "'self' data: blob: http://127.0.0.1:4820",
         "style-src": "'self' 'unsafe-inline'",

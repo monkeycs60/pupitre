@@ -176,6 +176,22 @@ test('reconnecte après une erreur sans doubler lorsque la fermeture suit', asyn
   expect(FakeSocket.instances).toHaveLength(2)
 })
 
+test('reste monté lorsque la politique de sécurité refuse le WebSocket', async () => {
+  globalThis.fetch = mock(async () => Response.json(payload)) as typeof fetch
+  globalThis.WebSocket = class {
+    constructor() {
+      throw new DOMException('The operation is insecure.', 'SecurityError')
+    }
+  } as unknown as typeof WebSocket
+  installFakeTimers()
+
+  const { container } = render(createElement(Probe))
+  await flushReact()
+
+  expect(container.textContent).toBe('off:1')
+  expect(timers.size).toBe(1)
+})
+
 test('annule la reconnexion et ferme le socket à l’unmount', async () => {
   globalThis.fetch = mock(async () => Response.json(payload)) as typeof fetch
   globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket

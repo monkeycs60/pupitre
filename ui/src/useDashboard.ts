@@ -51,9 +51,18 @@ export function useDashboard(projectId: string): DashboardState {
     }
 
     function connect() {
-      const current = new WebSocket(
-        webSocketUrl(`/ws?channel=tickets&project=${encodeURIComponent(projectId)}`),
-      )
+      let current: WebSocket
+      try {
+        current = new WebSocket(
+          webSocketUrl(`/ws?channel=tickets&project=${encodeURIComponent(projectId)}`),
+        )
+      } catch (connectionError) {
+        setConnected(false)
+        setError(connectionError instanceof Error ? connectionError.message : String(connectionError))
+        failedAttempts += 1
+        retryTimer = setTimeout(connect, reconnectDelayMs(failedAttempts))
+        return
+      }
       socket = current
 
       current.addEventListener('open', () => {

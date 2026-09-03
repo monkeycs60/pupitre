@@ -94,9 +94,15 @@ export function useQuotas(): Quotas {
     }
 
     function connect() {
-      const currentSocket = new WebSocket(
-        webSocketUrl('/ws?channel=quotas'),
-      )
+      let currentSocket: WebSocket
+      try {
+        currentSocket = new WebSocket(webSocketUrl('/ws?channel=quotas'))
+      } catch (error) {
+        failedAttempts += 1
+        retryTimer = setTimeout(connect, reconnectDelayMs(failedAttempts))
+        console.error('Connexion quotas refusée', error)
+        return
+      }
       socket = currentSocket
 
       function dropAndRetry() {

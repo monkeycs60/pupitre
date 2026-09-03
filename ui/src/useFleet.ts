@@ -145,7 +145,16 @@ export function useFleet(projectId?: string): FleetState {
     }
 
     function connect() {
-      const current = new WebSocket(webSocketUrl('/ws?channel=fleet'))
+      let current: WebSocket
+      try {
+        current = new WebSocket(webSocketUrl('/ws?channel=fleet'))
+      } catch (error) {
+        setConnected(false)
+        failedAttempts += 1
+        retryTimer = setTimeout(connect, reconnectDelayMs(failedAttempts))
+        console.error('Connexion Fleet refusée', error)
+        return
+      }
       socket = current
       current.addEventListener('open', () => {
         if (disposed || socket !== current) return

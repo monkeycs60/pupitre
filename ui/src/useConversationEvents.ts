@@ -105,9 +105,24 @@ export function useConversationEvents(
       const controller = new AbortController()
       abortController = controller
 
-      const currentSocket = new WebSocket(
-        webSocketUrl(`/ws?conversation=${encodeURIComponent(id)}`),
-      )
+      let currentSocket: WebSocket
+      try {
+        currentSocket = new WebSocket(
+          webSocketUrl(`/ws?conversation=${encodeURIComponent(id)}`),
+        )
+      } catch (error) {
+        controller.abort()
+        failedAttempts += 1
+        setConnection('reconnecting')
+        const delay = reconnectDelayMs(failedAttempts)
+        setRetryAt(Date.now() + delay)
+        retryTimer = setTimeout(() => {
+          setRetryAt(null)
+          connect(id)
+        }, delay)
+        console.error('Connexion à la conversation refusée', error)
+        return
+      }
       socket = currentSocket
 
       // Perte de connexion (close, error, ou replay injoignable) : on referme
