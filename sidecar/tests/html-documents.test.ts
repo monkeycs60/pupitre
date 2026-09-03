@@ -231,3 +231,16 @@ test("publie et retrouve un PDF avec sa provenance dans la vue Documents", async
     kind: "pdf",
   });
 });
+
+test("enregistre atomiquement un document texte avec contrôle de version", async () => {
+  const env = harness();
+  const source = join(env.projectPath, "donnees.csv");
+  writeFileSync(source, "nom,valeur\nalpha,1\n");
+  const document = await env.service.publish(env.conversation.id, { path: source, title: "Données" });
+
+  const updated = await env.service.updateText(document.id, "nom,valeur\nbeta,2\n", document.sha256);
+  expect(updated.sha256).not.toBe(document.sha256);
+  const grant = env.service.issueViewToken(document.id);
+  expect(readFileSync(env.service.contentPath(document.id, grant.token), "utf8")).toContain("beta,2");
+  await expect(env.service.updateText(document.id, "ancien", document.sha256)).rejects.toThrow(/modifié/i);
+});

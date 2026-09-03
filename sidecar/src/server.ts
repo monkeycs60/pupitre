@@ -3771,6 +3771,13 @@ export function createServer(deps: ServerDeps) {
         }
 
         const htmlDocumentId = routeId(pathname, /^\/api\/(?:html-documents|documents)\/([^/]+)$/);
+        if (request.method === "PUT" && htmlDocumentId !== null) {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents non câblés");
+          const body = await readObject(request);
+          try {
+            return json(await deps.htmlDocuments.updateText(htmlDocumentId, requiredString(body, "content"), requiredString(body, "expectedSha256")));
+          } catch (error) { htmlDocumentHttpError(error); }
+        }
         if (request.method === "GET" && htmlDocumentId !== null) {
           if (!deps.htmlDocuments) throw new HttpError(501, "documents non câblés");
           const document = deps.htmlDocuments.get(htmlDocumentId);

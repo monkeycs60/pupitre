@@ -340,6 +340,10 @@ export function deleteHtmlDocument(id: string): Promise<HtmlDocument> {
   return fetchJson(`/api/documents/${routeId(id)}`, { method: 'DELETE' })
 }
 
+export function updateDocumentText(id: string, content: string, expectedSha256: string): Promise<HtmlDocument> {
+  return fetchJson(`/api/documents/${routeId(id)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content, expectedSha256 }) })
+}
+
 export function exportDocument(id: string, path: string): Promise<{ path: string; sizeBytes: number }> {
   return fetchJson(`/api/documents/${routeId(id)}/export`, jsonPost({ path }))
 }

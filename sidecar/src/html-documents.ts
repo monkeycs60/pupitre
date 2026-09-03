@@ -34,6 +34,7 @@ const DOCUMENT_TYPES: Record<string, { kind: DocumentKind; mimeType: string; max
   ".json": { kind: "json", mimeType: "application/json", maxBytes: DEFAULT_HTML_MAX_BYTES },
 };
 export type HtmlDocumentState = "available" | "retained" | "expired" | "deleted";
+const EDITABLE_KINDS: DocumentKind[] = ["html", "csv", "tsv", "markdown", "text", "json"];
 
 interface HtmlDocumentRow {
   id: string;
@@ -378,8 +379,22 @@ export class HtmlDocumentService {
   }
 
   get(id: string): HtmlDocumentSnapshot | null {
-    const row = this.row(id);
+    let row = this.row(id);
     if (!row) return null;
+    if ((row.kind === "docx" || row.kind === "xlsx") && row.deleted_at === null) {
+      const path = join(this.directory, row.relative_path);
+      if (existsSync(path)) {
+        const bytes = readFileSync(path);
+        const sha256 = createHash("sha256").update(bytes).digest("hex");
+        if (sha256 !== row.sha256) {
+          this.db.query("UPDATE documents SET size_bytes = ?, sha256 = ? WHERE id = ?").run(bytes.length, sha256, id);
+          rmSync(join(this.directory, id, "document.pdf"), { force: true });
+          rmSync(join(this.directory, id, "thumbnail.png"), { force: true });
+          rmSync(join(this.directory, id, "thumbnail.svg"), { force: true });
+          row = this.row(id)!;
+        }
+      }
+    }
     if (stateOf(row, this.now().getTime()) === "expired" && row.expired_at === null) {
       this.expireRow(row, this.now().toISOString());
       return snapshot(this.row(id)!, this.now().getTime());
@@ -392,6 +407,28 @@ export class HtmlDocumentService {
     if (current.state === "retained") return current;
     this.db.query(`UPDATE documents SET retained_at = ?, expires_at = NULL
       WHERE id = ? AND expired_at IS NULL AND deleted_at IS NULL`).run(this.now().toISOString(), id);
+    return this.get(id)!;
+  }
+
+  async updateText(id: string, content: string, expectedSha256: string): Promise<HtmlDocumentSnapshot> {
+    const current = this.requireAvailable(id);
+    if (!EDITABLE_KINDS.includes(current.kind)) throw new HtmlDocumentError("source-invalid", "ce format n’est pas éditable inline");
+    if (current.sha256 !== expectedSha256) throw new HtmlDocumentError("source-invalid", "le document a été modifié depuis son ouverture");
+    const bytes = Buffer.from(content, "utf8");
+    const maxBytes = DOCUMENT_TYPES[extname(current.originalName).toLowerCase()]?.maxBytes ?? DEFAULT_HTML_MAX_BYTES;
+    if (bytes.length === 0 || bytes.length > maxBytes || content.includes("\0")) throw new HtmlDocumentError("source-invalid", "contenu invalide ou trop volumineux");
+    if (current.kind === "json") try { JSON.parse(content); } catch { throw new HtmlDocumentError("source-invalid", "JSON valide attendu"); }
+    if (current.kind === "html" && !/<(?:!doctype\s+html|html|head|body)\b/i.test(content)) throw new HtmlDocumentError("source-not-html", "contenu HTML autonome attendu");
+    const row = this.row(id)!;
+    const destination = join(this.directory, row.relative_path);
+    const pending = `${destination}.pending`;
+    writeFileSync(pending, bytes);
+    renameSync(pending, destination);
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    this.db.query("UPDATE documents SET size_bytes = ?, sha256 = ? WHERE id = ?").run(bytes.length, sha256, id);
+    rmSync(join(this.directory, id, "thumbnail.png"), { force: true });
+    rmSync(join(this.directory, id, "thumbnail.svg"), { force: true });
+    await this.indexDocument(id, current.kind, bytes);
     return this.get(id)!;
   }
 

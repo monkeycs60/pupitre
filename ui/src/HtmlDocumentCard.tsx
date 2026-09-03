@@ -6,6 +6,7 @@ import {
   deleteHtmlDocument,
   getHtmlDocument,
   openDocumentInSystem,
+  updateDocumentText,
 } from './api'
 import type { HtmlDocumentBlock } from './groupEvents'
 import type { HtmlDocument, HtmlDocumentState } from './types'
@@ -97,6 +98,9 @@ export function HtmlDocumentCard({
   const [isExpanded, setIsExpanded] = useState(false)
   const [busyAction, setBusyAction] = useState<'preview' | 'open' | 'delete' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [source, setSource] = useState<string | null>(null)
+  const [savedSource, setSavedSource] = useState<string | null>(null)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const now = useNow()
 
   useEffect(() => {
@@ -136,12 +140,49 @@ export function HtmlDocumentCard({
     }
   }, [block.documentId, shouldAutoOpen])
 
+  useEffect(() => {
+    if (!isOpen || (document.kind !== 'docx' && document.kind !== 'xlsx')) return
+    const timer = window.setInterval(() => {
+      void getHtmlDocument(block.documentId).then(async (updated) => {
+        if (updated.sha256 === document.sha256) return
+        setDocument(updated)
+        setPreviewUrl(await createViewUrl())
+      }).catch(() => {})
+    }, 2000)
+    return () => window.clearInterval(timer)
+  }, [block.documentId, document.kind, document.sha256, isOpen])
+
   const timedOut = document.state === 'available'
     && document.expiresAt !== null
     && Date.parse(document.expiresAt) <= now
   const effectiveState: HtmlDocumentState = timedOut ? 'expired' : document.state
   const canView = effectiveState === 'available' || effectiveState === 'retained'
   const documentKind = document.kind ?? 'html'
+  const editable = ['html', 'csv', 'tsv', 'markdown', 'text', 'json'].includes(documentKind)
+
+  useEffect(() => {
+    if (!editable || !previewUrl || source !== null) return
+    const controller = new AbortController()
+    void fetch(previewUrl, { signal: controller.signal }).then((response) => response.text()).then((value) => {
+      setSource(value)
+      setSavedSource(value)
+    }).catch(() => {})
+    return () => controller.abort()
+  }, [editable, previewUrl, source])
+
+  useEffect(() => {
+    if (!editable || source === null || savedSource === null || source === savedSource) return
+    const timer = window.setTimeout(() => {
+      setSaveState('saving')
+      void updateDocumentText(block.documentId, source, document.sha256).then(async (updated) => {
+        setDocument(updated)
+        setSavedSource(source)
+        setSaveState('saved')
+        setPreviewUrl(await createViewUrl())
+      }).catch((reason: unknown) => setError(errorMessage(reason, 'Enregistrement impossible')))
+    }, 600)
+    return () => window.clearTimeout(timer)
+  }, [block.documentId, document.sha256, editable, savedSource, source])
 
   async function createViewUrl(): Promise<string> {
     const grant = await createHtmlDocumentViewToken(block.documentId)
@@ -305,6 +346,12 @@ export function HtmlDocumentCard({
         </p>
       ) : isOpen ? (
         <div className="html-document-preview">
+          {editable && source !== null ? (
+            <div className="html-document-editor">
+              <textarea aria-label={`Modifier ${document.title}`} value={source} onChange={(event) => { setSource(event.target.value); setSaveState('idle') }} spellCheck={false} />
+              <span>{saveState === 'saving' ? 'Enregistrement…' : saveState === 'saved' ? 'Enregistré' : source !== savedSource ? 'Modifications…' : ''}</span>
+            </div>
+          ) : null}
           {previewUrl ? (
             <iframe
               src={previewUrl}
