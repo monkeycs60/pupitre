@@ -20,6 +20,10 @@ Mission control bureau pour Linux : une app qui pilote **Claude Code**, **Codex 
 └─────────────────────────────────────────────┘
 ```
 
+## Retours visuels Chrome
+
+Une extension Chrome locale permet de pointer des zones sur les interfaces `localhost`, de regrouper les annotations par projet, de choisir une branche et d'envoyer la correction dans une conversation Pupitre. L'installation et l'appairage sont décrits dans [l'aide dédiée](docs/help/retours-visuels.md).
+
 Les CLIs sont normalisés en un schéma d'événements unifié (`sidecar/src/events.ts`) ; le frontend ne connaît jamais Claude, Codex ou Grok directement. Les sessions sont celles des vrais CLIs (`claude -r`, `codex exec resume`, `grok --resume`) : reprise gratuite, et tes skills/CLAUDE.md/AGENTS.md marchent tels quels. Grok lit aussi `~/.grok/skills` et les skills Claude par compatibilité.
 
 ## Contrôle des changements (M3)

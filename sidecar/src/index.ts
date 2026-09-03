@@ -52,6 +52,7 @@ import { ConversationLinkStore } from "./stores/conversation-links";
 import { ProblemService } from "./problems";
 import { backgroundJobsEnabled, readInstance } from "./instance";
 import { PromotionRunner } from "./promotion";
+import { VisualFeedbackService } from "./visual-feedback";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -239,6 +240,9 @@ if (process.argv.includes("--pupitre-mcp")) {
     runner,
     notifications,
   );
+  const visualFeedback = new VisualFeedbackService(
+    db, projects, conversations, presets, git, media, runner,
+  );
   // Arrêt propre partagé : éviction par un sidecar plus récent (POST
   // /api/shutdown), SIGTERM de Tauri à la fermeture de l'app, Ctrl-C en dev.
   // Sans lui, l'app-server codex, les tours provider en vol et leurs flottes de
@@ -317,6 +321,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     integrationsRefresher,
     time,
     htmlDocuments,
+    visualFeedback,
   }), port);
   void problems.resume();
   if (backgroundJobsEnabled()) {

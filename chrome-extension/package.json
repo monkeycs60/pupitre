@@ -1,0 +1,14 @@
+{
+  "name": "@pupitre/chrome-visual-feedback",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "build": "bun run scripts/build.ts"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^20.11.2",
+    "bun-types": "^1.4.0",
+    "typescript": "~6.0.2"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Pupitre — Retours visuels",
+  "version": "0.1.0",
+  "description": "Annote une interface locale et transmet les corrections à Pupitre.",
+  "permissions": ["activeTab", "storage", "scripting", "tabs"],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://*.localhost/*",
+    "http://127.0.0.1/*",
+    "http://127.0.0.1:4820/*",
+    "http://127.0.0.1:4821/*"
+  ],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "Annoter avec Pupitre", "default_popup": "popup.html" },
+  "commands": {
+    "start-inspection": {
+      "suggested_key": { "default": "Alt+Shift+P" },
+      "description": "Pointer une zone de la page"
+    }
+  },
+  "content_scripts": [{
+    "matches": ["http://localhost/*", "http://*.localhost/*", "http://127.0.0.1/*"],
+    "js": ["content.js"],
+    "css": ["content.css"],
+    "run_at": "document_idle"
+  }]
+}

@@ -8,6 +8,7 @@
     "promote": "bun run scripts/promote.ts",
     "typecheck:sidecar": "bun run --cwd sidecar typecheck",
     "build:sidecar": "bun run scripts/build-sidecar.ts",
+    "build:chrome-extension": "bun run --cwd chrome-extension build",
     "prepare:tauri-dev": "bun run scripts/prepare-tauri-dev.ts",
     "tauri:before-build": "bun run typecheck:sidecar && bun run build:sidecar && bun run --cwd ui build"
   },
@@ -15,5 +16,5 @@
     "@tauri-apps/cli": "^2.11.4"
   },
   "private": true,
-  "workspaces": ["sidecar", "ui"]
+  "workspaces": ["sidecar", "ui", "chrome-extension"]
 }

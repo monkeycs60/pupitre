@@ -52,6 +52,7 @@ import { useAttention } from './useAttention'
 import { AttentionInbox } from './AttentionInbox'
 import type { AttentionTarget } from './types'
 import { retryUntilAvailable } from './startupRetry'
+import { subscribeVisualFeedbackNavigation } from './visualFeedbackNavigation'
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
@@ -160,6 +161,10 @@ function App() {
   const ticketLinks = useTicketLinks(selectedProject?.id)
   const sentryLinks = useSentryLinks(selectedProject?.id)
   useAppNotifications()
+
+  useEffect(() => subscribeVisualFeedbackNavigation((target) => {
+    window.dispatchEvent(new CustomEvent('pupitre:open-conversation', { detail: target }))
+  }), [])
 
   useEffect(() => {
     const openConversation = (event: Event) => {

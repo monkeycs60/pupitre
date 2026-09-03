@@ -95,6 +95,13 @@ import type { ConversationLinkStore } from "./stores/conversation-links";
 import type { ProblemService } from "./problems";
 import { buildInfo, readInstance, staleSourcesSince, type InstanceInfo } from "./instance";
 import { PromotionConflictError, type PromotionRunner } from "./promotion";
+import {
+  createVisualFeedbackToken,
+  listeningProcessCwd,
+  verifyVisualFeedbackToken,
+  type VisualFeedbackService,
+  type VisualFeedbackSubmission,
+} from "./visual-feedback";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -154,6 +161,7 @@ export interface ServerDeps {
   integrationsRefresher: IntegrationsRefresher;
   time?: TimeTrackingService;
   htmlDocuments?: HtmlDocumentService;
+  visualFeedback?: VisualFeedbackService;
   /**
    * Arrêt propre du sidecar, déclenché par `POST /api/shutdown` : c'est ce qui
    * permet à un sidecar plus récent de reprendre le port (cf. claimServer).
@@ -249,7 +257,8 @@ type WebSocketData =
   | { channel: "conversation"; conversationId: string }
   | { channel: "quotas" }
   | { channel: "fleet" }
-  | { channel: "tickets"; projectId: string };
+  | { channel: "tickets"; projectId: string }
+  | { channel: "navigation" };
 
 const EFFORTS_BY_PROVIDER = {
   claude: ["low", "medium", "high", "xhigh", "max"],
@@ -289,14 +298,34 @@ function empty(status: number): Response {
   return new Response(null, { status, headers: TAURI_CORS_HEADERS });
 }
 
-async function readObject(request: Request): Promise<Record<string, unknown>> {
+async function readObject(request: Request, maxBytes?: number): Promise<Record<string, unknown>> {
   try {
-    const value: unknown = await request.json();
+    const declaredLength = Number(request.headers.get("content-length") ?? 0);
+    if (maxBytes && declaredLength > maxBytes) throw new HttpError(413, "corps trop volumineux");
+    let text: string;
+    if (maxBytes && request.body) {
+      const reader = request.body.getReader();
+      const decoder = new TextDecoder();
+      let size = 0;
+      let output = "";
+      while (true) {
+        const { done, value: chunk } = await reader.read();
+        if (done) break;
+        size += chunk.byteLength;
+        if (size > maxBytes) throw new HttpError(413, "corps trop volumineux");
+        output += decoder.decode(chunk, { stream: true });
+      }
+      text = output + decoder.decode();
+    } else {
+      text = await request.text();
+    }
+    const value: unknown = JSON.parse(text);
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new Error("objet attendu");
     }
     return value as Record<string, unknown>;
-  } catch {
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
     throw new HttpError(400, "corps JSON invalide");
   }
 }
@@ -608,6 +637,7 @@ function publicSettings(deps: ServerDeps): Record<string, unknown> {
     ...settings,
     [INTEGRATION_TOKENS_KEY]: integrationTokens,
     conductorToolTokens: conductorToolTokens(),
+    visualFeedbackPaired: deps.settings.get<string>("visual-feedback-token-hash") !== null,
   };
 }
 
@@ -1126,6 +1156,7 @@ export function createServer(deps: ServerDeps) {
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
   const fleetSockets = new Set<ServerWebSocket<WebSocketData>>();
   const ticketSockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
+  const navigationSockets = new Set<ServerWebSocket<WebSocketData>>();
   let fleetTimer: ReturnType<typeof setInterval> | null = null;
   let lastFleetMessage: string | null = null;
   const currentFleet = () => fleetSnapshot(deps);
@@ -1206,19 +1237,77 @@ export function createServer(deps: ServerDeps) {
     hostname: "127.0.0.1",
     async fetch(request, server) {
       try {
+        const url = new URL(request.url);
+        const { pathname } = url;
         const origin = request.headers.get("origin");
+        const visualExtensionOrigin = origin?.startsWith("chrome-extension://") === true
+          && pathname.startsWith("/api/visual-feedback/");
         if (
           origin !== null
           && origin !== "tauri://localhost"
           && !origin.startsWith("http://localhost:")
           && !origin.startsWith("http://127.0.0.1:")
+          && !visualExtensionOrigin
         ) {
           throw new HttpError(403, "origine interdite");
         }
-        if (request.method === "OPTIONS") return empty(204);
+        if (request.method === "OPTIONS") {
+          if (visualExtensionOrigin) return new Response(null, { status: 204, headers: {
+            "access-control-allow-origin": origin!,
+            "access-control-allow-headers": "authorization, content-type",
+            "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
+          } });
+          return empty(204);
+        }
 
-        const url = new URL(request.url);
-        const { pathname } = url;
+        if (request.method === "GET" && pathname === "/api/visual-feedback/pairing") {
+          return json({ paired: deps.settings.get<string>("visual-feedback-token-hash") !== null });
+        }
+
+        if (request.method === "POST" && pathname === "/api/visual-feedback/pairing/rotate") {
+          await readObject(request, 1_024);
+          return json({ token: createVisualFeedbackToken(deps.settings) });
+        }
+
+        if (visualExtensionOrigin) {
+          const corsJson = (data: unknown, status = 200) => new Response(JSON.stringify(data), {
+            status,
+            headers: { "content-type": "application/json", "access-control-allow-origin": origin! },
+          });
+          const token = request.headers.get("authorization")?.replace(/^Bearer\s+/iu, "") ?? "";
+          if (!verifyVisualFeedbackToken(deps.settings, token)) return corsJson({ error: "appairage requis" }, 401);
+          if (!deps.visualFeedback) return corsJson({ error: "retours visuels indisponibles" }, 501);
+          if (request.method === "POST" && pathname === "/api/visual-feedback/resolve") {
+            const body = await readObject(request);
+            const pageOrigin = requiredString(body, "origin");
+            const pageUrl = new URL(pageOrigin);
+            const port = Number(pageUrl.port || (pageUrl.protocol === "https:" ? 443 : 80));
+            return corsJson(deps.visualFeedback.resolveOrigin({
+              origin: pageUrl.origin,
+              pathname: optionalTrimmed(body, "pathname") ?? "/",
+              cwd: listeningProcessCwd(port),
+            }));
+          }
+          if (request.method === "PUT" && pathname === "/api/visual-feedback/origins") {
+            const body = await readObject(request);
+            deps.visualFeedback.associateOrigin(
+              requiredString(body, "origin"),
+              optionalTrimmed(body, "pathPrefix") ?? "/",
+              requiredString(body, "projectId"),
+            );
+            return corsJson({ ok: true });
+          }
+          const destinationsId = routeId(pathname, /^\/api\/visual-feedback\/projects\/([^/]+)\/destinations$/);
+          if (request.method === "GET" && destinationsId !== null) {
+            return corsJson(deps.visualFeedback.destinations(destinationsId));
+          }
+          if (request.method === "POST" && pathname === "/api/visual-feedback/submissions") {
+            const result = await deps.visualFeedback.submit(await readObject(request, 25 * 1024 * 1024) as unknown as VisualFeedbackSubmission);
+            const message = JSON.stringify({ type: "open-conversation", ...result });
+            for (const socket of navigationSockets) socket.send(message);
+            return corsJson(result, 202);
+          }
+        }
 
         if (request.method === "GET" && pathname === "/api/health") {
           return json({
@@ -4180,6 +4269,10 @@ export function createServer(deps: ServerDeps) {
             if (server.upgrade(request, { data: { channel: "tickets", projectId } })) return;
             throw new HttpError(400, "upgrade WebSocket refusé");
           }
+          if (channel === "navigation") {
+            if (server.upgrade(request, { data: { channel: "navigation" } })) return;
+            throw new HttpError(400, "upgrade WebSocket refusé");
+          }
           if (channel !== null && channel !== "conversation") {
             throw new HttpError(400, "canal inconnu");
           }
@@ -4201,11 +4294,20 @@ export function createServer(deps: ServerDeps) {
 
         throw new HttpError(404, "route inconnue");
       } catch (error) {
+        const chromeOrigin = request.headers.get("origin");
+        const isVisualExtensionRequest = chromeOrigin?.startsWith("chrome-extension://") === true
+          && new URL(request.url).pathname.startsWith("/api/visual-feedback/");
+        const failure = error instanceof HttpError
+          ? json({ error: error.message }, error.status)
+          : json({ error: error instanceof Error ? error.message : "erreur interne" }, 500);
+        if (isVisualExtensionRequest) {
+          failure.headers.set("access-control-allow-origin", chromeOrigin!);
+        }
         if (error instanceof HttpError) {
-          return json({ error: error.message }, error.status);
+          return failure;
         }
         console.error("Erreur serveur", error);
-        return json({ error: "erreur interne" }, 500);
+        return failure;
       }
     },
     websocket: {
@@ -4236,6 +4338,10 @@ export function createServer(deps: ServerDeps) {
           socket.send(JSON.stringify(dashboardPayload(projectId, deps.integrations, deps.tickets, deps.problemStore)));
           return;
         }
+        if (socket.data.channel === "navigation") {
+          navigationSockets.add(socket);
+          return;
+        }
         const { conversationId } = socket.data;
         let subscribers = sockets.get(conversationId);
         if (!subscribers) {
@@ -4262,6 +4368,10 @@ export function createServer(deps: ServerDeps) {
           const subscribers = ticketSockets.get(projectId);
           subscribers?.delete(socket);
           if (subscribers?.size === 0) ticketSockets.delete(projectId);
+          return;
+        }
+        if (socket.data.channel === "navigation") {
+          navigationSockets.delete(socket);
           return;
         }
         const { conversationId } = socket.data;

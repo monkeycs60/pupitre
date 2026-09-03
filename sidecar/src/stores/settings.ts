@@ -21,6 +21,7 @@ const INTERNAL_KEYS = new Set([
   TIME_SYNC_WATERMARK_KEY,
   TIME_HEARTBEAT_KEY,
   TIME_BACKFILL_KEY,
+  "visual-feedback-token-hash",
 ]);
 
 export class SettingsStore {

@@ -171,6 +171,8 @@ export interface Settings {
   /** Dernière page Claude Design visitée, pour rouvrir la vue dessus. `null`
    *  efface la reprise. Le sidecar refuse toute URL hors `claude.ai/design`. */
   designLastUrl?: string | null
+  /** Lecture seule : un jeton d'extension Chrome existe côté sidecar. */
+  visualFeedbackPaired?: boolean
 }
 
 export class ApiError extends Error {
@@ -770,6 +772,10 @@ export function getSettings(signal?: AbortSignal): Promise<Settings> {
 
 export function updateSettings(settings: Settings): Promise<Settings> {
   return fetchJson('/api/settings', jsonPut(settings))
+}
+
+export function rotateVisualFeedbackPairing(): Promise<{ token: string }> {
+  return fetchJson('/api/visual-feedback/pairing/rotate', jsonPost({}))
 }
 
 export function getProjectDashboard(

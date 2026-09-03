@@ -37,6 +37,7 @@ import { IntegrationsRefresher } from "../src/integrations/refresher";
 import { ProblemStore } from "../src/stores/problems";
 import { ProblemService } from "../src/problems";
 import { ProblemMissionStore } from "../src/stores/problem-missions";
+import { VisualFeedbackService } from "../src/visual-feedback";
 
 interface TestServer {
   baseUrl: string;
@@ -72,6 +73,19 @@ async function putJson(path: string, body: unknown): Promise<Response> {
   return fetch(`${current.baseUrl}${path}`, {
     method: "PUT",
     headers: jsonHeaders(),
+    body: JSON.stringify(body),
+  });
+}
+
+async function visualPost(path: string, body: unknown, token?: string): Promise<Response> {
+  if (!current) throw new Error("serveur de test non démarré");
+  return fetch(`${current.baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      ...jsonHeaders(),
+      origin: "chrome-extension://pupitre-test",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(body),
   });
 }
@@ -237,6 +251,7 @@ beforeEach(() => {
       conversations: [{ title: "Corriger le bouton", instruction: "Reproduire puis corriger." }],
     }]),
   );
+  const git = new GitProjectService(db, projects, { worktreeRoot: join(dir, "worktrees") });
   const deps = {
     port: 0,
     projects,
@@ -254,7 +269,7 @@ beforeEach(() => {
     settings,
     reviews,
     debriefs,
-    git: new GitProjectService(db, projects, { worktreeRoot: join(dir, "worktrees") }),
+    git,
     testers,
     skills,
     skillComposer,
@@ -273,6 +288,7 @@ beforeEach(() => {
     problemStore,
     problemMissions,
     problems,
+    visualFeedback: new VisualFeedbackService(db, projects, conversations, presets, git, media, runner),
   } satisfies ServerDeps & { problemMissions: ProblemMissionStore };
   const server = createServer(deps);
   current = {
@@ -810,4 +826,24 @@ test("domaines : CRUD, suggestion invisible, fusion et filtre de recherche", asy
     method: "DELETE",
   });
   expect(blocked.status).toBe(409);
+});
+test("apparie l'extension puis protège la résolution visuelle par jeton", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const rotate = await postJson("/api/visual-feedback/pairing/rotate", {});
+  expect(rotate.status).toBe(200);
+  const { token } = await rotate.json() as { token: string };
+
+  const refused = await visualPost("/api/visual-feedback/resolve", {
+    origin: "http://localhost:5173",
+    pathname: "/",
+  });
+  expect(refused.status).toBe(401);
+
+  const accepted = await visualPost("/api/visual-feedback/resolve", {
+    origin: "http://localhost:5173",
+    pathname: "/",
+  }, token);
+  expect(accepted.status).toBe(200);
+  expect((await accepted.json() as { status: string }).status).toBe("unresolved");
+  expect(accepted.headers.get("access-control-allow-origin")).toBe("chrome-extension://pupitre-test");
 });

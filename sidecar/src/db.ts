@@ -74,6 +74,18 @@ export function openDb(dir: string = dataDir()): Database {
     );
     -- conversation_id porte SOIT un id de conversation SOIT un id de subtask :
     -- pas de clé étrangère, le replay par id reste identique dans les deux cas.
+    CREATE TABLE IF NOT EXISTS visual_feedback_origins (
+      origin TEXT NOT NULL,
+      path_prefix TEXT NOT NULL DEFAULT '/',
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      PRIMARY KEY (origin, path_prefix)
+    );
+    CREATE TABLE IF NOT EXISTS visual_feedback_submissions (
+      submission_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       conversation_id TEXT NOT NULL,

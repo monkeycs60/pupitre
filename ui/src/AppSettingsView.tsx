@@ -11,6 +11,7 @@ import {
 import type { FilesystemScope, InstanceHealth, PromotionState } from './types'
 import { DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
+import { VisualFeedbackSettings } from './VisualFeedbackSettings'
 
 const DEFAULT_SCOPE: FilesystemScope = 'project-and-ai-roots'
 
@@ -49,6 +50,7 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
   const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
   const [allowDirty, setAllowDirty] = useState(false)
   const [longTaskThreshold, setLongTaskThreshold] = useState(120)
+  const [visualFeedbackPaired, setVisualFeedbackPaired] = useState(false)
   const promotionFailure = promotion?.state === 'failed'
     ? [...promotion.events].reverse().find((event) => event.status === 'failed')
     : null
@@ -63,6 +65,7 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
         if (ignore) return
         setScope(settings.filesystemScope ?? DEFAULT_SCOPE)
         setLongTaskThreshold(settings.longTaskThresholdSeconds ?? 120)
+        setVisualFeedbackPaired(settings.visualFeedbackPaired === true)
         const stored = { ...DEFAULT_ACTION_FORMAT, ...(settings.actionFormat ?? {}) }
         setFormat(stored)
         setTodoDraft(stored.todoHeadings.join(', '))
@@ -292,6 +295,8 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
           ) : null}
         </div>
       ) : null}
+
+      <VisualFeedbackSettings initialPaired={visualFeedbackPaired} />
 
       <div className="settings-card">
         <div>

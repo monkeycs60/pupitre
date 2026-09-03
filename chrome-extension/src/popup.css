@@ -1,0 +1,19 @@
+:root { color-scheme: dark; font: 13px/1.4 ui-sans-serif,system-ui,sans-serif; background:#191817; color:#eee9e3; }
+body { margin:0; width:360px; }
+main { padding:16px; }
+header { display:flex; justify-content:space-between; align-items:center; padding-bottom:12px; border-bottom:1px solid #3a3733; }
+header strong { font-size:15px; }
+header span { color:#aaa39b; }
+section { margin-top:14px; }
+label { display:grid; gap:5px; margin:10px 0; color:#c9c2ba; }
+input,select,textarea { box-sizing:border-box; width:100%; color:#eee9e3; background:#23211f; border:1px solid #48433e; border-radius:6px; padding:8px; font:inherit; }
+textarea { resize:vertical; }
+button { border:1px solid #d96446; border-radius:6px; background:#d96446; color:#fff; padding:8px 10px; font:600 13px/1.2 inherit; cursor:pointer; }
+button.secondary { background:transparent; border-color:#57514b; color:#eee9e3; }
+.actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+#project { font-weight:600; }
+#annotations { margin:12px 0; padding-left:28px; max-height:180px; overflow:auto; }
+#annotations li { padding:5px 0; border-bottom:1px solid #302d2a; }
+#annotations li { display:flex; justify-content:space-between; gap:8px; align-items:start; }
+#annotations button.remove { padding:2px 4px; border:0; background:transparent; color:#aaa39b; font-weight:400; }
+#error { min-height:18px; margin:10px 0 0; color:#ff947d; }
