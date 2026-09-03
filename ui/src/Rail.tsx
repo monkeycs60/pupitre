@@ -67,8 +67,10 @@ const NAV_PATHS: Record<NavName, React.ReactNode> = {
   ),
   design: (
     <>
-      <path d="M8 2.2 2.6 13.4h10.8Z" />
-      <path d="M5.4 9.2h5.2" />
+      <path d="M8 2a6 6 0 1 0 0 12h1a1.3 1.3 0 0 0 .8-2.3l-.5-.3A1.3 1.3 0 0 1 10 9h2.5A1.5 1.5 0 0 0 14 7.5 6 6 0 0 0 8 2Z" />
+      <circle cx="5.2" cy="6" r=".65" />
+      <circle cx="7.8" cy="4.5" r=".65" />
+      <circle cx="10.6" cy="5.4" r=".65" />
     </>
   ),
   progress: (
@@ -222,6 +224,7 @@ export const Rail = memo(function Rail({
       group: 'work',
     },
     { name: 'dashboard', label: 'Tableau de bord', view: 'dashboard', onClick: onDashboardSelect, needsProject: true, shortcut: navigationShortcutLabel('dashboard'), group: 'work' },
+    ...(window.__TAURI__ ? [{ name: 'design' as const, label: 'Claude Design', view: 'design' as const, onClick: onDesignSelect, shortcut: navigationShortcutLabel('design'), group: 'work' as const }] : []),
     { name: 'attention', label: 'Inbox', view: 'attention', onClick: onAttentionSelect, badge: attentionCount, group: 'supervision' },
     { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive, shortcut: navigationShortcutLabel('fleet'), group: 'supervision' },
     { name: 'documents', label: 'Documents', view: 'documents', onClick: onDocumentsSelect, shortcut: navigationShortcutLabel('documents'), group: 'library' },
@@ -232,7 +235,6 @@ export const Rail = memo(function Rail({
     { name: 'progress', label: 'Progression', view: 'progress', onClick: onProgressSelect, group: 'system' },
     { name: 'settings', label: 'Réglages', view: 'settings', onClick: onSettingsSelect, group: 'system' },
     { name: 'help', label: 'Aide', view: 'help', onClick: onHelpSelect, group: 'system' },
-    ...(window.__TAURI__ ? [{ name: 'design' as const, label: 'Claude Design', view: 'design' as const, onClick: onDesignSelect, shortcut: navigationShortcutLabel('design'), group: 'work' as const }] : []),
   ]
 
   return (
