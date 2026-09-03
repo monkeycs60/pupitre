@@ -3,6 +3,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { createProject, getUnreadConversationCounts, listProjects } from './api'
 import type { Project, WorkspaceView } from './types'
 import { navigationShortcutLabel } from './navigationShortcuts'
+import { retryUntilAvailable } from './startupRetry'
 
 /** Rail vertical (56 px) : bascule de projet + navigation globale.
  *  Remplace la liste de projets et le tiroir « Outils » de l'ancienne sidebar. */
@@ -176,16 +177,18 @@ export const Rail = memo(function Rail({
 
   useEffect(() => {
     let ignore = false
-    void listProjects()
+    void retryUntilAvailable(
+      () => listProjects(),
+      { cancelled: () => ignore },
+    )
       .then((items) => {
-        if (ignore) return
+        if (ignore || items === null) return
         const ordered = pinnedFirst(items)
         setProjects(ordered)
         void getUnreadConversationCounts().then((counts) => {
           if (!ignore) setUnreadByProject(counts)
         }).catch(() => {})
       })
-      .catch(() => {})
     return () => {
       ignore = true
     }

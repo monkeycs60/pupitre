@@ -51,6 +51,7 @@ import { useInstance } from './useInstance'
 import { useAttention } from './useAttention'
 import { AttentionInbox } from './AttentionInbox'
 import type { AttentionTarget } from './types'
+import { retryUntilAvailable } from './startupRetry'
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
@@ -303,9 +304,12 @@ function App() {
       }
     }
 
-    void listProjects()
+    void retryUntilAvailable(
+      () => listProjects(),
+      { cancelled: () => ignore },
+    )
       .then(async (projects) => {
-        if (ignore) return
+        if (ignore || projects === null) return
         const project = restoreProject(projects, savedLocation)
         if (project === null) {
           setLocationRestored(true)
@@ -324,9 +328,6 @@ function App() {
         } catch {
           // La sidebar gère son propre chargement ; le projet reste restauré.
         }
-        if (!ignore) setLocationRestored(true)
-      })
-      .catch(() => {
         if (!ignore) setLocationRestored(true)
       })
 
