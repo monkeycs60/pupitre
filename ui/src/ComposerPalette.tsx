@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listSkills } from './api'
 import type { SkillProvenance, SkillSummary } from './types'
+import { COMPOSER_DIRECTIVES } from './composerDirectives'
 
 /**
  * Popover unique du composer, trois déclencheurs : `$` liste les skills,
@@ -29,13 +30,14 @@ export interface ComposerActionItem {
 }
 
 export interface ComposerToolItem {
-  id: 'chrome'
+  id: string
   label: string
   detail: string
 }
 
 export const COMPOSER_TOOLS: ComposerToolItem[] = [
   { id: 'chrome', label: 'chrome', detail: 'Piloter Chrome avec l’intégration du fournisseur' },
+  ...COMPOSER_DIRECTIVES,
 ]
 
 export const COMPOSER_ACTIONS: ComposerActionItem[] = [

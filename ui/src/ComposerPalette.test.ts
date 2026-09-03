@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { paletteTrigger, rankSkills } from './ComposerPalette'
+import { COMPOSER_TOOLS, paletteTrigger, rankSkills } from './ComposerPalette'
+import { COMPOSER_DIRECTIVES } from './composerDirectives'
 import type { SkillSummary } from './types'
 
 function skill(overrides: Partial<SkillSummary>): SkillSummary {
@@ -40,6 +41,14 @@ describe('paletteTrigger', () => {
 
   test('le curseur au milieu du message regarde le token à sa gauche', () => {
     expect(paletteTrigger('$va suite', 3)).toEqual({ mode: 'skills', anchor: 0, query: 'va' })
+  })
+})
+
+describe('directives du composer', () => {
+  test('chaque directive enregistrée est proposée dans la palette arobase', () => {
+    const suggestedIds = new Set(COMPOSER_TOOLS.map((tool) => tool.id))
+    expect(COMPOSER_DIRECTIVES.every((directive) => suggestedIds.has(directive.id))).toBe(true)
+    expect(COMPOSER_TOOLS.some((tool) => tool.id === 'sidequest')).toBe(true)
   })
 })
 
