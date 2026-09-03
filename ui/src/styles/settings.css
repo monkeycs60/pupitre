@@ -143,3 +143,13 @@
 .settings-promotion-steps .is-running { color: var(--warn); }
 .settings-promotion-steps .is-done { color: var(--ok); }
 .settings-promotion-steps .is-failed { color: var(--danger); }
+
+.settings-promotion-error {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-radius: 8px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+}

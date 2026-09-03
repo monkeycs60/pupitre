@@ -49,6 +49,9 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
   const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
   const [allowDirty, setAllowDirty] = useState(false)
   const [longTaskThreshold, setLongTaskThreshold] = useState(120)
+  const promotionFailure = promotion?.state === 'failed'
+    ? [...promotion.events].reverse().find((event) => event.status === 'failed')
+    : null
 
   useEffect(() => {
     let ignore = false
@@ -258,6 +261,16 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
             ) : null}
           </div>
           {instance.build.dirty && !allowDirty ? <p className="settings-help">Valider ou remiser les changements d’abord.</p> : null}
+          {promotion?.state === 'failed' ? (
+            <div className="settings-promotion-error" role="alert">
+              <strong>Promotion échouée</strong>
+              <span>
+                {promotionFailure
+                  ? `${promotionFailure.step} · ${promotionFailure.message}`
+                  : 'La promotion n’a pas pu être terminée. Relance-la après correction.'}
+              </span>
+            </div>
+          ) : null}
           {promotion ? (
             <ol className="settings-promotion-steps">
               {PROMOTION_STEPS.map((step) => {
