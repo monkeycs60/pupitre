@@ -2970,7 +2970,7 @@ export function createServer(deps: ServerDeps) {
             targetConversationId: conversation.id,
             label: instruction,
           });
-          void deps.runner.runTurn(conversation.id, prompt).catch((error) => console.error("Échec sidequest", error));
+          void deps.runner.runTurn(conversation.id, prompt, []).catch((error) => console.error("Échec sidequest", error));
           return json({ conversation, link }, 201);
         }
         if (conversationSidequestsId !== null && request.method === "GET") {
