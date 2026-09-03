@@ -20,7 +20,7 @@ export type ConversationAsset =
       id: string
       label: string
       documentId: string
-      documentKind: 'html' | 'pdf'
+      documentKind: import('./types').DocumentKind
       mimeType: string
       originalName: string
       size: number

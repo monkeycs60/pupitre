@@ -10,6 +10,7 @@ mock.module('@tauri-apps/plugin-opener', () => ({
 
 const { cleanup, render, fireEvent } = await import('@testing-library/react')
 const { ExternalLink } = await import('./externalLink')
+const Markdown = (await import('./Markdown')).default
 const { hasTauriRuntime } = await import('./transport')
 
 const TAURI = '__TAURI_INTERNALS__'
@@ -36,6 +37,14 @@ test('dans la fenêtre Tauri, le clic délègue au système au lieu de ne rien f
   fireEvent(link, event)
   expect(event.defaultPrevented).toBe(true)
   expect(opened).toEqual(['https://app.clickup.com/t/86c1'])
+})
+
+test('un lien web Markdown délègue lui aussi au navigateur système', () => {
+  inTauri(true)
+  render(<Markdown>[Documentation](https://example.com/docs)</Markdown>)
+  const link = document.querySelector('a') as HTMLAnchorElement
+  fireEvent.click(link)
+  expect(opened).toEqual(['https://example.com/docs'])
 })
 
 test('dans le navigateur, l’ancre garde son comportement natif', () => {

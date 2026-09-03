@@ -51,10 +51,10 @@ function renderConversationBrief(brief: ConversationBrief): string {
 }
 
 const DESCRIPTION =
-  "Publie dans le fil Pupitre un document HTML autonome ou un PDF que tu as créé. "
+  "Publie dans le fil Pupitre un document que tu as créé. Formats : HTML, PDF, CSV, TSV, XLSX, DOCX, Markdown, TXT et JSON. "
   + "Utilise cet outil pour livrer un plan, un audit, un brainstorming, une approche "
   + "ou tout contenu visuel riche qui serait pénible en long Markdown. Le fichier doit "
-  + "être un .html/.htm UTF-8 autonome (2 Mio max) ou un .pdf (10 Mio max), situé dans le projet courant ou dans le dossier "
+  + "respecter une limite de 2 Mio pour les formats texte et 10 Mio pour PDF/Office, et être situé dans le projet courant ou dans le dossier "
   + "temporaire de l’OS. Pupitre l’affiche dans un aperçu "
   + "sandboxé, l’indexe, génère sa miniature et le conserve jusqu’à suppression explicite. "
   + "Passe delete_source=true pour supprimer l’original uniquement s’il est temporaire.";
@@ -65,7 +65,7 @@ export function createPupitreServer(): McpServer {
     { instructions: "Publie les livrables HTML et PDF comme artefacts natifs de la conversation." },
   );
   const inputSchema = {
-    path: z.string().describe("Chemin absolu du fichier .html, .htm ou .pdf à publier."),
+    path: z.string().describe("Chemin absolu du fichier à publier."),
     title: z.string().min(1).max(160).describe("Titre court affiché dans le fil."),
     summary: z.string().max(500).optional().describe("Résumé optionnel d’une phrase."),
     delete_source: z.boolean().optional().default(true).describe(
@@ -90,7 +90,7 @@ export function createPupitreServer(): McpServer {
       });
       if (response.status !== 201) throw new Error(await errorMessage(response));
       const document = await response.json() as {
-        id: string; title: string; kind: "html" | "pdf"; expiresAt: string | null;
+        id: string; title: string; kind: string; expiresAt: string | null;
       };
       const kind = document.kind ?? (args.path.toLowerCase().endsWith(".pdf") ? "pdf" : "html");
       return text(`Document ${kind.toUpperCase()} publié et conservé dans Pupitre : ${document.title} (${document.id}).`);

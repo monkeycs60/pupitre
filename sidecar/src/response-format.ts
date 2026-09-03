@@ -65,7 +65,10 @@ export function actionFormatPreamble(format: ActionFormat): string {
     "ligne, à l'impératif, compréhensible seule et sans renvoi à une autre ligne.",
     "Pour présenter un audit, un brainstorming, un plan ou une approche structurée qui",
     "deviendrait longue en Markdown, préfère créer un document HTML autonome et éphémère",
-    "dans /tmp, puis fournis son lien. Garde le Markdown pour une réponse courte.",
+    "dans /tmp, puis publie-le avec l’outil Pupitre `publish_document` afin qu’il soit",
+    "affiché inline et recensé parmi les pièces jointes. Publie de la même façon tout",
+    "fichier livré (PDF, CSV, XLSX, DOCX, Markdown, texte ou JSON). Un simple lien local ne constitue pas une livraison.",
+    "Garde le Markdown pour une réponse courte.",
   ].join("\n");
 }
 

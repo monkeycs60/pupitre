@@ -5,6 +5,7 @@ import {
   createHtmlDocumentViewToken,
   deleteHtmlDocument,
   getHtmlDocument,
+  openDocumentInSystem,
 } from './api'
 import type { HtmlDocumentBlock } from './groupEvents'
 import type { HtmlDocument, HtmlDocumentState } from './types'
@@ -171,10 +172,14 @@ export function HtmlDocumentCard({
     setBusyAction('open')
     setError(null)
     try {
-      const grant = await createHtmlDocumentViewToken(block.documentId)
-      const url = htmlDocumentExternalUrl(block.documentId, grant.token)
-      if (hasTauriRuntime()) await openUrl(url)
-      else window.open(url, '_blank', 'noopener,noreferrer')
+      if (documentKind === 'docx' || documentKind === 'xlsx') {
+        await openDocumentInSystem(block.documentId)
+      } else {
+        const grant = await createHtmlDocumentViewToken(block.documentId)
+        const url = htmlDocumentExternalUrl(block.documentId, grant.token)
+        if (hasTauriRuntime()) await openUrl(url)
+        else window.open(url, '_blank', 'noopener,noreferrer')
+      }
     } catch (reason) {
       setError(errorMessage(reason, 'Ouverture impossible'))
     } finally {
@@ -267,7 +272,7 @@ export function HtmlDocumentCard({
           {canView ? (
             <>
               <button type="button" onClick={() => void openExternally()} disabled={busyAction !== null}>
-                {busyAction === 'open' ? 'Ouverture…' : 'Ouvrir ↗'}
+                {busyAction === 'open' ? 'Ouverture…' : documentKind === 'docx' || documentKind === 'xlsx' ? 'Modifier dans LibreOffice' : 'Ouvrir ↗'}
               </button>
               <button
                 type="button"

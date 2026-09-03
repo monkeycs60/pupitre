@@ -314,7 +314,7 @@ export function getHtmlDocument(id: string, signal?: AbortSignal): Promise<HtmlD
 export function listDocuments(filters: {
   projectId?: string
   query?: string
-  kind?: 'html' | 'pdf'
+  kind?: import('./types').DocumentKind
   state?: 'active' | 'retained' | 'available'
 } = {}, signal?: AbortSignal): Promise<HtmlDocument[]> {
   const params = new URLSearchParams()
@@ -342,6 +342,10 @@ export function deleteHtmlDocument(id: string): Promise<HtmlDocument> {
 
 export function exportDocument(id: string, path: string): Promise<{ path: string; sizeBytes: number }> {
   return fetchJson(`/api/documents/${routeId(id)}/export`, jsonPost({ path }))
+}
+
+export function openDocumentInSystem(id: string): Promise<{ ok: true }> {
+  return fetchJson(`/api/documents/${routeId(id)}/open`, jsonPost({}))
 }
 
 export function getTimeSnapshot(

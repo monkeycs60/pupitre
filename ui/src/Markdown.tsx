@@ -7,6 +7,7 @@ import type { SectionKind } from './taskToggle'
 import { ActionFormatContext, headingKind } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { mediaUrl } from './transport'
+import { ExternalLink } from './externalLink'
 
 /** GFM : tableaux, listes de tâches, barré, autolinks. */
 const REMARK_PLUGINS = [remarkGfm]
@@ -320,6 +321,12 @@ function CopyablePre({ node, children, ...props }: any) {
 
 const COMPONENTS = {
   img: MarkdownImage,
+  a: ({ node: _node, href, children, ...props }: any) => {
+    if (typeof href === 'string' && /^https?:\/\//i.test(href)) {
+      return <ExternalLink href={href} title={props.title}>{children}</ExternalLink>
+    }
+    return <a href={href} {...props}>{children}</a>
+  },
   /** Les tableaux larges défilent au lieu de déborder de la bulle. */
   table: ({ node: _node, ...props }: any) => (
     <div className="markdown-table-wrap">

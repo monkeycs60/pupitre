@@ -920,7 +920,7 @@ export type AppEvent =
       documentId: string
       title: string
       summary?: string
-      kind: 'html' | 'pdf'
+      kind: 'html' | 'pdf' | 'csv' | 'tsv' | 'xlsx' | 'docx' | 'markdown' | 'text' | 'json'
       mimeType: string
       originalName: string
       sizeBytes: number
@@ -967,6 +967,8 @@ export type StoredEvent = AppEvent & { id: number }
 
 export type HtmlDocumentState = 'available' | 'retained' | 'expired' | 'deleted'
 
+export type DocumentKind = 'html' | 'pdf' | 'csv' | 'tsv' | 'xlsx' | 'docx' | 'markdown' | 'text' | 'json'
+
 export interface HtmlDocument {
   id: string
   conversationId: string
@@ -975,7 +977,7 @@ export interface HtmlDocument {
   projectName: string | null
   title: string
   summary: string | null
-  kind: 'html' | 'pdf'
+  kind: DocumentKind
   mimeType: string
   originalName: string
   sizeBytes: number

@@ -71,7 +71,7 @@ export type AppEvent =
       documentId: string;
       title: string;
       summary?: string;
-      kind: "html" | "pdf";
+      kind: "html" | "pdf" | "csv" | "tsv" | "xlsx" | "docx" | "markdown" | "text" | "json";
       mimeType: string;
       originalName: string;
       sizeBytes: number;

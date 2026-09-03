@@ -44,7 +44,7 @@ export interface HtmlDocumentBlock {
   documentId: string
   title: string
   summary?: string
-  documentKind?: 'html' | 'pdf'
+  documentKind?: import('./types').DocumentKind
   mimeType?: string
   originalName?: string
   sizeBytes: number

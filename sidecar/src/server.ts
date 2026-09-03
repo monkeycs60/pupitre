@@ -3642,12 +3642,12 @@ export function createServer(deps: ServerDeps) {
           if (!deps.htmlDocuments) throw new HttpError(501, "documents non câblés");
           const kind = url.searchParams.get("kind");
           const state = url.searchParams.get("state");
-          if (kind !== null && kind !== "html" && kind !== "pdf") throw new HttpError(400, "kind invalide");
+          if (kind !== null && !["html", "pdf", "csv", "tsv", "xlsx", "docx", "markdown", "text", "json"].includes(kind)) throw new HttpError(400, "kind invalide");
           if (state !== null && !["active", "retained", "available"].includes(state)) throw new HttpError(400, "state invalide");
           return json(await deps.htmlDocuments.list({
             projectId: url.searchParams.get("projectId") ?? undefined,
             query: url.searchParams.get("q") ?? undefined,
-            kind: (kind ?? undefined) as "html" | "pdf" | undefined,
+            kind: (kind ?? undefined) as import("./html-documents").DocumentKind | undefined,
             state: (state ?? undefined) as "active" | "retained" | "available" | undefined,
           }));
         }
@@ -3717,6 +3717,15 @@ export function createServer(deps: ServerDeps) {
           } catch (error) {
             htmlDocumentHttpError(error);
           }
+        }
+
+        const documentOpenId = routeId(pathname, /^\/api\/documents\/([^/]+)\/open$/);
+        if (request.method === "POST" && documentOpenId !== null) {
+          if (!deps.htmlDocuments) throw new HttpError(501, "documents non câblés");
+          try {
+            deps.htmlDocuments.openExternal(documentOpenId);
+            return json({ ok: true });
+          } catch (error) { htmlDocumentHttpError(error); }
         }
 
         const htmlDocumentContentId = routeId(

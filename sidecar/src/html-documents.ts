@@ -18,7 +18,21 @@ const DEFAULT_HTML_MAX_BYTES = 2 * 1024 * 1024;
 const DEFAULT_PDF_MAX_BYTES = 10 * 1024 * 1024;
 const VIEW_TOKEN_TTL_MS = 60_000;
 
-export type DocumentKind = "html" | "pdf";
+export type DocumentKind = "html" | "pdf" | "csv" | "tsv" | "xlsx" | "docx" | "markdown" | "text" | "json";
+
+const DOCUMENT_TYPES: Record<string, { kind: DocumentKind; mimeType: string; maxBytes: number }> = {
+  ".html": { kind: "html", mimeType: "text/html", maxBytes: DEFAULT_HTML_MAX_BYTES },
+  ".htm": { kind: "html", mimeType: "text/html", maxBytes: DEFAULT_HTML_MAX_BYTES },
+  ".pdf": { kind: "pdf", mimeType: "application/pdf", maxBytes: DEFAULT_PDF_MAX_BYTES },
+  ".csv": { kind: "csv", mimeType: "text/csv", maxBytes: DEFAULT_HTML_MAX_BYTES },
+  ".tsv": { kind: "tsv", mimeType: "text/tab-separated-values", maxBytes: DEFAULT_HTML_MAX_BYTES },
+  ".xlsx": { kind: "xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", maxBytes: DEFAULT_PDF_MAX_BYTES },
+  ".docx": { kind: "docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", maxBytes: DEFAULT_PDF_MAX_BYTES },
+  ".md": { kind: "markdown", mimeType: "text/markdown", maxBytes: DEFAULT_HTML_MAX_BYTES },
+  ".markdown": { kind: "markdown", mimeType: "text/markdown", maxBytes: DEFAULT_HTML_MAX_BYTES },
+  ".txt": { kind: "text", mimeType: "text/plain", maxBytes: DEFAULT_HTML_MAX_BYTES },
+  ".json": { kind: "json", mimeType: "application/json", maxBytes: DEFAULT_HTML_MAX_BYTES },
+};
 export type HtmlDocumentState = "available" | "retained" | "expired" | "deleted";
 
 interface HtmlDocumentRow {
@@ -256,41 +270,40 @@ export class HtmlDocumentService {
     if (info.size === 0) throw new HtmlDocumentError("source-empty", "document vide");
 
     const extension = extname(sourcePath).toLowerCase();
-    const kind: DocumentKind = extension === ".pdf" ? "pdf" : "html";
-    if (![".html", ".htm", ".pdf"].includes(extension)) {
-      throw new HtmlDocumentError("source-invalid", "extension attendue : .html, .htm ou .pdf");
-    }
-    const maxBytes = kind === "pdf"
-      ? numberFromEnv("PUPITRE_PDF_DOCUMENT_MAX_BYTES", DEFAULT_PDF_MAX_BYTES)
-      : numberFromEnv("PUPITRE_HTML_DOCUMENT_MAX_BYTES", DEFAULT_HTML_MAX_BYTES);
+    const documentType = DOCUMENT_TYPES[extension];
+    if (!documentType) throw new HtmlDocumentError("source-invalid", `extension non prise en charge : ${extension}`);
+    const { kind, mimeType, maxBytes } = documentType;
     if (info.size > maxBytes) {
       throw new HtmlDocumentError("source-too-large", `document trop volumineux (${info.size} octets, maximum ${maxBytes})`);
     }
 
     const bytes = readFileSync(sourcePath);
-    if (kind === "html") {
+    if (["html", "csv", "tsv", "markdown", "text", "json"].includes(kind)) {
       let content: string;
       try { content = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch {
-        throw new HtmlDocumentError("source-not-html", "le document HTML doit être encodé en UTF-8");
+        throw new HtmlDocumentError("source-invalid", "le document texte doit être encodé en UTF-8");
       }
-      if (content.includes("\0") || !/<(?:!doctype\s+html|html|head|body)\b/i.test(content)) {
+      if (content.includes("\0")) throw new HtmlDocumentError("source-invalid", "contenu texte invalide");
+      if (kind === "html" && !/<(?:!doctype\s+html|html|head|body)\b/i.test(content)) {
         throw new HtmlDocumentError("source-not-html", "contenu HTML autonome attendu");
       }
-    } else if (bytes.subarray(0, 5).toString() !== "%PDF-") {
+      if (kind === "json") try { JSON.parse(content); } catch { throw new HtmlDocumentError("source-invalid", "JSON valide attendu"); }
+    } else if (kind === "pdf" && bytes.subarray(0, 5).toString() !== "%PDF-") {
       throw new HtmlDocumentError("source-not-pdf", "fichier PDF valide attendu");
+    } else if (["docx", "xlsx"].includes(kind) && bytes.subarray(0, 2).toString() !== "PK") {
+      throw new HtmlDocumentError("source-invalid", "document Office valide attendu");
     }
 
     const title = input.title.trim().slice(0, 160) || basename(sourcePath);
     const summary = input.summary?.trim().slice(0, 500) || null;
     const id = crypto.randomUUID();
-    const storedName = kind === "pdf" ? "document.pdf" : "index.html";
+    const storedName = `document${extension}`;
     const relativePath = join(id, storedName);
     const documentDirectory = join(this.directory, id);
     const temporaryPath = join(documentDirectory, `${storedName}.pending`);
     const destinationPath = join(this.directory, relativePath);
     const createdAt = this.now();
     const sha256 = createHash("sha256").update(bytes).digest("hex");
-    const mimeType = kind === "pdf" ? "application/pdf" : "text/html";
 
     let storedEvent: StoredEvent | null = null;
     mkdirSync(documentDirectory, { recursive: false });
@@ -314,7 +327,7 @@ export class HtmlDocumentService {
       };
       const event: AppEvent = kind === "html"
         ? { type: "html-document-ref", ...shared, kind: "html", mimeType: "text/html" }
-        : { type: "document-ref", ...shared, kind: "pdf", mimeType: "application/pdf" };
+        : { type: "document-ref", ...shared, kind, mimeType };
       const eventId = this.conversations.appendEvent(conversationId, event);
       storedEvent = { ...event, id: eventId };
     } catch (error) {
@@ -418,7 +431,25 @@ export class HtmlDocumentService {
     }
     const current = this.requireAvailable(id);
     const row = this.row(current.id)!;
+    if (current.kind === "docx" || current.kind === "xlsx") {
+      const directory = join(this.directory, id);
+      const previewPath = join(directory, "document.pdf");
+      if (!existsSync(previewPath)) {
+        const office = [process.env.PUPITRE_LIBREOFFICE_BIN, "/usr/bin/libreoffice", "/usr/bin/soffice"]
+          .find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)));
+        if (office) spawnSync(office, ["--headless", "--convert-to", "pdf", "--outdir", directory, join(this.directory, row.relative_path)], { timeout: 30_000, stdio: "ignore" });
+      }
+      if (existsSync(previewPath)) return { path: previewPath, mimeType: "application/pdf", originalName: `${current.title}.pdf`, kind: "pdf" };
+    }
     return { path: join(this.directory, row.relative_path), mimeType: current.mimeType, originalName: current.originalName, kind: current.kind };
+  }
+
+  openExternal(id: string): void {
+    const current = this.requireAvailable(id);
+    const row = this.row(id)!;
+    const path = join(this.directory, row.relative_path);
+    const command = current.kind === "docx" || current.kind === "xlsx" ? "libreoffice" : "xdg-open";
+    Bun.spawn([command, path], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
   }
 
   contentPath(id: string, token: string): string { return this.content(id, token).path; }
@@ -543,7 +574,9 @@ export class HtmlDocumentService {
     if (!row) return;
     const body = kind === "html"
       ? plainTextFromHtml(new TextDecoder().decode(bytes))
-      : await plainTextFromPdf(new Uint8Array(bytes));
+      : kind === "pdf" ? await plainTextFromPdf(new Uint8Array(bytes))
+      : ["csv", "tsv", "markdown", "text", "json"].includes(kind) ? new TextDecoder().decode(bytes)
+      : "";
     const transaction = this.db.transaction(() => {
       this.db.query("DELETE FROM documents_fts WHERE document_id = ?").run(id);
       this.db.query(`INSERT INTO documents_fts
