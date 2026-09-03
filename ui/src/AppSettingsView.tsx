@@ -86,25 +86,21 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
   useEffect(() => {
     if (instance?.instance !== 'dev') return
     let ignore = false
-    let timer: ReturnType<typeof setInterval> | undefined
     async function refresh() {
       const [nextPromotion, nextStable] = await Promise.all([getPromotion(), getStableHealth()])
       if (ignore) return
       setPromotion(nextPromotion)
       setStableHealth('running' in nextStable ? null : nextStable)
-      if (nextPromotion.state === 'running' && timer === undefined) {
-        timer = setInterval(() => void refresh(), 1_000)
-      } else if (nextPromotion.state !== 'running' && timer !== undefined) {
-        clearInterval(timer)
-        timer = undefined
-      }
     }
     void refresh().catch((loadError: unknown) => {
       if (!ignore) setError(errorMessage(loadError))
     })
+    const timer = setInterval(() => void refresh().catch((loadError: unknown) => {
+      if (!ignore) setError(errorMessage(loadError))
+    }), 1_000)
     return () => {
       ignore = true
-      if (timer !== undefined) clearInterval(timer)
+      clearInterval(timer)
     }
   }, [instance?.instance])
 

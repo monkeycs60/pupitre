@@ -128,6 +128,45 @@ test('affiche l’activité courante pendant une promotion', async () => {
   expect(status.textContent).toContain('585/587')
 })
 
+test('commence à suivre la progression après un lancement depuis l’état idle', async () => {
+  let promotionReads = 0
+  globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input)
+    const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+    if (url.endsWith('/api/settings')) return json({})
+    if (url.endsWith('/api/promotion/stable')) return json({ running: false })
+    if (url.endsWith('/api/promotion') && method === 'POST') return json({
+      state: 'running', sha: null, startedAt: 'now', finishedAt: null, steps: {}, events: [],
+    })
+    if (url.endsWith('/api/promotion')) {
+      promotionReads += 1
+      return json(promotionReads === 1
+        ? { state: 'idle', sha: null, startedAt: null, finishedAt: null, steps: {}, events: [] }
+        : {
+            state: 'running', sha: null, startedAt: 'now', finishedAt: null,
+            steps: { preflight: 'done', build: 'running' },
+            events: [{ step: 'build', status: 'running', message: 'compilation Rust' }],
+          })
+    }
+    throw new Error(`route inattendue: ${method} ${url}`)
+  }) as typeof fetch
+
+  render(createElement(AppSettingsView, {
+    instance: {
+      ...stableHealth,
+      instance: 'dev',
+      port: 4821,
+      build: { ...stableHealth.build, source: 'git' },
+    },
+  }))
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Promouvoir cette version' }))
+
+  await waitFor(() => {
+    expect(screen.getByRole('status').textContent).toContain('build · compilation Rust')
+  }, { timeout: 2_500 })
+})
+
 test('enregistre puis efface un token d’intégration sans jamais le relire', async () => {
   const writes: Array<Record<string, unknown>> = []
   let settings = {
