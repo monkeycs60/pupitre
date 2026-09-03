@@ -10,6 +10,7 @@ input,select,textarea { box-sizing:border-box; width:100%; color:#eee9e3; backgr
 textarea { resize:vertical; }
 button { border:1px solid #d96446; border-radius:6px; background:#d96446; color:#fff; padding:8px 10px; font:600 13px/1.2 inherit; cursor:pointer; }
 button.secondary { background:transparent; border-color:#57514b; color:#eee9e3; }
+button:disabled { cursor:wait; opacity:.45; }
 .actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
 #project { font-weight:600; }
 #annotations { margin:12px 0; padding-left:28px; max-height:180px; overflow:auto; }

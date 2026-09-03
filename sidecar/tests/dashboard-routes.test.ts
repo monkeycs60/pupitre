@@ -846,4 +846,21 @@ test("apparie l'extension puis protège la résolution visuelle par jeton", asyn
   expect(accepted.status).toBe(200);
   expect((await accepted.json() as { status: string }).status).toBe("unresolved");
   expect(accepted.headers.get("access-control-allow-origin")).toBe("chrome-extension://pupitre-test");
+
+  const repository = mkdtempSync(join(tmpdir(), "pupitre-visual-destination-"));
+  runGit(repository, "init", "-b", "master");
+  runGit(repository, "config", "user.email", "test@example.com");
+  runGit(repository, "config", "user.name", "Test");
+  writeFileSync(join(repository, "README.md"), "test");
+  runGit(repository, "add", "README.md");
+  runGit(repository, "commit", "-m", "initial");
+  const project = await createProject(repository);
+  current.deps.visualFeedback!.associateOrigin("http://localhost:5179", "/", project.id);
+  const resolved = await visualPost("/api/visual-feedback/resolve", {
+    origin: "http://localhost:5179",
+    pathname: "/",
+  }, token);
+  const payload = await resolved.json() as { status: string; destinations?: { currentBranch: string; branches: string[] } };
+  expect(payload.status).toBe("resolved");
+  expect(payload.destinations).toEqual(expect.objectContaining({ currentBranch: "master", branches: ["master"] }));
 });

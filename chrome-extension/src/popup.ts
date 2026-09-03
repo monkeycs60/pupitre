@@ -29,6 +29,7 @@ function updateConversations() {
 
 async function load() {
   errorBox.textContent = "";
+  ($("send") as HTMLButtonElement).disabled = true;
   const stored = await send({ type: "GET_STATE" });
   if (!stored.paired) {
     $("connection").hidden = false;
@@ -50,12 +51,14 @@ async function load() {
   }
   status.textContent = "Connecté";
   $("project").textContent = resolved.project.name;
-  const loadedDestinations = await send({ type: "DESTINATIONS", projectId: resolved.project.id }) as Destinations;
+  const loadedDestinations = resolved.destinations
+    ?? await send({ type: "DESTINATIONS", projectId: resolved.project.id }) as Destinations;
   destinations = loadedDestinations;
   $("destination").hidden = false;
   const branch = $("branch") as HTMLSelectElement;
   branch.replaceChildren(...loadedDestinations.branches.map((name) => new Option(name, name, false, name === loadedDestinations.currentBranch)));
   updateConversations();
+  ($("send") as HTMLButtonElement).disabled = false;
   const annotations = stored.carts?.[resolved.project.id] ?? [];
   $("annotations").replaceChildren(...annotations.map((item: any) => {
     const li = document.createElement("li");

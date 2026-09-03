@@ -33,7 +33,7 @@ export interface ConversationSummary {
 }
 
 export type Resolution =
-  | { status: "resolved"; project: ProjectSummary }
+  | { status: "resolved"; project: ProjectSummary; destinations?: Destinations }
   | { status: "ambiguous" | "unresolved"; projects: ProjectSummary[] };
 
 export interface Destinations {

@@ -1282,11 +1282,14 @@ export function createServer(deps: ServerDeps) {
             const pageOrigin = requiredString(body, "origin");
             const pageUrl = new URL(pageOrigin);
             const port = Number(pageUrl.port || (pageUrl.protocol === "https:" ? 443 : 80));
-            return corsJson(deps.visualFeedback.resolveOrigin({
+            const resolution = deps.visualFeedback.resolveOrigin({
               origin: pageUrl.origin,
               pathname: optionalTrimmed(body, "pathname") ?? "/",
               cwd: listeningProcessCwd(port),
-            }));
+            });
+            return corsJson(resolution.status === "resolved"
+              ? { ...resolution, destinations: deps.visualFeedback.destinations(resolution.project.id) }
+              : resolution);
           }
           if (request.method === "PUT" && pathname === "/api/visual-feedback/origins") {
             const body = await readObject(request);
