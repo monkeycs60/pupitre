@@ -52,6 +52,9 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
   const promotionFailure = promotion?.state === 'failed'
     ? [...promotion.events].reverse().find((event) => event.status === 'failed')
     : null
+  const promotionActivity = promotion?.state === 'running'
+    ? promotion.events.at(-1) ?? null
+    : null
 
   useEffect(() => {
     let ignore = false
@@ -261,6 +264,16 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
             ) : null}
           </div>
           {instance.build.dirty && !allowDirty ? <p className="settings-help">Valider ou remiser les changements d’abord.</p> : null}
+          {promotion?.state === 'running' ? (
+            <div className="settings-promotion-activity" role="status" aria-live="polite">
+              <strong>Promotion en cours</strong>
+              <span>
+                {promotionActivity
+                  ? `${promotionActivity.step} · ${promotionActivity.message}`
+                  : 'Démarrage…'}
+              </span>
+            </div>
+          ) : null}
           {promotion?.state === 'failed' ? (
             <div className="settings-promotion-error" role="alert">
               <strong>Promotion échouée</strong>

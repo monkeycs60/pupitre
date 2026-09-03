@@ -95,6 +95,39 @@ test('affiche immédiatement la cause d’une promotion échouée', async () => 
   expect(alert.textContent).toContain('build a échoué (1)')
 })
 
+test('affiche l’activité courante pendant une promotion', async () => {
+  globalThis.fetch = mock(async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input)
+    if (url.endsWith('/api/settings')) return json({})
+    if (url.endsWith('/api/promotion/stable')) return json({ running: true })
+    if (url.endsWith('/api/promotion')) return json({
+      state: 'running',
+      sha: 'd4a5c5f',
+      startedAt: '2026-09-03T09:01:28.000Z',
+      finishedAt: null,
+      steps: { preflight: 'done', build: 'running', promotion: 'running' },
+      events: [
+        { step: 'build', status: 'running', message: 'construction des binaires release' },
+        { step: 'promotion', status: 'running', message: 'Building [=======================> ] 585/587: app' },
+      ],
+    })
+    throw new Error(`route inattendue: ${url}`)
+  }) as typeof fetch
+
+  render(createElement(AppSettingsView, {
+    instance: {
+      ...stableHealth,
+      instance: 'dev',
+      port: 4821,
+      build: { ...stableHealth.build, source: 'git' },
+    },
+  }))
+
+  const status = await screen.findByRole('status')
+  expect(status.textContent).toContain('Promotion en cours')
+  expect(status.textContent).toContain('585/587')
+})
+
 test('enregistre puis efface un token d’intégration sans jamais le relire', async () => {
   const writes: Array<Record<string, unknown>> = []
   let settings = {
