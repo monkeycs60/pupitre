@@ -32,6 +32,7 @@ interface Health {
   build?: { sha: string; source: 'build' | 'git' } | null
 }
 interface Activity { busy: boolean; [key: string]: boolean | number }
+interface TerminateProcessGroupOptions { timeoutMs?: number }
 
 const root = join(import.meta.dir, '..')
 const installRoot = join(homedir(), '.local/opt/pupitre')
@@ -201,6 +202,40 @@ function validStableHealth(health: Health | null, origin: string): health is Hea
   return health?.ok === true && health.instance === 'stable' && health.port === expectedPort
 }
 
+function processGroupAlive(pid: number): boolean {
+  try {
+    process.kill(-pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function terminateProcessGroup(
+  pid: number,
+  options: TerminateProcessGroupOptions = {},
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 15_000
+  try { process.kill(-pid, 'SIGTERM') } catch {
+    try { process.kill(pid, 'SIGTERM') } catch {}
+  }
+
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!processGroupAlive(pid)) return
+    await Bun.sleep(50)
+  }
+
+  try { process.kill(-pid, 'SIGKILL') } catch {
+    try { process.kill(pid, 'SIGKILL') } catch {}
+  }
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (!processGroupAlive(pid)) return
+    await Bun.sleep(50)
+  }
+  throw new Error('Le groupe de processus de la stable ne s’est pas arrêté après SIGKILL.')
+}
+
 async function stopStable(origin: string, required: boolean, force = false): Promise<void> {
   const health = await fetchJson<Health>(`${origin}/api/health`)
   if (!health) {
@@ -216,20 +251,12 @@ async function stopStable(origin: string, required: boolean, force = false): Pro
   if (!Number.isInteger(health.appPid) || health.appPid <= 1) {
     throw new Error('La stable doit être fermée manuellement : son appPid est indisponible.')
   }
-  process.kill(health.appPid, 'SIGTERM')
-  const deadline = Date.now() + 15_000
-  while (Date.now() < deadline) {
-    let alive = true
-    try { process.kill(health.appPid, 0) } catch { alive = false }
-    if (!alive && !(await fetchJson<Health>(`${origin}/api/health`))) return
-    await Bun.sleep(250)
-  }
-  try { process.kill(health.appPid, 'SIGKILL') } catch {}
+  await terminateProcessGroup(health.appPid)
   for (let attempt = 0; attempt < 20; attempt += 1) {
     if (!(await fetchJson<Health>(`${origin}/api/health`))) return
     await Bun.sleep(250)
   }
-  throw new Error('La stable ne s’est pas arrêtée après SIGKILL.')
+  throw new Error('Le sidecar stable répond encore après l’arrêt de son groupe de processus.')
 }
 
 function activateRelease(release: string): void {
@@ -315,8 +342,7 @@ async function promote(options: PromotionOptions): Promise<void> {
       const runningHealth = await fetchJson<Health>(`${options.stableOrigin}/api/health`)
       if (runningHealth) await stopStable(options.stableOrigin, false, true)
       else if (launchedPid !== null) {
-        try { process.kill(launchedPid, 'SIGTERM') } catch {}
-        await Bun.sleep(500)
+        await terminateProcessGroup(launchedPid)
       }
       const previousPath = join(releasesDir, current)
       const previousVersion = parseVersion(readFileSync(join(previousPath, 'VERSION.json'), 'utf8'))
@@ -370,8 +396,7 @@ async function promote(options: PromotionOptions): Promise<void> {
     const runningHealth = await fetchJson<Health>(`${options.stableOrigin}/api/health`)
     if (runningHealth) await stopStable(options.stableOrigin, false, true)
     else if (launchedPid !== null) {
-      try { process.kill(launchedPid, 'SIGTERM') } catch {}
-      await Bun.sleep(500)
+      await terminateProcessGroup(launchedPid)
     }
     const previousPath = join(releasesDir, previousRelease)
     const previousVersion = parseVersion(readFileSync(join(previousPath, 'VERSION.json'), 'utf8'))

@@ -5,6 +5,7 @@ import {
   releaseDirectoryName,
   releasesToPrune,
   selectRollbackRelease,
+  terminateProcessGroup,
 } from './promote'
 
 test('retire toutes les variables Pupitre avant de lancer la stable', () => {
@@ -39,4 +40,17 @@ test('purge les anciennes releases sans supprimer la courante', () => {
     'ddd-20260901-140000',
   ]
   expect(releasesToPrune(releases, releases[1], 3)).toEqual([releases[0]])
+})
+
+test('arrête aussi les processus WebKit descendants avant une relance', async () => {
+  const processGroup = Bun.spawn(['bash', '-c', 'sleep 60 >/dev/null & echo $!; exec 1>&-; wait'], {
+    detached: true,
+    stdout: 'pipe',
+  })
+  const childPid = Number((await new Response(processGroup.stdout).text()).trim())
+
+  await terminateProcessGroup(processGroup.pid, { timeoutMs: 2_000 })
+
+  expect(() => process.kill(processGroup.pid, 0)).toThrow()
+  expect(() => process.kill(childPid, 0)).toThrow()
 })
