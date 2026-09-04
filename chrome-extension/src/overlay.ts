@@ -11,12 +11,18 @@ export interface LocatedAnnotation {
 
 export function locateAnnotation(annotation: Annotation, root: ParentNode = document): LocatedAnnotation | null {
   let element: Element | null = null;
+  let fallback: Element | null = null;
   for (const selector of annotation.selectors) {
     try {
-      element = root.querySelector(selector);
-      if (element) break;
+      const matches = root.querySelectorAll(selector);
+      fallback ??= matches[0] ?? null;
+      if (matches.length === 1) {
+        element = matches[0]!;
+        break;
+      }
     } catch {}
   }
+  element ??= fallback;
   if (!element) return null;
   const rect = element.getBoundingClientRect();
   return {

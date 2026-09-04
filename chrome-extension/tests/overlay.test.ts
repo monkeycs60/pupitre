@@ -27,3 +27,11 @@ test("signale un élément disparu au lieu de conserver des coordonnées périm�
   document.body.innerHTML = "";
   expect(locateAnnotation(annotation, document)).toBeNull();
 });
+
+test("ignore un sélecteur partagé au profit du sélecteur structurel unique", () => {
+  document.body.innerHTML = '<main><article class="card"></article><article class="card"></article></main>';
+  const cards = [...document.querySelectorAll(".card")];
+  cards[0]!.getBoundingClientRect = () => ({ left: 20, top: 10, width: 100, height: 50, right: 120, bottom: 60, x: 20, y: 10, toJSON() {} });
+  cards[1]!.getBoundingClientRect = () => ({ left: 220, top: 10, width: 100, height: 50, right: 320, bottom: 60, x: 220, y: 10, toJSON() {} });
+  expect(locateAnnotation({ ...annotation, selectors: ["article.card", "main > article:nth-of-type(2)"] }, document)?.left).toBe(220);
+});
