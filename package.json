@@ -1,7 +1,7 @@
 {
   "name": "pupitre",
   "scripts": {
-    "dev": "bun run scripts/dev.ts",
+    "dev": "doppler run -- bun run scripts/dev.ts",
     "dev:sidecar": "bun run scripts/dev.ts --sidecar",
     "dev:sidecar:watch": "bun run scripts/dev.ts --sidecar --watch",
     "dev:data:refresh": "bun run scripts/refresh-dev-data.ts",
@@ -16,5 +16,9 @@
     "@tauri-apps/cli": "^2.11.4"
   },
   "private": true,
-  "workspaces": ["sidecar", "ui", "chrome-extension"]
+  "workspaces": [
+    "sidecar",
+    "ui",
+    "chrome-extension"
+  ]
 }
