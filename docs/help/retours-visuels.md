@@ -19,8 +19,10 @@ Sur une page servie depuis `localhost`, `*.localhost` ou `127.0.0.1` :
 2. survole l’interface puis clique l’élément concerné ;
 3. saisis la correction souhaitée ;
 4. recommence pour ajouter d’autres annotations ;
-5. ouvre l’extension, choisis la branche et éventuellement une conversation existante ;
-6. envoie le panier.
+5. utilise le panier flottant à droite pour choisir la branche et éventuellement une conversation existante ;
+6. envoie directement à Pupitre sans rouvrir l’extension.
+
+Le rectangle rouge reste ancré à l’élément sélectionné pendant le scroll. La croix, le rectangle et la ligne du panier partagent le même survol : ils mettent en avant la zone et affichent la consigne. Le panneau peut être replié et disparaît lorsque le panier est vide.
 
 Les paniers sont séparés par projet. Si aucune conversation compatible n’est sélectionnée, Pupitre en crée automatiquement une dans le worktree de la branche choisie.
 

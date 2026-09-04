@@ -58,7 +58,13 @@ chrome.runtime.onMessage.addListener((message: any, sender: any, respond: (value
     if (message.type === "ASSOCIATE") return (await client()).associate(message.origin, message.pathname, message.projectId);
     if (message.type === "GET_STATE") {
       const stored = await state();
-      return { paired: Boolean(stored.token), port: stored.port ?? 4820, carts: stored.carts ?? {} };
+      return {
+        paired: Boolean(stored.token),
+        port: stored.port ?? 4820,
+        carts: stored.carts ?? {},
+        branches: stored.branches ?? {},
+        conversations: stored.conversations ?? {},
+      };
     }
     if (message.type === "SAVE_CONNECTION") {
       await chrome.storage.local.set({ token: message.token.trim(), port: Number(message.port) || 4820 });
@@ -66,6 +72,14 @@ chrome.runtime.onMessage.addListener((message: any, sender: any, respond: (value
     }
     if (message.type === "OPEN_POPUP") {
       await chrome.action.openPopup();
+      return { ok: true };
+    }
+    if (message.type === "SAVE_DESTINATION") {
+      const stored = await state();
+      await chrome.storage.local.set({
+        branches: { ...(stored.branches ?? {}), [message.projectId]: message.branch },
+        conversations: { ...(stored.conversations ?? {}), [message.projectId]: message.conversationId },
+      });
       return { ok: true };
     }
     if (message.type === "ADD_ANNOTATION") {
