@@ -276,7 +276,7 @@ export interface Conversation {
   ticket_instruction: string | null
   domains?: ConversationDomain[]
   proposed_domain_count?: number
-  origin_type?: 'sentry' | 'problem' | null
+  origin_type?: 'sentry' | 'problem' | 'promotion' | null
   origin_key?: string | null
   cli_session_id: string | null
   preset_id?: string | null
@@ -1018,6 +1018,16 @@ export interface PromotionState {
   finishedAt: string | null
   steps: Record<string, PromotionStepStatus>
   events: PromotionEvent[]
+}
+
+export type PromotionMissionState = 'running' | 'waiting_user' | 'succeeded' | 'failed'
+
+export interface PromotionMission {
+  conversationId: string
+  projectId: string
+  state: PromotionMissionState
+  startedAt: string
+  finishedAt: string | null
 }
 
 export type DocumentArtifact = HtmlDocument

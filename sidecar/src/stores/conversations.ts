@@ -31,7 +31,7 @@ export interface Conversation {
   ticket_id: string | null;
   ticket_key?: string | null;
   ticket_instruction: string | null;
-  origin_type?: "sentry" | "problem" | null;
+  origin_type?: "sentry" | "problem" | "promotion" | null;
   origin_key?: string | null;
   /** Reçoit le bridge MCP `conductor` (délégation de sous-tâches). */
   orchestrator: boolean;
@@ -98,7 +98,7 @@ export class ConversationStore {
     createdOnBranch?: string | null;
     ticketId?: string | null;
     ticketInstruction?: string | null;
-    originType?: "sentry" | "problem" | null;
+    originType?: "sentry" | "problem" | "promotion" | null;
     originKey?: string | null;
     firstMessage: string;
   }): Conversation {
@@ -148,11 +148,20 @@ export class ConversationStore {
     return this.get(id);
   }
 
-  setOrigin(id: string, originType: "sentry" | "problem" | null, originKey: string | null): Conversation | null {
+  setOrigin(id: string, originType: "sentry" | "problem" | "promotion" | null, originKey: string | null): Conversation | null {
     this.db.query(
       "UPDATE conversations SET origin_type = ?, origin_key = ?, updated_at = ? WHERE id = ?",
     ).run(originType, originKey, new Date().toISOString(), id);
     return this.get(id);
+  }
+
+  latestByOrigin(originType: "sentry" | "problem" | "promotion", originKey: string): Conversation | null {
+    const row = this.db.query(`
+      SELECT * FROM conversations
+      WHERE origin_type = ? AND origin_key = ? AND deleted_at IS NULL
+      ORDER BY created_at DESC LIMIT 1
+    `).get(originType, originKey) as any;
+    return row ? this.get(row.id) : null;
   }
 
   get(id: string): Conversation | null {

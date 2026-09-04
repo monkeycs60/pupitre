@@ -96,6 +96,11 @@ import type { ProblemService } from "./problems";
 import { buildInfo, readInstance, staleSourcesSince, type InstanceInfo } from "./instance";
 import { PromotionConflictError, type PromotionRunner } from "./promotion";
 import {
+  PromotionAgentConflictError,
+  PromotionAgentProjectError,
+  type PromotionAgentService,
+} from "./promotion-agent";
+import {
   createVisualFeedbackToken,
   listeningProcessCwd,
   verifyVisualFeedbackToken,
@@ -122,6 +127,7 @@ export interface ServerDeps {
   port: number;
   instance?: InstanceInfo;
   promotion?: PromotionRunner;
+  promotionAgent?: PromotionAgentService;
   projects: ProjectStore;
   conversations: ConversationStore;
   media: MediaStore;
@@ -1342,6 +1348,21 @@ export function createServer(deps: ServerDeps) {
 
         if (pathname === "/api/promotion" && !deps.promotion) {
           throw new HttpError(404, "promotion indisponible sur cette instance");
+        }
+        if (pathname === "/api/promotion/mission" && !deps.promotionAgent) {
+          throw new HttpError(404, "agent de promotion indisponible sur cette instance");
+        }
+        if (request.method === "GET" && pathname === "/api/promotion/mission") {
+          return json(deps.promotionAgent!.snapshot());
+        }
+        if (request.method === "POST" && pathname === "/api/promotion/mission") {
+          try {
+            return json(deps.promotionAgent!.start(), 202);
+          } catch (error) {
+            if (error instanceof PromotionAgentConflictError) throw new HttpError(409, error.message);
+            if (error instanceof PromotionAgentProjectError) throw new HttpError(422, error.message);
+            throw error;
+          }
         }
         if (request.method === "GET" && pathname === "/api/promotion") {
           return json(deps.promotion!.snapshot());

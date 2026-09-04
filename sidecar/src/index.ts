@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { openDb } from "./db";
 import { MediaStore } from "./media";
 import { ConversationRunner } from "./runner";
@@ -52,6 +53,7 @@ import { ConversationLinkStore } from "./stores/conversation-links";
 import { ProblemService } from "./problems";
 import { backgroundJobsEnabled, readInstance } from "./instance";
 import { PromotionRunner } from "./promotion";
+import { PromotionAgentService } from "./promotion-agent";
 import { VisualFeedbackService } from "./visual-feedback";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
@@ -190,6 +192,9 @@ if (process.argv.includes("--pupitre-mcp")) {
     domains,
     problemAxisRuns,
   );
+  const promotionAgent = instance.name === "dev"
+    ? new PromotionAgentService(join(import.meta.dir, "..", ".."), projects, conversations, runner)
+    : undefined;
   // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
   // tournent en parallèle du tour parent qui les a demandées.
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
@@ -281,6 +286,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     port,
     instance,
     promotion,
+    promotionAgent,
     shutdown: () => shutdownGracefully("requested"),
     projects,
     conversations,

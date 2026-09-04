@@ -55,6 +55,7 @@ import type {
   ProblemProjectPayload,
   InstanceHealth,
   PromotionState,
+  PromotionMission,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -206,6 +207,14 @@ export function startPromotion(options: { force?: boolean; timeoutMinutes?: numb
 
 export function cancelPromotion(): Promise<PromotionState> {
   return fetchJson('/api/promotion', { method: 'DELETE' })
+}
+
+export function getPromotionMission(signal?: AbortSignal): Promise<PromotionMission | null> {
+  return fetchJson('/api/promotion/mission', { signal })
+}
+
+export function startPromotionMission(): Promise<PromotionMission> {
+  return fetchJson('/api/promotion/mission', jsonPost({}))
 }
 
 // En développement, Vite peut répondre 502/503 pendant que Tauri compile puis

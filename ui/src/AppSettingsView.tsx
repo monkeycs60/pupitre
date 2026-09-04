@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react'
 import {
-  cancelPromotion,
-  getPromotion,
+  getPromotionMission,
   getSettings,
   getStableHealth,
-  startPromotion,
+  startPromotionMission,
   updateIntegrationTokens,
   updateSettings,
 } from './api'
-import type { FilesystemScope, InstanceHealth, PromotionState } from './types'
+import type { FilesystemScope, InstanceHealth, PromotionMission } from './types'
 import { DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { VisualFeedbackSettings } from './VisualFeedbackSettings'
+import { PromotionChat } from './PromotionChat'
 
 const DEFAULT_SCOPE: FilesystemScope = 'project-and-ai-roots'
 
@@ -22,8 +22,6 @@ function splitHeadings(value: string): string[] {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible de charger les paramètres.'
 }
-
-const PROMOTION_STEPS = ['preflight', 'build', 'stage', 'drain', 'switch', 'launch', 'verify', 'prune']
 
 export function AppSettingsView({ instance = null }: { instance?: InstanceHealth | null }) {
   const [scope, setScope] = useState<FilesystemScope>(DEFAULT_SCOPE)
@@ -46,17 +44,10 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
     clickup: '',
     gitlab: '',
   })
-  const [promotion, setPromotion] = useState<PromotionState | null>(null)
+  const [promotionMission, setPromotionMission] = useState<PromotionMission | null>(null)
   const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
-  const [allowDirty, setAllowDirty] = useState(false)
   const [longTaskThreshold, setLongTaskThreshold] = useState(120)
   const [visualFeedbackPaired, setVisualFeedbackPaired] = useState(false)
-  const promotionFailure = promotion?.state === 'failed'
-    ? [...promotion.events].reverse().find((event) => event.status === 'failed')
-    : null
-  const promotionActivity = promotion?.state === 'running'
-    ? promotion.events.at(-1) ?? null
-    : null
 
   useEffect(() => {
     let ignore = false
@@ -90,9 +81,9 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
     if (instance?.instance !== 'dev') return
     let ignore = false
     async function refresh() {
-      const [nextPromotion, nextStable] = await Promise.all([getPromotion(), getStableHealth()])
+      const [nextPromotion, nextStable] = await Promise.all([getPromotionMission(), getStableHealth()])
       if (ignore) return
-      setPromotion(nextPromotion)
+      setPromotionMission(nextPromotion)
       setStableHealth('running' in nextStable ? null : nextStable)
     }
     void refresh().catch((loadError: unknown) => {
@@ -107,10 +98,10 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
     }
   }, [instance?.instance])
 
-  async function promote(options: { force?: boolean; skipBuild?: boolean } = {}) {
+  async function startAgentPromotion() {
     setError(null)
     try {
-      setPromotion(await startPromotion(options))
+      setPromotionMission(await startPromotionMission())
     } catch (promotionError: unknown) {
       setError(errorMessage(promotionError))
     }
@@ -234,64 +225,27 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
                 : 'non lancée'}
             </p>
           </div>
-          {instance.build.dirty ? (
-            <label className="settings-checkbox-label">
-              <input type="checkbox" checked={allowDirty} onChange={(event) => setAllowDirty(event.target.checked)} />
-              Autoriser un arbre modifié
-            </label>
-          ) : null}
           <div className="settings-token-actions">
             <button
               type="button"
               className="primary-button"
-              disabled={promotion?.state === 'running' || (instance.build.dirty && !allowDirty)}
-              onClick={() => void promote()}
+              disabled={promotionMission?.state === 'running' || promotionMission?.state === 'waiting_user'}
+              onClick={() => void startAgentPromotion()}
             >
-              Promouvoir cette version
+              {promotionMission?.state === 'succeeded' || promotionMission?.state === 'failed'
+                ? 'Confier une nouvelle promotion à Luna'
+                : 'Confier la promotion à Luna'}
             </button>
-            {promotion?.state === 'running' ? (
-              <>
-                <button type="button" className="secondary-button" onClick={() => void cancelPromotion().then(setPromotion)}>Annuler</button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => void cancelPromotion().then(() => promote({ force: true, skipBuild: true }))}
-                >
-                  Forcer la bascule
-                </button>
-              </>
-            ) : null}
           </div>
-          {instance.build.dirty && !allowDirty ? <p className="settings-help">Valider ou remiser les changements d’abord.</p> : null}
-          {promotion?.state === 'running' ? (
-            <div className="settings-promotion-activity" role="status" aria-live="polite">
-              <strong>Promotion en cours</strong>
-              <span>
-                {promotionActivity
-                  ? `${promotionActivity.step} · ${promotionActivity.message}`
-                  : 'Démarrage…'}
-              </span>
-            </div>
-          ) : null}
-          {promotion?.state === 'failed' ? (
-            <div className="settings-promotion-error" role="alert">
-              <strong>Promotion échouée</strong>
-              <span>
-                {promotionFailure
-                  ? `${promotionFailure.step} · ${promotionFailure.message}`
-                  : 'La promotion n’a pas pu être terminée. Relance-la après correction.'}
-              </span>
-            </div>
-          ) : null}
-          {promotion ? (
-            <ol className="settings-promotion-steps">
-              {PROMOTION_STEPS.map((step) => {
-                const last = [...promotion.events].reverse().find((event) => event.step === step)
-                return <li key={step} className={promotion.steps[step] ? `is-${promotion.steps[step]}` : ''}>
-                  <strong>{step}</strong>{last ? ` · ${last.message}` : ''}
-                </li>
-              })}
-            </ol>
+          <p className="settings-help">
+            Luna committe l’état courant, teste, promeut, vérifie la stable et répare seule les incidents techniques.
+          </p>
+          {promotionMission ? (
+            <PromotionChat
+              mission={promotionMission}
+              onMissionChange={setPromotionMission}
+              onError={(message) => setError(message || null)}
+            />
           ) : null}
         </div>
       ) : null}

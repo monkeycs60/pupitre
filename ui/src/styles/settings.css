@@ -130,43 +130,50 @@
   gap: var(--space-2);
 }
 
-.settings-promotion-steps {
+.promotion-chat {
   display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding-left: var(--space-5);
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  min-height: 420px;
+  max-height: 68vh;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  background: var(--bg-base);
 }
 
-.settings-promotion-steps .is-running { color: var(--warn); }
-.settings-promotion-steps .is-done { color: var(--ok); }
-.settings-promotion-steps .is-failed { color: var(--danger); }
-
-.settings-promotion-error {
-  display: grid;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
-  border-radius: 8px;
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 9%, transparent);
+.promotion-chat-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
 }
 
-.settings-promotion-activity {
-  display: grid;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
-  border-radius: 8px;
-  color: var(--text);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+.promotion-chat-status > div { display: grid; gap: 2px; }
+.promotion-chat-status span { color: var(--text-muted); font-size: var(--text-xs); }
+.promotion-chat-status.is-running strong { color: var(--warn); }
+.promotion-chat-status.is-waiting_user strong { color: var(--accent); }
+.promotion-chat-status.is-succeeded strong { color: var(--ok); }
+.promotion-chat-status.is-failed strong { color: var(--danger); }
+
+.promotion-chat-events {
+  min-height: 280px;
+  overflow: auto;
+  padding: var(--space-4);
 }
 
-.settings-promotion-activity span {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  overflow-wrap: anywhere;
+.promotion-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+}
+
+.promotion-chat-composer textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
 }

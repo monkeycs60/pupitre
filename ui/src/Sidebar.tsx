@@ -774,7 +774,7 @@ export const Sidebar = memo(function Sidebar({
                           ticketId: context.ticket_id,
                           ticketKey: context.ticket_key,
                           branch: context.origin_type === 'sentry' ? null : groupLinks?.branch ?? null,
-                          originType: context.origin_type,
+                          originType: context.origin_type === 'promotion' ? null : context.origin_type,
                           originKey: context.origin_key,
                         })
                       }}

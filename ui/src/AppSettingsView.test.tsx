@@ -38,14 +38,12 @@ test('masque la promotion dans l’instance stable', async () => {
   expect(screen.queryByRole('heading', { name: 'Instance' })).toBeNull()
 })
 
-test('affiche la promotion en dev et bloque un arbre modifié', async () => {
+test('confie aussi un arbre modifié à Luna', async () => {
   globalThis.fetch = mock(async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input)
     if (url.endsWith('/api/settings')) return json({})
     if (url.endsWith('/api/promotion/stable')) return json({ running: false })
-    if (url.endsWith('/api/promotion')) return json({
-      state: 'idle', sha: null, startedAt: null, finishedAt: null, steps: {}, events: [],
-    })
+    if (url.endsWith('/api/promotion/mission')) return json(null)
     throw new Error(`route inattendue: ${url}`)
   }) as typeof fetch
   render(createElement(AppSettingsView, {
@@ -57,25 +55,19 @@ test('affiche la promotion en dev et bloque un arbre modifié', async () => {
     },
   }))
   expect(await screen.findByRole('heading', { name: 'Instance' })).toBeTruthy()
-  expect((screen.getByRole('button', { name: 'Promouvoir cette version' }) as HTMLButtonElement).disabled).toBe(true)
-  expect(screen.getByText(/Valider ou remiser/)).toBeTruthy()
+  expect((screen.getByRole('button', { name: 'Confier la promotion à Luna' }) as HTMLButtonElement).disabled).toBe(false)
+  expect(screen.getByText(/Luna committe l’état courant/)).toBeTruthy()
 })
 
-test('affiche immédiatement la cause d’une promotion échouée', async () => {
+test('affiche le chat et l’état d’une mission en cours', async () => {
   globalThis.fetch = mock(async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input)
     if (url.endsWith('/api/settings')) return json({})
     if (url.endsWith('/api/promotion/stable')) return json({ running: true })
-    if (url.endsWith('/api/promotion')) return json({
-      state: 'failed',
-      sha: 'f21d154',
-      startedAt: '2026-09-03T08:43:50.000Z',
-      finishedAt: '2026-09-03T08:44:01.000Z',
-      steps: { preflight: 'done', build: 'running', promotion: 'failed' },
-      events: [
-        { step: 'build', status: 'running', message: 'construction des binaires release' },
-        { step: 'promotion', status: 'failed', message: 'build a échoué (1)' },
-      ],
+    if (url.includes('/api/conversations/c1/events')) return json({ events: [], nextBefore: null })
+    if (url.endsWith('/api/promotion/mission')) return json({
+      conversationId: 'c1', projectId: 'p1', state: 'running',
+      startedAt: '2026-09-03T08:43:50.000Z', finishedAt: null,
     })
     throw new Error(`route inattendue: ${url}`)
   }) as typeof fetch
@@ -89,65 +81,25 @@ test('affiche immédiatement la cause d’une promotion échouée', async () => 
     },
   }))
 
-  const alert = await screen.findByRole('alert')
-  expect(alert.textContent).toContain('Promotion échouée')
-  expect(alert.textContent).toContain('promotion')
-  expect(alert.textContent).toContain('build a échoué (1)')
+  expect(await screen.findByText('Luna travaille')).toBeTruthy()
+  expect((screen.getByLabelText('Répondre à Luna') as HTMLTextAreaElement).disabled).toBe(true)
 })
 
-test('affiche l’activité courante pendant une promotion', async () => {
-  globalThis.fetch = mock(async (input: string | URL | Request) => {
-    const url = String(input instanceof Request ? input.url : input)
-    if (url.endsWith('/api/settings')) return json({})
-    if (url.endsWith('/api/promotion/stable')) return json({ running: true })
-    if (url.endsWith('/api/promotion')) return json({
-      state: 'running',
-      sha: 'd4a5c5f',
-      startedAt: '2026-09-03T09:01:28.000Z',
-      finishedAt: null,
-      steps: { preflight: 'done', build: 'running', promotion: 'running' },
-      events: [
-        { step: 'build', status: 'running', message: 'construction des binaires release' },
-        { step: 'promotion', status: 'running', message: 'Building [=======================> ] 585/587: app' },
-      ],
-    })
-    throw new Error(`route inattendue: ${url}`)
-  }) as typeof fetch
-
-  render(createElement(AppSettingsView, {
-    instance: {
-      ...stableHealth,
-      instance: 'dev',
-      port: 4821,
-      build: { ...stableHealth.build, source: 'git' },
-    },
-  }))
-
-  const status = await screen.findByRole('status')
-  expect(status.textContent).toContain('Promotion en cours')
-  expect(status.textContent).toContain('585/587')
-})
-
-test('commence à suivre la progression après un lancement depuis l’état idle', async () => {
-  let promotionReads = 0
+test('crée la mission au clic', async () => {
+  let started = false
   globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input)
     const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
     if (url.endsWith('/api/settings')) return json({})
     if (url.endsWith('/api/promotion/stable')) return json({ running: false })
-    if (url.endsWith('/api/promotion') && method === 'POST') return json({
-      state: 'running', sha: null, startedAt: 'now', finishedAt: null, steps: {}, events: [],
-    })
-    if (url.endsWith('/api/promotion')) {
-      promotionReads += 1
-      return json(promotionReads === 1
-        ? { state: 'idle', sha: null, startedAt: null, finishedAt: null, steps: {}, events: [] }
-        : {
-            state: 'running', sha: null, startedAt: 'now', finishedAt: null,
-            steps: { preflight: 'done', build: 'running' },
-            events: [{ step: 'build', status: 'running', message: 'compilation Rust' }],
-          })
+    if (url.includes('/api/conversations/c1/events')) return json({ events: [], nextBefore: null })
+    if (url.endsWith('/api/promotion/mission') && method === 'POST') {
+      started = true
+      return json({ conversationId: 'c1', projectId: 'p1', state: 'running', startedAt: 'now', finishedAt: null })
     }
+    if (url.endsWith('/api/promotion/mission')) return json(started
+      ? { conversationId: 'c1', projectId: 'p1', state: 'running', startedAt: 'now', finishedAt: null }
+      : null)
     throw new Error(`route inattendue: ${method} ${url}`)
   }) as typeof fetch
 
@@ -160,10 +112,11 @@ test('commence à suivre la progression après un lancement depuis l’état idl
     },
   }))
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Promouvoir cette version' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Confier la promotion à Luna' }))
 
   await waitFor(() => {
-    expect(screen.getByRole('status').textContent).toContain('build · compilation Rust')
+    expect(started).toBe(true)
+    expect(screen.getByText('Luna travaille')).toBeTruthy()
   }, { timeout: 2_500 })
 })
 
