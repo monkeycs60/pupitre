@@ -2366,3 +2366,19 @@ test("un nom de branche qui s'évaderait du dossier géré est refusé", async (
   });
   expect(refused.status).toBe(400);
 });
+
+test("/api/health ne date frontendAt qu'après le premier appel de la fenêtre", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const initial = await (await fetch(`${current.baseUrl}/api/health`)).json();
+  expect(initial.frontendAt).toBeNull();
+
+  const visibility = await fetch(`${current.baseUrl}/api/activity/visibility`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ active: true }),
+  });
+  expect(visibility.status).toBe(204);
+
+  const after = await (await fetch(`${current.baseUrl}/api/health`)).json();
+  expect(typeof after.frontendAt).toBe("string");
+});

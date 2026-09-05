@@ -29,6 +29,7 @@ interface Health {
   instance: 'stable' | 'dev'
   port: number
   appPid: number
+  frontendAt?: string | null
   build?: { sha: string; source: 'build' | 'git' } | null
 }
 interface Activity { busy: boolean; [key: string]: boolean | number }
@@ -285,26 +286,37 @@ X-GNOME-WMClass=fr.clementserizay.pupitre
 }
 
 function launchStable(): number {
+  const log = Bun.file(join(installRoot, 'stable.log'))
   const child = Bun.spawn([join(currentLink, 'app')], {
     cwd: installRoot,
     env: cleanEnv(process.env),
     detached: true,
     stdin: 'ignore',
-    stdout: 'ignore',
-    stderr: 'ignore',
+    stdout: log,
+    stderr: log,
   })
   child.unref()
   return child.pid
 }
 
+/// Un sidecar sain ne prouve rien de la fenêtre : une release dont le bundle
+/// ne s'exécute pas répond `/api/health` sur le bon SHA derrière un écran noir.
+/// `frontendAt` n'est daté que lorsque la webview a atteint son premier appel,
+/// donc lorsqu'elle a rendu quelque chose.
 async function verifyStable(origin: string, sha: string): Promise<void> {
-  const deadline = Date.now() + 30_000
+  const deadline = Date.now() + 60_000
+  let buildSeen = false
   while (Date.now() < deadline) {
     const health = await fetchJson<Health>(`${origin}/api/health`)
-    if (health?.build?.sha === sha && health.build.source === 'build') return
+    if (health?.build?.sha === sha && health.build.source === 'build') {
+      buildSeen = true
+      if (typeof health.frontendAt === 'string') return
+    }
     await Bun.sleep(1_000)
   }
-  throw new Error(`la stable ne répond pas avec le build ${sha}`)
+  throw new Error(buildSeen
+    ? `la stable répond sur ${sha} mais sa fenêtre reste vide`
+    : `la stable ne répond pas avec le build ${sha}`)
 }
 
 function pruneReleases(current: string): void {

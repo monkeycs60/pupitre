@@ -1157,6 +1157,7 @@ export function createServer(deps: ServerDeps) {
   const instance = deps.instance ?? readInstance({ ...process.env, PUPITRE_PORT: String(deps.port) });
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
+  let frontendAt: string | null = null;
   const build = buildInfo();
   const sockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
@@ -1326,6 +1327,7 @@ export function createServer(deps: ServerDeps) {
             pid: process.pid,
             appPid: process.ppid,
             startedAt,
+            frontendAt,
             build,
             staleSources: staleSourcesSince(startedAtMs),
           });
@@ -2022,6 +2024,7 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "POST" && pathname === "/api/activity/visibility") {
           const body = await readObject(request);
           if (typeof body.active !== "boolean") throw new HttpError(400, "champ active invalide");
+          frontendAt ??= new Date().toISOString();
           deps.integrationsRefresher.setActive(body.active);
           return empty(204);
         }
