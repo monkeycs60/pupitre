@@ -1158,6 +1158,11 @@ export function createServer(deps: ServerDeps) {
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
   let frontendAt: string | null = null;
+  // Signal de fenêtre vivante lu par la promotion. Deux sources, parce qu'un
+  // seul POST perdu au démarrage laisserait une release saine pour morte : la
+  // visibilité, émise au montage, et les canaux WebSocket que l'interface
+  // rouvre tant qu'ils tombent.
+  const markFrontendAlive = () => { frontendAt ??= new Date().toISOString(); };
   const build = buildInfo();
   const sockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
@@ -2024,7 +2029,7 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "POST" && pathname === "/api/activity/visibility") {
           const body = await readObject(request);
           if (typeof body.active !== "boolean") throw new HttpError(400, "champ active invalide");
-          frontendAt ??= new Date().toISOString();
+          markFrontendAlive();
           deps.integrationsRefresher.setActive(body.active);
           return empty(204);
         }
@@ -4281,10 +4286,12 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "GET" && pathname === "/ws") {
           const channel = url.searchParams.get("channel");
           if (channel === "quotas") {
+            markFrontendAlive();
             if (server.upgrade(request, { data: { channel: "quotas" } })) return;
             throw new HttpError(400, "upgrade WebSocket refusé");
           }
           if (channel === "fleet") {
+            markFrontendAlive();
             if (server.upgrade(request, { data: { channel: "fleet" } })) return;
             throw new HttpError(400, "upgrade WebSocket refusé");
           }

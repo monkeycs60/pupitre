@@ -96,12 +96,22 @@ function lastDigest(events: AppEvent[]): Extract<AppEvent, { type: 'conversation
 
 function App() {
   useEffect(() => {
+    let ignore = false
     const reportVisibility = () => {
       void setAppVisibility(document.visibilityState === 'visible').catch(() => {})
     }
-    reportVisibility()
+    // La fenêtre peut être prête avant que le sidecar écoute : le premier
+    // rapport est réessayé, sans quoi le rafraîchissement des intégrations
+    // resterait éteint jusqu'au prochain changement de focus.
+    void retryUntilAvailable(
+      () => setAppVisibility(document.visibilityState === 'visible'),
+      { cancelled: () => ignore },
+    )
     document.addEventListener('visibilitychange', reportVisibility)
-    return () => document.removeEventListener('visibilitychange', reportVisibility)
+    return () => {
+      ignore = true
+      document.removeEventListener('visibilitychange', reportVisibility)
+    }
   }, [])
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [selectedConversation, setSelectedConversation] =

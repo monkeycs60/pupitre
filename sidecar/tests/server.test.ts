@@ -2367,6 +2367,25 @@ test("un nom de branche qui s'évaderait du dossier géré est refusé", async (
   expect(refused.status).toBe(400);
 });
 
+test("/api/health date frontendAt sur l'ouverture d'un canal de l'interface", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  expect((await (await fetch(`${current.baseUrl}/api/health`)).json()).frontendAt).toBeNull();
+
+  await new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(`${current!.baseUrl.replace("http", "ws")}/ws?channel=fleet`);
+    const timeout = setTimeout(() => reject(new Error("timeout Fleet WS")), 2_000);
+    socket.addEventListener("open", () => {
+      clearTimeout(timeout);
+      socket.close();
+      resolve();
+    });
+    socket.addEventListener("error", reject);
+  });
+
+  const health = await (await fetch(`${current.baseUrl}/api/health`)).json();
+  expect(typeof health.frontendAt).toBe("string");
+});
+
 test("/api/health ne date frontendAt qu'après le premier appel de la fenêtre", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const initial = await (await fetch(`${current.baseUrl}/api/health`)).json();
