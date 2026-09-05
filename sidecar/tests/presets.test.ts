@@ -23,6 +23,7 @@ test("seed les trois presets M2 une seule fois", () => {
   ]);
   expect(presets.list().every((preset) => preset.built_in)).toBe(true);
   expect(presets.get("builtin-quality")).toMatchObject({
+    model: "fable-5.1",
     review_provider: "claude",
     review_model: "opus",
     review_effort: "high",
@@ -51,6 +52,41 @@ test("le preset Vitesse garde Gardien aligné après personnalisation", () => {
     review_provider: "codex",
     review_model: "gpt-5.6-luna",
     review_effort: "xhigh",
+  });
+});
+
+test("migre une seule fois Qualité max de Fable 5 vers Fable 5.1", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-quality-fable-"));
+  const legacyDb = openDb(dir);
+  new PresetStore(legacyDb);
+  legacyDb.query(`
+    UPDATE presets SET model = 'fable-5' WHERE id = 'builtin-quality'
+  `).run();
+  legacyDb.query("DELETE FROM settings WHERE key = 'quality-preset-fable-5-1-v1'").run();
+  legacyDb.close();
+
+  const migratedDb = openDb(dir);
+  expect(new PresetStore(migratedDb).get("builtin-quality")).toMatchObject({
+    model: "fable-5.1",
+  });
+});
+
+test("laisse intact un Qualité max déjà personnalisé", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-quality-custom-"));
+  const legacyDb = openDb(dir);
+  new PresetStore(legacyDb).update("builtin-quality", {
+    name: "Qualité max",
+    provider: "claude",
+    model: "sonnet",
+    effort: "high",
+    speed: null,
+    orchestrator: true,
+  });
+  legacyDb.query("DELETE FROM settings WHERE key = 'quality-preset-fable-5-1-v1'").run();
+  legacyDb.close();
+
+  expect(new PresetStore(openDb(dir)).get("builtin-quality")).toMatchObject({
+    model: "sonnet",
   });
 });
 

@@ -100,7 +100,7 @@ const BUILT_INS: ReadonlyArray<BuiltInPreset> = [
     id: "builtin-quality",
     name: "Qualité max",
     provider: "claude",
-    model: "fable-5",
+    model: "fable-5.1",
     effort: "max",
     speed: null,
     orchestrator: true,

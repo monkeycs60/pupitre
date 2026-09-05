@@ -2,7 +2,12 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { countConversationMessages } from "./message-count";
-import { MESSAGE_COUNT_MIGRATION_KEY, SettingsStore, SPEED_REVIEW_MIGRATION_KEY } from "./stores/settings";
+import {
+  MESSAGE_COUNT_MIGRATION_KEY,
+  QUALITY_FABLE_51_MIGRATION_KEY,
+  SettingsStore,
+  SPEED_REVIEW_MIGRATION_KEY,
+} from "./stores/settings";
 import { defaultDataDir, readInstance } from "./instance";
 
 export function dataDir(): string {
@@ -809,6 +814,18 @@ export function openDb(dir: string = dataDir()): Database {
         AND review_effort = 'high';
     `);
     new SettingsStore(db).set(SPEED_REVIEW_MIGRATION_KEY, true);
+  }
+  const qualityFableMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
+    .get(QUALITY_FABLE_51_MIGRATION_KEY);
+  if (!qualityFableMigrated) {
+    db.exec(`
+      UPDATE presets
+      SET model = 'fable-5.1'
+      WHERE id = 'builtin-quality'
+        AND provider = 'claude'
+        AND model = 'fable-5'
+    `);
+    new SettingsStore(db).set(QUALITY_FABLE_51_MIGRATION_KEY, true);
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
   widenProviderCheck(db, "skills");
