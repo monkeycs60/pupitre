@@ -310,6 +310,10 @@ async function verifyStable(origin: string, sha: string): Promise<void> {
     const health = await fetchJson<Health>(`${origin}/api/health`)
     if (health?.build?.sha === sha && health.build.source === 'build') {
       buildSeen = true
+      // Champ absent : sidecar antérieur à `frontendAt`, cas d'un rollback vers
+      // une release plus ancienne. `null` signale au contraire une fenêtre qui
+      // n'a jamais appelé.
+      if (!('frontendAt' in health)) return
       if (typeof health.frontendAt === 'string') return
     }
     await Bun.sleep(1_000)
@@ -412,11 +416,17 @@ async function promote(options: PromotionOptions): Promise<void> {
     }
     const previousPath = join(releasesDir, previousRelease)
     const previousVersion = parseVersion(readFileSync(join(previousPath, 'VERSION.json'), 'utf8'))
+    const cause = error instanceof Error ? error.message : String(error)
     activateRelease(previousPath)
     launchStable()
-    await verifyStable(options.stableOrigin, previousVersion.sha)
+    try {
+      await verifyStable(options.stableOrigin, previousVersion.sha)
+    } catch (restoration) {
+      const detail = restoration instanceof Error ? restoration.message : String(restoration)
+      throw new Error(`promotion de ${sha} annulée (${cause}), et restauration incertaine : ${detail}`)
+    }
     report('rollback', 'done', `stable restaurée sur ${previousVersion.sha}`)
-    throw new Error(`promotion de ${sha} annulée, stable restaurée : ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(`promotion de ${sha} annulée, stable restaurée : ${cause}`)
   }
   pruneReleases(basename(release))
   report('prune', 'done', 'trois dernières releases conservées')
