@@ -213,9 +213,10 @@ function text(value: string, isError = false) {
 // --- Schémas d'outils --------------------------------------------------------
 
 const MODELS_DOC =
-  "Modèles disponibles — provider 'claude' : fable-5 (le plus capable), opus, "
-  + "sonnet, haiku (le plus rapide/économe) ; provider 'codex' : gpt-5.6-sol "
-  + "(raisonnement profond), gpt-5.6-luna (rapide et économe), gpt-5.6-terra (polyvalent) "
+  "Modèles disponibles — provider 'claude' : fable-5.1 (le plus capable), fable-5, opus, "
+  + "sonnet, haiku (le plus rapide/économe) ; provider 'codex' : gpt-6-astra "
+  + "(le plus capable), gpt-5.6-sol (raisonnement profond), gpt-5.6-luna "
+  + "(rapide et économe), gpt-5.6-terra (polyvalent) "
   + "; provider 'grok' : grok-4.6 (le plus capable), grok-4.5.";
 const EFFORT_DOC =
   "effort : low | medium | high | xhigh (claude accepte aussi 'max'). "

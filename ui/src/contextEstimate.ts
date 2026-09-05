@@ -4,12 +4,14 @@ const MODEL_CONTEXT_WINDOWS: Partial<Record<Provider, Record<string, number>>> =
   // Valeurs de référence affichées comme estimations : aucune décision
   // automatique n'est prise à partir de cette jauge.
   claude: {
+    'fable-5.1': 1_000_000,
     'fable-5': 200_000,
     opus: 200_000,
     sonnet: 200_000,
     haiku: 200_000,
   },
   codex: {
+    'gpt-6-astra': 1_050_000,
     'gpt-5.6-sol': 400_000,
     'gpt-5.6-luna': 400_000,
     'gpt-5.6-terra': 400_000,
@@ -38,7 +40,13 @@ export function contextWindowTokens(provider: Provider, model: string): number {
 }
 
 export function formatContextWindow(tokens: number): string {
-  if (tokens >= 1_000_000 && tokens % 1_000_000 === 0) return `${tokens / 1_000_000}M`
+  if (tokens >= 1_000_000) {
+    const millions = tokens / 1_000_000
+    const label = Number.isInteger(millions)
+      ? String(millions)
+      : millions.toFixed(2).replace(/0+$/, '').replace(/\.$/, '').replace('.', ',')
+    return `${label}M`
+  }
   if (tokens >= 1_000 && tokens % 1_000 === 0) return `${tokens / 1_000}k`
   return tokens.toLocaleString('fr-FR')
 }

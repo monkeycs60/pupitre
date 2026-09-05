@@ -272,8 +272,8 @@ const EFFORTS_BY_PROVIDER = {
   grok: ["low", "medium", "high", "xhigh"],
 } as const satisfies Record<Provider, readonly string[]>;
 const MODELS_BY_PROVIDER = {
-  claude: ["fable-5", "opus", "sonnet", "haiku"],
-  codex: ["gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra"],
+  claude: ["fable-5.1", "fable-5", "opus", "sonnet", "haiku"],
+  codex: ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra"],
   grok: ["grok-4.6", "grok-4.5"],
 } as const satisfies Record<Provider, readonly string[]>;
 const SPEEDS = ["standard", "fast"] as const;

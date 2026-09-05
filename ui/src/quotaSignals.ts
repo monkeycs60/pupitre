@@ -6,8 +6,8 @@ import type { Provider, QuotaSnapshot, QuotaState, QuotaWindow } from './types'
 
 /** Modèles « chers » par provider : ceux que le pulse invite à consommer. */
 export const EXPENSIVE_MODELS = {
-  claude: ['fable-5', 'opus'],
-  codex: ['gpt-5.6-sol', 'gpt-5.6-terra'],
+  claude: ['fable-5.1', 'fable-5', 'opus'],
+  codex: ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra'],
   grok: ['grok-4.6'],
 } as const satisfies Record<Provider, readonly string[]>
 

@@ -5,6 +5,11 @@ import type { TurnOptions, EmitFn } from "./types";
 import { claudeMcpConfigArg } from "../conductor";
 import { aiRoots } from "../access";
 
+const CLAUDE_MODEL_IDS: Record<string, string> = {
+  "fable-5.1": "claude-fable-5-1",
+  "fable-5": "claude-fable-5",
+};
+
 export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   const bin = process.env.PUPITRE_CLAUDE_BIN ?? "claude";
   const userMessage = (prompt: string, images: string[]) => ({
@@ -22,7 +27,7 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     },
   });
   const permissionMode = opts.permissionMode === "default" ? "auto" : opts.permissionMode;
-  const model = opts.model === "fable-5" ? "fable" : opts.model;
+  const model = CLAUDE_MODEL_IDS[opts.model] ?? opts.model;
   const accessDirs = opts.filesystemScope === "full-system" ? ["/"] : aiRoots();
   // `--add-dir` élargit la racine visible, mais ne suffit pas pour les fichiers
   // d'instructions globaux : Claude les traite comme des fichiers sensibles.

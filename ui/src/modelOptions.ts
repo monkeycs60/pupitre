@@ -1,8 +1,8 @@
 import type { Provider } from './types'
 
 export const PROVIDER_MODELS = {
-  claude: ['fable-5', 'opus', 'sonnet', 'haiku'],
-  codex: ['gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra'],
+  claude: ['fable-5.1', 'fable-5', 'opus', 'sonnet', 'haiku'],
+  codex: ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra'],
   grok: ['grok-4.6', 'grok-4.5'],
 } as const satisfies Record<Provider, readonly string[]>
 
@@ -18,10 +18,12 @@ export const PROVIDER_EFFORTS = {
  * d'où cette table d'affichage. À tenir à jour à chaque sortie de modèle.
  */
 export const MODEL_LABELS: Record<string, string> = {
+  'fable-5.1': 'Fable 5.1',
   'fable-5': 'Fable 5',
   opus: 'Opus 5',
   sonnet: 'Sonnet 5',
   haiku: 'Haiku 4.5',
+  'gpt-6-astra': 'GPT-6 Astra',
   'gpt-5.6-sol': 'GPT-5.6 Sol',
   'gpt-5.6-luna': 'GPT-5.6 Luna',
   'gpt-5.6-terra': 'GPT-5.6 Terra',
@@ -40,11 +42,13 @@ export function modelLabel(model: string): string {
  * n'apprendrait rien et ferait quatre fois le même bruit.
  */
 export const MODEL_HINTS: Record<string, string> = {
-  'fable-5': 'le plus capable',
+  'fable-5.1': 'le plus capable',
+  'fable-5': 'génération précédente',
   opus: 'raisonnement profond',
   sonnet: 'équilibré',
   haiku: 'rapide et économe',
-  'gpt-5.6-sol': 'le plus capable',
+  'gpt-6-astra': 'le plus capable',
+  'gpt-5.6-sol': 'raisonnement profond',
   'gpt-5.6-luna': 'rapide et économe',
   'gpt-5.6-terra': 'polyvalent',
   'grok-4.6': 'le plus capable',
@@ -70,14 +74,16 @@ export interface ModelPricing {
 }
 
 /**
- * Tarifs indicatifs en dollars par million de tokens, relevés le 22 août 2026.
+ * Tarifs indicatifs en dollars par million de tokens, relevés le 6 septembre 2026.
  * Ils ne représentent jamais une facture d'abonnement : le sélecteur les
  * emploie seulement pour rendre le compromis coût/capacité lisible.
  */
 export const MODEL_PRICING: readonly ModelPricing[] = [
+  { provider: 'codex', model: 'gpt-6-astra', input: 10, output: 50 },
   { provider: 'codex', model: 'gpt-5.6-sol', input: 5, output: 30 },
   { provider: 'codex', model: 'gpt-5.6-luna', input: 0.2, output: 1.2 },
   { provider: 'codex', model: 'gpt-5.6-terra', input: 2, output: 12 },
+  { provider: 'claude', model: 'fable-5.1', input: 10, output: 50 },
   { provider: 'claude', model: 'fable-5', input: 10, output: 50 },
   { provider: 'claude', model: 'opus', input: 5, output: 25 },
   { provider: 'claude', model: 'sonnet', input: 2, output: 10 },

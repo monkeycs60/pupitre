@@ -200,7 +200,9 @@ test("les trois outils sont exposés avec des descriptions exploitables", async 
   // Ce que l'orchestrateur lit pour choisir : modèles, efforts, fast codex-only,
   // et la recommandation de routage.
   expect(delegate.description).toContain("gpt-5.6-luna");
+  expect(delegate.description).toContain("gpt-6-astra");
   expect(delegate.description).toContain("fable-5");
+  expect(delegate.description).toContain("fable-5.1");
   expect(delegate.description).toContain("grok-4.6");
   expect(delegate.description).toContain("xhigh");
   expect(delegate.description).toContain("check_quotas");

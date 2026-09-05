@@ -28,4 +28,5 @@ test('affiche le pourcentage et la fenêtre provider puis ouvre le handoff', () 
 test('formate les tailles de fenêtre sans bruit', () => {
   expect(formatContextWindow(256_000)).toBe('256k')
   expect(formatContextWindow(1_000_000)).toBe('1M')
+  expect(formatContextWindow(1_050_000)).toBe('1,05M')
 })

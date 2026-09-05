@@ -57,7 +57,7 @@ test("ajoute --effort quand un effort est fourni", async () => {
   expect(readFileSync(argsFile, "utf8")).toContain("--effort xhigh");
 });
 
-test("traduit l'ancien identifiant Fable 5 vers l'alias accepté par Claude Code", async () => {
+test("pinne Fable 5 et Fable 5.1 sur les identifiants Claude Code", async () => {
   const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
   process.env.PUPITRE_CLAUDE_BIN = FAKE;
   process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
@@ -70,9 +70,22 @@ test("traduit l'ancien identifiant Fable 5 vers l'alias accepté par Claude Code
     images: [],
   });
 
-  const args = readFileSync(argsFile, "utf8");
-  expect(args).toContain("--model fable");
-  expect(args).not.toContain("--model fable-5");
+  const fable5Args = readFileSync(argsFile, "utf8");
+  expect(fable5Args).toContain("--model claude-fable-5");
+  expect(fable5Args).not.toContain("--model fable-5");
+  expect(fable5Args).not.toContain("--model claude-fable-5-1");
+
+  await collect({
+    cwd: "/tmp",
+    model: "fable-5.1",
+    prompt: "analyse",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+  });
+
+  const fable51Args = readFileSync(argsFile, "utf8");
+  expect(fable51Args).toContain("--model claude-fable-5-1");
 });
 
 test("YOLO transmet le bypass dangereux à Claude", async () => {

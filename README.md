@@ -179,7 +179,7 @@ Le bridge est **sans état** : chaque outil est un appel à l'API D1 ci-dessus. 
 | `delegate_parallel({tasks:[…max 4]})` | Crée toutes les sous-tâches (le `429` de la limite de concurrence est encaissé et réessayé — c'est le séquençage attendu côté appelant), attend tout, rend les résultats dans l'ordre des tâches. |
 | `check_quotas()` | `GET /api/quotas` mis en forme lisible (fenêtres, % utilisé, reset). |
 
-Les descriptions d'outils sont la doc que lit l'orchestrateur : modèles disponibles (`claude` : fable-5 / opus / sonnet / haiku ; `codex` : gpt-5.6-sol / gpt-5.6-luna / gpt-5.6-terra ; `grok` : grok-4.6 / grok-4.5), efforts, `speed: fast` **codex uniquement**, et la recommandation de routage (sous-tâche d'exécution → `gpt-5.6-luna`, effort low/medium, fast ; `check_quotas` avant de choisir en cas d'hésitation).
+Les descriptions d'outils sont la doc que lit l'orchestrateur : modèles disponibles (`claude` : fable-5.1 / fable-5 / opus / sonnet / haiku ; `codex` : gpt-6-astra / gpt-5.6-sol / gpt-5.6-luna / gpt-5.6-terra ; `grok` : grok-4.6 / grok-4.5), efforts, `speed: fast` **codex uniquement**, et la recommandation de routage (sous-tâche d'exécution → `gpt-5.6-luna`, effort low/medium, fast ; `check_quotas` avant de choisir en cas d'hésitation).
 
 **Câblage, par tour** — piloté par la colonne de conversation `orchestrator` (INTEGER, **défaut 1**, acceptée par `POST /api/conversations`) :
 
