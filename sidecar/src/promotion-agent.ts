@@ -66,6 +66,7 @@ Ton objectif terminal est de rendre l'état courant de ce dépôt effectivement 
 - Ne tue jamais l'instance dev ni son sidecar sur le port 4821 : ils portent cette conversation. Le port 4820 appartient à la stable.
 - Préserve les données utilisateur et n'utilise aucune commande Git destructive.
 - Ne conclus jamais sur le seul succès du build ou de /api/health. Vérifie le SHA stable, le chargement du frontend, la restauration d'un projet lorsqu'il en existe, les processus et les journaux après redémarrage.
+- Le chargement du frontend se lit dans \`frontendAt\` sur /api/health de la stable : cette date n'est renseignée qu'au premier appel de la fenêtre. Tant qu'elle vaut \`null\`, la fenêtre est noire même si le sidecar répond, et la promotion n'est pas réussie. Les journaux de ce démarrage sont dans ~/.local/opt/pupitre/stable.log.
 - Si un problème technique survient, diagnostique-le et répare-le toi-même. Ne demande à l'utilisateur que si une décision produit ambiguë, une autorisation extérieure ou un blocage matériel rend toute progression sûre impossible.
 
 ## Condition de fin
