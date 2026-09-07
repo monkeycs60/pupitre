@@ -47,11 +47,17 @@ const LOOPBACK = /^https?:\/\/(?:(?:[^/]*\.)?localhost|127(?:\.\d{1,3}){3}|\[::1
  * boucle locale le script est injecté à la demande, sous `activeTab`.
  */
 async function ensureContentScript(tabId: number): Promise<void> {
-  const [probe] = await chrome.scripting.executeScript({
-    target: { tabId },
-    func: () => Boolean(document.getElementById("pupitre-visual-feedback-root")),
-  });
-  if (probe?.result === true) return;
+  // Sur une origine de `content_scripts`, le script arrive à `document_idle` :
+  // injecter avant la fin du chargement donnerait deux panneaux dans la page.
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const [probe] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => Boolean(document.getElementById("pupitre-visual-feedback-root")),
+    });
+    if (probe?.result === true) return;
+    if ((await chrome.tabs.get(tabId)).status === "complete") break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
   await chrome.scripting.insertCSS({ target: { tabId }, files: ["content.css"] });
   await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
 }
