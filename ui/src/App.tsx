@@ -75,12 +75,19 @@ const DesignView = lazy(() => import('./DesignView').then((module) => ({ default
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
 
 const DEFAULT_SIDEBAR_WIDTH = 296
-const MIN_SIDEBAR_WIDTH = 240
-const MAX_SIDEBAR_WIDTH = 420
+const MIN_SIDEBAR_WIDTH = 200
+/* La borne haute suit la fenêtre au lieu d'un palier fixe : sur un grand
+   écran la liste peut occuper la moitié de la surface, la conversation
+   gardant toujours de quoi s'afficher. */
+const SIDEBAR_WIDTH_RATIO = 0.6
 const SIDEBAR_WIDTH_STORAGE_KEY = 'pupitre.sidebar-width'
 
+function maxSidebarWidth(viewport = window.innerWidth): number {
+  return Math.max(MIN_SIDEBAR_WIDTH, Math.round(viewport * SIDEBAR_WIDTH_RATIO))
+}
+
 function clampSidebarWidth(width: number): number {
-  return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width))
+  return Math.min(maxSidebarWidth(), Math.max(MIN_SIDEBAR_WIDTH, width))
 }
 
 function storedSidebarWidth(): number {
@@ -310,6 +317,14 @@ function App() {
   }, [sidebarWidth])
 
   useEffect(() => {
+    function clampToViewport() {
+      setSidebarWidth((current) => clampSidebarWidth(current))
+    }
+    window.addEventListener('resize', clampToViewport)
+    return () => window.removeEventListener('resize', clampToViewport)
+  }, [])
+
+  useEffect(() => {
     let ignore = false
     void getSettings()
       .then((settings) => {
@@ -414,7 +429,7 @@ function App() {
       setSidebarWidth(MIN_SIDEBAR_WIDTH)
     } else if (event.key === 'End') {
       event.preventDefault()
-      setSidebarWidth(MAX_SIDEBAR_WIDTH)
+      setSidebarWidth(maxSidebarWidth())
     }
   }
 
@@ -905,7 +920,7 @@ function App() {
         aria-label="Redimensionner la barre latérale"
         aria-orientation="vertical"
         aria-valuemin={MIN_SIDEBAR_WIDTH}
-        aria-valuemax={MAX_SIDEBAR_WIDTH}
+        aria-valuemax={maxSidebarWidth()}
         aria-valuenow={sidebarWidth}
         tabIndex={0}
         title="Glisser pour redimensionner · double-cliquer pour réinitialiser"

@@ -15,10 +15,20 @@ export function inspectorGroupOf(view: InspectorView): InspectorGroup {
   return INSPECTOR_GROUPS.find((group) => group.tabs.some(([id]) => id === view))!
 }
 
+const MIN_INSPECTOR_WIDTH = 280
+
+/* Comme la sidebar, le panneau se borne à la fenêtre plutôt qu'à un palier
+   fixe : sur un grand écran il peut couvrir la quasi-totalité de la surface. */
+function maxInspectorWidth(viewport = window.innerWidth): number {
+  return Math.max(MIN_INSPECTOR_WIDTH, Math.round(viewport * 0.9))
+}
+
 export function WorkspaceInspector({ view, onViewChange, onClose, children }: { view: InspectorView; onViewChange: (view: InspectorView) => void; onClose: () => void; children: ReactNode }) {
   const [width, setWidth] = useState(() => {
     const stored = Number(localStorage.getItem('pupitre:inspector-width'))
-    return Number.isFinite(stored) && stored >= 360 ? Math.min(stored, 900) : 480
+    return Number.isFinite(stored) && stored >= MIN_INSPECTOR_WIDTH
+      ? Math.min(stored, maxInspectorWidth())
+      : 480
   })
   const closeRef = useRef<HTMLButtonElement>(null)
   const group = inspectorGroupOf(view)
@@ -28,14 +38,14 @@ export function WorkspaceInspector({ view, onViewChange, onClose, children }: { 
     return () => { if (previous?.isConnected) previous.focus() }
   }, [])
   function resize(value: number) {
-    const next = Math.min(900, Math.max(360, value))
+    const next = Math.min(maxInspectorWidth(), Math.max(MIN_INSPECTOR_WIDTH, value))
     setWidth(next)
     localStorage.setItem('pupitre:inspector-width', String(next))
   }
   return <aside className="workspace-inspector" aria-label={group.title} style={{ width }} onKeyDown={(event) => {
     if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); onClose() }
   }}>
-    <div className="inspector-resize" role="separator" aria-label="Redimensionner le panneau" aria-orientation="vertical" aria-valuenow={width} aria-valuemin={360} aria-valuemax={900} tabIndex={0}
+    <div className="inspector-resize" role="separator" aria-label="Redimensionner le panneau" aria-orientation="vertical" aria-valuenow={width} aria-valuemin={MIN_INSPECTOR_WIDTH} aria-valuemax={maxInspectorWidth()} tabIndex={0}
       onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); resize(width + (event.key === 'ArrowLeft' ? 32 : -32)) } }}
       onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); event.currentTarget.dataset.origin = String(event.clientX); event.currentTarget.dataset.width = String(width) }}
       onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) resize(Number(event.currentTarget.dataset.width) + Number(event.currentTarget.dataset.origin) - event.clientX) }}

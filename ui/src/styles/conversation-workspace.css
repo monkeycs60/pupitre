@@ -38,7 +38,7 @@
 .workspace-welcome { max-width:400px; text-align:left; }
 .workspace-welcome h1 { font-size:22px; font-weight:500; margin:0 0 12px; }
 .workspace-welcome p { line-height:1.6; margin-bottom:24px; }
-.todo-list { display:flex; flex-direction:column; min-height:0; }
+.todo-list { display:flex; flex-direction:column; min-height:0; padding-top:4px; }
 .todo-queue-control { padding:4px 12px 14px; display:flex; flex-direction:column; align-items:stretch; gap:8px; }
 .todo-queue-control > span { color:var(--text-faint); font-size:11px; text-align:center; }
 .todo-search { margin:0 12px 8px; min-width:0; }

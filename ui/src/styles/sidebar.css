@@ -27,8 +27,11 @@
   background: var(--bg-panel);
 }
 
+/* La rangée vit hors de la zone qui défile : son trait traverse la sidebar
+   bord à bord, sans buter sur la gouttière de l'ascenseur. */
 .sidebar-tabs {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3) 0;
@@ -646,7 +649,7 @@
   gap: var(--space-2);
   min-height: 30px;
   padding: 0 9px;
-  margin: var(--space-3) var(--space-2) 6px;
+  margin: var(--space-1) var(--space-1) 6px;
   color: var(--text-muted);
   background: var(--bg-input);
   border: 1px solid var(--border);
