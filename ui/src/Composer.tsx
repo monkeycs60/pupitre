@@ -16,6 +16,7 @@ import {
   uploadMedia,
 } from './api'
 import { buildCreateConversationInput } from './conversationDraft'
+import type { TodoDraftSeed } from './todoDraft'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { ProviderMark } from './ProviderMark'
 import { ComposerPalette, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
@@ -28,6 +29,8 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { parseSidequestDirective } from './sidequestDirective'
 
 interface ComposerProps {
+  /** Transforme le brouillon courant en TODO préparée au lieu de l'envoyer. */
+  onDraftToTodo?: (seed: TodoDraftSeed) => void
   conversationId: string | null
   project: Project
   quotas: QuotaSnapshot
@@ -199,6 +202,7 @@ export function Composer({
   quotas,
   isRunning,
   onConversationCreated,
+  onDraftToTodo,
   onProjectUpdated,
   message,
   onMessageChange,
@@ -237,6 +241,8 @@ export function Composer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [configReady, setConfigReady] = useState(!isNewConversation)
+  const [sendMenuOpen, setSendMenuOpen] = useState(false)
+  const sendGroupRef = useRef<HTMLDivElement>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [trigger, setTrigger] = useState<ComposerPaletteTrigger | null>(null)
   const [paletteIndex, setPaletteIndex] = useState(0)
@@ -260,6 +266,26 @@ export function Composer({
     const area = textareaRef.current
     if (area !== null) resizeComposerTextarea(area)
   }, [message])
+
+  useEffect(() => {
+    if (!sendMenuOpen) return
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (!sendGroupRef.current?.contains(event.target as Node)) setSendMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick)
+  }, [sendMenuOpen])
+
+  const hasDraft = message.trim().length > 0 || attachments.length > 0
+  const canDraftToTodo = onDraftToTodo !== undefined && hasDraft && pendingUploads === 0 && !isSubmitting && !canSteer
+
+  function handleDraftToTodo() {
+    if (!onDraftToTodo || !canDraftToTodo) return
+    setSendMenuOpen(false)
+    onDraftToTodo({ message: message.trim(), attachments: attachments.map((item) => item.attachment), config, ticketId })
+    onMessageChange('')
+    setAttachments([])
+  }
 
   function syncPaletteTrigger(value: string, cursor: number) {
     const next = paletteTrigger(value, cursor)
@@ -755,7 +781,7 @@ export function Composer({
               </>
             ) : null}
           </div>
-          <div className="composer-send-group">
+          <div className="composer-send-group" ref={sendGroupRef}>
             {isRunning && conversationId !== null ? (
               <button
                 type="button"
@@ -774,6 +800,28 @@ export function Composer({
                 : canSteer ? 'Orienter' : 'Envoyer'}
               {!isSubmitting ? <kbd aria-hidden="true">⏎</kbd> : null}
             </button>
+            {onDraftToTodo && !canSteer ? (
+              <button
+                type="button"
+                className="send-more"
+                aria-label="Autres façons d’envoyer"
+                aria-haspopup="menu"
+                aria-expanded={sendMenuOpen}
+                disabled={!canDraftToTodo}
+                onClick={() => setSendMenuOpen((open) => !open)}
+                onKeyDown={(event) => { if (event.key === 'Escape') setSendMenuOpen(false) }}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            ) : null}
+            {sendMenuOpen ? (
+              <div className="send-menu" role="menu" aria-label="Autres façons d’envoyer" onKeyDown={(event) => { if (event.key === 'Escape') setSendMenuOpen(false) }}>
+                <button type="button" role="menuitem" onClick={handleDraftToTodo}>
+                  Ajouter aux TODO
+                  <small>Garde le message, les pièces jointes et le modèle ; s’exécute quand tu dépiles la file.</small>
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       </form>

@@ -39,9 +39,12 @@ import { PushTimeline } from './PushTimeline'
 import { ProblemSuggestionsLoader } from './ProblemSuggestions'
 import type { ProblemMissionSeed } from './problemMission'
 import { collectConversationAssets } from './conversationAssets'
+import type { TodoDraftSeed } from './todoDraft'
+import { branchOfWorktree } from './conversationBranch'
 import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
 
 interface ChatProps {
+  onDraftToTodo?: (seed: TodoDraftSeed) => void
   /** Événement à faire défiler et surligner à l’ouverture (retour depuis un fichier partagé). */
   focusEventId?: number | null
   events: AppEvent[]
@@ -161,6 +164,7 @@ export function Chat({
   quotas,
   onConversationCreated,
   focusEventId = null,
+  onDraftToTodo,
   onProjectUpdated,
   onConversationRead,
   onRunningSubtasksChange,
@@ -471,6 +475,25 @@ export function Chat({
             quotas={quotas}
             isRunning={isRunning}
             onConversationCreated={handleConversationCreated}
+            onDraftToTodo={onDraftToTodo ? (seed) => onDraftToTodo({
+              ...seed,
+              ticketId: seed.ticketId ?? conversation?.ticket_id ?? null,
+              config: conversation
+                ? {
+                    ...seed.config,
+                    presetId: conversation.preset_id ?? null,
+                    provider: conversation.provider,
+                    model: conversation.model,
+                    effort: conversation.effort ?? seed.config.effort,
+                    speed: conversation.speed ?? seed.config.speed,
+                    permissionMode: conversation.permission_mode ?? null,
+                    orchestrator: conversation.orchestrator,
+                    subagentPresetId: conversation.subagent_preset_id ?? null,
+                    subagentEffort: conversation.subagent_effort ?? null,
+                    branch: branchOfWorktree(conversation.worktree_path) ?? seed.config.branch,
+                  }
+                : seed.config,
+            }) : undefined}
             onProjectUpdated={onProjectUpdated}
             message={message}
             onMessageChange={handleMessageChange}

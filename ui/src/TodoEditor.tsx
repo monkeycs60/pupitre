@@ -4,7 +4,7 @@ import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { PROVIDER_MODELS } from './modelOptions'
 import { TicketSelect } from './TicketSelect'
 import { ticketLinksOf } from './ticketLinks'
-import { buildTodoInput } from './todoDraft'
+import { buildTodoInput, type TodoDraftSeed } from './todoDraft'
 import { createTodo, type TodoItem } from './todos'
 import { mediaUrl } from './transport'
 import type { Attachment, Project, QuotaSnapshot } from './types'
@@ -14,23 +14,25 @@ interface Props {
   items: TodoItem[]
   quotas: QuotaSnapshot
   initialTicketId?: string | null
+  /** Brouillon repris depuis un composeur : message, pièces jointes, modèle et ticket. */
+  initial?: TodoDraftSeed | null
   onProjectUpdated: (project: Project) => void
   onCreated: (todo: TodoItem) => void
   onCancel: () => void
 }
 
-export function TodoEditor({ project, items, quotas, initialTicketId = null, onProjectUpdated, onCreated, onCancel }: Props) {
+export function TodoEditor({ project, items, quotas, initialTicketId = null, initial = null, onProjectUpdated, onCreated, onCancel }: Props) {
   const [title, setTitle] = useState('')
-  const [message, setMessage] = useState('')
-  const [ticketId, setTicketId] = useState<string | null>(initialTicketId)
+  const [message, setMessage] = useState(initial?.message ?? '')
+  const [ticketId, setTicketId] = useState<string | null>(initial?.ticketId ?? initialTicketId)
   const [autonomy, setAutonomy] = useState<'local' | 'investigate'>('local')
   const [integrate, setIntegrate] = useState(false)
   const [checks, setChecks] = useState('')
   const [dependsOn, setDependsOn] = useState('')
-  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [attachments, setAttachments] = useState<Attachment[]>(initial?.attachments ?? [])
   const [pending, setPending] = useState(0)
   const [configReady, setConfigReady] = useState(false)
-  const [config, setConfig] = useState<ConversationConfig>({
+  const [config, setConfig] = useState<ConversationConfig>(initial?.config ?? {
     presetId: null,
     provider: 'claude',
     model: PROVIDER_MODELS.claude[0],
@@ -105,7 +107,7 @@ export function TodoEditor({ project, items, quotas, initialTicketId = null, onP
       </div>
       <div className="todo-config">
         <span>Modèle et branche cible</span>
-        <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onProjectUpdated={onProjectUpdated} onError={setError} onReady={setConfigReady} />
+        <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onProjectUpdated={onProjectUpdated} onError={setError} onReady={setConfigReady} applyProjectDefault={initial === null} />
       </div>
       <label className="todo-integrate"><input type="checkbox" checked={integrate} disabled={autonomy === 'investigate'} onChange={(event) => setIntegrate(event.target.checked)} /><span><strong>Intégrer et pousser</strong><span>Après vérification, réunir les changements dans la branche cible et les publier. La TODO suivante partira de ce résultat.</span></span></label>
       <details className="todo-verification" open={integrate || undefined}>

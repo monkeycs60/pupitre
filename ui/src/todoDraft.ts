@@ -2,6 +2,13 @@ import type { ConversationConfig } from './ConfigPanel'
 import type { Attachment } from './types'
 import type { TodoInput } from './todos'
 
+export interface TodoDraftSeed {
+  message: string
+  attachments: Attachment[]
+  config: ConversationConfig
+  ticketId: string | null
+}
+
 export function buildTodoInput(config: ConversationConfig, draft: { message: string; ticketId: string | null; integrate: boolean; autonomy: 'local' | 'investigate'; checks: string; attachments: Attachment[] }): TodoInput {
   return {
     provider: config.provider, model: config.model, effort: config.effort,

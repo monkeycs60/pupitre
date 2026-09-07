@@ -1,5 +1,6 @@
 import { INSPECTOR_GROUPS, WorkspaceInspector, inspectorGroupOf, type InspectorView } from './WorkspaceInspector'
 import { TodoEditor } from './TodoEditor'
+import type { TodoDraftSeed } from './todoDraft'
 import { WorkflowsView } from './WorkflowsView'
 import { TodoDetail } from './TodoDetail'
 import { useTodos, type TodoItem } from './todos'
@@ -150,6 +151,7 @@ function App() {
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null)
   const [sidebarTab, setSidebarTab] = useState<'conversations' | 'todos'>('conversations')
   const [newTodo, setNewTodo] = useState(false)
+  const [todoSeed, setTodoSeed] = useState<TodoDraftSeed | null>(null)
   const lastInspectorViews = useRef<Partial<Record<string, InspectorView>>>({})
   const [focusEventId, setFocusEventId] = useState<number | null>(null)
   const todos = useTodos(selectedProject?.id ?? null)
@@ -443,6 +445,12 @@ function App() {
     setSelectedTodoId(todo.id)
     setSidebarTab('todos')
     setNewTodo(false)
+    setTodoSeed(null)
+  }
+
+  function handleDraftToTodo(seed: TodoDraftSeed) {
+    setTodoSeed(seed)
+    handleTodoCreate()
   }
 
   function handleTodoCreate() {
@@ -857,7 +865,7 @@ function App() {
         todos={todos}
         selectedTodoId={selectedTodoId}
         onTodoSelect={(id) => { setSelectedTodoId(id); setIsCreatingConversation(false); setWorkspaceView('conversations') }}
-        onTodoCreate={handleTodoCreate}
+        onTodoCreate={() => { setTodoSeed(null); handleTodoCreate() }}
         onUsageSelect={() => openInspector('quotas')}
         onProjectSelect={handleProjectSelect}
         onConversationSelect={handleConversationSelect}
@@ -909,7 +917,7 @@ function App() {
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         : workspaceView === 'settings' ? <AppSettingsView instance={instance} />
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
-        : newTodo ? <TodoEditor key={selectedProject.id} project={selectedProject} items={todos.items} quotas={quotas.snapshot} onProjectUpdated={handleProjectUpdated} onCreated={handleTodoCreated} onCancel={() => setNewTodo(false)} />
+        : newTodo ? <TodoEditor key={`${selectedProject.id}-${todoSeed ? 'seed' : 'blank'}`} project={selectedProject} items={todos.items} quotas={quotas.snapshot} initial={todoSeed} onProjectUpdated={handleProjectUpdated} onCreated={handleTodoCreated} onCancel={() => { setNewTodo(false); setTodoSeed(null) }} />
         : selectedTodo ? <TodoDetail key={selectedTodo.id} item={selectedTodo} items={todos.items} projectName={selectedProject.name} onChanged={todos.refresh} onDeleted={() => { setSelectedTodoId(null); todos.refresh() }} onConversationSelect={(id) => void handleGitConversationSelect(id)} />
         : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">
@@ -974,6 +982,7 @@ function App() {
               quotas={quotas.snapshot}
               onConversationCreated={handleConversationCreated}
               focusEventId={focusEventId}
+              onDraftToTodo={handleDraftToTodo}
               onProjectUpdated={handleProjectUpdated}
               onConversationRead={handleConversationRead}
               onRunningSubtasksChange={setRunningSubtasks}
