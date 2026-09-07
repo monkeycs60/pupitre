@@ -7,10 +7,9 @@ interface Props extends TodoSnapshot {
   loading: boolean
   error: string | null
   onSelect: (id: string) => void
-  onCreate: () => void
   onChanged: () => void
 }
-export function TodoList({ projectId, items, queue, selectedId, loading, error, onSelect, onCreate, onChanged }: Props) {
+export function TodoList({ projectId, items, queue, selectedId, loading, error, onSelect, onChanged }: Props) {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -30,7 +29,6 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
     void act(() => reorderTodos(projectId, ids))
   }
   return <div className="todo-list">
-    <div className="section-actions"><button className="section-action section-action--primary" onClick={onCreate}>+ Nouvelle TODO</button></div>
     <div className="todo-queue-control">
       <button className={queue.running ? 'secondary-button' : 'primary-button'} disabled={busy || (!queue.running && pending === 0)} onClick={() => void act(() => setTodoQueue(projectId, !queue.running))}>
         {queue.running ? 'Mettre en pause' : 'Dépiler les TODO'}

@@ -20,6 +20,7 @@ import { LevelCard } from './LevelCard'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { modelLabel } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
+import { projectInitials, shortenHomePath } from './projectInitials'
 import { useNow } from './useNow'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
@@ -100,7 +101,7 @@ const CONVERSATION_SCOPES: Array<[ConversationScope, string]> = [
 ]
 
 const SCOPE_PLACEHOLDERS: Record<ConversationScope, string> = {
-  active: 'Filtrer les conversations actives…',
+  active: 'Filtrer les conversations…',
   archived: 'Filtrer les archives…',
   trash: 'Filtrer la corbeille…',
 }
@@ -569,12 +570,15 @@ export const Sidebar = memo(function Sidebar({
   return (
     <aside className="sidebar">
       <div className="conv-sidebar-header">
+        <span className="conv-sidebar-avatar" aria-hidden="true">
+          {selectedProject ? projectInitials(selectedProject.name) : '··'}
+        </span>
         <div className="conv-sidebar-project">
           <div className="conv-sidebar-name">
             {selectedProject ? selectedProject.name : 'Aucun projet'}
           </div>
           <div className="conv-sidebar-path" title={selectedProject?.path}>
-            {selectedProject ? selectedProject.path : 'Choisis un projet dans le rail'}
+            {selectedProject ? shortenHomePath(selectedProject.path) : 'Choisis un projet dans le rail'}
           </div>
         </div>
         {selectedProject ? (
@@ -620,25 +624,22 @@ export const Sidebar = memo(function Sidebar({
           >
             TODO <span>{todos?.items.filter((item) => item.status !== 'done').length ?? 0}</span>
           </button>
+          <button
+            type="button"
+            className="sidebar-tabs-create"
+            onClick={sidebarTab === 'todos' ? onTodoCreate : onConversationCreate}
+            disabled={selectedProject === null}
+            title={sidebarTab === 'todos'
+              ? 'Préparer une TODO dans ce projet'
+              : 'Démarrer une nouvelle conversation dans ce projet'}
+          >
+            <span aria-hidden="true">+</span>
+            <span>{sidebarTab === 'todos' ? 'Nouvelle TODO' : 'Nouvelle'}</span>
+          </button>
         </div>
 
         {sidebarTab === 'conversations' ? (
           <div id="sidebar-conversations-panel" role="tabpanel" aria-labelledby="sidebar-conversations-tab">
-        {/* Deux libellés entiers ne tiennent pas à côté du titre dans la largeur
-            de la sidebar : ils se tronquaient. Ils ont leur propre rangée. */}
-        <div className="section-actions">
-          <button
-            type="button"
-            className="section-action section-action--primary"
-            onClick={onConversationCreate}
-            disabled={selectedProject === null}
-            title="Démarrer une nouvelle conversation dans ce projet"
-          >
-            <span aria-hidden="true">+</span>
-            <span>Nouvelle conversation</span>
-          </button>
-        </div>
-
         <div className={`conversation-filter-input${conversationScope !== 'active' ? ' has-scope' : ''}`}>
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
@@ -929,7 +930,7 @@ export const Sidebar = memo(function Sidebar({
           </div>
         ) : (
           <div id="sidebar-todos-panel" role="tabpanel" aria-labelledby="sidebar-todos-tab">
-            {selectedProject && todos ? <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={selectedTodoId} onSelect={onTodoSelect} onCreate={onTodoCreate} onChanged={todos.refresh} /> : <p className="list-empty">Sélectionne un projet.</p>}
+            {selectedProject && todos ? <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={selectedTodoId} onSelect={onTodoSelect} onChanged={todos.refresh} /> : <p className="list-empty">Sélectionne un projet.</p>}
           </div>
         )}
       </section>

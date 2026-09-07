@@ -3,6 +3,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { createProject, getUnreadConversationCounts, listProjects } from './api'
 import type { Project, WorkspaceView } from './types'
 import { retryUntilAvailable } from './startupRetry'
+import { projectInitials } from './projectInitials'
 
 /** Rail vertical (56 px) : bascule de projet. Les destinations globales
  *  vivent dans la barre de titre. */
@@ -16,14 +17,6 @@ interface RailProps {
   workspaceView: WorkspaceView
   /** Projets ayant au moins un run actif dans Fleet. */
   activeProjectIds?: string[]
-}
-
-function projectInitials(name: string): string {
-  const cleaned = name.replace(/[^a-zA-Z0-9]+/g, ' ').trim()
-  if (!cleaned) return '··'
-  const parts = cleaned.split(/\s+/)
-  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase()
-  return cleaned.slice(0, 2).toUpperCase()
 }
 
 function pinnedFirst<T extends { pinned: boolean }>(items: T[]): T[] {
