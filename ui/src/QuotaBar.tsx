@@ -275,13 +275,20 @@ export function QuotaStatus({
       <div className="quota-status-actions">
         <button
           type="button"
-          className="quota-refresh"
+          className={`quota-refresh-icon${isRefreshing ? ' is-running' : ''}${refreshFailed ? ' is-failed' : ''}`}
           onClick={() => void handleRefresh()}
           disabled={isRefreshing}
-          aria-label="Actualiser les quotas"
-          title={refreshFailed ? 'Relève impossible. Cliquez pour réessayer.' : undefined}
+          aria-label={isRefreshing
+            ? 'Relève des quotas en cours'
+            : refreshFailed ? 'Relève impossible, réessayer' : 'Actualiser les quotas'}
+          title={refreshFailed ? 'Relève impossible. Cliquez pour réessayer.' : 'Actualiser les quotas'}
         >
-          {isRefreshing ? 'Relève…' : refreshFailed ? 'Réessayer' : 'Actualiser'}
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" />
+              <path d="M13.5 2.5V5H11" />
+            </g>
+          </svg>
         </button>
       </div>
     </section>

@@ -646,7 +646,7 @@
   gap: var(--space-2);
   min-height: 30px;
   padding: 0 9px;
-  margin: 0 var(--space-2) 6px;
+  margin: var(--space-3) var(--space-2) 6px;
   color: var(--text-muted);
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -955,6 +955,47 @@
 .quota-status-actions {
   display: flex;
   justify-content: flex-end;
+  margin-top: -2px;
+}
+
+.quota-refresh-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.quota-refresh-icon:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+.quota-refresh-icon.is-failed {
+  color: var(--danger);
+}
+
+.quota-refresh-icon.is-running {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.quota-refresh-icon.is-running svg {
+  animation: quota-refresh-spin 900ms linear infinite;
+}
+
+@keyframes quota-refresh-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quota-refresh-icon.is-running svg { animation: none; }
 }
 
 .quota-status .quota-error {

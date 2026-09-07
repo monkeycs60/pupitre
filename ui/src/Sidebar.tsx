@@ -317,6 +317,12 @@ export const Sidebar = memo(function Sidebar({
     if (workspaceView === 'conversations' && selectedConversation !== null && runningSubtasks > 0) ids.add(selectedConversation.id)
     return ids
   }, [activeConversationIds, workspaceView, selectedConversation, runningSubtasks])
+  const unreadConversationCount = useMemo(
+    () => conversations.filter(
+      (conversation) => conversationRowState(conversation, displayedActiveConversationIds) === 'unread',
+    ).length,
+    [conversations, displayedActiveConversationIds],
+  )
   useEffect(() => {
     let ignore = false
     if (selectedProject === null) return
@@ -610,8 +616,9 @@ export const Sidebar = memo(function Sidebar({
             aria-controls="sidebar-conversations-panel"
             className={sidebarTab === 'conversations' ? 'is-selected' : ''}
             onClick={() => onSidebarTabChange('conversations')}
+            title={`${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} à lire sur ${conversations.length}`}
           >
-            Conversations <span>{conversations.length}</span>
+            Conversations <span>{unreadConversationCount}</span>
           </button>
           <button
             id="sidebar-todos-tab"
