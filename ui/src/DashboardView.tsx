@@ -362,6 +362,7 @@ export function DashboardView({
             {INTEGRATION_LABEL[integration.type] ?? integration.type}
             {` : ${integration.status}`}
             {integration.last_error ? ` — ${integration.last_error}` : ''}
+            {integration.status !== 'ok' && integration.last_ok_at ? ` · dernière relève réussie le ${new Date(integration.last_ok_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
             {integration.status === 'non configurée' && onOpenSettings ? (
               <>
                 {' '}

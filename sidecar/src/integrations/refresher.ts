@@ -9,7 +9,7 @@ import type { ProjectStore } from "../stores/projects";
 import type { TicketStore } from "../stores/tickets";
 import { suggestionsFromLabels, type DomainStore } from "../stores/domains";
 import type { SentryIssue, SentryStore } from "../stores/sentry";
-import { SentryAuthError, type SentryIssueSummary } from "./sentry";
+import { SentryAuthError, SentryHttpError, type SentryIssueSummary } from "./sentry";
 import { classifySentryIssue, compileDomainCatalog, type DomainDefinition } from "../sentry-domains";
 
 export const INTEGRATIONS_POLL_MS = 5 * 60 * 1000;
@@ -318,13 +318,20 @@ export class IntegrationsRefresher {
     const seen = new Set<string>();
     let count = 0;
     for (const project of config.projects) {
-      const issues = await client.listIssues({
-        org: config.org,
-        project,
-        environment: "production",
-        statsPeriod: "24h",
-        query: "is:unresolved",
-      });
+      let issues: SentryIssueSummary[];
+      try {
+        issues = await client.listIssues({
+          org: config.org,
+          project,
+          environment: "production",
+          statsPeriod: "24h",
+          query: "is:unresolved",
+        });
+      } catch (error) {
+        if (error instanceof SentryHttpError && error.status === 404)
+          throw new Error(`projet Sentry « ${config.org}/${project} » introuvable (404) : vérifier les slugs dans les réglages`);
+        throw error;
+      }
       for (const issue of issues) {
         seen.add(issue.id);
         count++;
@@ -341,8 +348,20 @@ export class IntegrationsRefresher {
     const resolved = new Set<string>();
     for (const issue of store.listProject(item.project_id)) {
       if (issue.integration_id !== item.id || seen.has(issue.sentry_issue_id)) continue;
-      const detail = await client.issueDetail(config.org, issue.sentry_issue_id);
-      if (isResolvedSentryIssue(detail)) resolved.add(issue.sentry_issue_id);
+      try {
+        const detail = await client.issueDetail(config.org, issue.sentry_issue_id);
+        if (isResolvedSentryIssue(detail)) resolved.add(issue.sentry_issue_id);
+      } catch (error) {
+        // Une issue supprimée ou fusionnée côté Sentry répond 404 pour toujours :
+        // la considérer résolue, sinon elle bloque chaque relève suivante.
+        if (error instanceof SentryHttpError && error.status === 404) {
+          resolved.add(issue.sentry_issue_id);
+          continue;
+        }
+        if (error instanceof SentryHttpError && !(error instanceof SentryAuthError))
+          throw new Error(`détail de l'issue Sentry ${issue.sentry_issue_id} : ${error.message}`);
+        throw error;
+      }
     }
     store.markMissing(item.id, seen, resolved, scannedAt);
     store.sweep();

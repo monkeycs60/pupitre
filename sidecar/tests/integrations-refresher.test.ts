@@ -12,6 +12,7 @@ import { ProjectStore } from "../src/stores/projects";
 import { TicketStore } from "../src/stores/tickets";
 import { DomainStore } from "../src/stores/domains";
 import { SentryStore } from "../src/stores/sentry";
+import { SentryHttpError } from "../src/integrations/sentry";
 
 let projectId: string;
 let integrations: IntegrationStore;
@@ -248,6 +249,65 @@ test("relève Sentry en production, classe Match AI et respecte la cadence", asy
   expect(sentry.listProject(projectId)[0]).toEqual(expect.objectContaining({
     sentry_issue_id: "42",
     relevance: expect.objectContaining({ matched: true }),
+  }));
+});
+
+test("une issue Sentry supprimée (404 sur le détail) est résolue au lieu de bloquer la relève", async () => {
+  const sentry = new SentryStore(db);
+  integrations.upsert(projectId, "sentry", {
+    config: { org: "affilae", projects: ["hapigator"], domains: [] },
+    branchPattern: null,
+  });
+  const summary = {
+    id: "42", shortId: "HAPI-42", project: "hapigator", title: "Timeout", culprit: null,
+    transaction: null, level: "error", status: "unresolved", count: 1, userCount: 1,
+    firstSeen: "2026-08-20T10:00:00Z", lastSeen: "2026-08-21T10:00:00Z",
+    permalink: "https://sentry/42", release: null, tags: {},
+  };
+  let present = true;
+  const refresher = new IntegrationsRefresher(
+    { integrations, tickets, conversations, projects: new ProjectStore(db), sentry },
+    {
+      clickUpClient: () => fakeClickUp() as any,
+      gitLabClient: () => fakeGitLab() as any,
+      sentryClient: () => ({
+        listIssues: async () => (present ? [summary] : []),
+        issueDetail: async () => { throw new SentryHttpError(404, "Sentry request failed: 404"); },
+      }),
+    },
+  );
+
+  await refresher.refreshProject(projectId, { forceSentry: true });
+  present = false;
+  await refresher.refreshProject(projectId, { forceSentry: true });
+
+  expect(integrations.find(projectId, "sentry")).toEqual(expect.objectContaining({ status: "ok", last_error: null }));
+  expect(sentry.listProject(projectId)[0]).toEqual(expect.objectContaining({ sentry_issue_id: "42", lifecycle: "resolved_remote" }));
+});
+
+test("un slug de projet Sentry inconnu nomme le projet fautif", async () => {
+  const sentry = new SentryStore(db);
+  integrations.upsert(projectId, "sentry", {
+    config: { org: "affilae", projects: ["inconnu"], domains: [] },
+    branchPattern: null,
+  });
+  const refresher = new IntegrationsRefresher(
+    { integrations, tickets, conversations, projects: new ProjectStore(db), sentry },
+    {
+      clickUpClient: () => fakeClickUp() as any,
+      gitLabClient: () => fakeGitLab() as any,
+      sentryClient: () => ({
+        listIssues: async () => { throw new SentryHttpError(404, "Sentry request failed: 404"); },
+        issueDetail: async () => ({ status: "unresolved" }),
+      }),
+    },
+  );
+
+  await refresher.refreshProject(projectId, { forceSentry: true });
+
+  expect(integrations.find(projectId, "sentry")).toEqual(expect.objectContaining({
+    status: "dégradée",
+    last_error: expect.stringContaining("affilae/inconnu"),
   }));
 });
 
