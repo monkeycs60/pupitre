@@ -6,6 +6,7 @@ import { openDb } from "../src/db";
 import { SettingsStore } from "../src/stores/settings";
 import {
   createVisualFeedbackToken,
+  isLoopbackHostname,
   sanitizeVisualFeedbackSubmission,
   verifyVisualFeedbackToken,
   visualFeedbackPrompt,
@@ -75,4 +76,22 @@ test("persiste les tables et remplace le jeton d'appairage", () => {
   expect(tables.map((row) => row.name)).toContain("visual_feedback_submissions");
   expect(tables.map((row) => row.name)).toContain("visual_feedback_origins");
   db.close();
+});
+
+test("accepte toute la boucle locale, pas seulement 127.0.0.1", () => {
+  for (const hostname of ["localhost", "app.localhost", "127.0.0.1", "127.0.0.2", "127.1.2.3", "[::1]"]) {
+    expect(isLoopbackHostname(hostname)).toBe(true);
+  }
+  for (const hostname of ["127.0.0.256", "128.0.0.1", "example.com", "notlocalhost", "1270.0.0.1"]) {
+    expect(isLoopbackHostname(hostname)).toBe(false);
+  }
+  const accepted = sanitizeVisualFeedbackSubmission({
+    ...submission,
+    page: { ...submission.page, url: "http://127.0.0.2:8080/fr/admin/publishers" },
+  });
+  expect(accepted.page.url).toBe("http://127.0.0.2:8080/fr/admin/publishers");
+  expect(() => sanitizeVisualFeedbackSubmission({
+    ...submission,
+    page: { ...submission.page, url: "http://example.com/" },
+  })).toThrow("URL non locale");
 });

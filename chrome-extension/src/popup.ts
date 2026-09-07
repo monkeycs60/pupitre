@@ -96,7 +96,9 @@ $("save-connection").addEventListener("click", () => void send({
 $("branch").addEventListener("change", updateConversations);
 
 $("inspect").addEventListener("click", () => void (async () => {
-  if (tab?.id) await chrome.tabs.sendMessage(tab.id, { type: "START_INSPECTION" });
+  if (tab?.id === undefined) return;
+  await send({ type: "ENSURE_CONTENT", tabId: tab.id });
+  await chrome.tabs.sendMessage(tab.id, { type: "START_INSPECTION" });
   window.close();
 })().catch(showError));
 
@@ -109,6 +111,7 @@ $("associate").addEventListener("click", () => void (async () => {
 
 $("send").addEventListener("click", () => void (async () => {
   if (resolution?.status !== "resolved" || !tab?.url) return;
+  await send({ type: "ENSURE_CONTENT", tabId: tab.id });
   const page = await chrome.tabs.sendMessage(tab.id, { type: "PAGE_INFO" });
   const result = await send({
     type: "SUBMIT",

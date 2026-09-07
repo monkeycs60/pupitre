@@ -39,6 +39,23 @@ async function cropScreenshot(dataUrl: string, rect: { left: number; top: number
   return `data:image/png;base64,${btoa(binary)}`;
 }
 
+const LOOPBACK = /^https?:\/\/(?:(?:[^/]*\.)?localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?\//u;
+
+/**
+ * `content_scripts` ne couvre que localhost et 127.0.0.1 : les motifs de
+ * correspondance ne savent pas décrire 127.0.0.0/8. Sur les autres adresses de
+ * boucle locale le script est injecté à la demande, sous `activeTab`.
+ */
+async function ensureContentScript(tabId: number): Promise<void> {
+  const [probe] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => Boolean(document.getElementById("pupitre-visual-feedback-root")),
+  });
+  if (probe?.result === true) return;
+  await chrome.scripting.insertCSS({ target: { tabId }, files: ["content.css"] });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
+}
+
 async function syncMarkers(projectId: string, annotations: unknown[]) {
   const tabs = await chrome.tabs.query({});
   await Promise.all(tabs.filter((tab: any) => tab.id).map((tab: any) =>
@@ -48,11 +65,17 @@ async function syncMarkers(projectId: string, annotations: unknown[]) {
 chrome.commands.onCommand.addListener(async (command: string) => {
   if (command !== "start-inspection") return;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id) await chrome.tabs.sendMessage(tab.id, { type: "START_INSPECTION" });
+  if (tab?.id === undefined) return;
+  await ensureContentScript(tab.id);
+  await chrome.tabs.sendMessage(tab.id, { type: "START_INSPECTION" });
 });
 
 chrome.runtime.onMessage.addListener((message: any, sender: any, respond: (value: any) => void) => {
   void (async () => {
+    if (message.type === "ENSURE_CONTENT") {
+      await ensureContentScript(message.tabId);
+      return { ok: true };
+    }
     if (message.type === "RESOLVE") return (await client()).resolve(message.origin, message.pathname);
     if (message.type === "DESTINATIONS") return (await client()).destinations(message.projectId);
     if (message.type === "ASSOCIATE") return (await client()).associate(message.origin, message.pathname, message.projectId);
@@ -127,10 +150,7 @@ chrome.runtime.onMessage.addListener((message: any, sender: any, respond: (value
       await chrome.storage.local.remove(submissionKey);
       await chrome.storage.local.set({ carts });
       const tabs = await chrome.tabs.query({});
-      await Promise.all(tabs.filter((tab: any) => tab.id && (
-        /^http:\/\/(?:[^/]*\.)?localhost(?::\d+)?\//u.test(tab.url ?? "")
-        || /^http:\/\/127\.0\.0\.1(?::\d+)?\//u.test(tab.url ?? "")
-      ))
+      await Promise.all(tabs.filter((tab: any) => tab.id && LOOPBACK.test(tab.url ?? ""))
         .map((tab: any) => chrome.tabs.sendMessage(tab.id, { type: "CLEAR_MARKERS", projectId: message.projectId }).catch(() => undefined)));
       return result;
     }

@@ -72,6 +72,15 @@ export function listeningProcessCwd(port: number): string | null {
   try { return readlinkSync(`/proc/${pid}/cwd`); } catch { return null; }
 }
 
+/** Toute la plage 127.0.0.0/8, pas seulement 127.0.0.1 : un serveur de dev peut
+ * écouter sur n'importe laquelle (affilae utilise 127.0.0.2). */
+export function isLoopbackHostname(hostname: string): boolean {
+  if (hostname === "localhost" || hostname.endsWith(".localhost")) return true;
+  if (hostname === "[::1]" || hostname === "::1") return true;
+  const parts = /^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/u.exec(hostname);
+  return parts !== null && parts.slice(1).every((part) => Number(part) <= 255);
+}
+
 function requiredText(value: unknown, label: string, max = 10_000): string {
   if (typeof value !== "string" || !value.trim() || value.length > max) {
     throw new Error(`${label} invalide`);
@@ -97,9 +106,7 @@ export function sanitizeVisualFeedbackSubmission(input: VisualFeedbackSubmission
     throw new Error("annotations invalides");
   }
   const url = new URL(requiredText(input.page?.url, "URL", 2_048));
-  if (!(url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname.endsWith(".localhost"))) {
-    throw new Error("URL non locale");
-  }
+  if (!isLoopbackHostname(url.hostname)) throw new Error("URL non locale");
   const annotations = input.annotations.map((annotation, index) => ({
     number: Number.isInteger(annotation.number) && annotation.number > 0 ? annotation.number : index + 1,
     instruction: requiredText(annotation.instruction, "instruction", 4_000),
