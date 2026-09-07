@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { BranchIcon } from './BranchIcon'
-import { createProblemCapture, getSentryInbox, listProjectChangelog, refreshProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
+import { getSentryInbox, listProjectChangelog, refreshProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
 import type {
   DashboardIntegration,
   Project,
@@ -15,33 +15,28 @@ import { useDashboard } from './useDashboard'
 import { SentryInbox } from './SentryInbox'
 import { ExternalLink } from './externalLink'
 import { useNow } from './useNow'
-import { ProblemsPanel } from './ProblemsPanel'
-import type { ProblemMissionSeed } from './problemMission'
 
 interface DashboardViewProps {
   embedded?: boolean
   project: Project
   onConversationSelect: (conversationId: string) => void
   onStartConversation: (seed: { ticketId: string; branch: string | null; ticketKey: string }) => void
-  onStartProblem?: (seed: ProblemMissionSeed) => void
   onOpenSettings?: () => void
 }
 
-type DashboardTab = 'tickets' | 'problems' | 'sentry' | 'changelog' | 'environments'
+type DashboardTab = 'tickets' | 'sentry' | 'changelog' | 'environments'
 
 const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
   { id: 'tickets', label: 'Mes tickets' },
-  { id: 'problems', label: 'Problématiques' },
   { id: 'sentry', label: 'Issues Sentry' },
   { id: 'changelog', label: 'Changelog' },
   { id: 'environments', label: 'Environnements' },
 ]
 
-const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { tickets: 'Tickets', problems: 'Problématiques', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements' }
+const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements' }
 
 const PROJECT_RAIL_ICONS: Record<DashboardTab, ReactNode> = {
   tickets: <><rect x="2" y="4" width="12" height="8" rx="1.5" /><path d="M2 7h12" /></>,
-  problems: <><circle cx="8" cy="8" r="5.5" /><path d="M8 5v3.5M8 10.8v.2" /></>,
   sentry: <path d="M8 2.5 13.5 12H10a2 2 0 0 0-2-2 2 2 0 0 0-2 2H2.5Z" />,
   changelog: <path d="M3 4.5h10M3 8h7M3 11.5h9" />,
   environments: <><rect x="2.5" y="3" width="11" height="4" rx="1" /><rect x="2.5" y="9" width="11" height="4" rx="1" /><path d="M5 5h.01M5 11h.01" /></>,
@@ -167,7 +162,6 @@ export function DashboardView({
   project,
   onConversationSelect,
   onStartConversation,
-  onStartProblem,
   onOpenSettings,
   embedded = false,
 }: DashboardViewProps) {
@@ -187,10 +181,6 @@ export function DashboardView({
   const [sentryCount, setSentryCount] = useState(0)
   const railRef = useRef<HTMLElement>(null)
   const [activeTab, setActiveTab] = useState<DashboardTab>(() => storedDashboardTab(project.id))
-  const [captureOpen, setCaptureOpen] = useState(false)
-  const [captureText, setCaptureText] = useState('')
-  const [captureSaving, setCaptureSaving] = useState(false)
-  const [captureError, setCaptureError] = useState<string | null>(null)
   const now = useNow(30_000)
   const hasGitlab = data?.integrations.some((integration) => integration.type === 'gitlab') ?? false
   const degradedIntegrations = data?.integrations.filter((integration) => integration.status !== 'ok') ?? []
@@ -248,23 +238,6 @@ export function DashboardView({
     try {
       await refreshProjectDashboard(project.id)
     } catch {}
-  }
-
-  async function handleCapture(rawText = captureText) {
-    const text = rawText.trim()
-    if (!text || captureSaving) return
-    setCaptureSaving(true)
-    setCaptureError(null)
-    selectTab('problems')
-    try {
-      await createProblemCapture(project.id, text)
-      setCaptureText('')
-      setCaptureOpen(false)
-    } catch (captureFailure) {
-      setCaptureError(captureFailure instanceof Error ? captureFailure.message : 'Capture impossible.')
-    } finally {
-      setCaptureSaving(false)
-    }
   }
 
   async function handleChangelogRefresh() {
@@ -326,12 +299,9 @@ export function DashboardView({
     }
   }
 
-  const railSections = DASHBOARD_TABS.filter(
-    (tab) => tab.id !== 'problems' || activeTab === 'problems' || (data?.problems?.problems.length ?? 0) > 0,
-  )
+  const railSections = DASHBOARD_TABS
   const railCounts: Partial<Record<DashboardTab, number>> = {
     tickets: data?.tickets.length ?? 0,
-    problems: data?.problems?.problems.length ?? 0,
     sentry: sentryCount,
   }
 
@@ -401,9 +371,6 @@ export function DashboardView({
             <span className={`dashboard-connection ${connected ? 'is-live' : ''}`}>
               <i aria-hidden="true" /> {connected ? 'temps réel' : 'reconnexion'}
             </span>
-            <button type="button" className="primary-button" onClick={() => { setCaptureError(null); setCaptureOpen(true) }}>
-              Capturer
-            </button>
             <div
               className="dashboard-changelog-menu"
               onBlur={(event) => {
@@ -647,17 +614,6 @@ export function DashboardView({
           </div>
         ) : null}
 
-        {activeTab === 'problems' ? (
-          <ProblemsPanel
-            project={project}
-            onConversationSelect={onConversationSelect}
-            payload={data?.problems ?? { projectId: project.id, captures: [], problems: [] }}
-            tickets={data?.tickets ?? []}
-            onChanged={() => {}}
-            onStartConversation={(seed) => onStartProblem?.(seed)}
-          />
-        ) : null}
-
         {activeTab === 'changelog' ? (
         <section id="dashboard-panel-changelog" role="tabpanel" aria-label={embedded ? "changelog" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-changelog"} className="dashboard-section dashboard-changelog">
           <div className="dashboard-section-head">
@@ -744,36 +700,6 @@ export function DashboardView({
               <textarea id="ticket-instruction" autoFocus rows={8} value={instructionDraft} onChange={(event) => setInstructionDraft(event.target.value)} placeholder="Ex. Vérifier la rétrocompatibilité de l’API avant toute modification…" />
               {instructionError ? <p className="modal-error" role="alert">{instructionError}</p> : null}
               <footer className="modal-actions"><button type="button" className="secondary-button" onClick={() => setInstructionTicket(null)}>Annuler</button><button type="submit" className="primary-button" disabled={instructionSaving}>{instructionSaving ? 'Enregistrement…' : 'Enregistrer'}</button></footer>
-            </form>
-          </section>
-        </div>
-      ) : null}
-      {captureOpen ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setCaptureOpen(false)} onKeyDown={(event) => { if (event.key === 'Escape') setCaptureOpen(false) }}>
-          <section className="modal review-dialog problem-capture-dialog" role="dialog" aria-modal="true" aria-labelledby="problem-capture-title" onMouseDown={(event) => event.stopPropagation()}>
-            <header className="modal-header">
-              <div><h2 id="problem-capture-title">Capturer des problématiques</h2><p>Colle le vrac tel quel. Luna fera le tri.</p></div>
-              <button type="button" className="modal-close" onClick={() => setCaptureOpen(false)} aria-label="Fermer">×</button>
-            </header>
-            <form className="review-dialog-form problem-capture-form" onSubmit={(event) => { event.preventDefault(); void handleCapture() }}>
-              <label htmlFor="problem-capture-text">Texte à structurer</label>
-              <textarea
-                id="problem-capture-text"
-                autoFocus
-                rows={12}
-                maxLength={50_000}
-                value={captureText}
-                placeholder="Colle ici bugs, retours, questions et idées, même mélangés…"
-                onChange={(event) => setCaptureText(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' || !event.ctrlKey) return
-                  event.preventDefault()
-                  void handleCapture(event.currentTarget.value)
-                }}
-              />
-              <div className="problem-capture-meta"><span>{captureText.length.toLocaleString('fr-FR')} / 50 000</span><kbd>Ctrl</kbd><span>+</span><kbd>Entrée</kbd></div>
-              {captureError ? <p className="modal-error" role="alert">{captureError}</p> : null}
-              <footer className="modal-actions"><button type="button" className="secondary-button" onClick={() => setCaptureOpen(false)}>Annuler</button><button type="submit" className="primary-button" disabled={captureSaving || !captureText.trim()}>{captureSaving ? 'Ajout…' : 'Ajouter'}</button></footer>
             </form>
           </section>
         </div>

@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import { getCurrentWindow, type Window } from '@tauri-apps/api/window'
-import type { TimeSnapshot } from './types'
-import { formatActiveDuration } from './formatActiveDuration'
 import type { InstanceHealth } from './types'
 import { InstanceBadge } from './InstanceBadge'
 import { NavIcon, type NavName } from './NavIcon'
@@ -27,7 +25,6 @@ interface TitlebarProps {
   /** Fil d'Ariane discret (projet · vue) ; les entrées vides sont ignorées. */
   crumbs?: Array<string | null | undefined>
   onSearch?: () => void
-  time?: TimeSnapshot | null
   instance?: InstanceHealth | null
   onRestart?: () => Promise<void>
   /** Destinations globales : elles remplacent la navigation de l'ancien rail. */
@@ -47,20 +44,9 @@ const RESIZE_HANDLES: ReadonlyArray<[string, ResizeDirection]> = [
   ['corner-se', 'SouthEast'],
 ]
 
-const FLAME_PATH =
-  'M8 13.6c2.6 0 4.3-1.7 4.3-4 0-2.5-1.9-3.9-2.7-6.1-1.2 1-1.9 2.1-1.9 3.3 0 .9.4 1.4.4 2 0 .8-.5 1.3-1.2 1.3-.9 0-1.4-.8-1.4-1.9-.9.9-1.2 2-1.2 3.2 0 2.2 1.4 4.2 3.7 4.2Z'
-
-function activeLabel(snapshot: TimeSnapshot | null | undefined): string | null {
-  if (!snapshot) return null
-  const minutes = Math.floor(snapshot.user.todayMs / 60_000)
-  if (minutes < 1) return null
-  return formatActiveDuration(snapshot.user.todayMs)
-}
-
 export function Titlebar({
   crumbs,
   onSearch,
-  time,
   instance,
   onRestart,
   destinations = [],
@@ -70,8 +56,6 @@ export function Titlebar({
   const visibleCrumbs = (crumbs ?? []).filter(
     (crumb): crumb is string => typeof crumb === 'string' && crumb.length > 0,
   )
-  const activity = activeLabel(time)
-
   const drag = IS_TAURI ? { 'data-tauri-drag-region': true } : {}
 
   return (
@@ -137,15 +121,6 @@ export function Titlebar({
 
       <div className="titlebar-right">
         {onRestart ? <InstanceBadge health={instance ?? null} onRestart={onRestart} /> : null}
-        {activity ? (
-          <span className="titlebar-streak" title="Temps actif aujourd'hui">
-            <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
-              <path d={FLAME_PATH} fill="currentColor" />
-            </svg>
-            <span>{activity}</span>
-          </span>
-        ) : null}
-
         {IS_TAURI ? (
           <div className="titlebar-controls">
             <button

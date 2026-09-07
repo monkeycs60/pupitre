@@ -54,7 +54,6 @@ import {
   writeLastActiveLocation,
 } from './restoreLocation'
 import { navigationViewForShortcut, type NavigationShortcutView } from './navigationShortcuts'
-import { problemMissionDraft, type ProblemMissionSeed } from './problemMission'
 import { useInstance } from './useInstance'
 import { useAttention } from './useAttention'
 import { AttentionInbox } from './AttentionInbox'
@@ -561,41 +560,6 @@ function App() {
     setWorkspaceView('conversations')
   }
 
-  function handleStartProblem(seed: ProblemMissionSeed) {
-    if (!confirmLeaveMemory() || selectedProject === null) return
-    const first = seed.problems[0]
-    if (!first) return
-    const commonTicketId = first.ticket_id !== null
-      && seed.problems.every((problem) => problem.ticket_id === first.ticket_id)
-      ? first.ticket_id
-      : null
-    const commonBranch = first.ticket_branch
-      && seed.problems.every((problem) => problem.ticket_branch === first.ticket_branch)
-      ? first.ticket_branch
-      : null
-    setConversationSeed({
-      ticketId: commonTicketId,
-      ticketKey: commonTicketId ? first.ticket_key ?? null : null,
-      branch: commonBranch,
-      problemIds: seed.problems.map((problem) => problem.id),
-      problemPlanIndices: seed.planIndices,
-      missionTitle: seed.missionTitle,
-    })
-    setSelectedConversation(null)
-    setNewConversationDraft(problemMissionDraft(seed))
-    setNewConversationAttachments([])
-    setSelectedTodoId(null)
-    setIsCreatingConversation(true)
-    setShowSwitchModel(false)
-    setWorkspaceView('conversations')
-  }
-
-  function handleSeeAllProblems() {
-    if (selectedProject === null) return
-    window.localStorage.setItem(`pupitre:dashboard-tab:${selectedProject.id}`, 'problems')
-    openInspector('dashboard')
-  }
-
   function handleConversationClosed() {
     setSelectedConversation(null)
     setConversationSeed(null)
@@ -859,7 +823,6 @@ function App() {
       <Titlebar
         crumbs={[selectedProject?.name, titlebarView]}
         onSearch={() => setPaletteOpen(true)}
-        time={time.snapshot}
         instance={instance}
         onRestart={restartApp}
         destinations={destinations}
@@ -1053,8 +1016,6 @@ function App() {
               problemIds={conversationSeed?.problemIds}
               problemPlanIndices={conversationSeed?.problemPlanIndices}
               missionTitle={conversationSeed?.missionTitle}
-              onStartProblem={handleStartProblem}
-              onSeeAllProblems={handleSeeAllProblems}
               reviewStatus={fleet.reviewStatus}
               onHandoff={() => setShowHandoff(true)}
               onSwitchModel={() => setShowSwitchModel(true)}
@@ -1123,7 +1084,6 @@ function App() {
             project={selectedProject}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
             onStartConversation={handleStartFromTicket}
-            onStartProblem={handleStartProblem}
             onOpenSettings={() => setProjectSettingsOpen(true)}
           />
         ) : inspector === 'costs' ? (

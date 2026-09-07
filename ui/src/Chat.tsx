@@ -36,8 +36,6 @@ import { toggleAction, withTaskActions } from './taskDraft'
 import { newConversationDraftStorageKey } from './conversationDraft'
 import { ThreadSearch } from './ThreadSearch'
 import { PushTimeline } from './PushTimeline'
-import { ProblemSuggestionsLoader } from './ProblemSuggestions'
-import type { ProblemMissionSeed } from './problemMission'
 import { collectConversationAssets } from './conversationAssets'
 import type { TodoDraftSeed } from './todoDraft'
 import { branchOfWorktree } from './conversationBranch'
@@ -77,8 +75,6 @@ interface ChatProps {
   problemIds?: string[]
   problemPlanIndices?: Record<string, number[]>
   missionTitle?: string
-  onStartProblem?: (seed: ProblemMissionSeed) => void
-  onSeeAllProblems?: () => void
   reviewStatus: ReviewStatusSnapshot | null
   onHandoff: () => void
   onSwitchModel: () => void
@@ -188,8 +184,6 @@ export function Chat({
   problemIds,
   problemPlanIndices,
   missionTitle,
-  onStartProblem,
-  onSeeAllProblems,
   reviewStatus,
   onHandoff,
   onSwitchModel,
@@ -479,14 +473,6 @@ export function Chat({
             </div>
           </div>
           </div>
-
-          {conversation === null && onStartProblem && onSeeAllProblems ? (
-            <ProblemSuggestionsLoader
-              projectId={project.id}
-              onSelect={onStartProblem}
-              onSeeAll={onSeeAllProblems}
-            />
-          ) : null}
 
           <Composer
             conversationId={conversation?.id ?? null}
