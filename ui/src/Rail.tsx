@@ -16,11 +16,7 @@ interface RailProps {
   onProjectCreated: (project: Project) => void
   workspaceView: WorkspaceView
   onConversationsSelect: () => void
-  onDashboardSelect: () => void
   onDesignSelect: () => void
-  onCostsSelect: () => void
-  onLibrarySelect: () => void
-  onRoutinesSelect: () => void
   onAttentionSelect: () => void
   onHelpSelect: () => void
   onSettingsSelect: () => void
@@ -143,11 +139,7 @@ export const Rail = memo(function Rail({
   onProjectCreated,
   workspaceView,
   onConversationsSelect,
-  onDashboardSelect,
   onDesignSelect,
-  onCostsSelect,
-  onLibrarySelect,
-  onRoutinesSelect,
   onAttentionSelect,
   onHelpSelect,
   onSettingsSelect,
@@ -204,7 +196,7 @@ export const Rail = memo(function Rail({
     needsProject?: boolean
     badge?: number
     shortcut?: string | null
-    group: 'work' | 'supervision' | 'library' | 'system'
+    group: 'work' | 'supervision' | 'system'
   }> = [
     {
       name: 'conversations',
@@ -215,12 +207,8 @@ export const Rail = memo(function Rail({
       shortcut: navigationShortcutLabel('conversations'),
       group: 'work',
     },
-    { name: 'dashboard', label: 'Projet', view: 'dashboard', onClick: onDashboardSelect, needsProject: true, shortcut: navigationShortcutLabel('dashboard'), group: 'work' },
     ...(window.__TAURI__ ? [{ name: 'design' as const, label: 'Claude Design', view: 'design' as const, onClick: onDesignSelect, shortcut: navigationShortcutLabel('design'), group: 'work' as const }] : []),
     { name: 'attention', label: 'Activité', view: 'attention', onClick: onAttentionSelect, badge: attentionCount, group: 'supervision' },
-    { name: 'library', label: 'Contexte', view: 'library', onClick: onLibrarySelect, group: 'library' },
-    { name: 'routines', label: 'Automatisations', view: 'routines', onClick: onRoutinesSelect, group: 'library' },
-    { name: 'costs', label: 'Utilisation', view: 'costs', onClick: onCostsSelect, needsProject: true, group: 'system' },
     { name: 'settings', label: 'Réglages', view: 'settings', onClick: onSettingsSelect, group: 'system' },
     { name: 'help', label: 'Aide', view: 'help', onClick: onHelpSelect, group: 'system' },
   ]

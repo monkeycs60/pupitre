@@ -33,6 +33,8 @@
 .automation-row p { color:var(--text-muted); font-size:12px; line-height:1.5; white-space:pre-wrap; }
 .automation-row > div:last-child { display:flex; gap:8px; }
 .sidebar-footer--compact { padding:8px 12px; }
+.sidebar-footer--compact .sidebar-quotas { padding-bottom:6px; }
+.sidebar-footer--compact .sidebar-quotas + .sidebar-usage-link { border-top:1px solid var(--border-subtle); padding-top:8px; }
 .sidebar-usage-link { display:flex; width:100%; justify-content:space-between; border:0; background:transparent; color:var(--text-faint); padding:8px 4px; font-size:12px; }
 .sidebar-usage-link:hover { color:var(--text); }
 .workspace-welcome { max-width:400px; text-align:left; }

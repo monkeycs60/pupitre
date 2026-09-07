@@ -14,7 +14,8 @@ import {
   setConversationPinned,
   setConversationPermissionMode,
 } from './api'
-import type { Conversation, FleetItem, Project, ProjectDomain, WorkspaceView } from './types'
+import type { Conversation, FleetItem, Project, ProjectDomain, QuotaSnapshot, WorkspaceView } from './types'
+import { QuotaStatus } from './QuotaBar'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { modelLabel } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
@@ -38,6 +39,7 @@ interface SidebarProps {
   onTodoSelect?: (id: string) => void
   onTodoCreate?: () => void
   onUsageSelect?: () => void
+  quotas?: QuotaSnapshot
   selectedProject: Project | null
   selectedConversation: Conversation | null
   onProjectSelect: (project: Project) => void
@@ -241,6 +243,7 @@ export const Sidebar = memo(function Sidebar({
   onTodoSelect = () => {},
   onTodoCreate = () => {},
   onUsageSelect,
+  quotas,
   selectedConversation,
   onProjectSelect,
   onConversationSelect,
@@ -941,6 +944,11 @@ export const Sidebar = memo(function Sidebar({
       ) : null}
 
       <div className="sidebar-footer sidebar-footer--compact">
+        {quotas ? (
+          <div className="sidebar-quotas">
+            <QuotaStatus snapshot={quotas} />
+          </div>
+        ) : null}
         <button type="button" className="sidebar-usage-link" onClick={onUsageSelect}>Utilisation et quotas <span aria-hidden="true">↗</span></button>
       </div>
     </aside>

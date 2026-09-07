@@ -641,13 +641,6 @@ function App() {
     setConversationListVersion((current) => current + 1)
   }
 
-  function handleCostsSelect() {
-    if (!confirmLeaveMemory()) return
-    if (selectedProject === null) return
-    openInspector('costs')
-    setShowSwitchModel(false)
-  }
-
   function handleDashboardSelect() {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
@@ -844,11 +837,7 @@ function App() {
         onProjectCreated={handleProjectSelect}
         workspaceView={inspector === 'workflows' ? 'routines' : inspector === 'quotas' ? 'costs' : inspector ?? workspaceView}
         onConversationsSelect={handleConversationsSelect}
-        onDashboardSelect={handleDashboardSelect}
         onDesignSelect={handleDesignSelect}
-        onCostsSelect={handleCostsSelect}
-        onLibrarySelect={handleLibrarySelect}
-        onRoutinesSelect={handleRoutinesSelect}
         onAttentionSelect={handleAttentionSelect}
         onHelpSelect={() => handleHelpSelect()}
         onSettingsSelect={handleSettingsSelect}
@@ -867,6 +856,7 @@ function App() {
         onTodoSelect={(id) => { setSelectedTodoId(id); setIsCreatingConversation(false); setWorkspaceView('conversations') }}
         onTodoCreate={() => { setTodoSeed(null); handleTodoCreate() }}
         onUsageSelect={() => openInspector('quotas')}
+        quotas={quotas.snapshot}
         onProjectSelect={handleProjectSelect}
         onConversationSelect={handleConversationSelect}
         onConversationCreate={handleConversationCreate}
