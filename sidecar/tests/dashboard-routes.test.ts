@@ -77,10 +77,10 @@ async function putJson(path: string, body: unknown): Promise<Response> {
   });
 }
 
-async function visualPost(path: string, body: unknown, token?: string): Promise<Response> {
+async function visualPost(path: string, body: unknown, token?: string, method = "POST"): Promise<Response> {
   if (!current) throw new Error("serveur de test non démarré");
   return fetch(`${current.baseUrl}${path}`, {
-    method: "POST",
+    method,
     headers: {
       ...jsonHeaders(),
       origin: "chrome-extension://pupitre-test",
@@ -860,15 +860,31 @@ test("apparie l'extension puis protège la résolution visuelle par jeton", asyn
     origin: "http://localhost:5179",
     pathname: "/",
   }, token);
-  const payload = await resolved.json() as {
+  type ResolvePayload = {
     status: string;
+    via?: string;
     instance?: string;
     instancePort?: number;
+    projects?: Array<{ id: string; name: string }>;
     destinations?: { currentBranch: string; branches: string[] };
   };
+  const payload = await resolved.json() as ResolvePayload;
   expect(payload.status).toBe("resolved");
+  expect(payload.via).toBe("origin");
   expect(payload.destinations).toEqual(expect.objectContaining({ currentBranch: "master", branches: ["master"] }));
   // L'extension ne peut afficher la cible que si la résolution la nomme.
   expect(payload.instance).toBe("stable");
   expect(payload.instancePort).toBe(Number(new URL(current.baseUrl).port));
+
+  // Le popup doit pouvoir réépingler une origine déjà résolue : sans la liste
+  // complète des projets, le sélecteur serait vide sur une page reconnue.
+  expect(payload.projects).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: project.id }),
+  ]));
+  const rebound = await visualPost("/api/visual-feedback/origins", {
+    origin: "http://localhost:5179",
+    pathPrefix: "/",
+    projectId: project.id,
+  }, token, "PUT");
+  expect(rebound.status).toBe(200);
 });

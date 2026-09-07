@@ -35,7 +35,13 @@ export interface ConversationSummary {
 export interface InstanceTarget { instance?: "stable" | "dev"; instancePort?: number }
 
 export type Resolution = InstanceTarget & (
-  | { status: "resolved"; project: ProjectSummary; destinations?: Destinations }
+  | {
+      status: "resolved";
+      via: "origin" | "cwd";
+      project: ProjectSummary;
+      projects: ProjectSummary[];
+      destinations?: Destinations;
+    }
   | { status: "ambiguous" | "unresolved"; projects: ProjectSummary[] }
 );
 

@@ -49,7 +49,13 @@ export interface VisualFeedbackSubmission {
 }
 
 export type VisualFeedbackResolution =
-  | { status: "resolved"; project: Pick<Project, "id" | "name"> }
+  | {
+      status: "resolved";
+      /** `origin` : association épinglée. `cwd` : déduite du dossier du serveur. */
+      via: "origin" | "cwd";
+      project: Pick<Project, "id" | "name">;
+      projects: Array<Pick<Project, "id" | "name">>;
+    }
   | { status: "ambiguous"; projects: Array<Pick<Project, "id" | "name">> }
   | { status: "unresolved"; projects: Array<Pick<Project, "id" | "name">> };
 
@@ -203,18 +209,21 @@ export class VisualFeedbackService {
         return prefix === "/" || input.pathname === prefix || input.pathname.startsWith(`${prefix}/`);
       })
       .sort((left, right) => right.path_prefix.length - left.path_prefix.length)[0] ?? null;
+    const projects = this.projects.list().map(publicProject);
     if (associated) {
       const project = this.projects.get(associated.project_id);
-      if (project) return { status: "resolved", project: publicProject(project) };
+      if (project) return { status: "resolved", via: "origin", project: publicProject(project), projects };
     }
     const cwd = input.cwd ? realpathSync(input.cwd) : null;
     const candidates = cwd ? this.projects.list().filter((project) => {
       try { return inside(realpathSync(project.path), cwd); } catch { return false; }
     }) : [];
-    if (candidates.length === 1) return { status: "resolved", project: publicProject(candidates[0]!) };
+    if (candidates.length === 1) {
+      return { status: "resolved", via: "cwd", project: publicProject(candidates[0]!), projects };
+    }
     return candidates.length > 1
       ? { status: "ambiguous", projects: candidates.map(publicProject) }
-      : { status: "unresolved", projects: this.projects.list().map(publicProject) };
+      : { status: "unresolved", projects };
   }
 
   associateOrigin(origin: string, pathPrefix: string, projectId: string): void {

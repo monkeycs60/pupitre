@@ -45,14 +45,25 @@ async function load() {
   resolution = resolved;
   const instance = resolved.instance ? `${resolved.instance} · ${resolved.instancePort}` : `port ${stored.port}`;
   $("feedback").hidden = false;
+  $("association").hidden = false;
+  const select = $("project-choice") as HTMLSelectElement;
+  const selected = resolved.status === "resolved" ? resolved.project.id : "";
+  select.replaceChildren(...resolved.projects.map((project) =>
+    new Option(project.name, project.id, false, project.id === selected)));
   if (resolved.status !== "resolved") {
     status.textContent = `Projet à associer — Pupitre ${instance}`;
-    $("association").hidden = false;
-    const select = $("project-choice") as HTMLSelectElement;
-    select.replaceChildren(...resolved.projects.map((project) => new Option(project.name, project.id)));
+    $("association-hint").textContent = resolved.status === "ambiguous"
+      ? "Plusieurs projets contiennent le dossier de ce serveur : choisis lequel."
+      : `Aucun projet déduit pour ${url.origin}.`;
     return;
   }
   status.textContent = `Pupitre ${instance}`;
+  $("association-hint").textContent = resolved.via === "origin"
+    ? `${url.origin} est épinglée sur ce projet.`
+    : `Projet déduit du dossier du serveur — épingle ${url.origin} pour ne plus en dépendre.`;
+  ($("associate") as HTMLButtonElement).textContent = resolved.via === "origin"
+    ? "Réépingler cette origine"
+    : "Épingler cette origine";
   $("project").textContent = resolved.project.name;
   const loadedDestinations = resolved.destinations
     ?? await send({ type: "DESTINATIONS", projectId: resolved.project.id }) as Destinations;
@@ -92,7 +103,7 @@ $("inspect").addEventListener("click", () => void (async () => {
 $("associate").addEventListener("click", () => void (async () => {
   if (!tab?.url) return;
   const url = new URL(tab.url);
-  await send({ type: "ASSOCIATE", origin: url.origin, pathname: url.pathname, projectId: ($("project-choice") as HTMLSelectElement).value });
+  await send({ type: "ASSOCIATE", origin: url.origin, pathname: "/", projectId: ($("project-choice") as HTMLSelectElement).value });
   location.reload();
 })().catch(showError));
 

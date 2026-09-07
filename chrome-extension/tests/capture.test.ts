@@ -27,11 +27,13 @@ beforeAll(async () => {
       onMessage: { addListener() {} },
       sendMessage: async (message: any) => {
         const panel = shadow.querySelector<HTMLElement>(".panel");
-        messages.push({ type: message.type, panelHidden: panel?.hidden ?? true });
+        messages.push({ type: message.type, panelHidden: panel?.hidden !== false });
         if (message.type === "RESOLVE") {
           return {
             status: "resolved",
+            via: "cwd",
             project: { id: "p1", name: "Projet" },
+            projects: [{ id: "p1", name: "Projet" }],
             instance: "dev",
             instancePort: 4821,
             destinations: { branches: ["main"], currentBranch: "main", conversations: [] },
