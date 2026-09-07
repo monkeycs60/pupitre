@@ -37,6 +37,8 @@ const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
   { id: 'environments', label: 'Environnements' },
 ]
 
+const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { tickets: 'Tickets', problems: 'Problématiques', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements' }
+
 function dashboardTabStorageKey(projectId: string): string {
   return `pupitre:dashboard-tab:${projectId}`
 }
@@ -306,12 +308,10 @@ export function DashboardView({
   return (
     <section className="dashboard-view" aria-label={embedded ? 'Suivi du projet' : undefined} aria-labelledby={embedded ? undefined : 'dashboard-title'}>
       <div className="dashboard-scroll">
-        {embedded ? <header className="project-panel-toolbar">
-          <select aria-label="Section du projet" value={activeTab} onChange={(event) => selectTab(event.target.value as DashboardTab)}>
-            {DASHBOARD_TABS.filter((tab) => tab.id !== 'problems' || activeTab === 'problems' || (data?.problems?.problems.length ?? 0) > 0).map((tab) => <option key={tab.id} value={tab.id}>{tab.id === 'problems' ? 'Anciens problèmes' : tab.label}</option>)}
-          </select>
-          <button type="button" className="text-button" onClick={() => void (activeTab === 'changelog' ? handleChangelogRefresh() : handleRefresh())}>Actualiser</button>
-        </header> : <header className="dashboard-header">
+        {embedded ? <div className="inspector-tabs project-panel-tabs" role="tablist" aria-label="Sections du projet">
+          {DASHBOARD_TABS.filter((tab) => tab.id !== 'problems' || activeTab === 'problems' || (data?.problems?.problems.length ?? 0) > 0).map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => selectTab(tab.id)}>{PROJECT_PANEL_LABELS[tab.id]}</button>)}
+          <button type="button" className="project-panel-refresh" onClick={() => void (activeTab === 'changelog' ? handleChangelogRefresh() : handleRefresh())}>Actualiser</button>
+        </div> : <header className="dashboard-header">
           <div className="dashboard-heading">
             <h1 id="dashboard-title">Tableau de bord</h1>
             <p className="dashboard-baseline">{project.name}</p>

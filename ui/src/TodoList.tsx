@@ -39,7 +39,7 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
     </div>
     {items.length > 0 ? <input className="todo-search" aria-label="Filtrer les TODO" placeholder="Rechercher une TODO…" value={query} onChange={(event) => setQuery(event.target.value)} /> : null}
     {error || actionError ? <p className="sidebar-error" role="alert">{actionError ?? error}</p> : null}
-    {loading ? <p className="list-empty">Chargement…</p> : !items.length ? <p className="list-empty">Prépare une conversation et choisis « Ajouter aux TODO ». Elle démarrera quand tu le décideras.</p> : null}
+    {loading ? <p className="list-empty">Chargement…</p> : !items.length ? <p className="list-empty">Prépare une TODO : elle démarrera quand tu dépileras la file, dans une branche dédiée.</p> : null}
     {items.length > 0 && !visible.length ? <p className="list-empty">Aucune TODO ne correspond.</p> : null}
     <div className="todo-rows">{visible.map((item) => <div className={`todo-row ${item.id === selectedId ? 'is-selected' : ''}`} key={item.id}>
       <button className="todo-row-main" onClick={() => onSelect(item.id)} aria-current={item.id === selectedId ? 'true' : undefined}>

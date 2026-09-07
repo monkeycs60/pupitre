@@ -1,4 +1,5 @@
-import { WorkspaceInspector, type InspectorView } from './WorkspaceInspector'
+import { INSPECTOR_GROUPS, WorkspaceInspector, inspectorGroupOf, type InspectorView } from './WorkspaceInspector'
+import { TodoEditor } from './TodoEditor'
 import { WorkflowsView } from './WorkflowsView'
 import { TodoDetail } from './TodoDetail'
 import { useTodos, type TodoItem } from './todos'
@@ -149,6 +150,7 @@ function App() {
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null)
   const [sidebarTab, setSidebarTab] = useState<'conversations' | 'todos'>('conversations')
   const [newTodo, setNewTodo] = useState(false)
+  const lastInspectorViews = useRef<Partial<Record<string, InspectorView>>>({})
   const [focusEventId, setFocusEventId] = useState<number | null>(null)
   const todos = useTodos(selectedProject?.id ?? null)
   const selectedTodo = todos.items.find((item) => item.id === selectedTodoId) ?? null
@@ -427,6 +429,7 @@ function App() {
 
   function openInspector(view: InspectorView) {
     if (view !== inspector && !confirmLeaveMemory()) return
+    lastInspectorViews.current[inspectorGroupOf(view).title] = view
     setInspector(view)
     setWorkspaceView('conversations')
   }
@@ -439,11 +442,17 @@ function App() {
     todos.refresh()
     setSelectedTodoId(todo.id)
     setSidebarTab('todos')
-    setSelectedConversation(null)
-    setIsCreatingConversation(false)
-    setNewConversationDraft('')
-    setNewConversationAttachments([])
     setNewTodo(false)
+  }
+
+  function handleTodoCreate() {
+    if (!confirmLeaveMemory() || selectedProject === null) return
+    setSelectedTodoId(null)
+    setIsCreatingConversation(false)
+    setShowSwitchModel(false)
+    setNewTodo(true)
+    setSidebarTab('todos')
+    setWorkspaceView('conversations')
   }
 
   function confirmLeaveMemory(): boolean {
@@ -842,13 +851,13 @@ function App() {
       <>
       <Sidebar
         selectedProject={selectedProject}
-        selectedConversation={selectedTodoId ? null : selectedConversation}
+        selectedConversation={selectedTodoId || newTodo ? null : selectedConversation}
         sidebarTab={sidebarTab}
         onSidebarTabChange={setSidebarTab}
         todos={todos}
         selectedTodoId={selectedTodoId}
         onTodoSelect={(id) => { setSelectedTodoId(id); setIsCreatingConversation(false); setWorkspaceView('conversations') }}
-        onTodoCreate={() => { handleConversationCreate(); setNewTodo(true); setSidebarTab('todos') }}
+        onTodoCreate={handleTodoCreate}
         onUsageSelect={() => openInspector('quotas')}
         onProjectSelect={handleProjectSelect}
         onConversationSelect={handleConversationSelect}
@@ -887,7 +896,11 @@ function App() {
       <section className="workspace" aria-label={titlebarView ?? 'Conversation'}>
         {workspaceView === 'conversations' ? <nav className="workspace-toolbar" aria-label="Outils du projet">
           <span>{selectedProject?.name ?? 'Conversations'}</span>
-          <div><button aria-pressed={inspector === 'dashboard'} onClick={() => inspector === 'dashboard' ? closeInspector() : openInspector('dashboard')} disabled={!selectedProject}>Projet</button><button aria-pressed={inspector === 'documents'} onClick={() => inspector === 'documents' ? closeInspector() : openInspector('documents')} disabled={!selectedProject}>Fichiers</button><button aria-pressed={inspector === 'attention' || inspector === 'fleet'} onClick={() => openInspector('attention')}>Activité{attention.items.length > 0 ? ` · ${attention.items.length}` : ''}</button></div>
+          <div>{INSPECTOR_GROUPS.map((group) => {
+            const active = inspector !== null && group.tabs.some(([id]) => id === inspector)
+            const count = group.title === 'Activité' ? attention.items.length : 0
+            return <button key={group.title} type="button" aria-pressed={active} disabled={group.needsProject && !selectedProject} onClick={() => active ? closeInspector() : openInspector(lastInspectorViews.current[group.title] ?? group.tabs[0][0])}>{group.title}{count > 0 ? <span className="workspace-toolbar-count">{count}</span> : null}</button>
+          })}</div>
         </nav> : null}
         <div className="workspace-split">
         <div className="conversation-workspace">
@@ -896,6 +909,7 @@ function App() {
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         : workspaceView === 'settings' ? <AppSettingsView instance={instance} />
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
+        : newTodo ? <TodoEditor key={selectedProject.id} project={selectedProject} items={todos.items} quotas={quotas.snapshot} onProjectUpdated={handleProjectUpdated} onCreated={handleTodoCreated} onCancel={() => setNewTodo(false)} />
         : selectedTodo ? <TodoDetail key={selectedTodo.id} item={selectedTodo} items={todos.items} projectName={selectedProject.name} onChanged={todos.refresh} onDeleted={() => { setSelectedTodoId(null); todos.refresh() }} onConversationSelect={(id) => void handleGitConversationSelect(id)} />
         : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">
@@ -905,7 +919,7 @@ function App() {
           <>
             <header className="conversation-header">
               <div className="conversation-title-block">
-                <h1>{selectedConversation?.title ?? (newTodo ? 'Nouvelle TODO' : 'Nouvelle conversation')}</h1>
+                <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
                 {selectedConversation !== null
                 && branchOfWorktree(selectedConversation.worktree_path) !== null ? (
                   <span
@@ -950,7 +964,7 @@ function App() {
             </header>
             <Chat
               key={selectedConversation === null
-                ? `chat-new-${selectedProject.id}-${conversationSeed?.ticketId ?? ''}-${newConversationDraft}-${newTodo}`
+                ? `chat-new-${selectedProject.id}-${conversationSeed?.ticketId ?? ''}-${newConversationDraft}`
                 : `chat-${selectedConversation.id}`}
               events={selectedConversation === null ? [] : events}
               connection={connection}
@@ -959,8 +973,6 @@ function App() {
               project={selectedProject}
               quotas={quotas.snapshot}
               onConversationCreated={handleConversationCreated}
-              onTodoCreated={handleTodoCreated}
-              initialTodo={newTodo}
               focusEventId={focusEventId}
               onProjectUpdated={handleProjectUpdated}
               onConversationRead={handleConversationRead}

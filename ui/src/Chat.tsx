@@ -1,4 +1,3 @@
-import type { TodoItem } from './todos'
 import {
   useCallback,
   useEffect,
@@ -43,10 +42,8 @@ import { collectConversationAssets } from './conversationAssets'
 import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
 
 interface ChatProps {
-  initialTodo?: boolean
   /** Événement à faire défiler et surligner à l’ouverture (retour depuis un fichier partagé). */
   focusEventId?: number | null
-  onTodoCreated?: (todo: TodoItem) => void
   events: AppEvent[]
   connection: ConnectionState
   retryAt: number | null
@@ -163,8 +160,6 @@ export function Chat({
   project,
   quotas,
   onConversationCreated,
-  onTodoCreated,
-  initialTodo,
   focusEventId = null,
   onProjectUpdated,
   onConversationRead,
@@ -476,8 +471,6 @@ export function Chat({
             quotas={quotas}
             isRunning={isRunning}
             onConversationCreated={handleConversationCreated}
-            onTodoCreated={onTodoCreated}
-            initialTodo={initialTodo}
             onProjectUpdated={onProjectUpdated}
             message={message}
             onMessageChange={handleMessageChange}
