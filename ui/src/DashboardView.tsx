@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { BranchIcon } from './BranchIcon'
-import { createProblemCapture, listProjectChangelog, refreshProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
+import { createProblemCapture, getSentryInbox, listProjectChangelog, refreshProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
 import type {
   DashboardIntegration,
   Project,
@@ -38,6 +38,14 @@ const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
 ]
 
 const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { tickets: 'Tickets', problems: 'Problématiques', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements' }
+
+const PROJECT_RAIL_ICONS: Record<DashboardTab, ReactNode> = {
+  tickets: <><rect x="2" y="4" width="12" height="8" rx="1.5" /><path d="M2 7h12" /></>,
+  problems: <><circle cx="8" cy="8" r="5.5" /><path d="M8 5v3.5M8 10.8v.2" /></>,
+  sentry: <path d="M8 2.5 13.5 12H10a2 2 0 0 0-2-2 2 2 0 0 0-2 2H2.5Z" />,
+  changelog: <path d="M3 4.5h10M3 8h7M3 11.5h9" />,
+  environments: <><rect x="2.5" y="3" width="11" height="4" rx="1" /><rect x="2.5" y="9" width="11" height="4" rx="1" /><path d="M5 5h.01M5 11h.01" /></>,
+}
 
 function dashboardTabStorageKey(projectId: string): string {
   return `pupitre:dashboard-tab:${projectId}`
@@ -174,6 +182,10 @@ export function DashboardView({
   const [changelogState, setChangelogState] = useState<ProjectChangelogState | null>(null)
   const [changelogDomain, setChangelogDomain] = useState('')
   const [changelogMenuOpen, setChangelogMenuOpen] = useState(false)
+  /* Le compteur du rail : l'inbox Sentry n'est pas dans le payload du
+     tableau de bord, et la section ne se monte qu'une fois ouverte. */
+  const [sentryCount, setSentryCount] = useState(0)
+  const railRef = useRef<HTMLElement>(null)
   const [activeTab, setActiveTab] = useState<DashboardTab>(() => storedDashboardTab(project.id))
   const [captureOpen, setCaptureOpen] = useState(false)
   const [captureText, setCaptureText] = useState('')
@@ -208,6 +220,15 @@ export function DashboardView({
     }).catch(() => {})
     return () => { cancelled = true }
   }, [project.id])
+
+  useEffect(() => {
+    if (!embedded) return
+    const controller = new AbortController()
+    void getSentryInbox(project.id, controller.signal)
+      .then((payload) => setSentryCount(payload.issues.length))
+      .catch(() => {})
+    return () => controller.abort()
+  }, [project.id, embedded])
 
   useEffect(() => {
     let cancelled = false
@@ -305,13 +326,73 @@ export function DashboardView({
     }
   }
 
+  const railSections = DASHBOARD_TABS.filter(
+    (tab) => tab.id !== 'problems' || activeTab === 'problems' || (data?.problems?.problems.length ?? 0) > 0,
+  )
+  const railCounts: Partial<Record<DashboardTab, number>> = {
+    tickets: data?.tickets.length ?? 0,
+    problems: data?.problems?.problems.length ?? 0,
+    sentry: sentryCount,
+  }
+
+  function moveRailFocus(current: DashboardTab, step: number) {
+    const index = railSections.findIndex((section) => section.id === current)
+    const next = railSections[index + step]
+    if (next === undefined) return
+    selectTab(next.id)
+    railRef.current?.querySelector<HTMLButtonElement>(`#project-rail-${next.id}`)?.focus()
+  }
+
   return (
-    <section className="dashboard-view" aria-label={embedded ? 'Suivi du projet' : undefined} aria-labelledby={embedded ? undefined : 'dashboard-title'}>
+    <section
+      className={`dashboard-view${embedded ? ' is-railed' : ''}`}
+      aria-label={embedded ? 'Suivi du projet' : undefined}
+      aria-labelledby={embedded ? undefined : 'dashboard-title'}
+    >
+      {embedded ? (
+        <nav className="project-rail" ref={railRef} aria-label="Sections du projet">
+          <p className="project-rail-title">Projet</p>
+          <div className="project-rail-list" role="tablist" aria-orientation="vertical" aria-label="Sections du projet">
+            {railSections.map((section) => {
+              const count = railCounts[section.id] ?? 0
+              return (
+                <button
+                  key={section.id}
+                  id={`project-rail-${section.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === section.id}
+                  tabIndex={activeTab === section.id ? 0 : -1}
+                  className={activeTab === section.id ? 'is-selected' : ''}
+                  onClick={() => selectTab(section.id)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+                    event.preventDefault()
+                    moveRailFocus(section.id, event.key === 'ArrowDown' ? 1 : -1)
+                  }}
+                >
+                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                      {PROJECT_RAIL_ICONS[section.id]}
+                    </g>
+                  </svg>
+                  <span>{PROJECT_PANEL_LABELS[section.id]}</span>
+                  {count > 0 ? <span className={`project-rail-count${section.id === 'sentry' ? ' is-alert' : ''}`}>{count}</span> : null}
+                </button>
+              )
+            })}
+          </div>
+          <button
+            type="button"
+            className="project-rail-refresh"
+            onClick={() => void (activeTab === 'changelog' ? handleChangelogRefresh() : handleRefresh())}
+          >
+            Actualiser
+          </button>
+        </nav>
+      ) : null}
       <div className="dashboard-scroll">
-        {embedded ? <div className="inspector-tabs project-panel-tabs" role="tablist" aria-label="Sections du projet">
-          {DASHBOARD_TABS.filter((tab) => tab.id !== 'problems' || activeTab === 'problems' || (data?.problems?.problems.length ?? 0) > 0).map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => selectTab(tab.id)}>{PROJECT_PANEL_LABELS[tab.id]}</button>)}
-          <button type="button" className="project-panel-refresh" onClick={() => void (activeTab === 'changelog' ? handleChangelogRefresh() : handleRefresh())}>Actualiser</button>
-        </div> : <header className="dashboard-header">
+        {embedded ? null : <header className="dashboard-header">
           <div className="dashboard-heading">
             <h1 id="dashboard-title">Tableau de bord</h1>
             <p className="dashboard-baseline">{project.name}</p>
