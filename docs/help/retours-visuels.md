@@ -15,7 +15,7 @@ L’extension Chrome de Pupitre transforme une zone pointée sur une page locale
 
 Sur une page servie depuis `localhost`, `*.localhost` ou `127.0.0.1` :
 
-1. utilise `Alt+Maj+P` ou **Pointer une zone** dans l’extension ;
+1. utilise `Alt+Maj+S` ou **Pointer une zone** dans l’extension ;
 2. survole l’interface puis clique l’élément concerné ;
 3. saisis la correction souhaitée ;
 4. recommence pour ajouter d’autres annotations ;
