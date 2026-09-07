@@ -658,18 +658,22 @@ button.titlebar-instance {
   gap: var(--space-3);
 }
 
+/* Le titre s'écrit en entier : il prend toute la largeur laissée par les
+   actions, et se replie sur une seconde ligne plutôt que de se couper. */
 .conversation-header h1 {
-  flex: 0 1 auto;
+  display: -webkit-box;
+  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   overflow: hidden;
   color: var(--text-strong);
   font-size: var(--text-md);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.3;
   letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .conversation-instruction-badge {
@@ -846,6 +850,28 @@ button.titlebar-instance {
 .header-action-icon:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.header-action-badged {
+  position: relative;
+  overflow: visible;
+}
+
+.header-action-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 15px;
+  padding: 0 4px;
+  color: var(--on-accent);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 15px;
+  text-align: center;
+  background: var(--accent);
+  border-radius: var(--r-full);
 }
 
 .connection-banner {

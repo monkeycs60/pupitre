@@ -11,12 +11,12 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react'
-import { Chat } from './Chat'
+import { Chat, type ThreadTools } from './Chat'
 import { Sidebar } from './Sidebar'
 import { Rail } from './Rail'
 import { Titlebar, type TitlebarDestination } from './Titlebar'
 import { navigationShortcutLabel } from './navigationShortcuts'
-import { NavIcon, type NavName } from './NavIcon'
+import { NavIcon } from './NavIcon'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
 import type { Attachment, Conversation, Project } from './types'
@@ -70,15 +70,8 @@ const MemoryView = lazy(() => import('./MemoryView').then((module) => ({ default
 const HelpView = lazy(() => import('./HelpView').then((module) => ({ default: module.HelpView })))
 const ProgressView = lazy(() => import('./ProgressView').then((module) => ({ default: module.ProgressView })))
 const AppSettingsView = lazy(() => import('./AppSettingsView').then((module) => ({ default: module.AppSettingsView })))
-const SharedFilesView = lazy(() => import('./SharedFilesView').then((module) => ({ default: module.SharedFilesView })))
 const DesignView = lazy(() => import('./DesignView').then((module) => ({ default: module.DesignView })))
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
-
-/** Panneaux joignables depuis le head de la conversation. */
-const HEADER_PANELS: ReadonlyArray<{ view: InspectorView; name: NavName; label: string }> = [
-  { view: 'dashboard', name: 'dashboard', label: 'Suivi du projet' },
-  { view: 'documents', name: 'documents', label: 'Fichiers partagés' },
-]
 
 const DEFAULT_SIDEBAR_WIDTH = 296
 const MIN_SIDEBAR_WIDTH = 200
@@ -172,6 +165,7 @@ function App() {
   const selectedTodo = todos.items.find((item) => item.id === selectedTodoId) ?? null
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
+  const [threadTools, setThreadTools] = useState<ThreadTools | null>(null)
   const [locationRestored, setLocationRestored] = useState(false)
   // Décision D1 : l'info « sous-tâches en vol » vit dans le fil de la
   // conversation ouverte — la sidebar n'en affiche l'indicateur que pour elle.
@@ -670,12 +664,6 @@ function App() {
     setShowSwitchModel(false)
   }
 
-  function handleDocumentsSelect() {
-    if (!confirmLeaveMemory()) return
-    openInspector('documents')
-    setShowSwitchModel(false)
-  }
-
   function handleConversationsSelect() {
     if (!confirmLeaveMemory()) return
     setInspector(null)
@@ -731,7 +719,6 @@ function App() {
     if (view === 'conversations') handleConversationsSelect()
     else if (view === 'fleet') handleFleetSelect()
     else if (view === 'dashboard') handleDashboardSelect()
-    else if (view === 'documents') handleDocumentsSelect()
     else handleDesignSelect()
   }
 
@@ -755,11 +742,10 @@ function App() {
     setShowSwitchModel(false)
   }
 
-  function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'documents' | 'library' | 'memory' | 'help' | 'dashboard') {
+  function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'library' | 'memory' | 'help' | 'dashboard') {
     if (view === 'dashboard') handleDashboardSelect()
     else if (view === 'fleet') handleFleetSelect()
     else if (view === 'routines') handleRoutinesSelect()
-    else if (view === 'documents') handleDocumentsSelect()
     else if (view === 'library') handleLibrarySelect()
     else if (view === 'memory') handleMemorySelect()
     else handleHelpSelect()
@@ -958,16 +944,6 @@ function App() {
             <header className="conversation-header">
               <div className="conversation-title-block">
                 <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
-                {selectedConversation !== null
-                && branchOfWorktree(selectedConversation.worktree_path) !== null ? (
-                  <span
-                    className="conversation-branch"
-                    title={`Worktree dédié : ${selectedConversation.worktree_path}`}
-                  >
-                    <BranchIcon />
-                    {branchOfWorktree(selectedConversation.worktree_path)}
-                  </span>
-                ) : null}
                 {selectedConversation?.ticket_instruction ? (
                   <ConversationInstruction instruction={selectedConversation.ticket_instruction} />
                 ) : null}
@@ -995,20 +971,57 @@ function App() {
                 })()}
               </div>
               <div className="header-actions">
-                {HEADER_PANELS.map(({ view, name, label }) => (
-                  <button
-                    key={view}
-                    type="button"
-                    className={`header-action header-action-icon${inspector === view ? ' is-active' : ''}`}
-                    disabled={selectedProject === null}
-                    aria-pressed={inspector === view}
-                    aria-label={label}
-                    title={label}
-                    onClick={() => inspector === view ? closeInspector() : openInspector(view)}
+                {selectedConversation !== null
+                && branchOfWorktree(selectedConversation.worktree_path) !== null ? (
+                  <span
+                    className="conversation-branch"
+                    title={`Worktree dédié : ${selectedConversation.worktree_path}`}
                   >
-                    <NavIcon name={name} />
+                    <BranchIcon />
+                    {branchOfWorktree(selectedConversation.worktree_path)}
+                  </span>
+                ) : null}
+                {threadTools !== null && threadTools.assetCount > 0 ? (
+                  <button
+                    type="button"
+                    className="header-action header-action-icon header-action-badged"
+                    onClick={threadTools.openAssets}
+                    title={`Afficher les pièces jointes (${threadTools.assetCount})`}
+                    aria-label={`Afficher les ${threadTools.assetCount} pièce${threadTools.assetCount > 1 ? 's' : ''} jointe${threadTools.assetCount > 1 ? 's' : ''}`}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M2.5 4h4l1.25 1.4h5.75v7.1h-11V4Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+                    </svg>
+                    <span className="header-action-count">{threadTools.assetCount}</span>
                   </button>
-                ))}
+                ) : null}
+                {threadTools !== null ? (
+                  <button
+                    type="button"
+                    className="header-action header-action-icon"
+                    onClick={threadTools.openSearch}
+                    title="Rechercher dans le fil (Ctrl F)"
+                    aria-label="Rechercher dans le fil"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+                        <circle cx="7" cy="7" r="4.2" />
+                        <path d="m10.2 10.2 3 3" />
+                      </g>
+                    </svg>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className={`header-action header-action-icon${inspector === 'dashboard' ? ' is-active' : ''}`}
+                  disabled={selectedProject === null}
+                  aria-pressed={inspector === 'dashboard'}
+                  aria-label="Suivi du projet"
+                  title="Suivi du projet"
+                  onClick={() => inspector === 'dashboard' ? closeInspector() : openInspector('dashboard')}
+                >
+                  <NavIcon name="dashboard" />
+                </button>
               </div>
             </header>
             <Chat
@@ -1027,6 +1040,7 @@ function App() {
               onProjectUpdated={handleProjectUpdated}
               onConversationRead={handleConversationRead}
               onRunningSubtasksChange={setRunningSubtasks}
+              onThreadToolsChange={setThreadTools}
               initialMessage={newConversationDraft}
               initialAttachments={newConversationAttachments}
               initialConfig={conversationSeed
@@ -1072,13 +1086,7 @@ function App() {
         </div>
         {workspaceView === 'conversations' && inspector ? <WorkspaceInspector view={inspector} onViewChange={openInspector} onClose={closeInspector}>
           <Suspense fallback={<p className="list-empty">Chargement…</p>}>
-        {inspector === 'documents' ? (
-          <SharedFilesView
-            currentProject={selectedProject}
-            conversationId={selectedConversation?.id ?? null}
-            onConversationSelect={(projectId, conversationId, eventId) => void handleRoutineConversationSelect(projectId, conversationId, eventId)}
-          />
-        ) : inspector === 'library' ? (
+        {inspector === 'library' ? (
           <SkillsLibrary project={selectedProject} />
         ) : inspector === 'routines' ? (
           <RoutinesView

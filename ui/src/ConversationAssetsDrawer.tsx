@@ -26,12 +26,15 @@ export function ConversationAssetsDrawer({
   onOpen,
   onClose,
   onImageOpen,
+  showTrigger = true,
 }: {
   assets: ConversationAsset[]
   open: boolean
   onOpen: () => void
   onClose: () => void
   onImageOpen: (src: string, alt: string) => void
+  /** Faux quand le head porte le déclencheur à sa place. */
+  showTrigger?: boolean
 }) {
   useEffect(() => {
     if (!open) return
@@ -43,7 +46,7 @@ export function ConversationAssetsDrawer({
   }, [open, onClose])
 
   if (!open) {
-    if (assets.length === 0) return null
+    if (!showTrigger || assets.length === 0) return null
     const countLabel = `${assets.length} pièce${assets.length > 1 ? 's' : ''} jointe${assets.length > 1 ? 's' : ''}`
     return (
       <button

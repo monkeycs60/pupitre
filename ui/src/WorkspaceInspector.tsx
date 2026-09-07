@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
-export type InspectorView = 'dashboard' | 'documents' | 'attention' | 'fleet' | 'library' | 'memory' | 'routines' | 'workflows' | 'costs' | 'quotas' | 'progress'
+export type InspectorView = 'dashboard' | 'attention' | 'fleet' | 'library' | 'memory' | 'routines' | 'workflows' | 'costs' | 'quotas' | 'progress'
 export const INSPECTOR_GROUPS = [
   { title: 'Projet', needsProject: true, tabs: [['dashboard', 'Suivi du projet']] },
-  { title: 'Fichiers', needsProject: true, tabs: [['documents', 'Fichiers partagés']] },
   { title: 'Activité', needsProject: false, tabs: [['attention', 'À traiter'], ['fleet', 'Exécutions']] },
   { title: 'Contexte', needsProject: false, tabs: [['library', 'Skills'], ['memory', 'Mémoire']] },
   { title: 'Automatisations', needsProject: true, tabs: [['workflows', 'À la demande'], ['routines', 'Planifiées']] },

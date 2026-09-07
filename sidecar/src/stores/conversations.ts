@@ -38,7 +38,7 @@ export interface Conversation {
   created_at: string; updated_at: string;
 }
 
-const TITLE_MAX = 47;
+const TITLE_MAX = 120;
 
 function matchesPreset(conversation: Pick<Conversation, "provider" | "model" | "effort" | "speed" | "orchestrator">, preset: Preset): boolean {
   return conversation.provider === preset.provider

@@ -18,7 +18,7 @@ beforeEach(() => {
 
 test("crée une conversation avec titre dérivé du premier message", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "Corrige le bug du lightbox sur mobile s'il te plaît" });
-  expect(c.title).toBe("Corrige le bug du lightbox sur mobile s'il te p…");
+  expect(c.title).toBe("Corrige le bug du lightbox sur mobile s'il te plaît");
   expect(c.cli_session_id).toBeNull();
   expect(c.effort).toBeNull();
   expect(c.speed).toBeNull();

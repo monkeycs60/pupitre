@@ -43,6 +43,13 @@ import type { TodoDraftSeed } from './todoDraft'
 import { branchOfWorktree } from './conversationBranch'
 import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
 
+/** Outils du fil pilotés depuis le head : pièces jointes et recherche. */
+export interface ThreadTools {
+  assetCount: number
+  openAssets: () => void
+  openSearch: () => void
+}
+
 interface ChatProps {
   onDraftToTodo?: (seed: TodoDraftSeed) => void
   /** Événement à faire défiler et surligner à l’ouverture (retour depuis un fichier partagé). */
@@ -58,6 +65,8 @@ interface ChatProps {
   onConversationRead?: () => void
   /** Nombre de sous-tâches en cours dans ce fil (indicateur sidebar). */
   onRunningSubtasksChange?: (count: number) => void
+  /** Publie les outils du fil pour que le head de la conversation les porte. */
+  onThreadToolsChange?: (tools: ThreadTools | null) => void
   initialMessage?: string
   initialAttachments?: Attachment[]
   initialConfig?: Partial<ConversationConfig>
@@ -168,6 +177,7 @@ export function Chat({
   onProjectUpdated,
   onConversationRead,
   onRunningSubtasksChange,
+  onThreadToolsChange,
   initialMessage = '',
   initialAttachments = [],
   initialConfig,
@@ -265,6 +275,15 @@ export function Chat({
     onRunningSubtasksChange?.(runningSubtasks)
     return () => onRunningSubtasksChange?.(0)
   }, [runningSubtasks, onRunningSubtasksChange])
+
+  useEffect(() => {
+    onThreadToolsChange?.({
+      assetCount: conversationAssets.length,
+      openAssets: () => setAssetsOpen(true),
+      openSearch: () => setSearchOpen(true),
+    })
+    return () => onThreadToolsChange?.(null)
+  }, [conversationAssets.length, onThreadToolsChange])
 
   const scrollToBottomIfFollowing = useCallback(() => {
     const viewport = viewportRef.current
@@ -407,16 +426,16 @@ export function Chat({
               onOpen={() => setSearchOpen(true)}
               onClose={() => setSearchOpen(false)}
               contentVersion={events.length}
+              showTrigger={false}
             />
-            {!searchOpen ? (
-              <ConversationAssetsDrawer
-                assets={conversationAssets}
-                open={assetsOpen}
-                onOpen={() => setAssetsOpen(true)}
-                onClose={() => setAssetsOpen(false)}
-                onImageOpen={handleImageOpen}
-              />
-            ) : null}
+            <ConversationAssetsDrawer
+              assets={conversationAssets}
+              open={assetsOpen}
+              onOpen={() => setAssetsOpen(true)}
+              onClose={() => setAssetsOpen(false)}
+              onImageOpen={handleImageOpen}
+              showTrigger={false}
+            />
             {!atBottom ? (
               <button type="button" className="thread-jump" onClick={jumpToBottom} title="Aller au dernier message">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">

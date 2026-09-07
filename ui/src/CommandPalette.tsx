@@ -31,7 +31,7 @@ interface CommandPaletteProps {
   onProjectSelect: (project: Project) => void
   onConversationSelect: (projectId: string, conversationId: string) => void | Promise<void>
   onSkillLaunch: (skill: SkillSummary) => void
-  onViewSelect: (view: Extract<WorkspaceView, 'dashboard' | 'fleet' | 'routines' | 'documents' | 'library' | 'memory' | 'help'>) => void
+  onViewSelect: (view: Extract<WorkspaceView, 'dashboard' | 'fleet' | 'routines' | 'library' | 'memory' | 'help'>) => void
   onAction: (action: PaletteAction) => void | Promise<void>
   instance?: InstanceHealth | null
   onPromotionSelect?: () => void
@@ -174,7 +174,6 @@ export function CommandPalette({
       ['dashboard', 'Projet', 'Tickets, Sentry, changelog, environnements'],
       ['fleet', 'Exécutions', 'Runs actifs tous projets'],
       ['routines', 'Automatisations', 'Planifiées et à la demande'],
-      ['documents', 'Fichiers', 'Documents, images et pièces jointes partagés'],
       ['library', 'Skills', 'Compétences et prompts disponibles'],
       ['memory', 'Mémoire', 'Fichiers de mémoire persistante Claude'],
       ['help', 'Aide', 'Comprendre les concepts de Pupitre'],

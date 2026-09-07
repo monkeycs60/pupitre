@@ -6,13 +6,15 @@ import { clearMatches, collectMatches, paintMatches, scrollToMatch } from './thr
  * Barre de recherche flottante du fil (Ctrl F ou la loupe) : occurrences
  * surlignées dans le texte, la courante en accent, navigation ↑↓ / ⏎.
  */
-export function ThreadSearch({ viewportRef, open, onOpen, onClose, contentVersion }: {
+export function ThreadSearch({ viewportRef, open, onOpen, onClose, contentVersion, showTrigger = true }: {
   viewportRef: RefObject<HTMLDivElement | null>
   open: boolean
   onOpen: () => void
   onClose: () => void
   /** Change avec le contenu du fil : les Ranges se recalculent. */
   contentVersion: number
+  /** Faux quand le head porte le déclencheur à sa place. */
+  showTrigger?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -80,6 +82,7 @@ export function ThreadSearch({ viewportRef, open, onOpen, onClose, contentVersio
   }
 
   if (!open) {
+    if (!showTrigger) return null
     return (
       <button
         type="button"

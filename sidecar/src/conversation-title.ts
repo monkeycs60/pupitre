@@ -1,7 +1,7 @@
 const GREETING_PREFIX = /^(?:bonjour|bonsoir|hello|hi|salut)\b[\s,!:.-]*/iu;
 const REQUEST_PREFIX = /^(?:(?:tu|vous)\s+peux?\s+|peux?-tu\s+|pourrais-tu\s+|merci\s+de\s+|est-ce\s+que\s+tu\s+peux\s+)/iu;
 
-const TITLE_MAX = 47;
+const TITLE_MAX = 120;
 const SUMMARY_MAX = 240;
 
 function cleanMessage(message: string): string {
