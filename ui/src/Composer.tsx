@@ -1,3 +1,4 @@
+import { buildTodoInput } from './todoDraft'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
   ChangeEvent,
@@ -15,6 +16,9 @@ import {
   sendMessage,
   uploadMedia,
 } from './api'
+import { createTodo, type TodoItem } from './todos'
+import { TicketSelect } from './TicketSelect'
+import { ticketLinksOf } from './ticketLinks'
 import { buildCreateConversationInput } from './conversationDraft'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { ProviderMark } from './ProviderMark'
@@ -28,6 +32,8 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { parseSidequestDirective } from './sidequestDirective'
 
 interface ComposerProps {
+  initialTodo?: boolean
+  onTodoCreated?: (todo: TodoItem) => void
   conversationId: string | null
   project: Project
   quotas: QuotaSnapshot
@@ -199,6 +205,8 @@ export function Composer({
   quotas,
   isRunning,
   onConversationCreated,
+  onTodoCreated,
+  initialTodo = false,
   onProjectUpdated,
   message,
   onMessageChange,
@@ -217,6 +225,11 @@ export function Composer({
   onAction,
 }: ComposerProps) {
   const isNewConversation = conversationId === null
+  const [todoMode, setTodoMode] = useState(initialTodo)
+  const [selectedTicketId, setSelectedTicketId] = useState(ticketId)
+  const [todoIntegrate, setTodoIntegrate] = useState(false)
+  const [todoAutonomy, setTodoAutonomy] = useState<'local' | 'investigate'>('local')
+  const [todoChecks, setTodoChecks] = useState('')
   const [config, setConfig] = useState<ConversationConfig>({
     presetId: null,
     provider: 'claude',
@@ -483,11 +496,19 @@ export function Composer({
       .map((attachment) => attachment.name)
 
     try {
-      if (conversationId === null) {
+      if (conversationId === null && todoMode) {
+        const todo = await createTodo(project.id, buildTodoInput(config, {
+          message: trimmedMessage, ticketId: selectedTicketId, integrate: todoIntegrate,
+          autonomy: todoAutonomy, checks: todoChecks, attachments: attachmentInputs,
+        }))
+        onMessageChange('')
+        setAttachments([])
+        onTodoCreated?.(todo)
+      } else if (conversationId === null) {
         const conversation = await createConversation(buildCreateConversationInput({
           projectId: project.id,
           ...config,
-          ticketId,
+          ticketId: selectedTicketId,
           originType,
           originKey,
           problemPlanIndex,
@@ -697,6 +718,21 @@ export function Composer({
           </div>
         ) : null}
 
+        {isNewConversation ? <div className="composer-preparation">
+          <div className="composer-intent" role="group" aria-label="Quand démarrer">
+            <button type="button" aria-pressed={!todoMode} onClick={() => setTodoMode(false)}>Maintenant</button>
+            <button type="button" aria-pressed={todoMode} onClick={() => setTodoMode(true)}>TODO</button>
+          </div>
+          <TicketSelect projectId={project.id} value={selectedTicketId} onChange={(ticket) => {
+            setSelectedTicketId(ticket?.id ?? null)
+            setConfig((current) => ({ ...current, ticketKey: ticket?.key ?? null, branch: ticket ? ticketLinksOf(ticket).branch ?? current.branch : current.branch }))
+          }} />
+          {todoMode ? <>
+            <label className="composer-todo-autonomy"><span>Autonomie</span><select value={todoAutonomy} onChange={(event) => { const value = event.target.value as 'local' | 'investigate'; setTodoAutonomy(value); if (value === 'investigate') setTodoIntegrate(false) }}><option value="local">Corrections locales</option><option value="investigate">Enquête</option></select></label>
+            <label className="composer-todo-integrate" title="Autoriser les vérifications, l’intégration dans la branche cible et le push"><input type="checkbox" checked={todoIntegrate} disabled={todoAutonomy === 'investigate'} onChange={(event) => setTodoIntegrate(event.target.checked)} />Intégrer et pousser</label>
+            {todoIntegrate ? <label className="composer-todo-checks"><span>Vérifications avant intégration (une commande par ligne)</span><textarea aria-label="Vérifications de la TODO" rows={2} placeholder="bun test" value={todoChecks} onChange={(event) => setTodoChecks(event.target.value)} /></label> : null}
+          </> : null}
+        </div> : null}
         <div className="composer-actions">
           <div className="composer-tools">
             {isNewConversation ? (
@@ -771,7 +807,7 @@ export function Composer({
                 ? isNewConversation
                   ? 'Création…'
                   : 'Envoi…'
-                : canSteer ? 'Orienter' : 'Envoyer'}
+                : todoMode && isNewConversation ? 'Ajouter aux TODO' : canSteer ? 'Orienter' : 'Envoyer'}
               {!isSubmitting ? <kbd aria-hidden="true">⏎</kbd> : null}
             </button>
           </div>

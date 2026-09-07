@@ -24,3 +24,5 @@
 @import './cards.css';
 @import './dialogs.css';
 @import './settings.css';
+
+@import './conversation-workspace.css';

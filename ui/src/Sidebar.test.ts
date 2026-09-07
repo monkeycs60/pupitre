@@ -8,6 +8,7 @@ if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { Sidebar } = await import('./Sidebar')
+const { WorkflowsView } = await import('./WorkflowsView')
 
 const project: Project = {
   id: 'pupitre',
@@ -167,36 +168,34 @@ function renderSidebar(
     onConversationCreate: () => undefined,
     onConversationCreateFromContext,
     conversationListVersion: 0,
-    quotas: { snapshot: { claude: null, codex: null, grok: null } },
     runningSubtasks: 0,
     liveConversationMessageCount,
     activeFleet,
     workspaceView: 'conversations',
-    time: null,
-    timeMode: 'user' as const,
-    onTimeModeToggle: () => undefined,
     ticketLinks,
   }))
   return onConversationSelect
 }
 
+function renderWorkflows() {
+  const onConversationSelect = mock(() => undefined)
+  render(createElement(WorkflowsView, { project, onConversationSelect }))
+  return onConversationSelect
+}
 async function openWorkflows() {
-  const workflowsTab = await screen.findByRole('tab', { name: /Workflows [1-9]/ })
-  fireEvent.click(workflowsTab)
+  await screen.findAllByRole('button', { name: 'Lancer' })
 }
 
 test('sélectionne la conversation créée après le lancement réussi d’un workflow', async () => {
   installApi([reviewWorkflow], () => Promise.resolve(jsonResponse(startedConversation)))
-  const onConversationSelect = renderSidebar()
+  const onConversationSelect = renderWorkflows()
   await openWorkflows()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Lancer →' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Lancer' }))
 
   await waitFor(() => {
     expect(onConversationSelect).toHaveBeenCalledWith(startedConversation)
   })
-  expect(screen.getByRole('tab', { name: /Conversations/ }).getAttribute('aria-selected'))
-    .toBe('true')
 })
 
 test('affiche le rejet du lancement sans sélectionner de conversation', async () => {
@@ -204,10 +203,10 @@ test('affiche le rejet du lancement sans sélectionner de conversation', async (
     { error: 'Lancement impossible' },
     500,
   )))
-  const onConversationSelect = renderSidebar()
+  const onConversationSelect = renderWorkflows()
   await openWorkflows()
 
-  const runButton = screen.getByRole('button', { name: 'Lancer →' }) as HTMLButtonElement
+  const runButton = screen.getByRole('button', { name: 'Lancer' }) as HTMLButtonElement
   fireEvent.click(runButton)
 
   expect((await screen.findByRole('alert')).textContent).toBe('Lancement impossible')
@@ -224,11 +223,11 @@ test('empêche un second lancement tant que le premier workflow est en cours', a
     [reviewWorkflow, releaseWorkflow],
     () => pendingRunRequest,
   )
-  const onConversationSelect = renderSidebar()
+  const onConversationSelect = renderWorkflows()
   await openWorkflows()
 
-  fireEvent.click(screen.getAllByRole('button', { name: 'Lancer →' })[0]!)
-  const otherRunButton = await screen.findByRole('button', { name: 'Lancer →' }) as HTMLButtonElement
+  fireEvent.click(screen.getAllByRole('button', { name: 'Lancer' })[0]!)
+  const otherRunButton = await screen.findByRole('button', { name: 'Lancer' }) as HTMLButtonElement
 
   expect(screen.getByRole('button', { name: 'Lancement…' })).toBeTruthy()
   expect(otherRunButton.disabled).toBe(true)
@@ -417,12 +416,8 @@ test('un tour qui quitte le flottant fait apparaître la conversation à lire', 
     onConversationSelect: () => undefined,
     onConversationCreate: () => undefined,
     conversationListVersion: 0,
-    quotas: { snapshot: { claude: null, codex: null, grok: null } },
     runningSubtasks: 0,
     workspaceView: 'conversations' as const,
-    time: null,
-    timeMode: 'user' as const,
-    onTimeModeToggle: () => undefined,
   }
   const { rerender } = render(createElement(Sidebar, { ...props, activeFleet: [activeItem] }))
 

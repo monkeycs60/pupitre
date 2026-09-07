@@ -2401,3 +2401,33 @@ test("/api/health ne date frontendAt qu'après le premier appel de la fenêtre",
   const after = await (await fetch(`${current.baseUrl}/api/health`)).json();
   expect(typeof after.frontendAt).toBe("string");
 });
+
+test("TODO HTTP endpoints preserve prepared configuration and reject protected fields", async () => {
+  const { TodoStore } = await import("../src/stores/todos");
+  const { TodoService } = await import("../src/todos");
+  const root = mkdtempSync(join(tmpdir(), "pupitre-todo-api-"));
+  try {
+    for (const args of [["init", "-b", "main"], ["config", "user.email", "test@example.com"], ["config", "user.name", "Test"], ["commit", "--allow-empty", "-m", "base"]]) {
+      const result = Bun.spawnSync(["git", ...args], { cwd: root });
+      expect(result.exitCode).toBe(0);
+    }
+    const d = current!.deps;
+    d.todos = new TodoService(new TodoStore(current!.db), d.projects, d.conversations, d.runner, d.git, d.tickets, d.quotas);
+    const project = d.projects.create({ name: "todo-api", path: root });
+    const response = await postJson(`/api/projects/${project.id}/todos`, { message: "Fix later", provider: "codex", model: "model", integrate: false, images: ["image.png"] });
+    expect(response.status).toBe(201);
+    const item = await response.json() as { id: string; target_branch: string; images: string[] };
+    expect(item.target_branch).toBe("main");
+    expect(item.images).toEqual(["image.png"]);
+    const denied = await fetch(`${current!.baseUrl}/api/todos/${item.id}`, { method: "PATCH", headers: jsonHeaders(), body: JSON.stringify({ status: "done" }) });
+    expect(denied.status).toBe(400);
+    const edited = await fetch(`${current!.baseUrl}/api/todos/${item.id}`, { method: "PATCH", headers: jsonHeaders(), body: JSON.stringify({ message: "Revised", checks: ["true"] }) });
+    expect(edited.status).toBe(200);
+    const listed = await fetch(`${current!.baseUrl}/api/projects/${project.id}/todos`);
+    expect((await listed.json() as { items: Array<{ message: string }> }).items[0]!.message).toBe("Revised");
+    const removed = await fetch(`${current!.baseUrl}/api/todos/${item.id}`, { method: "DELETE" });
+    expect(removed.status).toBe(204);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

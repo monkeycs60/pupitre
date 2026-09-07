@@ -1,3 +1,6 @@
+import { SharedFilesService } from "./shared-files";
+import { TodoService } from "./todos";
+import { TodoStore } from "./stores/todos";
 import { join } from "node:path";
 import { openDb } from "./db";
 import { MediaStore } from "./media";
@@ -192,6 +195,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     domains,
     problemAxisRuns,
   );
+  const todos = new TodoService(new TodoStore(db), projects, conversations, runner, git, tickets, quotas);
   const promotionAgent = instance.name === "dev"
     ? new PromotionAgentService(join(import.meta.dir, "..", ".."), projects, conversations, runner)
     : undefined;
@@ -308,6 +312,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     workflows,
     routineStore,
     routines,
+    todos,
     notifications,
     search,
     costs,
@@ -327,6 +332,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     integrationsRefresher,
     time,
     htmlDocuments,
+    sharedFiles: new SharedFilesService(db, media, htmlDocuments),
     visualFeedback,
   }), port);
   void problems.resume();

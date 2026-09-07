@@ -22,7 +22,7 @@ export function AttentionInbox({ items, loading, error, projectName, onOpen, onA
   return (
     <section className="attention-view" aria-labelledby="attention-title">
       <header className="attention-header">
-        <div><h1 id="attention-title">Inbox</h1><p>{projectName ? `Ce qui réclame une action dans ${projectName}.` : 'Ce qui réclame une action, tous projets confondus.'}</p></div>
+        <div><h1 id="attention-title">À traiter</h1><p>{projectName ? `Ce qui réclame une action dans ${projectName}.` : 'Ce qui réclame une action, tous projets confondus.'}</p></div>
         <span className="attention-count">{items.length}</span>
       </header>
       {error ? <div className="attention-error" role="alert">{error}</div> : null}

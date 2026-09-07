@@ -1,3 +1,6 @@
+import type { SharedFilesService } from "./shared-files";
+import { TodoError, type TodoService } from "./todos";
+import type { TodoInput } from "./stores/todos";
 import type { ServerWebSocket } from "bun";
 import { basename, extname, join } from "node:path";
 import { existsSync, statSync } from "node:fs";
@@ -124,6 +127,7 @@ export class ConversationEventBus {
 }
 
 export interface ServerDeps {
+  todos?: TodoService;
   port: number;
   instance?: InstanceInfo;
   promotion?: PromotionRunner;
@@ -167,6 +171,7 @@ export interface ServerDeps {
   integrationsRefresher: IntegrationsRefresher;
   time?: TimeTrackingService;
   htmlDocuments?: HtmlDocumentService;
+  sharedFiles?: SharedFilesService;
   visualFeedback?: VisualFeedbackService;
   /**
    * Arrêt propre du sidecar, déclenché par `POST /api/shutdown` : c'est ce qui
@@ -2579,6 +2584,40 @@ export function createServer(deps: ServerDeps) {
           return empty(204);
         }
 
+        const todoProjectRoute = pathname.match(/^\/api\/projects\/([^/]+)\/todos(?:\/(queue|reorder))?$/);
+        const todoRoute = pathname.match(/^\/api\/todos\/([^/]+)(?:\/(start|reconcile))?$/);
+        if (todoProjectRoute || todoRoute) {
+          if (!deps.todos) throw new HttpError(503, "Service TODO indisponible");
+          try {
+            if (todoProjectRoute) {
+              const id = decodeURIComponent(todoProjectRoute[1]!);
+              const action = todoProjectRoute[2];
+              if (!action && request.method === "GET") return json(deps.todos.snapshot(id));
+              if (!action && request.method === "POST") return json(await deps.todos.create(id, await readObject(request) as unknown as TodoInput), 201);
+              if (action === "queue" && request.method === "POST") {
+                const body = await readObject(request);
+                if (typeof body.running !== "boolean") throw new HttpError(400, "running doit être booléen");
+                return json(deps.todos.setQueue(id, body.running));
+              }
+              if (action === "reorder" && request.method === "POST") {
+                const body = await readObject(request);
+                if (!Array.isArray(body.ids) || body.ids.some(id => typeof id !== "string")) throw new HttpError(400, "ids invalide");
+                return json(deps.todos.reorder(id, body.ids as string[]));
+              }
+            } else if (todoRoute) {
+              const id = decodeURIComponent(todoRoute[1]!);
+              const action = todoRoute[2];
+              if (!action && request.method === "PATCH") return json(await deps.todos.edit(id, await readObject(request)));
+              if (!action && request.method === "DELETE") { deps.todos.remove(id); return empty(204); }
+              if (action === "start" && request.method === "POST") return json(deps.todos.start(id), 202);
+              if (action === "reconcile" && request.method === "POST") return json(deps.todos.reconcile(id), 202);
+            }
+          } catch (error) {
+            if (error instanceof TodoError) throw new HttpError(error.status, error.message);
+            throw error;
+          }
+        }
+
         if (request.method === "GET" && pathname === "/api/routines") {
           const projectId = url.searchParams.get("projectId") ?? undefined;
           if (projectId && !deps.projects.get(projectId)) throw new HttpError(404, "projet inconnu");
@@ -3757,6 +3796,13 @@ export function createServer(deps: ServerDeps) {
           } catch (error) {
             htmlDocumentHttpError(error);
           }
+        }
+
+        if (request.method === "GET" && pathname === "/api/shared-files") {
+          if (!deps.sharedFiles) throw new HttpError(501, "fichiers partagés non câblés");
+          const projectId = url.searchParams.get("projectId");
+          if (!projectId) throw new HttpError(400, "projectId requis");
+          return json(deps.sharedFiles.list(projectId, url.searchParams.get("conversationId") ?? undefined));
         }
 
         if (request.method === "GET" && pathname === "/api/documents") {

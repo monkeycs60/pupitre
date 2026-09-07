@@ -17,19 +17,13 @@ interface RailProps {
   workspaceView: WorkspaceView
   onConversationsSelect: () => void
   onDashboardSelect: () => void
-  onDocumentsSelect: () => void
   onDesignSelect: () => void
   onCostsSelect: () => void
   onLibrarySelect: () => void
   onRoutinesSelect: () => void
-  onFleetSelect: () => void
   onAttentionSelect: () => void
-  onMemorySelect: () => void
   onHelpSelect: () => void
-  onProgressSelect: () => void
   onSettingsSelect: () => void
-  /** Runs actifs (tours + sub-agents + routines), pour la pastille Fleet. */
-  fleetActive?: number
   attentionCount?: number
   /** Projets ayant au moins un run actif dans Fleet. */
   activeProjectIds?: string[]
@@ -150,18 +144,13 @@ export const Rail = memo(function Rail({
   workspaceView,
   onConversationsSelect,
   onDashboardSelect,
-  onDocumentsSelect,
   onDesignSelect,
   onCostsSelect,
   onLibrarySelect,
   onRoutinesSelect,
-  onFleetSelect,
   onAttentionSelect,
-  onMemorySelect,
   onHelpSelect,
-  onProgressSelect,
   onSettingsSelect,
-  fleetActive = 0,
   attentionCount = 0,
   activeProjectIds = [],
 }: RailProps) {
@@ -226,16 +215,12 @@ export const Rail = memo(function Rail({
       shortcut: navigationShortcutLabel('conversations'),
       group: 'work',
     },
-    { name: 'dashboard', label: 'Tableau de bord', view: 'dashboard', onClick: onDashboardSelect, needsProject: true, shortcut: navigationShortcutLabel('dashboard'), group: 'work' },
+    { name: 'dashboard', label: 'Projet', view: 'dashboard', onClick: onDashboardSelect, needsProject: true, shortcut: navigationShortcutLabel('dashboard'), group: 'work' },
     ...(window.__TAURI__ ? [{ name: 'design' as const, label: 'Claude Design', view: 'design' as const, onClick: onDesignSelect, shortcut: navigationShortcutLabel('design'), group: 'work' as const }] : []),
-    { name: 'attention', label: 'Inbox', view: 'attention', onClick: onAttentionSelect, badge: attentionCount, group: 'supervision' },
-    { name: 'fleet', label: 'Fleet', view: 'fleet', onClick: onFleetSelect, badge: fleetActive, shortcut: navigationShortcutLabel('fleet'), group: 'supervision' },
-    { name: 'documents', label: 'Documents', view: 'documents', onClick: onDocumentsSelect, shortcut: navigationShortcutLabel('documents'), group: 'library' },
-    { name: 'library', label: 'Skills', view: 'library', onClick: onLibrarySelect, group: 'library' },
-    { name: 'memory', label: 'Mémoire', view: 'memory', onClick: onMemorySelect, group: 'library' },
-    { name: 'routines', label: 'Routines', view: 'routines', onClick: onRoutinesSelect, group: 'library' },
-    { name: 'costs', label: 'Coûts & quotas', view: 'costs', onClick: onCostsSelect, needsProject: true, group: 'system' },
-    { name: 'progress', label: 'Progression', view: 'progress', onClick: onProgressSelect, group: 'system' },
+    { name: 'attention', label: 'Activité', view: 'attention', onClick: onAttentionSelect, badge: attentionCount, group: 'supervision' },
+    { name: 'library', label: 'Contexte', view: 'library', onClick: onLibrarySelect, group: 'library' },
+    { name: 'routines', label: 'Automatisations', view: 'routines', onClick: onRoutinesSelect, group: 'library' },
+    { name: 'costs', label: 'Utilisation', view: 'costs', onClick: onCostsSelect, needsProject: true, group: 'system' },
     { name: 'settings', label: 'Réglages', view: 'settings', onClick: onSettingsSelect, group: 'system' },
     { name: 'help', label: 'Aide', view: 'help', onClick: onHelpSelect, group: 'system' },
   ]

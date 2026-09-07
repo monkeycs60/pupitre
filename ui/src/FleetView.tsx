@@ -4,6 +4,7 @@ import { useNow } from './useNow'
 import type { FleetItem } from './types'
 
 interface FleetViewProps {
+  projectId?: string
   onConversationSelect: (projectId: string, conversationId: string) => void
 }
 
@@ -68,13 +69,13 @@ function groupByProject(items: (FleetItem | FleetHistoryItem)[]): FleetGroup[] {
   return order.map((id) => byProject.get(id)!)
 }
 
-export function FleetView({ onConversationSelect }: FleetViewProps) {
-  const { items, history, connected } = useFleet()
+export function FleetView({ onConversationSelect, projectId }: FleetViewProps) {
+  const { items, history, connected } = useFleet(projectId)
   const [tab, setTab] = useState<FleetTab>('active')
   const now = useNow(1_000)
   const visibleItems: FleetItem[] | FleetHistoryItem[] = tab === 'active'
     ? items
-    : history
+    : history.filter((item) => !projectId || item.projectId === projectId)
   const historical = tab !== 'active'
   const groups = useMemo(() => groupByProject(visibleItems), [visibleItems])
 
@@ -109,7 +110,7 @@ export function FleetView({ onConversationSelect }: FleetViewProps) {
       <div className="fleet-scroll">
         <header className="fleet-header">
           <div className="fleet-heading">
-            <h1 id="fleet-title">Fleet</h1>
+            <h1 id="fleet-title">Exécutions</h1>
             <p>
               Tout ce qui tourne, sur tous les projets, en direct.
               {' '}

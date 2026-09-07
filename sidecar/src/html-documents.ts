@@ -378,9 +378,10 @@ export class HtmlDocumentService {
     return rows.map((row) => snapshot(row, this.now().getTime()));
   }
 
-  get(id: string): HtmlDocumentSnapshot | null {
+  get(id: string, options: { readOnly?: boolean } = {}): HtmlDocumentSnapshot | null {
     let row = this.row(id);
     if (!row) return null;
+    if (options.readOnly) return snapshot(row, this.now().getTime());
     if ((row.kind === "docx" || row.kind === "xlsx") && row.deleted_at === null) {
       const path = join(this.directory, row.relative_path);
       if (existsSync(path)) {

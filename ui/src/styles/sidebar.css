@@ -1701,14 +1701,6 @@
   .level-running > i { animation: none; }
 }
 
-.sidebar-quotas {
-  margin-top: 11px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-
-
 /* --- Conversations groupées à deux lignes (maquette redesign) ------------- */
 
 .conv-group {

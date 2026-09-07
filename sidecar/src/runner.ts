@@ -50,6 +50,7 @@ export interface ActiveTurnSnapshot {
 }
 
 export interface TurnOutcome {
+  cancelled?: boolean;
   state: "done" | "error";
   error?: string;
 }
@@ -379,6 +380,7 @@ export class ConversationRunner {
       }
       const activeTurn = this.active.get(conversationId);
       if (activeTurn?.cancelledByUser) {
+        outcome.cancelled = true;
         this.problemAxisRuns?.transitionConversation(conversationId, "interrupted");
       } else if (outcome.state === "done") {
         this.problemAxisRuns?.transitionConversation(conversationId, "awaiting_validation");

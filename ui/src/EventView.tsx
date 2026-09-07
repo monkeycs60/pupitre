@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from 'react'
 import Markdown from './Markdown'
-import type { EventBlock } from './eventBlocks'
+import { eventIdOfBlock, type EventBlock } from './eventBlocks'
 import type { Attachment } from './types'
 import { mediaUrl } from './transport'
 import { useNow } from './useNow'
@@ -187,7 +187,7 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: Ev
   switch (block.kind) {
     case 'user':
       return (
-        <article className="message-row message-row-user">
+        <article className="message-row message-row-user" data-event-id={eventIdOfBlock(block.id)}>
           <div className="message-bubble user-message">
             {block.steering ? <span className="message-steering-label">Ajouté au tour en cours</span> : null}
             {block.text ? <p>{block.text}</p> : null}
@@ -204,7 +204,7 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: Ev
 
     case 'assistant':
       return (
-        <article className="message-row message-row-assistant">
+        <article className="message-row message-row-assistant" data-event-id={eventIdOfBlock(block.id)}>
           {/* Le caret de streaming est un ::after du dernier bloc rendu : il
               suit le texte au caractère près au lieu de flotter dessous. */}
           <div className={`message-bubble assistant-message${block.streaming ? ' is-streaming' : ''}`}>

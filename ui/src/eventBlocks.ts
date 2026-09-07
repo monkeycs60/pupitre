@@ -53,3 +53,8 @@ export type EventBlock =
   | AssistantBlock
   | ToolBlock
   | TurnFooterBlock
+
+export function eventIdOfBlock(id: string): number | undefined {
+  const match = /^(?:user|assistant|html-document)-(\d+)(?:-|$)/.exec(id)
+  return match ? Number(match[1]) : undefined
+}

@@ -25,24 +25,21 @@ test('affiche le raccourci à côté de chaque destination concernée', async ()
     onProjectCreated: () => {},
     onConversationsSelect: () => {},
     onDashboardSelect: () => {},
-    onDocumentsSelect: () => {},
     onDesignSelect: () => {},
     onCostsSelect: () => {},
     onLibrarySelect: () => {},
     onRoutinesSelect: () => {},
-    onFleetSelect: () => {},
-    onMemorySelect: () => {},
     onHelpSelect: () => {},
-    onProgressSelect: () => {},
     onSettingsSelect: () => {},
   }))
 
   expect(await screen.findByText('Ctrl Maj C')).toBeTruthy()
-  expect(screen.getByText('Ctrl Maj F')).toBeTruthy()
   expect(screen.getByText('Ctrl Maj T')).toBeTruthy()
-  expect(screen.getByText('Ctrl Maj D')).toBeTruthy()
+  expect(screen.queryByText('Ctrl Maj F')).toBeNull()
+  expect(screen.queryByText('Ctrl Maj D')).toBeNull()
   expect(screen.queryByText('Ctrl Maj G')).toBeNull()
-  expect(screen.getByRole('button', { name: 'Inbox' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Activité' })).toBeTruthy()
+  for (const label of ['Inbox', 'Fleet', 'Documents', 'Mémoire', 'Progression']) expect(screen.queryByRole('button', { name: label })).toBeNull()
   expect(railCss).toMatch(/\.rail-nav-label\s*>\s*span\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*hidden;/)
   expect(railCss).toMatch(/\.rail-nav-shortcut\s*\{[\s\S]*?flex:\s*none;/)
 })
@@ -61,23 +58,19 @@ test('place Claude Design dans le groupe de travail avec une icône palette', as
       onProjectCreated: () => {},
       onConversationsSelect: () => {},
       onDashboardSelect: () => {},
-      onDocumentsSelect: () => {},
       onDesignSelect: () => {},
       onCostsSelect: () => {},
       onLibrarySelect: () => {},
       onRoutinesSelect: () => {},
-      onFleetSelect: () => {},
       onAttentionSelect: () => {},
-      onMemorySelect: () => {},
       onHelpSelect: () => {},
-      onProgressSelect: () => {},
       onSettingsSelect: () => {},
     }))
 
     const buttons = await screen.findAllByRole('button')
     const labels = buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent)
-    expect(labels.indexOf('Claude Design')).toBeGreaterThan(labels.indexOf('Tableau de bord'))
-    expect(labels.indexOf('Claude Design')).toBeLessThan(labels.indexOf('Inbox'))
+    expect(labels.indexOf('Claude Design')).toBeGreaterThan(labels.indexOf('Projet'))
+    expect(labels.indexOf('Claude Design')).toBeLessThan(labels.indexOf('Activité'))
     expect(screen.getByRole('button', { name: 'Claude Design' }).querySelectorAll('circle')).toHaveLength(3)
   } finally {
     if (hadTauri) window.__TAURI__ = previousTauri

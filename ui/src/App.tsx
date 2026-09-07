@@ -1,3 +1,8 @@
+import { WorkspaceInspector, type InspectorView } from './WorkspaceInspector'
+import { WorkflowsView } from './WorkflowsView'
+import { TodoDetail } from './TodoDetail'
+import { useTodos, type TodoItem } from './todos'
+import { QuotaBar } from './QuotaBar'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   CSSProperties,
@@ -10,7 +15,7 @@ import { Rail } from './Rail'
 import { Titlebar } from './Titlebar'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
-import type { Attachment, Conversation, DocumentArtifact, Project } from './types'
+import type { Attachment, Conversation, Project } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import {
@@ -62,7 +67,7 @@ const MemoryView = lazy(() => import('./MemoryView').then((module) => ({ default
 const HelpView = lazy(() => import('./HelpView').then((module) => ({ default: module.HelpView })))
 const ProgressView = lazy(() => import('./ProgressView').then((module) => ({ default: module.ProgressView })))
 const AppSettingsView = lazy(() => import('./AppSettingsView').then((module) => ({ default: module.AppSettingsView })))
-const DocumentsView = lazy(() => import('./DocumentsView').then((module) => ({ default: module.DocumentsView })))
+const SharedFilesView = lazy(() => import('./SharedFilesView').then((module) => ({ default: module.SharedFilesView })))
 const DesignView = lazy(() => import('./DesignView').then((module) => ({ default: module.DesignView })))
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
 
@@ -140,6 +145,13 @@ function App() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
   const [memoryDirty, setMemoryDirty] = useState(false)
+  const [inspector, setInspector] = useState<InspectorView | null>(null)
+  const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null)
+  const [sidebarTab, setSidebarTab] = useState<'conversations' | 'todos'>('conversations')
+  const [newTodo, setNewTodo] = useState(false)
+  const [focusEventId, setFocusEventId] = useState<number | null>(null)
+  const todos = useTodos(selectedProject?.id ?? null)
+  const selectedTodo = todos.items.find((item) => item.id === selectedTodoId) ?? null
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const [locationRestored, setLocationRestored] = useState(false)
@@ -162,8 +174,8 @@ function App() {
   // La Progression est une vue globale : on y lit tous les projets, et le
   // temps passé à consulter ses propres chiffres n'est imputé à aucun d'eux.
   const time = useTimeTracking(
-    workspaceView === 'progress' ? null : selectedProject?.id ?? null,
-    workspaceView === 'progress' ? null : selectedConversation?.id ?? null,
+    inspector === 'progress' ? null : selectedProject?.id ?? null,
+    inspector === 'progress' ? null : selectedConversation?.id ?? null,
   )
   const fleet = useFleet(selectedProject?.id)
   const attention = useAttention(selectedProject?.id)
@@ -413,8 +425,29 @@ function App() {
     return () => window.removeEventListener('hashchange', syncHelpHash)
   }, [])
 
+  function openInspector(view: InspectorView) {
+    if (view !== inspector && !confirmLeaveMemory()) return
+    setInspector(view)
+    setWorkspaceView('conversations')
+  }
+
+  function closeInspector() {
+    if (confirmLeaveMemory()) setInspector(null)
+  }
+
+  function handleTodoCreated(todo: TodoItem) {
+    todos.refresh()
+    setSelectedTodoId(todo.id)
+    setSidebarTab('todos')
+    setSelectedConversation(null)
+    setIsCreatingConversation(false)
+    setNewConversationDraft('')
+    setNewConversationAttachments([])
+    setNewTodo(false)
+  }
+
   function confirmLeaveMemory(): boolean {
-    if (workspaceView !== 'memory' || !memoryDirty) return true
+    if (inspector !== 'memory' || !memoryDirty) return true
     if (!window.confirm('Abandonner les modifications mémoire non enregistrées ?')) return false
     setMemoryDirty(false)
     return true
@@ -422,6 +455,9 @@ function App() {
 
   function handleProjectSelect(project: Project) {
     if (!confirmLeaveMemory()) return
+    setSelectedTodoId(null)
+    setSidebarTab('conversations')
+    setNewTodo(false)
     if (project.id !== selectedProject?.id) {
       setSelectedConversation(null)
       setConversationSeed(null)
@@ -437,6 +473,10 @@ function App() {
   }
 
   function handleConversationSelect(conversation: Conversation) {
+    setSelectedTodoId(null)
+    setFocusEventId(null)
+    setSidebarTab('conversations')
+    setNewTodo(false)
     if (!confirmLeaveMemory()) return
     setSelectedConversation(conversation)
     setConversationSeed(null)
@@ -448,12 +488,16 @@ function App() {
   }
 
   function handleConversationCreate() {
+    setSelectedTodoId(null)
+    setNewTodo(false)
+    setSidebarTab('conversations')
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setSelectedConversation(null)
     setConversationSeed(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
+    setSelectedTodoId(null)
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
     setWorkspaceView('conversations')
@@ -466,6 +510,7 @@ function App() {
     setSelectedConversation(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
+    setSelectedTodoId(null)
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
     setWorkspaceView('conversations')
@@ -477,6 +522,7 @@ function App() {
     setSelectedConversation(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
+    setSelectedTodoId(null)
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
     setWorkspaceView('conversations')
@@ -505,6 +551,7 @@ function App() {
     setSelectedConversation(null)
     setNewConversationDraft(problemMissionDraft(seed))
     setNewConversationAttachments([])
+    setSelectedTodoId(null)
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
     setWorkspaceView('conversations')
@@ -513,7 +560,7 @@ function App() {
   function handleSeeAllProblems() {
     if (selectedProject === null) return
     window.localStorage.setItem(`pupitre:dashboard-tab:${selectedProject.id}`, 'problems')
-    setWorkspaceView('dashboard')
+    openInspector('dashboard')
   }
 
   function handleConversationClosed() {
@@ -580,50 +627,51 @@ function App() {
   function handleCostsSelect() {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
-    setWorkspaceView('costs')
+    openInspector('costs')
     setShowSwitchModel(false)
   }
 
   function handleDashboardSelect() {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
-    setWorkspaceView('dashboard')
+    openInspector('dashboard')
     setShowSwitchModel(false)
   }
 
   function handleDocumentsSelect() {
     if (!confirmLeaveMemory()) return
-    setWorkspaceView('documents')
+    openInspector('documents')
     setShowSwitchModel(false)
   }
 
   function handleConversationsSelect() {
     if (!confirmLeaveMemory()) return
+    setInspector(null)
     setWorkspaceView('conversations')
     setShowSwitchModel(false)
   }
 
   function handleLibrarySelect() {
     if (!confirmLeaveMemory()) return
-    setWorkspaceView('library')
+    openInspector('library')
     setShowSwitchModel(false)
   }
 
   function handleRoutinesSelect() {
     if (!confirmLeaveMemory()) return
-    setWorkspaceView('routines')
+    openInspector('workflows')
     setShowSwitchModel(false)
   }
 
   function handleFleetSelect() {
     if (!confirmLeaveMemory()) return
-    setWorkspaceView('fleet')
+    openInspector('fleet')
     setShowSwitchModel(false)
   }
 
   function handleAttentionSelect() {
     if (!confirmLeaveMemory()) return
-    setWorkspaceView('attention')
+    openInspector('attention')
     setShowSwitchModel(false)
   }
 
@@ -637,7 +685,7 @@ function App() {
       : null
     if (project) {
       window.localStorage.setItem(`pupitre:dashboard-tab:${project.id}`, 'problems')
-      setWorkspaceView('dashboard')
+      openInspector('dashboard')
     }
   }
 
@@ -656,7 +704,7 @@ function App() {
   }
 
   function handleMemorySelect() {
-    setWorkspaceView('memory')
+    openInspector('memory')
     setShowSwitchModel(false)
   }
 
@@ -666,12 +714,6 @@ function App() {
     setHelpSlug(nextSlug)
     setWorkspaceView('help')
     window.location.hash = `help/${nextSlug}`
-    setShowSwitchModel(false)
-  }
-
-  function handleProgressSelect() {
-    if (!confirmLeaveMemory()) return
-    setWorkspaceView('progress')
     setShowSwitchModel(false)
   }
 
@@ -698,6 +740,7 @@ function App() {
     setConversationSeed(null)
     setNewConversationDraft(`$${skill.invocation} `)
     setNewConversationAttachments([])
+    setSelectedTodoId(null)
     setIsCreatingConversation(true)
     setWorkspaceView('conversations')
   }
@@ -715,7 +758,7 @@ function App() {
     }
   }
 
-  async function handleRoutineConversationSelect(projectId: string, conversationId: string) {
+  async function handleRoutineConversationSelect(projectId: string, conversationId: string, eventId?: number) {
     const project = selectedProject?.id === projectId
       ? selectedProject
       : listProjects().then((items) => items.find((item) => item.id === projectId) ?? null)
@@ -726,24 +769,7 @@ function App() {
     if (!conversation) return
     setSelectedProject(resolvedProject)
     handleConversationSelect(conversation)
-  }
-
-  async function handleDocumentUse(
-    projectId: string,
-    attachment: Attachment,
-    document: DocumentArtifact,
-  ) {
-    const projects = await listProjects()
-    const project = projects.find((item) => item.id === projectId)
-    if (!project) return
-    setSelectedProject(project)
-    setSelectedConversation(null)
-    setConversationSeed(null)
-    setNewConversationDraft(`Utilise le document joint « ${document.title} » comme contexte pour cette nouvelle conversation.`)
-    setNewConversationAttachments([attachment])
-    setIsCreatingConversation(true)
-    setShowSwitchModel(false)
-    setWorkspaceView('conversations')
+    setFocusEventId(eventId ?? null)
   }
 
   async function handleGitConversationSelect(conversationId: string) {
@@ -757,14 +783,14 @@ function App() {
     ? selectedConversation?.title ?? null
     : {
         git: 'Git',
-        documents: 'Documents',
+        documents: 'Fichiers',
         design: 'Claude Design',
-        dashboard: 'Tableau de bord',
-        costs: 'Coûts',
+        dashboard: 'Projet',
+        costs: 'Utilisation',
         library: 'Skills',
-        routines: 'Routines',
-        fleet: 'Fleet',
-        attention: 'Inbox',
+        routines: 'Automatisations',
+        fleet: 'Exécutions',
+        attention: 'À traiter',
         memory: 'Mémoire',
         help: 'Aide',
         progress: 'Progression',
@@ -799,21 +825,16 @@ function App() {
         conversationListVersion={conversationListVersion + railReadVersion}
         onProjectSelect={handleProjectSelect}
         onProjectCreated={handleProjectSelect}
-        workspaceView={workspaceView}
+        workspaceView={inspector === 'workflows' ? 'routines' : inspector === 'quotas' ? 'costs' : inspector ?? workspaceView}
         onConversationsSelect={handleConversationsSelect}
         onDashboardSelect={handleDashboardSelect}
-        onDocumentsSelect={handleDocumentsSelect}
         onDesignSelect={handleDesignSelect}
         onCostsSelect={handleCostsSelect}
         onLibrarySelect={handleLibrarySelect}
         onRoutinesSelect={handleRoutinesSelect}
-        onFleetSelect={handleFleetSelect}
         onAttentionSelect={handleAttentionSelect}
-        onMemorySelect={handleMemorySelect}
         onHelpSelect={() => handleHelpSelect()}
-        onProgressSelect={handleProgressSelect}
         onSettingsSelect={handleSettingsSelect}
-        fleetActive={fleet.items.length}
         attentionCount={attention.items.length}
         activeProjectIds={[...new Set(fleet.items.map((item) => item.projectId))]}
       />
@@ -821,7 +842,14 @@ function App() {
       <>
       <Sidebar
         selectedProject={selectedProject}
-        selectedConversation={selectedConversation}
+        selectedConversation={selectedTodoId ? null : selectedConversation}
+        sidebarTab={sidebarTab}
+        onSidebarTabChange={setSidebarTab}
+        todos={todos}
+        selectedTodoId={selectedTodoId}
+        onTodoSelect={(id) => { setSelectedTodoId(id); setIsCreatingConversation(false); setWorkspaceView('conversations') }}
+        onTodoCreate={() => { handleConversationCreate(); setNewTodo(true); setSidebarTab('todos') }}
+        onUsageSelect={() => openInspector('quotas')}
         onProjectSelect={handleProjectSelect}
         onConversationSelect={handleConversationSelect}
         onConversationCreate={handleConversationCreate}
@@ -830,14 +858,9 @@ function App() {
         isCreatingConversation={isCreatingConversation}
         onConversationRead={() => setRailReadVersion((current) => current + 1)}
         conversationListVersion={conversationListVersion}
-        quotas={quotas}
         runningSubtasks={runningSubtasks}
         liveConversationMessageCount={liveConversationMessageCount}
         workspaceView={workspaceView}
-        time={time.snapshot}
-        timeMode={time.mode}
-        onTimeModeToggle={time.toggleMode}
-        agentRunning={fleet.items.length > 0}
         activeFleet={fleet.items}
         ticketLinks={ticketLinks}
         sentryLinks={sentryLinks}
@@ -862,70 +885,27 @@ function App() {
       ) : null}
 
       <section className="workspace" aria-label={titlebarView ?? 'Conversation'}>
+        {workspaceView === 'conversations' ? <nav className="workspace-toolbar" aria-label="Outils du projet">
+          <span>{selectedProject?.name ?? 'Conversations'}</span>
+          <div><button aria-pressed={inspector === 'dashboard'} onClick={() => inspector === 'dashboard' ? closeInspector() : openInspector('dashboard')} disabled={!selectedProject}>Projet</button><button aria-pressed={inspector === 'documents'} onClick={() => inspector === 'documents' ? closeInspector() : openInspector('documents')} disabled={!selectedProject}>Fichiers</button><button aria-pressed={inspector === 'attention' || inspector === 'fleet'} onClick={() => openInspector('attention')}>Activité{attention.items.length > 0 ? ` · ${attention.items.length}` : ''}</button></div>
+        </nav> : null}
+        <div className="workspace-split">
+        <div className="conversation-workspace">
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
-        {workspaceView === 'documents' ? (
-          <DocumentsView
-            currentProject={selectedProject}
-            onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
-            onUseInConversation={(projectId, attachment, document) => void handleDocumentUse(projectId, attachment, document)}
-          />
-        ) : workspaceView === 'design' ? (
-          <DesignView />
-        ) : workspaceView === 'library' ? (
-          <SkillsLibrary project={selectedProject} />
-        ) : workspaceView === 'routines' ? (
-          <RoutinesView
-            initialProject={selectedProject}
-            onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
-          />
-        ) : workspaceView === 'fleet' ? (
-          <FleetView
-            onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
-          />
-        ) : workspaceView === 'attention' ? (
-          <AttentionInbox
-            items={attention.items}
-            loading={attention.loading}
-            error={attention.error}
-            projectName={selectedProject?.name}
-            onOpen={handleAttentionOpen}
-            onAcknowledge={attention.acknowledge}
-          />
-        ) : workspaceView === 'memory' ? (
-          <MemoryView onDirtyChange={setMemoryDirty} />
-        ) : workspaceView === 'help' ? (
-          <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
-        ) : workspaceView === 'progress' ? (
-          <ProgressView snapshot={time.snapshot} />
-        ) : workspaceView === 'settings' ? (
-          <AppSettingsView instance={instance} />
-        ) : selectedProject === null ? (
+        {workspaceView === 'design' ? <DesignView />
+        : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
+        : workspaceView === 'settings' ? <AppSettingsView instance={instance} />
+        : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
+        : selectedTodo ? <TodoDetail key={selectedTodo.id} item={selectedTodo} items={todos.items} projectName={selectedProject.name} onChanged={todos.refresh} onDeleted={() => { setSelectedTodoId(null); todos.refresh() }} onConversationSelect={(id) => void handleGitConversationSelect(id)} />
+        : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">
-            <p>Sélectionnez un projet pour commencer.</p>
-          </div>
-        ) : workspaceView === 'dashboard' ? (
-          <DashboardView
-            key={selectedProject.id}
-            project={selectedProject}
-            onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
-            onStartConversation={handleStartFromTicket}
-            onStartProblem={handleStartProblem}
-            onOpenSettings={() => setProjectSettingsOpen(true)}
-          />
-        ) : workspaceView === 'costs' ? (
-          <CostsView
-            project={selectedProject}
-            onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
-          />
-        ) : selectedConversation === null && !isCreatingConversation ? (
-          <div className="empty-state">
-            <p>Sélectionnez une conversation pour afficher ses événements.</p>
+            <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Une conversation pour avancer, une TODO pour préparer la suite.</p><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button></div>
           </div>
         ) : (
           <>
             <header className="conversation-header">
               <div className="conversation-title-block">
-                <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
+                <h1>{selectedConversation?.title ?? (newTodo ? 'Nouvelle TODO' : 'Nouvelle conversation')}</h1>
                 {selectedConversation !== null
                 && branchOfWorktree(selectedConversation.worktree_path) !== null ? (
                   <span
@@ -970,7 +950,7 @@ function App() {
             </header>
             <Chat
               key={selectedConversation === null
-                ? `chat-new-${selectedProject.id}-${conversationSeed?.ticketId ?? ''}-${newConversationDraft}`
+                ? `chat-new-${selectedProject.id}-${conversationSeed?.ticketId ?? ''}-${newConversationDraft}-${newTodo}`
                 : `chat-${selectedConversation.id}`}
               events={selectedConversation === null ? [] : events}
               connection={connection}
@@ -979,6 +959,9 @@ function App() {
               project={selectedProject}
               quotas={quotas.snapshot}
               onConversationCreated={handleConversationCreated}
+              onTodoCreated={handleTodoCreated}
+              initialTodo={newTodo}
+              focusEventId={focusEventId}
               onProjectUpdated={handleProjectUpdated}
               onConversationRead={handleConversationRead}
               onRunningSubtasksChange={setRunningSubtasks}
@@ -1024,6 +1007,66 @@ function App() {
           </>
         )}
         </Suspense>
+        </div>
+        {workspaceView === 'conversations' && inspector ? <WorkspaceInspector view={inspector} onViewChange={openInspector} onClose={closeInspector}>
+          <Suspense fallback={<p className="list-empty">Chargement…</p>}>
+        {inspector === 'documents' ? (
+          <SharedFilesView
+            currentProject={selectedProject}
+            conversationId={selectedConversation?.id ?? null}
+            onConversationSelect={(projectId, conversationId, eventId) => void handleRoutineConversationSelect(projectId, conversationId, eventId)}
+          />
+        ) : inspector === 'library' ? (
+          <SkillsLibrary project={selectedProject} />
+        ) : inspector === 'routines' ? (
+          <RoutinesView
+            key={selectedProject?.id}
+            initialProject={selectedProject}
+            onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
+          />
+        ) : inspector === 'fleet' ? (
+          <FleetView
+            projectId={selectedProject?.id}
+            onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
+          />
+        ) : inspector === 'attention' ? (
+          <AttentionInbox
+            items={attention.items}
+            loading={attention.loading}
+            error={attention.error}
+            projectName={selectedProject?.name}
+            onOpen={handleAttentionOpen}
+            onAcknowledge={attention.acknowledge}
+          />
+        ) : inspector === 'memory' ? (
+          <MemoryView onDirtyChange={setMemoryDirty} />
+        ) : inspector === 'progress' ? (
+          <ProgressView snapshot={time.snapshot} />
+        ) : selectedProject === null ? (
+          <div className="empty-state">
+            <p>Sélectionnez un projet pour commencer.</p>
+          </div>
+        ) : inspector === 'dashboard' ? (
+          <DashboardView
+            embedded
+            key={selectedProject.id}
+            project={selectedProject}
+            onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
+            onStartConversation={handleStartFromTicket}
+            onStartProblem={handleStartProblem}
+            onOpenSettings={() => setProjectSettingsOpen(true)}
+          />
+        ) : inspector === 'costs' ? (
+          <CostsView
+            project={selectedProject}
+            onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
+          />
+        ) : inspector === 'workflows' && selectedProject ? (
+          <WorkflowsView key={selectedProject.id} project={selectedProject} onConversationSelect={handleConversationSelect} />
+        ) : inspector === 'quotas' ? <QuotaBar snapshot={quotas.snapshot} /> : null}
+          </Suspense>
+        </WorkspaceInspector> : null}
+        </div>
       </section>
       <CommandPalette
         open={paletteOpen}

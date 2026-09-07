@@ -1,3 +1,4 @@
+import { eventIdOfBlock } from './eventBlocks'
 import { useEffect, useState } from 'react'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import {
@@ -285,6 +286,7 @@ export function HtmlDocumentCard({
       ) : null}
       <section
         className={`html-document-card is-${effectiveState}${isExpanded ? ' is-expanded' : ''}`}
+        data-event-id={eventIdOfBlock(block.id)}
         aria-label={`Document ${documentKind.toUpperCase()} ${document.title}`}
         role={isExpanded ? 'dialog' : undefined}
         aria-modal={isExpanded ? true : undefined}

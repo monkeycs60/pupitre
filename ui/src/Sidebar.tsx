@@ -1,29 +1,24 @@
+import { TodoList } from './TodoList'
+import type { TodoSnapshot } from './todos'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
   associateConversationDomain,
   dissociateConversationDomain,
   listProjectConversations,
   listProjectDomains,
-  listProjectWorkflows,
   markConversationRead,
   renameConversation,
-  runWorkflow,
   setConversationArchived,
   purgeTrashedConversations,
   setConversationDeleted,
   setConversationPinned,
   setConversationPermissionMode,
 } from './api'
-import { QuotaStatus } from './QuotaBar'
-import type { Conversation, FleetItem, Project, ProjectDomain, TimeMode, TimeSnapshot, Workflow, WorkspaceView } from './types'
-import type { Quotas } from './useQuotas'
-import { WorkflowDialog } from './WorkflowDialog'
+import type { Conversation, FleetItem, Project, ProjectDomain, WorkspaceView } from './types'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { modelLabel } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
-import { filterWorkflows, workflowSummary } from './workflowSidebar'
 import { useNow } from './useNow'
-import { LevelCard } from './LevelCard'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { SentryLinkIcon, TicketLinkIcons } from './TicketLinkIcons'
@@ -36,6 +31,13 @@ declare global {
 }
 
 interface SidebarProps {
+  sidebarTab?: 'conversations' | 'todos'
+  onSidebarTabChange?: (tab: 'conversations' | 'todos') => void
+  todos?: TodoSnapshot & { loading: boolean; error: string | null; refresh: () => void }
+  selectedTodoId?: string | null
+  onTodoSelect?: (id: string) => void
+  onTodoCreate?: () => void
+  onUsageSelect?: () => void
   selectedProject: Project | null
   selectedConversation: Conversation | null
   onProjectSelect: (project: Project) => void
@@ -48,7 +50,6 @@ interface SidebarProps {
    *  doit alors être restauré à sa place. */
   isCreatingConversation?: boolean
   conversationListVersion: number
-  quotas: Quotas
   /** Sous-tâches en cours dans la conversation ouverte (cf. App). */
   runningSubtasks: number
   /** Compteur recalculé depuis le replay/flux live de la conversation ouverte. */
@@ -56,11 +57,6 @@ interface SidebarProps {
   /** Snapshot Fleet global, nécessaire pour marquer les conversations non ouvertes comme live. */
   activeFleet?: FleetItem[]
   workspaceView: WorkspaceView
-  time: TimeSnapshot | null
-  timeMode: TimeMode
-  onTimeModeToggle: () => void
-  /** Un tour tourne : la carte le signale sans changer de compteur. */
-  agentRunning?: boolean
   /** Liens ClickUp / MR par clé de ticket, pour les groupes contextuels. */
   ticketLinks?: Map<string, TicketLinks>
   /** Permalinks Sentry par shortId d'issue, pour les groupes scout. */
@@ -90,7 +86,6 @@ function conversationRelation(
 }
 
 type ConversationScope = 'active' | 'archived' | 'trash'
-type SidebarTab = 'conversations' | 'workflows'
 
 const CONVERSATION_SCOPES: Array<[ConversationScope, string]> = [
   ['active', 'Actives'],
@@ -239,6 +234,13 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
 
 export const Sidebar = memo(function Sidebar({
   selectedProject,
+  sidebarTab = 'conversations',
+  onSidebarTabChange = () => {},
+  todos,
+  selectedTodoId = null,
+  onTodoSelect = () => {},
+  onTodoCreate = () => {},
+  onUsageSelect,
   selectedConversation,
   onProjectSelect,
   onConversationSelect,
@@ -248,30 +250,19 @@ export const Sidebar = memo(function Sidebar({
   isCreatingConversation = false,
   onConversationRead,
   conversationListVersion,
-  quotas,
   runningSubtasks,
   liveConversationMessageCount,
   activeFleet = [],
   workspaceView,
-  time,
-  timeMode,
-  onTimeModeToggle,
-  agentRunning = false,
   ticketLinks,
   sentryLinks,
 }: SidebarProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [isRunningWorkflow, setIsRunningWorkflow] = useState<string | null>(null)
-  const [showWorkflowDialog, setShowWorkflowDialog] = useState(false)
-  const [workflowToEdit, setWorkflowToEdit] = useState<Workflow | null>(null)
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('conversations')
   const [conversationScope, setConversationScope] = useState<ConversationScope>('active')
   const [scopeMenuOpen, setScopeMenuOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [filterText, setFilterText] = useState('')
-  const [workflowFilterText, setWorkflowFilterText] = useState('')
   const [openConversationMenu, setOpenConversationMenu] = useState<string | null>(null)
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
@@ -364,9 +355,6 @@ export const Sidebar = memo(function Sidebar({
       .catch((loadError: unknown) => {
         if (!ignore) setError(errorMessage(loadError))
       })
-    void listProjectWorkflows(selectedProject.id)
-      .then((items) => { if (!ignore) setWorkflows(items) })
-      .catch(() => {})
     void listProjectDomains(selectedProject.id)
       .then((items) => { if (!ignore) setProjectDomains(items) })
       .catch(() => { if (!ignore) setProjectDomains([]) })
@@ -378,11 +366,7 @@ export const Sidebar = memo(function Sidebar({
 
   useEffect(() => {
     restoreProjectIdRef.current = selectedProject?.id ?? null
-    setSidebarTab('conversations')
     setFilterText('')
-    setWorkflowFilterText('')
-    setWorkflowToEdit(null)
-    setShowWorkflowDialog(false)
     setScopeMenuOpen(false)
     try {
       const stored = localStorage.getItem(`pupitre:sidebar-collapsed:${selectedProject?.id ?? ''}`)
@@ -564,27 +548,6 @@ export const Sidebar = memo(function Sidebar({
     }
   }
 
-  function openWorkflowDialog(workflow: Workflow | null = null) {
-    setWorkflowToEdit(workflow)
-    setShowWorkflowDialog(true)
-  }
-
-  async function handleWorkflowRun(workflow: Workflow) {
-    if (isRunningWorkflow !== null) return
-    setError(null)
-    setIsRunningWorkflow(workflow.id)
-    try {
-      const conversation = await runWorkflow(workflow.id)
-      setSidebarTab('conversations')
-      onConversationSelect(conversation)
-    } catch (runError: unknown) {
-      setError(errorMessage(runError))
-    } finally {
-      setIsRunningWorkflow(null)
-    }
-  }
-
-
   const conversationGroups = useMemo(() => {
     const query = filterText.trim().toLowerCase()
     const filtered = query
@@ -632,20 +595,20 @@ export const Sidebar = memo(function Sidebar({
             aria-selected={sidebarTab === 'conversations'}
             aria-controls="sidebar-conversations-panel"
             className={sidebarTab === 'conversations' ? 'is-selected' : ''}
-            onClick={() => setSidebarTab('conversations')}
+            onClick={() => onSidebarTabChange('conversations')}
           >
             Conversations <span>{conversations.length}</span>
           </button>
           <button
-            id="sidebar-workflows-tab"
+            id="sidebar-todos-tab"
             type="button"
             role="tab"
-            aria-selected={sidebarTab === 'workflows'}
-            aria-controls="sidebar-workflows-panel"
-            className={sidebarTab === 'workflows' ? 'is-selected' : ''}
-            onClick={() => setSidebarTab('workflows')}
+            aria-selected={sidebarTab === 'todos'}
+            aria-controls="sidebar-todos-panel"
+            className={sidebarTab === 'todos' ? 'is-selected' : ''}
+            onClick={() => onSidebarTabChange('todos')}
           >
-            Workflows <span>{workflows.length}</span>
+            TODO <span>{todos?.items.filter((item) => item.status !== 'done').length ?? 0}</span>
           </button>
         </div>
 
@@ -955,64 +918,8 @@ export const Sidebar = memo(function Sidebar({
         </div>
           </div>
         ) : (
-          <div id="sidebar-workflows-panel" className="workflow-sidebar-panel" role="tabpanel" aria-labelledby="sidebar-workflows-tab">
-            <div className="section-actions">
-              <button
-                type="button"
-                className="section-action section-action--primary"
-                onClick={() => openWorkflowDialog()}
-                disabled={selectedProject === null}
-                title="Créer un workflow réutilisable pour ce projet"
-              >
-                <span aria-hidden="true">+</span>
-                <span>Nouveau workflow</span>
-              </button>
-            </div>
-
-            <div className="conversation-filter-input">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-                  <circle cx="7" cy="7" r="4.2" />
-                  <path d="m10.2 10.2 3 3" />
-                </g>
-              </svg>
-              <input
-                type="text"
-                value={workflowFilterText}
-                onChange={(event) => setWorkflowFilterText(event.target.value)}
-                placeholder={`Filtrer ${workflows.length} workflow${workflows.length > 1 ? 's' : ''}…`}
-                aria-label="Filtrer les workflows"
-              />
-            </div>
-
-            {selectedProject === null ? (
-              <p className="list-empty">Sélectionnez un projet</p>
-            ) : workflows.length === 0 ? (
-              <p className="list-empty">Aucun workflow. Créez un raccourci pour vos tâches répétitives.</p>
-            ) : (() => {
-              const filtered = filterWorkflows(workflows, workflowFilterText)
-              return filtered.length === 0 ? (
-                <p className="list-empty">Aucun workflow ne correspond</p>
-              ) : (
-                <div className="workflow-sidebar-list">
-                  {filtered.map((workflow) => (
-                    <article className="workflow-sidebar-row" key={workflow.id}>
-                      <div className="workflow-sidebar-copy">
-                        <strong>{workflow.name}</strong>
-                        <p title={workflowSummary(workflow)}>{workflowSummary(workflow)}</p>
-                        <span><code>${workflow.skill_invocation}</code> · {workflow.preset_id ? 'preset' : modelLabel(workflow.model)}</span>
-                      </div>
-                      <div className="workflow-sidebar-actions">
-                        <button type="button" onClick={() => void handleWorkflowRun(workflow)} disabled={isRunningWorkflow !== null}>
-                          {isRunningWorkflow === workflow.id ? 'Lancement…' : 'Lancer →'}
-                        </button>
-                        <button type="button" onClick={() => openWorkflowDialog(workflow)} aria-label={`Modifier ${workflow.name}`} title="Modifier ce workflow">✎</button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )
-            })()}
+          <div id="sidebar-todos-panel" role="tabpanel" aria-labelledby="sidebar-todos-tab">
+            {selectedProject && todos ? <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={selectedTodoId} onSelect={onTodoSelect} onCreate={onTodoCreate} onChanged={todos.refresh} /> : <p className="list-empty">Sélectionne un projet.</p>}
           </div>
         )}
       </section>
@@ -1022,20 +929,6 @@ export const Sidebar = memo(function Sidebar({
           {error}
         </p>
       )}
-
-      {showWorkflowDialog && selectedProject ? (
-        <WorkflowDialog
-          key={selectedProject.id}
-          project={selectedProject}
-          workflows={workflows}
-          initialWorkflow={workflowToEdit}
-          onClose={() => {
-            setShowWorkflowDialog(false)
-            setWorkflowToEdit(null)
-          }}
-          onChanged={setWorkflows}
-        />
-      ) : null}
 
       {projectSettingsProject ? (
         <ProjectSettingsDialog
@@ -1047,18 +940,8 @@ export const Sidebar = memo(function Sidebar({
         />
       ) : null}
 
-      <div className="sidebar-footer">
-        {time ? (
-          <LevelCard
-            snapshot={time}
-            mode={timeMode}
-            agentRunning={agentRunning}
-            onToggle={onTimeModeToggle}
-          />
-        ) : null}
-        <div className="sidebar-quotas">
-          <QuotaStatus snapshot={quotas.snapshot} />
-        </div>
+      <div className="sidebar-footer sidebar-footer--compact">
+        <button type="button" className="sidebar-usage-link" onClick={onUsageSelect}>Utilisation et quotas <span aria-hidden="true">↗</span></button>
       </div>
     </aside>
   )

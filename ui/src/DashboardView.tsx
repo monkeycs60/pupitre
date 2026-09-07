@@ -19,6 +19,7 @@ import { ProblemsPanel } from './ProblemsPanel'
 import type { ProblemMissionSeed } from './problemMission'
 
 interface DashboardViewProps {
+  embedded?: boolean
   project: Project
   onConversationSelect: (conversationId: string) => void
   onStartConversation: (seed: { ticketId: string; branch: string | null; ticketKey: string }) => void
@@ -158,6 +159,7 @@ export function DashboardView({
   onStartConversation,
   onStartProblem,
   onOpenSettings,
+  embedded = false,
 }: DashboardViewProps) {
   const { data, connected, error } = useDashboard(project.id)
   const [openConversations, setOpenConversations] = useState<Record<string, boolean>>({})
@@ -302,9 +304,14 @@ export function DashboardView({
   }
 
   return (
-    <section className="dashboard-view" aria-labelledby="dashboard-title">
+    <section className="dashboard-view" aria-label={embedded ? 'Suivi du projet' : undefined} aria-labelledby={embedded ? undefined : 'dashboard-title'}>
       <div className="dashboard-scroll">
-        <header className="dashboard-header">
+        {embedded ? <header className="project-panel-toolbar">
+          <select aria-label="Section du projet" value={activeTab} onChange={(event) => selectTab(event.target.value as DashboardTab)}>
+            {DASHBOARD_TABS.filter((tab) => tab.id !== 'problems' || activeTab === 'problems' || (data?.problems?.problems.length ?? 0) > 0).map((tab) => <option key={tab.id} value={tab.id}>{tab.id === 'problems' ? 'Anciens problèmes' : tab.label}</option>)}
+          </select>
+          <button type="button" className="text-button" onClick={() => void (activeTab === 'changelog' ? handleChangelogRefresh() : handleRefresh())}>Actualiser</button>
+        </header> : <header className="dashboard-header">
           <div className="dashboard-heading">
             <h1 id="dashboard-title">Tableau de bord</h1>
             <p className="dashboard-baseline">{project.name}</p>
@@ -346,7 +353,7 @@ export function DashboardView({
               Rafraîchir
             </button>
           </div>
-        </header>
+        </header>}
 
         {error ? <p className="dashboard-banner is-danger">Tableau indisponible : {error}</p> : null}
 
@@ -364,7 +371,7 @@ export function DashboardView({
           </p>
         ))}
 
-        <div className="dashboard-tabs" role="tablist" aria-label="Sections du tableau de bord">
+        {!embedded ? <div className="dashboard-tabs" role="tablist" aria-label="Sections du tableau de bord">
           {DASHBOARD_TABS.map((tab) => (
             <button
               key={tab.id}
@@ -380,10 +387,10 @@ export function DashboardView({
               {tab.label}
             </button>
           ))}
-        </div>
+        </div> : null}
 
         {activeTab === 'tickets' ? (
-        <section id="dashboard-panel-tickets" role="tabpanel" aria-labelledby="dashboard-tab-tickets" className="dashboard-section">
+        <section id="dashboard-panel-tickets" role="tabpanel" aria-label={embedded ? "tickets" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-tickets"} className="dashboard-section">
           <div className="dashboard-section-head">
             <h2 className="dashboard-section-title">Mes tickets</h2>
           </div>
@@ -393,7 +400,20 @@ export function DashboardView({
               <strong>Aucun ticket pour ce projet</strong>
               <p>Configure ClickUp ou GitLab, ou démarre une conversation sur une branche.</p>
             </div>
-          ) : (
+          ) : embedded ? <div className="project-ticket-list">{sortedTickets.map((ticket) => {
+            const branch = refOf(ticket, 'branch')?.ref ?? null
+            return <details className="project-ticket" key={ticket.id}>
+              <summary><span>{ticket.key}<span>{ticket.status}</span></span><strong>{ticket.title}</strong></summary>
+              {branch ? <p className="project-ticket-branch"><BranchIcon /> {branch}</p> : null}
+              {ticket.instruction ? <p className="project-ticket-instruction">{ticket.instruction}</p> : null}
+              <div className="project-ticket-links">{ticket.external_url ? <ExternalLink href={ticket.external_url}>Ouvrir le ticket</ExternalLink> : null}{ticket.refs.map((ref) => {
+                const url = textValue(ref.payload.url)
+                return url ? <ExternalLink key={ref.id} href={url}>{ref.kind} · {ref.ref}</ExternalLink> : null
+              })}</div>
+              {ticket.conversations.map((conversation) => <button key={conversation.id} type="button" className="project-ticket-conversation" onClick={() => onConversationSelect(conversation.id)}>{conversation.title} →</button>)}
+              <div className="project-ticket-actions"><button type="button" className="secondary-button" onClick={() => onStartConversation({ ticketId: ticket.id, ticketKey: ticket.key, branch })}>Nouvelle conversation</button><button type="button" className="text-button" onClick={() => openInstruction(ticket)}>Instruction</button></div>
+            </details>
+          })}</div> : (
             <div className={tableClassName} role="region" aria-label="Mes tickets">
               <div className="dashboard-row dashboard-head">
                 <span aria-sort={sort.key === 'ticket' ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
@@ -540,7 +560,7 @@ export function DashboardView({
         ) : null}
 
         {activeTab === 'sentry' ? (
-          <div id="dashboard-panel-sentry" role="tabpanel" aria-labelledby="dashboard-tab-sentry">
+          <div id="dashboard-panel-sentry" role="tabpanel" aria-label={embedded ? "sentry" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-sentry"}>
             <SentryInbox projectId={project.id} onConfigure={onOpenSettings} onConversationSelect={onConversationSelect} />
           </div>
         ) : null}
@@ -557,7 +577,7 @@ export function DashboardView({
         ) : null}
 
         {activeTab === 'changelog' ? (
-        <section id="dashboard-panel-changelog" role="tabpanel" aria-labelledby="dashboard-tab-changelog" className="dashboard-section dashboard-changelog">
+        <section id="dashboard-panel-changelog" role="tabpanel" aria-label={embedded ? "changelog" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-changelog"} className="dashboard-section dashboard-changelog">
           <div className="dashboard-section-head">
             <div><h2 className="dashboard-section-title">Changelog</h2><p>{changelogTiming(changelogState, now)}</p></div>
             {changelogDomains.length > 1 ? <select aria-label="Filtrer le changelog par domaine" value={changelogDomain} onChange={(event) => setChangelogDomain(event.target.value)}><option value="">Tous les domaines</option>{changelogDomains.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : null}
@@ -567,7 +587,7 @@ export function DashboardView({
         ) : null}
 
         {activeTab === 'environments' ? (
-          <section id="dashboard-panel-environments" role="tabpanel" aria-labelledby="dashboard-tab-environments" className="dashboard-section">
+          <section id="dashboard-panel-environments" role="tabpanel" aria-label={embedded ? "environments" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-environments"} className="dashboard-section">
             <div className="dashboard-section-head">
               <h2 className="dashboard-section-title">Environnements</h2>
             </div>

@@ -1,0 +1,21 @@
+import { useEffect, useState } from 'react'
+import { getProjectDashboard } from './api'
+import type { TicketRow } from './types'
+
+export function TicketSelect({ projectId, value, onChange }: { projectId: string; value: string | null; onChange: (ticket: TicketRow | null) => void }) {
+  const [tickets, setTickets] = useState<TicketRow[]>([])
+  const [error, setError] = useState(false)
+  useEffect(() => {
+    const controller = new AbortController()
+    void getProjectDashboard(projectId, controller.signal)
+      .then((data) => { if (!controller.signal.aborted) setTickets(data.tickets) })
+      .catch(() => { if (!controller.signal.aborted) setError(true) })
+    return () => controller.abort()
+  }, [projectId])
+  if (!tickets.length && !value && !error) return null
+  return <label className="composer-ticket-select"><span>Ticket</span><select aria-label="Ticket lié" value={value ?? ''} onChange={(event) => onChange(tickets.find((ticket) => ticket.id === event.target.value) ?? null)}>
+    <option value="">Sans ticket</option>
+    {value && !tickets.some((ticket) => ticket.id === value) ? <option value={value}>Ticket sélectionné</option> : null}
+    {tickets.map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.key} · {ticket.title}</option>)}
+  </select>{error ? <span role="status">Tickets indisponibles</span> : null}</label>
+}

@@ -171,10 +171,10 @@ export function CommandPalette({
       })
     }
     const views = [
-      ['dashboard', 'Tableau de bord', 'Tickets, MR, environnements'],
-      ['fleet', 'Fleet', 'Runs actifs tous projets'],
-      ['routines', 'Routines', 'Planifications et historique'],
-      ['documents', 'Documents', 'Livrables HTML et PDF'],
+      ['dashboard', 'Projet', 'Tickets, Sentry, changelog, environnements'],
+      ['fleet', 'Exécutions', 'Runs actifs tous projets'],
+      ['routines', 'Automatisations', 'Planifiées et à la demande'],
+      ['documents', 'Fichiers', 'Documents, images et pièces jointes partagés'],
       ['library', 'Skills', 'Compétences et prompts disponibles'],
       ['memory', 'Mémoire', 'Fichiers de mémoire persistante Claude'],
       ['help', 'Aide', 'Comprendre les concepts de Pupitre'],

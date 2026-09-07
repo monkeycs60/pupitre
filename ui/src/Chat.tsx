@@ -1,3 +1,4 @@
+import type { TodoItem } from './todos'
 import {
   useCallback,
   useEffect,
@@ -42,6 +43,10 @@ import { collectConversationAssets } from './conversationAssets'
 import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
 
 interface ChatProps {
+  initialTodo?: boolean
+  /** Événement à faire défiler et surligner à l’ouverture (retour depuis un fichier partagé). */
+  focusEventId?: number | null
+  onTodoCreated?: (todo: TodoItem) => void
   events: AppEvent[]
   connection: ConnectionState
   retryAt: number | null
@@ -158,6 +163,9 @@ export function Chat({
   project,
   quotas,
   onConversationCreated,
+  onTodoCreated,
+  initialTodo,
+  focusEventId = null,
   onProjectUpdated,
   onConversationRead,
   onRunningSubtasksChange,
@@ -193,6 +201,17 @@ export function Chat({
   const [searchOpen, setSearchOpen] = useState(false)
   const [assetsOpen, setAssetsOpen] = useState(false)
   const [atBottom, setAtBottom] = useState(true)
+  const locatedEventRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (focusEventId === null || locatedEventRef.current === focusEventId) return
+    const target = viewportRef.current?.querySelector(`[data-event-id="${focusEventId}"]`)
+    if (!(target instanceof HTMLElement)) return
+    locatedEventRef.current = focusEventId
+    followsBottomRef.current = false
+    target.scrollIntoView({ block: 'center' })
+    target.classList.add('is-located')
+    window.setTimeout(() => target.classList.remove('is-located'), 2500)
+  }, [focusEventId, blocks])
   const [focusRequest, setFocusRequest] = useState(0)
   /** Actions *DO THIS* cochées dans le fil, source de la consigne composée. */
   const [selectedActions, setSelectedActions] = useState<TaskAction[]>([])
@@ -457,6 +476,8 @@ export function Chat({
             quotas={quotas}
             isRunning={isRunning}
             onConversationCreated={handleConversationCreated}
+            onTodoCreated={onTodoCreated}
+            initialTodo={initialTodo}
             onProjectUpdated={onProjectUpdated}
             message={message}
             onMessageChange={handleMessageChange}
