@@ -4,17 +4,18 @@
 <body>
   <main>
     <header><strong>Pupitre</strong><span id="status">Connexion…</span></header>
-    <section id="connection" hidden>
+    <details id="connection">
+      <summary id="connection-summary">Instance Pupitre</summary>
       <label>Jeton d’appairage<input id="token" type="password" autocomplete="off"></label>
       <label>Port Pupitre<input id="port" type="number" value="4820" min="1" max="65535"></label>
       <button id="save-connection">Enregistrer</button>
-    </section>
+    </details>
     <section id="feedback" hidden>
       <p id="project"></p>
       <div id="association" hidden><label>Projet<select id="project-choice"></select></label><button id="associate">Associer cette page</button></div>
       <div id="destination" hidden>
         <label>Branche<select id="branch"></select></label>
-        <label>Conversation<select id="conversation"><option value="">Nouvelle conversation automatique</option></select></label>
+        <label>Conversation<select id="conversation"><option value="">Nouvelle conversation</option></select></label>
         <label>Consigne générale<textarea id="instruction" rows="2"></textarea></label>
       </div>
       <ol id="annotations"></ol>

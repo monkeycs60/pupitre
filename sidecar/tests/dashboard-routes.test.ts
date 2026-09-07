@@ -860,7 +860,15 @@ test("apparie l'extension puis protège la résolution visuelle par jeton", asyn
     origin: "http://localhost:5179",
     pathname: "/",
   }, token);
-  const payload = await resolved.json() as { status: string; destinations?: { currentBranch: string; branches: string[] } };
+  const payload = await resolved.json() as {
+    status: string;
+    instance?: string;
+    instancePort?: number;
+    destinations?: { currentBranch: string; branches: string[] };
+  };
   expect(payload.status).toBe("resolved");
   expect(payload.destinations).toEqual(expect.objectContaining({ currentBranch: "master", branches: ["master"] }));
+  // L'extension ne peut afficher la cible que si la résolution la nomme.
+  expect(payload.instance).toBe("stable");
+  expect(payload.instancePort).toBe(Number(new URL(current.baseUrl).port));
 });

@@ -32,9 +32,12 @@ export interface ConversationSummary {
   worktree_path: string | null;
 }
 
-export type Resolution =
+export interface InstanceTarget { instance?: "stable" | "dev"; instancePort?: number }
+
+export type Resolution = InstanceTarget & (
   | { status: "resolved"; project: ProjectSummary; destinations?: Destinations }
-  | { status: "ambiguous" | "unresolved"; projects: ProjectSummary[] };
+  | { status: "ambiguous" | "unresolved"; projects: ProjectSummary[] }
+);
 
 export interface Destinations {
   branches: string[];

@@ -1304,9 +1304,10 @@ export function createServer(deps: ServerDeps) {
               pathname: optionalTrimmed(body, "pathname") ?? "/",
               cwd: listeningProcessCwd(port),
             });
+            const target = { instance: instance.name, instancePort: server.port ?? instance.port };
             return corsJson(resolution.status === "resolved"
-              ? { ...resolution, destinations: deps.visualFeedback.destinations(resolution.project.id) }
-              : resolution);
+              ? { ...resolution, ...target, destinations: deps.visualFeedback.destinations(resolution.project.id) }
+              : { ...resolution, ...target });
           }
           if (request.method === "PUT" && pathname === "/api/visual-feedback/origins") {
             const body = await readObject(request);

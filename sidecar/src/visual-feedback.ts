@@ -253,10 +253,6 @@ export class VisualFeedbackService {
     }
     const prompt = visualFeedbackPrompt(input);
     if (!conversation) {
-      conversation = this.conversations.listByProject(project.id).find((item) =>
-        item.created_on_branch === input.branch && item.worktree_path === worktreePath) ?? null;
-    }
-    if (!conversation) {
       const preset = this.presets.get(project.default_preset_id ?? "builtin-eco") ?? this.presets.get("builtin-eco")!;
       conversation = this.conversations.create({
         projectId: project.id,

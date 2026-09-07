@@ -22,7 +22,7 @@ function updateConversations() {
     item.created_on_branch === selectedBranch
     && (selectedBranch !== destinations!.currentBranch || item.worktree_path === null));
   ($("conversation") as HTMLSelectElement).replaceChildren(
-    new Option("Nouvelle conversation automatique", ""),
+    new Option("Nouvelle conversation", ""),
     ...compatible.map((item) => new Option(item.title, item.id)),
   );
 }
@@ -31,8 +31,10 @@ async function load() {
   errorBox.textContent = "";
   ($("send") as HTMLButtonElement).disabled = true;
   const stored = await send({ type: "GET_STATE" });
+  ($("port") as HTMLInputElement).value = String(stored.port);
+  $("connection-summary").textContent = stored.paired ? `Appairé sur le port ${stored.port}` : "Appairer une instance";
   if (!stored.paired) {
-    $("connection").hidden = false;
+    ($("connection") as HTMLDetailsElement).open = true;
     status.textContent = "Non appairé";
     return;
   }
@@ -41,15 +43,16 @@ async function load() {
   const url = new URL(tab.url);
   const resolved = await send({ type: "RESOLVE", origin: url.origin, pathname: url.pathname }) as Resolution;
   resolution = resolved;
+  const instance = resolved.instance ? `${resolved.instance} · ${resolved.instancePort}` : `port ${stored.port}`;
   $("feedback").hidden = false;
   if (resolved.status !== "resolved") {
-    status.textContent = "Projet à associer";
+    status.textContent = `Projet à associer — Pupitre ${instance}`;
     $("association").hidden = false;
     const select = $("project-choice") as HTMLSelectElement;
     select.replaceChildren(...resolved.projects.map((project) => new Option(project.name, project.id)));
     return;
   }
-  status.textContent = "Connecté";
+  status.textContent = `Pupitre ${instance}`;
   $("project").textContent = resolved.project.name;
   const loadedDestinations = resolved.destinations
     ?? await send({ type: "DESTINATIONS", projectId: resolved.project.id }) as Destinations;

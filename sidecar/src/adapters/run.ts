@@ -13,6 +13,7 @@ export function runProviderTurn(
 ): Promise<void> {
   if (provider === "claude") return runClaudeTurn(opts, emit);
   if (provider === "grok") return runGrokTurn(opts, emit);
+  if (provider !== "codex") return Promise.reject(new Error(`provider inconnu : ${provider}`));
   if (process.env.PUPITRE_CODEX_MODE === "exec") return runCodexTurn(opts, emit);
   return runCodexAppServerTurn(opts, emit);
 }

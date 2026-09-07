@@ -8,6 +8,7 @@ let destinations: Destinations | null = null;
 let annotations: Annotation[] = [];
 let hoveredNumber: number | null = null;
 let panelCollapsed = false;
+let target: { instance?: "stable" | "dev"; instancePort?: number } = {};
 const markers = new Map<number, HTMLElement>();
 const boxes = new Map<number, HTMLElement>();
 
@@ -80,8 +81,20 @@ function placeHighlight(element: Element | null) {
 async function resolveProject(): Promise<{ id: string; destinations?: Destinations }> {
   const resolution = await chrome.runtime.sendMessage({ type: "RESOLVE", origin: location.origin, pathname: location.pathname }) as Resolution & { error?: string };
   if (resolution.error) throw new Error(resolution.error);
+  target = { instance: resolution.instance, instancePort: resolution.instancePort };
   if (resolution.status !== "resolved") throw new Error("Associe d’abord cette origine à un projet depuis le panneau Pupitre.");
   return { id: resolution.project.id, destinations: resolution.destinations };
+}
+
+/**
+ * `chrome.tabs.captureVisibleTab` photographie l'onglet tel qu'il est peint :
+ * le panier resterait sur la capture envoyée à Pupitre.
+ */
+async function withoutPanel<T>(run: () => Promise<T>): Promise<T> {
+  panel.hidden = true;
+  tooltip.hidden = true;
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  try { return await run(); } finally { renderPanel(); }
 }
 
 function start() { active = true; document.documentElement.style.cursor = "crosshair"; }
@@ -130,7 +143,10 @@ function updateConversationOptions(preferred = conversationSelect.value) {
 function renderPanel() {
   panel.hidden = annotations.length === 0;
   panel.classList.toggle("collapsed", panelCollapsed);
-  panelTitle.textContent = panelCollapsed ? `Pupitre · ${annotations.length}` : `Panier Pupitre · ${annotations.length}`;
+  const instance = target.instance ? `${target.instance} · ${target.instancePort}` : "instance inconnue";
+  panelTitle.textContent = panelCollapsed
+    ? `Pupitre ${target.instance ?? "?"} · ${annotations.length}`
+    : `Panier Pupitre ${instance} · ${annotations.length}`;
   collapseButton.textContent = panelCollapsed ? "Ouvrir" : "Replier";
   panelList.replaceChildren(...annotations.map((annotation) => {
     const item = document.createElement("li");
@@ -279,7 +295,8 @@ document.addEventListener("click", async (event) => {
     const stored = await chrome.runtime.sendMessage({ type: "GET_STATE" });
     const previous = stored.carts?.[projectId] ?? [];
     renderAnnotations([...previous, { ...annotation, number: previous.length + 1 }]);
-    const response = await chrome.runtime.sendMessage({ type: "ADD_ANNOTATION", projectId, annotation });
+    const response = await withoutPanel<any>(() =>
+      chrome.runtime.sendMessage({ type: "ADD_ANNOTATION", projectId, annotation }));
     if (response.error) {
       renderAnnotations(previous);
       throw new Error(response.error);

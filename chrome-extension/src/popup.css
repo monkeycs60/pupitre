@@ -18,3 +18,5 @@ button:disabled { cursor:wait; opacity:.45; }
 #annotations li { display:flex; justify-content:space-between; gap:8px; align-items:start; }
 #annotations button.remove { padding:2px 4px; border:0; background:transparent; color:#aaa39b; font-weight:400; }
 #error { min-height:18px; margin:10px 0 0; color:#ff947d; }
+
+#connection summary{cursor:pointer;padding:6px 0;font-weight:600}
