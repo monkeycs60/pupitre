@@ -14,8 +14,9 @@ import {
   setConversationPinned,
   setConversationPermissionMode,
 } from './api'
-import type { Conversation, FleetItem, Project, ProjectDomain, QuotaSnapshot, WorkspaceView } from './types'
+import type { Conversation, FleetItem, Project, ProjectDomain, QuotaSnapshot, TimeMode, TimeSnapshot, WorkspaceView } from './types'
 import { QuotaStatus } from './QuotaBar'
+import { LevelCard } from './LevelCard'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { modelLabel } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
@@ -38,8 +39,11 @@ interface SidebarProps {
   selectedTodoId?: string | null
   onTodoSelect?: (id: string) => void
   onTodoCreate?: () => void
-  onUsageSelect?: () => void
   quotas?: QuotaSnapshot
+  time?: TimeSnapshot | null
+  timeMode?: TimeMode
+  onTimeModeToggle?: () => void
+  agentRunning?: boolean
   selectedProject: Project | null
   selectedConversation: Conversation | null
   onProjectSelect: (project: Project) => void
@@ -242,8 +246,11 @@ export const Sidebar = memo(function Sidebar({
   selectedTodoId = null,
   onTodoSelect = () => {},
   onTodoCreate = () => {},
-  onUsageSelect,
   quotas,
+  time = null,
+  timeMode = 'user',
+  onTimeModeToggle = () => {},
+  agentRunning = false,
   selectedConversation,
   onProjectSelect,
   onConversationSelect,
@@ -944,12 +951,19 @@ export const Sidebar = memo(function Sidebar({
       ) : null}
 
       <div className="sidebar-footer sidebar-footer--compact">
+        {time ? (
+          <LevelCard
+            snapshot={time}
+            mode={timeMode}
+            agentRunning={agentRunning}
+            onToggle={onTimeModeToggle}
+          />
+        ) : null}
         {quotas ? (
           <div className="sidebar-quotas">
             <QuotaStatus snapshot={quotas} />
           </div>
         ) : null}
-        <button type="button" className="sidebar-usage-link" onClick={onUsageSelect}>Utilisation et quotas <span aria-hidden="true">↗</span></button>
       </div>
     </aside>
   )

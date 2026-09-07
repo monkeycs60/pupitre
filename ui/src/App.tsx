@@ -14,7 +14,8 @@ import type {
 import { Chat } from './Chat'
 import { Sidebar } from './Sidebar'
 import { Rail } from './Rail'
-import { Titlebar } from './Titlebar'
+import { Titlebar, type TitlebarDestination } from './Titlebar'
+import { navigationShortcutLabel } from './navigationShortcuts'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
 import type { Attachment, Conversation, Project } from './types'
@@ -807,6 +808,32 @@ function App() {
         settings: 'Paramètres',
       }[workspaceView]
 
+  const railView: WorkspaceView = inspector === 'workflows'
+    ? 'routines'
+    : inspector === 'quotas' ? 'costs' : inspector ?? workspaceView
+
+  const destinations: TitlebarDestination[] = [
+    {
+      name: 'conversations',
+      label: 'Conversations',
+      view: 'conversations',
+      onClick: handleConversationsSelect,
+      shortcut: navigationShortcutLabel('conversations'),
+    },
+    ...(window.__TAURI__
+      ? [{
+          name: 'design' as const,
+          label: 'Claude Design',
+          view: 'design' as const,
+          onClick: handleDesignSelect,
+          shortcut: navigationShortcutLabel('design'),
+        }]
+      : []),
+    { name: 'attention', label: 'Activité', view: 'attention', onClick: handleAttentionSelect, badge: attention.items.length },
+    { name: 'settings', label: 'Réglages', view: 'settings', onClick: handleSettingsSelect },
+    { name: 'help', label: 'Aide', view: 'help', onClick: () => handleHelpSelect() },
+  ]
+
   const showSidebar = workspaceView === 'conversations'
 
   return (
@@ -828,6 +855,9 @@ function App() {
         time={time.snapshot}
         instance={instance}
         onRestart={restartApp}
+        destinations={destinations}
+        workspaceView={railView}
+        hasProject={selectedProject !== null}
       />
       <Rail
         selectedProject={selectedProject}
@@ -835,13 +865,7 @@ function App() {
         conversationListVersion={conversationListVersion + railReadVersion}
         onProjectSelect={handleProjectSelect}
         onProjectCreated={handleProjectSelect}
-        workspaceView={inspector === 'workflows' ? 'routines' : inspector === 'quotas' ? 'costs' : inspector ?? workspaceView}
-        onConversationsSelect={handleConversationsSelect}
-        onDesignSelect={handleDesignSelect}
-        onAttentionSelect={handleAttentionSelect}
-        onHelpSelect={() => handleHelpSelect()}
-        onSettingsSelect={handleSettingsSelect}
-        attentionCount={attention.items.length}
+        workspaceView={railView}
         activeProjectIds={[...new Set(fleet.items.map((item) => item.projectId))]}
       />
       {showSidebar ? (
@@ -855,8 +879,11 @@ function App() {
         selectedTodoId={selectedTodoId}
         onTodoSelect={(id) => { setSelectedTodoId(id); setIsCreatingConversation(false); setWorkspaceView('conversations') }}
         onTodoCreate={() => { setTodoSeed(null); handleTodoCreate() }}
-        onUsageSelect={() => openInspector('quotas')}
         quotas={quotas.snapshot}
+        time={time.snapshot}
+        timeMode={time.mode}
+        onTimeModeToggle={time.toggleMode}
+        agentRunning={fleet.items.length > 0}
         onProjectSelect={handleProjectSelect}
         onConversationSelect={handleConversationSelect}
         onConversationCreate={handleConversationCreate}

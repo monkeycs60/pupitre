@@ -4,12 +4,24 @@ import type { TimeSnapshot } from './types'
 import { formatActiveDuration } from './formatActiveDuration'
 import type { InstanceHealth } from './types'
 import { InstanceBadge } from './InstanceBadge'
+import { NavIcon, type NavName } from './NavIcon'
+import type { WorkspaceView } from './types'
 
 type ResizeDirection = Parameters<Window['startResizeDragging']>[0]
 
 /** La barre de titre s'affiche partout ; seuls les contrôles de fenêtre et le
  *  glisser-déplacer sont réservés à Tauri (nuls en dev navigateur). */
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+
+export interface TitlebarDestination {
+  name: NavName
+  label: string
+  view: WorkspaceView
+  onClick: () => void
+  shortcut?: string | null
+  badge?: number
+  needsProject?: boolean
+}
 
 interface TitlebarProps {
   /** Fil d'Ariane discret (projet · vue) ; les entrées vides sont ignorées. */
@@ -18,6 +30,10 @@ interface TitlebarProps {
   time?: TimeSnapshot | null
   instance?: InstanceHealth | null
   onRestart?: () => Promise<void>
+  /** Destinations globales : elles remplacent la navigation de l'ancien rail. */
+  destinations?: TitlebarDestination[]
+  workspaceView?: WorkspaceView
+  hasProject?: boolean
 }
 
 const RESIZE_HANDLES: ReadonlyArray<[string, ResizeDirection]> = [
@@ -41,7 +57,16 @@ function activeLabel(snapshot: TimeSnapshot | null | undefined): string | null {
   return formatActiveDuration(snapshot.user.todayMs)
 }
 
-export function Titlebar({ crumbs, onSearch, time, instance, onRestart }: TitlebarProps) {
+export function Titlebar({
+  crumbs,
+  onSearch,
+  time,
+  instance,
+  onRestart,
+  destinations = [],
+  workspaceView,
+  hasProject = true,
+}: TitlebarProps) {
   const visibleCrumbs = (crumbs ?? []).filter(
     (crumb): crumb is string => typeof crumb === 'string' && crumb.length > 0,
   )
@@ -82,6 +107,33 @@ export function Titlebar({ crumbs, onSearch, time, instance, onRestart }: Titleb
           </button>
         ) : null}
       </div>
+
+      {destinations.length > 0 ? (
+        <nav className="titlebar-nav" aria-label="Navigation">
+          {destinations.map((destination) => (
+            <button
+              key={destination.name}
+              type="button"
+              className={`titlebar-nav-button${workspaceView === destination.view ? ' is-active' : ''}`}
+              onClick={destination.onClick}
+              disabled={destination.needsProject && !hasProject}
+              title={destination.shortcut ? `${destination.label} · ${destination.shortcut}` : destination.label}
+              aria-current={workspaceView === destination.view ? 'true' : undefined}
+              aria-label={destination.badge
+                ? `${destination.label}, ${destination.badge} à lire`
+                : destination.label}
+            >
+              <NavIcon name={destination.name} />
+              <span>{destination.label}</span>
+              {destination.badge && destination.badge > 0 ? (
+                <span className="titlebar-nav-badge" aria-hidden="true">
+                  {destination.badge > 99 ? '99+' : destination.badge}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </nav>
+      ) : null}
 
       <div className="titlebar-right">
         {onRestart ? <InstanceBadge health={instance ?? null} onRestart={onRestart} /> : null}

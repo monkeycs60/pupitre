@@ -103,6 +103,64 @@ body.is-resizing-documents-list {
   font-size: var(--text-xs);
 }
 
+.titlebar-nav {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  margin-left: auto;
+  padding-right: var(--space-3);
+}
+
+.titlebar-nav-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.titlebar-nav-button svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.titlebar-nav-button:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+.titlebar-nav-button.is-active {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+}
+
+.titlebar-nav-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.titlebar-nav-badge {
+  padding: 0 5px;
+  color: var(--unread);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  background: var(--unread-soft);
+  border-radius: var(--r-full);
+}
+
 .titlebar-right {
   display: flex;
   flex: none;
@@ -538,189 +596,6 @@ button.titlebar-instance {
   opacity: 1;
 }
 
-.rail-spacer {
-  flex: 1;
-}
-
-.rail-divider {
-  width: 28px;
-  height: 1px;
-  margin: 4px 0 6px;
-  background: var(--border);
-}
-
-.rail-nav {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-}
-
-.rail.is-label-expanded .rail-divider {
-  width: calc(100% - 16px);
-  margin-right: 8px;
-  margin-left: 8px;
-}
-
-.rail.is-label-expanded .rail-nav {
-  align-self: stretch;
-  align-items: stretch;
-  padding: 0 8px;
-}
-
-.rail-nav-divider {
-  display: none;
-  height: 1px;
-  margin: 4px 0;
-  background: var(--border);
-}
-
-.rail.is-label-expanded .rail-nav-divider {
-  display: block;
-}
-
-.rail-nav-button {
-  position: relative;
-  display: grid;
-  grid-template-columns: 16px minmax(0, 0fr);
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  width: 34px;
-  height: 34px;
-  min-width: 0;
-  padding: 0;
-  overflow: hidden;
-  color: var(--text-muted);
-  background: transparent;
-  border: 0;
-  border-radius: 9px;
-  cursor: pointer;
-  transition: width 140ms var(--ease), grid-template-columns 140ms var(--ease), gap 140ms var(--ease), padding 140ms var(--ease), color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
-}
-
-.rail-nav-button svg {
-  width: 16px;
-  height: 16px;
-}
-
-.rail-nav-label {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-  min-width: 0;
-  max-width: 0;
-  overflow: hidden;
-  color: inherit;
-  font-size: var(--text-sm);
-  line-height: 1;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0;
-  transition: max-width 120ms var(--ease), opacity 100ms var(--ease);
-}
-
-.rail-nav-label > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rail-nav-shortcut {
-  flex: none;
-  color: var(--text-faint);
-  font: inherit;
-  font-size: 9px;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
-
-.rail.is-label-expanded .rail-nav-button {
-  grid-template-columns: 16px minmax(0, 1fr);
-  justify-content: start;
-  gap: 8px;
-  width: 100%;
-  padding: 0 10px;
-}
-
-.rail.is-label-expanded .rail-nav-label {
-  max-width: 132px;
-  opacity: 1;
-}
-
-.rail-nav-button:hover:not(:disabled) {
-  color: var(--text-strong);
-  background: var(--bg-hover);
-}
-
-.rail-nav-button.is-active {
-  color: var(--accent-bright);
-  background: var(--accent-soft);
-}
-
-.rail-nav-button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.rail-badge {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 6px;
-  height: 6px;
-  background: var(--danger);
-  border-radius: var(--r-full);
-}
-
-.rail-badge.is-live {
-  background: var(--accent);
-  animation: livepulse 1.4s var(--ease) infinite;
-}
-
-/* Rail replié : le non-lu est un point, comme dans la liste des conversations.
-   Le chiffre attend le dépliage, où la ligne a la place de le porter. */
-.rail-badge.is-unread {
-  top: 6px;
-  right: 6px;
-  width: 7px;
-  height: 7px;
-  background: var(--unread);
-  box-shadow: 0 0 0 2px var(--bg-rail);
-  transform: none;
-}
-
-.rail-badge-count {
-  display: none;
-}
-
-.rail-nav-button:has(.rail-badge.is-unread) {
-  overflow: visible;
-}
-
-.rail.is-label-expanded .rail-badge.is-unread {
-  top: 50%;
-  right: 10px;
-  width: auto;
-  height: auto;
-  padding: 1px 6px;
-  color: var(--unread);
-  font-family: var(--font-sans);
-  font-size: 10.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.5;
-  background: var(--unread-soft);
-  box-shadow: none;
-  transform: translateY(-50%);
-}
-
-.rail.is-label-expanded .rail-badge-count {
-  display: inline;
-}
 
 @keyframes rail-live {
   0%, 100% { box-shadow: 0 0 0 0 rgba(139, 124, 255, 0); }
