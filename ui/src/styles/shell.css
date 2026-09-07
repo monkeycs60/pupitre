@@ -832,6 +832,22 @@ button.titlebar-instance {
   font-size: var(--text-md);
 }
 
+.header-action-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.header-action-icon.is-active {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.header-action-icon:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .connection-banner {
   flex: none;
   padding: var(--space-1) var(--space-5);

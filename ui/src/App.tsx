@@ -1,4 +1,4 @@
-import { INSPECTOR_GROUPS, WorkspaceInspector, inspectorGroupOf, type InspectorView } from './WorkspaceInspector'
+import { WorkspaceInspector, inspectorGroupOf, type InspectorView } from './WorkspaceInspector'
 import { TodoEditor } from './TodoEditor'
 import type { TodoDraftSeed } from './todoDraft'
 import { WorkflowsView } from './WorkflowsView'
@@ -16,6 +16,7 @@ import { Sidebar } from './Sidebar'
 import { Rail } from './Rail'
 import { Titlebar, type TitlebarDestination } from './Titlebar'
 import { navigationShortcutLabel } from './navigationShortcuts'
+import { NavIcon, type NavName } from './NavIcon'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
 import type { Attachment, Conversation, Project } from './types'
@@ -34,7 +35,6 @@ import { useAppNotifications } from './useAppNotifications'
 import { CommandPalette } from './CommandPalette'
 import { createSessionSummary, createTestInventory, startReview } from './api'
 import type { SkillSummary } from './types'
-import { ResumeCommandButton } from './ResumeCommandButton'
 import type { AppEvent, WorkspaceView } from './types'
 import { useTimeTracking } from './useTimeTracking'
 import { useFleet } from './useFleet'
@@ -73,6 +73,12 @@ const AppSettingsView = lazy(() => import('./AppSettingsView').then((module) => 
 const SharedFilesView = lazy(() => import('./SharedFilesView').then((module) => ({ default: module.SharedFilesView })))
 const DesignView = lazy(() => import('./DesignView').then((module) => ({ default: module.DesignView })))
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
+
+/** Panneaux joignables depuis le head de la conversation. */
+const HEADER_PANELS: ReadonlyArray<{ view: InspectorView; name: NavName; label: string }> = [
+  { view: 'dashboard', name: 'dashboard', label: 'Suivi du projet' },
+  { view: 'documents', name: 'documents', label: 'Fichiers partagés' },
+]
 
 const DEFAULT_SIDEBAR_WIDTH = 296
 const MIN_SIDEBAR_WIDTH = 200
@@ -934,14 +940,6 @@ function App() {
       ) : null}
 
       <section className="workspace" aria-label={titlebarView ?? 'Conversation'}>
-        {workspaceView === 'conversations' ? <nav className="workspace-toolbar" aria-label="Outils du projet">
-          <span>{selectedProject?.name ?? 'Conversations'}</span>
-          <div>{INSPECTOR_GROUPS.map((group) => {
-            const active = inspector !== null && group.tabs.some(([id]) => id === inspector)
-            const count = group.title === 'Activité' ? attention.items.length : 0
-            return <button key={group.title} type="button" aria-pressed={active} disabled={group.needsProject && !selectedProject} onClick={() => active ? closeInspector() : openInspector(lastInspectorViews.current[group.title] ?? group.tabs[0][0])}>{group.title}{count > 0 ? <span className="workspace-toolbar-count">{count}</span> : null}</button>
-          })}</div>
-        </nav> : null}
         <div className="workspace-split">
         <div className="conversation-workspace">
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
@@ -996,11 +994,22 @@ function App() {
                     : null
                 })()}
               </div>
-              {selectedConversation !== null ? (
-                <div className="header-actions">
-                  <ResumeCommandButton conversation={selectedConversation} />
-                </div>
-              ) : null}
+              <div className="header-actions">
+                {HEADER_PANELS.map(({ view, name, label }) => (
+                  <button
+                    key={view}
+                    type="button"
+                    className={`header-action header-action-icon${inspector === view ? ' is-active' : ''}`}
+                    disabled={selectedProject === null}
+                    aria-pressed={inspector === view}
+                    aria-label={label}
+                    title={label}
+                    onClick={() => inspector === view ? closeInspector() : openInspector(view)}
+                  >
+                    <NavIcon name={name} />
+                  </button>
+                ))}
+              </div>
             </header>
             <Chat
               key={selectedConversation === null

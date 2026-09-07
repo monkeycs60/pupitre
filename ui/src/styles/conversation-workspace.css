@@ -1,8 +1,4 @@
-.workspace-toolbar { display:flex; align-items:center; justify-content:space-between; min-height:42px; padding:0 20px; border-bottom:1px solid var(--border-subtle); flex-shrink:0; gap:12px; }
-.workspace-toolbar > span { font-size:12px; color:var(--text-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.workspace-toolbar > div { display:flex; gap:4px; }
-.workspace-toolbar button, .inspector-tabs button { padding:7px 10px; color:var(--text-muted); background:transparent; border:0; border-radius:var(--r-sm); font-size:12px; transition:background 150ms, color 150ms; }
-.workspace-toolbar button:hover, .workspace-toolbar button[aria-pressed=true] { background:var(--bg-hover); color:var(--text-strong); }
+.inspector-tabs button { padding:7px 10px; color:var(--text-muted); background:transparent; border:0; border-radius:var(--r-sm); font-size:12px; transition:background 150ms, color 150ms; }
 .workspace-split { display:flex; flex:1; min-height:0; min-width:0; position:relative; }
 .conversation-workspace { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; overflow:hidden; }
 .workspace-inspector { display:flex; flex-direction:column; position:relative; flex-shrink:0; max-width:65%; min-width:360px; min-height:0; border-left:1px solid var(--border); background:var(--bg-panel); animation:inspector-appear 160ms ease-out; }
@@ -78,8 +74,8 @@
 .todo-attachments { display:flex; flex-wrap:wrap; gap:12px; font-size:12px; }
 .workspace-inspector :is(button,input,select,textarea):focus-visible, .todo-detail :is(button,input,select,textarea):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 @media (max-width:1100px) { .workspace-inspector { position:absolute; right:0; top:0; bottom:0; max-width:90%; width:480px; z-index:35; } }
-@media (max-width:700px) { .workspace-inspector { min-width:0; max-width:100%; width:100% !important; } .workspace-toolbar { padding:0 12px; } .workspace-toolbar > span { display:none; } .todo-detail { padding:20px 16px; } }
-@media (prefers-reduced-motion:reduce) { .workspace-inspector { animation:none; } .todo-row,.todo-row-order,.workspace-toolbar button { transition:none; } }
+@media (max-width:700px) { .workspace-inspector { min-width:0; max-width:100%; width:100% !important; } .todo-detail { padding:20px 16px; } }
+@media (prefers-reduced-motion:reduce) { .workspace-inspector { animation:none; } .todo-row,.todo-row-order { transition:none; } }
 .workspace-inspector .dashboard-view { background:var(--bg-panel); }
 .workspace-inspector .dashboard-scroll { padding:16px 20px; }
 .workspace-inspector .dashboard-section-head { margin-bottom:16px; }
@@ -113,7 +109,6 @@
 .project-panel-tabs { margin:-4px 0 20px; border-bottom:1px solid var(--border-subtle); }
 .project-panel-refresh { margin-left:auto; padding:8px 0 8px 12px; border:0; background:transparent; color:var(--text-faint); font-size:12px; white-space:nowrap; }
 .project-panel-refresh:hover { color:var(--text); }
-.workspace-toolbar-count { margin-left:6px; font-size:11px; color:var(--accent-bright); }
 .todo-config { display:flex; flex-direction:column; gap:10px; margin:20px 0; font-size:12px; color:var(--text-muted); }
 .todo-config .config-panel { flex-wrap:wrap; }
 .todo-attach { display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin:-4px 0 12px; }
