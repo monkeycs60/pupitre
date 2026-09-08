@@ -106,25 +106,36 @@
 .conversation-workspace .config-panel { flex-wrap:wrap; }
 .is-located { outline:2px solid var(--accent); outline-offset:4px; border-radius:var(--r-sm); }
 .workspace-inspector .quota-card-grid { grid-template-columns:1fr; }
-/* Rail des sections du projet : la liste entière tient debout à gauche, là où
-   les onglets horizontaux se tronquaient dès que le panneau rétrécissait. */
-.dashboard-view.is-railed { flex-direction:row; }
-.project-rail { display:flex; flex:none; flex-direction:column; gap:2px; width:186px; padding:16px 10px 12px; border-right:1px solid var(--border-subtle); overflow-y:auto; }
-.project-rail-title { margin:0 0 8px 8px; color:var(--text-faint); font-size:10.5px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; }
-.project-rail-list { display:flex; flex-direction:column; gap:2px; }
-.project-rail-list button { display:flex; align-items:center; gap:9px; width:100%; padding:7px 9px; color:var(--text-muted); font-size:12.5px; text-align:left; background:transparent; border:1px solid transparent; border-radius:var(--r-sm); cursor:pointer; transition:color 150ms, background 150ms, border-color 150ms; }
-.project-rail-list button svg { width:15px; height:15px; flex:none; }
-.project-rail-list button > span:first-of-type { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.project-rail-list button:hover { color:var(--text-strong); background:var(--bg-hover); }
-.project-rail-list button.is-selected { color:var(--text-strong); background:var(--accent-soft); border-color:var(--accent-border); }
-.project-rail-count { flex:none; padding:0 6px; color:var(--text-faint); font-family:var(--font-mono); font-size:10.5px; font-variant-numeric:tabular-nums; line-height:1.7; background:var(--bg-raised); border-radius:var(--r-full); }
-.project-rail-list button.is-selected .project-rail-count { color:var(--accent-bright); }
-.project-rail-count.is-alert { color:var(--danger); background:var(--danger-soft); }
-.project-rail-refresh { margin-top:auto; padding:8px 9px 0; color:var(--text-faint); font-size:11.5px; text-align:left; background:transparent; border:0; cursor:pointer; }
-.project-rail-refresh:hover { color:var(--text); }
+/* Barre des sections du projet : les quatre sections tiennent en tête du
+   panneau, la largeur restante revient au contenu. */
+.dashboard-view.is-sectioned { flex-direction:column; }
+.project-sections { display:flex; align-items:center; gap:8px; flex:none; padding:10px 12px; border-bottom:1px solid var(--border-subtle); }
+.project-sections-list { display:flex; align-items:center; gap:3px; flex:1; min-width:0; }
+.project-sections-list button { display:flex; align-items:center; gap:7px; min-width:0; padding:6px 10px; color:var(--text-muted); font-size:12.5px; background:transparent; border:1px solid transparent; border-radius:var(--r-full); cursor:pointer; transition:color 150ms, background 150ms, border-color 150ms; }
+.project-sections-list button svg { width:15px; height:15px; flex:none; }
+.project-sections-list button > span:first-of-type { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.project-sections-list button:hover { color:var(--text-strong); background:var(--bg-hover); }
+.project-sections-list button.is-selected { color:var(--text-strong); background:var(--accent-soft); border-color:var(--accent-border); }
+.project-section-count { flex:none; padding:0 6px; color:var(--text-faint); font-family:var(--font-mono); font-size:10.5px; font-variant-numeric:tabular-nums; line-height:1.7; background:var(--bg-raised); border-radius:var(--r-full); }
+.project-sections-list button.is-selected .project-section-count { color:var(--accent-bright); }
+.project-section-count.is-alert { color:var(--danger); background:var(--danger-soft); }
+.project-sections-refresh { flex:none; padding:6px 4px; color:var(--text-faint); font-size:11.5px; background:transparent; border:0; cursor:pointer; }
+.project-sections-refresh:hover { color:var(--text); }
 /* Le repli suit la largeur du panneau, pas celle de la fenêtre : le panneau
    se redimensionne, un point de rupture sur la fenêtre le raterait. */
-@container inspector (max-width: 430px) { .project-rail { width:48px; padding:16px 7px 12px; } .project-rail-title, .project-rail-list button > span:first-of-type, .project-rail-refresh { display:none; } .project-rail-list button { position:relative; justify-content:center; padding:7px 0; } .project-rail-count { position:absolute; top:1px; right:1px; padding:0 4px; font-size:9px; } }
+@container inspector (max-width: 568px) {
+  .project-sections-list button svg { display:none; }
+  .project-sections-list button { padding:6px 9px; }
+}
+@container inspector (max-width: 470px) {
+  .project-sections { gap:6px; padding:9px 10px; }
+  .project-sections-list { gap:2px; }
+  .project-sections-list button svg { display:block; }
+  .project-sections-list button:not(.is-selected) > span:first-of-type { display:none; }
+  .project-sections-list button:not(.is-selected) { padding:6px 7px; }
+  .project-sections-refresh > span { display:none; }
+  .project-sections-refresh::before { content:'\21bb'; font-size:14px; }
+}
 .todo-config { display:flex; flex-direction:column; gap:10px; margin:20px 0; font-size:12px; color:var(--text-muted); }
 .todo-config .config-panel { flex-wrap:wrap; }
 .todo-attach { display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin:-4px 0 12px; }

@@ -35,7 +35,7 @@ const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
 
 const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements' }
 
-const PROJECT_RAIL_ICONS: Record<DashboardTab, ReactNode> = {
+const PROJECT_SECTION_ICONS: Record<DashboardTab, ReactNode> = {
   tickets: <><rect x="2" y="4" width="12" height="8" rx="1.5" /><path d="M2 7h12" /></>,
   sentry: <path d="M8 2.5 13.5 12H10a2 2 0 0 0-2-2 2 2 0 0 0-2 2H2.5Z" />,
   changelog: <path d="M3 4.5h10M3 8h7M3 11.5h9" />,
@@ -179,7 +179,7 @@ export function DashboardView({
   /* Le compteur du rail : l'inbox Sentry n'est pas dans le payload du
      tableau de bord, et la section ne se monte qu'une fois ouverte. */
   const [sentryCount, setSentryCount] = useState(0)
-  const railRef = useRef<HTMLElement>(null)
+  const sectionsRef = useRef<HTMLElement>(null)
   const [activeTab, setActiveTab] = useState<DashboardTab>(() => storedDashboardTab(project.id))
   const now = useNow(30_000)
   const hasGitlab = data?.integrations.some((integration) => integration.type === 'gitlab') ?? false
@@ -299,65 +299,65 @@ export function DashboardView({
     }
   }
 
-  const railSections = DASHBOARD_TABS
-  const railCounts: Partial<Record<DashboardTab, number>> = {
+  const sectionCounts: Partial<Record<DashboardTab, number>> = {
     tickets: data?.tickets.length ?? 0,
     sentry: sentryCount,
   }
 
-  function moveRailFocus(current: DashboardTab, step: number) {
-    const index = railSections.findIndex((section) => section.id === current)
-    const next = railSections[index + step]
+  function moveSectionFocus(current: DashboardTab, step: number) {
+    const index = DASHBOARD_TABS.findIndex((section) => section.id === current)
+    const next = DASHBOARD_TABS[index + step]
     if (next === undefined) return
     selectTab(next.id)
-    railRef.current?.querySelector<HTMLButtonElement>(`#project-rail-${next.id}`)?.focus()
+    sectionsRef.current?.querySelector<HTMLButtonElement>(`#project-section-${next.id}`)?.focus()
   }
 
   return (
     <section
-      className={`dashboard-view${embedded ? ' is-railed' : ''}`}
+      className={`dashboard-view${embedded ? ' is-sectioned' : ''}`}
       aria-label={embedded ? 'Suivi du projet' : undefined}
       aria-labelledby={embedded ? undefined : 'dashboard-title'}
     >
       {embedded ? (
-        <nav className="project-rail" ref={railRef} aria-label="Sections du projet">
-          <p className="project-rail-title">Projet</p>
-          <div className="project-rail-list" role="tablist" aria-orientation="vertical" aria-label="Sections du projet">
-            {railSections.map((section) => {
-              const count = railCounts[section.id] ?? 0
+        <nav className="project-sections" ref={sectionsRef} aria-label="Sections du projet">
+          <div className="project-sections-list" role="tablist" aria-orientation="horizontal" aria-label="Sections du projet">
+            {DASHBOARD_TABS.map((section) => {
+              const count = sectionCounts[section.id] ?? 0
               return (
                 <button
                   key={section.id}
-                  id={`project-rail-${section.id}`}
+                  id={`project-section-${section.id}`}
                   type="button"
                   role="tab"
                   aria-selected={activeTab === section.id}
                   tabIndex={activeTab === section.id ? 0 : -1}
                   className={activeTab === section.id ? 'is-selected' : ''}
+                  title={PROJECT_PANEL_LABELS[section.id]}
                   onClick={() => selectTab(section.id)}
                   onKeyDown={(event) => {
-                    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+                    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
                     event.preventDefault()
-                    moveRailFocus(section.id, event.key === 'ArrowDown' ? 1 : -1)
+                    moveSectionFocus(section.id, event.key === 'ArrowRight' ? 1 : -1)
                   }}
                 >
                   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                      {PROJECT_RAIL_ICONS[section.id]}
+                      {PROJECT_SECTION_ICONS[section.id]}
                     </g>
                   </svg>
                   <span>{PROJECT_PANEL_LABELS[section.id]}</span>
-                  {count > 0 ? <span className={`project-rail-count${section.id === 'sentry' ? ' is-alert' : ''}`}>{count}</span> : null}
+                  {count > 0 ? <span className={`project-section-count${section.id === 'sentry' ? ' is-alert' : ''}`}>{count}</span> : null}
                 </button>
               )
             })}
           </div>
           <button
             type="button"
-            className="project-rail-refresh"
+            className="project-sections-refresh"
+            aria-label="Actualiser"
             onClick={() => void (activeTab === 'changelog' ? handleChangelogRefresh() : handleRefresh())}
           >
-            Actualiser
+            <span>Actualiser</span>
           </button>
         </nav>
       ) : null}
