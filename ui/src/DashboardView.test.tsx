@@ -306,6 +306,49 @@ test('affiche le changelog compact, son échéance au survol et permet une actua
   await waitFor(() => expect(refreshRequests).toHaveLength(1))
 })
 
+test('le panneau trie par numéro, mise à jour et dernière conversation', async () => {
+  const older = {
+    ...ticket,
+    id: 't2',
+    key: 'TECH-24001',
+    title: 'Anciennes retombées',
+    instruction: '',
+    updated_at: '2026-08-01T10:00:00Z',
+    payload: { statusColor: '#4466ff', updatedAt: '2026-08-30T10:00:00Z' },
+    refs: [],
+    conversations: [],
+  }
+  const withConversation = {
+    ...ticket,
+    payload: { statusColor: '#4466ff', updatedAt: '2026-08-02T10:00:00Z' },
+    conversations: [{ ...ticket.conversations[0]!, created_at: '2026-09-01T10:00:00Z' }],
+  }
+  globalThis.fetch = mock(async (input) => (
+    String(input).includes('/notes')
+      ? Response.json([])
+      : Response.json({ ...withGitlab, tickets: [withConversation, older] })
+  )) as typeof fetch
+  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
+  render(createElement(DashboardView, {
+    embedded: true,
+    project,
+    onConversationSelect: () => {},
+    onStartConversation: () => {},
+  }))
+
+  await screen.findByText('TECH-24657')
+  const keys = () => Array.from(document.querySelectorAll('.project-ticket-head > strong')).map((node) => node.textContent)
+  expect(keys()).toEqual(['TECH-24001', 'TECH-24657'])
+
+  fireEvent.click(screen.getByRole('button', { name: /Mise à jour/ }))
+  expect(keys()).toEqual(['TECH-24001', 'TECH-24657'])
+  fireEvent.click(screen.getByRole('button', { name: /Mise à jour/ }))
+  expect(keys()).toEqual(['TECH-24657', 'TECH-24001'])
+
+  fireEvent.click(screen.getByRole('button', { name: /Conversation/ }))
+  expect(keys()).toEqual(['TECH-24657', 'TECH-24001'])
+})
+
 test('le panneau montre les liens ClickUp et GitLab, l’instruction et le départ de conversation', async () => {
   globalThis.fetch = mock(async (input) => (
     String(input).includes('/notes') ? Response.json([]) : Response.json(withGitlab)

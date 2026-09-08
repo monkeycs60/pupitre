@@ -70,6 +70,26 @@ function ClickUpIcon() {
   )
 }
 
+type TicketSortKey = 'ticket' | 'status' | 'updated' | 'conversation'
+
+const TICKET_SORTS: ReadonlyArray<{ key: TicketSortKey; label: string; hint: string }> = [
+  { key: 'ticket', label: 'Numéro', hint: 'Trier par numéro de ticket' },
+  { key: 'updated', label: 'Mise à jour', hint: 'Trier par date de mise à jour dans ClickUp' },
+  { key: 'conversation', label: 'Conversation', hint: 'Trier par date de la dernière conversation créée' },
+]
+
+function ticketUpdatedAt(ticket: TicketRow): number {
+  return Date.parse(textValue(ticket.payload.updatedAt) ?? ticket.updated_at) || 0
+}
+
+/** Le sidecar antérieur à la colonne `created_at` ne sert que `updated_at`. */
+function lastConversationAt(ticket: TicketRow): number {
+  return ticket.conversations.reduce(
+    (latest, conversation) => Math.max(latest, Date.parse(conversation.created_at ?? conversation.updated_at) || 0),
+    0,
+  )
+}
+
 /** Les statuts arrivent tels que ClickUp les écrit, en minuscules. */
 function statusLabel(status: string): string {
   return status ? status.charAt(0).toUpperCase() + status.slice(1) : '—'
@@ -178,7 +198,7 @@ export function DashboardView({
   const [instructionDraft, setInstructionDraft] = useState('')
   const [instructionSaving, setInstructionSaving] = useState(false)
   const [instructionError, setInstructionError] = useState<string | null>(null)
-  const [sort, setSort] = useState<{ key: 'ticket' | 'status'; direction: 'asc' | 'desc' }>({ key: 'ticket', direction: 'asc' })
+  const [sort, setSort] = useState<{ key: TicketSortKey; direction: 'asc' | 'desc' }>({ key: 'ticket', direction: 'asc' })
   const [changelog, setChangelog] = useState<ProjectChangelogEntry[]>([])
   const [changelogState, setChangelogState] = useState<ProjectChangelogState | null>(null)
   const [changelogDomain, setChangelogDomain] = useState('')
@@ -200,12 +220,17 @@ export function DashboardView({
     .map((item) => [item.domain_id, item.domain_name])).entries()], [changelog])
   const visibleChangelog = changelogDomain ? changelog.filter((item) => item.domain_id === changelogDomain) : changelog
   const changelogHasMultipleRepositories = new Set(changelog.map((item) => item.repository_path)).size > 1
-  const sortedTickets = useMemo(() => [...(data?.tickets ?? [])].sort((left, right) => {
-    const comparison = sort.key === 'ticket'
-      ? left.key.localeCompare(right.key, 'fr', { numeric: true })
-      : left.status.localeCompare(right.status, 'fr', { sensitivity: 'base' }) || left.key.localeCompare(right.key, 'fr', { numeric: true })
-    return sort.direction === 'asc' ? comparison : -comparison
-  }), [data?.tickets, sort])
+  const sortedTickets = useMemo(() => {
+    const byKey = (left: TicketRow, right: TicketRow) => left.key.localeCompare(right.key, 'fr', { numeric: true })
+    return [...(data?.tickets ?? [])].sort((left, right) => {
+      let comparison: number
+      if (sort.key === 'status') comparison = left.status.localeCompare(right.status, 'fr', { sensitivity: 'base' }) || byKey(left, right)
+      else if (sort.key === 'updated') comparison = ticketUpdatedAt(left) - ticketUpdatedAt(right) || byKey(left, right)
+      else if (sort.key === 'conversation') comparison = lastConversationAt(left) - lastConversationAt(right) || byKey(left, right)
+      else comparison = byKey(left, right)
+      return sort.direction === 'asc' ? comparison : -comparison
+    })
+  }, [data?.tickets, sort])
 
   useEffect(() => {
     let cancelled = false
@@ -280,10 +305,10 @@ export function DashboardView({
     selectTab(nextTab.id)
   }
 
-  function handleSort(key: 'ticket' | 'status') {
+  function handleSort(key: TicketSortKey) {
     setSort((current) => current.key === key
       ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
-      : { key, direction: 'asc' })
+      : { key, direction: key === 'ticket' || key === 'status' ? 'asc' : 'desc' })
   }
 
   function openInstruction(ticket: TicketRow) {
@@ -449,9 +474,26 @@ export function DashboardView({
         {activeTab === 'tickets' ? (
         <section id="dashboard-panel-tickets" role="tabpanel" aria-label={embedded ? "tickets" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-tickets"} className="dashboard-section">
           <div className="dashboard-section-head">
-            {embedded
-              ? <p className="project-ticket-caption">Tickets qui te sont attribués dans ClickUp</p>
-              : <h2 className="dashboard-section-title">Mes tickets</h2>}
+            {embedded ? (
+              <>
+                <p className="project-ticket-caption">Tickets qui te sont attribués dans ClickUp</p>
+                <div className="project-ticket-sort" role="group" aria-label="Trier les tickets">
+                  {TICKET_SORTS.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={sort.key === option.key ? 'is-active' : ''}
+                      aria-pressed={sort.key === option.key}
+                      title={option.hint}
+                      onClick={() => handleSort(option.key)}
+                    >
+                      {option.label}
+                      {sort.key === option.key ? <i aria-hidden="true">{sort.direction === 'asc' ? '↑' : '↓'}</i> : null}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : <h2 className="dashboard-section-title">Mes tickets</h2>}
           </div>
 
           {data === null ? null : data.tickets.length === 0 ? (
@@ -470,10 +512,22 @@ export function DashboardView({
                 <span className="project-ticket-status" title={ticket.status}>{statusLabel(ticket.status)}</span>
               </div>
               <p className="project-ticket-title">{ticket.title}</p>
-              {links.branch || mergeRequestStatus ? (
+              {links.branch || mergeRequestStatus || ticket.conversations.length > 0 ? (
                 <div className="project-ticket-refs">
                   {links.branch ? <span className="project-ticket-branch"><BranchIcon /> {links.branch}</span> : null}
                   {mergeRequestStatus ? <span className={`dashboard-state ${mergeRequestStatus.tone}`} title={mergeRequestStatus.explanation}>{mergeRequestStatus.label}</span> : null}
+                  {ticket.conversations.length > 0 ? (
+                    <button
+                      type="button"
+                      className="project-ticket-toggle"
+                      aria-expanded={Boolean(openConversations[ticket.id])}
+                      aria-controls={`project-ticket-${ticket.id}-conversations`}
+                      onClick={() => setOpenConversations((current) => ({ ...current, [ticket.id]: !current[ticket.id] }))}
+                    >
+                      {ticket.conversations.length} conversation{ticket.conversations.length > 1 ? 's' : ''}
+                      <svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
               {ticket.instruction ? (
@@ -487,26 +541,21 @@ export function DashboardView({
                 </button>
               ) : null}
               <div className="project-ticket-actions">
-                <button type="button" className="secondary-button" onClick={() => onStartConversation({ ticketId: ticket.id, ticketKey: ticket.key, branch: links.branch })}>Nouvelle conversation</button>
                 <button
                   type="button"
-                  className="project-ticket-link-button"
+                  className="project-ticket-action is-primary"
+                  onClick={() => onStartConversation({ ticketId: ticket.id, ticketKey: ticket.key, branch: links.branch })}
+                >
+                  Nouvelle conversation
+                </button>
+                <button
+                  type="button"
+                  className="project-ticket-action"
                   title="Instruction injectée dans chaque nouvelle conversation reliée à ce ticket."
                   onClick={() => openInstruction(ticket)}
                 >
                   {ticket.instruction ? 'Modifier l’instruction' : 'Ajouter une instruction'}
                 </button>
-                {ticket.conversations.length > 0 ? (
-                  <button
-                    type="button"
-                    className="project-ticket-toggle"
-                    aria-expanded={Boolean(openConversations[ticket.id])}
-                    aria-controls={`project-ticket-${ticket.id}-conversations`}
-                    onClick={() => setOpenConversations((current) => ({ ...current, [ticket.id]: !current[ticket.id] }))}
-                  >
-                    {ticket.conversations.length} conversation{ticket.conversations.length > 1 ? 's' : ''}
-                  </button>
-                ) : null}
               </div>
               {openConversations[ticket.id] ? (
                 <div className="project-ticket-conversations" id={`project-ticket-${ticket.id}-conversations`}>

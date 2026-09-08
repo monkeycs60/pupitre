@@ -40,6 +40,7 @@ export interface TicketConversationSummary {
   title: string;
   summary: string;
   provider: string;
+  created_at: string;
   updated_at: string;
   worktree_path: string | null;
 }
@@ -281,7 +282,7 @@ export class TicketStore {
 
   conversationsByTicket(ticketId: string): TicketConversationSummary[] {
     return this.db.query(`
-      SELECT id, title, summary, provider, updated_at, worktree_path
+      SELECT id, title, summary, provider, created_at, updated_at, worktree_path
       FROM conversations
       WHERE ticket_id = ?
         AND deleted_at IS NULL

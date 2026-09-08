@@ -345,6 +345,8 @@ export interface TicketConversationSummary {
   title: string
   summary: string
   provider: Provider
+  /** Absent tant que le sidecar en service précède la colonne. */
+  created_at?: string
   updated_at: string
   worktree_path: string | null
 }

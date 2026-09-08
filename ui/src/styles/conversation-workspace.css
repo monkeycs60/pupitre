@@ -78,14 +78,22 @@
 @media (prefers-reduced-motion:reduce) { .workspace-inspector { animation:none; } .todo-row,.todo-row-order { transition:none; } }
 .workspace-inspector .dashboard-view { background:var(--bg-panel); }
 .workspace-inspector .dashboard-scroll { padding:16px 20px; }
-.workspace-inspector .dashboard-section-head { margin-bottom:16px; }
+.workspace-inspector .dashboard-section-head { flex-wrap:wrap; row-gap:6px; margin-bottom:12px; }
 .workspace-inspector .dashboard-section-title { font-size:14px; }
 .workspace-inspector .dashboard-empty { border:0; padding:12px 0; background:transparent; }
 /* Fiche ticket du panneau. La couleur d'état vient de ClickUp et ne teinte
-   que la pastille de statut : c'est le seul repère coloré de la liste, d'où
+   que la pastille de statut : c'est le seul repère coloré de la fiche, d'où
    l'absence de point d'état à côté. */
-.project-ticket { display:flex; flex-direction:column; align-items:flex-start; gap:7px; padding:13px 0 15px; border-bottom:1px solid var(--border-subtle); }
+.project-ticket-list { display:flex; flex-direction:column; gap:8px; }
+.project-ticket { display:flex; flex-direction:column; align-items:flex-start; gap:7px; padding:12px 13px 11px; background:var(--bg-raised); border:1px solid var(--border-subtle); border-radius:var(--r-md); transition:border-color 150ms; }
+.project-ticket:hover { border-color:var(--border); }
+.project-ticket:focus-within { border-color:var(--accent-border); }
 .project-ticket-caption { margin:0; color:var(--text-faint); font-size:11.5px; }
+.project-ticket-sort { display:flex; flex-wrap:wrap; align-items:center; gap:2px; margin-left:auto; }
+.project-ticket-sort button { display:flex; align-items:center; gap:4px; padding:3px 8px; color:var(--text-faint); font:inherit; font-size:11.5px; background:transparent; border:0; border-radius:var(--r-full); cursor:pointer; transition:color 150ms, background 150ms; }
+.project-ticket-sort button:hover { color:var(--text); background:var(--bg-hover); }
+.project-ticket-sort button.is-active { color:var(--text-strong); background:var(--bg-hover); }
+.project-ticket-sort button i { font-style:normal; font-size:10px; color:var(--accent-bright); }
 .project-ticket-head { display:flex; align-items:center; gap:8px; width:100%; color:var(--text-faint); font-size:11.5px; }
 .project-ticket-head > strong { flex:none; font-family:var(--font-mono); font-weight:500; letter-spacing:0.01em; white-space:nowrap; }
 /* Le statut cède avant la clé : c'est elle qu'on lit pour identifier la ligne. */
@@ -95,18 +103,21 @@
 .project-ticket-branch { display:inline-flex; align-items:center; gap:6px; color:var(--text-muted); font:11.5px var(--font-mono); overflow-wrap:anywhere; }
 .project-ticket-branch svg { width:13px; height:13px; flex:none; }
 /* L'instruction se lit et s'écrit au même endroit : le bloc est le bouton. */
-.project-ticket-instruction { width:100%; padding:6px 10px; color:var(--text-muted); font:inherit; font-size:12px; line-height:1.55; text-align:left; white-space:pre-wrap; background:color-mix(in srgb, var(--bg-raised) 60%, transparent); border:0; border-left:2px solid var(--border); border-radius:0 var(--r-sm) var(--r-sm) 0; cursor:pointer; transition:color 150ms, border-color 150ms, background 150ms; }
-.project-ticket-instruction:hover { color:var(--text-strong); border-left-color:var(--accent); background:color-mix(in srgb, var(--bg-raised) 80%, transparent); }
-.project-ticket-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; width:100%; margin-top:1px; }
-.project-ticket-actions .secondary-button { padding:5px 11px; font-size:12px; }
-.project-ticket-link-button { padding:0; color:var(--text-muted); font:inherit; font-size:12px; background:transparent; border:0; cursor:pointer; }
-.project-ticket-link-button:hover { color:var(--text-strong); }
-.project-ticket-toggle { margin-left:auto; padding:0; color:var(--text-faint); font:inherit; font-size:11.5px; background:transparent; border:0; cursor:pointer; }
-.project-ticket-toggle:hover { color:var(--text); }
-.project-ticket-toggle[aria-expanded='true'] { color:var(--text); }
+.project-ticket-instruction { width:100%; padding:6px 10px; color:var(--text-muted); font:inherit; font-size:12px; line-height:1.55; text-align:left; white-space:pre-wrap; background:var(--bg-panel); border:0; border-left:2px solid var(--border); border-radius:0 var(--r-sm) var(--r-sm) 0; cursor:pointer; transition:color 150ms, border-color 150ms; }
+.project-ticket-instruction:hover { color:var(--text-strong); border-left-color:var(--accent); }
+.project-ticket-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; width:100%; margin-top:2px; }
+.project-ticket-action { padding:5px 11px; color:var(--text-muted); font:inherit; font-size:12px; background:transparent; border:1px solid transparent; border-radius:var(--r-full); cursor:pointer; transition:color 150ms, background 150ms, border-color 150ms; }
+.project-ticket-action:hover { color:var(--text-strong); background:var(--bg-hover); }
+.project-ticket-action.is-primary { color:var(--accent-bright); background:var(--accent-soft); border-color:var(--accent-border); }
+.project-ticket-action.is-primary:hover { background:color-mix(in srgb, var(--accent) 24%, transparent); }
+.project-ticket-toggle { display:flex; align-items:center; gap:3px; padding:0; color:var(--text-faint); font:inherit; font-size:11.5px; background:transparent; border:0; cursor:pointer; }
+.project-ticket-toggle:hover, .project-ticket-toggle[aria-expanded='true'] { color:var(--text); }
+.project-ticket-toggle svg { width:12px; height:12px; transition:transform 150ms; }
+.project-ticket-toggle[aria-expanded='true'] svg { transform:rotate(180deg); }
 .project-ticket-conversations { display:flex; flex-direction:column; width:100%; padding-left:10px; border-left:1px solid var(--border-subtle); }
 .project-ticket-conversation { display:block; width:100%; border:0; padding:5px 0; background:transparent; color:var(--text-muted); text-align:left; font:inherit; font-size:12px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .project-ticket-conversation:hover { color:var(--accent-bright); }
+@media (prefers-reduced-motion:reduce) { .project-ticket-toggle svg { transition:none; } }
 .workspace-inspector .memory-body { display:flex; flex-direction:column; }
 .workspace-inspector .memory-list { max-height:200px; flex-shrink:0; border-right:0; border-bottom:1px solid var(--border); }
 .workspace-inspector .memory-editor { flex:1; min-height:200px; }
