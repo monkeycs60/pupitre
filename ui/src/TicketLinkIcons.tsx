@@ -2,7 +2,7 @@ import { ExternalLink } from './externalLink'
 import type { TicketLinks } from './ticketLinks'
 
 /** Liens ClickUp et MR GitLab d'un ticket, au format icône compact — dans le
- *  header de conversation et sur les groupes de tickets de la sidebar. */
+ *  panneau Projet, le header de conversation et les groupes de la sidebar. */
 export function TicketLinkIcons({ links, ticketKey }: { links: TicketLinks; ticketKey: string }) {
   return (
     <span className="ticket-link-icons">
@@ -23,8 +23,8 @@ export function TicketLinkIcons({ links, ticketKey }: { links: TicketLinks; tick
         <ExternalLink
           className="ticket-link-icon"
           href={links.mergeRequestUrl}
-          ariaLabel={`Ouvrir la MR de ${ticketKey} dans GitLab`}
-          title={`Ouvrir la MR de ${ticketKey} dans GitLab`}
+          ariaLabel={`Ouvrir les MR de ${ticketKey} dans GitLab`}
+          title={`Ouvrir les MR de ${ticketKey} dans GitLab`}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path fill="#e24329" d="m12 21.4-3.5-10.7h7Z" />

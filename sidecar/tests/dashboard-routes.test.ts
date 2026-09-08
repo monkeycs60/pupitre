@@ -578,6 +578,23 @@ test("dashboard : Mes tickets ne contient que les tâches ClickUp actuellement a
   expect(dashboard.tickets.map((ticket) => ticket.key)).toEqual(["TECH-ME"]);
 });
 
+test("dashboard : le pseudo GitLab de la relève accompagne le payload", async () => {
+  const project = await createProject("/tmp/dash-gitlab-username");
+  const integration = current!.deps.integrations.upsert(project.id, "gitlab", {
+    config: { host: "https://git.kaizen-hosting.com", projects: [] },
+  });
+
+  const before = await fetch(`${current!.baseUrl}/api/projects/${project.id}/dashboard`)
+    .then((response) => response.json()) as { gitlabUsername: string | null };
+  expect(before.gitlabUsername).toBeNull();
+
+  current!.deps.integrations.markOk(integration.id, { username: "clement.serizay" });
+
+  const after = await fetch(`${current!.baseUrl}/api/projects/${project.id}/dashboard`)
+    .then((response) => response.json()) as { gitlabUsername: string | null };
+  expect(after.gitlabUsername).toBe("clement.serizay");
+});
+
 test("le scan Sentry manuel attend la relève avant de rendre l'inbox", async () => {
   const project = await createProject("/tmp/dash-sentry-refresh");
   let release!: () => void;

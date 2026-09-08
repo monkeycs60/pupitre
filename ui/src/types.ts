@@ -465,6 +465,7 @@ export interface DashboardPayload {
   refreshedAt: string
   integrations: DashboardIntegration[]
   tickets: TicketRow[]
+  gitlabUsername?: string | null
   environments: EnvironmentState[]
   toReview: ReviewRequest[]
   problems?: ProblemProjectPayload

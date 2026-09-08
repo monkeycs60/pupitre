@@ -63,13 +63,14 @@ const withGitlab: DashboardPayload = {
   integrations: [{
     id: 'i1',
     type: 'gitlab',
-    config: {},
+    config: { host: 'https://git.kaizen-hosting.com' },
     branch_pattern: null,
     status: 'dégradée',
     last_ok_at: null,
     last_error: 'fetch failed',
   }],
   tickets: [ticket],
+  gitlabUsername: 'clement.serizay',
   environments: [{
     project: 'reactor',
     name: 'preprod',
@@ -303,4 +304,35 @@ test('affiche le changelog compact, son échéance au survol et permet une actua
   fireEvent.click(screen.getByRole('menuitem', { name: 'Actualiser le changelog' }))
 
   await waitFor(() => expect(refreshRequests).toHaveLength(1))
+})
+
+test('le panneau montre les liens ClickUp et GitLab, l’instruction et le départ de conversation', async () => {
+  globalThis.fetch = mock(async (input) => (
+    String(input).includes('/notes') ? Response.json([]) : Response.json(withGitlab)
+  )) as typeof fetch
+  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
+  const onStart = mock(() => {})
+  const onConversationSelect = mock(() => {})
+  render(createElement(DashboardView, {
+    embedded: true,
+    project,
+    onConversationSelect,
+    onStartConversation: onStart,
+  }))
+
+  await screen.findByText('TECH-24657')
+
+  expect(screen.getByLabelText('Ouvrir TECH-24657 dans ClickUp').getAttribute('href')).toBe('https://app.clickup.com/t/x')
+  expect(screen.getByLabelText('Ouvrir les MR de TECH-24657 dans GitLab').getAttribute('href')).toBe(
+    'https://git.kaizen-hosting.com/dashboard/merge_requests/search?scope=all&state=opened&assignee_username=clement.serizay&search=24657',
+  )
+  expect(screen.getByText('feature/TECH-24657')).toBeTruthy()
+  expect(screen.getByText('Vérifier la rétrocompatibilité.')).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Nouvelle conversation' }))
+  expect(onStart).toHaveBeenCalledWith({ ticketId: 't1', ticketKey: 'TECH-24657', branch: 'feature/TECH-24657' })
+
+  fireEvent.click(screen.getByRole('button', { name: '1 conversation' }))
+  fireEvent.click(screen.getByRole('button', { name: /Première passe/ }))
+  expect(onConversationSelect).toHaveBeenCalledWith('c1')
 })

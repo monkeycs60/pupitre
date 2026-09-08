@@ -17,6 +17,9 @@ export interface DashboardPayload {
     config: Record<string, unknown>;
   }>;
   tickets: TicketRow[];
+  /** Pseudo GitLab relevé par le rafraîchisseur : le front en fait le filtre
+   *  `assignee_username` des recherches de MR. */
+  gitlabUsername: string | null;
   environments: EnvironmentState[];
   toReview: Array<GitLabMergeRequest & { project: string }>;
   problems: ProblemProjectPayload;
@@ -46,6 +49,7 @@ export function dashboardPayload(
     tickets: tickets.listByProject(projectId).filter((ticket) =>
       ticket.source === "clickup" && ticket.payload.assignedToMe !== false
     ),
+    gitlabUsername: typeof gitlab?.snapshot.username === "string" ? gitlab.snapshot.username : null,
     environments: Array.isArray(gitlab?.snapshot.environments)
       ? gitlab.snapshot.environments as EnvironmentState[]
       : [],

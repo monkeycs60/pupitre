@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { BranchIcon } from './BranchIcon'
+import { TicketLinkIcons } from './TicketLinkIcons'
+import { gitlabContextOf, ticketLinksOf } from './ticketLinks'
 import { getSentryInbox, listProjectChangelog, refreshProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
 import type {
   DashboardIntegration,
@@ -299,6 +301,7 @@ export function DashboardView({
     }
   }
 
+  const gitlab = gitlabContextOf({ integrations: data?.integrations ?? [], gitlabUsername: data?.gitlabUsername ?? null })
   const sectionCounts: Partial<Record<DashboardTab, number>> = {
     tickets: data?.tickets.length ?? 0,
     sentry: sentryCount,
@@ -450,18 +453,62 @@ export function DashboardView({
               <p>Configure ClickUp ou GitLab, ou démarre une conversation sur une branche.</p>
             </div>
           ) : embedded ? <div className="project-ticket-list">{sortedTickets.map((ticket) => {
-            const branch = refOf(ticket, 'branch')?.ref ?? null
-            return <details className="project-ticket" key={ticket.id}>
-              <summary><span>{ticket.key}<span>{ticket.status}</span></span><strong>{ticket.title}</strong></summary>
-              {branch ? <p className="project-ticket-branch"><BranchIcon /> {branch}</p> : null}
-              {ticket.instruction ? <p className="project-ticket-instruction">{ticket.instruction}</p> : null}
-              <div className="project-ticket-links">{ticket.external_url ? <ExternalLink href={ticket.external_url}>Ouvrir le ticket</ExternalLink> : null}{ticket.refs.map((ref) => {
-                const url = textValue(ref.payload.url)
-                return url ? <ExternalLink key={ref.id} href={url}>{ref.kind} · {ref.ref}</ExternalLink> : null
-              })}</div>
-              {ticket.conversations.map((conversation) => <button key={conversation.id} type="button" className="project-ticket-conversation" onClick={() => onConversationSelect(conversation.id)}>{conversation.title} →</button>)}
-              <div className="project-ticket-actions"><button type="button" className="secondary-button" onClick={() => onStartConversation({ ticketId: ticket.id, ticketKey: ticket.key, branch })}>Nouvelle conversation</button><button type="button" className="text-button" onClick={() => openInstruction(ticket)}>Instruction</button></div>
-            </details>
+            const links = ticketLinksOf(ticket, gitlab)
+            const mergeRequestStatus = mrPresentation(refOf(ticket, 'mr'))
+            return <article className="project-ticket" key={ticket.id}>
+              <div className="project-ticket-head">
+                <strong>{ticket.key}</strong>
+                <TicketLinkIcons links={links} ticketKey={ticket.key} />
+                <span className="project-ticket-status">
+                  <i className="dashboard-status-dot" aria-hidden="true" style={{ background: textValue(ticket.payload.statusColor) ?? 'var(--text-faint)' }} />
+                  {ticket.status || '—'}
+                </span>
+              </div>
+              <p className="project-ticket-title">{ticket.title}</p>
+              {links.branch || mergeRequestStatus ? (
+                <div className="project-ticket-refs">
+                  {links.branch ? <span className="project-ticket-branch"><BranchIcon /> {links.branch}</span> : null}
+                  {mergeRequestStatus ? <span className={`dashboard-state ${mergeRequestStatus.tone}`} title={mergeRequestStatus.explanation}>{mergeRequestStatus.label}</span> : null}
+                </div>
+              ) : null}
+              {ticket.instruction ? (
+                <button
+                  type="button"
+                  className="project-ticket-instruction"
+                  title="Instruction injectée dans chaque nouvelle conversation reliée à ce ticket."
+                  onClick={() => openInstruction(ticket)}
+                >
+                  {ticket.instruction}
+                </button>
+              ) : null}
+              <div className="project-ticket-actions">
+                <button type="button" className="secondary-button" onClick={() => onStartConversation({ ticketId: ticket.id, ticketKey: ticket.key, branch: links.branch })}>Nouvelle conversation</button>
+                <button
+                  type="button"
+                  className="text-button"
+                  title="Instruction injectée dans chaque nouvelle conversation reliée à ce ticket."
+                  onClick={() => openInstruction(ticket)}
+                >
+                  {ticket.instruction ? 'Modifier l’instruction' : '+ Instruction de base'}
+                </button>
+                {ticket.conversations.length > 0 ? (
+                  <button
+                    type="button"
+                    className="text-button"
+                    aria-expanded={Boolean(openConversations[ticket.id])}
+                    aria-controls={`project-ticket-${ticket.id}-conversations`}
+                    onClick={() => setOpenConversations((current) => ({ ...current, [ticket.id]: !current[ticket.id] }))}
+                  >
+                    {ticket.conversations.length} conversation{ticket.conversations.length > 1 ? 's' : ''}
+                  </button>
+                ) : null}
+              </div>
+              {openConversations[ticket.id] ? (
+                <div className="project-ticket-conversations" id={`project-ticket-${ticket.id}-conversations`}>
+                  {ticket.conversations.map((conversation) => <button key={conversation.id} type="button" className="project-ticket-conversation" onClick={() => onConversationSelect(conversation.id)}>{conversation.title} →</button>)}
+                </div>
+              ) : null}
+            </article>
           })}</div> : (
             <div className={tableClassName} role="region" aria-label="Mes tickets">
               <div className="dashboard-row dashboard-head">
