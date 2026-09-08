@@ -328,6 +328,7 @@ test('le panneau montre les liens ClickUp et GitLab, l’instruction et le dépa
   )
   expect(screen.getByText('feature/TECH-24657')).toBeTruthy()
   expect(screen.getByText('Vérifier la rétrocompatibilité.')).toBeTruthy()
+  expect(screen.getByText('In progress')).toBeTruthy()
 
   fireEvent.click(screen.getByRole('button', { name: 'Nouvelle conversation' }))
   expect(onStart).toHaveBeenCalledWith({ ticketId: 't1', ticketKey: 'TECH-24657', branch: 'feature/TECH-24657' })

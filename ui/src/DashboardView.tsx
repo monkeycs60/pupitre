@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { BranchIcon } from './BranchIcon'
 import { TicketLinkIcons } from './TicketLinkIcons'
 import { gitlabContextOf, ticketLinksOf } from './ticketLinks'
@@ -68,6 +68,11 @@ function ClickUpIcon() {
       <path fill="#7b68ee" d="m2 18.4 3.7-2.8c2 2.6 4 3.8 6.4 3.8 2.3 0 4.3-1.2 6.2-3.7l3.7 2.7c-2.7 3.7-6.1 5.6-10 5.6-3.8 0-7.2-1.9-10-5.6Z" />
     </svg>
   )
+}
+
+/** Les statuts arrivent tels que ClickUp les écrit, en minuscules. */
+function statusLabel(status: string): string {
+  return status ? status.charAt(0).toUpperCase() + status.slice(1) : '—'
 }
 
 function refOf(ticket: TicketRow, kind: TicketRef['kind']): TicketRef | undefined {
@@ -444,7 +449,9 @@ export function DashboardView({
         {activeTab === 'tickets' ? (
         <section id="dashboard-panel-tickets" role="tabpanel" aria-label={embedded ? "tickets" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-tickets"} className="dashboard-section">
           <div className="dashboard-section-head">
-            <h2 className="dashboard-section-title">Mes tickets</h2>
+            {embedded
+              ? <p className="project-ticket-caption">Tickets qui te sont attribués dans ClickUp</p>
+              : <h2 className="dashboard-section-title">Mes tickets</h2>}
           </div>
 
           {data === null ? null : data.tickets.length === 0 ? (
@@ -455,14 +462,12 @@ export function DashboardView({
           ) : embedded ? <div className="project-ticket-list">{sortedTickets.map((ticket) => {
             const links = ticketLinksOf(ticket, gitlab)
             const mergeRequestStatus = mrPresentation(refOf(ticket, 'mr'))
-            return <article className="project-ticket" key={ticket.id}>
+            const statusColor = textValue(ticket.payload.statusColor) ?? 'var(--text-faint)'
+            return <article className="project-ticket" key={ticket.id} style={{ '--ticket-status': statusColor } as CSSProperties}>
               <div className="project-ticket-head">
                 <strong>{ticket.key}</strong>
                 <TicketLinkIcons links={links} ticketKey={ticket.key} />
-                <span className="project-ticket-status">
-                  <i className="dashboard-status-dot" aria-hidden="true" style={{ background: textValue(ticket.payload.statusColor) ?? 'var(--text-faint)' }} />
-                  {ticket.status || '—'}
-                </span>
+                <span className="project-ticket-status" title={ticket.status}>{statusLabel(ticket.status)}</span>
               </div>
               <p className="project-ticket-title">{ticket.title}</p>
               {links.branch || mergeRequestStatus ? (
@@ -485,16 +490,16 @@ export function DashboardView({
                 <button type="button" className="secondary-button" onClick={() => onStartConversation({ ticketId: ticket.id, ticketKey: ticket.key, branch: links.branch })}>Nouvelle conversation</button>
                 <button
                   type="button"
-                  className="text-button"
+                  className="project-ticket-link-button"
                   title="Instruction injectée dans chaque nouvelle conversation reliée à ce ticket."
                   onClick={() => openInstruction(ticket)}
                 >
-                  {ticket.instruction ? 'Modifier l’instruction' : '+ Instruction de base'}
+                  {ticket.instruction ? 'Modifier l’instruction' : 'Ajouter une instruction'}
                 </button>
                 {ticket.conversations.length > 0 ? (
                   <button
                     type="button"
-                    className="text-button"
+                    className="project-ticket-toggle"
                     aria-expanded={Boolean(openConversations[ticket.id])}
                     aria-controls={`project-ticket-${ticket.id}-conversations`}
                     onClick={() => setOpenConversations((current) => ({ ...current, [ticket.id]: !current[ticket.id] }))}
@@ -555,7 +560,7 @@ export function DashboardView({
                           aria-hidden="true"
                           style={{ background: textValue(ticket.payload.statusColor) ?? 'var(--text-faint)' }}
                         />
-                        {ticket.status || '—'}
+                        {statusLabel(ticket.status)}
                       </span>
 
                       <span className="dashboard-branch">

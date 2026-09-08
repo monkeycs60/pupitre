@@ -81,19 +81,31 @@
 .workspace-inspector .dashboard-section-head { margin-bottom:16px; }
 .workspace-inspector .dashboard-section-title { font-size:14px; }
 .workspace-inspector .dashboard-empty { border:0; padding:12px 0; background:transparent; }
-.project-ticket { display:flex; flex-direction:column; align-items:flex-start; gap:8px; border-bottom:1px solid var(--border-subtle); padding:14px 0; }
-.project-ticket-head { display:flex; align-items:center; gap:8px; width:100%; color:var(--text-faint); font-size:12px; }
-.project-ticket-head > strong { font-family:var(--font-mono); font-weight:500; }
-.project-ticket-status { display:inline-flex; align-items:center; gap:6px; margin-left:auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.project-ticket-title { margin:0; color:var(--text-strong); font-size:14px; font-weight:500; line-height:1.5; }
-.project-ticket-refs { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
-.project-ticket-branch { display:inline-flex; align-items:center; gap:6px; color:var(--text-muted); font:12px var(--font-mono); overflow-wrap:anywhere; }
-.project-ticket-branch svg { width:14px; height:14px; }
-.project-ticket-instruction { width:100%; padding:7px 10px; color:var(--text-muted); font:inherit; font-size:12.5px; line-height:1.6; text-align:left; white-space:pre-wrap; background:transparent; border:1px dashed var(--border); border-radius:var(--r-sm); cursor:pointer; transition:color 150ms, border-color 150ms; }
-.project-ticket-instruction:hover { color:var(--text-strong); border-color:var(--accent-border); }
-.project-ticket-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:2px; font-size:12px; }
-.project-ticket-conversations { display:flex; flex-direction:column; width:100%; }
-.project-ticket-conversation { display:block; width:100%; border:0; padding:6px 0; background:transparent; color:var(--text-muted); text-align:left; font:inherit; font-size:12px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Fiche ticket du panneau. La couleur d'état vient de ClickUp et ne teinte
+   que la pastille de statut : c'est le seul repère coloré de la liste, d'où
+   l'absence de point d'état à côté. */
+.project-ticket { display:flex; flex-direction:column; align-items:flex-start; gap:7px; padding:13px 0 15px; border-bottom:1px solid var(--border-subtle); }
+.project-ticket-caption { margin:0; color:var(--text-faint); font-size:11.5px; }
+.project-ticket-head { display:flex; align-items:center; gap:8px; width:100%; color:var(--text-faint); font-size:11.5px; }
+.project-ticket-head > strong { flex:none; font-family:var(--font-mono); font-weight:500; letter-spacing:0.01em; white-space:nowrap; }
+/* Le statut cède avant la clé : c'est elle qu'on lit pour identifier la ligne. */
+.project-ticket-status { min-width:0; margin-left:auto; padding:2px 8px; color:color-mix(in srgb, var(--ticket-status) 45%, var(--text)); font-size:11px; line-height:1.5; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:color-mix(in srgb, var(--ticket-status) 14%, transparent); border-radius:var(--r-full); }
+.project-ticket-title { margin:0; color:var(--text-strong); font-size:13.5px; font-weight:500; line-height:1.45; }
+.project-ticket-refs { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.project-ticket-branch { display:inline-flex; align-items:center; gap:6px; color:var(--text-muted); font:11.5px var(--font-mono); overflow-wrap:anywhere; }
+.project-ticket-branch svg { width:13px; height:13px; flex:none; }
+/* L'instruction se lit et s'écrit au même endroit : le bloc est le bouton. */
+.project-ticket-instruction { width:100%; padding:6px 10px; color:var(--text-muted); font:inherit; font-size:12px; line-height:1.55; text-align:left; white-space:pre-wrap; background:color-mix(in srgb, var(--bg-raised) 60%, transparent); border:0; border-left:2px solid var(--border); border-radius:0 var(--r-sm) var(--r-sm) 0; cursor:pointer; transition:color 150ms, border-color 150ms, background 150ms; }
+.project-ticket-instruction:hover { color:var(--text-strong); border-left-color:var(--accent); background:color-mix(in srgb, var(--bg-raised) 80%, transparent); }
+.project-ticket-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; width:100%; margin-top:1px; }
+.project-ticket-actions .secondary-button { padding:5px 11px; font-size:12px; }
+.project-ticket-link-button { padding:0; color:var(--text-muted); font:inherit; font-size:12px; background:transparent; border:0; cursor:pointer; }
+.project-ticket-link-button:hover { color:var(--text-strong); }
+.project-ticket-toggle { margin-left:auto; padding:0; color:var(--text-faint); font:inherit; font-size:11.5px; background:transparent; border:0; cursor:pointer; }
+.project-ticket-toggle:hover { color:var(--text); }
+.project-ticket-toggle[aria-expanded='true'] { color:var(--text); }
+.project-ticket-conversations { display:flex; flex-direction:column; width:100%; padding-left:10px; border-left:1px solid var(--border-subtle); }
+.project-ticket-conversation { display:block; width:100%; border:0; padding:5px 0; background:transparent; color:var(--text-muted); text-align:left; font:inherit; font-size:12px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .project-ticket-conversation:hover { color:var(--accent-bright); }
 .workspace-inspector .memory-body { display:flex; flex-direction:column; }
 .workspace-inspector .memory-list { max-height:200px; flex-shrink:0; border-right:0; border-bottom:1px solid var(--border); }
