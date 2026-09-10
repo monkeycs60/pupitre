@@ -8,6 +8,7 @@ import {
   setProjectDefaultPreset,
   updatePreset,
 } from './api'
+import { BranchAutocomplete } from './BranchAutocomplete'
 import { ModelConfigSelector } from './ModelConfigSelector'
 import { branchSuggestions } from './worktrees'
 import type {
@@ -304,17 +305,8 @@ export function ConfigPanel({
 
       <label className="config-branch">
         <span>Branche</span>
-        <input
-          type="text"
-          list="config-branch-options"
-          value={config.branch ?? ''}
-          placeholder="dépôt principal"
-          disabled={isBusy}
-          onChange={(event) => onConfigChange({ ...config, branch: event.target.value })}
-        />
-        <datalist id="config-branch-options">
-          {branches.map((name) => <option key={name} value={name} />)}
-        </datalist>
+        <BranchAutocomplete value={config.branch ?? ''} branches={branches} disabled={isBusy}
+          onChange={(branch) => onConfigChange({ ...config, branch })} />
         {config.ticketKey ? <small className="config-ticket">Ticket {config.ticketKey}</small> : null}
       </label>
 

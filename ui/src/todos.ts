@@ -45,6 +45,12 @@ export interface TodoItem {
   provider: Provider
   model: string
   effort: string | null
+  speed?: ConversationSpeed | null
+  preset_id?: string | null
+  permission_mode?: PresetPermissionMode | null
+  orchestrator?: boolean
+  subagent_preset_id?: string | null
+  subagent_effort?: string | null
   attachments: Attachment[]
   checks: string[]
 }

@@ -76,8 +76,8 @@ export function TodoEditor({ project, items, quotas, initialTicketId = null, ini
   return <section className="todo-detail todo-editor" aria-label="Nouvelle TODO">
     <header className="todo-detail-header"><span>{project.name} <span aria-hidden="true">/</span> TODO</span><span>Nouvelle</span></header>
     <form onSubmit={(event) => void submit(event)}>
-      <input className="todo-title-input" aria-label="Titre de la TODO" placeholder="Titre (facultatif, déduit de la consigne)" value={title} onChange={(event) => setTitle(event.target.value)} />
-      <p className="todo-model">Préparée maintenant, lancée quand tu dépiles la file, dans une branche et un dossier de travail dédiés.</p>
+      <h1>Nouvelle TODO</h1>
+      <p className="todo-model">Décris la tâche, ajoute-la à la file, puis dépile quand tu es prêt.</p>
       <label className="todo-field"><span>Consigne</span><textarea aria-label="Consigne de la TODO" autoFocus rows={8} required placeholder="Ce que l’agent doit faire, et le résultat attendu." value={message} onChange={(event) => setMessage(event.target.value)} /></label>
       <div className="todo-attach">
         {attachments.length > 0 || pending > 0 ? <div className="composer-attachments" aria-label="Pièces jointes">
@@ -96,24 +96,28 @@ export function TodoEditor({ project, items, quotas, initialTicketId = null, ini
         <button type="button" className="text-button" onClick={() => fileInput.current?.click()}>Joindre des images ou des fichiers</button>
         <input ref={fileInput} className="composer-file-input" type="file" multiple accept="image/*,.csv,.doc,.docx,.json,.md,.pdf,.txt,.xls,.xlsx,.xml,.zip" onChange={(event) => { void attach(Array.from(event.target.files ?? [])); event.target.value = '' }} />
       </div>
-      <div className="todo-settings">
-        <TicketSelect projectId={project.id} value={ticketId} onChange={(ticket) => {
-          setTicketId(ticket?.id ?? null)
-          setDependsOn('')
-          setConfig((current) => ({ ...current, ticketKey: ticket?.key ?? null, branch: ticket ? ticketLinksOf(ticket).branch ?? current.branch : current.branch }))
-        }} />
-        <label className="todo-field"><span>Autonomie</span><select value={autonomy} onChange={(event) => { const value = event.target.value as 'local' | 'investigate'; setAutonomy(value); if (value === 'investigate') setIntegrate(false) }}><option value="local">Corrections locales</option><option value="investigate">Enquête et propositions</option></select></label>
-        <label className="todo-field"><span>Après intégration de</span><select value={dependsOn} disabled={dependencies.length === 0} onChange={(event) => setDependsOn(event.target.value)}><option value="">Aucune dépendance</option>{dependencies.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
-      </div>
       <div className="todo-config">
         <span>Modèle et branche cible</span>
         <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onProjectUpdated={onProjectUpdated} onError={setError} onReady={setConfigReady} applyProjectDefault={initial === null} />
       </div>
-      <label className="todo-integrate"><input type="checkbox" checked={integrate} disabled={autonomy === 'investigate'} onChange={(event) => setIntegrate(event.target.checked)} /><span><strong>Intégrer et pousser</strong><span>Après vérification, réunir les changements dans la branche cible et les publier. La TODO suivante partira de ce résultat.</span></span></label>
-      <details className="todo-verification" open={integrate || undefined}>
-        <summary>Vérifications avant intégration</summary>
-        <label className="todo-field"><span>Commandes à exécuter, une par ligne</span><textarea aria-label="Commandes de vérification" rows={3} value={checks} onChange={(event) => setChecks(event.target.value)} placeholder="bun test" /></label>
-        {integrate && !checks.trim() ? <p>Renseigne les vérifications pour autoriser l’intégration automatique.</p> : null}
+      <details className="todo-verification">
+        <summary>Options de la tâche</summary>
+        <label className="todo-field"><span>Titre facultatif</span><input aria-label="Titre de la TODO" placeholder="Déduit de la consigne" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+        <div className="todo-settings">
+          <TicketSelect projectId={project.id} value={ticketId} onChange={(ticket) => {
+            setTicketId(ticket?.id ?? null)
+            setDependsOn('')
+            setConfig((current) => ({ ...current, ticketKey: ticket?.key ?? null, branch: ticket ? ticketLinksOf(ticket).branch ?? current.branch : current.branch }))
+          }} />
+          <label className="todo-field"><span>Autonomie</span><select value={autonomy} onChange={(event) => { const value = event.target.value as 'local' | 'investigate'; setAutonomy(value); if (value === 'investigate') setIntegrate(false) }}><option value="local">Corrections locales</option><option value="investigate">Enquête et propositions</option></select></label>
+          <label className="todo-field"><span>Après intégration de</span><select value={dependsOn} disabled={dependencies.length === 0} onChange={(event) => setDependsOn(event.target.value)}><option value="">Aucune dépendance</option>{dependencies.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+        </div>
+        <label className="todo-integrate"><input type="checkbox" checked={integrate} disabled={autonomy === 'investigate'} onChange={(event) => setIntegrate(event.target.checked)} /><span><strong>Intégrer et pousser</strong><span>Après vérification, réunir les changements dans la branche cible et les publier. La TODO suivante partira de ce résultat.</span></span></label>
+        <details className="todo-verification" open={integrate || undefined}>
+          <summary>Vérifications avant intégration</summary>
+          <label className="todo-field"><span>Commandes à exécuter, une par ligne</span><textarea aria-label="Commandes de vérification" rows={3} value={checks} onChange={(event) => setChecks(event.target.value)} placeholder="bun test" /></label>
+          {integrate && !checks.trim() ? <p>Renseigne les vérifications pour autoriser l’intégration automatique.</p> : null}
+        </details>
       </details>
       {error ? <p className="todo-error" role="alert">{error}</p> : null}
       <div className="todo-detail-actions">

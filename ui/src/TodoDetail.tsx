@@ -1,20 +1,30 @@
 import { useState } from 'react'
 import { deleteTodo, reconcileTodo, startTodo, TODO_LABELS, updateTodo, type TodoItem } from './todos'
 import { modelLabel } from './modelOptions'
+import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
+import type { Project, QuotaSnapshot } from './types'
 import { mediaUrl } from './transport'
 
 interface Props {
   item: TodoItem
   items: TodoItem[]
-  projectName: string
+  project: Project
+  quotas: QuotaSnapshot
+  onProjectUpdated: (project: Project) => void
   onChanged: () => void
   onDeleted: () => void
   onConversationSelect: (id: string) => void
 }
-export function TodoDetail({ item, items, projectName, onChanged, onDeleted, onConversationSelect }: Props) {
+export function TodoDetail({ item, items, project, quotas, onProjectUpdated, onChanged, onDeleted, onConversationSelect }: Props) {
   const [title, setTitle] = useState(item.title)
   const [message, setMessage] = useState(item.message)
-  const [target, setTarget] = useState(item.target_branch ?? '')
+  const [config, setConfig] = useState<ConversationConfig>({
+    provider: item.provider, model: item.model, effort: item.effort ?? 'high',
+    speed: item.speed ?? 'standard', presetId: item.preset_id,
+    permissionMode: item.permission_mode ?? null, orchestrator: item.orchestrator ?? true,
+    subagentPresetId: item.subagent_preset_id ?? null, subagentEffort: item.subagent_effort ?? null,
+    branch: item.target_branch,
+  })
   const [integrate, setIntegrate] = useState(item.integrate)
   const [autonomy, setAutonomy] = useState(item.autonomy)
   const [dependsOn, setDependsOn] = useState(item.depends_on ?? '')
@@ -27,18 +37,24 @@ export function TodoDetail({ item, items, projectName, onChanged, onDeleted, onC
     try { await action(); onChanged() } catch (reason) { setError(reason instanceof Error ? reason.message : 'Action impossible') }
     finally { setBusy(null) }
   }
-  const payload = () => ({ title, message, targetBranch: target.trim() || null, integrate, autonomy, dependsOn: dependsOn || null, checks: checks.split('\n').map((line) => line.trim()).filter(Boolean) })
+  const payload = () => ({ title, message, targetBranch: config.branch?.trim() || null,
+    provider: config.provider, model: config.model, effort: config.effort, speed: config.speed,
+    presetId: config.presetId, permissionMode: config.permissionMode, orchestrator: config.orchestrator,
+    subagentPresetId: config.subagentPresetId, subagentEffort: config.subagentEffort, integrate, autonomy, dependsOn: dependsOn || null, checks: checks.split('\n').map((line) => line.trim()).filter(Boolean) })
   const canStart = editable && !!message.trim() && (!integrate || !!checks.trim())
   const dependencies = items.filter((other) => other.id !== item.id && other.ticket_id === item.ticket_id)
   return <section className="todo-detail" aria-label="Détail de la TODO">
-    <header className="todo-detail-header"><span>{projectName} <span aria-hidden="true">/</span> TODO</span><span className={`todo-row-state is-${item.status}`}>{TODO_LABELS[item.status]}</span></header>
+    <header className="todo-detail-header"><span>{project.name} <span aria-hidden="true">/</span> TODO</span><span className={`todo-row-state is-${item.status}`}>{TODO_LABELS[item.status]}</span></header>
     <form onSubmit={(event) => { event.preventDefault(); void act('save', () => updateTodo(item.id, payload())) }}>
       {editable ? <input className="todo-title-input" aria-label="Titre de la TODO" value={title} onChange={(event) => setTitle(event.target.value)} required /> : <h1>{item.title}</h1>}
-      <p className="todo-model">{modelLabel(item.model)} · {item.autonomy === 'investigate' ? 'Enquête' : 'Corrections locales'}</p>
+      <p className="todo-model">{modelLabel(config.model)} · {item.autonomy === 'investigate' ? 'Enquête' : 'Corrections locales'}</p>
       <label className="todo-field"><span>Consigne</span><textarea aria-label="Consigne de la TODO" value={message} onChange={(event) => setMessage(event.target.value)} readOnly={!editable} rows={7} required /></label>
       {item.attachments?.length ? <div className="todo-attachments">{item.attachments.map((file) => <a key={file.name} href={mediaUrl(file.name)} target="_blank" rel="noreferrer">{file.originalName}</a>)}</div> : null}
+      {editable ? <div className="todo-config">
+        <span>Modèle et branche cible</span>
+        <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onProjectUpdated={onProjectUpdated} onError={setError} applyProjectDefault={false} />
+      </div> : <p className="todo-model">Branche cible : {item.target_branch}</p>}
       <div className="todo-settings">
-        <label className="todo-field"><span>Branche cible</span><input value={target} onChange={(event) => setTarget(event.target.value)} readOnly={!editable} placeholder="Branche de référence du projet" /></label>
         <label className="todo-field"><span>Autonomie</span><select value={autonomy} disabled={!editable} onChange={(event) => { const value = event.target.value as TodoItem['autonomy']; setAutonomy(value); if (value === 'investigate') setIntegrate(false) }}><option value="local">Corrections locales</option><option value="investigate">Enquête et propositions</option></select></label>
         <label className="todo-field"><span>Après intégration de</span><select value={dependsOn} disabled={!editable} onChange={(event) => setDependsOn(event.target.value)}><option value="">Aucune dépendance</option>{dependencies.map((other) => <option key={other.id} value={other.id}>{other.title}</option>)}</select></label>
       </div>

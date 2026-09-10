@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { reorderTodos, setTodoQueue, TODO_LABELS, type TodoSnapshot } from './todos'
-import { TodoQuickAdd } from './TodoQuickAdd'
 
 interface Props extends TodoSnapshot {
   projectId: string
@@ -30,7 +29,6 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
     void act(() => reorderTodos(projectId, ids))
   }
   return <div className="todo-list">
-    <TodoQuickAdd projectId={projectId} onCreated={onChanged} />
     <div className="todo-queue-control">
       <button className={queue.running ? 'secondary-button' : 'primary-button'} disabled={busy || (!queue.running && pending === 0)} onClick={() => void act(() => setTodoQueue(projectId, !queue.running))}>
         {queue.running ? 'Mettre en pause' : 'Dépiler les TODO'}
