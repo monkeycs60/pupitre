@@ -280,6 +280,7 @@ export const Sidebar = memo(function Sidebar({
   const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null)
   const [domainRevision, setDomainRevision] = useState(0)
   const [projectDomains, setProjectDomains] = useState<ProjectDomain[]>([])
+  const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null)
   const [domainMenuOpen, setDomainMenuOpen] = useState(false)
   const selectedConversationRef = useRef(selectedConversation)
   selectedConversationRef.current = selectedConversation
@@ -384,6 +385,7 @@ export const Sidebar = memo(function Sidebar({
   useEffect(() => {
     restoreProjectIdRef.current = selectedProject?.id ?? null
     setFilterText('')
+    setSelectedDomainId(null)
     setScopeMenuOpen(false)
     try {
       const stored = localStorage.getItem(`pupitre:sidebar-collapsed:${selectedProject?.id ?? ''}`)
@@ -567,11 +569,12 @@ export const Sidebar = memo(function Sidebar({
 
   const conversationGroups = useMemo(() => {
     const query = filterText.trim().toLowerCase()
-    const filtered = query
-      ? conversations.filter((item) => item.title.toLowerCase().includes(query))
-      : conversations
+    const filtered = conversations.filter((item) => (
+      (!query || item.title.toLowerCase().includes(query))
+      && (selectedDomainId === null || (item.domains ?? []).some((domain) => domain.id === selectedDomainId))
+    ))
     return groupConversations(filtered)
-  }, [conversations, filterText])
+  }, [conversations, filterText, selectedDomainId])
 
   return (
     <aside className="sidebar">
@@ -587,6 +590,7 @@ export const Sidebar = memo(function Sidebar({
             {selectedProject ? shortenHomePath(selectedProject.path) : 'Choisis un projet dans le rail'}
           </div>
         </div>
+
         {selectedProject ? (
           <button
             type="button"
@@ -675,6 +679,22 @@ export const Sidebar = memo(function Sidebar({
             </svg>
           </button>
         </div>
+
+        {activeDomains.length > 0 ? (
+          <div className="conversation-domain-filters" role="group" aria-label="Filtrer par domaine">
+            {activeDomains.map((domain) => (
+              <button
+                key={domain.id}
+                type="button"
+                className={`conversation-domain-filter is-${domain.kind === 'métier' ? 'metier' : 'technique'}${selectedDomainId === domain.id ? ' is-selected' : ''}`}
+                aria-pressed={selectedDomainId === domain.id}
+                onClick={() => setSelectedDomainId((current) => current === domain.id ? null : domain.id)}
+              >
+                {domain.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {scopeMenuOpen ? (
           <div className="conversation-scope-anchor">
@@ -809,6 +829,14 @@ export const Sidebar = memo(function Sidebar({
                       {conversation.ticket_key ? (
                         <span className="conv-row-ticket">{conversation.ticket_key}</span>
                       ) : null}
+                      {(conversation.domains ?? []).slice(0, 2).map((domain) => (
+                        <span
+                          key={domain.id}
+                          className={`conv-row-domain is-${domain.kind === 'métier' ? 'metier' : 'technique'}`}
+                        >
+                          {domain.name}
+                        </span>
+                      ))}
                       {branch !== null ? (
                         <span className="conv-row-branch" title={`Branche du worktree : ${conversation.worktree_path}`}>
                           <BranchIcon />{branch}

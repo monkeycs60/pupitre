@@ -674,6 +674,51 @@
   color: var(--text-muted);
 }
 
+.conversation-domain-filters {
+  display: flex;
+  gap: 5px;
+  padding: 0 var(--space-1) 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.conversation-domain-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.conversation-domain-filter,
+.conv-row-domain {
+  flex: none;
+  padding: 2px 7px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.25;
+  background: var(--bg-hover);
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+}
+
+.conversation-domain-filter {
+  cursor: pointer;
+}
+
+.conversation-domain-filter.is-metier,
+.conv-row-domain.is-metier {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+}
+
+.conversation-domain-filter:hover,
+.conversation-domain-filter.is-selected {
+  color: var(--text-strong);
+  border-color: var(--accent-border);
+}
+
+.conversation-domain-filter.is-selected {
+  background: color-mix(in srgb, var(--accent) 20%, var(--bg-hover));
+}
+
 /* Périmètre (actives / archives / corbeille) : un menu sur le champ de
    filtre remplace la rangée d'onglets — Sentry vit dans les groupes du fil. */
 .conversation-scope-toggle {
@@ -1937,6 +1982,12 @@
   min-width: 0;
   margin-top: 3px;
   padding-left: 17px;
+}
+
+.conv-row-domain {
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .navigation-main .conv-row-activity {

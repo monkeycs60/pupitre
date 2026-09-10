@@ -496,7 +496,7 @@ test('le menu du filtre bascule vers les archives', async () => {
   expect(screen.getByRole('menuitemradio', { name: 'Corbeille' })).toBeTruthy()
 })
 
-test('la ligne de conversation reste épurée : pas de pastilles de domaines', async () => {
+test('affiche les domaines sur les lignes de conversation', async () => {
   const labelled: Conversation = {
     ...startedConversation,
     id: 'conversation-domains',
@@ -510,8 +510,27 @@ test('la ligne de conversation reste épurée : pas de pastilles de domaines', a
   renderSidebar()
   await waitFor(() => expect(document.querySelector('.navigation-row')).not.toBeNull())
   expect(document.querySelector('.conv-row-mark')).not.toBeNull()
-  expect(screen.queryByText('API')).toBeNull()
-  expect(screen.queryByText('Match AI')).toBeNull()
+  expect(screen.getByText('API')).not.toBeNull()
+  expect(screen.getByText('Match AI')).not.toBeNull()
+})
+
+test('filtre les conversations par domaine depuis la sidebar', async () => {
+  const domains: ProjectDomain[] = [{
+    id: 'd-match', project_id: project.id, name: 'Match AI', kind: 'métier', status: 'actif',
+    created_at: '2026-08-23T08:00:00.000Z', updated_at: '2026-08-23T08:00:00.000Z',
+  }]
+  const labelled: Conversation = {
+    ...startedConversation,
+    id: 'labelled',
+    title: 'Travail Match',
+    domains: [{ id: 'd-match', name: 'Match AI', kind: 'métier' }],
+  }
+  const other: Conversation = { ...startedConversation, id: 'other', title: 'Travail général', domains: [] }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [labelled, other], domains)
+  renderSidebar()
+  await waitFor(() => expect(document.querySelector('.conv-row-title')?.textContent).toBe('Travail Match'))
+  fireEvent.click(screen.getByRole('button', { name: 'Match AI' }))
+  expect([...document.querySelectorAll('.conv-row-title')].map((item) => item.textContent)).toEqual(['Travail Match'])
 })
 
 test('le menu d’une conversation n’attache que les domaines déjà validés', async () => {

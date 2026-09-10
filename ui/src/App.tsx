@@ -43,6 +43,7 @@ import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { ConversationInstruction } from './ConversationInstruction'
+import { ConversationDomains } from './ConversationDomains'
 import { SentryLinkIcon, TicketLinkIcons } from './TicketLinkIcons'
 import { useSentryLinks, useTicketLinks } from './ticketLinks'
 import { isAppRestartShortcut, restartApp } from './appRestart'
@@ -907,6 +908,15 @@ function App() {
             <header className="conversation-header">
               <div className="conversation-title-block">
                 <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
+                {selectedConversation ? (
+                  <ConversationDomains
+                    conversation={selectedConversation}
+                    onChange={(updated) => {
+                      setSelectedConversation(updated)
+                      setConversationListVersion((current) => current + 1)
+                    }}
+                  />
+                ) : null}
                 {selectedConversation?.ticket_instruction ? (
                   <ConversationInstruction instruction={selectedConversation.ticket_instruction} />
                 ) : null}
