@@ -716,7 +716,10 @@
 }
 
 .conversation-domain-filter.is-selected {
-  background: color-mix(in srgb, var(--accent) 20%, var(--bg-hover));
+  color: var(--on-accent);
+  font-weight: 650;
+  background: var(--accent);
+  border-color: var(--accent-hover);
 }
 
 /* Périmètre (actives / archives / corbeille) : un menu sur le champ de
