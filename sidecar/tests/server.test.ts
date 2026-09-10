@@ -800,6 +800,23 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     default_correction_preset_id: preset.id,
   }));
 
+  const selectedTodo = await putJson(`/api/projects/${project.id}/default-todo-preset`, {
+    presetId: preset.id,
+  });
+  expect(selectedTodo.status).toBe(200);
+  expect(await selectedTodo.json()).toEqual(expect.objectContaining({
+    default_todo_preset_id: preset.id,
+  }));
+  expect((await putJson(
+    `/api/projects/${project.id}/default-todo-preset`,
+    { presetId: "preset-inconnu" },
+  )).status).toBe(404);
+  const clearedTodo = await putJson(`/api/projects/${project.id}/default-todo-preset`, { presetId: null });
+  expect(clearedTodo.status).toBe(200);
+  expect(await clearedTodo.json()).toEqual(expect.objectContaining({
+    default_todo_preset_id: null,
+  }));
+
   const editedBuiltIn = await putJson(`/api/presets/${builtIns[0]!.id}`, {
     name: "Éco maison",
     provider: "claude",

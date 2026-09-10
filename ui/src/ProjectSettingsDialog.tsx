@@ -8,6 +8,7 @@ import {
   saveProjectIntegration,
   setProjectDefaultCorrectionPreset,
   setProjectDefaultScoutPreset,
+  setProjectDefaultTodoPreset,
   setProjectDefaultReviewPreset,
   setProjectFilesystemScope,
   setProjectPermissionMode,
@@ -74,7 +75,7 @@ function projectPresetId(value: string | null | undefined, legacy: string | null
   return value === undefined ? legacy ?? '' : value ?? ''
 }
 
-function presetLabel(preset: Preset, kind: 'review' | 'correction'): string {
+function presetLabel(preset: Preset, kind: 'review' | 'correction' | 'todo'): string {
   const model = kind === 'review' ? preset.review_model : preset.model
   const effort = kind === 'review' ? preset.review_effort : (preset.effort ?? '—')
   return `${preset.name} · ${model} · ${effort}`
@@ -182,6 +183,9 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
   const [reviewPresetId, setReviewPresetId] = useState(() => projectPresetId(project.default_review_preset_id, project.default_preset_id))
   const [correctionPresetId, setCorrectionPresetId] = useState(() => projectPresetId(project.default_correction_preset_id, project.default_preset_id))
   const [scoutPresetId, setScoutPresetId] = useState(() => projectPresetId(project.default_scout_preset_id, project.default_preset_id))
+  // Pas de reprise de `default_preset_id` à l'affichage : `null` veut dire
+  // « suivre le défaut du projet », et l'éditeur de TODO applique ce repli.
+  const [todoPresetId, setTodoPresetId] = useState(() => project.default_todo_preset_id ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mcp, setMcp] = useState<ProjectMcpConfig | null>(null)
@@ -311,6 +315,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
       updated = await setProjectDefaultReviewPreset(project.id, reviewPresetId || null)
       updated = await setProjectDefaultCorrectionPreset(project.id, correctionPresetId || null)
       updated = await setProjectDefaultScoutPreset(project.id, scoutPresetId || null)
+      updated = await setProjectDefaultTodoPreset(project.id, todoPresetId || null)
       for (const type of ['clickup', 'gitlab', 'sentry'] as const) {
         const form = integrations[type]
         if (form.enabled) {
@@ -379,8 +384,8 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
         <div className="project-settings-body">
           <section className="project-settings-defaults" aria-labelledby="project-gardien-defaults-title">
             <div className="project-settings-section-heading">
-              <strong id="project-gardien-defaults-title">Defaults du Gardien</strong>
-              <span>Appliqués au prochain lancement, y compris dans les conversations en cours.</span>
+              <strong id="project-gardien-defaults-title">Presets par défaut</strong>
+              <span>Gardien (review, correction, Scout) et nouvelles TODO. Appliqués au prochain lancement, y compris dans les conversations en cours.</span>
             </div>
             <label htmlFor="project-review-preset">
               <strong>Preset de review</strong>
@@ -413,6 +418,17 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
                 {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset, 'review')}</option>)}
               </select>
             </label>
+            <label htmlFor="project-todo-preset">
+              <strong>Preset des TODO</strong>
+              <select id="project-todo-preset" value={todoPresetId} disabled={saving} onChange={(event) => setTodoPresetId(event.target.value)}>
+                <option value="">Automatique · preset du projet</option>
+                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset, 'todo')}</option>)}
+              </select>
+            </label>
+            <p>
+              Modèle, effort et autonomie proposés par défaut dans l’éditeur de TODO.
+              Chaque TODO garde ensuite ses propres réglages.
+            </p>
           </section>
           <label htmlFor="project-filesystem-scope">
             <strong>Accès filesystem</strong>

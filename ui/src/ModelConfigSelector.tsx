@@ -157,6 +157,7 @@ export function ModelConfigSelector({
   const [open, setOpen] = useState(false)
   const [submenu, setSubmenu] = useState<Submenu>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const menuRef = useRef<HTMLElement | null>(null)
   const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? null
   const selectedSubagentPreset = presets.find((preset) => preset.id === config.subagentPresetId) ?? null
   const subagentEfforts = selectedSubagentPreset
@@ -164,6 +165,40 @@ export function ModelConfigSelector({
     : ['low', 'medium', 'high', 'xhigh']
   const isDirty = selectedPreset !== null && !sameConfig(config, configOf(selectedPreset))
   const summary = configSummary(config)
+
+  // Le menu grandit avec le nombre de presets : sans borne, il sortait par le
+  // haut de l'écran dès que le bouton était bas dans la fenêtre — presets et
+  // réglages étaient coupés. On ne borne pas le menu lui-même (son `overflow`
+  // clipperait les sous-menus qui débordent volontairement) mais la liste des
+  // presets, sa seule zone variable, quitte à la réduire jusqu'à `LIST_MIN`.
+  useLayoutEffect(() => {
+    if (!open) return
+    const menu = menuRef.current
+    const root = rootRef.current
+    const list = menu?.querySelector('.preset-selector-list') as HTMLElement | null
+    if (!menu || !root || !list) return
+    const LIST_MAX = 250
+    const LIST_MIN = 72
+    const pad = 8
+    function fit() {
+      if (!menu || !root || !list) return
+      list.style.maxHeight = `${LIST_MAX}px`
+      const rect = root.getBoundingClientRect()
+      const available = placement === 'bottom'
+        ? window.innerHeight - rect.bottom - 8 - pad
+        : rect.top - 8 - pad
+      const overflow = menu.getBoundingClientRect().height - available
+      if (overflow <= 0) return
+      const current = list.getBoundingClientRect().height
+      list.style.maxHeight = `${Math.max(LIST_MIN, Math.round(current - overflow))}px`
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => {
+      window.removeEventListener('resize', fit)
+      list.style.maxHeight = ''
+    }
+  }, [open, placement, isDirty, presets.length])
 
   // Le sous-menu est ancré au bouton, mais la liste des modèles dépasse souvent le viewport.
   useLayoutEffect(() => {
@@ -282,7 +317,7 @@ export function ModelConfigSelector({
 
       {open ? (
         <div className="preset-selector-popovers">
-          <section className="preset-selector-menu" role="menu" aria-label="Configuration de la conversation">
+          <section className="preset-selector-menu" ref={menuRef} role="menu" aria-label="Configuration de la conversation">
             {isDirty && selectedPreset ? (
               <div className="preset-selector-dirty-actions">
                 <p>Réglages différents de {selectedPreset.name}</p>

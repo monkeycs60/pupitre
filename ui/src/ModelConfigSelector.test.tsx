@@ -182,3 +182,67 @@ test('conserve le réglage d’effort des sub-agents dans le menu compact', () =
 
   expect(nextConfig).toEqual({ ...config, subagentEffort: 'xhigh' })
 })
+
+/**
+ * `getBoundingClientRect` renvoie des zéros sous happy-dom : on déclare la
+ * géométrie à la main pour mesurer ce que le composant décide à partir d'elle.
+ */
+function stubGeometry(rootTop: number, menuHeight: number, listHeight: number) {
+  const original = Element.prototype.getBoundingClientRect
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    const rect = (height: number, top: number): DOMRect => ({
+      x: 0, y: top, top, bottom: top + height, left: 0, right: 0,
+      width: 0, height, toJSON: () => ({}),
+    }) as DOMRect
+    if (this.classList.contains('preset-selector')) return rect(28, rootTop)
+    if (this.classList.contains('preset-selector-menu')) return rect(menuHeight, rootTop - 8 - menuHeight)
+    if (this.classList.contains('preset-selector-list')) return rect(listHeight, rootTop - 8 - listHeight)
+    return original.call(this)
+  }
+  return () => { Element.prototype.getBoundingClientRect = original }
+}
+
+test('la liste des presets cède la place au lieu de sortir par le haut de l’écran', () => {
+  // Le bouton est bas dans une fenêtre courte : 300 px au-dessus de lui, pour
+  // un menu de 520 px. Le menu déborderait de 236 px vers le haut.
+  const restore = stubGeometry(300, 520, 250)
+  try {
+    render(createElement(ModelConfigSelector, {
+      config,
+      presets: Array.from({ length: 30 }, (_, index) => preset(index + 1)),
+      selectedPresetId: '',
+      quotas: emptyQuotas,
+      onConfigChange: () => undefined,
+      onPresetSelect: () => undefined,
+    }))
+
+    fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
+
+    const list = document.querySelector('.preset-selector-list') as HTMLElement
+    // 250 px de liste − 236 px de débordement = 14 px, relevé au plancher de
+    // lisibilité : la liste défile au lieu de pousser le menu hors de l'écran.
+    expect(list.style.maxHeight).toBe('72px')
+  } finally {
+    restore()
+  }
+})
+
+test('garde la liste entière quand la place au-dessus suffit', () => {
+  const restore = stubGeometry(900, 520, 250)
+  try {
+    render(createElement(ModelConfigSelector, {
+      config,
+      presets: Array.from({ length: 30 }, (_, index) => preset(index + 1)),
+      selectedPresetId: '',
+      quotas: emptyQuotas,
+      onConfigChange: () => undefined,
+      onPresetSelect: () => undefined,
+    }))
+
+    fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
+
+    expect((document.querySelector('.preset-selector-list') as HTMLElement).style.maxHeight).toBe('250px')
+  } finally {
+    restore()
+  }
+})

@@ -46,6 +46,11 @@ interface ConfigPanelProps {
   onReady?: (ready: boolean) => void
   /** La modale de bascule conserve sa configuration au lieu du défaut projet. */
   applyProjectDefault?: boolean
+  /**
+   * Preset appliqué à l'ouverture à la place de `project.default_preset_id` :
+   * l'éditeur de TODO peut ainsi viser son propre défaut.
+   */
+  defaultPresetId?: string | null
   /** Les réglages de conversation exigent des routes dédiées après création. */
   showConversationSettings?: boolean
 }
@@ -102,6 +107,7 @@ export function ConfigPanel({
   onError,
   onReady,
   applyProjectDefault = true,
+  defaultPresetId,
   showConversationSettings = true,
 }: ConfigPanelProps) {
   const [branches, setBranches] = useState<string[]>([])
@@ -135,7 +141,7 @@ export function ConfigPanel({
       .then((loaded) => {
         if (abortController.signal.aborted) return
         setPresets(loaded)
-        const projectDefault = loaded.find((preset) => preset.id === project.default_preset_id)
+        const projectDefault = loaded.find((preset) => preset.id === (defaultPresetId ?? project.default_preset_id))
           ?? loaded.find((preset) => preset.id === 'builtin-speed')
           ?? loaded[0]
         if (applyProjectDefault && projectDefault) {
@@ -158,6 +164,7 @@ export function ConfigPanel({
     return () => abortController.abort()
   }, [
     applyProjectDefault,
+    defaultPresetId,
     onConfigChange,
     onError,
     onReady,

@@ -230,6 +230,8 @@ export interface Project {
   default_review_preset_id?: string | null
   default_correction_preset_id?: string | null
   default_scout_preset_id?: string | null
+  /** Preset des nouvelles TODO ; `null` = suivre `default_preset_id`. */
+  default_todo_preset_id?: string | null
   auto_rescan: boolean
 }
 

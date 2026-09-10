@@ -9,6 +9,11 @@ export interface Project {
   default_review_preset_id: string | null;
   default_correction_preset_id: string | null;
   default_scout_preset_id: string | null;
+  /**
+   * Preset appliqué aux nouvelles TODO. `null` = suivre `default_preset_id`,
+   * le défaut conversationnel du projet.
+   */
+  default_todo_preset_id: string | null;
   filesystem_scope: FilesystemScope;
   auto_rescan: boolean;
   /**
@@ -85,6 +90,10 @@ export class ProjectStore {
 
   setDefaultScoutPreset(id: string, presetId: string | null): void {
     this.db.query("UPDATE projects SET default_scout_preset_id = ? WHERE id = ?").run(presetId, id);
+  }
+
+  setDefaultTodoPreset(id: string, presetId: string | null): void {
+    this.db.query("UPDATE projects SET default_todo_preset_id = ? WHERE id = ?").run(presetId, id);
   }
 
   setPermissionMode(id: string, mode: PresetPermissionMode): void {

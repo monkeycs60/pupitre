@@ -321,9 +321,11 @@ export class PresetStore {
          SET default_preset_id = CASE WHEN default_preset_id = ? THEN NULL ELSE default_preset_id END,
              default_review_preset_id = CASE WHEN default_review_preset_id = ? THEN NULL ELSE default_review_preset_id END,
              default_correction_preset_id = CASE WHEN default_correction_preset_id = ? THEN NULL ELSE default_correction_preset_id END,
-             default_scout_preset_id = CASE WHEN default_scout_preset_id = ? THEN NULL ELSE default_scout_preset_id END
-         WHERE default_preset_id = ? OR default_review_preset_id = ? OR default_correction_preset_id = ? OR default_scout_preset_id = ?`,
-      ).run(id, id, id, id, id, id, id, id);
+             default_scout_preset_id = CASE WHEN default_scout_preset_id = ? THEN NULL ELSE default_scout_preset_id END,
+             default_todo_preset_id = CASE WHEN default_todo_preset_id = ? THEN NULL ELSE default_todo_preset_id END
+         WHERE default_preset_id = ? OR default_review_preset_id = ? OR default_correction_preset_id = ?
+            OR default_scout_preset_id = ? OR default_todo_preset_id = ?`,
+      ).run(id, id, id, id, id, id, id, id, id, id);
       this.db.query("DELETE FROM presets WHERE id = ?").run(id);
     });
     transaction();

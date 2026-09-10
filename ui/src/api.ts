@@ -644,6 +644,10 @@ export function setProjectDefaultScoutPreset(id: string, presetId: string | null
   return fetchJson(`/api/projects/${routeId(id)}/default-scout-preset`, jsonPut({ presetId }))
 }
 
+export function setProjectDefaultTodoPreset(id: string, presetId: string | null): Promise<Project> {
+  return fetchJson(`/api/projects/${routeId(id)}/default-todo-preset`, jsonPut({ presetId }))
+}
+
 export function setProjectFilesystemScope(
   id: string,
   scope: FilesystemScope,

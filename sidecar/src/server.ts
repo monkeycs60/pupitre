@@ -2300,6 +2300,17 @@ export function createServer(deps: ServerDeps) {
           return json(deps.projects.get(projectDefaultScoutPresetId));
         }
 
+        const projectDefaultTodoPresetId = routeId(pathname, /^\/api\/projects\/([^/]+)\/default-todo-preset$/);
+        if (request.method === "PUT" && projectDefaultTodoPresetId !== null) {
+          if (!deps.projects.get(projectDefaultTodoPresetId)) throw new HttpError(404, "projet inconnu");
+          const body = await readObject(request);
+          const presetId = body.presetId;
+          if (presetId !== null && typeof presetId !== "string") throw new HttpError(400, "champ presetId invalide");
+          if (typeof presetId === "string" && !deps.presets.get(presetId)) throw new HttpError(404, "preset inconnu");
+          deps.projects.setDefaultTodoPreset(projectDefaultTodoPresetId, presetId as string | null);
+          return json(deps.projects.get(projectDefaultTodoPresetId));
+        }
+
         const projectFilesystemScopeId = routeId(
           pathname,
           /^\/api\/projects\/([^/]+)\/filesystem-scope$/,

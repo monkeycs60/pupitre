@@ -35,7 +35,8 @@ export function openDb(dir: string = dataDir()): Database {
       pinned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
       default_review_preset_id TEXT NULL,
       default_correction_preset_id TEXT NULL,
-      default_scout_preset_id TEXT NULL
+      default_scout_preset_id TEXT NULL,
+      default_todo_preset_id TEXT NULL
     );
     CREATE TABLE IF NOT EXISTS presets (
       id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -671,6 +672,10 @@ export function openDb(dir: string = dataDir()): Database {
     `);
   }
   if (addedDefaultScoutPreset) db.exec("UPDATE projects SET default_scout_preset_id = default_preset_id WHERE default_scout_preset_id IS NULL");
+  // Aucun report ici : `NULL` signifie « suivre le défaut du projet », donc les
+  // projets existants gardent exactement le modèle qu'ils utilisaient pour
+  // leurs TODO.
+  addColumn(db, "projects", "default_todo_preset_id TEXT NULL");
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
   addColumn(db, "projects", "auto_rescan INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "project_changelog_state", "backfill_version INTEGER NOT NULL DEFAULT 0");

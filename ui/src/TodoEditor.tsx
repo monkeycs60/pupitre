@@ -98,7 +98,7 @@ export function TodoEditor({ project, items, quotas, initialTicketId = null, ini
       </div>
       <div className="todo-config">
         <span>Modèle et branche cible</span>
-        <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onProjectUpdated={onProjectUpdated} onError={setError} onReady={setConfigReady} applyProjectDefault={initial === null} />
+        <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onProjectUpdated={onProjectUpdated} onError={setError} onReady={setConfigReady} applyProjectDefault={initial === null} defaultPresetId={project.default_todo_preset_id ?? null} />
       </div>
       <details className="todo-verification">
         <summary>Options de la tâche</summary>

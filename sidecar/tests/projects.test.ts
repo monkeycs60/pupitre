@@ -54,3 +54,14 @@ test("sépare les presets par défaut du chat, de la review et de la correction"
     default_correction_preset_id: "correction-preset",
   }));
 });
+
+test("le preset des TODO est nul par défaut, puis réglable", () => {
+  const p = store.create({ name: "a", path: "/tmp/todo-preset" });
+  // `null` = suivre le défaut conversationnel : les projets existants ne
+  // changent pas de modèle pour leurs TODO.
+  expect(p.default_todo_preset_id).toBeNull();
+  store.setDefaultTodoPreset(p.id, "todo-preset");
+  expect(store.get(p.id)?.default_todo_preset_id).toBe("todo-preset");
+  store.setDefaultTodoPreset(p.id, null);
+  expect(store.get(p.id)?.default_todo_preset_id).toBeNull();
+});

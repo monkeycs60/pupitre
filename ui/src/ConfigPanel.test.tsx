@@ -196,3 +196,34 @@ test("appliquer le preset par défaut du projet ne perd pas la branche ni le tic
     ticketKey: 'TECH-1',
   }))
 })
+
+test('un défaut de TODO remplace le défaut du projet', async () => {
+  const changes: ConversationConfig[] = []
+  const presets = [
+    { ...speedPreset, id: 'speed', name: 'Vitesse' },
+    { ...speedPreset, id: 'todo', name: 'TODO', provider: 'claude', model: 'claude-haiku-4-5-20251001', effort: 'medium' },
+  ]
+  globalThis.fetch = mock(() => Promise.resolve(new Response(JSON.stringify(presets), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  }))) as unknown as typeof fetch
+
+  render(createElement(ConfigPanel, {
+    project: { ...project, default_preset_id: 'speed', default_todo_preset_id: 'todo' },
+    quotas,
+    config: initialConfig,
+    onConfigChange: (next: ConversationConfig) => changes.push(next),
+    onProjectUpdated: () => undefined,
+    onError: () => undefined,
+    // C'est ce que fait l'éditeur de TODO : viser le défaut des TODO.
+    defaultPresetId: 'todo',
+  }))
+
+  await waitFor(() => expect(changes.length).toBeGreaterThan(0))
+  expect(changes.at(-1)).toEqual(expect.objectContaining({
+    presetId: 'todo',
+    provider: 'claude',
+    model: 'claude-haiku-4-5-20251001',
+    effort: 'medium',
+  }))
+})

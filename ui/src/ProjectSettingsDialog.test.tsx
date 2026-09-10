@@ -54,6 +54,7 @@ test('enregistre une intégration GitLab avec son motif de branche', async () =>
     if (url.endsWith('/api/projects/p1/default-review-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/default-correction-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/default-scout-preset')) return json(project)
+    if (url.endsWith('/api/projects/p1/default-todo-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/integrations/gitlab') && method === 'PUT') {
       calls.push({ url, body: JSON.parse(String(init?.body)) })
       return json({
@@ -90,6 +91,64 @@ test('enregistre une intégration GitLab avec son motif de branche', async () =>
   }
   expect(saved.config.host).toBe('https://git.example')
   expect(saved.branchPattern).toBe('^(issue|feature)/(TECH-\\d+)')
+})
+
+test('enregistre le preset par défaut des TODO', async () => {
+  const calls: Array<{ url: string; body: unknown }> = []
+  const preset = {
+    id: 'todo-2',
+    name: 'TODO rapide',
+    provider: 'claude',
+    model: 'fable-5',
+    effort: 'medium',
+    speed: null,
+    permission_mode: null,
+    orchestrator: true,
+    subagent_preset_id: null,
+    subagent_effort: null,
+    review_provider: 'claude',
+    review_model: 'opus',
+    review_effort: 'high',
+    built_in: false,
+    created_at: '2026-08-19T08:00:00.000Z',
+    updated_at: '2026-08-19T08:00:00.000Z',
+  }
+
+  const presets = [
+    { ...preset, id: 'todo-1', name: 'TODO maison' },
+    preset,
+  ]
+
+  globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input)
+    const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+    if (url.endsWith('/api/presets')) return json(presets)
+    if (url.endsWith('/api/projects/p1/mcp-servers')) return json({ servers: [], enabled: [], weights: {}, used: [] })
+    if (url.endsWith('/api/projects/p1/integrations') && method === 'GET') return json([])
+    if (url.endsWith('/api/projects/p1/domains') && method === 'GET') return json([])
+    if (method === 'PUT' && url.includes('/api/projects/p1/')) {
+      calls.push({ url, body: JSON.parse(String(init?.body)) })
+      return json(project)
+    }
+    throw new Error(`route inattendue: ${method} ${url}`)
+  }) as typeof fetch
+
+  render(createElement(ProjectSettingsDialog, {
+    project: { ...project, default_todo_preset_id: 'todo-1' },
+    onClose: () => {},
+    onUpdated: () => {},
+  }))
+
+  // Les presets arrivent après le montage : le `<select>` doit alors afficher le
+  // preset enregistré, et non retomber sur « Automatique ».
+  await waitFor(() => expect((screen.getByLabelText('Preset des TODO') as HTMLSelectElement).options.length).toBe(3))
+  const selector = screen.getByLabelText('Preset des TODO') as HTMLSelectElement
+  expect(selector.value).toBe('todo-1')
+  fireEvent.change(selector, { target: { value: 'todo-2' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+  await waitFor(() => expect(calls.some((call) => call.url.endsWith('/default-todo-preset'))).toBe(true))
+  expect(calls.find((call) => call.url.endsWith('/default-todo-preset'))?.body).toEqual({ presetId: 'todo-2' })
 })
 
 test('le corps des paramètres projet défile sans masquer les actions', () => {

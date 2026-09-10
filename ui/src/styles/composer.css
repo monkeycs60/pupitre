@@ -407,6 +407,9 @@
 
 .preset-selector-menu {
   width: 286px;
+  /* Aucun `overflow` ici : les sous-menus sortent volontairement du cadre
+     (610 px pour la liste des modèles). La hauteur est bornée en réduisant
+     `max-height` de la seule liste des presets (voir ModelConfigSelector). */
 }
 
 .preset-selector-heading {
@@ -420,6 +423,9 @@
 
 .preset-selector-list {
   display: grid;
+  /* Zone élastique du menu : `ModelConfigSelector` abaisse cette limite quand
+     le menu dépasserait la place disponible, le reste du panneau (réglages et
+     actions) restant alors visible. */
   max-height: 250px;
   overflow-y: auto;
   overscroll-behavior: contain;
