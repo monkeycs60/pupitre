@@ -3,15 +3,15 @@ import type { MediaAttachment, Provider } from "../events";
 import type { PresetPermissionMode } from "./presets";
 export type TodoStatus =
   "backlog" | "queued" | "running" | "awaiting_validation" | "done" | "blocked";
+export type TodoFinish = "none" | "commit" | "commit_push";
+export const TODO_FINISHES: TodoFinish[] = ["none", "commit", "commit_push"];
 export interface TodoInput {
   status?: "backlog" | "queued";
   title?: string;
   message: string;
   targetBranch?: string | null;
   ticketId?: string | null;
-  integrate?: boolean;
-  autonomy?: "local" | "investigate";
-  dependsOn?: string | null;
+  finish?: TodoFinish;
   provider: Provider;
   model: string;
   effort?: string | null;
@@ -20,7 +20,6 @@ export interface TodoInput {
   permissionMode?: PresetPermissionMode | null;
   images?: string[];
   attachments?: MediaAttachment[];
-  checks?: string[];
 }
 export interface TodoItem {
   id: string;
@@ -29,12 +28,9 @@ export interface TodoItem {
   message: string;
   ticket_id: string | null;
   target_branch: string;
-  integrate: boolean;
-  autonomy: "local" | "investigate";
-  depends_on: string | null;
+  finish: TodoFinish;
   status: TodoStatus;
   execution_completed: boolean;
-  publication_pending: boolean;
   conversation_id: string | null;
   branch: string | null;
   worktree_path: string | null;
@@ -50,7 +46,18 @@ export interface TodoItem {
   permission_mode: PresetPermissionMode | null;
   images: string[];
   attachments: MediaAttachment[];
-  checks: string[];
+}
+function titleOf(message: string): string {
+  const line = message.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+  return line.length > 80 ? `${line.slice(0, 79).trimEnd()}…` : line;
+}
+/** Les payloads antérieurs portaient `integrate` : un push automatique. */
+function normalize(raw: Record<string, unknown>): TodoItem {
+  const { integrate, autonomy: _a, depends_on: _d, checks: _c, publication_pending: _p, ...rest } = raw;
+  const finish = TODO_FINISHES.includes(rest.finish as TodoFinish)
+    ? rest.finish as TodoFinish
+    : integrate === true ? "commit_push" : "none";
+  return { ...rest, finish } as TodoItem;
 }
 export class TodoStore {
   constructor(private db: Database) {
@@ -85,7 +92,7 @@ export class TodoStore {
         : this.db.query("SELECT payload FROM project_todos").all()
     ) as { payload: string }[];
     return rows
-      .map((r) => JSON.parse(r.payload) as TodoItem)
+      .map((r) => normalize(JSON.parse(r.payload)))
       .sort(
         (a, b) =>
           a.position - b.position || a.created_at.localeCompare(b.created_at),
@@ -95,23 +102,20 @@ export class TodoStore {
     const row = this.db
       .query("SELECT payload FROM project_todos WHERE id=?")
       .get(id) as { payload: string } | null;
-    return row ? JSON.parse(row.payload) : null;
+    return row ? normalize(JSON.parse(row.payload)) : null;
   }
   create(projectId: string, input: TodoInput): TodoItem {
     const now = new Date().toISOString();
     const item: TodoItem = {
       id: crypto.randomUUID(),
       project_id: projectId,
-      title: input.title?.trim() || input.message.slice(0, 80),
+      title: input.title?.trim() || titleOf(input.message),
       message: input.message,
       ticket_id: input.ticketId ?? null,
       target_branch: input.targetBranch ?? "",
-      integrate: input.integrate ?? false,
-      autonomy: input.autonomy ?? "local",
-      depends_on: input.dependsOn ?? null,
+      finish: input.finish ?? "none",
       status: input.status ?? "queued",
       execution_completed: false,
-      publication_pending: false,
       conversation_id: null,
       branch: null,
       worktree_path: null,
@@ -128,7 +132,6 @@ export class TodoStore {
       permission_mode: input.permissionMode ?? null,
       images: input.images ?? [],
       attachments: input.attachments ?? [],
-      checks: input.checks ?? [],
     };
     this.db
       .query("INSERT INTO project_todos VALUES (?,?,?)")
@@ -153,18 +156,22 @@ export class TodoStore {
   delete(id: string): void {
     this.db.query("DELETE FROM project_todos WHERE id=?").run(id);
   }
+  /** `ids` : toutes les tâches ouvertes du projet, dans l'ordre voulu. Les
+   *  tâches terminées gardent leur rang derrière la pile. */
   reorder(projectId: string, ids: string[]): void {
-    const items = this.list(projectId).filter((t) => t.status === "queued");
+    const items = this.list(projectId).filter((t) => t.status !== "done");
     if (
       ids.length !== items.length ||
       new Set(ids).size !== ids.length ||
       items.some((t) => !ids.includes(t.id))
     )
       throw new Error(
-        "La liste doit contenir chaque TODO en attente une seule fois",
+        "La liste doit contenir chaque tâche ouverte une seule fois",
       );
-    this.db.transaction(() =>
-      ids.forEach((id, i) => this.update(id, { position: i })),
-    )();
+    const done = this.list(projectId).filter((t) => t.status === "done");
+    this.db.transaction(() => {
+      ids.forEach((id, i) => this.update(id, { position: i }));
+      done.forEach((t, i) => this.update(t.id, { position: ids.length + i }));
+    })();
   }
 }

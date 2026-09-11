@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { completeTodo, reopenTodo, reorderTodos, setTodoQueue, TODO_LABELS, type TodoSnapshot, type TodoStatus } from './todos'
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
+import { completeTodo, deleteTodo, drainTodos, isStartable, reopenTodo, reorderTodos, setTodoQueue, startTodo, TODO_FINISH_LABELS, TODO_LABELS, type TodoItem, type TodoSnapshot } from './todos'
 import type { TicketLinks } from './ticketLinks'
 import './styles/project-todos.css'
 
@@ -11,66 +11,151 @@ interface Props extends TodoSnapshot {
   ticketLinks?: Map<string, TicketLinks>
   onSelect: (id: string) => void
   onChanged: () => void
+  /** Conversation liée si elle existe, sinon nouvelle conversation préremplie. */
+  onOpenConversation: (item: TodoItem) => void
 }
-const GROUPS: TodoStatus[] = ['blocked', 'running', 'awaiting_validation', 'backlog', 'queued', 'done']
-const GROUP_LABELS: Record<TodoStatus, string> = { backlog: 'À faire', queued: 'En file', running: 'En cours', awaiting_validation: 'À valider', blocked: 'Bloquées', done: 'Terminées' }
 
-export function TodoList({ projectId, items, queue, selectedId, loading, error, ticketLinks, onSelect, onChanged }: Props) {
+const LEAVE_DELAY = 900
+
+export function TodoList({ projectId, items, queue, selectedId, loading, error, ticketLinks, onSelect, onChanged, onOpenConversation }: Props) {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<'open' | 'done' | 'all'>('open')
-  const visible = items.filter((item) => (filter === 'all' || (filter === 'done' ? item.status === 'done' : item.status !== 'done'))
-    && `${item.title} ${item.message} ${ticketLinks?.get(item.ticket_id ?? '')?.ticketKey ?? ''}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-  const pending = items.filter((item) => item.status === 'queued')
+  const [tab, setTab] = useState<'open' | 'done'>('open')
+  const [leaving, setLeaving] = useState<string[]>([])
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+  useEffect(() => () => timers.current.forEach(clearTimeout), [])
+
+  const open = items.filter((item) => item.status !== 'done')
+  const done = items.filter((item) => item.status === 'done')
+  const needle = query.trim().toLocaleLowerCase()
+  const matches = (item: TodoItem) => needle === ''
+    || `${item.title} ${item.message} ${ticketLinks?.get(item.ticket_id ?? '')?.ticketKey ?? ''}`.toLocaleLowerCase().includes(needle)
+  const visible = (tab === 'open' ? items.filter((item) => item.status !== 'done' || leaving.includes(item.id)) : done).filter(matches)
+  const startable = open.filter((item) => isStartable(item) && item.status !== 'blocked')
+  const canDrag = tab === 'open' && needle === ''
+
   async function act(action: () => Promise<unknown>) {
     setBusy(true); setActionError(null)
     try { await action(); onChanged() } catch (reason) { setActionError(reason instanceof Error ? reason.message : 'Action impossible') }
     finally { setBusy(false) }
   }
-  function move(id: string, direction: number) {
-    const ids = pending.map((item) => item.id)
+  function complete(item: TodoItem) {
+    setLeaving((current) => [...current, item.id])
+    timers.current.push(setTimeout(() => setLeaving((current) => current.filter((id) => id !== item.id)), LEAVE_DELAY))
+    void act(() => completeTodo(item.id))
+  }
+  function reorder(id: string, target: string) {
+    const ids = open.map((item) => item.id)
+    const from = ids.indexOf(id), to = ids.indexOf(target)
+    if (from < 0 || to < 0 || from === to) return
+    ids.splice(from, 1)
+    ids.splice(to, 0, id)
+    void act(() => reorderTodos(projectId, ids))
+  }
+  function move(id: string, direction: -1 | 1) {
+    const ids = open.map((item) => item.id)
     const index = ids.indexOf(id)
     const other = index + direction
     if (index < 0 || other < 0 || other >= ids.length) return
     ;[ids[index], ids[other]] = [ids[other]!, ids[index]!]
     void act(() => reorderTodos(projectId, ids))
   }
+  function handleRowKeyDown(event: KeyboardEvent<HTMLButtonElement>, item: TodoItem) {
+    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') || !canDrag) return
+    event.preventDefault()
+    move(item.id, event.key === 'ArrowUp' ? -1 : 1)
+  }
+  function handleDragStart(event: DragEvent<HTMLLIElement>, item: TodoItem) {
+    setDragId(item.id)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', item.id)
+  }
+  function handleDrop(event: DragEvent<HTMLLIElement>, target: TodoItem) {
+    event.preventDefault()
+    const id = dragId ?? event.dataTransfer.getData('text/plain')
+    setDragId(null); setOverId(null)
+    if (id && id !== target.id) reorder(id, target.id)
+  }
+
   return <div className="todo-list project-task-list">
-    <div className="project-task-filters">
-      <input aria-label="Rechercher une tâche" placeholder="Rechercher…" value={query} onChange={(event) => setQuery(event.target.value)} />
-      <select aria-label="Afficher les tâches" value={filter} onChange={(event) => setFilter(event.target.value as typeof filter)}>
-        <option value="open">Ouvertes</option><option value="done">Terminées</option><option value="all">Toutes</option>
-      </select>
+    <div className="project-task-toolbar">
+      <div className="project-task-tabs" role="tablist" aria-label="Afficher les tâches">
+        <button type="button" role="tab" aria-selected={tab === 'open'} onClick={() => setTab('open')}>Ouvertes <span>{open.length}</span></button>
+        <button type="button" role="tab" aria-selected={tab === 'done'} onClick={() => setTab('done')}>Terminées <span>{done.length}</span></button>
+      </div>
+      <label className={`project-task-search${query ? ' has-value' : ''}`}>
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><circle cx="7" cy="7" r="4.2" /><path d="m10.2 10.2 3 3" strokeLinecap="round" /></svg>
+        <input aria-label="Rechercher une tâche" placeholder="Filtrer" value={query} onChange={(event) => setQuery(event.target.value)} />
+      </label>
     </div>
-    {pending.length > 0 || queue.running || queue.activeTodoId ? <div className="project-task-queue">
-      <span role="status">{queue.running ? 'Exécution de la file' : queue.activeTodoId ? 'Pause après la tâche en cours' : `${pending.length} en file`}</span>
-      <button type="button" className="text-button" disabled={busy || (!queue.running && pending.length === 0)} onClick={() => void act(() => setTodoQueue(projectId, !queue.running))}>{queue.running ? 'Mettre en pause' : 'Lancer la file'}</button>
+    {tab === 'open' && (startable.length > 0 || queue.running || queue.activeTodoId) ? <div className={`project-task-queue${queue.running ? ' is-running' : ''}`}>
+      <span role="status">
+        {queue.activeTodoId ? <span className="project-task-pulse" aria-hidden="true" /> : null}
+        {queue.running
+          ? queue.activeTodoId ? 'Dépilage en cours' : 'Pile active, en attente'
+          : queue.activeTodoId ? 'Pause après la tâche en cours' : `${startable.length} à dépiler, de haut en bas`}
+      </span>
+      {queue.running
+        ? <button type="button" className="secondary-button" disabled={busy} onClick={() => void act(() => setTodoQueue(projectId, false))}>Mettre en pause</button>
+        : <button type="button" className="primary-button" disabled={busy || startable.length === 0} onClick={() => void act(() => drainTodos(projectId))}>
+            <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M4 2.8v10.4L12.5 8z" /></svg>
+            Dépiler
+          </button>}
     </div> : null}
     {error || actionError ? <p className="todo-error" role="alert">{actionError ?? error}</p> : null}
-    {loading ? <p className="list-empty">Chargement…</p> : !items.length ? <div className="project-task-empty"><strong>Aucune tâche pour le moment</strong><p>Note un bug, une idée ou une amélioration. Tu pourras ensuite t’en occuper ou la confier à un agent.</p></div> : !visible.length ? <p className="list-empty">{query ? 'Aucune tâche ne correspond.' : filter === 'done' ? 'Aucune tâche terminée.' : 'Toutes les tâches sont terminées.'}</p> : null}
-    {GROUPS.map((status) => {
-      const group = visible.filter((item) => item.status === status)
-      if (!group.length) return null
-      return <section className="project-task-group" key={status} aria-label={GROUP_LABELS[status]}>
-        <h3>{GROUP_LABELS[status]} <span>{group.length}</span></h3>
-        {group.map((item) => {
-          const manual = !item.conversation_id && !item.branch && !item.worktree_path && ['backlog', 'queued', 'blocked', 'done'].includes(item.status)
-          const ticket = ticketLinks?.get(item.ticket_id ?? '')
-          return <div className={`todo-row project-task-row ${item.id === selectedId ? 'is-selected' : ''}`} key={item.id} data-status={item.status}>
-            {manual ? <button type="button" className={`project-task-check is-${item.status}`} disabled={busy} aria-label={`${item.status === 'done' ? 'Rouvrir' : 'Terminer'} ${item.title}`} onClick={() => void act(() => item.status === 'done' ? reopenTodo(item.id) : completeTodo(item.id))}>{item.status === 'done' ? '✓' : null}</button>
-              : <span className={`project-task-status is-${item.status}`} title={TODO_LABELS[item.status]} aria-label={TODO_LABELS[item.status]}>{item.status === 'blocked' ? '!' : item.status === 'done' ? '✓' : item.status === 'running' ? '◐' : '◷'}</span>}
-            <button type="button" className="todo-row-main" onClick={() => onSelect(item.id)} aria-current={item.id === selectedId ? 'true' : undefined}>
-              <span className="todo-row-title">{item.title}</span>
-              {ticket || item.integrate || item.conversation_id ? <span className="project-task-meta">{[ticket?.ticketKey, item.conversation_id ? 'Conversation liée' : null, item.integrate ? 'Intégration auto' : null].filter(Boolean).join(' · ')}</span> : null}
+    {loading ? <p className="list-empty">Chargement…</p>
+      : !items.length ? <div className="project-task-empty"><strong>La pile est vide</strong><p>Passe le composer en mode <em>Tâche</em> pour empiler un bug, une idée ou une amélioration, puis dépile quand tu veux.</p></div>
+      : !visible.length ? <p className="list-empty">{needle ? 'Aucune tâche ne correspond.' : tab === 'done' ? 'Aucune tâche terminée.' : 'Tout est dépilé.'}</p>
+      : null}
+    <ol className="project-task-rows" aria-label={tab === 'open' ? 'Tâches ouvertes' : 'Tâches terminées'}>
+      {visible.map((item) => {
+        const running = item.status === 'running' || queue.activeTodoId === item.id
+        const isDone = item.status === 'done'
+        const startableItem = isStartable(item)
+        const ticket = ticketLinks?.get(item.ticket_id ?? '')
+        const classes = ['todo-row', 'project-task-row', `is-${item.status}`]
+        if (item.id === selectedId) classes.push('is-selected')
+        if (leaving.includes(item.id)) classes.push('is-leaving')
+        if (dragId === item.id) classes.push('is-dragging')
+        if (overId === item.id && dragId && dragId !== item.id) classes.push('is-drop-target')
+        return <li className={classes.join(' ')} key={item.id} data-status={item.status}
+          draggable={canDrag && !running}
+          onDragStart={(event) => handleDragStart(event, item)}
+          onDragOver={(event) => { if (dragId && canDrag) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; if (overId !== item.id) setOverId(item.id) } }}
+          onDragLeave={() => { if (overId === item.id) setOverId(null) }}
+          onDrop={(event) => handleDrop(event, item)}
+          onDragEnd={() => { setDragId(null); setOverId(null) }}>
+          {canDrag ? <span className="project-task-grip" aria-hidden="true" title="Glisser pour réordonner · Alt + ↑/↓"><svg viewBox="0 0 8 14" width="8" height="14" fill="currentColor"><circle cx="2" cy="2" r="1.1" /><circle cx="6" cy="2" r="1.1" /><circle cx="2" cy="7" r="1.1" /><circle cx="6" cy="7" r="1.1" /><circle cx="2" cy="12" r="1.1" /><circle cx="6" cy="12" r="1.1" /></svg></span> : null}
+          {running
+            ? <span className="project-task-check is-running" role="img" aria-label="En cours"><span className="project-task-spinner" /></span>
+            : <button type="button" className={`project-task-check is-${item.status}`} disabled={busy} aria-label={`${isDone ? 'Rouvrir' : 'Terminer'} ${item.title}`} title={isDone ? 'Rouvrir' : 'Marquer terminée'} onClick={() => isDone ? void act(() => reopenTodo(item.id)) : complete(item)}>
+                <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m2.5 6.3 2.3 2.3 4.7-5" /></svg>
+              </button>}
+          <button type="button" className="todo-row-main" onClick={() => onSelect(item.id)} onKeyDown={(event) => handleRowKeyDown(event, item)} aria-current={item.id === selectedId ? 'true' : undefined}>
+            <span className="todo-row-title">{item.title}</span>
+            <span className="project-task-meta">
+              {item.status !== 'backlog' && !isDone ? <span className={`project-task-state is-${item.status}`} title={item.error ?? undefined}>{TODO_LABELS[item.status]}</span> : null}
+              {ticket?.ticketKey ? <span className="project-task-ticket">{ticket.ticketKey}</span> : null}
+              {item.finish !== 'none' ? <span>{TODO_FINISH_LABELS[item.finish]}</span> : null}
+              {item.error && item.status === 'blocked' ? <span className="project-task-error" title={item.error}>{item.error}</span> : null}
+            </span>
+          </button>
+          <span className="project-task-actions">
+            {startableItem && !isDone ? <button type="button" disabled={busy || !!queue.activeTodoId} aria-label={`Lancer l’agent sur ${item.title}`} title="Lancer l’agent" onClick={() => void act(() => startTodo(item.id))}>
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M4.5 3v10L12.5 8z" /></svg>
+            </button> : null}
+            <button type="button" className={item.conversation_id ? 'is-linked' : ''} aria-label={item.conversation_id ? `Ouvrir la conversation de ${item.title}` : `Ouvrir ${item.title} dans une conversation`} title={item.conversation_id ? 'Ouvrir la conversation liée' : 'Ouvrir dans une conversation préremplie'} onClick={() => onOpenConversation(item)}>
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" />{item.conversation_id ? <path d="M5.5 7h5" strokeLinecap="round" /> : null}</svg>
             </button>
-            {item.status === 'queued' ? <div className="todo-row-order">
-              <button type="button" disabled={busy || pending[0]?.id === item.id} aria-label={`Monter ${item.title}`} onClick={() => move(item.id, -1)}>↑</button>
-              <button type="button" disabled={busy || pending.at(-1)?.id === item.id} aria-label={`Descendre ${item.title}`} onClick={() => move(item.id, 1)}>↓</button>
-            </div> : null}
-          </div>
-        })}
-      </section>
-    })}
+            <button type="button" className="is-danger" disabled={busy || running} aria-label={`Supprimer ${item.title}`} title="Supprimer" onClick={() => void act(() => deleteTodo(item.id))}>
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
+            </button>
+          </span>
+        </li>
+      })}
+    </ol>
   </div>
 }

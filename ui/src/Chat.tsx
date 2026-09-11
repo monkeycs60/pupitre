@@ -37,8 +37,7 @@ import { newConversationDraftStorageKey } from './conversationDraft'
 import { ThreadSearch } from './ThreadSearch'
 import { PushTimeline } from './PushTimeline'
 import { collectConversationAssets } from './conversationAssets'
-import type { TodoDraftSeed } from './todoDraft'
-import { branchOfWorktree } from './conversationBranch'
+import type { TodoItem } from './todos'
 import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
 
 /** Outils du fil pilotés depuis le head : pièces jointes et recherche. */
@@ -49,7 +48,9 @@ export interface ThreadTools {
 }
 
 interface ChatProps {
-  onDraftToTodo?: (seed: TodoDraftSeed) => void
+  todoMode?: boolean
+  onTodoModeChange?: (todoMode: boolean) => void
+  onTodoCreated?: (todo: TodoItem) => void
   /** Événement à faire défiler et surligner à l’ouverture (retour depuis un fichier partagé). */
   focusEventId?: number | null
   events: AppEvent[]
@@ -168,7 +169,9 @@ export function Chat({
   quotas,
   onConversationCreated,
   focusEventId = null,
-  onDraftToTodo,
+  todoMode = false,
+  onTodoModeChange,
+  onTodoCreated,
   onConversationRead,
   onRunningSubtasksChange,
   onThreadToolsChange,
@@ -478,22 +481,9 @@ export function Chat({
             quotas={quotas}
             isRunning={isRunning}
             onConversationCreated={handleConversationCreated}
-            onDraftToTodo={onDraftToTodo ? (seed) => onDraftToTodo({
-              ...seed,
-              ticketId: seed.ticketId ?? conversation?.ticket_id ?? null,
-              config: conversation
-                ? {
-                    ...seed.config,
-                    presetId: conversation.preset_id ?? null,
-                    provider: conversation.provider,
-                    model: conversation.model,
-                    effort: conversation.effort ?? seed.config.effort,
-                    speed: conversation.speed ?? seed.config.speed,
-                    permissionMode: conversation.permission_mode ?? null,
-                    branch: branchOfWorktree(conversation.worktree_path) ?? seed.config.branch,
-                  }
-                : seed.config,
-            }) : undefined}
+            todoMode={todoMode}
+            onTodoModeChange={onTodoModeChange}
+            onTodoCreated={onTodoCreated}
             message={message}
             onMessageChange={handleMessageChange}
             focusRequest={focusRequest}

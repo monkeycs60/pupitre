@@ -3,16 +3,15 @@ import type { Attachment, ConversationSpeed, PresetPermissionMode, Provider } fr
 import { httpUrl } from './transport'
 
 export type TodoStatus = 'backlog' | 'queued' | 'running' | 'awaiting_validation' | 'done' | 'blocked'
+export type TodoFinish = 'none' | 'commit' | 'commit_push'
+export const TODO_FINISH_LABELS: Record<TodoFinish, string> = { none: 'Sans commit', commit: 'Commit', commit_push: 'Commit & push' }
 export interface TodoInput {
   status?: 'backlog' | 'queued'
   title?: string
   message: string
-  checks?: string[]
   targetBranch?: string | null
   ticketId?: string | null
-  integrate?: boolean
-  autonomy?: 'local' | 'investigate'
-  dependsOn?: string | null
+  finish?: TodoFinish
   provider: Provider
   model: string
   effort?: string | null
@@ -29,10 +28,9 @@ export interface TodoItem {
   message: string
   ticket_id: string | null
   target_branch: string | null
-  integrate: boolean
-  autonomy: 'local' | 'investigate'
-  depends_on: string | null
+  finish: TodoFinish
   status: TodoStatus
+  execution_completed?: boolean
   conversation_id: string | null
   branch: string | null
   worktree_path: string | null
@@ -47,7 +45,6 @@ export interface TodoItem {
   preset_id?: string | null
   permission_mode?: PresetPermissionMode | null
   attachments: Attachment[]
-  checks: string[]
 }
 export interface TodoSnapshot {
   items: TodoItem[]
@@ -55,6 +52,11 @@ export interface TodoSnapshot {
 }
 export const TODO_LABELS: Record<TodoStatus, string> = {
   backlog: 'À faire', queued: 'En file', running: 'En cours', awaiting_validation: 'À valider', done: 'Terminée', blocked: 'Bloquée',
+}
+/** Une tâche que la pile peut encore confier à un agent : aucune exécution n'a commencé. */
+export function isStartable(item: TodoItem): boolean {
+  return ['backlog', 'queued', 'blocked'].includes(item.status)
+    && !item.conversation_id && !item.branch && !item.worktree_path && !item.execution_completed
 }
 export async function todoRequest<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(httpUrl(path), {
@@ -73,10 +75,11 @@ export const completeTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${
 export const reopenTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/reopen`, 'POST', {})
 export const enqueueTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}/enqueue`, 'POST', {})
 export const startTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}/start`, 'POST', {})
-export const reconcileTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}/reconcile`, 'POST', {})
+export const linkTodo = (id: string, conversationId: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/link`, 'POST', { conversationId })
 export const deleteTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}`, 'DELETE')
 export const setTodoQueue = (projectId: string, running: boolean) => todoRequest(`/api/projects/${encodeURIComponent(projectId)}/todos/queue`, 'POST', { running })
 export const reorderTodos = (projectId: string, ids: string[]) => todoRequest(`/api/projects/${encodeURIComponent(projectId)}/todos/reorder`, 'POST', { ids })
+export const drainTodos = (projectId: string) => todoRequest<TodoSnapshot>(`/api/projects/${encodeURIComponent(projectId)}/todos/drain`, 'POST', {})
 
 const EMPTY: TodoSnapshot = { items: [], queue: { running: false, activeTodoId: null } }
 export function useTodos(projectId: string | null) {

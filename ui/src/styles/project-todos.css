@@ -1,34 +1,84 @@
-.project-todos { min-width:0; }
-.project-tasks-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 0 20px; }
-.project-tasks-header h2 { margin:0; font-size:16px; font-weight:600; color:var(--text-strong); }
-.project-tasks-header .primary-button { padding:6px 10px; font-size:12px; }
-.project-task-list { padding:0; }
-.project-task-filters { display:flex; gap:8px; padding-bottom:18px; }
-.project-task-filters input, .project-task-filters select { min-width:0; padding:7px 9px; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--bg-input); color:var(--text-muted); font:inherit; font-size:12px; }
-.project-task-filters input { flex:1; width:0; }
-.project-task-filters select { max-width:110px; }
-.project-task-queue { display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid var(--border-subtle); padding:0 0 12px; font-size:12px; color:var(--text-muted); }
-.project-task-queue .text-button { font-size:12px; color:var(--accent-bright); padding:4px; }
-.project-task-group { padding:4px 0 14px; }
-.project-task-group h3 { display:flex; align-items:baseline; gap:8px; margin:12px 0 6px; color:var(--text-muted); font-size:12px; font-weight:500; }
-.project-task-group h3 span { color:var(--text-faint); font-family:var(--font-mono); font-size:11px; }
-.project-task-row { margin:0 -8px; padding:0 8px; border-radius:var(--r-sm); min-height:46px; gap:10px; }
-.project-task-row + .project-task-row { border-top:1px solid var(--border-subtle); }
-.project-task-row .todo-row-main { padding:10px 0; gap:3px; }
-.project-task-row .todo-row-title { font-size:13px; line-height:1.5; }
-.project-task-row[data-status='done'] .todo-row-title { color:var(--text-muted); }
-.project-task-check, .project-task-status { flex:none; display:flex; align-items:center; justify-content:center; width:15px; height:15px; color:var(--text-faint); font-size:11px; }
-.project-task-check { border:1px solid var(--border-strong); border-radius:4px; background:transparent; padding:0; cursor:pointer; transition:background 140ms,border-color 140ms,color 140ms; }
-.project-task-check:hover { border-color:var(--accent); background:var(--accent-soft); }
-.project-task-check.is-done { border-color:var(--ok); color:var(--ok); }
-.project-task-status.is-running { color:var(--accent-bright); }
-.project-task-status.is-blocked { color:var(--warn); }
-.project-task-status.is-done { color:var(--ok); }
-.project-task-meta { color:var(--text-faint); font-size:11px; line-height:1.5; }
-.project-task-empty { padding:20px 0; }
-.project-task-empty strong { font-size:13px; font-weight:500; }
-.project-task-empty p { color:var(--text-muted); font-size:12px; line-height:1.7; max-width:330px; }
-.conversation-list-heading > span { color:var(--text-muted); font-size:12px; display:flex; align-items:baseline; gap:6px; }
-.conversation-list-heading > span > span { color:var(--text-faint); font-family:var(--font-mono); font-size:10px; }
-.project-sections-list button { border-radius:var(--r-sm); }
-@media (prefers-reduced-motion:reduce) { .project-task-check { transition:none; } }
+.project-todos { min-width: 0; }
+.project-tasks-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 16px; }
+.project-tasks-header h2 { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-strong); }
+.project-tasks-header .primary-button { padding: 6px 10px; font-size: 12px; }
+.project-task-list { padding: 0; }
+
+/* Barre : onglets Ouvertes / Terminées à gauche, filtre discret à droite. */
+.project-task-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 14px; }
+.project-task-tabs { display: inline-flex; gap: 2px; padding: 2px; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--r-full); }
+.project-task-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border: 0; border-radius: var(--r-full); background: transparent; color: var(--text-faint); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.project-task-tabs button:hover { color: var(--text); }
+.project-task-tabs button[aria-selected='true'] { color: var(--text-strong); background: var(--bg-raised); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
+.project-task-tabs button span { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); }
+.project-task-tabs button[aria-selected='true'] span { color: var(--text-muted); }
+.project-task-search { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-full); color: var(--text-faint); transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), width var(--dur-fast) var(--ease); }
+.project-task-search:hover, .project-task-search:focus-within, .project-task-search.has-value { border-color: var(--border-subtle); background: var(--bg-input); color: var(--text-muted); }
+.project-task-search input { width: 64px; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 12px; outline: none; transition: width var(--dur-fast) var(--ease); }
+.project-task-search:focus-within input, .project-task-search.has-value input { width: 120px; }
+.project-task-search input::placeholder { color: var(--text-faint); }
+
+/* Dépilage : la pile s'exécute de haut en bas. */
+.project-task-queue { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--r-md); background: var(--bg-panel); font-size: 12px; color: var(--text-muted); }
+.project-task-queue.is-running { border-color: var(--accent-border); background: var(--accent-soft); color: var(--text); }
+.project-task-queue [role='status'] { display: inline-flex; align-items: center; gap: 8px; }
+.project-task-queue .primary-button, .project-task-queue .secondary-button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; }
+.project-task-pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-bright); box-shadow: 0 0 0 0 var(--accent-soft); animation: project-task-pulse 1.6s ease-out infinite; }
+@keyframes project-task-pulse { 0% { box-shadow: 0 0 0 0 rgba(139, 124, 255, 0.5); } 100% { box-shadow: 0 0 0 7px rgba(139, 124, 255, 0); } }
+
+/* Lignes */
+.project-task-rows { list-style: none; margin: 0; padding: 0; }
+.project-task-row { position: relative; margin: 0 -8px; padding: 0 6px 0 4px; border-radius: var(--r-sm); min-height: 44px; gap: 8px; align-items: center; transition: background-color var(--dur-fast) var(--ease), opacity 320ms var(--ease), transform 320ms var(--ease); }
+.project-task-row + .project-task-row::before { content: ''; position: absolute; top: 0; left: 30px; right: 8px; border-top: 1px solid var(--border-subtle); }
+.project-task-row .todo-row-main { flex: 1; min-width: 0; padding: 9px 0; gap: 3px; }
+.project-task-row .todo-row-title { font-size: 13px; line-height: 1.45; }
+.project-task-row.is-done .todo-row-title { color: var(--text-muted); text-decoration: line-through; text-decoration-color: var(--border-strong); }
+.project-task-row.is-leaving { opacity: 0.35; transform: translateX(6px); }
+.project-task-row.is-leaving .todo-row-title { text-decoration: line-through; text-decoration-color: var(--ok); }
+.project-task-row.is-dragging { opacity: 0.4; }
+.project-task-row.is-drop-target::after { content: ''; position: absolute; left: 4px; right: 4px; top: -1px; height: 2px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.project-task-row[draggable='true'] { cursor: grab; }
+.project-task-row[draggable='true']:active { cursor: grabbing; }
+.project-task-grip { flex: none; display: flex; width: 10px; color: var(--text-faint); opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.project-task-row:hover .project-task-grip, .project-task-row:focus-within .project-task-grip { opacity: 0.7; }
+
+/* Coche : terminer d'un clic, l'état vit dans sa couleur. */
+.project-task-check { flex: none; display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border: 1.5px solid var(--border-strong); border-radius: 4px; background: transparent; color: transparent; cursor: pointer; transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.project-task-check:hover:not(:disabled) { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+.project-task-check.is-done { border-color: var(--ok); background: var(--ok); color: var(--on-accent); }
+.project-task-check.is-done:hover:not(:disabled) { background: transparent; color: var(--ok); }
+.project-task-check.is-awaiting_validation { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.project-task-check.is-blocked { border-color: var(--warn); }
+.project-task-check.is-queued { border-style: dashed; }
+.project-task-check.is-running { border-color: transparent; cursor: default; }
+.project-task-spinner { width: 14px; height: 14px; border: 2px solid var(--accent-soft); border-top-color: var(--accent-bright); border-radius: 50%; animation: project-task-spin 0.9s linear infinite; }
+@keyframes project-task-spin { to { transform: rotate(360deg); } }
+
+/* Méta : état, ticket, fin de tâche. */
+.project-task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--text-faint); font-size: 11px; line-height: 1.4; }
+.project-task-state { padding: 1px 6px; border-radius: var(--r-full); background: var(--neutral-soft); color: var(--text-muted); font-size: 10px; font-weight: 500; letter-spacing: 0.01em; }
+.project-task-state.is-running { color: var(--accent-bright); background: var(--accent-soft); }
+.project-task-state.is-awaiting_validation { color: var(--accent-bright); background: var(--accent-soft); }
+.project-task-state.is-blocked { color: var(--warn); background: var(--warn-soft); }
+.project-task-state.is-queued { color: var(--text-muted); }
+.project-task-ticket { font-family: var(--font-mono); font-size: 10px; }
+.project-task-error { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--warn); }
+
+/* Actions sur survol : lancer, conversation, supprimer. */
+.project-task-actions { flex: none; display: flex; gap: 2px; opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.project-task-row:hover .project-task-actions, .project-task-row:focus-within .project-task-actions, .project-task-actions:has(.is-linked) { opacity: 1; }
+.project-task-actions button { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-faint); cursor: pointer; transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.project-task-actions button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-strong); }
+.project-task-actions button:disabled { opacity: 0.35; cursor: default; }
+.project-task-actions button.is-linked { color: var(--accent-bright); }
+.project-task-actions button.is-danger:hover:not(:disabled) { color: var(--danger); background: var(--danger-soft); }
+.project-task-row:not(:hover):not(:focus-within) .project-task-actions button:not(.is-linked) { visibility: hidden; }
+
+.project-task-empty { padding: 20px 0; }
+.project-task-empty strong { font-size: 13px; font-weight: 500; }
+.project-task-empty p { color: var(--text-muted); font-size: 12px; line-height: 1.7; max-width: 330px; }
+.project-task-empty em { font-style: normal; color: var(--accent-bright); }
+.conversation-list-heading > span { color: var(--text-muted); font-size: 12px; display: flex; align-items: baseline; gap: 6px; }
+.conversation-list-heading > span > span { color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; }
+.project-sections-list button { border-radius: var(--r-sm); }
+@media (prefers-reduced-motion: reduce) { .project-task-check, .project-task-row, .project-task-pulse, .project-task-spinner { transition: none; animation: none; } }

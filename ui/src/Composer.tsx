@@ -16,7 +16,8 @@ import {
   uploadMedia,
 } from './api'
 import { buildCreateConversationInput } from './conversationDraft'
-import type { TodoDraftSeed } from './todoDraft'
+import { buildTodoInput } from './todoDraft'
+import { createTodo, TODO_FINISH_LABELS, type TodoFinish, type TodoItem } from './todos'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { ProviderMark } from './ProviderMark'
 import { ComposerPalette, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
@@ -29,8 +30,11 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { parseSidequestDirective } from './sidequestDirective'
 
 interface ComposerProps {
-  /** Transforme le brouillon courant en TODO préparée au lieu de l'envoyer. */
-  onDraftToTodo?: (seed: TodoDraftSeed) => void
+  /** Mode tâche d'une nouvelle conversation : le même formulaire alimente la
+   *  pile du projet au lieu d'ouvrir un fil. */
+  todoMode?: boolean
+  onTodoModeChange?: (todoMode: boolean) => void
+  onTodoCreated?: (todo: TodoItem) => void
   conversationId: string | null
   project: Project
   quotas: QuotaSnapshot
@@ -201,7 +205,9 @@ export function Composer({
   quotas,
   isRunning,
   onConversationCreated,
-  onDraftToTodo,
+  todoMode = false,
+  onTodoModeChange,
+  onTodoCreated,
   message,
   onMessageChange,
   focusRequest,
@@ -236,8 +242,8 @@ export function Composer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [configReady, setConfigReady] = useState(!isNewConversation)
-  const [sendMenuOpen, setSendMenuOpen] = useState(false)
-  const sendGroupRef = useRef<HTMLDivElement>(null)
+  const [finish, setFinish] = useState<TodoFinish>('none')
+  const isTodoMode = isNewConversation && todoMode && onTodoModeChange !== undefined
   const [toast, setToast] = useState<string | null>(null)
   const [trigger, setTrigger] = useState<ComposerPaletteTrigger | null>(null)
   const [paletteIndex, setPaletteIndex] = useState(0)
@@ -261,26 +267,6 @@ export function Composer({
     const area = textareaRef.current
     if (area !== null) resizeComposerTextarea(area)
   }, [message])
-
-  useEffect(() => {
-    if (!sendMenuOpen) return
-    function closeOnOutsideClick(event: PointerEvent) {
-      if (!sendGroupRef.current?.contains(event.target as Node)) setSendMenuOpen(false)
-    }
-    document.addEventListener('pointerdown', closeOnOutsideClick)
-    return () => document.removeEventListener('pointerdown', closeOnOutsideClick)
-  }, [sendMenuOpen])
-
-  const hasDraft = message.trim().length > 0 || attachments.length > 0
-  const canDraftToTodo = onDraftToTodo !== undefined && hasDraft && pendingUploads === 0 && !isSubmitting && !canSteer
-
-  function handleDraftToTodo() {
-    if (!onDraftToTodo || !canDraftToTodo) return
-    setSendMenuOpen(false)
-    onDraftToTodo({ message: message.trim(), attachments: attachments.map((item) => item.attachment), config, ticketId })
-    onMessageChange('')
-    setAttachments([])
-  }
 
   function syncPaletteTrigger(value: string, cursor: number) {
     const next = paletteTrigger(value, cursor)
@@ -485,7 +471,16 @@ export function Composer({
       .map((attachment) => attachment.name)
 
     try {
-      if (conversationId === null) {
+      if (isTodoMode) {
+        const todo = await createTodo(project.id, {
+          ...buildTodoInput(config, { message: trimmedMessage, ticketId, finish, attachments: attachmentInputs }),
+          status: 'backlog',
+        })
+        onMessageChange('')
+        setAttachments([])
+        setToast(null)
+        onTodoCreated?.(todo)
+      } else if (conversationId === null) {
         const conversation = await createConversation(buildCreateConversationInput({
           projectId: project.id,
           ...config,
@@ -603,7 +598,7 @@ export function Composer({
       ) : null}
 
       <form
-        className={`composer${isDragActive ? ' is-drag-active' : ''}`}
+        className={`composer${isDragActive ? ' is-drag-active' : ''}${isTodoMode ? ' is-todo' : ''}`}
         onSubmit={(event) => void handleSubmit(event)}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
@@ -686,9 +681,11 @@ export function Composer({
           />
           {message === '' && !isRunning ? (
             <div className="composer-placeholder" aria-hidden="true">
-              Écris ton message, ou <span className="composer-ph-key">/</span> pour une action,{' '}
-              <span className="composer-ph-key">$</span> pour un skill,{' '}
-              <span className="composer-ph-key">@</span> pour un outil
+              {isTodoMode ? <>Décris la tâche à empiler : la première ligne sert de titre</> : <>
+                Écris ton message, ou <span className="composer-ph-key">/</span> pour une action,{' '}
+                <span className="composer-ph-key">$</span> pour un skill,{' '}
+                <span className="composer-ph-key">@</span> pour un outil
+              </>}
             </div>
           ) : null}
         </div>
@@ -701,16 +698,36 @@ export function Composer({
 
         <div className="composer-actions">
           <div className="composer-tools">
+            {isNewConversation && onTodoModeChange ? (
+              <div className="composer-mode" role="group" aria-label="Destination du message">
+                <button type="button" className={!todoMode ? 'is-active' : ''} aria-pressed={!todoMode} onClick={() => onTodoModeChange(false)}>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>
+                  Conversation
+                </button>
+                <button type="button" className={todoMode ? 'is-active' : ''} aria-pressed={todoMode} onClick={() => onTodoModeChange(true)}>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m2.5 4 1.2 1.2L6 2.9M8 4h5.5M2.5 8.3l1.2 1.2L6 7.2M8 8.3h5.5M2.5 12.6l1.2 1.2L6 11.5M8 12.6h5.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  Tâche
+                </button>
+              </div>
+            ) : null}
             {isNewConversation ? (
               <ConfigPanel
                 project={project}
                 quotas={quotas}
                 config={config}
                 memoryKey={project.id}
+                applyProjectDefault={initialConfig?.provider === undefined}
                 onConfigChange={setConfig}
                 onError={setToast}
                 onReady={setConfigReady}
               />
+            ) : null}
+            {isTodoMode ? (
+              <label className="composer-finish" title="Ce que la file fait du résultat de l’agent">
+                <select value={finish} onChange={(event) => setFinish(event.target.value as TodoFinish)} aria-label="Fin de tâche">
+                  {(Object.keys(TODO_FINISH_LABELS) as TodoFinish[]).map((value) => <option key={value} value={value}>{TODO_FINISH_LABELS[value]}</option>)}
+                </select>
+              </label>
             ) : null}
             <input
               ref={fileInputRef}
@@ -743,7 +760,7 @@ export function Composer({
               </>
             ) : null}
           </div>
-          <div className="composer-send-group" ref={sendGroupRef}>
+          <div className="composer-send-group">
             {isRunning && conversationId !== null ? (
               <button
                 type="button"
@@ -754,36 +771,12 @@ export function Composer({
                 {isCancelling ? 'Annulation…' : 'Annuler le tour'}
               </button>
             ) : null}
-            <button type="submit" className={`send-button${isRunning ? ' is-running' : ''}`} disabled={!canSubmit}>
+            <button type="submit" className={`send-button${isRunning ? ' is-running' : ''}${isTodoMode ? ' is-todo' : ''}`} disabled={!canSubmit}>
               {isSubmitting
-                ? isNewConversation
-                  ? 'Création…'
-                  : 'Envoi…'
-                : canSteer ? 'Orienter' : 'Envoyer'}
+                ? isTodoMode ? 'Ajout…' : isNewConversation ? 'Création…' : 'Envoi…'
+                : isTodoMode ? 'Empiler' : canSteer ? 'Orienter' : 'Envoyer'}
               {!isSubmitting ? <kbd aria-hidden="true">⏎</kbd> : null}
             </button>
-            {onDraftToTodo && !canSteer ? (
-              <button
-                type="button"
-                className="send-more"
-                aria-label="Autres façons d’envoyer"
-                aria-haspopup="menu"
-                aria-expanded={sendMenuOpen}
-                disabled={!canDraftToTodo}
-                onClick={() => setSendMenuOpen((open) => !open)}
-                onKeyDown={(event) => { if (event.key === 'Escape') setSendMenuOpen(false) }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </button>
-            ) : null}
-            {sendMenuOpen ? (
-              <div className="send-menu" role="menu" aria-label="Autres façons d’envoyer" onKeyDown={(event) => { if (event.key === 'Escape') setSendMenuOpen(false) }}>
-                <button type="button" role="menuitem" onClick={handleDraftToTodo}>
-                  Ajouter aux TODO
-                  <small>Garde le message, les pièces jointes et le modèle ; s’exécute quand tu dépiles la file.</small>
-                </button>
-              </div>
-            ) : null}
           </div>
         </div>
       </form>

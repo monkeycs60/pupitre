@@ -2480,8 +2480,8 @@ export function createServer(deps: ServerDeps) {
           return empty(204);
         }
 
-        const todoProjectRoute = pathname.match(/^\/api\/projects\/([^/]+)\/todos(?:\/(queue|reorder))?$/);
-        const todoRoute = pathname.match(/^\/api\/todos\/([^/]+)(?:\/(start|reconcile|complete|reopen|enqueue))?$/);
+        const todoProjectRoute = pathname.match(/^\/api\/projects\/([^/]+)\/todos(?:\/(queue|reorder|drain))?$/);
+        const todoRoute = pathname.match(/^\/api\/todos\/([^/]+)(?:\/(start|complete|reopen|enqueue|link))?$/);
         if (todoProjectRoute || todoRoute) {
           if (!deps.todos) throw new HttpError(503, "Service TODO indisponible");
           try {
@@ -2500,16 +2500,21 @@ export function createServer(deps: ServerDeps) {
                 if (!Array.isArray(body.ids) || body.ids.some(id => typeof id !== "string")) throw new HttpError(400, "ids invalide");
                 return json(deps.todos.reorder(id, body.ids as string[]));
               }
+              if (action === "drain" && request.method === "POST") return json(await deps.todos.drain(id), 202);
             } else if (todoRoute) {
               const id = decodeURIComponent(todoRoute[1]!);
               const action = todoRoute[2];
               if (!action && request.method === "PATCH") return json(await deps.todos.edit(id, await readObject(request)));
               if (!action && request.method === "DELETE") { deps.todos.remove(id); return empty(204); }
               if (action === "start" && request.method === "POST") return json(deps.todos.start(id), 202);
-              if (action === "reconcile" && request.method === "POST") return json(deps.todos.reconcile(id), 202);
               if (action === "complete" && request.method === "POST") return json(deps.todos.complete(id));
               if (action === "reopen" && request.method === "POST") return json(deps.todos.reopen(id));
               if (action === "enqueue" && request.method === "POST") return json(await deps.todos.enqueue(id));
+              if (action === "link" && request.method === "POST") {
+                const body = await readObject(request);
+                if (typeof body.conversationId !== "string") throw new HttpError(400, "conversationId requis");
+                return json(deps.todos.link(id, body.conversationId));
+              }
             }
           } catch (error) {
             if (error instanceof TodoError) throw new HttpError(error.status, error.message);
