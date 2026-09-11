@@ -1,4 +1,4 @@
-import { afterEach, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement, useState } from 'react'
 import type { ConversationConfig } from './ConfigPanel'
@@ -9,6 +9,10 @@ if (typeof document === 'undefined') GlobalRegistrator.register()
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { ConfigPanel } = await import('./ConfigPanel')
 const defaultFetch = globalThis.fetch
+
+beforeEach(() => {
+  localStorage.clear()
+})
 
 afterEach(() => {
   cleanup()
@@ -60,170 +64,198 @@ const initialConfig: ConversationConfig = {
 
 const quotas: QuotaSnapshot = { claude: null, codex: null, grok: null }
 
-test('remplace le panneau de création par le chip du preset par défaut', async () => {
-  globalThis.fetch = mock(() => Promise.resolve(new Response(JSON.stringify([speedPreset]), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  }))) as typeof fetch
+function servePresets(presets: Preset[]) {
+  globalThis.fetch = mock((input: string | URL) => {
+    const body = String(input).endsWith('/git')
+      ? { branches: [], worktrees: [], commits: [], currentBranch: 'develop' }
+      : presets
+    return Promise.resolve(new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }))
+  }) as unknown as typeof fetch
+}
+
+test('ouvre sur le preset par défaut du projet quand aucune mémoire n’existe', async () => {
+  servePresets([speedPreset])
+  const changes: ConversationConfig[] = []
+
+  render(createElement(ConfigPanel, {
+    project,
+    quotas,
+    config: initialConfig,
+    memoryKey: project.id,
+    onConfigChange: (next: ConversationConfig) => changes.push(next),
+    onError: () => undefined,
+  }))
+
+  await waitFor(() => expect(changes.length).toBeGreaterThan(0))
+  expect(changes.at(-1)).toEqual(expect.objectContaining({
+    provider: 'codex',
+    model: 'gpt-5.6-luna',
+    effort: 'low',
+  }))
+})
+
+test('la dernière configuration lancée revient avant le défaut du projet', async () => {
+  servePresets([speedPreset])
+  localStorage.setItem('pupitre:launch-config:project-1', JSON.stringify({
+    provider: 'claude',
+    model: 'opus',
+    effort: 'xhigh',
+    speed: 'standard',
+    permissionMode: 'bypassPermissions',
+    orchestrator: false,
+    subagentPresetId: null,
+    subagentEffort: null,
+  }))
+  const changes: ConversationConfig[] = []
+
+  render(createElement(ConfigPanel, {
+    project,
+    quotas,
+    config: initialConfig,
+    memoryKey: project.id,
+    onConfigChange: (next: ConversationConfig) => changes.push(next),
+    onError: () => undefined,
+  }))
+
+  await waitFor(() => expect(changes.length).toBeGreaterThan(0))
+  expect(changes.at(-1)).toEqual(expect.objectContaining({
+    provider: 'claude',
+    model: 'opus',
+    effort: 'xhigh',
+    permissionMode: 'bypassPermissions',
+    orchestrator: false,
+  }))
+})
+
+test('un modèle disparu du catalogue ne ressuscite pas par la mémoire', async () => {
+  servePresets([speedPreset])
+  localStorage.setItem('pupitre:launch-config:project-1', JSON.stringify({
+    provider: 'claude',
+    model: 'fable-3-retire',
+    effort: 'high',
+  }))
+  const changes: ConversationConfig[] = []
+
+  render(createElement(ConfigPanel, {
+    project,
+    quotas,
+    config: initialConfig,
+    memoryKey: project.id,
+    onConfigChange: (next: ConversationConfig) => changes.push(next),
+    onError: () => undefined,
+  }))
+
+  await waitFor(() => expect(changes.length).toBeGreaterThan(0))
+  expect(changes.at(-1)).toEqual(expect.objectContaining({ model: 'gpt-5.6-luna' }))
+})
+
+test('changer un réglage écrit la mémoire du projet', async () => {
+  servePresets([speedPreset])
   function Harness() {
     const [config, setConfig] = useState(initialConfig)
     return createElement(ConfigPanel, {
       project,
       quotas,
       config,
+      memoryKey: project.id,
       onConfigChange: setConfig,
-      onProjectUpdated: () => undefined,
       onError: () => undefined,
     })
   }
 
   render(createElement(Harness))
 
-  expect(await screen.findByRole('button', { name: /vitesse.*luna.*low/i })).toBeTruthy()
-  expect(screen.queryByRole('heading', { name: 'Configuration' })).toBeNull()
+  await waitFor(() => expect(screen.getByRole('radio', { name: 'Codex' }).getAttribute('aria-checked')).toBe('true'))
+  fireEvent.click(screen.getByRole('radio', { name: 'Grok' }))
+
+  await waitFor(() => {
+    const raw = localStorage.getItem('pupitre:launch-config:project-1')
+    expect(raw === null ? null : (JSON.parse(raw) as { model: string }).model).toBe('grok-4.6')
+  })
 })
 
-test("écraser un preset personnalisé laisse intacte sa configuration de relecture", async () => {
-  const customPreset: Preset = {
-    ...speedPreset,
-    id: 'custom-1',
-    name: 'Ma config',
-    speed: 'standard',
-    effort: 'high',
-    review_provider: 'claude',
-    review_model: 'opus',
-    review_effort: 'high',
-    built_in: false,
-  }
-  const bodies: Array<Record<string, unknown>> = []
-  globalThis.fetch = mock((input: string, init?: RequestInit) => {
-    if (init?.method === 'PUT') {
-      bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>)
-      return Promise.resolve(new Response(JSON.stringify(customPreset), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }))
-    }
-    return Promise.resolve(new Response(JSON.stringify([customPreset]), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    }))
-  }) as unknown as typeof fetch
-
+test('sans clé de mémoire, rien n’est écrit : une bascule de modèle ne dicte pas le prochain lancement', async () => {
+  servePresets([speedPreset])
   function Harness() {
-    const [config, setConfig] = useState<ConversationConfig>({ ...initialConfig, provider: 'codex', model: 'gpt-5.6-luna', effort: 'low' })
-    // L'utilisateur a choisi un effort plus bas que le preset : la sélection du
-    // preset ne doit pas effacer cet écart, sinon rien n'est « modifié ».
+    const [config, setConfig] = useState(initialConfig)
     return createElement(ConfigPanel, {
-      project: { ...project, default_preset_id: null },
+      project,
       quotas,
       config,
-      onConfigChange: (next: ConversationConfig) => setConfig({ ...next, effort: 'low' }),
-      onProjectUpdated: () => undefined,
+      applyProjectDefault: false,
+      onConfigChange: setConfig,
       onError: () => undefined,
     })
   }
 
   render(createElement(Harness))
 
-  fireEvent.click(await screen.findByRole('button', { name: /réglages libres/i }))
-  fireEvent.click(screen.getByRole('menuitemradio', { name: /ma config/i }))
-  fireEvent.click(screen.getByRole('button', { name: /ma config.*modifié/i }))
-  fireEvent.click(screen.getByRole('button', { name: /écraser ma config/i }))
+  fireEvent.click(await screen.findByRole('radio', { name: 'Grok' }))
 
-  await waitFor(() => expect(bodies).toHaveLength(1))
-  expect(bodies[0]).not.toHaveProperty('review_provider')
-  expect(bodies[0]).not.toHaveProperty('review_model')
-  expect(bodies[0]).not.toHaveProperty('review_effort')
+  expect(localStorage.getItem('pupitre:launch-config:project-1')).toBeNull()
 })
 
-test("appliquer le preset par défaut du projet ne perd pas la branche ni le ticket", async () => {
+test("appliquer le défaut ne perd ni la branche ni le ticket", async () => {
+  servePresets([speedPreset])
   const changes: ConversationConfig[] = []
-  globalThis.fetch = mock((input: string | URL) => {
-    const url = String(input)
-    if (url.endsWith('/git')) {
-      return Promise.resolve(new Response(JSON.stringify({
-        branches: [],
-        worktrees: [],
-        commits: [],
-        currentBranch: 'develop',
-      }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }))
-    }
-    return Promise.resolve(new Response(JSON.stringify([{
-      id: 'preset-1',
-      name: 'Éco',
-      provider: 'claude',
-      model: 'claude-haiku-4-5-20251001',
-      effort: 'low',
-      speed: 'standard',
-      permission_mode: null,
-      orchestrator: true,
-      subagent_preset_id: null,
-      subagent_effort: null,
-      review_provider: 'codex',
-      review_model: 'gpt-5.6-sol',
-      review_effort: 'high',
-      built_in: true,
-      created_at: '2026-08-09T00:00:00.000Z',
-      updated_at: '2026-08-09T00:00:00.000Z',
-    }]), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    }))
-  }) as unknown as typeof fetch
 
   render(createElement(ConfigPanel, {
-    project: { ...project, default_preset_id: 'preset-1' },
+    project,
     quotas,
-    config: {
-      ...initialConfig,
-      branch: 'feature/TECH-1',
-      ticketKey: 'TECH-1',
-    },
+    config: { ...initialConfig, branch: 'feature/TECH-1', ticketKey: 'TECH-1' },
+    memoryKey: project.id,
     onConfigChange: (next: ConversationConfig) => changes.push(next),
-    onProjectUpdated: () => undefined,
     onError: () => undefined,
-    applyProjectDefault: true,
   }))
 
   await waitFor(() => expect(changes.length).toBeGreaterThan(0))
   expect(changes.at(-1)).toEqual(expect.objectContaining({
-    presetId: 'preset-1',
     branch: 'feature/TECH-1',
     ticketKey: 'TECH-1',
   }))
 })
 
 test('un défaut de TODO remplace le défaut du projet', async () => {
+  servePresets([
+    speedPreset,
+    { ...speedPreset, id: 'todo', name: 'TODO', provider: 'claude', model: 'haiku', effort: 'medium' },
+  ])
   const changes: ConversationConfig[] = []
-  const presets = [
-    { ...speedPreset, id: 'speed', name: 'Vitesse' },
-    { ...speedPreset, id: 'todo', name: 'TODO', provider: 'claude', model: 'claude-haiku-4-5-20251001', effort: 'medium' },
-  ]
-  globalThis.fetch = mock(() => Promise.resolve(new Response(JSON.stringify(presets), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  }))) as unknown as typeof fetch
 
   render(createElement(ConfigPanel, {
-    project: { ...project, default_preset_id: 'speed', default_todo_preset_id: 'todo' },
+    project: { ...project, default_todo_preset_id: 'todo' },
     quotas,
     config: initialConfig,
-    onConfigChange: (next: ConversationConfig) => changes.push(next),
-    onProjectUpdated: () => undefined,
-    onError: () => undefined,
-    // C'est ce que fait l'éditeur de TODO : viser le défaut des TODO.
     defaultPresetId: 'todo',
+    onConfigChange: (next: ConversationConfig) => changes.push(next),
+    onError: () => undefined,
   }))
 
   await waitFor(() => expect(changes.length).toBeGreaterThan(0))
   expect(changes.at(-1)).toEqual(expect.objectContaining({
     presetId: 'todo',
     provider: 'claude',
-    model: 'claude-haiku-4-5-20251001',
+    model: 'haiku',
     effort: 'medium',
   }))
+})
+
+test('la branche courante du dépôt sert de repère dans le champ', async () => {
+  servePresets([speedPreset])
+
+  render(createElement(ConfigPanel, {
+    project,
+    quotas,
+    config: initialConfig,
+    onConfigChange: () => undefined,
+    onError: () => undefined,
+    applyProjectDefault: false,
+  }))
+
+  await waitFor(() => {
+    expect(screen.getByRole('combobox', { name: 'Branche cible' }).getAttribute('placeholder')).toBe('develop')
+  })
 })

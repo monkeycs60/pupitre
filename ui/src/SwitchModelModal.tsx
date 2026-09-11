@@ -18,7 +18,6 @@ interface SwitchModelModalProps {
   events: AppEvent[]
   project: Project
   quotas: QuotaSnapshot
-  onProjectUpdated: (project: Project) => void
   onClose: () => void
   onSwitched: (conversation: Conversation) => void
   onHandoff: (conversation: Conversation) => void
@@ -33,7 +32,6 @@ export function SwitchModelModal({
   events,
   project,
   quotas,
-  onProjectUpdated,
   onClose,
   onSwitched,
   onHandoff,
@@ -114,10 +112,10 @@ export function SwitchModelModal({
             quotas={quotas}
             config={config}
             onConfigChange={setConfig}
-            onProjectUpdated={onProjectUpdated}
             onError={setError}
             applyProjectDefault={false}
             showConversationSettings={false}
+            placement="bottom"
           />
 
           {isHandoff ? (

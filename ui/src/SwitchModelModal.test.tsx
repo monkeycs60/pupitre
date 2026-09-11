@@ -96,15 +96,15 @@ test('confirme une passation Claude après une sélection dans le même sélecte
     events: [],
     project,
     quotas,
-    onProjectUpdated: () => undefined,
     onClose: () => undefined,
     onSwitched: () => undefined,
     onHandoff: (next) => { handoffs.push(next) },
   }))
 
-  fireEvent.click(await screen.findByRole('button', { name: /réglages libres/i }))
-  expect(screen.queryByRole('button', { name: 'Autonomie' })).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Sub-agents' })).toBeNull()
+  fireEvent.click(await screen.findByRole('radio', { name: 'Claude' }))
+  // La bascule ne règle que le moteur : l'autonomie et les sub-agents
+  // appartiennent à la conversation et ont leurs propres routes.
+  expect(screen.queryByRole('button', { name: 'Réglages du tour' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
   fireEvent.click(screen.getByRole('menuitemradio', { name: 'Fable 5' }))
   fireEvent.click(screen.getByRole('button', { name: 'Passer à claude' }))
@@ -113,7 +113,7 @@ test('confirme une passation Claude après une sélection dans le même sélecte
   expect(handoffPayload).toEqual({
     provider: 'claude',
     model: 'fable-5',
-    effort: 'high',
+    effort: 'low',
     speed: null,
     orchestrator: true,
   })

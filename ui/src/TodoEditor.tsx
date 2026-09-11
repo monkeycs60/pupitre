@@ -16,12 +16,11 @@ interface Props {
   initialTicketId?: string | null
   /** Brouillon repris depuis un composeur : message, pièces jointes, modèle et ticket. */
   initial?: TodoDraftSeed | null
-  onProjectUpdated: (project: Project) => void
   onCreated: (todo: TodoItem) => void
   onCancel: () => void
 }
 
-export function TodoEditor({ project, items, quotas, initialTicketId = null, initial = null, onProjectUpdated, onCreated, onCancel }: Props) {
+export function TodoEditor({ project, items, quotas, initialTicketId = null, initial = null, onCreated, onCancel }: Props) {
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState(initial?.message ?? '')
   const [ticketId, setTicketId] = useState<string | null>(initial?.ticketId ?? initialTicketId)
@@ -98,7 +97,7 @@ export function TodoEditor({ project, items, quotas, initialTicketId = null, ini
       </div>
       <div className="todo-config">
         <span>Modèle et branche cible</span>
-        <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onProjectUpdated={onProjectUpdated} onError={setError} onReady={setConfigReady} applyProjectDefault={initial === null} defaultPresetId={project.default_todo_preset_id ?? null} />
+        <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onError={setError} onReady={setConfigReady} placement="bottom" applyProjectDefault={initial === null} defaultPresetId={project.default_todo_preset_id ?? null} />
       </div>
       <details className="todo-verification">
         <summary>Options de la tâche</summary>

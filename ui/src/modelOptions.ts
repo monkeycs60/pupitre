@@ -1,5 +1,14 @@
 import type { Provider } from './types'
 
+/** Ordre des providers dans toutes les listes et sélecteurs. */
+export const PROVIDERS = ['codex', 'claude', 'grok'] as const satisfies readonly Provider[]
+
+export const PROVIDER_LABELS: Record<Provider, string> = {
+  codex: 'Codex',
+  claude: 'Claude',
+  grok: 'Grok',
+}
+
 export const PROVIDER_MODELS = {
   claude: ['fable-5.1', 'fable-5', 'opus', 'sonnet', 'haiku'],
   codex: ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra'],
@@ -34,6 +43,18 @@ export const MODEL_LABELS: Record<string, string> = {
 /** Un modèle inconnu s'affiche tel quel plutôt que de disparaître. */
 export function modelLabel(model: string): string {
   return MODEL_LABELS[model] ?? model
+}
+
+/**
+ * Ce que coûte un cran d'effort, en trois mots : l'échelle est ordinale mais
+ * ses paliers n'ont pas de sens évident hors du contexte de chaque provider.
+ */
+export const EFFORT_HINTS: Record<string, string> = {
+  low: 'réponse directe',
+  medium: 'réflexion courte',
+  high: 'réflexion approfondie',
+  xhigh: 'analyse longue',
+  max: 'sans plafond de réflexion',
 }
 
 /**

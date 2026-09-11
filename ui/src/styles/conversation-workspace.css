@@ -129,7 +129,6 @@
 .conversation-workspace .composer-send-group { margin-left:auto; }
 .conversation-workspace .composer-model { max-width:210px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .conversation-workspace .composer-placeholder { white-space:normal; max-width:100%; overflow:hidden; }
-.conversation-workspace .config-branch { margin-left:0; }
 .conversation-workspace .config-panel { flex-wrap:wrap; }
 .is-located { outline:2px solid var(--accent); outline-offset:4px; border-radius:var(--r-sm); }
 .workspace-inspector .quota-card-grid { grid-template-columns:1fr; }
@@ -170,9 +169,4 @@
 .todo-attach-pending { color:var(--text-faint); font-size:12px; align-self:center; }
 
 
-.branch-autocomplete { position:relative; }
-.branch-suggestions { position:absolute; top:calc(100% + 4px); left:0; z-index:30; min-width:100%; max-width:360px; max-height:220px; overflow:auto; margin:0; padding:4px; list-style:none; background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--r-sm); }
-.branch-suggestions li { padding:8px 10px; color:var(--text); overflow-wrap:anywhere; cursor:pointer; }
-.branch-suggestions li:hover, .branch-suggestions li[aria-selected=true] { background:var(--accent-soft); }
-.todo-config .config-branch { margin-left:0; }
-.todo-config .branch-autocomplete input { width:280px; max-width:100%; }
+.todo-config .branch-field input { width:280px; max-width:100%; }

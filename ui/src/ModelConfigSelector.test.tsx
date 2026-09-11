@@ -24,224 +24,145 @@ const config: ConversationConfig = {
   subagentEffort: null,
 }
 
-function preset(index: number): Preset {
-  return {
-    id: `preset-${index}`,
-    name: `Preset ${index}`,
-    provider: 'claude',
-    model: 'fable-5',
-    effort: 'high',
-    speed: null,
-    permission_mode: null,
-    orchestrator: true,
-    subagent_preset_id: null,
-    subagent_effort: null,
-    review_provider: 'claude',
-    review_model: 'opus',
-    review_effort: 'high',
-    built_in: false,
-    created_at: '2026-08-09T00:00:00.000Z',
-    updated_at: '2026-08-09T00:00:00.000Z',
-  }
+function selector(overrides: Partial<Parameters<typeof ModelConfigSelector>[0]> = {}) {
+  return createElement(ModelConfigSelector, {
+    config,
+    presets: [] as Preset[],
+    quotas: emptyQuotas,
+    onConfigChange: () => undefined,
+    ...overrides,
+  })
 }
 
-test('permet de sélectionner le cent-unième preset sans limiter la liste', () => {
-  let selectedPresetId: string | null = null
-  render(createElement(ModelConfigSelector, {
-    config,
-    presets: Array.from({ length: 101 }, (_, index) => preset(index + 1)),
-    selectedPresetId: '',
-    quotas: emptyQuotas,
-    onConfigChange: () => undefined,
-    onPresetSelect: (next) => { selectedPresetId = next.id },
-  }))
+test('les trois providers sont proposés, seul le provider courant est coché', () => {
+  render(selector())
 
-  fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
-  fireEvent.click(screen.getByRole('menuitemradio', { name: /preset 101/i }))
-
-  expect(selectedPresetId).toBe('preset-101')
+  const providers = screen.getAllByRole('radio')
+  expect(providers.map((button) => button.getAttribute('aria-label'))).toEqual(['Codex', 'Claude', 'Grok'])
+  expect(providers.filter((button) => button.getAttribute('aria-checked') === 'true'))
+    .toEqual([screen.getByRole('radio', { name: 'Claude' })])
 })
 
-test('choisir un modèle d’un autre provider réinitialise les réglages dépendants', () => {
-  let nextConfig: ConversationConfig | null = null
-  render(createElement(ModelConfigSelector, {
-    config,
-    presets: [],
-    selectedPresetId: '',
-    quotas: emptyQuotas,
-    onConfigChange: (next) => { nextConfig = next },
-    onPresetSelect: () => undefined,
-  }))
+test('changer de provider emmène son modèle le plus capable et garde l’effort', () => {
+  let next: ConversationConfig | null = null
+  render(selector({ onConfigChange: (config) => { next = config } }))
 
-  fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
-  fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
-  fireEvent.click(screen.getByRole('menuitemradio', { name: '5.6 Luna' }))
+  fireEvent.click(screen.getByRole('radio', { name: 'Codex' }))
 
-  expect(nextConfig).toEqual({
-    ...config,
-    provider: 'codex',
-    model: 'gpt-5.6-luna',
-    effort: 'high',
-    speed: 'standard',
-  })
+  expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-6-astra', effort: 'high' })
 })
 
-test('ouvre le sous-menu modèle avec la flèche droite', () => {
-  render(createElement(ModelConfigSelector, {
-    config,
-    presets: [],
-    selectedPresetId: '',
-    quotas: emptyQuotas,
-    onConfigChange: () => undefined,
-    onPresetSelect: () => undefined,
-  }))
+test('un effort absent chez le nouveau provider retombe sur high', () => {
+  let next: ConversationConfig | null = null
+  render(selector({ config: { ...config, effort: 'max' }, onConfigChange: (config) => { next = config } }))
 
-  fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
-  const modelButton = screen.getByRole('button', { name: 'Modèle' })
-  modelButton.focus()
-  fireEvent.keyDown(modelButton, { key: 'ArrowRight' })
+  fireEvent.click(screen.getByRole('radio', { name: 'Grok' }))
 
-  expect(screen.getByRole('menu', { name: 'Choisir un modèle' })).toBeTruthy()
+  expect(next).toEqual({ ...config, provider: 'grok', model: 'grok-4.6', effort: 'high' })
 })
 
-test('ancre chaque sous-menu à son réglage déclencheur', () => {
-  render(createElement(ModelConfigSelector, {
-    config: { ...config, provider: 'codex', model: 'gpt-5.6-luna' },
-    presets: [],
-    selectedPresetId: '',
-    quotas: emptyQuotas,
-    onConfigChange: () => undefined,
-    onPresetSelect: () => undefined,
-  }))
+test('le menu des modèles ne liste que ceux du provider courant', () => {
+  render(selector({ config: { ...config, provider: 'grok', model: 'grok-4.6' } }))
 
-  fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
-
-  for (const [trigger, menuName] of [
-    ['Modèle', 'Choisir un modèle'],
-    ['Effort', 'Choisir l’effort'],
-    ['Vitesse', 'Choisir la vitesse'],
-    ['Autonomie', 'Choisir l’autonomie'],
-    ['Sub-agents', 'Configurer les sub-agents'],
-  ]) {
-    fireEvent.click(screen.getByRole('button', { name: trigger }))
-    const submenu = screen.getByRole('menu', { name: menuName })
-    expect(submenu.parentElement?.classList.contains('preset-selector-setting')).toBe(true)
-    expect(submenu.parentElement?.querySelector(`[aria-label="${trigger}"]`)).toBeTruthy()
-  }
-})
-
-test('liste les modèles Grok dans le sous-menu', () => {
-  render(createElement(ModelConfigSelector, {
-    config,
-    presets: [],
-    selectedPresetId: '',
-    quotas: emptyQuotas,
-    onConfigChange: () => undefined,
-    onPresetSelect: () => undefined,
-  }))
-
-  fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
   fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
 
-  const selector = screen.getByRole('menu', { name: 'Choisir un modèle' }).closest('.preset-selector')
-  expect(selector?.classList.contains('opens-top')).toBe(true)
-  expect(screen.getByRole('menuitemradio', { name: 'Grok 4.6' })).toBeTruthy()
+  expect(screen.getAllByRole('menuitemradio').map((item) => item.getAttribute('aria-label')))
+    .toEqual(['Grok 4.6', 'Grok 4.5'])
 })
 
-test('peut ouvrir les sous-menus vers la gauche dans un en-tête droit', () => {
-  render(createElement(ModelConfigSelector, {
-    config,
-    presets: [],
-    selectedPresetId: '',
-    quotas: emptyQuotas,
-    submenuPlacement: 'left',
-    onConfigChange: () => undefined,
-    onPresetSelect: () => undefined,
-  }))
+test('choisir un modèle ne touche qu’au modèle', () => {
+  let next: ConversationConfig | null = null
+  render(selector({ onConfigChange: (config) => { next = config } }))
 
-  fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
   fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Haiku 4.5' }))
 
-  expect(screen.getByRole('menu', { name: 'Choisir un modèle' }).closest('.preset-selector')?.classList.contains('submenus-left')).toBe(true)
+  expect(next).toEqual({ ...config, model: 'haiku' })
+  expect(screen.queryByRole('menu', { name: 'Choisir un modèle' })).toBeNull()
 })
 
-test('conserve le réglage d’effort des sub-agents dans le menu compact', () => {
-  let nextConfig: ConversationConfig | null = null
-  render(createElement(ModelConfigSelector, {
-    config,
-    presets: [],
-    selectedPresetId: '',
-    quotas: emptyQuotas,
-    onConfigChange: (next) => { nextConfig = next },
-    onPresetSelect: () => undefined,
-  }))
+test('l’effort propose les cinq crans de Claude et quatre chez Codex', () => {
+  const { unmount } = render(selector())
+  fireEvent.click(screen.getByRole('button', { name: 'Effort' }))
+  expect(screen.getAllByRole('menuitemradio')).toHaveLength(5)
+  unmount()
 
-  fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
-  fireEvent.click(screen.getByRole('button', { name: 'Sub-agents' }))
+  render(selector({ config: { ...config, provider: 'codex', model: 'gpt-5.6-sol' } }))
+  fireEvent.click(screen.getByRole('button', { name: 'Effort' }))
+  expect(screen.getAllByRole('menuitemradio')).toHaveLength(4)
+})
+
+test('la vitesse n’apparaît que pour Codex', () => {
+  const { unmount } = render(selector())
+  fireEvent.click(screen.getByRole('button', { name: 'Réglages du tour' }))
+  expect(screen.queryByRole('menuitemradio', { name: /rapide/i })).toBeNull()
+  unmount()
+
+  render(selector({ config: { ...config, provider: 'codex', model: 'gpt-5.6-sol' } }))
+  fireEvent.click(screen.getByRole('button', { name: 'Réglages du tour' }))
+  expect(screen.getByRole('menuitemradio', { name: /rapide/i })).toBeTruthy()
+})
+
+test('sans réglages de conversation, un provider non-Codex n’a aucun panneau de réglages', () => {
+  render(selector({ showConversationSettings: false }))
+
+  expect(screen.queryByRole('button', { name: 'Réglages du tour' })).toBeNull()
+})
+
+test('YOLO reste visible hors du panneau', () => {
+  render(selector({ config: { ...config, permissionMode: 'bypassPermissions' } }))
+
+  expect(screen.getByText('YOLO')).toBeTruthy()
+})
+
+test('conserve le réglage d’effort des sub-agents', () => {
+  let next: ConversationConfig | null = null
+  render(selector({ onConfigChange: (config) => { next = config } }))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Réglages du tour' }))
   fireEvent.change(screen.getByLabelText('Effort sub-agent'), { target: { value: 'xhigh' } })
 
-  expect(nextConfig).toEqual({ ...config, subagentEffort: 'xhigh' })
+  expect(next).toEqual({ ...config, subagentEffort: 'xhigh' })
 })
 
 /**
  * `getBoundingClientRect` renvoie des zéros sous happy-dom : on déclare la
  * géométrie à la main pour mesurer ce que le composant décide à partir d'elle.
  */
-function stubGeometry(rootTop: number, menuHeight: number, listHeight: number) {
+function stubGeometry(cellTop: number, popHeight: number) {
   const original = Element.prototype.getBoundingClientRect
   Element.prototype.getBoundingClientRect = function (this: Element) {
-    const rect = (height: number, top: number): DOMRect => ({
-      x: 0, y: top, top, bottom: top + height, left: 0, right: 0,
-      width: 0, height, toJSON: () => ({}),
+    const rect = (height: number, top: number, right = 0): DOMRect => ({
+      x: 0, y: top, top, bottom: top + height, left: 0, right,
+      width: right, height, toJSON: () => ({}),
     }) as DOMRect
-    if (this.classList.contains('preset-selector')) return rect(28, rootTop)
-    if (this.classList.contains('preset-selector-menu')) return rect(menuHeight, rootTop - 8 - menuHeight)
-    if (this.classList.contains('preset-selector-list')) return rect(listHeight, rootTop - 8 - listHeight)
+    if (this.classList.contains('model-strip-cell')) return rect(30, cellTop)
+    if (this.classList.contains('model-strip-pop')) return rect(popHeight, cellTop - 6 - popHeight)
     return original.call(this)
   }
   return () => { Element.prototype.getBoundingClientRect = original }
 }
 
-test('la liste des presets cède la place au lieu de sortir par le haut de l’écran', () => {
-  // Le bouton est bas dans une fenêtre courte : 300 px au-dessus de lui, pour
-  // un menu de 520 px. Le menu déborderait de 236 px vers le haut.
-  const restore = stubGeometry(300, 520, 250)
+test('le panneau se borne à la place disponible au lieu de sortir par le haut', () => {
+  const restore = stubGeometry(300, 520)
   try {
-    render(createElement(ModelConfigSelector, {
-      config,
-      presets: Array.from({ length: 30 }, (_, index) => preset(index + 1)),
-      selectedPresetId: '',
-      quotas: emptyQuotas,
-      onConfigChange: () => undefined,
-      onPresetSelect: () => undefined,
-    }))
+    render(selector())
+    fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
 
-    fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
-
-    const list = document.querySelector('.preset-selector-list') as HTMLElement
-    // 250 px de liste − 236 px de débordement = 14 px, relevé au plancher de
-    // lisibilité : la liste défile au lieu de pousser le menu hors de l'écran.
-    expect(list.style.maxHeight).toBe('72px')
+    // 300 px au-dessus de la cellule, moins 6 px d'écart et 8 px de marge.
+    expect((document.querySelector('.model-strip-pop') as HTMLElement).style.maxHeight).toBe('286px')
   } finally {
     restore()
   }
 })
 
-test('garde la liste entière quand la place au-dessus suffit', () => {
-  const restore = stubGeometry(900, 520, 250)
+test('garde le panneau entier quand la place au-dessus suffit', () => {
+  const restore = stubGeometry(900, 520)
   try {
-    render(createElement(ModelConfigSelector, {
-      config,
-      presets: Array.from({ length: 30 }, (_, index) => preset(index + 1)),
-      selectedPresetId: '',
-      quotas: emptyQuotas,
-      onConfigChange: () => undefined,
-      onPresetSelect: () => undefined,
-    }))
+    render(selector())
+    fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
 
-    fireEvent.click(screen.getByRole('button', { name: /réglages libres/i }))
-
-    expect((document.querySelector('.preset-selector-list') as HTMLElement).style.maxHeight).toBe('250px')
+    expect((document.querySelector('.model-strip-pop') as HTMLElement).style.maxHeight).toBe('')
   } finally {
     restore()
   }

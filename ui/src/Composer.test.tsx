@@ -43,7 +43,6 @@ function composerProps(isRunning: boolean, message = '') {
     quotas,
     isRunning,
     onConversationCreated: () => undefined,
-    onProjectUpdated: () => undefined,
     message,
     onMessageChange: () => undefined,
     focusRequest: 0,

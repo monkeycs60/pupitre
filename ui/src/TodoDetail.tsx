@@ -10,12 +10,11 @@ interface Props {
   items: TodoItem[]
   project: Project
   quotas: QuotaSnapshot
-  onProjectUpdated: (project: Project) => void
   onChanged: () => void
   onDeleted: () => void
   onConversationSelect: (id: string) => void
 }
-export function TodoDetail({ item, items, project, quotas, onProjectUpdated, onChanged, onDeleted, onConversationSelect }: Props) {
+export function TodoDetail({ item, items, project, quotas, onChanged, onDeleted, onConversationSelect }: Props) {
   const [title, setTitle] = useState(item.title)
   const [message, setMessage] = useState(item.message)
   const [config, setConfig] = useState<ConversationConfig>({
@@ -52,7 +51,7 @@ export function TodoDetail({ item, items, project, quotas, onProjectUpdated, onC
       {item.attachments?.length ? <div className="todo-attachments">{item.attachments.map((file) => <a key={file.name} href={mediaUrl(file.name)} target="_blank" rel="noreferrer">{file.originalName}</a>)}</div> : null}
       {editable ? <div className="todo-config">
         <span>Modèle et branche cible</span>
-        <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onProjectUpdated={onProjectUpdated} onError={setError} applyProjectDefault={false} />
+        <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onError={setError} placement="bottom" applyProjectDefault={false} />
       </div> : <p className="todo-model">Branche cible : {item.target_branch}</p>}
       <div className="todo-settings">
         <label className="todo-field"><span>Autonomie</span><select value={autonomy} disabled={!editable} onChange={(event) => { const value = event.target.value as TodoItem['autonomy']; setAutonomy(value); if (value === 'investigate') setIntegrate(false) }}><option value="local">Corrections locales</option><option value="investigate">Enquête et propositions</option></select></label>

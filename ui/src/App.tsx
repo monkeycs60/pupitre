@@ -897,8 +897,8 @@ function App() {
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         : workspaceView === 'settings' ? <AppSettingsView instance={instance} />
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
-        : newTodo ? <TodoEditor key={`${selectedProject.id}-${todoSeed ? 'seed' : 'blank'}`} project={selectedProject} items={todos.items} quotas={quotas.snapshot} initial={todoSeed} onProjectUpdated={handleProjectUpdated} onCreated={handleTodoCreated} onCancel={() => { setNewTodo(false); setTodoSeed(null) }} />
-        : selectedTodo ? <TodoDetail key={selectedTodo.id} item={selectedTodo} items={todos.items} project={selectedProject} quotas={quotas.snapshot} onProjectUpdated={handleProjectUpdated} onChanged={todos.refresh} onDeleted={() => { setSelectedTodoId(null); todos.refresh() }} onConversationSelect={(id) => void handleGitConversationSelect(id)} />
+        : newTodo ? <TodoEditor key={`${selectedProject.id}-${todoSeed ? 'seed' : 'blank'}`} project={selectedProject} items={todos.items} quotas={quotas.snapshot} initial={todoSeed} onCreated={handleTodoCreated} onCancel={() => { setNewTodo(false); setTodoSeed(null) }} />
+        : selectedTodo ? <TodoDetail key={selectedTodo.id} item={selectedTodo} items={todos.items} project={selectedProject} quotas={quotas.snapshot} onChanged={todos.refresh} onDeleted={() => { setSelectedTodoId(null); todos.refresh() }} onConversationSelect={(id) => void handleGitConversationSelect(id)} />
         : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">
             <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Une conversation pour avancer, une TODO pour préparer la suite.</p><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button></div>
@@ -1010,7 +1010,6 @@ function App() {
               onConversationCreated={handleConversationCreated}
               focusEventId={focusEventId}
               onDraftToTodo={handleDraftToTodo}
-              onProjectUpdated={handleProjectUpdated}
               onConversationRead={handleConversationRead}
               onRunningSubtasksChange={setRunningSubtasks}
               onThreadToolsChange={setThreadTools}
@@ -1037,7 +1036,6 @@ function App() {
                 events={events}
                 project={selectedProject}
                 quotas={quotas.snapshot}
-                onProjectUpdated={handleProjectUpdated}
                 onClose={() => setShowSwitchModel(false)}
                 onSwitched={handleConversationSwitched}
                 onHandoff={handleConversationHandoff}

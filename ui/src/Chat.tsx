@@ -59,7 +59,6 @@ interface ChatProps {
   project: Project
   quotas: QuotaSnapshot
   onConversationCreated: (conversation: Conversation) => void
-  onProjectUpdated: (project: Project) => void
   onConversationRead?: () => void
   /** Nombre de sous-tâches en cours dans ce fil (indicateur sidebar). */
   onRunningSubtasksChange?: (count: number) => void
@@ -170,7 +169,6 @@ export function Chat({
   onConversationCreated,
   focusEventId = null,
   onDraftToTodo,
-  onProjectUpdated,
   onConversationRead,
   onRunningSubtasksChange,
   onThreadToolsChange,
@@ -499,7 +497,6 @@ export function Chat({
                   }
                 : seed.config,
             }) : undefined}
-            onProjectUpdated={onProjectUpdated}
             message={message}
             onMessageChange={handleMessageChange}
             focusRequest={focusRequest}

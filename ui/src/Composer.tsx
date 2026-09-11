@@ -36,7 +36,6 @@ interface ComposerProps {
   quotas: QuotaSnapshot
   isRunning: boolean
   onConversationCreated: (conversation: Conversation) => void
-  onProjectUpdated: (project: Project) => void
   message: string
   onMessageChange: (message: string) => void
   focusRequest: number
@@ -203,7 +202,6 @@ export function Composer({
   isRunning,
   onConversationCreated,
   onDraftToTodo,
-  onProjectUpdated,
   message,
   onMessageChange,
   focusRequest,
@@ -350,25 +348,6 @@ export function Composer({
     setTrigger(null)
     dismissedAnchorRef.current = null
     void onAction?.(action)
-  }
-
-  /** Bouton « Insérer un skill » : pose un `$` au bout du message et rend le
-   *  focus au textarea — le popover s'ouvre par le même chemin que la frappe. */
-  function openSkillPalette() {
-    const base = message.length > 0 && !message.endsWith(' ') && !message.endsWith('\n')
-      ? `${message} $`
-      : `${message}$`
-    onMessageChange(base)
-    dismissedAnchorRef.current = null
-    setPaletteIndex(0)
-    setTrigger({ mode: 'skills', anchor: base.length - 1, query: '' })
-    requestAnimationFrame(() => {
-      const area = textareaRef.current
-      if (area !== null) {
-        area.focus()
-        area.setSelectionRange(base.length, base.length)
-      }
-    })
   }
 
   async function importFiles(files: File[]) {
@@ -730,8 +709,8 @@ export function Composer({
                 project={project}
                 quotas={quotas}
                 config={config}
+                memoryKey={project.id}
                 onConfigChange={setConfig}
-                onProjectUpdated={onProjectUpdated}
                 onError={setToast}
                 onReady={setConfigReady}
               />
@@ -756,20 +735,6 @@ export function Composer({
               <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M9.5 4 5 8.5a2.1 2.1 0 0 0 3 3l4.5-4.5a3.5 3.5 0 0 0-5-5L3 6.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-            </button>
-            <button
-              type="button"
-              className="composer-skill-button"
-              onClick={openSkillPalette}
-              disabled={(isRunning && !canSteer) || isSubmitting}
-              title="Insérer un skill ($)"
-              aria-label="Insérer un skill"
-            >
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M2.5 3.5h11v9h-11z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
-                <path d="m5 6 2 2-2 2M8.8 10h2.2" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>Insérer un skill</span>
             </button>
             {composerModel && provider ? (
               <>

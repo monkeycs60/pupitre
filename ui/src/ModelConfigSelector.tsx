@@ -2,15 +2,20 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { ConversationConfig } from './ConfigPanel'
 import {
+  EFFORT_HINTS,
   formatModelPrice,
   modelCostTicks,
   modelCostTone,
   modelLabel,
   MODEL_COST_TICKS,
-  MODEL_PRICING,
+  MODEL_HINTS,
   PROVIDER_EFFORTS,
+  PROVIDER_LABELS,
+  PROVIDER_MODELS,
+  PROVIDERS,
   relativeCostLabel,
 } from './modelOptions'
+import { ProviderMark } from './ProviderMark'
 import { quotaSummary } from './quotaSignals'
 import type {
   ConversationSpeed,
@@ -20,63 +25,19 @@ import type {
   QuotaSnapshot,
 } from './types'
 
-type Submenu = 'model' | 'effort' | 'speed' | 'permission' | 'subagents' | null
+type Panel = 'model' | 'effort' | 'settings' | null
 
 export interface ModelConfigSelectorProps {
   config: ConversationConfig
+  /** Uniquement pour imposer un preset aux sub-agents. */
   presets: Preset[]
-  selectedPresetId: string
   quotas: QuotaSnapshot
   isLoading?: boolean
   isBusy?: boolean
-  isDefault?: boolean
   /** Certains contextes ne peuvent modifier que le modèle, l'effort et la vitesse. */
   showConversationSettings?: boolean
   onConfigChange: (config: ConversationConfig) => void
-  onPresetSelect: (preset: Preset) => void
-  onSaveAs?: () => void
-  onOverwrite?: () => void
-  onRevert?: () => void
-  onRename?: () => void
-  onDelete?: () => void
-  onRestore?: () => void
-  onToggleDefault?: () => void
-  onHelp?: () => void
   placement?: 'top' | 'bottom'
-  submenuPlacement?: 'left' | 'right'
-}
-
-function configOf(preset: Preset): ConversationConfig {
-  return {
-    presetId: preset.id,
-    provider: preset.provider,
-    model: preset.model,
-    effort: preset.effort ?? 'high',
-    speed: preset.speed ?? 'standard',
-    permissionMode: preset.permission_mode ?? null,
-    orchestrator: preset.orchestrator,
-    subagentPresetId: preset.subagent_preset_id ?? null,
-    subagentEffort: preset.subagent_effort ?? null,
-  }
-}
-
-function sameConfig(left: ConversationConfig, right: ConversationConfig): boolean {
-  return left.provider === right.provider
-    && left.model === right.model
-    && left.effort === right.effort
-    && left.orchestrator === right.orchestrator
-    && left.subagentPresetId === right.subagentPresetId
-    && left.subagentEffort === right.subagentEffort
-    && left.permissionMode === right.permissionMode
-    && (left.provider === 'codex' ? left.speed === right.speed : true)
-}
-
-function selectorModelLabel(model: string): string {
-  return modelLabel(model).replace(/^GPT-/, '')
-}
-
-function configSummary(config: ConversationConfig): string {
-  return `${selectorModelLabel(config.model).toLowerCase()} · ${config.effort}${config.provider === 'codex' && config.speed === 'fast' ? ' · rapide' : ''}`
 }
 
 function permissionLabel(permission: PresetPermissionMode | null): string {
@@ -114,122 +75,123 @@ function providerQuota(provider: Provider, quotas: QuotaSnapshot): {
 
 function Checkmark() {
   return (
-    <svg className="preset-selector-check" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <svg className="model-strip-check" viewBox="0 0 14 14" fill="none" aria-hidden="true">
       <path d="m2.5 7.5 3 3 6-6.5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
 
-function Chevron({ direction = 'right' }: { direction?: 'right' | 'down' }) {
+function Chevron() {
   return (
-    <svg className={`preset-selector-chevron is-${direction}`} viewBox="0 0 10 10" fill="none" aria-hidden="true">
-      <path d={direction === 'down' ? 'm2 4 3 3 3-3' : 'm4 2 3 3-3 3'} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className="model-strip-chevron" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+      <path d="m2 4 3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
 
+function Sliders() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14">
+      <path d="M2 5h5M11 5h3M2 11h3M9 11h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="9" cy="5" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="7" cy="11" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  )
+}
+
+function EffortGauge({ level, count }: { level: number; count: number }) {
+  return (
+    <span className="model-strip-steps" aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <i key={index} className={index <= level ? 'is-on' : ''} />
+      ))}
+    </span>
+  )
+}
+
+function Ticks({ filled, tone }: { filled: number; tone: 'ok' | 'warn' | 'danger' }) {
+  return (
+    <span className="model-strip-ticks" aria-hidden="true">
+      {Array.from({ length: MODEL_COST_TICKS }, (_, index) => (
+        <i key={index} className={index < filled ? toneClass(tone) : ''} />
+      ))}
+    </span>
+  )
+}
+
+function CostBar({ model, tone }: { model: string; tone: 'ok' | 'warn' | 'danger' }) {
+  return (
+    <span className={`model-strip-bar ${toneClass(tone)}`} aria-hidden="true">
+      <i style={{ width: `${modelCostTicks(model) / MODEL_COST_TICKS * 100}%` }} />
+    </span>
+  )
+}
+
 /**
- * Le même sélecteur compact est placé dans le composer et dans la modale de
- * bascule. Les opérations de persistance restent injectées par ConfigPanel.
+ * Réglette de lancement : provider, modèle, effort côte à côte ; vitesse,
+ * autonomie et sub-agents dans le panneau des réglages du tour.
  */
 export function ModelConfigSelector({
   config,
   presets,
-  selectedPresetId,
   quotas,
   isLoading = false,
   isBusy = false,
-  isDefault = false,
   showConversationSettings = true,
   onConfigChange,
-  onPresetSelect,
-  onSaveAs,
-  onOverwrite,
-  onRevert,
-  onRename,
-  onDelete,
-  onRestore,
-  onToggleDefault,
-  onHelp,
   placement = 'top',
-  submenuPlacement = 'right',
 }: ModelConfigSelectorProps) {
-  const [open, setOpen] = useState(false)
-  const [submenu, setSubmenu] = useState<Submenu>(null)
+  const [panel, setPanel] = useState<Panel>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const menuRef = useRef<HTMLElement | null>(null)
-  const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? null
+  // Revenir à un provider redonne le modèle qu'on y avait laissé.
+  const lastModelRef = useRef<Record<Provider, string>>({
+    codex: PROVIDER_MODELS.codex[0],
+    claude: PROVIDER_MODELS.claude[0],
+    grok: PROVIDER_MODELS.grok[0],
+  })
+  const disabled = isLoading || isBusy
+  const efforts = PROVIDER_EFFORTS[config.provider] as readonly string[]
+  const effortLevel = Math.max(0, efforts.indexOf(config.effort))
   const selectedSubagentPreset = presets.find((preset) => preset.id === config.subagentPresetId) ?? null
   const subagentEfforts = selectedSubagentPreset
     ? PROVIDER_EFFORTS[selectedSubagentPreset.provider]
     : ['low', 'medium', 'high', 'xhigh']
-  const isDirty = selectedPreset !== null && !sameConfig(config, configOf(selectedPreset))
-  const summary = configSummary(config)
-
-  // Le menu grandit avec le nombre de presets : sans borne, il sortait par le
-  // haut de l'écran dès que le bouton était bas dans la fenêtre — presets et
-  // réglages étaient coupés. On ne borne pas le menu lui-même (son `overflow`
-  // clipperait les sous-menus qui débordent volontairement) mais la liste des
-  // presets, sa seule zone variable, quitte à la réduire jusqu'à `LIST_MIN`.
-  useLayoutEffect(() => {
-    if (!open) return
-    const menu = menuRef.current
-    const root = rootRef.current
-    const list = menu?.querySelector('.preset-selector-list') as HTMLElement | null
-    if (!menu || !root || !list) return
-    const LIST_MAX = 250
-    const LIST_MIN = 72
-    const pad = 8
-    function fit() {
-      if (!menu || !root || !list) return
-      list.style.maxHeight = `${LIST_MAX}px`
-      const rect = root.getBoundingClientRect()
-      const available = placement === 'bottom'
-        ? window.innerHeight - rect.bottom - 8 - pad
-        : rect.top - 8 - pad
-      const overflow = menu.getBoundingClientRect().height - available
-      if (overflow <= 0) return
-      const current = list.getBoundingClientRect().height
-      list.style.maxHeight = `${Math.max(LIST_MIN, Math.round(current - overflow))}px`
-    }
-    fit()
-    window.addEventListener('resize', fit)
-    return () => {
-      window.removeEventListener('resize', fit)
-      list.style.maxHeight = ''
-    }
-  }, [open, placement, isDirty, presets.length])
-
-  // Le sous-menu est ancré au bouton, mais la liste des modèles dépasse souvent le viewport.
-  useLayoutEffect(() => {
-    if (!open || submenu === null) return
-    const el = rootRef.current?.querySelector('.preset-selector-submenu') as HTMLElement | null
-    if (!el) return
-    el.style.top = '0px'
-    el.style.maxHeight = ''
-    const pad = 8
-    const first = el.getBoundingClientRect()
-    const overflowBottom = first.bottom - (window.innerHeight - pad)
-    if (overflowBottom > 0) el.style.top = `${-overflowBottom}px`
-    const next = el.getBoundingClientRect()
-    if (next.top >= pad) return
-    el.style.top = `${parseFloat(el.style.top || '0') + (pad - next.top)}px`
-    el.style.maxHeight = `${window.innerHeight - pad * 2}px`
-  }, [open, submenu])
+  const hasSettingsPanel = showConversationSettings || config.provider === 'codex'
 
   useEffect(() => {
-    if (!open) return
+    lastModelRef.current[config.provider] = config.model
+  }, [config.provider, config.model])
+
+  // Le panneau est ancré à sa cellule, mais la liste des modèles est plus large
+  // que la réglette et le composer touche le bas de la fenêtre.
+  useLayoutEffect(() => {
+    if (panel === null) return
+    const element = rootRef.current?.querySelector('.model-strip-pop') as HTMLElement | null
+    const anchor = element?.parentElement
+    if (!element || !anchor) return
+    element.style.left = '0px'
+    element.style.maxHeight = ''
+    const pad = 8
+    const anchorRect = anchor.getBoundingClientRect()
+    const overflowRight = element.getBoundingClientRect().right - (window.innerWidth - pad)
+    if (overflowRight > 0) element.style.left = `${-overflowRight}px`
+    const available = placement === 'bottom'
+      ? window.innerHeight - anchorRect.bottom - 6 - pad
+      : anchorRect.top - 6 - pad
+    if (element.getBoundingClientRect().height > available) {
+      element.style.maxHeight = `${Math.max(160, Math.round(available))}px`
+    }
+  }, [panel, placement])
+
+  useEffect(() => {
+    if (panel === null) return
     function closeWhenClickingAway(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false)
-        setSubmenu(null)
-      }
+      if (!rootRef.current?.contains(event.target as Node)) setPanel(null)
     }
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
       event.preventDefault()
-      if (submenu !== null) setSubmenu(null)
-      else setOpen(false)
+      setPanel(null)
     }
     document.addEventListener('mousedown', closeWhenClickingAway)
     document.addEventListener('keydown', closeOnEscape)
@@ -237,264 +199,254 @@ export function ModelConfigSelector({
       document.removeEventListener('mousedown', closeWhenClickingAway)
       document.removeEventListener('keydown', closeOnEscape)
     }
-  }, [open, submenu])
+  }, [panel])
 
   function patch(change: Partial<ConversationConfig>) {
     onConfigChange({ ...config, ...change })
   }
 
-  function chooseModel(model: string, provider: Provider) {
-    onConfigChange(provider === config.provider
-      ? { ...config, model }
-      : { ...config, provider, model, effort: 'high', speed: 'standard' })
-    setSubmenu(null)
+  function chooseProvider(provider: Provider) {
+    if (provider === config.provider) return
+    const nextEfforts = PROVIDER_EFFORTS[provider] as readonly string[]
+    onConfigChange({
+      ...config,
+      provider,
+      model: lastModelRef.current[provider],
+      effort: nextEfforts.includes(config.effort) ? config.effort : 'high',
+      speed: provider === 'codex' ? config.speed : 'standard',
+    })
+    setPanel(null)
   }
 
-  function choosePreset(preset: Preset) {
-    onPresetSelect(preset)
-    setSubmenu(null)
-  }
-
-  function toggleSubmenu(next: Exclude<Submenu, null>) {
-    setSubmenu((current) => current === next ? null : next)
+  function toggle(next: Exclude<Panel, null>) {
+    setPanel((current) => current === next ? null : next)
   }
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (!open) return
-    const target = event.target
-    if (!(target instanceof HTMLButtonElement)) return
-
-    const nextSubmenu = ({
-      Modèle: 'model',
-      Effort: 'effort',
-      Vitesse: 'speed',
-      Autonomie: 'permission',
-      'Sub-agents': 'subagents',
-    } as const)[target.getAttribute('aria-label') ?? '']
-
-    if (event.key === 'ArrowRight' && nextSubmenu) {
-      event.preventDefault()
-      setSubmenu(nextSubmenu)
-      return
-    }
-    if (event.key === 'ArrowLeft' && submenu !== null) {
-      event.preventDefault()
-      setSubmenu(null)
-      return
-    }
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-
-    const buttons = Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
-      .filter((button) => button !== target.closest('.preset-selector')?.querySelector('.preset-selector-chip'))
-    const index = buttons.indexOf(target)
-    if (index < 0 || buttons.length === 0) return
+    if (panel === null || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return
+    const open = rootRef.current?.querySelector('.model-strip-pop')
+    if (!(event.target instanceof HTMLElement) || !open?.contains(event.target)) return
+    const buttons = Array.from(open.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'))
+    const index = buttons.indexOf(event.target as HTMLButtonElement)
+    if (index < 0) return
     event.preventDefault()
     const offset = event.key === 'ArrowDown' ? 1 : -1
     buttons[(index + offset + buttons.length) % buttons.length]?.focus()
   }
 
-  const chipName = selectedPreset?.name ?? 'Réglages libres'
-
   return (
-    <div className={`preset-selector opens-${placement} submenus-${submenuPlacement}`} ref={rootRef} onKeyDown={handleKeyDown}>
-      <button
-        type="button"
-        className={`preset-selector-chip${isDirty ? ' is-dirty' : ''}${selectedPreset === null ? ' is-free' : ''}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        disabled={isLoading || isBusy}
-        onClick={() => {
-          setOpen((current) => !current)
-          setSubmenu(null)
-        }}
-      >
-        <span className="preset-selector-chip-dot" aria-hidden="true" />
-        <span className="preset-selector-chip-name">{chipName}</span>
-        {isDirty ? <span className="preset-selector-chip-dirty">modifié</span> : null}
-        <span className="preset-selector-chip-summary">{summary}</span>
-        <Chevron direction="down" />
-      </button>
+    <div className={`model-strip opens-${placement}`} ref={rootRef} onKeyDown={handleKeyDown}>
+      <div className="model-strip-providers" role="radiogroup" aria-label="Provider">
+        {PROVIDERS.map((provider) => {
+          const quota = providerQuota(provider, quotas)
+          return (
+            <button
+              type="button"
+              key={provider}
+              role="radio"
+              aria-checked={provider === config.provider}
+              aria-label={PROVIDER_LABELS[provider]}
+              title={`${PROVIDER_LABELS[provider]} · ${quota.label}`}
+              className={`model-strip-provider is-${provider}${provider === config.provider ? ' is-active' : ''}`}
+              disabled={disabled}
+              onClick={() => chooseProvider(provider)}
+            >
+              <ProviderMark provider={provider} />
+              {quota.tone !== 'ok' ? <i className={`model-strip-alert ${toneClass(quota.tone)}`} aria-hidden="true" /> : null}
+            </button>
+          )
+        })}
+      </div>
 
-      {open ? (
-        <div className="preset-selector-popovers">
-          <section className="preset-selector-menu" ref={menuRef} role="menu" aria-label="Configuration de la conversation">
-            {isDirty && selectedPreset ? (
-              <div className="preset-selector-dirty-actions">
-                <p>Réglages différents de {selectedPreset.name}</p>
-                <span>{summary} au lieu de {configSummary(configOf(selectedPreset))}</span>
-                {onSaveAs ? <button type="button" onClick={() => { onSaveAs(); setOpen(false) }}>Enregistrer comme preset…</button> : null}
-                {onOverwrite ? <button type="button" onClick={() => { onOverwrite(); setOpen(false) }}>Écraser {selectedPreset.name}</button> : null}
-                {onRevert ? <button type="button" onClick={onRevert}>Revenir à {selectedPreset.name}</button> : null}
-              </div>
-            ) : null}
-
-            <div className="preset-selector-heading">Presets</div>
-            <div className="preset-selector-list" aria-label="Presets disponibles">
-              {presets.map((preset) => (
+      <div className="model-strip-cell">
+        <button
+          type="button"
+          className="model-strip-trigger"
+          aria-label="Modèle"
+          aria-haspopup="menu"
+          aria-expanded={panel === 'model'}
+          disabled={disabled}
+          onClick={() => toggle('model')}
+        >
+          <span className="model-strip-value">{modelLabel(config.model)}</span>
+          <Chevron />
+        </button>
+        {panel === 'model' ? (
+          <section className="model-strip-pop model-strip-models" role="menu" aria-label="Choisir un modèle">
+            <header>
+              <strong>{PROVIDER_LABELS[config.provider]}</strong>
+              <span className={toneClass(providerQuota(config.provider, quotas).tone)}>
+                {providerQuota(config.provider, quotas).label}
+              </span>
+              <Ticks {...providerQuota(config.provider, quotas)} />
+            </header>
+            {PROVIDER_MODELS[config.provider].map((model) => {
+              const isSelected = model === config.model
+              const tone = modelCostTone(model)
+              return (
                 <button
                   type="button"
-                  key={preset.id}
+                  key={model}
                   role="menuitemradio"
-                  aria-checked={preset.id === selectedPresetId}
-                  className={`preset-selector-preset${preset.id === selectedPresetId ? ' is-selected' : ''}`}
-                  onClick={() => choosePreset(preset)}
+                  aria-checked={isSelected}
+                  aria-label={modelLabel(model)}
+                  className={`model-strip-model${isSelected ? ' is-selected' : ''}`}
+                  onClick={() => { patch({ model }); setPanel(null) }}
                 >
-                  <span>{preset.id === selectedPresetId ? <Checkmark /> : null}</span>
-                  <span>{preset.name}</span>
-                  <span>{isDefault && preset.id === selectedPresetId ? 'défaut' : configSummary(configOf(preset))}</span>
+                  <span className="model-strip-check-slot">{isSelected ? <Checkmark /> : null}</span>
+                  <span className="model-strip-model-id">
+                    <strong>{modelLabel(model)}</strong>
+                    <small>{MODEL_HINTS[model] ?? ''}</small>
+                  </span>
+                  <span className="model-strip-model-cost">
+                    <span className="model-strip-cost-line">
+                      <CostBar model={model} tone={tone} />
+                      <b className={toneClass(tone)}>{relativeCostLabel(model, config.model)}</b>
+                    </span>
+                    <small>{formatModelPrice(model)}</small>
+                  </span>
                 </button>
-              ))}
-              {presets.length === 0 ? <p className="preset-selector-empty">Aucun preset enregistré.</p> : null}
-            </div>
+              )
+            })}
+            <footer>Jauge : coût relatif d’un échange type. Les prix API sont indicatifs et ne sont pas facturés sur abonnement.</footer>
+          </section>
+        ) : null}
+      </div>
 
-            <div className="preset-selector-divider" />
-            <div className="preset-selector-settings">
-              <div className="preset-selector-setting">
-                <button type="button" aria-label="Modèle" onClick={() => toggleSubmenu('model')}>
-                  <span>Modèle</span><span>{selectorModelLabel(config.model)}</span><Chevron />
-                </button>
-                {submenu === 'model' ? (
-                  <section className="preset-selector-submenu preset-selector-model-menu" role="menu" aria-label="Choisir un modèle">
-                    {(['codex', 'claude', 'grok'] as const).map((provider) => {
-                      const quota = providerQuota(provider, quotas)
-                      return (
-                        <div className="preset-selector-provider" key={provider}>
-                          <header>
-                            <div><strong>{provider}</strong><span className={toneClass(quota.tone)}>{quota.label}</span></div>
-                            <div className="preset-selector-quota-ticks" aria-hidden="true">
-                              {Array.from({ length: MODEL_COST_TICKS }, (_, index) => <i key={index} className={index < quota.filled ? toneClass(quota.tone) : ''} />)}
-                            </div>
-                          </header>
-                          {MODEL_PRICING.filter((pricing) => pricing.provider === provider).map((pricing) => {
-                            const isSelected = pricing.model === config.model
-                            const tone = modelCostTone(pricing.model)
-                            return (
-                              <button
-                                type="button"
-                                key={pricing.model}
-                                role="menuitemradio"
-                                aria-checked={isSelected}
-                                aria-label={selectorModelLabel(pricing.model)}
-                                className={`preset-selector-model${isSelected ? ' is-selected' : ''}`}
-                                onClick={() => chooseModel(pricing.model, provider)}
-                              >
-                                <span>{isSelected ? <Checkmark /> : null}</span>
-                                <span>{selectorModelLabel(pricing.model)}</span>
-                                <span className="preset-selector-cost-ticks" aria-hidden="true">
-                                  {Array.from({ length: MODEL_COST_TICKS }, (_, index) => <i key={index} className={index < modelCostTicks(pricing.model) ? toneClass(tone) : ''} />)}
-                                </span>
-                                <span>{modelCostTicks(pricing.model) === 1 ? 'le moins cher' : modelCostTicks(pricing.model) === MODEL_COST_TICKS ? 'le plus cher' : ''}</span>
-                                <strong className={toneClass(tone)}>{relativeCostLabel(pricing.model, config.model)}</strong>
-                                <span>{formatModelPrice(pricing.model)}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )
-                    })}
-                    <footer>Jauge : coût relatif d’un échange type. Les prix API sont indicatifs et ne sont pas facturés sur abonnement.</footer>
-                  </section>
-                ) : null}
-              </div>
-              <div className="preset-selector-setting">
-                <button type="button" aria-label="Effort" onClick={() => toggleSubmenu('effort')}>
-                  <span>Effort</span><span>{config.effort}</span><Chevron />
-                </button>
-                {submenu === 'effort' ? (
-                  <section className="preset-selector-submenu preset-selector-option-menu" role="menu" aria-label="Choisir l’effort">
-                    {PROVIDER_EFFORTS[config.provider].map((effort) => (
-                      <button type="button" key={effort} role="menuitemradio" aria-checked={config.effort === effort} onClick={() => { patch({ effort }); setSubmenu(null) }}>
-                        <span>{config.effort === effort ? <Checkmark /> : null}</span>{effort}
-                      </button>
-                    ))}
-                  </section>
-                ) : null}
-              </div>
+      <div className="model-strip-cell">
+        <button
+          type="button"
+          className="model-strip-trigger"
+          aria-label="Effort"
+          aria-haspopup="menu"
+          aria-expanded={panel === 'effort'}
+          disabled={disabled}
+          onClick={() => toggle('effort')}
+        >
+          <EffortGauge level={effortLevel} count={efforts.length} />
+          <span className="model-strip-value">{config.effort}</span>
+          <Chevron />
+        </button>
+        {panel === 'effort' ? (
+          <section className="model-strip-pop model-strip-efforts" role="menu" aria-label="Choisir l’effort">
+            {efforts.map((effort, index) => (
+              <button
+                type="button"
+                key={effort}
+                role="menuitemradio"
+                aria-checked={config.effort === effort}
+                className={config.effort === effort ? 'is-selected' : ''}
+                onClick={() => { patch({ effort }); setPanel(null) }}
+              >
+                <span className="model-strip-check-slot">{config.effort === effort ? <Checkmark /> : null}</span>
+                <EffortGauge level={index} count={efforts.length} />
+                <strong>{effort}</strong>
+                <small>{EFFORT_HINTS[effort] ?? ''}</small>
+              </button>
+            ))}
+          </section>
+        ) : null}
+      </div>
+
+      {hasSettingsPanel ? (
+        <div className="model-strip-cell">
+          <button
+            type="button"
+            className={`model-strip-trigger is-icon${config.permissionMode === 'bypassPermissions' ? ' is-danger' : ''}`}
+            aria-label="Réglages du tour"
+            title={showConversationSettings
+              ? `Autonomie : ${permissionLabel(config.permissionMode)} · sub-agents ${config.orchestrator ? 'délégués' : 'désactivés'}`
+              : `Vitesse : ${speedLabel(config.speed)}`}
+            aria-haspopup="menu"
+            aria-expanded={panel === 'settings'}
+            disabled={disabled}
+            onClick={() => toggle('settings')}
+          >
+            <Sliders />
+          </button>
+          {panel === 'settings' ? (
+            <section className="model-strip-pop model-strip-settings" role="menu" aria-label="Réglages du tour">
               {config.provider === 'codex' ? (
-                <div className="preset-selector-setting">
-                  <button type="button" aria-label="Vitesse" onClick={() => toggleSubmenu('speed')}>
-                    <span>Vitesse</span><span>{speedLabel(config.speed)}</span><Chevron />
-                  </button>
-                  {submenu === 'speed' ? (
-                    <section className="preset-selector-submenu preset-selector-option-menu" role="menu" aria-label="Choisir la vitesse">
-                      {(['standard', 'fast'] as const).map((speed) => (
-                        <button type="button" key={speed} role="menuitemradio" aria-checked={config.speed === speed} onClick={() => { patch({ speed }); setSubmenu(null) }}>
-                          <span>{config.speed === speed ? <Checkmark /> : null}</span>{speedLabel(speed)}
-                        </button>
-                      ))}
-                    </section>
-                  ) : null}
-                </div>
-              ) : null}
-              {showConversationSettings ? (
                 <>
-                  <div className="preset-selector-setting">
-                    <button type="button" aria-label="Autonomie" onClick={() => toggleSubmenu('permission')}>
-                      <span>Autonomie</span><span className={config.permissionMode === 'bypassPermissions' ? 'is-danger' : ''}>{permissionLabel(config.permissionMode)}</span><Chevron />
+                  <p className="model-strip-section">Vitesse</p>
+                  {(['standard', 'fast'] as const).map((speed) => (
+                    <button
+                      type="button"
+                      key={speed}
+                      role="menuitemradio"
+                      aria-checked={config.speed === speed}
+                      className={config.speed === speed ? 'is-selected' : ''}
+                      onClick={() => patch({ speed })}
+                    >
+                      <span className="model-strip-check-slot">{config.speed === speed ? <Checkmark /> : null}</span>
+                      {speedLabel(speed)}
                     </button>
-                    {submenu === 'permission' ? (
-                      <section className="preset-selector-submenu preset-selector-option-menu" role="menu" aria-label="Choisir l’autonomie">
-                        {([
-                          [null, 'Hériter du projet'],
-                          ['default', 'Par défaut du provider'],
-                          ['acceptEdits', 'Éditions acceptées'],
-                          ['plan', 'Plan / lecture seule'],
-                          ['dontAsk', 'Autonome (sans demande)'],
-                          ['bypassPermissions', 'YOLO · sans permissions'],
-                        ] as const).map(([permission, label]) => (
-                          <button type="button" key={permission ?? 'inherit'} role="menuitemradio" aria-checked={config.permissionMode === permission} className={permission === 'bypassPermissions' ? 'is-danger' : ''} onClick={() => { patch({ permissionMode: permission }); setSubmenu(null) }}>
-                            <span>{config.permissionMode === permission ? <Checkmark /> : null}</span>{label}
-                          </button>
-                        ))}
-                      </section>
-                    ) : null}
-                  </div>
-                  <div className="preset-selector-setting">
-                    <button type="button" aria-label="Sub-agents" onClick={() => toggleSubmenu('subagents')}>
-                      <span>Sub-agents</span><span>{config.orchestrator ? 'Délégation auto' : 'Désactivés'}</span><Chevron />
-                    </button>
-                    {submenu === 'subagents' ? (
-                      <section className="preset-selector-submenu preset-selector-option-menu" role="menu" aria-label="Configurer les sub-agents">
-                        <button type="button" role="menuitemradio" aria-checked={config.orchestrator} onClick={() => patch({ orchestrator: !config.orchestrator })}>
-                          <span>{config.orchestrator ? <Checkmark /> : null}</span>{config.orchestrator ? 'Autoriser la délégation' : 'Activer la délégation'}
-                        </button>
-                        {config.orchestrator ? (
-                          <>
-                            <label>
-                              Preset imposé
-                              <select value={config.subagentPresetId ?? ''} onChange={(event) => patch({ subagentPresetId: event.target.value || null, subagentEffort: null })}>
-                                <option value="">Choix du modèle principal</option>
-                                {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name} · {selectorModelLabel(preset.model)}</option>)}
-                              </select>
-                            </label>
-                            <label>
-                              Effort sub-agent
-                              <select value={config.subagentEffort ?? ''} onChange={(event) => patch({ subagentEffort: event.target.value || null })}>
-                                <option value="">{selectedSubagentPreset ? 'Effort du preset' : 'Choix du modèle principal'}</option>
-                                {subagentEfforts.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
-                              </select>
-                            </label>
-                          </>
-                        ) : null}
-                      </section>
-                    ) : null}
-                  </div>
+                  ))}
                 </>
               ) : null}
-            </div>
 
-            <div className="preset-selector-divider" />
-            <div className="preset-selector-actions">
-              {!isDirty && onSaveAs ? <button type="button" onClick={() => { onSaveAs(); setOpen(false) }}>Enregistrer comme preset…</button> : null}
-              {selectedPreset && onRename ? <button type="button" onClick={() => { onRename(); setOpen(false) }}>Renommer {selectedPreset.name}</button> : null}
-              {selectedPreset && onToggleDefault ? <button type="button" onClick={() => { onToggleDefault(); setOpen(false) }}>{isDefault ? 'Retirer le défaut du projet' : 'Définir comme défaut'}</button> : null}
-              {selectedPreset?.built_in && onRestore ? <button type="button" onClick={() => { onRestore(); setOpen(false) }}>Restaurer les valeurs d’origine</button> : null}
-              {selectedPreset && !selectedPreset.built_in && onDelete ? <button type="button" className="is-danger" onClick={() => { onDelete(); setOpen(false) }}>Supprimer</button> : null}
-              {onHelp ? <button type="button" onClick={() => { onHelp(); setOpen(false) }}>En savoir plus sur les presets</button> : null}
-            </div>
-          </section>
+              {showConversationSettings ? (
+                <>
+                  <p className="model-strip-section">Autonomie</p>
+                  {([
+                    [null, 'Hériter du projet'],
+                    ['default', 'Par défaut du provider'],
+                    ['acceptEdits', 'Éditions acceptées'],
+                    ['plan', 'Plan / lecture seule'],
+                    ['dontAsk', 'Autonome (sans demande)'],
+                    ['bypassPermissions', 'YOLO · sans permissions'],
+                  ] as const).map(([permission, label]) => (
+                    <button
+                      type="button"
+                      key={permission ?? 'inherit'}
+                      role="menuitemradio"
+                      aria-checked={config.permissionMode === permission}
+                      className={`${config.permissionMode === permission ? 'is-selected' : ''}${permission === 'bypassPermissions' ? ' is-danger' : ''}`}
+                      onClick={() => patch({ permissionMode: permission })}
+                    >
+                      <span className="model-strip-check-slot">{config.permissionMode === permission ? <Checkmark /> : null}</span>
+                      {label}
+                    </button>
+                  ))}
 
+                  <p className="model-strip-section">Sub-agents</p>
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={config.orchestrator}
+                    className={config.orchestrator ? 'is-selected' : ''}
+                    onClick={() => patch({ orchestrator: !config.orchestrator })}
+                  >
+                    <span className="model-strip-check-slot">{config.orchestrator ? <Checkmark /> : null}</span>
+                    Déléguer les sous-tâches
+                  </button>
+                  {config.orchestrator ? (
+                    <div className="model-strip-fields">
+                      <label>
+                        Modèle imposé
+                        <select value={config.subagentPresetId ?? ''} onChange={(event) => patch({ subagentPresetId: event.target.value || null, subagentEffort: null })}>
+                          <option value="">Choix du modèle principal</option>
+                          {presets.map((preset) => <option key={preset.id} value={preset.id}>{modelLabel(preset.model)} · {preset.name}</option>)}
+                        </select>
+                      </label>
+                      <label>
+                        Effort sub-agent
+                        <select value={config.subagentEffort ?? ''} onChange={(event) => patch({ subagentEffort: event.target.value || null })}>
+                          <option value="">{selectedSubagentPreset ? 'Effort du preset' : 'Choix du modèle principal'}</option>
+                          {subagentEfforts.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </section>
+          ) : null}
         </div>
+      ) : null}
+
+      {showConversationSettings && config.permissionMode === 'bypassPermissions' ? (
+        <span className="model-strip-yolo">YOLO</span>
       ) : null}
     </div>
   )

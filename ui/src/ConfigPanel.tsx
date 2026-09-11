@@ -1,14 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  createPreset,
-  deletePreset,
-  getProjectGit,
-  listPresets,
-  restorePreset,
-  setProjectDefaultPreset,
-  updatePreset,
-} from './api'
+import { getProjectGit, listPresets } from './api'
 import { BranchAutocomplete } from './BranchAutocomplete'
+import { readLaunchConfig, writeLaunchConfig } from './configMemory'
 import { ModelConfigSelector } from './ModelConfigSelector'
 import { branchSuggestions } from './worktrees'
 import type {
@@ -41,7 +34,6 @@ interface ConfigPanelProps {
   quotas: QuotaSnapshot
   config: ConversationConfig
   onConfigChange: (config: ConversationConfig) => void
-  onProjectUpdated: (project: Project) => void
   onError: (message: string) => void
   onReady?: (ready: boolean) => void
   /** La modale de bascule conserve sa configuration au lieu du défaut projet. */
@@ -53,9 +45,14 @@ interface ConfigPanelProps {
   defaultPresetId?: string | null
   /** Les réglages de conversation exigent des routes dédiées après création. */
   showConversationSettings?: boolean
+  /**
+   * Mémorise la configuration sous cette clé et la repropose à l'ouverture
+   * suivante. Le composer y met l'identifiant du projet ; la bascule de modèle
+   * et les TODO s'en passent, leur choix vaut pour leur seul objet.
+   */
+  memoryKey?: string | null
+  placement?: 'top' | 'bottom'
 }
-
-type MenuAction = 'rename' | 'save-as' | null
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Une erreur est survenue.'
@@ -83,52 +80,41 @@ function keepBranch(next: ConversationConfig, current: ConversationConfig): Conv
   }
 }
 
-function sameConfig(left: ConversationConfig, right: ConversationConfig): boolean {
-  return left.provider === right.provider
-    && left.model === right.model
-    && left.effort === right.effort
-    && left.orchestrator === right.orchestrator
-    && left.subagentPresetId === right.subagentPresetId
-    && left.subagentEffort === right.subagentEffort
-    && left.permissionMode === right.permissionMode
-    && (left.provider === 'codex' ? left.speed === right.speed : true)
-}
-
 /**
- * Contrôleur des presets pour la création et la modale de bascule. Le rendu
- * lourd est dans ModelConfigSelector : ici restent uniquement les appels API.
+ * Réglette de lancement : provider, modèle, effort et branche. La
+ * configuration d'ouverture vient de la mémoire du projet, à défaut du preset
+ * par défaut que Gardien et les TODO continuent d'utiliser.
  */
 export function ConfigPanel({
   project,
   quotas,
   config,
   onConfigChange,
-  onProjectUpdated,
   onError,
   onReady,
   applyProjectDefault = true,
   defaultPresetId,
   showConversationSettings = true,
+  memoryKey = null,
+  placement = 'top',
 }: ConfigPanelProps) {
   const [branches, setBranches] = useState<string[]>([])
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null)
   const [presets, setPresets] = useState<Preset[]>([])
-  const [selectedPresetId, setSelectedPresetId] = useState('')
-  const [action, setAction] = useState<MenuAction>(null)
-  const [draftName, setDraftName] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const [isBusy, setIsBusy] = useState(false)
   const configRef = useRef(config)
   configRef.current = config
-
-  const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? null
-  const isDefault = selectedPresetId !== '' && selectedPresetId === project.default_preset_id
 
   // Les branches existantes alimentent la complétion : une faute de frappe
   // créerait une branche jumelle au lieu de rejoindre la bonne.
   useEffect(() => {
     const controller = new AbortController()
     void getProjectGit(project.id, null, controller.signal)
-      .then((snapshot) => { if (!controller.signal.aborted) setBranches(branchSuggestions(snapshot.branches)) })
+      .then((snapshot) => {
+        if (controller.signal.aborted) return
+        setBranches(branchSuggestions(snapshot.branches))
+        setCurrentBranch(snapshot.currentBranch)
+      })
       .catch(() => {})
     return () => controller.abort()
   }, [project.id])
@@ -141,16 +127,16 @@ export function ConfigPanel({
       .then((loaded) => {
         if (abortController.signal.aborted) return
         setPresets(loaded)
+        if (!applyProjectDefault) return
+        const remembered = memoryKey === null ? null : readLaunchConfig(memoryKey)
+        if (remembered !== null) {
+          onConfigChange(keepBranch(remembered, configRef.current))
+          return
+        }
         const projectDefault = loaded.find((preset) => preset.id === (defaultPresetId ?? project.default_preset_id))
           ?? loaded.find((preset) => preset.id === 'builtin-speed')
           ?? loaded[0]
-        if (applyProjectDefault && projectDefault) {
-          setSelectedPresetId(projectDefault.id)
-          onConfigChange(keepBranch(configOf(projectDefault), configRef.current))
-          return
-        }
-        const matchingPreset = loaded.find((preset) => sameConfig(configRef.current, configOf(preset)))
-        setSelectedPresetId(matchingPreset?.id ?? '')
+        if (projectDefault) onConfigChange(keepBranch(configOf(projectDefault), configRef.current))
       })
       .catch((error: unknown) => {
         if (!abortController.signal.aborted) onError(errorMessage(error))
@@ -165,6 +151,7 @@ export function ConfigPanel({
   }, [
     applyProjectDefault,
     defaultPresetId,
+    memoryKey,
     onConfigChange,
     onError,
     onReady,
@@ -172,119 +159,9 @@ export function ConfigPanel({
     project.id,
   ])
 
-  function selectPreset(preset: Preset) {
-    setSelectedPresetId(preset.id)
-    onConfigChange(keepBranch(configOf(preset), configRef.current))
-  }
-
-  function replace(updated: Preset) {
-    setPresets((current) => current.map((preset) => preset.id === updated.id ? updated : preset))
-  }
-
-  async function run(task: () => Promise<void>) {
-    if (isBusy) return
-    setIsBusy(true)
-    try {
-      await task()
-    } catch (error: unknown) {
-      onError(errorMessage(error))
-    } finally {
-      setIsBusy(false)
-    }
-  }
-
-  function applyToPreset() {
-    if (!selectedPreset) return
-    void run(async () => {
-      const updated = await updatePreset(selectedPreset.id, {
-        name: selectedPreset.name,
-        provider: config.provider,
-        model: config.model,
-        effort: config.effort,
-        speed: config.provider === 'codex' ? config.speed : null,
-        orchestrator: config.orchestrator,
-        subagent_preset_id: config.subagentPresetId,
-        subagent_effort: config.subagentEffort,
-        permission_mode: config.permissionMode,
-      })
-      replace(updated)
-      if (isDefault) onProjectUpdated(await setProjectDefaultPreset(project.id, updated.id))
-    })
-  }
-
-  function saveAs() {
-    const name = draftName.trim()
-    if (!name) return
-    void run(async () => {
-      const created = await createPreset({
-        name,
-        provider: config.provider,
-        model: config.model,
-        effort: config.effort,
-        speed: config.provider === 'codex' ? config.speed : null,
-        orchestrator: config.orchestrator,
-        subagent_preset_id: config.subagentPresetId,
-        subagent_effort: config.subagentEffort,
-        permission_mode: config.permissionMode,
-      })
-      setPresets((current) => [...current, created])
-      setSelectedPresetId(created.id)
-      setDraftName('')
-      setAction(null)
-    })
-  }
-
-  function rename() {
-    const name = draftName.trim()
-    if (!selectedPreset || !name) return
-    void run(async () => {
-      replace(await updatePreset(selectedPreset.id, {
-        name,
-        provider: selectedPreset.provider,
-        model: selectedPreset.model,
-        effort: selectedPreset.effort,
-        speed: selectedPreset.speed,
-        orchestrator: selectedPreset.orchestrator,
-        subagent_preset_id: selectedPreset.subagent_preset_id,
-        subagent_effort: selectedPreset.subagent_effort,
-        permission_mode: selectedPreset.permission_mode,
-      }))
-      setDraftName('')
-      setAction(null)
-    })
-  }
-
-  function restore() {
-    if (!selectedPreset) return
-    void run(async () => {
-      const restored = await restorePreset(selectedPreset.id)
-      replace(restored)
-      onConfigChange(keepBranch(configOf(restored), configRef.current))
-    })
-  }
-
-  function remove() {
-    if (!selectedPreset || selectedPreset.built_in) return
-    const removed = selectedPreset
-    void run(async () => {
-      await deletePreset(removed.id)
-      setPresets((current) => current.filter((preset) => preset.id !== removed.id))
-      setSelectedPresetId('')
-      if (project.default_preset_id === removed.id) {
-        onProjectUpdated({ ...project, default_preset_id: null })
-      }
-    })
-  }
-
-  function toggleDefault() {
-    void run(async () => {
-      onProjectUpdated(await setProjectDefaultPreset(project.id, isDefault ? null : selectedPresetId || null))
-    })
-  }
-
-  function openAction(next: Exclude<MenuAction, null>) {
-    setAction(next)
-    setDraftName(next === 'rename' ? selectedPreset?.name ?? '' : '')
+  function changeConfig(next: ConversationConfig) {
+    if (memoryKey !== null) writeLaunchConfig(memoryKey, next)
+    onConfigChange(next)
   }
 
   return (
@@ -292,54 +169,24 @@ export function ConfigPanel({
       <ModelConfigSelector
         config={config}
         presets={presets}
-        selectedPresetId={selectedPresetId}
         quotas={quotas}
         isLoading={isLoading}
-        isBusy={isBusy}
-        isDefault={isDefault}
         showConversationSettings={showConversationSettings}
-        onConfigChange={onConfigChange}
-        onPresetSelect={selectPreset}
-        onSaveAs={() => openAction('save-as')}
-        onOverwrite={applyToPreset}
-        onRevert={() => selectedPreset && onConfigChange(keepBranch(configOf(selectedPreset), configRef.current))}
-        onRename={() => openAction('rename')}
-        onDelete={remove}
-        onRestore={restore}
-        onToggleDefault={toggleDefault}
-        onHelp={() => { window.location.hash = '#help/presets' }}
+        onConfigChange={changeConfig}
+        placement={placement}
       />
 
-      <label className="config-branch">
-        <span>Branche</span>
-        <BranchAutocomplete value={config.branch ?? ''} branches={branches} disabled={isBusy}
-          onChange={(branch) => onConfigChange({ ...config, branch })} />
+      <div className="config-branch">
+        <BranchAutocomplete
+          value={config.branch ?? ''}
+          branches={branches}
+          currentBranch={currentBranch}
+          disabled={isLoading}
+          placement={placement}
+          onChange={(branch) => onConfigChange({ ...config, branch })}
+        />
         {config.ticketKey ? <small className="config-ticket">Ticket {config.ticketKey}</small> : null}
-      </label>
-
-      {action !== null ? (
-        <div className="config-inline-form">
-          <label htmlFor="config-preset-name">{action === 'rename' ? 'Nouveau nom' : 'Nom du preset'}</label>
-          <input
-            id="config-preset-name"
-            autoFocus
-            value={draftName}
-            placeholder={action === 'rename' ? 'Vitesse' : 'Ma configuration'}
-            onChange={(event) => setDraftName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') setAction(null)
-              if (event.key !== 'Enter') return
-              event.preventDefault()
-              if (action === 'rename') rename()
-              else saveAs()
-            }}
-          />
-          <button type="button" className="config-primary" disabled={!draftName.trim() || isBusy} onClick={action === 'rename' ? rename : saveAs}>
-            {action === 'rename' ? 'Renommer' : 'Enregistrer'}
-          </button>
-          <button type="button" className="config-ghost" onClick={() => setAction(null)}>Annuler</button>
-        </div>
-      ) : null}
+      </div>
     </div>
   )
 }
