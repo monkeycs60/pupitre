@@ -1,7 +1,7 @@
 export type Provider = 'claude' | 'codex' | 'grok'
 export type ConversationSpeed = 'standard' | 'fast'
 export type PresetPermissionMode =
-  'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'bypassPermissions'
+  'plan' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions'
 export type FilesystemScope = 'project-and-ai-roots' | 'full-system'
 export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'attention' | 'costs' | 'memory' | 'help' | 'progress' | 'dashboard' | 'settings'
 

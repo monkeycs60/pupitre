@@ -195,17 +195,21 @@ chemin ne permet de l'y ajouter.
 
 ## Autonomie d'un tour
 
-Cinq modes, du plus borné au plus ouvert (`AUTONOMY_LEVELS` dans
+Quatre modes, du plus borné au plus ouvert (`AUTONOMY_LEVELS` dans
 `ui/src/modelOptions.ts`, `PRESET_PERMISSION_MODES` côté sidecar) ; une
 conversation peut aussi hériter du réglage du projet.
 
 | Mode | Ce que le CLI peut faire |
 | --- | --- |
 | `plan` | Lit et propose. Codex passe en sandbox `read-only`. |
-| `default` | Mode natif du provider. Les tours partent en headless : ce qui demanderait une permission est refusé. |
 | `acceptEdits` | Éditions de fichiers acceptées d'office ; les commandes restent refusées. |
 | `dontAsk` | Édite et exécute sans demander, dans le périmètre du projet. |
 | `bypassPermissions` | `--dangerously-skip-permissions` (claude), sandbox `danger-full-access` (codex), `--always-approve` (grok). |
+
+Le mode natif des providers (`default`) n'est plus proposé : les tours partent
+en headless, donc aucune demande de permission ne pouvait être accordée et le
+tour lisait sans jamais agir. `default` reste accepté en entrée d'API comme
+alias de `plan`, et les réglages qui le portaient sont réécrits au démarrage.
 
 ## Presets et réglages (M2-E1)
 

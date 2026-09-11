@@ -15,7 +15,7 @@ const project: Project = {
   id: 'p1',
   name: 'mono',
   path: '/tmp/mono',
-  permission_mode: 'default',
+  permission_mode: 'acceptEdits',
   filesystem_scope: 'project-and-ai-roots',
   pinned: false,
   created_at: '2026-08-19T08:00:00.000Z',

@@ -2,9 +2,8 @@ import type { Database } from "bun:sqlite";
 import type { Provider } from "../events";
 
 export const PRESET_PERMISSION_MODES = [
-  "default",
-  "acceptEdits",
   "plan",
+  "acceptEdits",
   "dontAsk",
   "bypassPermissions",
 ] as const;
@@ -20,6 +19,10 @@ const PERMISSION_MODE_ALIASES: Readonly<Record<string, PresetPermissionMode>> = 
   yolo: "bypassPermissions",
   autonomous: "bypassPermissions",
   autonome: "bypassPermissions",
+  // Le mode natif des CLIs ne travaillait pas en headless : sans écran pour
+  // répondre, tout ce qui demandait une permission était refusé. Les réglages
+  // qui le portaient tombent sur le rang qui décrit ce comportement.
+  default: "plan",
 };
 
 export function normalizePresetPermissionMode(

@@ -750,6 +750,17 @@ export function openDb(dir: string = dataDir()): Database {
       ), 0)
     `);
   }
+  // `default` laissait le CLI demander une permission que personne ne pouvait
+  // accorder en headless : le tour lisait et répondait sans jamais agir. Le
+  // rang a disparu ; les réglages qui le portaient tombent sur `plan`, qui
+  // décrit ce comportement au lieu de le subir.
+  db.exec("UPDATE projects SET permission_mode = 'plan' WHERE permission_mode = 'default'");
+  db.exec("UPDATE conversations SET permission_mode = 'plan' WHERE permission_mode = 'default'");
+  // La colonne appartient au PresetStore, qui l'ajoute à l'ouverture : sur une
+  // base neuve elle n'existe pas encore, et aucune ligne n'est à réécrire.
+  if (hasColumn(db, "presets", "permission_mode")) {
+    db.exec("UPDATE presets SET permission_mode = 'plan' WHERE permission_mode = 'default'");
+  }
   // La délégation de sous-tâches au modèle principal a été retirée : les
   // colonnes survivraient sinon aux `SELECT *` des stores, qui les rendraient
   // encore dans les réponses de l'API.
@@ -918,9 +929,13 @@ function widenProviderCheck(db: Database, table: string): void {
   db.exec(`DROP TABLE ${staging}`);
 }
 
-function dropColumn(db: Database, table: string, column: string): void {
+function hasColumn(db: Database, table: string, column: string): boolean {
   const columns = db.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-  if (columns.some((item) => item.name === column)) {
+  return columns.some((item) => item.name === column);
+}
+
+function dropColumn(db: Database, table: string, column: string): void {
+  if (hasColumn(db, table, column)) {
     db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`);
   }
 }

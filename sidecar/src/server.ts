@@ -696,7 +696,7 @@ function optionalPresetPermissionMode(
   } catch {
     throw new HttpError(
       400,
-      "permission_mode invalide (default, acceptEdits, plan, dontAsk ou yolo/autonomous)",
+      "permission_mode invalide (plan, acceptEdits, dontAsk ou yolo/autonomous)",
     );
   }
 }

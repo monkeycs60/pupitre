@@ -26,7 +26,7 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
       }],
     },
   });
-  const permissionMode = opts.permissionMode === "default" ? "auto" : opts.permissionMode;
+  const permissionMode = opts.permissionMode;
   const model = CLAUDE_MODEL_IDS[opts.model] ?? opts.model;
   const accessDirs = opts.filesystemScope === "full-system" ? ["/"] : aiRoots();
   // `--add-dir` élargit la racine visible, mais ne suffit pas pour les fichiers

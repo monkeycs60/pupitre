@@ -25,7 +25,7 @@ const project: Project = {
   id: 'project-1',
   name: 'Projet de test',
   path: '/tmp/project-1',
-  permission_mode: 'default',
+  permission_mode: 'acceptEdits',
   filesystem_scope: 'project-and-ai-roots',
   pinned: false,
   default_preset_id: null,

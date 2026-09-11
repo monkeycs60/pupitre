@@ -175,23 +175,17 @@ export const REVIEW_MODELS = PROVIDER_MODELS
 
 /**
  * Échelle d'autonomie, du plus borné au plus ouvert. Le rang alimente la jauge
- * du menu : les cinq modes forment une progression, pas une liste de pairs.
+ * du menu : les quatre modes forment une progression, pas une liste de pairs.
  *
  * Les tours partent en headless : aucun CLI ne peut poser une question de
- * permission à l'écran. Ce qu'un mode « demande » est donc refusé, d'où les
- * deux premiers rangs qui ne travaillent pas.
+ * permission à l'écran. Un mode qui en demanderait une la verrait refusée, d'où
+ * l'absence du mode natif des providers dans l'échelle.
  */
 export const AUTONOMY_LEVELS = [
   {
     mode: 'plan',
     label: 'Plan / lecture seule',
     hint: 'Lit et propose. N’écrit rien.',
-    tone: 'ok',
-  },
-  {
-    mode: 'default',
-    label: 'Par défaut du provider',
-    hint: 'Tout ce qui demanderait une permission est refusé.',
     tone: 'ok',
   },
   {

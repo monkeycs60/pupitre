@@ -122,7 +122,6 @@ test('l’autonomie est une échelle ordonnée, du plus borné au plus ouvert', 
   expect(options).toEqual([
     'Hériter du projet',
     'Plan / lecture seule',
-    'Par défaut du provider',
     'Éditions acceptées',
     'Autonome',
     'YOLO · sans permissions',
@@ -138,7 +137,7 @@ test('chaque rang porte une jauge plus haute que le précédent', () => {
     .filter((option) => option.className.includes('autonomy-option'))
     .map((option) => option.querySelectorAll('.autonomy-gauge i.is-on').length)
 
-  expect(lit).toEqual([1, 2, 3, 4, 5])
+  expect(lit).toEqual([1, 2, 3, 4])
 })
 
 test('l’héritage annonce le réglage du projet qu’il suit', () => {

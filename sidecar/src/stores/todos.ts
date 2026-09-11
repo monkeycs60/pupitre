@@ -60,6 +60,14 @@ export class TodoStore {
     db.run(
       "CREATE INDEX IF NOT EXISTS project_todos_project ON project_todos(project_id)",
     );
+    // Pendant du recalage `default` → `plan` de `migrate()` : la table est créée
+    // ici, pas dans les migrations, donc la réécriture y vit aussi.
+    db.run(`
+      UPDATE project_todos
+      SET payload = json_set(payload, '$.permission_mode', 'plan')
+      WHERE json_valid(payload)
+        AND json_extract(payload, '$.permission_mode') = 'default'
+    `);
     for (const item of this.list())
       if (item.status === "running")
         this.update(item.id, {

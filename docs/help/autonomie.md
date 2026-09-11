@@ -6,12 +6,12 @@ pour la conversation ; le bouton `⚙` d'un projet règle son défaut.
 
 Les tours partent en **headless** : aucun CLI ne peut afficher de demande de
 permission. Un outil qui en réclamerait une est donc refusé, pas mis en attente.
-C'est ce qui sépare les deux premiers rangs des trois suivants.
+C'est pour cette raison que le mode natif des providers n'est pas proposé — il
+lisait et répondait sans jamais agir, sans le dire.
 
 | Rang | Ce que le modèle peut faire |
 | --- | --- |
 | Plan / lecture seule | Lit le code et propose. N'écrit rien. Codex passe en sandbox lecture seule. |
-| Par défaut du provider | Le mode natif du CLI. En headless, tout ce qui demanderait une permission est refusé : le tour lit et répond, sans agir. |
 | Éditions acceptées | Les écritures de fichiers passent d'office. Les commandes shell restent refusées. |
 | Autonome | Édite et exécute sans demander, dans le périmètre du projet et les racines IA. |
 | YOLO · sans permissions | Plus aucun garde-fou : `--dangerously-skip-permissions` côté Claude, sandbox `danger-full-access` côté Codex, `--always-approve` côté Grok. Le périmètre filesystem lui-même tombe. |

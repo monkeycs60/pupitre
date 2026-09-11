@@ -10,7 +10,7 @@ export function runGrokTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   const bin = process.env.PUPITRE_GROK_BIN ?? "grok";
   const promptFile = writePromptFile(opts.prompt, opts.images);
   const pluginDir = writeBridgePlugin(opts);
-  const permissionMode = opts.permissionMode === "default" ? "default" : opts.permissionMode;
+  const permissionMode = opts.permissionMode;
   const args = [
     "--prompt-file", promptFile,
     "--output-format", "streaming-messages-json",
