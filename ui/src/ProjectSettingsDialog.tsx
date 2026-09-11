@@ -16,6 +16,7 @@ import {
   verifyProjectMcpCost,
 } from './api'
 import type { McpContextProbe, ProjectMcpConfig } from './api'
+import { AUTONOMY_LEVELS } from './modelOptions'
 import { formatCompact } from './formatCompact'
 import { ProviderMark } from './ProviderMark'
 import { DomainSettings } from './DomainSettings'
@@ -454,11 +455,9 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
               disabled={saving}
               onChange={(event) => setPermissionMode(event.target.value as PresetPermissionMode)}
             >
-              <option value="default">Par défaut du provider</option>
-              <option value="acceptEdits">Éditions acceptées</option>
-              <option value="plan">Plan / lecture seule</option>
-              <option value="dontAsk">Autonome · sans demande</option>
-              <option value="bypassPermissions">YOLO · sans permissions</option>
+              {AUTONOMY_LEVELS.map((level) => (
+                <option key={level.mode} value={level.mode}>{level.label}</option>
+              ))}
             </select>
           </label>
           <p>

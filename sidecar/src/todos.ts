@@ -81,9 +81,6 @@ export class TodoService {
       "speed",
       "presetId",
       "permissionMode",
-      "orchestrator",
-      "subagentPresetId",
-      "subagentEffort",
       "images",
       "attachments",
       "checks",
@@ -98,8 +95,6 @@ export class TodoService {
       "dependsOn",
       "effort",
       "presetId",
-      "subagentPresetId",
-      "subagentEffort",
     ] as const) {
       if (input[key] != null && typeof input[key] !== "string")
         throw new TodoError(`${key} invalide`);
@@ -128,9 +123,8 @@ export class TodoService {
       throw new TodoError("Autonomie invalide");
     if (id && this.store.list(projectId).some((other) => other.depends_on === id && other.ticket_id !== (input.ticketId ?? null)))
       throw new TodoError("Les TODO dépendantes doivent rester dans le même ticket", 409);
-    for (const key of ["integrate", "orchestrator"] as const)
-      if (input[key] !== undefined && typeof input[key] !== "boolean")
-        throw new TodoError(`${key} invalide`);
+    if (input.integrate !== undefined && typeof input.integrate !== "boolean")
+      throw new TodoError("integrate invalide");
     for (const key of ["checks", "images"] as const)
       if (
         input[key] !== undefined &&
@@ -226,9 +220,6 @@ export class TodoService {
       speed: item.speed,
       presetId: item.preset_id,
       permissionMode: item.permission_mode,
-      orchestrator: item.orchestrator,
-      subagentPresetId: item.subagent_preset_id,
-      subagentEffort: item.subagent_effort,
       images: item.images,
       attachments: item.attachments,
       checks: item.checks,
@@ -247,8 +238,6 @@ export class TodoService {
       dependsOn: "depends_on",
       presetId: "preset_id",
       permissionMode: "permission_mode",
-      subagentPresetId: "subagent_preset_id",
-      subagentEffort: "subagent_effort",
     };
     return this.store.update(
       id,
@@ -433,9 +422,6 @@ export class TodoService {
         speed: t.speed,
         presetId: t.preset_id,
         permissionMode: t.permission_mode,
-        orchestrator: t.orchestrator,
-        subagentPresetId: t.subagent_preset_id,
-        subagentEffort: t.subagent_effort,
         worktreePath: worktree.path,
         createdOnBranch: branch,
         ticketId: t.ticket_id,

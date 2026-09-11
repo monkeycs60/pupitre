@@ -226,9 +226,6 @@ export function Composer({
     effort: 'high',
     speed: 'standard',
     permissionMode: null,
-    orchestrator: true,
-    subagentPresetId: null,
-    subagentEffort: null,
     ...initialConfig,
   })
   const [attachments, setAttachments] = useState<UploadedAttachment[]>(() =>

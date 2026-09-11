@@ -112,7 +112,6 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
         model,
         effort,
         speed: provider === 'codex' ? speed : null,
-        orchestrator: conversation.orchestrator,
       }))
     } catch (creationError: unknown) {
       setError(errorMessage(creationError))

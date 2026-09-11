@@ -490,9 +490,6 @@ export function Chat({
                     effort: conversation.effort ?? seed.config.effort,
                     speed: conversation.speed ?? seed.config.speed,
                     permissionMode: conversation.permission_mode ?? null,
-                    orchestrator: conversation.orchestrator,
-                    subagentPresetId: conversation.subagent_preset_id ?? null,
-                    subagentEffort: conversation.subagent_effort ?? null,
                     branch: branchOfWorktree(conversation.worktree_path) ?? seed.config.branch,
                   }
                 : seed.config,

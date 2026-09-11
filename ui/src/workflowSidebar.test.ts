@@ -15,7 +15,6 @@ const reviewWorkflow: Workflow = {
   model: 'gpt-5.6-sol',
   effort: 'high',
   speed: 'standard',
-  orchestrator: true,
   created_at: '2026-08-08T08:00:00.000Z',
   updated_at: '2026-08-08T08:00:00.000Z',
 }

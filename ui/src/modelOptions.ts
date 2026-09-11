@@ -1,4 +1,4 @@
-import type { Provider } from './types'
+import type { PresetPermissionMode, Provider } from './types'
 
 /** Ordre des providers dans toutes les listes et sélecteurs. */
 export const PROVIDERS = ['codex', 'claude', 'grok'] as const satisfies readonly Provider[]
@@ -170,28 +170,51 @@ export function formatModelPrice(model: string): string {
   return pricing === null ? '—' : `${frenchAmount(pricing.input)} / ${frenchAmount(pricing.output)} $`
 }
 
-/**
- * Ce que l'orchestrateur peut faire quand la délégation est autorisée.
- *
- * Il n'y a pas de liste figée de sub-agents : le modèle principal choisit
- * lui-même provider et modèle pour chaque sous-tâche, parmi `PROVIDER_MODELS`
- * des DEUX abonnements. Ce qui est connu d'avance, c'est le routage qu'on lui
- * recommande et la limite de concurrence — c'est donc ça qu'on affiche, plutôt
- * qu'une liste de modèles qui laisserait croire à un choix déjà fait.
- *
- * Source de vérité : `RECO_DOC` dans `sidecar/src/conductor-mcp.ts` et
- * `MAX_CONCURRENT_SUBTASKS` dans `sidecar/src/subtasks.ts`. Un test de
- * cohérence (`sidecar/tests/ui-delegation.test.ts`) empêche la dérive.
- */
-export const DELEGATION_ROUTING = {
-  provider: 'codex',
-  model: 'gpt-5.6-luna',
-  effort: 'low ou medium',
-  speed: 'rapide',
-} as const
-
-/** Sous-tâches simultanées par conversation parente. */
-export const MAX_CONCURRENT_SUBTASKS = 4
-
 /** Gardien propose exactement le même catalogue que le chat. */
 export const REVIEW_MODELS = PROVIDER_MODELS
+
+/**
+ * Échelle d'autonomie, du plus borné au plus ouvert. Le rang alimente la jauge
+ * du menu : les cinq modes forment une progression, pas une liste de pairs.
+ *
+ * Les tours partent en headless : aucun CLI ne peut poser une question de
+ * permission à l'écran. Ce qu'un mode « demande » est donc refusé, d'où les
+ * deux premiers rangs qui ne travaillent pas.
+ */
+export const AUTONOMY_LEVELS = [
+  {
+    mode: 'plan',
+    label: 'Plan / lecture seule',
+    hint: 'Lit et propose. N’écrit rien.',
+    tone: 'ok',
+  },
+  {
+    mode: 'default',
+    label: 'Par défaut du provider',
+    hint: 'Tout ce qui demanderait une permission est refusé.',
+    tone: 'ok',
+  },
+  {
+    mode: 'acceptEdits',
+    label: 'Éditions acceptées',
+    hint: 'Écrit dans les fichiers. Les commandes restent refusées.',
+    tone: 'accent',
+  },
+  {
+    mode: 'dontAsk',
+    label: 'Autonome',
+    hint: 'Édite et exécute sans demander, dans le périmètre du projet.',
+    tone: 'warn',
+  },
+  {
+    mode: 'bypassPermissions',
+    label: 'YOLO · sans permissions',
+    hint: 'Plus aucun garde-fou, périmètre compris.',
+    tone: 'danger',
+  },
+] as const satisfies ReadonlyArray<{
+  mode: PresetPermissionMode
+  label: string
+  hint: string
+  tone: 'ok' | 'accent' | 'warn' | 'danger'
+}>

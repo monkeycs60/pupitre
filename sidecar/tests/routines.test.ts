@@ -68,7 +68,6 @@ test("le scheduler lance une conversation normale taguée et notifie la fin", as
     model: "haiku",
     effort: "low",
     speed: null,
-    orchestrator: false,
     enabled: true,
   });
   const now = new Date("2026-08-05T12:00:00Z");
@@ -110,7 +109,6 @@ test("un redémarrage clôt les passages restés en cours", () => {
     model: "gpt-5.6-luna",
     effort: "low",
     speed: "fast",
-    orchestrator: false,
     enabled: true,
   });
   routines.reserve(routine, new Date());

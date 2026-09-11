@@ -25,7 +25,6 @@ function harness() {
           model: input.model,
           effort: input.effort,
           permission_mode: input.permissionMode,
-          orchestrator: input.orchestrator,
           worktree_path: input.worktreePath,
           origin_type: input.originType,
           origin_key: input.originKey,

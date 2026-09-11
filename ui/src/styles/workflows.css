@@ -193,17 +193,6 @@
   gap: var(--space-2);
 }
 
-.workflow-model-grid .workflow-orchestrator {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.workflow-orchestrator input {
-  accent-color: var(--accent);
-}
-
 @media (max-width: 820px) {
   .workflow-dialog-body {
     grid-template-columns: 170px minmax(0, 1fr);

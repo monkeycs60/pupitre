@@ -294,25 +294,10 @@ export class ConversationRunner {
         ...(attachments.length > 0 ? { attachments } : {}),
       });
       emit({ type: "turn-timing", phase: "started", startedAt });
-      // Câblage du bridge MCP `conductor`, par tour : seule une conversation
-      // orchestratrice peut déléguer. Les tours de sous-tâches passent par
-      // SubtaskRunner, qui ne construit JAMAIS ce champ (garde de profondeur).
-      let conductor: { port: number; conversationId: string } | undefined;
       let pupitre: { port: number; conversationId: string } | undefined;
       const sidecarPort = this.port();
       if (Number.isInteger(sidecarPort) && sidecarPort > 0) {
         pupitre = { port: sidecarPort, conversationId };
-      }
-      if (conv.orchestrator) {
-        if (!Number.isInteger(sidecarPort) || sidecarPort <= 0) {
-          // Échec immédiat et lisible plutôt qu'un tour lancé vers un bridge
-          // injoignable : le CLI aurait tourné, appelé `delegate`, et attendu.
-          const message = `port du sidecar indisponible (${sidecarPort}) : `
-            + "impossible de câbler le bridge conductor";
-          emit({ type: "status", state: "error", error: message });
-          throw new Error(message);
-        }
-        conductor = { port: sidecarPort, conversationId };
       }
       const permissionMode = conv.permission_mode ?? project.permission_mode;
       const cwd = conversationCwd(project, conv)
@@ -341,7 +326,6 @@ export class ConversationRunner {
         images: imageNames.map((name) => this.media.absolutePath(name)),
         attachments,
         signal: controller.signal,
-        ...(conductor ? { conductor } : {}),
         ...(pupitre ? { pupitre } : {}),
         ...(selectedMcpServers(project) ?? {}),
         ...(supportsSteer && acceptSteer ? { registerSteer: acceptSteer } : {}),

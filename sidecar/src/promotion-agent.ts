@@ -23,7 +23,6 @@ interface PromotionConversationStore {
     effort: string;
     speed: "standard";
     permissionMode: "bypassPermissions";
-    orchestrator: false;
     worktreePath: null;
     createdOnBranch: string | null;
     originType: "promotion";
@@ -141,7 +140,6 @@ export class PromotionAgentService {
       effort: "high",
       speed: "standard",
       permissionMode: "bypassPermissions",
-      orchestrator: false,
       worktreePath: null,
       createdOnBranch: null,
       originType: "promotion",

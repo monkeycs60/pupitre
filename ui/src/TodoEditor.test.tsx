@@ -32,7 +32,7 @@ beforeEach(() => {
     requests.push({ path, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined })
     if (path.endsWith('/git')) return Promise.resolve(new Response(JSON.stringify({ error: 'Pas un dépôt Git' }), { status: 400 }))
     const body = path.endsWith('/presets')
-      ? [{ id: 'todo-preset', name: 'Tâches', provider: 'codex', model: 'gpt-5.6-sol', effort: 'low', speed: 'standard', permission_mode: null, orchestrator: true, subagent_preset_id: null, subagent_effort: null }]
+      ? [{ id: 'todo-preset', name: 'Tâches', provider: 'codex', model: 'gpt-5.6-sol', effort: 'low', speed: 'standard', permission_mode: null }]
       : path.endsWith('/dashboard')
         ? { tickets: [{ id: 'ticket-42', key: 'TECH-42', title: 'Raccourci', links: {} }] }
         : task
@@ -62,7 +62,7 @@ test('le brouillon conserve description, pièce jointe, configuration et ticket 
   const attachment = { name: 'brief.pdf', originalName: 'Brief.pdf', mimeType: 'application/pdf', size: 123 }
   const initial = {
     message: 'Réparer le raccourci\nConserver le focus après fermeture.', attachments: [attachment], ticketId: 'ticket-42',
-    config: { provider: 'claude' as const, model: 'opus', effort: 'high', speed: 'standard' as const, permissionMode: null, orchestrator: true, subagentPresetId: null, subagentEffort: null, branch: 'TECH-42' },
+    config: { provider: 'claude' as const, model: 'opus', effort: 'high', speed: 'standard' as const, permissionMode: null, branch: 'TECH-42' },
   }
   render(createElement(TodoEditor, { project, items: [], quotas, initial, onCreated: () => {}, onCancel: () => {} }))
   await waitFor(() => expect((screen.getByRole('button', { name: 'Créer la tâche' }) as HTMLButtonElement).disabled).toBe(false))

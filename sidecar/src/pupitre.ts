@@ -31,6 +31,26 @@ export function pupitreServerConfig(
   };
 }
 
+/**
+ * Valeur de `claude --mcp-config` : un JSON inline `{mcpServers:{…}}`.
+ *
+ * `extraServers` n'est fourni que si le projet filtre ses serveurs MCP. Dans ce
+ * cas l'appelant ajoute `--strict-mcp-config`, ce qui coupe la découverte
+ * automatique : les serveurs retenus doivent donc être réinjectés ici avec leur
+ * définition complète.
+ */
+export function claudeMcpConfigArg(
+  extraServers: Record<string, unknown> = {},
+  pupitre: PupitreTarget | null = null,
+): string {
+  return JSON.stringify({
+    mcpServers: {
+      ...(pupitre ? { pupitre: pupitreServerConfig(pupitre) } : {}),
+      ...extraServers,
+    },
+  });
+}
+
 export function codexPupitreMcpServer(target: PupitreTarget): Record<string, unknown> {
   return { ...pupitreServerConfig(target), enabled: true };
 }

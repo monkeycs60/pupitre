@@ -52,9 +52,6 @@ export function readLaunchConfig(projectId: string): ConversationConfig | null {
     permissionMode: typeof memory.permissionMode === 'string'
       ? memory.permissionMode as ConversationConfig['permissionMode']
       : null,
-    orchestrator: memory.orchestrator !== false,
-    subagentPresetId: typeof memory.subagentPresetId === 'string' ? memory.subagentPresetId : null,
-    subagentEffort: typeof memory.subagentEffort === 'string' ? memory.subagentEffort : null,
   }
 }
 
@@ -69,9 +66,6 @@ export function writeLaunchConfig(projectId: string, config: ConversationConfig)
       effort: config.effort,
       speed: config.speed,
       permissionMode: config.permissionMode,
-      orchestrator: config.orchestrator,
-      subagentPresetId: config.subagentPresetId,
-      subagentEffort: config.subagentEffort,
     }))
   } catch {
     // Le quota de stockage ou un mode privé ne doit pas casser l'envoi.

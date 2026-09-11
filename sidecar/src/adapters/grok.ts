@@ -1,7 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { conductorServerConfig } from "../conductor";
 import { pupitreServerConfig } from "../pupitre";
 import { parseGrokLine } from "./grok-parser";
 import { spawnJsonl } from "./spawn-jsonl";
@@ -31,11 +30,9 @@ export function runGrokTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     "--allow", "Write(~/.codex/**)",
     "--allow", "Write(~/.grok/**)",
   );
-  if (opts.conductor) args.push("--allow", "MCPTool(conductor__*)");
   if (opts.pupitre) args.push("--allow", "MCPTool(pupitre__*)");
   // Review, débrief et sous-tâche n'ont pas le pont Pupitre : one-shot, pas
-  // de fork natif. Un fil de conversation le garde — spawn_subagent est une
-  // faculté Grok, distincte de Conductor.
+  // de fork natif. Un fil de conversation le garde.
   if (!opts.pupitre) args.push("--no-subagents");
 
   return spawnJsonl({
@@ -76,7 +73,7 @@ function writePromptFile(prompt: string, images: string[]): string {
  * pose un pont éphémère par tour, conversation-id cuit dans `.mcp.json`.
  */
 function writeBridgePlugin(opts: TurnOptions): string | null {
-  if (!opts.conductor && !opts.pupitre && !opts.mcpServers) return null;
+  if (!opts.pupitre && !opts.mcpServers) return null;
   const root = process.env.PUPITRE_GROK_PLUGINS_DIR
     ?? join(homedir(), ".grok", "plugins");
   const dir = join(root, `.pupitre-${crypto.randomUUID()}`);
@@ -88,7 +85,6 @@ function writeBridgePlugin(opts: TurnOptions): string | null {
   writeFileSync(join(dir, ".mcp.json"), JSON.stringify({
     mcpServers: {
       ...(opts.mcpServers ?? {}),
-      ...(opts.conductor ? { conductor: conductorServerConfig(opts.conductor) } : {}),
       ...(opts.pupitre ? { pupitre: pupitreServerConfig(opts.pupitre) } : {}),
     },
   }));

@@ -18,9 +18,6 @@ export interface TodoInput {
   speed?: "standard" | "fast" | null;
   presetId?: string | null;
   permissionMode?: PresetPermissionMode | null;
-  orchestrator?: boolean;
-  subagentPresetId?: string | null;
-  subagentEffort?: string | null;
   images?: string[];
   attachments?: MediaAttachment[];
   checks?: string[];
@@ -51,9 +48,6 @@ export interface TodoItem {
   speed: "standard" | "fast" | null;
   preset_id: string | null;
   permission_mode: PresetPermissionMode | null;
-  orchestrator: boolean;
-  subagent_preset_id: string | null;
-  subagent_effort: string | null;
   images: string[];
   attachments: MediaAttachment[];
   checks: string[];
@@ -124,9 +118,6 @@ export class TodoStore {
       speed: input.speed ?? null,
       preset_id: input.presetId ?? null,
       permission_mode: input.permissionMode ?? null,
-      orchestrator: input.orchestrator ?? true,
-      subagent_preset_id: input.subagentPresetId ?? null,
-      subagent_effort: input.subagentEffort ?? null,
       images: input.images ?? [],
       attachments: input.attachments ?? [],
       checks: input.checks ?? [],

@@ -42,9 +42,6 @@ export function openDb(dir: string = dataDir()): Database {
       id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE,
       provider TEXT NOT NULL, model TEXT NOT NULL,
       effort TEXT NULL, speed TEXT NULL,
-      orchestrator INTEGER NOT NULL DEFAULT 1,
-      subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
-      subagent_effort TEXT NULL,
       built_in INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
@@ -69,8 +66,6 @@ export function openDb(dir: string = dataDir()): Database {
       provider TEXT NOT NULL, model TEXT NOT NULL,
       preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
       permission_mode TEXT NULL,
-      subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
-      subagent_effort TEXT NULL,
       cli_session_id TEXT, pinned INTEGER NOT NULL DEFAULT 0,
       message_count INTEGER NOT NULL DEFAULT 0,
       last_read_turn INTEGER NOT NULL DEFAULT 0,
@@ -514,7 +509,6 @@ export function openDb(dir: string = dataDir()): Database {
       model TEXT NOT NULL,
       effort TEXT NULL,
       speed TEXT NULL,
-      orchestrator INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -532,7 +526,6 @@ export function openDb(dir: string = dataDir()): Database {
       model TEXT NOT NULL,
       effort TEXT NULL,
       speed TEXT NULL,
-      orchestrator INTEGER NOT NULL DEFAULT 1,
       enabled INTEGER NOT NULL DEFAULT 1,
       next_run_at TEXT NULL,
       created_at TEXT NOT NULL,
@@ -614,11 +607,6 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "summary TEXT NOT NULL DEFAULT ''");
   addColumn(db, "conversations", "archived INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "deleted_at TEXT NULL");
-  // M2-D2 : une conversation orchestratrice reçoit le bridge MCP `conductor`.
-  // Défaut ON — les conversations existantes en héritent aussi.
-  addColumn(db, "conversations", "orchestrator INTEGER NOT NULL DEFAULT 1");
-  addColumn(db, "conversations", "subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL");
-  addColumn(db, "conversations", "subagent_effort TEXT NULL");
   addColumn(db, "conversations", "continued_from TEXT NULL");
   addColumn(db, "conversations", "handoff_pending INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "routine_id TEXT NULL");
@@ -762,6 +750,17 @@ export function openDb(dir: string = dataDir()): Database {
       ), 0)
     `);
   }
+  // La délégation de sous-tâches au modèle principal a été retirée : les
+  // colonnes survivraient sinon aux `SELECT *` des stores, qui les rendraient
+  // encore dans les réponses de l'API.
+  dropColumn(db, "conversations", "orchestrator");
+  dropColumn(db, "conversations", "subagent_preset_id");
+  dropColumn(db, "conversations", "subagent_effort");
+  dropColumn(db, "presets", "orchestrator");
+  dropColumn(db, "presets", "subagent_preset_id");
+  dropColumn(db, "presets", "subagent_effort");
+  dropColumn(db, "workflows", "orchestrator");
+  dropColumn(db, "routines", "orchestrator");
   const addedReviewProvider = addColumn(
     db,
     "presets",
@@ -769,8 +768,6 @@ export function openDb(dir: string = dataDir()): Database {
   );
   addColumn(db, "presets", "review_model TEXT NOT NULL DEFAULT 'gpt-5.6-sol'");
   addColumn(db, "presets", "review_effort TEXT NOT NULL DEFAULT 'high'");
-  addColumn(db, "presets", "subagent_preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL");
-  addColumn(db, "presets", "subagent_effort TEXT NULL");
   // Marqueur d'héritage : sans lui, une configuration de review égale aux
   // anciens defaults est indiscernable d'un choix délibéré identique.
   const addedReviewExplicit = addColumn(

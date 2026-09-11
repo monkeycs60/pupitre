@@ -13,7 +13,7 @@ import { ProjectStore } from "../src/stores/projects";
 import { PresetStore } from "../src/stores/presets";
 import { SettingsStore } from "../src/stores/settings";
 import { QuotaTracker } from "../src/quotas";
-import { MAX_CONCURRENT_SUBTASKS, SubtaskRunner } from "../src/subtasks";
+import { MAX_CONCURRENT_SUBTASKS, SubtaskLimitError, SubtaskRunner } from "../src/subtasks";
 import { codexAppServer } from "../src/adapters/codex-app-server";
 import { ReviewStore } from "../src/stores/reviews";
 import { ReviewRunner } from "../src/reviews";
@@ -64,6 +64,22 @@ async function postJson(path: string, body: unknown): Promise<Response> {
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${harness().baseUrl}${path}`);
   return response.json() as Promise<T>;
+}
+
+/**
+ * Le moteur n'a plus de façade HTTP : Gardien appelle `start` directement,
+ * et c'est donc ce chemin-là que les tests doivent exercer.
+ */
+function spawnSubtask(input: {
+  conversationId: string;
+  provider: "claude" | "codex";
+  model: string;
+  effort?: string | null;
+  speed?: "standard" | "fast" | null;
+  prompt: string;
+  label?: string | null;
+}): string {
+  return harness().subtasks.start(input).id;
 }
 
 /** Crée un projet + une conversation parente (sans lancer de tour parent). */
@@ -187,15 +203,13 @@ afterEach(() => {
 
 test("delegate simple : la sous-tâche claude finit en done avec le texte final concaténé", async () => {
   const parentId = parentConversation();
-  const created = await postJson("/api/subtasks", {
+  const id = spawnSubtask({
     conversationId: parentId,
     provider: "claude",
     model: "haiku",
     prompt: "liste le dossier",
     label: "recon",
   });
-  expect(created.status).toBe(201);
-  const { id } = await created.json() as { id: string };
 
   const result = await waitForSubtask(id);
   expect(result.status).toBe("done");
@@ -213,14 +227,14 @@ test("delegate simple : la sous-tâche claude finit en done avec le texte final 
 
 test("un subtask-ref est appendé à la conversation parente au lancement", async () => {
   const parentId = parentConversation();
-  const { id } = await (await postJson("/api/subtasks", {
+  const id = spawnSubtask({
     conversationId: parentId,
     provider: "claude",
     model: "haiku",
     effort: "high",
     prompt: "analyse",
     label: "audit",
-  })).json() as { id: string };
+  });
 
   const parentEvents = await getJson<StoredEvent[]>(`/api/conversations/${parentId}/events`);
   const ref = parentEvents.find((event) => event.type === "subtask-ref");
@@ -235,12 +249,12 @@ test("un subtask-ref est appendé à la conversation parente au lancement", asyn
 
 test("le WS par conversation diffuse les events de la sous-tâche sous son id", async () => {
   const parentId = parentConversation();
-  const { id } = await (await postJson("/api/subtasks", {
+  const id = spawnSubtask({
     conversationId: parentId,
     provider: "claude",
     model: "haiku",
     prompt: "BLOQUE puis réponds",
-  })).json() as { id: string };
+  });
 
   const received: StoredEvent[] = [];
   const socket = new WebSocket(
@@ -271,17 +285,13 @@ test("le WS par conversation diffuse les events de la sous-tâche sous son id", 
 
 test("deux sous-tâches codex tournent en parallèle sur la même conversation", async () => {
   const parentId = parentConversation("claude");
-  const ids = await Promise.all([1, 2].map(async (index) => {
-    const response = await postJson("/api/subtasks", {
-      conversationId: parentId,
-      provider: "codex",
-      model: "gpt-5.6-luna",
-      speed: "fast",
-      prompt: `tâche ${index}`,
-      label: `t${index}`,
-    });
-    expect(response.status).toBe(201);
-    return (await response.json() as { id: string }).id;
+  const ids = [1, 2].map((index) => spawnSubtask({
+    conversationId: parentId,
+    provider: "codex",
+    model: "gpt-5.6-luna",
+    speed: "fast",
+    prompt: `tâche ${index}`,
+    label: `t${index}`,
   }));
   expect(new Set(ids).size).toBe(2);
   // Les deux sont en vol en même temps : la limite les compte toutes les deux.
@@ -316,12 +326,12 @@ test("deux sous-tâches codex tournent en parallèle sur la même conversation",
 test("binaire introuvable : la sous-tâche finit en error, statut persisté", async () => {
   process.env.PUPITRE_CLAUDE_BIN = join(tmpdir(), `absent-${crypto.randomUUID()}`);
   const parentId = parentConversation();
-  const { id } = await (await postJson("/api/subtasks", {
+  const id = spawnSubtask({
     conversationId: parentId,
     provider: "claude",
     model: "haiku",
     prompt: "va échouer",
-  })).json() as { id: string };
+  });
 
   const result = await waitForSubtask(id);
   expect(result.status).toBe("error");
@@ -335,10 +345,10 @@ test("binaire introuvable : la sous-tâche finit en error, statut persisté", as
   expect(harness().subtasks.get(id)!.status).toBe("error");
 });
 
-test(`au-delà de ${MAX_CONCURRENT_SUBTASKS} sous-tâches simultanées, l'API répond 429`, async () => {
+test(`au-delà de ${MAX_CONCURRENT_SUBTASKS} sous-tâches simultanées, start refuse`, async () => {
   const parentId = parentConversation();
   const otherParentId = parentConversation();
-  const spawn = (conversationId: string) => postJson("/api/subtasks", {
+  const spawn = (conversationId: string) => spawnSubtask({
     conversationId,
     provider: "claude",
     model: "haiku",
@@ -347,27 +357,20 @@ test(`au-delà de ${MAX_CONCURRENT_SUBTASKS} sous-tâches simultanées, l'API r�
 
   const ids: string[] = [];
   for (let index = 0; index < MAX_CONCURRENT_SUBTASKS; index += 1) {
-    const response = await spawn(parentId);
-    expect(response.status).toBe(201);
-    ids.push((await response.json() as { id: string }).id);
+    ids.push(spawn(parentId));
   }
 
-  const refused = await spawn(parentId);
-  expect(refused.status).toBe(429);
+  expect(() => spawn(parentId)).toThrow(SubtaskLimitError);
 
   // La limite est PAR conversation : une autre conversation reste servie.
-  const other = await spawn(otherParentId);
-  expect(other.status).toBe(201);
-  ids.push((await other.json() as { id: string }).id);
+  ids.push(spawn(otherParentId));
 
   writeFileSync(harness().releaseFile, "go");
   await Promise.all(ids.map((id) => waitForSubtask(id)));
   expect(harness().subtasks.runningCount(parentId)).toBe(0);
 
   // Une fois les slots libérés, la conversation accepte à nouveau.
-  const again = await spawn(parentId);
-  expect(again.status).toBe(201);
-  await waitForSubtask((await again.json() as { id: string }).id);
+  await waitForSubtask(spawn(parentId));
 });
 
 test("annuler le tour parent annule EN CASCADE ses sous-tâches en vol", async () => {
@@ -375,18 +378,14 @@ test("annuler le tour parent annule EN CASCADE ses sous-tâches en vol", async (
   const otherParentId = parentConversation();
   const parentRun = harness().runner.runTurn(parentId, "BLOQUE parent", []);
   expect(harness().runner.isRunning(parentId)).toBe(true);
-  const spawn = (conversationId: string) => postJson("/api/subtasks", {
+  const spawn = (conversationId: string) => spawnSubtask({
     conversationId, provider: "claude", model: "haiku", prompt: "BLOQUE ici",
   });
 
   const ids: string[] = [];
-  for (let index = 0; index < 2; index += 1) {
-    const response = await spawn(parentId);
-    expect(response.status).toBe(201);
-    ids.push((await response.json() as { id: string }).id);
-  }
+  for (let index = 0; index < 2; index += 1) ids.push(spawn(parentId));
   // Une sous-tâche d'une AUTRE conversation : la cascade ne doit pas la toucher.
-  const untouched = (await (await spawn(otherParentId)).json() as { id: string }).id;
+  const untouched = spawn(otherParentId);
   expect(harness().subtasks.runningCount(parentId)).toBe(2);
 
   // Aucun tour parent en cours ici, mais deux sous-tâches en vol : l'annulation
@@ -413,9 +412,9 @@ test("annuler le tour parent annule EN CASCADE ses sous-tâches en vol", async (
 
 test("le résultat d'une sous-tâche annulée porte l'erreur terminale", async () => {
   const parentId = parentConversation();
-  const { id } = await (await postJson("/api/subtasks", {
+  const id = spawnSubtask({
     conversationId: parentId, provider: "claude", model: "haiku", prompt: "BLOQUE ici",
-  })).json() as { id: string };
+  });
 
   expect((await postJson(`/api/subtasks/${id}/cancel`, {})).status).toBe(202);
   const result = await getJson<SubtaskResultBody>(`/api/subtasks/${id}`);
@@ -443,13 +442,12 @@ test("une sous-tâche terminée ne laisse pas sa promesse dans la table des runs
   expect(await runner.cancel(subtask.id)).toBe(false);
 });
 
-test("routes de sous-tâche : 404 sur id inconnu, 404 sur conversation parente inconnue", async () => {
+test("routes de sous-tâche : 404 sur id inconnu, conversation parente inconnue refusée", async () => {
   expect((await fetch(`${harness().baseUrl}/api/subtasks/inconnu`)).status).toBe(404);
   expect((await fetch(`${harness().baseUrl}/api/subtasks/inconnu/events`)).status).toBe(404);
-  const response = await postJson("/api/subtasks", {
+  expect(() => spawnSubtask({
     conversationId: "inconnue", provider: "claude", model: "haiku", prompt: "x",
-  });
-  expect(response.status).toBe(404);
+  })).toThrow("conversation inconnue");
 });
 
 test("waitResult attend la fin du tour et rend le résultat concaténé", async () => {

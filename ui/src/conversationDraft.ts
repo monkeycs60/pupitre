@@ -9,9 +9,6 @@ interface ConversationDraft {
   effort: string
   speed: ConversationSpeed
   permissionMode?: PresetPermissionMode | null
-  orchestrator: boolean
-  subagentPresetId?: string | null
-  subagentEffort?: string | null
   /** Branche saisie par l'utilisateur ; vide = travailler dans le dépôt. */
   branch?: string | null
   ticketId?: string | null
@@ -57,9 +54,6 @@ export function buildCreateConversationInput(
     effort: draft.effort,
     speed: draft.provider === 'codex' ? draft.speed : undefined,
     permissionMode: draft.permissionMode ?? null,
-    orchestrator: draft.orchestrator,
-    subagentPresetId: draft.subagentPresetId ?? null,
-    subagentEffort: draft.subagentEffort ?? null,
     branch: draft.branch?.trim() || null,
     ticketId: draft.ticketId ?? null,
     ...(draft.originType ? {

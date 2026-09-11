@@ -40,9 +40,6 @@ const speedPreset: Preset = {
   effort: 'low',
   speed: 'fast',
   permission_mode: null,
-  orchestrator: true,
-  subagent_preset_id: null,
-  subagent_effort: null,
   review_provider: 'codex',
   review_model: 'gpt-5.6-sol',
   review_effort: 'high',
@@ -57,9 +54,6 @@ const initialConfig: ConversationConfig = {
   effort: 'high',
   speed: 'standard',
   permissionMode: null,
-  orchestrator: true,
-  subagentPresetId: null,
-  subagentEffort: null,
 }
 
 const quotas: QuotaSnapshot = { claude: null, codex: null, grok: null }
@@ -105,9 +99,6 @@ test('la dernière configuration lancée revient avant le défaut du projet', as
     effort: 'xhigh',
     speed: 'standard',
     permissionMode: 'bypassPermissions',
-    orchestrator: false,
-    subagentPresetId: null,
-    subagentEffort: null,
   }))
   const changes: ConversationConfig[] = []
 
@@ -126,7 +117,6 @@ test('la dernière configuration lancée revient avant le défaut du projet', as
     model: 'opus',
     effort: 'xhigh',
     permissionMode: 'bypassPermissions',
-    orchestrator: false,
   }))
 })
 

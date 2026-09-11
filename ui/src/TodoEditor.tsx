@@ -40,9 +40,6 @@ export function TodoEditor({ project, items, quotas, compact = false, hasTicketI
     effort: 'high',
     speed: 'standard',
     permissionMode: null,
-    orchestrator: true,
-    subagentPresetId: null,
-    subagentEffort: null,
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

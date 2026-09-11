@@ -37,9 +37,6 @@ const conversation: Conversation = {
   effort: 'low',
   speed: 'standard',
   permission_mode: null,
-  orchestrator: true,
-  subagent_preset_id: null,
-  subagent_effort: null,
   continued_from: null,
   routine_id: null,
   worktree_path: null,
@@ -63,9 +60,6 @@ const fablePreset: Preset = {
   effort: 'high',
   speed: null,
   permission_mode: null,
-  orchestrator: true,
-  subagent_preset_id: null,
-  subagent_effort: null,
   review_provider: 'claude',
   review_model: 'opus',
   review_effort: 'high',
@@ -115,6 +109,5 @@ test('confirme une passation Claude après une sélection dans le même sélecte
     model: 'fable-5',
     effort: 'low',
     speed: null,
-    orchestrator: true,
   })
 })

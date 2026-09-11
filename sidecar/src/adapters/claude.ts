@@ -2,7 +2,7 @@ import { parseClaudeLine } from "./claude-parser";
 import { claudeSessions, persistenceEnabled } from "./claude-session";
 import { spawnJsonl } from "./spawn-jsonl";
 import type { TurnOptions, EmitFn } from "./types";
-import { claudeMcpConfigArg } from "../conductor";
+import { claudeMcpConfigArg } from "../pupitre";
 import { aiRoots } from "../access";
 
 const CLAUDE_MODEL_IDS: Record<string, string> = {
@@ -55,24 +55,16 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   // `--mcp-config` accepte un chemin de fichier OU un JSON inline (cf.
   // `claude --help`). Sans sélection de projet, pas de `--strict-mcp-config` :
   // les serveurs MCP que l'utilisateur a configurés lui-même restent chargés.
-  if (opts.conductor || opts.pupitre || opts.mcpServers) {
+  if (opts.pupitre || opts.mcpServers) {
     args.push(
       "--mcp-config",
-      claudeMcpConfigArg(opts.conductor ?? null, opts.mcpServers ?? {}, opts.pupitre ?? null),
+      claudeMcpConfigArg(opts.mcpServers ?? {}, opts.pupitre ?? null),
     );
   }
   if (opts.mcpServers) {
     // Le projet a choisi ses serveurs : on coupe la découverte automatique pour
-    // que seuls ceux-là, plus le bridge, soient chargés.
+    // que seuls ceux-là soient chargés.
     args.push("--strict-mcp-config");
-  }
-  if (opts.conductor) {
-    args.push(
-      // Un run headless ne peut pas demander une permission MCP à l'UI. On
-      // pré-autorise uniquement les trois outils du bridge que Pupitre injecte.
-      "--allowedTools",
-      "mcp__conductor__delegate,mcp__conductor__delegate_parallel,mcp__conductor__check_quotas",
-    );
   }
   if (opts.pupitre) {
     args.push(

@@ -26,8 +26,7 @@ export function TodoDetail({ item, items, project, quotas, hasTicketIntegration 
   const [config, setConfig] = useState<ConversationConfig>({
     provider: item.provider, model: item.model, effort: item.effort ?? 'high',
     speed: item.speed ?? 'standard', presetId: item.preset_id,
-    permissionMode: item.permission_mode ?? null, orchestrator: item.orchestrator ?? true,
-    subagentPresetId: item.subagent_preset_id ?? null, subagentEffort: item.subagent_effort ?? null,
+    permissionMode: item.permission_mode ?? null,
     branch: item.target_branch,
   })
   const [integrate, setIntegrate] = useState(item.integrate)
@@ -54,8 +53,7 @@ export function TodoDetail({ item, items, project, quotas, hasTicketIntegration 
     title: title.trim(), message: message.trim() || title.trim(), ticketId,
     targetBranch: config.branch?.trim() || null,
     provider: config.provider, model: config.model, effort: config.effort, speed: config.speed,
-    presetId: config.presetId, permissionMode: config.permissionMode, orchestrator: config.orchestrator,
-    subagentPresetId: config.subagentPresetId, subagentEffort: config.subagentEffort,
+    presetId: config.presetId, permissionMode: config.permissionMode,
     integrate, autonomy, dependsOn: dependsOn || null,
     checks: checks.split('\n').map((line) => line.trim()).filter(Boolean),
   })

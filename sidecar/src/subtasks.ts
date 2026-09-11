@@ -326,10 +326,9 @@ export class SubtaskRunner {
         signal,
         ...(readOnly ? { sandboxMode: "read-only" as const } : {}),
         ...(mcpServers === null ? {} : { mcpServers }),
-        // GARDE DE PROFONDEUR : pas de `conductor` ici, et il n'y a aucun
-        // chemin pour en ajouter un. Un sub-agent ne voit donc pas les outils
-        // de délégation et ne peut pas créer de sous-sous-tâche — la
-        // récursion est structurellement impossible, pas simplement découragée.
+        // GARDE DE PROFONDEUR : pas de pont `pupitre` ici. Une sous-tâche ne
+        // voit donc pas les outils de conversation et ne peut pas en relancer
+        // une — la récursion est structurellement impossible.
       };
       await runProviderTurn(subtask.provider, opts, emit);
       if (outcome.terminal === null) {

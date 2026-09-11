@@ -21,9 +21,6 @@ export interface ConversationConfig {
   effort: string
   speed: ConversationSpeed
   permissionMode: PresetPermissionMode | null
-  orchestrator: boolean
-  subagentPresetId: string | null
-  subagentEffort: string | null
   /** Branche sur laquelle isoler la conversation ; vide = dépôt principal. */
   branch?: string | null
   ticketKey?: string | null
@@ -66,9 +63,6 @@ export function configOf(preset: Preset): ConversationConfig {
     effort: preset.effort ?? 'high',
     speed: preset.speed ?? 'standard',
     permissionMode: preset.permission_mode ?? null,
-    orchestrator: preset.orchestrator,
-    subagentPresetId: preset.subagent_preset_id ?? null,
-    subagentEffort: preset.subagent_effort ?? null,
   }
 }
 
@@ -100,7 +94,6 @@ export function ConfigPanel({
 }: ConfigPanelProps) {
   const [branches, setBranches] = useState<string[]>([])
   const [currentBranch, setCurrentBranch] = useState<string | null>(null)
-  const [presets, setPresets] = useState<Preset[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const configRef = useRef(config)
   configRef.current = config
@@ -126,7 +119,6 @@ export function ConfigPanel({
     void listPresets(abortController.signal)
       .then((loaded) => {
         if (abortController.signal.aborted) return
-        setPresets(loaded)
         if (!applyProjectDefault) return
         const remembered = memoryKey === null ? null : readLaunchConfig(memoryKey)
         if (remembered !== null) {
@@ -168,7 +160,7 @@ export function ConfigPanel({
     <div className="config-panel" aria-label="Configuration de la conversation">
       <ModelConfigSelector
         config={config}
-        presets={presets}
+        projectPermissionMode={project.permission_mode}
         quotas={quotas}
         isLoading={isLoading}
         showConversationSettings={showConversationSettings}

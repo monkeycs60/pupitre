@@ -219,7 +219,6 @@ test("notifie la fin d'une tâche longue hors routine", async () => {
     projectId,
     provider: "claude",
     model: "haiku",
-    orchestrator: false,
     firstMessage: "travail long",
   });
 

@@ -706,7 +706,6 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     model: "gpt-5.6-sol",
     effort: "high",
     speed: "standard",
-    orchestrator: true,
     permission_mode: "autonomous",
     review_provider: "claude",
     review_model: "opus",
@@ -721,7 +720,6 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     model: "gpt-5.6-luna",
     effort: "medium",
     speed: "fast",
-    orchestrator: false,
   });
   expect(updated.status).toBe(200);
   expect(await updated.json()).toEqual(expect.objectContaining({
@@ -738,7 +736,6 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     model: "gpt-5.6-luna",
     effort: "low",
     speed: "standard",
-    orchestrator: true,
     permission_mode: "confirm-everything",
   });
   expect(invalidPermission.status).toBe(400);
@@ -823,7 +820,6 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     model: "haiku",
     effort: "low",
     speed: null,
-    orchestrator: false,
   });
   expect(editedBuiltIn.status).toBe(200);
   expect(await editedBuiltIn.json()).toEqual(expect.objectContaining({
@@ -882,7 +878,6 @@ test("POST /api/reviews lance un scan headless et l'expose par review et projet"
     model: "gpt-5.6-luna",
     effort: "high",
     speed: "standard",
-    orchestrator: true,
     review_provider: "codex",
     review_model: "gpt-5.6-luna",
     review_effort: "medium",
@@ -994,7 +989,6 @@ test("dispatch utilise le preset de correction du projet", async () => {
     model: "opus",
     effort: "high",
     speed: null,
-    orchestrator: true,
   });
   expect(preset.status).toBe(201);
   const { id: presetId } = await preset.json() as { id: string };
@@ -1157,15 +1151,14 @@ test("la création d'un preset invalide conserve son erreur de validation", asyn
 test("persiste les seuils de quota dans settings", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const emptySettings = await fetch(`${current.baseUrl}/api/settings`);
-  // `conductorToolTokens` est calculé en lecture, pas un réglage persisté.
-  expect(await emptySettings.json()).toMatchObject({ conductorToolTokens: expect.any(Number) });
+  // `visualFeedbackPaired` est calculé en lecture, pas un réglage persisté.
+  expect(await emptySettings.json()).toMatchObject({ visualFeedbackPaired: false });
 
   const saved = await putJson("/api/settings", {
     quotaThresholds: { lastHour: false, usedPercent: 91 },
   });
   expect(saved.status).toBe(200);
   expect(await saved.json()).toMatchObject({
-    conductorToolTokens: expect.any(Number),
     integrationTokens: {},
     quotaThresholds: { lastHour: false, usedPercent: 91 },
   });
@@ -1174,7 +1167,6 @@ test("persiste les seuils de quota dans settings", async () => {
     longTaskThresholdSeconds: 45,
   });
   expect(await longTask.json()).toMatchObject({
-    conductorToolTokens: expect.any(Number),
     integrationTokens: {},
     longTaskThresholdSeconds: 45,
     quotaThresholds: { lastHour: false, usedPercent: 91 },
@@ -1189,7 +1181,6 @@ test("persiste les seuils de quota dans settings", async () => {
     filesystemScope: "full-system",
   });
   expect(await globalFilesystem.json()).toMatchObject({
-    conductorToolTokens: expect.any(Number),
     integrationTokens: {},
     filesystemScope: "full-system",
     longTaskThresholdSeconds: 45,
@@ -1232,7 +1223,6 @@ test("CRUD et exécution immédiate d'une routine avec notification", async () =
     model: "haiku",
     effort: "low",
     speed: null,
-    orchestrator: false,
     enabled: true,
   });
   expect(created.status).toBe(201);
@@ -1657,7 +1647,6 @@ test("handoff cross-provider résume, crée et seed une conversation liée", asy
     model: "gpt-5.6-luna",
     effort: "low",
     speed: "fast",
-    orchestrator: true,
   });
   expect(response.status).toBe(201);
   const continuation = await response.json() as {
@@ -1774,7 +1763,6 @@ test("POST debrief versionne le bilan, le diffuse et l'expose en lecture", async
     provider: "claude",
     model: "sonnet",
     effort: "high",
-    orchestrator: true,
     message: "Décidons de rester local-first",
     images: [],
   });
@@ -1815,7 +1803,6 @@ test("Résumé session reste court et le handoff expose un document réutilisabl
     provider: "claude",
     model: "sonnet",
     effort: "high",
-    orchestrator: true,
     message: "Implémentons le parcours de passation",
     images: [],
   });
@@ -1852,7 +1839,6 @@ test("Résumé session reste court et le handoff expose un document réutilisabl
       model: "sonnet",
       effort: "high",
       speed: null,
-      orchestrator: true,
     },
   );
   expect(continuationResponse.status).toBe(201);

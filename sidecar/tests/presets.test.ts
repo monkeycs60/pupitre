@@ -47,7 +47,6 @@ test("le preset Vitesse garde Gardien aligné après personnalisation", () => {
     model: "gpt-5.6-luna",
     effort: "xhigh",
     speed: "fast",
-    orchestrator: true,
   })).toMatchObject({
     review_provider: "codex",
     review_model: "gpt-5.6-luna",
@@ -80,7 +79,6 @@ test("laisse intact un Qualité max déjà personnalisé", () => {
     model: "sonnet",
     effort: "high",
     speed: null,
-    orchestrator: true,
   });
   legacyDb.query("DELETE FROM settings WHERE key = 'quality-preset-fable-5-1-v1'").run();
   legacyDb.close();
@@ -118,7 +116,6 @@ test("CRUD d'un preset personnalisé", () => {
     model: "gpt-5.6-sol",
     effort: "high",
     speed: "standard",
-    orchestrator: true,
   });
   expect(created).toMatchObject({ name: "Revue Codex", built_in: false });
   expect(created).toMatchObject({
@@ -133,7 +130,6 @@ test("CRUD d'un preset personnalisé", () => {
     model: "gpt-5.6-luna",
     effort: "medium",
     speed: "fast",
-    orchestrator: false,
   });
   expect(updated).toMatchObject({ name: "Revue rapide", speed: "fast" });
   expect(presets.delete(created.id)).toBe(true);
@@ -147,7 +143,6 @@ test("un preset personnalisé utilise sa configuration pour la review", () => {
     model: "gpt-5.6-sol",
     effort: "medium",
     speed: "standard",
-    orchestrator: true,
   });
   expect(created).toMatchObject({
     review_provider: "codex",
@@ -163,7 +158,6 @@ test("une review héritée suit le nouveau modèle, une review choisie ne bouge 
     model: "gpt-5.6-sol",
     effort: "high",
     speed: "standard",
-    orchestrator: true,
   });
   expect(inherited.review_explicit).toBe(false);
   expect(presets.update(inherited.id, {
@@ -172,7 +166,6 @@ test("une review héritée suit le nouveau modèle, une review choisie ne bouge 
     model: "opus",
     effort: "medium",
     speed: "standard",
-    orchestrator: true,
   })).toMatchObject({
     review_provider: "claude",
     review_model: "opus",
@@ -185,7 +178,6 @@ test("une review héritée suit le nouveau modèle, une review choisie ne bouge 
     model: "gpt-5.6-sol",
     effort: "high",
     speed: "standard",
-    orchestrator: true,
     review_provider: "claude",
     review_model: "opus",
     review_effort: "high",
@@ -197,7 +189,6 @@ test("une review héritée suit le nouveau modèle, une review choisie ne bouge 
     model: "gpt-5.6-luna",
     effort: "low",
     speed: "fast",
-    orchestrator: true,
   })).toMatchObject({
     review_provider: "claude",
     review_model: "opus",
@@ -211,11 +202,11 @@ test("aligne la review des presets personnalisés d'une base sans colonne de rev
   new PresetStore(legacyDb);
   legacyDb.query(`
     INSERT INTO presets
-      (id, name, provider, model, effort, speed, orchestrator,
+      (id, name, provider, model, effort, speed,
        permission_mode, review_provider, review_model, review_effort,
        built_in, created_at, updated_at)
     VALUES
-      ('implicit', 'Opus low', 'claude', 'opus', 'low', NULL, 1,
+      ('implicit', 'Opus low', 'claude', 'opus', 'low', NULL,
        NULL, 'claude', 'opus', 'high', 0, 'now', 'now')
   `).run();
   for (const column of ["review_explicit", "review_provider", "review_model", "review_effort"]) {
@@ -238,11 +229,11 @@ test("aligne aussi un preset personnalisé dont l'effort est NULL", () => {
   new PresetStore(legacyDb);
   legacyDb.query(`
     INSERT INTO presets
-      (id, name, provider, model, effort, speed, orchestrator,
+      (id, name, provider, model, effort, speed,
        permission_mode, review_provider, review_model, review_effort,
        built_in, created_at, updated_at)
     VALUES
-      ('sans-effort', 'Luna', 'codex', 'gpt-5.6-luna', NULL, NULL, 1,
+      ('sans-effort', 'Luna', 'codex', 'gpt-5.6-luna', NULL, NULL,
        NULL, 'codex', 'gpt-5.6-sol', 'high', 0, 'now', 'now')
   `).run();
   for (const column of ["review_explicit", "review_provider", "review_model", "review_effort"]) {
@@ -265,11 +256,11 @@ test("préserve une review déjà saisie quand la base n'a pas encore de marqueu
   new PresetStore(legacyDb);
   legacyDb.query(`
     INSERT INTO presets
-      (id, name, provider, model, effort, speed, orchestrator,
+      (id, name, provider, model, effort, speed,
        permission_mode, review_provider, review_model, review_effort,
        built_in, created_at, updated_at)
     VALUES
-      ('choisi', 'Luna relue par Sol', 'codex', 'gpt-5.6-luna', 'low', 'standard', 1,
+      ('choisi', 'Luna relue par Sol', 'codex', 'gpt-5.6-luna', 'low', 'standard',
        NULL, 'codex', 'gpt-5.6-sol', 'high', 0, 'now', 'now')
   `).run();
   legacyDb.exec("ALTER TABLE presets DROP COLUMN review_explicit");
@@ -291,7 +282,6 @@ test("une review choisie est marquée explicite, une review héritée ne l'est p
     model: "gpt-5.6-luna",
     effort: "low",
     speed: "standard",
-    orchestrator: true,
   });
   expect(inherited.review_explicit).toBe(false);
 
@@ -301,7 +291,6 @@ test("une review choisie est marquée explicite, une review héritée ne l'est p
     model: "gpt-5.6-luna",
     effort: "low",
     speed: "standard",
-    orchestrator: true,
     review_provider: "codex",
     review_model: "gpt-5.6-sol",
     review_effort: "high",
@@ -314,7 +303,6 @@ test("une review choisie est marquée explicite, une review héritée ne l'est p
     model: "gpt-5.6-luna",
     effort: "low",
     speed: "standard",
-    orchestrator: true,
   });
   expect(renamed?.review_explicit).toBe(true);
 });
@@ -326,7 +314,6 @@ test("la permission d'un preset est optionnelle, canonique et persistante", () =
     model: "sonnet",
     effort: "high",
     speed: null,
-    orchestrator: true,
   });
   expect(inherited.permission_mode).toBeNull();
 
@@ -336,7 +323,6 @@ test("la permission d'un preset est optionnelle, canonique et persistante", () =
     model: "sonnet",
     effort: "high",
     speed: null,
-    orchestrator: true,
     permission_mode: "bypassPermissions",
   });
   expect(autonomous.permission_mode).toBe("bypassPermissions");
@@ -347,7 +333,6 @@ test("la permission d'un preset est optionnelle, canonique et persistante", () =
     model: autonomous.model,
     effort: autonomous.effort,
     speed: autonomous.speed,
-    orchestrator: autonomous.orchestrator,
     permission_mode: null,
   });
   expect(updated?.permission_mode).toBeNull();
@@ -358,7 +343,6 @@ test("la permission d'un preset est optionnelle, canonique et persistante", () =
     model: autonomous.model,
     effort: autonomous.effort,
     speed: autonomous.speed,
-    orchestrator: autonomous.orchestrator,
     permission_mode: "bypassPermissions",
   });
   expect(restoredOnUpdate?.permission_mode).toBe("bypassPermissions");
@@ -371,7 +355,6 @@ test("les presets intégrés s'éditent et se restaurent, mais ne se suppriment 
     model: "haiku",
     effort: "medium",
     speed: null,
-    orchestrator: false,
     review_provider: "claude",
     review_model: "sonnet",
     review_effort: "high",
@@ -380,7 +363,6 @@ test("les presets intégrés s'éditent et se restaurent, mais ne se suppriment 
     name: "Éco maison",
     provider: "claude",
     model: "haiku",
-    orchestrator: false,
     review_model: "sonnet",
     // Le drapeau survit à l'édition : c'est lui qui rend la restauration possible.
     built_in: true,
@@ -393,7 +375,6 @@ test("les presets intégrés s'éditent et se restaurent, mais ne se suppriment 
     model: "gpt-5.6-luna",
     effort: "low",
     speed: "standard",
-    orchestrator: true,
     review_provider: "codex",
     review_model: "gpt-5.6-sol",
     review_effort: "high",
@@ -411,7 +392,6 @@ test("une édition d'un preset intégré survit au redémarrage", () => {
     model: "sonnet",
     effort: "high",
     speed: null,
-    orchestrator: true,
     review_provider: "claude",
     review_model: "fable-5",
     review_effort: "high",
@@ -433,7 +413,6 @@ test("un preset personnalisé n'a pas de valeurs d'origine à restaurer", () => 
     model: "gpt-5.6-sol",
     effort: "high",
     speed: "standard",
-    orchestrator: true,
   });
   expect(() => presets.restore(custom.id)).toThrow("preset sans valeurs d'origine");
   expect(presets.restore("inconnu")).toBeNull();
@@ -447,7 +426,6 @@ test("un projet mémorise son preset par défaut et le perd si le preset est sup
     model: "sonnet",
     effort: "medium",
     speed: null,
-    orchestrator: true,
   });
 
   projects.setDefaultPreset(project.id, custom.id);

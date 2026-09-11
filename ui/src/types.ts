@@ -45,7 +45,6 @@ export interface ConversationCost {
   totalTokens: number
   directTokens: number
   subtaskTokens: number
-  delegationSavingsTokens: number
   models: ModelCost[]
 }
 
@@ -55,7 +54,6 @@ export interface ProjectCostReport {
   totalTokens: number
   directTokens: number
   subtaskTokens: number
-  delegationSavingsTokens: number
   conversations: ConversationCost[]
 }
 
@@ -156,7 +154,6 @@ export interface Workflow {
   model: string
   effort: string | null
   speed: ConversationSpeed | null
-  orchestrator: boolean
   created_at: string
   updated_at: string
 }
@@ -173,7 +170,6 @@ export interface Routine {
   model: string
   effort: string | null
   speed: ConversationSpeed | null
-  orchestrator: boolean
   enabled: boolean
   next_run_at: string | null
   created_at: string
@@ -242,9 +238,6 @@ export interface Preset {
   model: string
   effort: string | null
   speed: ConversationSpeed | null
-  orchestrator: boolean
-  subagent_preset_id?: string | null
-  subagent_effort?: string | null
   permission_mode: PresetPermissionMode | null
   review_provider: Provider
   review_model: string
@@ -264,9 +257,6 @@ export interface Conversation {
   effort: string | null
   speed: ConversationSpeed | null
   permission_mode?: PresetPermissionMode | null
-  orchestrator: boolean
-  subagent_preset_id?: string | null
-  subagent_effort?: string | null
   continued_from: string | null
   routine_id: string | null
   /** Worktree git dédié ; null = dossier principal du projet (ADR 0001). */

@@ -6,7 +6,6 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import type { AppEvent } from "../events";
 import type { EmitFn, SteerInput, TurnOptions } from "./types";
-import { codexMcpConfig } from "../conductor";
 import { codexPupitreMcpServer } from "../pupitre";
 import { boundedToolOutput } from "./output";
 import { aiRoots, DEFAULT_FILESYSTEM_SCOPE } from "../access";
@@ -458,21 +457,17 @@ export class CodexAppServerClient {
     };
     // `config` est un override de configuration PAR THREAD (ThreadStartParams /
     // ThreadResumeParams, objet libre aux clés de `config.toml`). C'est ce qui
-    // permet de câbler le bridge MCP `conductor` avec le bon
+    // permet de câbler le bridge MCP `pupitre` avec le bon
     // PUPITRE_CONVERSATION_ID alors que le process app-server est partagé par
     // tout le sidecar : chaque thread démarre ses propres serveurs MCP.
     // L'effort passe par `turn/start` (champ `effort` des types v2) ; on le
     // duplique en config pour les versions qui ne l'honorent qu'au niveau thread.
-    const conductorConfig = opts.conductor ? codexMcpConfig(opts.conductor) : {};
-    const conductorServers = (
-      conductorConfig.mcp_servers as Record<string, Record<string, unknown>> | undefined
-    ) ?? {};
     const pupitreServers = opts.pupitre
       ? { pupitre: codexPupitreMcpServer(opts.pupitre) }
       : {};
     // Ajouter `mcp_servers` dans la config du thread fait repasser cette branche
     // après les overrides CLI du process. Sans recopier la politique utilisateur,
-    // le conductor restaurait donc notamment le timeout Sentry de 120 secondes.
+    // le pont restaurait donc notamment le timeout Sentry de 120 secondes.
     // Sélection du projet : tout serveur non retenu est désactivé pour CE
     // thread. Codex n'accepte pas de définitions inline comme Claude, mais
     // `enabled = false` par serveur donne le même résultat.
@@ -484,9 +479,8 @@ export class CodexAppServerClient {
       )
       : {};
     const threadMcpServers = {
-      ...(opts.conductor || opts.pupitre ? this.threadMcpPolicyOverrides() : {}),
+      ...(opts.pupitre ? this.threadMcpPolicyOverrides() : {}),
       ...projectFilter,
-      ...(opts.conductor ? conductorServers : {}),
       ...pupitreServers,
     };
     const overrides = {

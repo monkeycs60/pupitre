@@ -123,7 +123,7 @@ test("la charge fixe reste bornée par la mesure de référence", () => {
 
   // Avec une mesure de 30 000, la charge fixe vaut exactement ça — jamais le
   // reliquat entier, qui absorbe aussi l'erreur d'estimation.
-  const measured = contextParts(events, 500_000, 1_000_000, 0, 30_000);
+  const measured = contextParts(events, 500_000, 1_000_000, 30_000);
   // Sans profil détaillé, toute la base est imputée au prompt système.
   expect(measured.find((part) => part.label === "Prompt système du CLI")?.tokens)
     .toBe(30_000);
@@ -138,19 +138,9 @@ test("les grands nombres s'abrègent en millions", () => {
   expect(formatCompact(842)).toBe("842");
 });
 
-test("le bridge conductor bascule du déduit vers les consignes Pupitre", () => {
-  const withBridge = contextParts(events, 10_000, 1_000_000, 1_200);
-  const without = contextParts(events, 10_000, 1_000_000, 0);
-  const part = (parts: typeof withBridge, label: string) =>
-    parts.find((item) => item.label === label)!.tokens;
-  expect(part(withBridge, "Consignes Pupitre") - part(without, "Consignes Pupitre")).toBe(1_200);
-  expect(part(without, "Autres") - part(withBridge, "Autres")).toBe(1_200);
-  expect(withBridge.reduce((sum, item) => sum + item.tokens, 0)).toBe(1_000_000);
-});
-
 test("le ratio incompressible se rapporte à la fenêtre entière", () => {
   // Charge fixe mesurée à 9 000 sur une fenêtre de 20 000.
-  const parts = contextParts(events, 10_000, 20_000, 0, 9_000);
+  const parts = contextParts(events, 10_000, 20_000, 9_000);
   expect(persistentRatio(parts, 20_000)).toBeCloseTo(0.45, 2);
   expect(persistentRatio(parts, 0)).toBe(0);
 });
@@ -161,7 +151,7 @@ test("le seuil d'alerte reste sous la moitié de la fenêtre", () => {
 });
 
 test("la charge fixe détaille instructions et MCP quand ils sont mesurés", () => {
-  const parts = contextParts(events, 500_000, 1_000_000, 0, 30_000, {
+  const parts = contextParts(events, 500_000, 1_000_000, 30_000, {
     instructionsTokens: 1_800,
     mcpTokens: 6_100,
   });
@@ -175,7 +165,7 @@ test("la charge fixe détaille instructions et MCP quand ils sont mesurés", () 
 test("instructions et MCP s'affichent même sans mesure de référence", () => {
   // Le cas courant : on sait peser les fichiers et les serveurs sur disque,
   // alors que la base demande un tour CLI que l'utilisateur n'a pas lancé.
-  const parts = contextParts(events, 500_000, 1_000_000, 0, 0, {
+  const parts = contextParts(events, 500_000, 1_000_000, 0, {
     instructionsTokens: 1_800,
     mcpTokens: 6_100,
   });
@@ -187,7 +177,7 @@ test("instructions et MCP s'affichent même sans mesure de référence", () => {
 });
 
 test("un profil plus lourd que le reliquat ne crée pas de part négative", () => {
-  const parts = contextParts(events, 2_000, 1_000_000, 0, 5_000, {
+  const parts = contextParts(events, 2_000, 1_000_000, 5_000, {
     instructionsTokens: 9_000,
     mcpTokens: 9_000,
   });

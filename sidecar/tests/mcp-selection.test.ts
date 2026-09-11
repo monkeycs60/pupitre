@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDb } from "../src/db";
 import { ProjectStore } from "../src/stores/projects";
 import { claudeServerDefinitions } from "../src/mcp-inventory";
-import { claudeMcpConfigArg } from "../src/conductor";
+import { claudeMcpConfigArg } from "../src/pupitre";
 
 let projects: ProjectStore;
 
@@ -41,16 +41,16 @@ test("les définitions du projet écrasent celles du global", () => {
   expect(definitions.tavily).toEqual({ command: "npx" });
 });
 
-test("la config CLI ne contient que le bridge et les serveurs retenus", () => {
+test("la config CLI ne contient que le pont et les serveurs retenus", () => {
   const config = JSON.parse(claudeMcpConfigArg(
-    { port: 4321, conversationId: "c1" },
     { figma: { command: "npx", args: ["figma-mcp"] } },
+    { port: 4321, conversationId: "c1" },
   ));
-  expect(Object.keys(config.mcpServers).sort()).toEqual(["conductor", "figma"]);
+  expect(Object.keys(config.mcpServers).sort()).toEqual(["figma", "pupitre"]);
 });
 
-test("sans conducteur, la config ne porte que les serveurs du projet", () => {
-  const config = JSON.parse(claudeMcpConfigArg(null, { figma: { command: "npx" } }));
+test("sans pont, la config ne porte que les serveurs du projet", () => {
+  const config = JSON.parse(claudeMcpConfigArg({ figma: { command: "npx" } }));
   expect(Object.keys(config.mcpServers)).toEqual(["figma"]);
 });
 

@@ -77,9 +77,6 @@ export interface CreateConversationInput {
   effort?: string
   speed?: ConversationSpeed
   permissionMode?: PresetPermissionMode | null
-  orchestrator: boolean
-  subagentPresetId?: string | null
-  subagentEffort?: string | null
   /** Fait naître la conversation sur cette branche, dans un worktree dédié. */
   branch?: string | null
   ticketId?: string | null
@@ -105,7 +102,6 @@ export interface ModelConfigInput {
   model: string
   effort: string | null
   speed: ConversationSpeed | null
-  orchestrator?: boolean
 }
 
 export interface PresetInput {
@@ -114,9 +110,6 @@ export interface PresetInput {
   model: string
   effort: string | null
   speed: ConversationSpeed | null
-  orchestrator: boolean
-  subagent_preset_id?: string | null
-  subagent_effort?: string | null
   permission_mode?: PresetPermissionMode | null
   review_provider?: Provider
   review_model?: string
@@ -133,7 +126,6 @@ export interface WorkflowInput {
   model?: string
   effort?: string | null
   speed?: ConversationSpeed | null
-  orchestrator?: boolean
 }
 
 export interface RoutineInput {
@@ -147,7 +139,6 @@ export interface RoutineInput {
   model: string
   effort: string | null
   speed: ConversationSpeed | null
-  orchestrator: boolean
   enabled: boolean
 }
 
@@ -165,8 +156,6 @@ export interface Settings {
   filesystemScope?: FilesystemScope
   actionFormat?: ActionFormat
   integrationTokens?: Record<string, boolean>
-  /** Lecture seule : calculé par le sidecar, ignoré en écriture. */
-  conductorToolTokens?: number
   /** Contexte d'un tour à vide, mesuré par « Vérifier en réel ». */
   contextBaseline?: number
   /** Dernière page Claude Design visitée, pour rouvrir la vue dessus. `null`

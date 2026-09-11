@@ -19,9 +19,6 @@ export interface TodoInput {
   speed?: ConversationSpeed | null
   presetId?: string | null
   permissionMode?: PresetPermissionMode | null
-  orchestrator?: boolean
-  subagentPresetId?: string | null
-  subagentEffort?: string | null
   images?: string[]
   attachments?: Attachment[]
 }
@@ -49,9 +46,6 @@ export interface TodoItem {
   speed?: ConversationSpeed | null
   preset_id?: string | null
   permission_mode?: PresetPermissionMode | null
-  orchestrator?: boolean
-  subagent_preset_id?: string | null
-  subagent_effort?: string | null
   attachments: Attachment[]
   checks: string[]
 }

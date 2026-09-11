@@ -34,7 +34,6 @@ test("agrège les tokens par modèle et les tokens parent préservés par Luna",
     type: "session", provider: "codex", cliSessionId: "thread", model: "gpt-5.6-luna",
   });
   conversations.appendEvent(subtask.id, { type: "usage", inputTokens: 40, outputTokens: 10 });
-  // Un changement ultérieur ne réécrit pas le contrefactuel de la délégation.
   conversations.updateModel(conversation.id, {
     model: "gpt-5.6-luna", effort: "low", speed: "fast",
   });
@@ -45,7 +44,6 @@ test("agrège les tokens par modèle et les tokens parent préservés par Luna",
     totalTokens: 170,
     directTokens: 120,
     subtaskTokens: 50,
-    delegationSavingsTokens: 50,
   });
   expect(report.conversations[0]?.models).toEqual([
     { model: "fable-5", tokens: 120 },

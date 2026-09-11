@@ -36,7 +36,6 @@ const reviewWorkflow: Workflow = {
   model: 'gpt-5.6-sol',
   effort: 'high',
   speed: 'standard',
-  orchestrator: true,
   created_at: '2026-08-08T08:00:00.000Z',
   updated_at: '2026-08-08T08:00:00.000Z',
 }
@@ -61,9 +60,6 @@ const startedConversation: Conversation = {
   effort: 'high',
   speed: 'standard',
   permission_mode: 'default',
-  orchestrator: true,
-  subagent_preset_id: null,
-  subagent_effort: null,
   continued_from: null,
   routine_id: null,
   worktree_path: null,

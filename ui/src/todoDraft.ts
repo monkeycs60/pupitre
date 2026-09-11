@@ -14,8 +14,6 @@ export function buildTodoInput(config: ConversationConfig, draft: { message: str
     provider: config.provider, model: config.model, effort: config.effort,
     speed: config.provider === 'codex' ? config.speed : undefined,
     presetId: config.presetId, permissionMode: config.permissionMode,
-    orchestrator: config.orchestrator, subagentPresetId: config.subagentPresetId,
-    subagentEffort: config.subagentEffort,
     message: draft.message, ticketId: draft.ticketId,
     targetBranch: config.branch?.trim() || null,
     integrate: draft.autonomy === 'local' && draft.integrate,

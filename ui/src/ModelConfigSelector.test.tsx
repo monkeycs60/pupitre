@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
 import type { ConversationConfig } from './ConfigPanel'
-import type { Preset, QuotaSnapshot } from './types'
+import type { QuotaSnapshot } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
@@ -19,15 +19,11 @@ const config: ConversationConfig = {
   effort: 'high',
   speed: 'standard',
   permissionMode: null,
-  orchestrator: true,
-  subagentPresetId: null,
-  subagentEffort: null,
 }
 
 function selector(overrides: Partial<Parameters<typeof ModelConfigSelector>[0]> = {}) {
   return createElement(ModelConfigSelector, {
     config,
-    presets: [] as Preset[],
     quotas: emptyQuotas,
     onConfigChange: () => undefined,
     ...overrides,
@@ -115,14 +111,54 @@ test('YOLO reste visible hors du panneau', () => {
   expect(screen.getByText('YOLO')).toBeTruthy()
 })
 
-test('conserve le réglage d’effort des sub-agents', () => {
+test('l’autonomie est une échelle ordonnée, du plus borné au plus ouvert', () => {
+  render(selector())
+  fireEvent.click(screen.getByRole('button', { name: 'Réglages du tour' }))
+
+  const options = screen.getAllByRole('menuitemradio')
+    .filter((option) => option.className.includes('autonomy-option'))
+    .map((option) => option.querySelector('strong')?.textContent)
+
+  expect(options).toEqual([
+    'Hériter du projet',
+    'Plan / lecture seule',
+    'Par défaut du provider',
+    'Éditions acceptées',
+    'Autonome',
+    'YOLO · sans permissions',
+  ])
+})
+
+test('chaque rang porte une jauge plus haute que le précédent', () => {
+  render(selector())
+  fireEvent.click(screen.getByRole('button', { name: 'Réglages du tour' }))
+
+  const lit = screen.getAllByRole('menuitemradio')
+    .filter((option) => !option.className.includes('is-inherit'))
+    .filter((option) => option.className.includes('autonomy-option'))
+    .map((option) => option.querySelectorAll('.autonomy-gauge i.is-on').length)
+
+  expect(lit).toEqual([1, 2, 3, 4, 5])
+})
+
+test('l’héritage annonce le réglage du projet qu’il suit', () => {
+  render(selector({ projectPermissionMode: 'bypassPermissions' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Réglages du tour' }))
+
+  const inherit = screen.getAllByRole('menuitemradio')
+    .find((option) => option.className.includes('is-inherit'))!
+  expect(inherit.querySelector('small')?.textContent)
+    .toContain('yolo · sans permissions')
+})
+
+test('choisir un rang le renvoie sans toucher au reste de la configuration', () => {
   let next: ConversationConfig | null = null
   render(selector({ onConfigChange: (config) => { next = config } }))
 
   fireEvent.click(screen.getByRole('button', { name: 'Réglages du tour' }))
-  fireEvent.change(screen.getByLabelText('Effort sub-agent'), { target: { value: 'xhigh' } })
+  fireEvent.click(screen.getByRole('menuitemradio', { name: /Autonome/ }))
 
-  expect(next).toEqual({ ...config, subagentEffort: 'xhigh' })
+  expect(next).toEqual({ ...config, permissionMode: 'dontAsk' })
 })
 
 /**

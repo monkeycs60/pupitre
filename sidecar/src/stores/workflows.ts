@@ -13,7 +13,6 @@ export interface WorkflowInput {
   model: string;
   effort: string | null;
   speed: "standard" | "fast" | null;
-  orchestrator: boolean;
 }
 
 export interface Workflow {
@@ -29,7 +28,6 @@ export interface Workflow {
   model: string;
   effort: string | null;
   speed: "standard" | "fast" | null;
-  orchestrator: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -56,12 +54,12 @@ export class WorkflowStore {
     this.db.query(`
       INSERT INTO workflows (
         id, project_id, name, skill_id, skill_name, skill_invocation, prompt,
-        preset_id, provider, model, effort, speed, orchestrator, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        preset_id, provider, model, effort, speed, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, input.projectId, input.name, input.skillId, input.skillName,
       input.skillInvocation, input.prompt, input.presetId, input.provider,
-      input.model, input.effort, input.speed, input.orchestrator ? 1 : 0, now, now,
+      input.model, input.effort, input.speed, now, now,
     );
     return this.get(id)!;
   }
@@ -71,12 +69,12 @@ export class WorkflowStore {
       UPDATE workflows
       SET name = ?, skill_id = ?, skill_name = ?, skill_invocation = ?,
         prompt = ?, preset_id = ?, provider = ?, model = ?, effort = ?, speed = ?,
-        orchestrator = ?, updated_at = ?
+        updated_at = ?
       WHERE id = ? AND project_id = ?
     `).run(
       input.name, input.skillId, input.skillName, input.skillInvocation,
       input.prompt, input.presetId, input.provider, input.model, input.effort,
-      input.speed, input.orchestrator ? 1 : 0, new Date().toISOString(), id,
+      input.speed, new Date().toISOString(), id,
       input.projectId,
     );
     return result.changes === 1 ? this.get(id) : null;
@@ -87,6 +85,6 @@ export class WorkflowStore {
   }
 
   private hydrate(row: Record<string, unknown>): Workflow {
-    return { ...row, orchestrator: row.orchestrator === 1 } as Workflow;
+    return row as unknown as Workflow;
   }
 }

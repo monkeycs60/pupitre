@@ -45,7 +45,6 @@ test("CRUD d'un workflow épinglé avec snapshot du skill et du modèle", () => 
     model: "gpt-5.6-luna",
     effort: "low",
     speed: "fast",
-    orchestrator: true,
   });
   expect(workflows.listByProject(projectId)).toEqual([created]);
 
@@ -61,12 +60,10 @@ test("CRUD d'un workflow épinglé avec snapshot du skill et du modèle", () => 
     model: "gpt-5.6-sol",
     effort: "high",
     speed: "standard",
-    orchestrator: false,
   });
   expect(updated).toMatchObject({
     name: "Support vérifié",
     model: "gpt-5.6-sol",
-    orchestrator: false,
   });
   expect(workflows.delete(created.id)).toBe(true);
   expect(workflows.listByProject(projectId)).toEqual([]);
@@ -85,7 +82,6 @@ test("refuse deux noms identiques dans un même projet", () => {
     model: "haiku",
     effort: "low",
     speed: null,
-    orchestrator: true,
   };
   workflows.create(input);
   expect(() => workflows.create({ ...input, name: "support" })).toThrow();

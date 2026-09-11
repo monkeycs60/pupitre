@@ -172,7 +172,6 @@ export function WorkflowDialog({
   const [model, setModel] = useState<string>('gpt-5.6-luna')
   const [effort, setEffort] = useState('low')
   const [speed, setSpeed] = useState<ConversationSpeed>('fast')
-  const [orchestrator, setOrchestrator] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const initializedWorkflowIdRef = useRef<string | null>(null)
@@ -203,7 +202,6 @@ export function WorkflowDialog({
     setModel('gpt-5.6-luna')
     setEffort('low')
     setSpeed('fast')
-    setOrchestrator(true)
   }
 
   const edit = useCallback((workflow: Workflow) => {
@@ -218,7 +216,6 @@ export function WorkflowDialog({
     setModel(workflow.model)
     setEffort(workflow.effort ?? 'high')
     setSpeed(workflow.speed ?? 'standard')
-    setOrchestrator(workflow.orchestrator)
   }, [skills])
 
   useEffect(() => {
@@ -248,7 +245,6 @@ export function WorkflowDialog({
         model,
         effort,
         speed: provider === 'codex' ? speed : null,
-        orchestrator,
       } : {}),
     }
     try {
@@ -349,7 +345,6 @@ export function WorkflowDialog({
                 <label><span>Modèle</span><select value={model} onChange={(event) => setModel(event.target.value)}>{PROVIDER_MODELS[provider].map((item) => <option key={item}>{item}</option>)}</select></label>
                 <label><span>Effort</span><select value={effort} onChange={(event) => setEffort(event.target.value)}>{PROVIDER_EFFORTS[provider].map((item) => <option key={item}>{item}</option>)}</select></label>
                 {provider === 'codex' ? <label><span>Vitesse</span><select value={speed} onChange={(event) => setSpeed(event.target.value as ConversationSpeed)}><option value="standard">standard</option><option value="fast">fast</option></select></label> : null}
-                <label className="workflow-orchestrator"><input type="checkbox" checked={orchestrator} onChange={(event) => setOrchestrator(event.target.checked)} /><span>Orchestrateur</span></label>
               </div>
             ) : null}
             {error ? <p className="modal-error" role="alert">{error}</p> : null}

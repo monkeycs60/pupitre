@@ -63,7 +63,6 @@ function toInput(routine: Routine, enabled = routine.enabled): RoutineInput {
     model: routine.model,
     effort: routine.effort,
     speed: routine.speed,
-    orchestrator: routine.orchestrator,
     enabled,
   }
 }
@@ -223,7 +222,6 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
       model: config?.model ?? 'gpt-5.6-luna',
       effort: config?.effort ?? 'low',
       speed: config?.speed ?? 'fast',
-      orchestrator: config?.orchestrator ?? true,
       enabled,
     }
     setBusy('save')

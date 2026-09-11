@@ -1,6 +1,5 @@
 import type { AppEvent } from "../events";
 import type { MediaAttachment } from "../events";
-import type { ConductorTarget } from "../conductor";
 import type { PupitreTarget } from "../pupitre";
 import type { FilesystemScope } from "../access";
 
@@ -25,19 +24,12 @@ export interface TurnOptions {
   images: string[]; // chemins absolus d'images jointes par l'utilisateur
   attachments?: MediaAttachment[];
   signal?: AbortSignal;
-  /**
-   * Présent uniquement pour les tours d'une conversation ORCHESTRATRICE : le CLI
-   * reçoit alors le serveur MCP `conductor` et peut déléguer. Toujours absent
-   * pour un tour de sous-tâche (garde de profondeur : un sub-agent ne délègue
-   * pas — cf. SubtaskRunner).
-   */
-  conductor?: ConductorTarget;
   /** Bridge natif toujours attaché aux conversations principales. */
   pupitre?: PupitreTarget;
   /**
    * Définitions des serveurs MCP retenus par le projet. Absent = aucun filtre,
    * le CLI charge ce que l'utilisateur a configuré. Présent (même vide) = seuls
-   * ces serveurs sont chargés, bridge conductor compris.
+   * ces serveurs sont chargés, bridge pupitre compris.
    */
   mcpServers?: Record<string, unknown>;
   /**

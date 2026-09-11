@@ -172,17 +172,17 @@ test("le timeout de démarrage MCP est configurable", async () => {
   ]);
 });
 
-test("un thread orchestrateur conserve les bornes MCP en ajoutant conductor", async () => {
+test("un thread avec pont conserve les bornes MCP en ajoutant pupitre", async () => {
   const files = useFake();
   await collect(newClient(), {
-    conductor: { port: 4820, conversationId: "conversation-parent" },
+    pupitre: { port: 4820, conversationId: "conversation-parent" },
   });
 
   const start = sentRequests(files.log).find((request) => request.method === "thread/start")!;
   expect(start.params.config.mcp_servers).toMatchObject({
     sentry: { startup_timeout_sec: 5 },
     node_repl: { startup_timeout_sec: 5 },
-    conductor: {
+    pupitre: {
       enabled: true,
       env: {
         PUPITRE_PORT: "4820",
@@ -192,18 +192,18 @@ test("un thread orchestrateur conserve les bornes MCP en ajoutant conductor", as
   });
 });
 
-test("le mode off reste appliqué dans un thread orchestrateur", async () => {
+test("le mode off reste appliqué dans un thread avec pont", async () => {
   const files = useFake();
   process.env.PUPITRE_CODEX_MCP_POLICY = "off";
   await collect(newClient(), {
-    conductor: { port: 4820, conversationId: "conversation-parent" },
+    pupitre: { port: 4820, conversationId: "conversation-parent" },
   });
 
   const start = sentRequests(files.log).find((request) => request.method === "thread/start")!;
   expect(start.params.config.mcp_servers).toMatchObject({
     sentry: { enabled: false },
     node_repl: { enabled: false },
-    conductor: { enabled: true },
+    pupitre: { enabled: true },
   });
 });
 

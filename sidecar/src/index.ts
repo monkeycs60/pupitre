@@ -17,7 +17,6 @@ import { authenticateQuotaProvider } from "./quota-auth";
 import { SubtaskRunner } from "./subtasks";
 import { claudeSessions } from "./adapters/claude-session";
 import { codexAppServer } from "./adapters/codex-app-server";
-import { runConductorMcp } from "./conductor-mcp";
 import { runPupitreMcp } from "./pupitre-mcp";
 import { ReviewStore } from "./stores/reviews";
 import { ReviewRunner } from "./reviews";
@@ -64,8 +63,6 @@ const KILLED_EXIT_CODE = 143;
 
 if (process.argv.includes("--pupitre-mcp")) {
   await runPupitreMcp();
-} else if (process.argv.includes("--conductor-mcp")) {
-  await runConductorMcp();
 } else {
   const instance = readInstance();
   const dir = instance.dataDir;

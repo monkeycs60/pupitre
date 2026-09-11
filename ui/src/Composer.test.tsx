@@ -94,7 +94,6 @@ test('conserve la mission de problématiques dans le contrat de création', () =
     model: 'gpt-5.6',
     effort: 'high',
     speed: 'standard',
-    orchestrator: true,
     problemIds: ['problem-1', 'problem-2'],
     missionTitle: 'Prouver Match AI',
     message: 'Corriger le bug\n\n[PB-ABC123]',

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { ConversationConfig } from './ConfigPanel'
 import {
+  AUTONOMY_LEVELS,
   EFFORT_HINTS,
   formatModelPrice,
   modelCostTicks,
@@ -15,11 +16,11 @@ import {
   PROVIDERS,
   relativeCostLabel,
 } from './modelOptions'
+import { HelpLink } from './HelpLink'
 import { ProviderMark } from './ProviderMark'
 import { quotaSummary } from './quotaSignals'
 import type {
   ConversationSpeed,
-  Preset,
   PresetPermissionMode,
   Provider,
   QuotaSnapshot,
@@ -29,9 +30,9 @@ type Panel = 'model' | 'effort' | 'settings' | null
 
 export interface ModelConfigSelectorProps {
   config: ConversationConfig
-  /** Uniquement pour imposer un preset aux sub-agents. */
-  presets: Preset[]
   quotas: QuotaSnapshot
+  /** Autonomie appliquée quand la conversation hérite du projet. */
+  projectPermissionMode?: PresetPermissionMode
   isLoading?: boolean
   isBusy?: boolean
   /** Certains contextes ne peuvent modifier que le modèle, l'effort et la vitesse. */
@@ -40,15 +41,13 @@ export interface ModelConfigSelectorProps {
   placement?: 'top' | 'bottom'
 }
 
+function autonomyLevel(permission: PresetPermissionMode) {
+  return AUTONOMY_LEVELS.find((level) => level.mode === permission) ?? null
+}
+
 function permissionLabel(permission: PresetPermissionMode | null): string {
-  switch (permission) {
-    case 'default': return 'Par défaut'
-    case 'acceptEdits': return 'Éditions acceptées'
-    case 'plan': return 'Lecture seule'
-    case 'dontAsk': return 'Autonome'
-    case 'bypassPermissions': return 'YOLO'
-    default: return 'Hériter du projet'
-  }
+  if (permission === null) return 'Hériter du projet'
+  return autonomyLevel(permission)?.label ?? permission
 }
 
 function speedLabel(speed: ConversationSpeed): string {
@@ -99,6 +98,24 @@ function Sliders() {
   )
 }
 
+/** Rang de l'autonomie sur l'échelle, dans le vocabulaire de la jauge d'effort. */
+function AutonomyGauge({ level, tone, muted = false }: {
+  level: number
+  tone: 'ok' | 'accent' | 'warn' | 'danger'
+  muted?: boolean
+}) {
+  return (
+    <span
+      className={`model-strip-steps autonomy-gauge is-${tone}${muted ? ' is-muted' : ''}`}
+      aria-hidden="true"
+    >
+      {AUTONOMY_LEVELS.map((_, index) => (
+        <i key={index} className={index <= level ? 'is-on' : ''} />
+      ))}
+    </span>
+  )
+}
+
 function EffortGauge({ level, count }: { level: number; count: number }) {
   return (
     <span className="model-strip-steps" aria-hidden="true">
@@ -128,13 +145,13 @@ function CostBar({ model, tone }: { model: string; tone: 'ok' | 'warn' | 'danger
 }
 
 /**
- * Réglette de lancement : provider, modèle, effort côte à côte ; vitesse,
- * autonomie et sub-agents dans le panneau des réglages du tour.
+ * Réglette de lancement : provider, modèle, effort côte à côte ; vitesse et
+ * autonomie dans le panneau des réglages du tour.
  */
 export function ModelConfigSelector({
   config,
-  presets,
   quotas,
+  projectPermissionMode = 'acceptEdits',
   isLoading = false,
   isBusy = false,
   showConversationSettings = true,
@@ -152,10 +169,8 @@ export function ModelConfigSelector({
   const disabled = isLoading || isBusy
   const efforts = PROVIDER_EFFORTS[config.provider] as readonly string[]
   const effortLevel = Math.max(0, efforts.indexOf(config.effort))
-  const selectedSubagentPreset = presets.find((preset) => preset.id === config.subagentPresetId) ?? null
-  const subagentEfforts = selectedSubagentPreset
-    ? PROVIDER_EFFORTS[selectedSubagentPreset.provider]
-    : ['low', 'medium', 'high', 'xhigh']
+  const inheritedIndex = AUTONOMY_LEVELS.findIndex((level) => level.mode === projectPermissionMode)
+  const inherited = AUTONOMY_LEVELS[inheritedIndex] ?? AUTONOMY_LEVELS[2]!
   const hasSettingsPanel = showConversationSettings || config.provider === 'codex'
 
   useEffect(() => {
@@ -355,7 +370,7 @@ export function ModelConfigSelector({
             className={`model-strip-trigger is-icon${config.permissionMode === 'bypassPermissions' ? ' is-danger' : ''}`}
             aria-label="Réglages du tour"
             title={showConversationSettings
-              ? `Autonomie : ${permissionLabel(config.permissionMode)} · sub-agents ${config.orchestrator ? 'délégués' : 'désactivés'}`
+              ? `Autonomie : ${permissionLabel(config.permissionMode)}`
               : `Vitesse : ${speedLabel(config.speed)}`}
             aria-haspopup="menu"
             aria-expanded={panel === 'settings'}
@@ -388,56 +403,41 @@ export function ModelConfigSelector({
               {showConversationSettings ? (
                 <>
                   <p className="model-strip-section">Autonomie</p>
-                  {([
-                    [null, 'Hériter du projet'],
-                    ['default', 'Par défaut du provider'],
-                    ['acceptEdits', 'Éditions acceptées'],
-                    ['plan', 'Plan / lecture seule'],
-                    ['dontAsk', 'Autonome (sans demande)'],
-                    ['bypassPermissions', 'YOLO · sans permissions'],
-                  ] as const).map(([permission, label]) => (
-                    <button
-                      type="button"
-                      key={permission ?? 'inherit'}
-                      role="menuitemradio"
-                      aria-checked={config.permissionMode === permission}
-                      className={`${config.permissionMode === permission ? 'is-selected' : ''}${permission === 'bypassPermissions' ? ' is-danger' : ''}`}
-                      onClick={() => patch({ permissionMode: permission })}
-                    >
-                      <span className="model-strip-check-slot">{config.permissionMode === permission ? <Checkmark /> : null}</span>
-                      {label}
-                    </button>
-                  ))}
-
-                  <p className="model-strip-section">Sub-agents</p>
                   <button
                     type="button"
-                    role="menuitemcheckbox"
-                    aria-checked={config.orchestrator}
-                    className={config.orchestrator ? 'is-selected' : ''}
-                    onClick={() => patch({ orchestrator: !config.orchestrator })}
+                    role="menuitemradio"
+                    aria-checked={config.permissionMode === null}
+                    className={`autonomy-option is-inherit${config.permissionMode === null ? ' is-selected' : ''}`}
+                    onClick={() => patch({ permissionMode: null })}
                   >
-                    <span className="model-strip-check-slot">{config.orchestrator ? <Checkmark /> : null}</span>
-                    Déléguer les sous-tâches
+                    <span className="model-strip-check-slot">{config.permissionMode === null ? <Checkmark /> : null}</span>
+                    <AutonomyGauge level={inheritedIndex} tone={inherited.tone} muted />
+                    <span className="autonomy-text">
+                      <strong>Hériter du projet</strong>
+                      <small>Suit le réglage du projet : {inherited.label.toLowerCase()}.</small>
+                    </span>
                   </button>
-                  {config.orchestrator ? (
-                    <div className="model-strip-fields">
-                      <label>
-                        Modèle imposé
-                        <select value={config.subagentPresetId ?? ''} onChange={(event) => patch({ subagentPresetId: event.target.value || null, subagentEffort: null })}>
-                          <option value="">Choix du modèle principal</option>
-                          {presets.map((preset) => <option key={preset.id} value={preset.id}>{modelLabel(preset.model)} · {preset.name}</option>)}
-                        </select>
-                      </label>
-                      <label>
-                        Effort sub-agent
-                        <select value={config.subagentEffort ?? ''} onChange={(event) => patch({ subagentEffort: event.target.value || null })}>
-                          <option value="">{selectedSubagentPreset ? 'Effort du preset' : 'Choix du modèle principal'}</option>
-                          {subagentEfforts.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
-                        </select>
-                      </label>
-                    </div>
-                  ) : null}
+                  <p className="autonomy-scale">Du plus borné au plus ouvert</p>
+                  {AUTONOMY_LEVELS.map((level, index) => (
+                    <button
+                      type="button"
+                      key={level.mode}
+                      role="menuitemradio"
+                      aria-checked={config.permissionMode === level.mode}
+                      className={`autonomy-option is-${level.tone}${config.permissionMode === level.mode ? ' is-selected' : ''}`}
+                      onClick={() => patch({ permissionMode: level.mode })}
+                    >
+                      <span className="model-strip-check-slot">{config.permissionMode === level.mode ? <Checkmark /> : null}</span>
+                      <AutonomyGauge level={index} tone={level.tone} />
+                      <span className="autonomy-text">
+                        <strong>{level.label}</strong>
+                        <small>{level.hint}</small>
+                      </span>
+                    </button>
+                  ))}
+                  <p className="autonomy-help">
+                    <HelpLink slug="autonomie" label="Ce que chaque rang autorise" />
+                  </p>
                 </>
               ) : null}
             </section>

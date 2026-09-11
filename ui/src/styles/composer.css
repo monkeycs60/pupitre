@@ -515,12 +515,93 @@
 }
 
 .model-strip-settings {
-  width: 244px;
+  width: 288px;
 }
 
 .model-strip-settings button {
   grid-template-columns: 12px minmax(0, 1fr);
   gap: var(--space-2);
+}
+
+/* --- Autonomie : une échelle, pas une liste de pairs ---------------------- */
+
+.model-strip-settings .autonomy-option {
+  position: relative;
+  grid-template-columns: 12px 16px minmax(0, 1fr);
+  align-items: start;
+  padding: 7px 8px;
+}
+
+.model-strip-settings .autonomy-option .model-strip-check-slot,
+.model-strip-settings .autonomy-option .autonomy-gauge {
+  margin-top: 1px;
+}
+
+.autonomy-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.autonomy-text strong {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.autonomy-text small {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+/* La teinte reste dans la jauge tant que l'option n'est pas retenue : cinq
+   libellés colorés d'un coup deviendraient illisibles. YOLO fait exception —
+   son libellé est rouge même non retenu (`.model-strip-pop button.is-danger`),
+   parce qu'il annonce la disparition des garde-fous. */
+.autonomy-gauge.is-ok { color: var(--ok); }
+.autonomy-gauge.is-accent { color: var(--accent); }
+.autonomy-gauge.is-warn { color: var(--warn); }
+.autonomy-gauge.is-danger { color: var(--danger); }
+.autonomy-gauge.is-muted { color: var(--text-faint); }
+
+.autonomy-option::before {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: 2px;
+  background: currentColor;
+  border-radius: 0 2px 2px 0;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+  content: '';
+}
+
+.autonomy-option.is-selected::before { opacity: 1; }
+.autonomy-option.is-ok.is-selected { color: var(--ok); background: var(--ok-soft); }
+.autonomy-option.is-accent.is-selected { color: var(--accent-bright); background: var(--accent-soft); }
+.autonomy-option.is-warn.is-selected { color: var(--warn); background: var(--warn-soft); }
+.autonomy-option.is-danger.is-selected { color: var(--danger); background: var(--danger-soft); }
+.autonomy-option.is-inherit.is-selected { color: var(--text-strong); }
+
+.autonomy-option.is-selected .autonomy-text small { color: var(--text-muted); }
+
+.autonomy-option.is-danger.is-selected .autonomy-text strong {
+  letter-spacing: 0.01em;
+}
+
+.autonomy-help {
+  padding: 2px 8px 4px;
+  margin: 0;
+}
+
+.autonomy-scale {
+  padding: 6px 8px 2px;
+  margin: var(--space-1) 0 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .model-strip-section {
@@ -534,29 +615,6 @@
 .model-strip-section:not(:first-child) {
   margin-top: var(--space-1);
   border-top: 1px solid var(--border-subtle);
-}
-
-.model-strip-fields {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-2) 8px;
-}
-
-.model-strip-fields label {
-  display: grid;
-  gap: var(--space-1);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.model-strip-fields select {
-  min-height: 26px;
-  padding: 2px var(--space-2);
-  color: var(--text);
-  font-size: var(--text-sm);
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
 }
 
 /* --- Branche de la conversation (worktree dédié, ADR 0001) ---------------- */

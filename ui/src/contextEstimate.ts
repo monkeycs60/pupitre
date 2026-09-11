@@ -188,8 +188,6 @@ export function contextParts(
   events: AppEvent[],
   usedTokens: number,
   windowTokens = 0,
-  /** Coût du bridge conductor, mesuré par le sidecar ; 0 si non orchestrée. */
-  conductorTokens = 0,
   /**
    * Contexte d'un tour à vide, mesuré par le sidecar : prompt système du CLI,
    * instructions globales et mémoire. 0 tant qu'aucune mesure n'a été lancée —
@@ -233,8 +231,8 @@ export function contextParts(
   // garde la part Pupitre et recale les catégories observées pour que leur
   // somme reste lisible et ne dépasse jamais le total de référence.
   const fixedPupitre = usedTokens > 0
-    ? Math.min(usedTokens, pupitre + conductorTokens)
-    : pupitre + conductorTokens
+    ? Math.min(usedTokens, pupitre)
+    : pupitre
   const variableMeasured = user + images + assistantText + reasoning + tools
   const rawMeasured = variableMeasured + fixedPupitre
   if (usedTokens > 0 && rawMeasured > usedTokens && variableMeasured > 0) {

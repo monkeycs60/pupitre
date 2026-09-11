@@ -87,8 +87,6 @@ function displayTokens(value: number | null | undefined): string {
   return value == null ? '—' : tokens(value)
 }
 
-const PARENT_TOKENS_AVOIDED_LABEL = 'Tokens du modèle parent évités — estimation'
-
 /** Une fenêtre de quota : libellé, jauge fine colorée, légende de reset. */
 function QuotaWindowRow({ provider, window, now }: {
   provider: Provider
@@ -179,11 +177,9 @@ export function CostsView({ project, onConversationSelect }: CostsViewProps) {
   }, [month, project.id])
 
   const hasDelegatedTokens = report?.conversations.some((conversation) => hasTokenUsage(conversation.subtaskTokens)) ?? false
-  const hasDelegationSavings = report?.conversations.some((conversation) => hasTokenUsage(conversation.delegationSavingsTokens)) ?? false
   const tableClassName = [
     'cost-table',
     hasDelegatedTokens ? 'cost-table--with-delegated' : '',
-    hasDelegationSavings ? 'cost-table--with-savings' : '',
   ].filter(Boolean).join(' ')
   const modelSlices = useMemo(() => modelBreakdown(report), [report])
   const modelTotal = useMemo(() => modelSlices.reduce((sum, slice) => sum + slice.value, 0), [modelSlices])
@@ -222,7 +218,6 @@ export function CostsView({ project, onConversationSelect }: CostsViewProps) {
                 <div><dt>Total</dt><dd>{tokens(report.totalTokens)}</dd></div>
                 <div><dt>Direct</dt><dd>{tokens(report.directTokens)}</dd></div>
                 {hasDelegatedTokens ? <div><dt>Délégué</dt><dd>{tokens(report.subtaskTokens)}</dd></div> : null}
-                {hasDelegationSavings ? <div title="Estimation des tokens qui auraient été consommés par le modèle parent."><dt>{PARENT_TOKENS_AVOIDED_LABEL}</dt><dd>{tokens(report.delegationSavingsTokens)}</dd></div> : null}
               </dl>
             ) : null}
 
@@ -274,14 +269,13 @@ export function CostsView({ project, onConversationSelect }: CostsViewProps) {
                 <div className="costs-empty"><strong>{modelFilter ? `Aucune conversation avec ${modelFilter}` : 'Aucun usage ce mois-ci'}</strong><p>Les événements d’usage des conversations et sous-tâches apparaîtront ici.</p></div>
               ) : (
                 <div className={tableClassName} role="region" aria-label="Coûts par conversation">
-                  <div className="cost-row cost-head"><span>Conversation</span><span>Modèles</span><span>Direct</span>{hasDelegatedTokens ? <span>Délégué</span> : null}{hasDelegationSavings ? <span className="cost-savings-heading" title={PARENT_TOKENS_AVOIDED_LABEL} aria-label={PARENT_TOKENS_AVOIDED_LABEL}>Parent évités</span> : null}<span>Total</span></div>
+                  <div className="cost-row cost-head"><span>Conversation</span><span>Modèles</span><span>Direct</span>{hasDelegatedTokens ? <span>Délégué</span> : null}<span>Total</span></div>
                   {filteredConversations.map((conversation) => (
                     <button type="button" className="cost-row" key={conversation.conversationId} onClick={() => onConversationSelect(conversation.conversationId)}>
                       <span><strong>{conversation.title}</strong><small>parent · {conversation.parentModel}</small></span>
                       <span className="model-breakdown">{conversation.models.map((model) => <small key={model.model}>{modelLabel(model.model)} · {tokens(model.tokens)}</small>)}</span>
                       <span>{tokens(conversation.directTokens)}</span>
                       {hasDelegatedTokens ? <span>{displayTokens(conversation.subtaskTokens)}</span> : null}
-                      {hasDelegationSavings ? <span>{displayTokens(conversation.delegationSavingsTokens)}</span> : null}
                       <span><strong>{tokens(conversation.totalTokens)}</strong></span>
                     </button>
                   ))}

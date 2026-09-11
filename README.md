@@ -1,6 +1,6 @@
 # Pupitre
 
-Mission control bureau pour Linux : une app qui pilote **Claude Code**, **Codex CLI** et **Grok Build** sur tes abonnements (jamais d'API payante), avec discussions par projet, orchestration, contrôle des changements, tests guidés et historique Git. Le pupitre du chef d'orchestre : l'app dirige les CLIs sans jouer une note elle-même.
+Mission control bureau pour Linux : une app qui pilote **Claude Code**, **Codex CLI** et **Grok Build** sur tes abonnements (jamais d'API payante), avec discussions par projet, contrôle des changements, tests guidés et historique Git. Le pupitre du chef d'orchestre : l'app dirige les CLIs sans jouer une note elle-même.
 
 ## Architecture (M4)
 
@@ -149,53 +149,67 @@ et lit les captures depuis leur chemin local. Un tour Grok est one-shot
 - **Aide** embarque les pages Markdown des concepts Pupitre, les recherche en
   local et reçoit les liens contextuels des écrans et contrôles non évidents.
 
-## Sous-tâches déléguées (M2-D1)
+## Moteur de sous-tâches
 
-Une conversation peut déléguer du travail à un autre modèle (le Conductor de la phase D). Le moteur vit dans `sidecar/src/subtasks.ts` :
+Pupitre ne délègue plus de travail à la main du modèle principal : les
+sous-agents s'invoquent depuis le prompt, avec les outils natifs du CLI. Le
+moteur `sidecar/src/subtasks.ts` reste le lanceur de tours headless de Pupitre
+lui-même — c'est par lui que Gardien dispatche ses corrections.
 
-- `POST /api/subtasks {conversationId, provider, model, effort?, speed?, prompt, label?}` → `201 {id}`, tour lancé en arrière-plan dans le cwd du projet parent, **sans prendre le verrou de conversation** (une sous-tâche tourne délibérément en parallèle du tour parent qui l'a demandée).
-- `GET /api/subtasks/:id` → `{status, resultText, error, subtask}` — `resultText` = concaténation des `text-final`, `error` = message du dernier statut terminal en échec (`null` sinon). Un sub-agent qui plante n'écrit souvent aucun `text-final` : sans `error`, l'orchestrateur et la carte UI n'ont qu'un « ÉCHEC » sans cause.
-- `GET /api/subtasks/:id/events` → replay, et `GET /api/conversations/:id/subtasks` → les sous-tâches d'une conversation.
-- Les événements d'une sous-tâche sont stockés dans la table `events` sous **son propre id** : le replay HTTP et le canal `/ws?conversation=<subtaskId>` fonctionnent à l'identique d'une conversation.
-- Au lancement, un event `subtask-ref` est appendé à la **conversation parente** : c'est ce qui permet à l'UI d'afficher la carte de sub-agent. La carte charge d'abord le snapshot HTTP et n'ouvre un WebSocket que si elle est **dépliée** ou si la sous-tâche **tourne encore** (`ui/src/subtaskStream.ts`) : un fil qui a délégué trente fois ne tient pas trente sockets sur des flux définitivement muets. Tant que le snapshot n'est pas revenu, la carte est dans un état neutre (« chargement ») — jamais « en cours », sinon les cartes historiques gonfleraient le compteur de sub-agents de la sidebar à chaque ouverture du fil.
-- `POST /api/subtasks/:id/cancel` → `202` (interrompt la sous-tâche en vol, statut terminal `error: annulé`), `409` si elle est déjà terminée, `404` si l'id est inconnu.
-- `POST /api/conversations/:id/cancel` annule **en cascade** : le tour parent *et* toutes ses sous-tâches en vol (`SubtaskRunner.cancelByConversation`). `202` dès qu'il y avait quelque chose à annuler (même sans tour parent en cours), `409` sinon. Sans la cascade, tuer l'orchestrateur laissait ses sub-agents tourner sans plus personne pour lire leur résultat.
+- `SubtaskRunner.start({conversationId, provider, model, effort?, speed?, prompt, label?, readOnly?})`
+  lance un tour en arrière-plan dans le cwd du projet parent, **sans prendre le
+  verrou de conversation** : la sous-tâche tourne en parallèle du tour parent.
+- `GET /api/subtasks/:id` → `{status, resultText, error, subtask}` — `resultText`
+  = concaténation des `text-final`, `error` = message du dernier statut terminal
+  en échec (`null` sinon). Une sous-tâche qui plante n'écrit souvent aucun
+  `text-final` : sans `error`, la carte UI n'a qu'un « ÉCHEC » sans cause.
+- `GET /api/subtasks/:id/events` → replay, et `GET /api/conversations/:id/subtasks`
+  → les sous-tâches d'une conversation.
+- Les événements d'une sous-tâche sont stockés dans la table `events` sous **son
+  propre id** : le replay HTTP et le canal `/ws?conversation=<subtaskId>`
+  fonctionnent à l'identique d'une conversation.
+- Au lancement, un event `subtask-ref` est appendé à la **conversation parente** :
+  c'est ce qui permet à l'UI d'afficher la carte. La carte charge d'abord le
+  snapshot HTTP et n'ouvre un WebSocket que si elle est **dépliée** ou si la
+  sous-tâche **tourne encore** (`ui/src/subtaskStream.ts`). Tant que le snapshot
+  n'est pas revenu, la carte est dans un état neutre (« chargement ») — jamais
+  « en cours », sinon les cartes historiques gonfleraient le compteur de la
+  sidebar à chaque ouverture du fil.
+- `POST /api/subtasks/:id/cancel` → `202` (interrompt la sous-tâche en vol,
+  statut terminal `error: annulé`), `409` si elle est déjà terminée, `404` si
+  l'id est inconnu. Il n'y a **pas** de route de création : le moteur s'appelle
+  depuis le sidecar.
+- `POST /api/conversations/:id/cancel` annule **en cascade** : le tour parent
+  *et* toutes ses sous-tâches en vol (`SubtaskRunner.cancelByConversation`).
+  `202` dès qu'il y avait quelque chose à annuler (même sans tour parent en
+  cours), `409` sinon.
 
-**Limite de concurrence : 4 sous-tâches simultanées par conversation parente** (`MAX_CONCURRENT_SUBTASKS`). Au-delà, l'API répond `429` et c'est à l'appelant (le bridge MCP de D2) de séquencer ses délégations. La limite est par conversation, pas globale : deux conversations peuvent orchestrer en parallèle sans se gêner. Elle protège du fan-out incontrôlé — autant de process CLI, de quota consommé et d'écritures concurrentes dans le même working directory qu'il y a d'appels.
+**Limite de concurrence : 4 sous-tâches simultanées par conversation parente**
+(`MAX_CONCURRENT_SUBTASKS`). Au-delà, `start` lève `SubtaskLimitError` et
+l'appelant séquence. La limite est par conversation, pas globale.
 
-## Bridge MCP « conductor » (M2-D2)
+**Garde de profondeur** : un tour de sous-tâche ne reçoit **jamais** le pont MCP
+`pupitre`. Ce n'est pas une convention mais une propriété de structure —
+`SubtaskRunner` ne construit pas le champ `pupitre` de `TurnOptions` et aucun
+chemin ne permet de l'y ajouter.
 
-C'est ce qui donne à l'orchestrateur la *main* sur les sous-tâches : un serveur MCP stdio maison, `sidecar/src/conductor-mcp.ts`, lancé **par le CLI** et qui rappelle le sidecar en HTTP local.
+## Autonomie d'un tour
 
-```
-bun sidecar/src/conductor-mcp.ts     # PUPITRE_PORT, PUPITRE_CONVERSATION_ID
-```
+Cinq modes, du plus borné au plus ouvert (`AUTONOMY_LEVELS` dans
+`ui/src/modelOptions.ts`, `PRESET_PERMISSION_MODES` côté sidecar) ; une
+conversation peut aussi hériter du réglage du projet.
 
-Le bridge est **sans état** : chaque outil est un appel à l'API D1 ci-dessus. Un process par tour orchestrateur, rien à nettoyer.
-
-| Outil | Effet |
+| Mode | Ce que le CLI peut faire |
 | --- | --- |
-| `delegate({provider, model, effort?, speed?, prompt, label?})` | `POST /api/subtasks`, puis poll de `GET /api/subtasks/:id` toutes les 2 s jusqu'à `done`/`error` (timeout 15 min). Rend le `resultText` ou l'erreur. |
-| `delegate_parallel({tasks:[…max 4]})` | Crée toutes les sous-tâches (le `429` de la limite de concurrence est encaissé et réessayé — c'est le séquençage attendu côté appelant), attend tout, rend les résultats dans l'ordre des tâches. |
-| `check_quotas()` | `GET /api/quotas` mis en forme lisible (fenêtres, % utilisé, reset). |
-
-Les descriptions d'outils sont la doc que lit l'orchestrateur : modèles disponibles (`claude` : fable-5.1 / fable-5 / opus / sonnet / haiku ; `codex` : gpt-6-astra / gpt-5.6-sol / gpt-5.6-luna / gpt-5.6-terra ; `grok` : grok-4.6 / grok-4.5), efforts, `speed: fast` **codex uniquement**, et la recommandation de routage (sous-tâche d'exécution → `gpt-5.6-luna`, effort low/medium, fast ; `check_quotas` avant de choisir en cas d'hésitation).
-
-**Câblage, par tour** — piloté par la colonne de conversation `orchestrator` (INTEGER, **défaut 1**, acceptée par `POST /api/conversations`) :
-
-- **claude** : `--mcp-config '<JSON inline>'` avec `{mcpServers:{conductor:{command, args:[<chemin absolu>], env:{PUPITRE_PORT, PUPITRE_CONVERSATION_ID}}}}`. Pas de `--strict-mcp-config` : les serveurs MCP de l'utilisateur restent actifs.
-- **codex (app-server)** : le champ `config` de `thread/start` / `thread/resume` est un **override de configuration par thread** (clés de `config.toml`) — on y met `mcp_servers.conductor`. C'est ce qui résout le problème du process app-server *partagé* par tout le sidecar : chaque thread démarre ses propres serveurs MCP, donc chaque tour reçoit son propre `PUPITRE_CONVERSATION_ID` par l'environnement. Aucun besoin de passer l'id par le prompt.
-- **codex exec** (chemin historique `PUPITRE_CODEX_MODE=exec`) : les mêmes valeurs en overrides `-c mcp_servers.conductor.*`.
-- **grok** : `grok -p` n'a pas `--mcp-config`. Le pont est un plugin éphémère sous `~/.grok/plugins/.pupitre-*` (chargé et de confiance), retiré à la fin du tour. Le flux est `streaming-messages-json` (même fil Messages que Claude Code). Pas de précision en vol : le headless Grok ne lit pas stdin.
-- Filet documenté : chaque outil accepte aussi un paramètre optionnel `conversation_id` qui prime sur l'environnement, pour un hôte incapable de transmettre un environnement par tour.
-
-Le port du sidecar est fourni au `ConversationRunner` par une fonction **obligatoire** (résolue à chaque tour, le serveur étant construit après le runner). Un tour orchestrateur qui résout un port invalide échoue immédiatement avec un `status: error` explicite, au lieu de lancer un CLI dont les délégations partiraient vers un port mort.
-
-**Garde de profondeur** : un tour de sous-tâche ne reçoit **jamais** le câblage conductor. Ce n'est pas une convention mais une propriété de structure — `SubtaskRunner` ne construit pas le champ `conductor` de `TurnOptions` et aucun chemin ne permet de l'y ajouter. Un sub-agent ne voit donc pas les outils de délégation : pas de sous-sous-tâche, pas de récursion (testé dans `tests/conductor-wiring.test.ts`).
+| `plan` | Lit et propose. Codex passe en sandbox `read-only`. |
+| `default` | Mode natif du provider. Les tours partent en headless : ce qui demanderait une permission est refusé. |
+| `acceptEdits` | Éditions de fichiers acceptées d'office ; les commandes restent refusées. |
+| `dontAsk` | Édite et exécute sans demander, dans le périmètre du projet. |
+| `bypassPermissions` | `--dangerously-skip-permissions` (claude), sandbox `danger-full-access` (codex), `--always-approve` (grok). |
 
 ## Presets et réglages (M2-E1)
 
-Les configurations de nouveau tour sont persistées dans `presets` (`provider`, modèle, effort, vitesse, orchestration et verrou éventuel des sub-agents). Trois presets intégrés sont créés idempotemment — **Éco**, **Qualité max**, **Vitesse**. **Tous les presets sont éditables** via le CRUD HTTP (`/api/presets`) ; `built_in` ne signifie plus « immuable » mais « restaurable et non supprimable » : `POST /api/presets/:id/restore` remet un intégré à ses valeurs d'usine, et le seed au démarrage est un `INSERT OR IGNORE` pur pour ne jamais réécrire une édition. Chaque projet peut mémoriser son choix avec `PUT /api/projects/:id/default-preset`; supprimer un preset personnel efface aussi les défauts projet qui le référencent.
+Les configurations de nouveau tour sont persistées dans `presets` (`provider`, modèle, effort, vitesse, autonomie). Trois presets intégrés sont créés idempotemment — **Éco**, **Qualité max**, **Vitesse**. **Tous les presets sont éditables** via le CRUD HTTP (`/api/presets`) ; `built_in` ne signifie plus « immuable » mais « restaurable et non supprimable » : `POST /api/presets/:id/restore` remet un intégré à ses valeurs d'usine, et le seed au démarrage est un `INSERT OR IGNORE` pur pour ne jamais réécrire une édition. Chaque projet peut mémoriser son choix avec `PUT /api/projects/:id/default-preset`; supprimer un preset personnel efface aussi les défauts projet qui le référencent.
 
 Les réglages transverses vivent dans la table key/value `settings` (`GET/PUT /api/settings`). Au premier démarrage E1, l'UI importe les anciens seuils de notification de quota depuis `localStorage`, les enregistre côté sidecar puis retire la clé historique. Les clés de déduplication des notifications restent locales à la webview.
 
@@ -284,8 +298,8 @@ Par défaut, l'app-server Codex lancé par Pupitre conserve les plugins et MCP
 utilisateur, mais borne à 5 secondes le handshake de chaque MCP classique : un
 serveur indisponible ne peut donc plus retarder le premier retour de deux minutes.
 La borne est appliquée au process puis répétée dans la configuration des threads
-orchestrateurs afin que l'ajout du bridge `conductor` ne la remplace pas. Le
-bridge reste activé par thread. Réglages disponibles :
+qui reçoivent le pont `pupitre`, afin que son ajout ne la remplace pas.
+Réglages disponibles :
 
 - `PUPITRE_CODEX_MCP_POLICY=bounded` (défaut) : capacités conservées, démarrage borné ;
 - `PUPITRE_CODEX_MCP_POLICY=full` : configuration Codex intacte, sans borne ajoutée ;
@@ -324,7 +338,7 @@ Protocole e2e : `e2e/basic-flow.md`.
 
 **M1 (fait)** : socle — projets, conversations streamées sur les deux providers, reprise, épinglage, images inline, annulation de tour, coquille Tauri.
 
-**M2 (fait)** : orchestration cross-provider (Conductor), sous-tâches, quotas des deux abonnements, presets et changement de modèle.
+**M2 (fait)** : sous-tâches, quotas des deux abonnements, presets et changement de modèle. La délégation pilotée par le modèle (Conductor) a été retirée : les sous-agents s'invoquent depuis le prompt.
 
 **M3 (fait)** : Gardien, résumé de session, handoff, bouton Tester avec
 preuves, vue Git et durcissement du sidecar.

@@ -9,7 +9,6 @@ export interface Conversation {
   model: string; effort: string | null; speed: "standard" | "fast" | null;
   preset_id: string | null;
   permission_mode: PresetPermissionMode | null;
-  subagent_preset_id: string | null; subagent_effort: string | null;
   cli_session_id: string | null; pinned: boolean;
   /** Renommé à la main : le digest automatique ne l'écrase plus. */
   title_locked: boolean;
@@ -33,19 +32,16 @@ export interface Conversation {
   ticket_instruction: string | null;
   origin_type?: "sentry" | "problem" | "promotion" | null;
   origin_key?: string | null;
-  /** Reçoit le bridge MCP `conductor` (délégation de sous-tâches). */
-  orchestrator: boolean;
   created_at: string; updated_at: string;
 }
 
 const TITLE_MAX = 120;
 
-function matchesPreset(conversation: Pick<Conversation, "provider" | "model" | "effort" | "speed" | "orchestrator">, preset: Preset): boolean {
+function matchesPreset(conversation: Pick<Conversation, "provider" | "model" | "effort" | "speed">, preset: Preset): boolean {
   return conversation.provider === preset.provider
     && conversation.model === preset.model
     && conversation.effort === preset.effort
-    && conversation.speed === preset.speed
-    && conversation.orchestrator === preset.orchestrator;
+    && conversation.speed === preset.speed;
 }
 
 export class ConversationStore {
@@ -60,12 +56,11 @@ export class ConversationStore {
   backfillPresetIds(presets: Pick<PresetStore, "list">): number {
     const candidates = presets.list();
     const rows = this.db.query(
-      `SELECT id, project_id, provider, model, effort, speed, orchestrator
+      `SELECT id, project_id, provider, model, effort, speed
        FROM conversations WHERE preset_id IS NULL`,
-    ).all() as Array<Omit<Pick<Conversation, "id" | "project_id" | "provider" | "model" | "effort" | "speed" | "orchestrator">, "orchestrator"> & { orchestrator: number }>;
+    ).all() as Array<Pick<Conversation, "id" | "project_id" | "provider" | "model" | "effort" | "speed">>;
     let updated = 0;
-    for (const row of rows) {
-      const conversation = { ...row, orchestrator: !!row.orchestrator };
+    for (const conversation of rows) {
       const matches = candidates.filter((preset) => matchesPreset(conversation, preset));
       if (matches.length !== 1) continue;
       this.db.query(
@@ -84,10 +79,6 @@ export class ConversationStore {
     effort?: string | null;
     speed?: "standard" | "fast" | null;
     permissionMode?: PresetPermissionMode | null;
-    subagentPresetId?: string | null;
-    subagentEffort?: string | null;
-    /** Défaut ON : toute nouvelle conversation peut déléguer. */
-    orchestrator?: boolean;
     continuedFrom?: string | null;
     /** Vrai jusqu'au statut terminal réussi du premier tour de continuation. */
     handoffPending?: boolean;
@@ -108,10 +99,9 @@ export class ConversationStore {
     const summary = taskSummary(input.firstMessage);
     this.db.query(
       `INSERT INTO conversations
-         (id, project_id, title, summary, provider, model, preset_id, effort, speed, permission_mode, orchestrator,
-          subagent_preset_id, subagent_effort,
+         (id, project_id, title, summary, provider, model, preset_id, effort, speed, permission_mode,
           continued_from, handoff_pending, routine_id, worktree_path, created_on_branch, ticket_id, ticket_instruction, origin_type, origin_key, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -123,9 +113,6 @@ export class ConversationStore {
       input.effort ?? null,
       input.speed ?? null,
       input.permissionMode ?? null,
-      input.orchestrator === false ? 0 : 1,
-      input.subagentPresetId ?? null,
-      input.subagentEffort ?? null,
       input.continuedFrom ?? null,
       input.handoffPending ? 1 : 0,
       input.routineId ?? null,
@@ -175,7 +162,6 @@ export class ConversationStore {
       answered_turn: row.answered_turn ?? 0,
       message_count: row.message_count ?? 0,
       last_read_turn: row.last_read_turn ?? 0,
-      orchestrator: !!row.orchestrator,
       handoff_pending: !!row.handoff_pending,
       archived: !!row.archived,
       deleted_at: row.deleted_at ?? null,
@@ -208,7 +194,6 @@ export class ConversationStore {
       answered_turn: r.answered_turn ?? 0,
       message_count: r.message_count ?? 0,
       last_read_turn: r.last_read_turn ?? 0,
-      orchestrator: !!r.orchestrator,
       handoff_pending: !!r.handoff_pending,
       archived: !!r.archived,
       deleted_at: r.deleted_at ?? null,

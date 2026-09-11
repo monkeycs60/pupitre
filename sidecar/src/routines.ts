@@ -18,7 +18,6 @@ export interface RoutineInput {
   model: string;
   effort: string | null;
   speed: "standard" | "fast" | null;
-  orchestrator: boolean;
   enabled: boolean;
 }
 
@@ -34,7 +33,6 @@ export interface Routine {
   model: string;
   effort: string | null;
   speed: "standard" | "fast" | null;
-  orchestrator: boolean;
   enabled: boolean;
   next_run_at: string | null;
   created_at: string;
@@ -115,7 +113,6 @@ function hydrate(row: Record<string, unknown>): Routine {
   return {
     ...row,
     enabled: row.enabled === 1,
-    orchestrator: row.orchestrator === 1,
   } as Routine;
 }
 
@@ -171,19 +168,19 @@ export class RoutineStore {
     this.db.query(`
       INSERT INTO routines (
         id, project_id, name, schedule, workflow_id, prompt, preset_id, provider,
-        model, effort, speed, orchestrator, enabled, next_run_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        model, effort, speed, enabled, next_run_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name, schedule = excluded.schedule,
         workflow_id = excluded.workflow_id, prompt = excluded.prompt,
         preset_id = excluded.preset_id, provider = excluded.provider,
         model = excluded.model, effort = excluded.effort, speed = excluded.speed,
-        orchestrator = excluded.orchestrator, enabled = excluded.enabled,
+        enabled = excluded.enabled,
         next_run_at = excluded.next_run_at, updated_at = excluded.updated_at
     `).run(
       id, input.projectId, input.name, input.schedule, input.workflowId, input.prompt,
       input.presetId, input.provider, input.model, input.effort, input.speed,
-      input.orchestrator ? 1 : 0, input.enabled ? 1 : 0, nextRun,
+      input.enabled ? 1 : 0, nextRun,
       now.toISOString(), now.toISOString(),
     );
     return this.get(id)!;
@@ -304,9 +301,6 @@ export class RoutineScheduler {
         presetId,
         effort: config.effort,
         speed: config.speed,
-        orchestrator: config.orchestrator,
-        subagentPresetId: "subagent_preset_id" in config ? config.subagent_preset_id : null,
-        subagentEffort: "subagent_effort" in config ? config.subagent_effort : null,
         routineId: routine.id,
         firstMessage: prompt,
       });

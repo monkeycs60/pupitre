@@ -56,8 +56,6 @@
 .costs-conversations h2 { margin: 0 0 var(--space-4); color: var(--text-strong); font-size: var(--text-lg); font-weight: 600; }
 .cost-table { --cost-grid-columns: minmax(180px, 1.5fr) minmax(170px, 1.3fr) minmax(76px, .65fr) minmax(76px, .65fr); background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-md); overflow: hidden; }
 .cost-table--with-delegated { --cost-grid-columns: minmax(180px, 1.5fr) minmax(170px, 1.3fr) repeat(2, minmax(76px, .65fr)) minmax(76px, .65fr); }
-.cost-table--with-savings { --cost-grid-columns: minmax(180px, 1.5fr) minmax(170px, 1.3fr) minmax(76px, .65fr) minmax(76px, .65fr) minmax(76px, .65fr); }
-.cost-table--with-delegated.cost-table--with-savings { --cost-grid-columns: minmax(180px, 1.5fr) minmax(170px, 1.3fr) repeat(4, minmax(76px, .65fr)); }
 .cost-row { display: grid; grid-template-columns: var(--cost-grid-columns); align-items: center; width: 100%; min-height: 48px; padding: 0 var(--space-4); color: var(--text-muted); text-align: right; background: transparent; border: 0; border-bottom: 1px solid var(--border-subtle); }
 .cost-row:last-child { border-bottom: 0; }
 button.cost-row { cursor: pointer; }
@@ -66,7 +64,6 @@ button.cost-row:hover { background: var(--bg-hover); }
 .cost-row strong { color: var(--text-strong); font-weight: 600; }
 .cost-row small { display: block; overflow: hidden; color: var(--text-faint); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
 .cost-head { color: var(--text-faint); font-size: var(--text-xs); background: var(--bg-panel); min-height: 32px; }
-.cost-savings-heading { overflow-wrap: anywhere; }
 .model-breakdown { display: grid; gap: 1px; }
 
 .costs-empty { padding: var(--space-6); color: var(--text-muted); background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-md); }

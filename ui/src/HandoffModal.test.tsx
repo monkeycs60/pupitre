@@ -22,7 +22,6 @@ const conversation = {
   model: 'gpt-5.6-sol',
   effort: 'high',
   speed: 'standard',
-  orchestrator: true,
 } as Conversation
 
 test('sépare la discussion fidèle du handoff généré', async () => {

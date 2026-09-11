@@ -12,7 +12,6 @@ export interface ConversationCost {
   totalTokens: number;
   directTokens: number;
   subtaskTokens: number;
-  delegationSavingsTokens: number;
   models: ModelCost[];
 }
 
@@ -22,7 +21,6 @@ export interface ProjectCostReport {
   totalTokens: number;
   directTokens: number;
   subtaskTokens: number;
-  delegationSavingsTokens: number;
   conversations: ConversationCost[];
 }
 
@@ -93,7 +91,6 @@ export class CostStore {
           totalTokens: 0,
           directTokens: 0,
           subtaskTokens: 0,
-          delegationSavingsTokens: 0,
           models: [],
           modelMap: new Map(),
         };
@@ -102,14 +99,7 @@ export class CostStore {
       const tokens = row.input_tokens + row.output_tokens;
       cost.totalTokens += tokens;
       if (row.scope === "direct") cost.directTokens += tokens;
-      else {
-        cost.subtaskTokens += tokens;
-        if (row.usage_model.includes("luna") && !row.parent_model.includes("luna")) {
-          // Contrefactuel volontairement exprimé en tokens, jamais en euros :
-          // ces tokens auraient été consommés dans le budget du modèle parent.
-          cost.delegationSavingsTokens += tokens;
-        }
-      }
+      else cost.subtaskTokens += tokens;
       cost.modelMap.set(row.usage_model, (cost.modelMap.get(row.usage_model) ?? 0) + tokens);
     }
 
@@ -126,7 +116,6 @@ export class CostStore {
       totalTokens: items.reduce((sum, item) => sum + item.totalTokens, 0),
       directTokens: items.reduce((sum, item) => sum + item.directTokens, 0),
       subtaskTokens: items.reduce((sum, item) => sum + item.subtaskTokens, 0),
-      delegationSavingsTokens: items.reduce((sum, item) => sum + item.delegationSavingsTokens, 0),
       conversations: items,
     };
   }

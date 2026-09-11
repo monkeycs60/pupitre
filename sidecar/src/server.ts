@@ -60,7 +60,6 @@ import {
 } from "./html-documents";
 import { FILESYSTEM_SCOPES, type FilesystemScope } from "./access";
 import { actionFormat } from "./response-format";
-import { conductorToolTokens } from "./conductor-mcp";
 import { dashboardPayload } from "./dashboard";
 import { composeTicketBrief } from "./ticket-brief";
 import {
@@ -185,7 +184,6 @@ interface HandoffTargetConfig {
   model: string;
   effort: string | null;
   speed: "standard" | "fast" | null;
-  orchestrator: boolean;
 }
 
 async function ticketBriefFor(
@@ -225,9 +223,6 @@ async function createContinuationFromHandoff(
     model: target.model,
     effort: target.effort,
     speed: target.speed,
-    orchestrator: target.orchestrator,
-    subagentPresetId: source.subagent_preset_id,
-    subagentEffort: source.subagent_effort,
     continuedFrom: source.id,
     handoffPending: true,
     createdOnBranch: snapshot.currentBranch,
@@ -647,7 +642,6 @@ function publicSettings(deps: ServerDeps): Record<string, unknown> {
   return {
     ...settings,
     [INTEGRATION_TOKENS_KEY]: integrationTokens,
-    conductorToolTokens: conductorToolTokens(),
     visualFeedbackPaired: deps.settings.get<string>("visual-feedback-token-hash") !== null,
   };
 }
@@ -660,25 +654,6 @@ function optionalBoolean(
   const value = body[field];
   if (value === undefined || value === null) return fallback;
   if (typeof value !== "boolean") throw new HttpError(400, `champ ${field} invalide`);
-  return value;
-}
-
-const COMMON_SUBAGENT_EFFORTS = ["low", "medium", "high", "xhigh"] as const;
-const ANY_SUBAGENT_EFFORTS = [...COMMON_SUBAGENT_EFFORTS, "max"] as const;
-
-function optionalNamedEffort(
-  body: Record<string, unknown>,
-  field: string,
-  provider?: Provider,
-): string | null {
-  const value = body[field];
-  if (value === undefined || value === null || value === "") return null;
-  const allowed = provider
-    ? EFFORTS_BY_PROVIDER[provider]
-    : ANY_SUBAGENT_EFFORTS;
-  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) {
-    throw new HttpError(400, `${field} invalide${provider ? ` pour ${provider}` : ""}`);
-  }
   return value;
 }
 
@@ -700,7 +675,6 @@ function inferPresetId(
     model: string
     effort: string | null
     speed: "standard" | "fast" | null
-    orchestrator: boolean
   },
   deps: ServerDeps,
 ): string | null {
@@ -709,30 +683,8 @@ function inferPresetId(
       && preset.model === input.model
       && preset.effort === input.effort
       && preset.speed === input.speed
-      && preset.orchestrator === input.orchestrator
   ));
   return matches.length === 1 ? matches[0]!.id : null;
-}
-
-function validatePresetSubagentConfig(input: PresetInput, deps: ServerDeps): void {
-  if (input.subagent_preset_id === null || input.subagent_preset_id === undefined) {
-    if (input.subagent_effort !== null && input.subagent_effort !== undefined) {
-      const allowed = COMMON_SUBAGENT_EFFORTS as readonly string[];
-      if (!allowed.includes(input.subagent_effort)) {
-        throw new HttpError(400, "subagent_effort invalide");
-      }
-    }
-    return;
-  }
-  const target = deps.presets.get(input.subagent_preset_id);
-  if (!target) throw new HttpError(404, "preset sub-agent inconnu");
-  if (
-    input.subagent_effort !== null
-    && input.subagent_effort !== undefined
-    && !(EFFORTS_BY_PROVIDER[target.provider] as readonly string[]).includes(input.subagent_effort)
-  ) {
-    throw new HttpError(400, `subagent_effort invalide pour ${target.provider}`);
-  }
 }
 
 function optionalPresetPermissionMode(
@@ -747,50 +699,6 @@ function optionalPresetPermissionMode(
       "permission_mode invalide (default, acceptEdits, plan, dontAsk ou yolo/autonomous)",
     );
   }
-}
-
-function conversationSubagentConfig(
-  body: Record<string, unknown>,
-  deps: ServerDeps,
-): { subagentPresetId: string | null; subagentEffort: string | null } {
-  const subagentPresetId = optionalNamedPresetId(body, "subagentPresetId");
-  const target = subagentPresetId ? deps.presets.get(subagentPresetId) : null;
-  if (subagentPresetId && !target) throw new HttpError(404, "preset sub-agent inconnu");
-  const subagentEffort = optionalNamedEffort(body, "subagentEffort", target?.provider);
-  if (!target && subagentEffort === "max") {
-    throw new HttpError(400, "subagentEffort max exige un preset Claude");
-  }
-  return {
-    subagentPresetId,
-    subagentEffort,
-  };
-}
-
-export function effectiveSubtaskConfig(
-  conversation: Conversation,
-  requested: {
-    provider: Provider;
-    model: string;
-    effort: string | null;
-    speed: "standard" | "fast" | null;
-  },
-  presets: PresetStore,
-): typeof requested {
-  const lockedPreset = conversation.subagent_preset_id
-    ? presets.get(conversation.subagent_preset_id)
-    : null;
-  if (!lockedPreset) {
-    return {
-      ...requested,
-      effort: conversation.subagent_effort ?? requested.effort,
-    };
-  }
-  return {
-    provider: lockedPreset.provider,
-    model: lockedPreset.model,
-    effort: conversation.subagent_effort ?? lockedPreset.effort,
-    speed: lockedPreset.speed,
-  };
 }
 
 function presetInput(body: Record<string, unknown>): PresetInput {
@@ -827,8 +735,6 @@ function presetInput(body: Record<string, unknown>): PresetInput {
       throw new HttpError(400, `review_effort invalide pour ${effortProvider}`);
     }
   }
-  const subagentPresetIdValue = body.subagent_preset_id;
-  const subagentEffortValue = body.subagent_effort;
   const permissionMode = optionalPresetPermissionMode(body);
   return {
     name,
@@ -836,13 +742,6 @@ function presetInput(body: Record<string, unknown>): PresetInput {
     model: requiredString(body, "model"),
     effort: optionalEffort(body, provider),
     speed: optionalSpeed(body, provider),
-    orchestrator: optionalBoolean(body, "orchestrator", true),
-    ...(subagentPresetIdValue !== undefined
-      ? { subagent_preset_id: optionalNamedPresetId(body, "subagent_preset_id") }
-      : {}),
-    ...(subagentEffortValue !== undefined
-      ? { subagent_effort: optionalNamedEffort(body, "subagent_effort") }
-      : {}),
     ...(permissionMode !== undefined ? { permission_mode: permissionMode } : {}),
     ...(reviewProvider ? { review_provider: reviewProvider } : {}),
     ...(typeof reviewModelValue === "string" ? { review_model: reviewModelValue } : {}),
@@ -1033,9 +932,8 @@ function workflowInput(
   let model: string;
   let effort: string | null;
   let speed: "standard" | "fast" | null;
-  let orchestrator: boolean;
   if (preset) {
-    ({ provider, model, effort, speed, orchestrator } = preset);
+    ({ provider, model, effort, speed } = preset);
   } else {
     const providerValue = requiredString(body, "provider");
     if (!isProvider(providerValue)) {
@@ -1045,7 +943,6 @@ function workflowInput(
     model = requiredString(body, "model");
     effort = optionalEffort(body, provider);
     speed = optionalSpeed(body, provider);
-    orchestrator = optionalBoolean(body, "orchestrator", true);
   }
   return {
     projectId,
@@ -1059,7 +956,6 @@ function workflowInput(
     model,
     effort,
     speed,
-    orchestrator,
   };
 }
 
@@ -1091,9 +987,8 @@ function routineInput(
   let model: string;
   let effort: string | null;
   let speed: "standard" | "fast" | null;
-  let orchestrator: boolean;
   if (config) {
-    ({ provider, model, effort, speed, orchestrator } = config);
+    ({ provider, model, effort, speed } = config);
   } else {
     const providerValue = requiredString(body, "provider");
     if (!isProvider(providerValue)) {
@@ -1103,7 +998,6 @@ function routineInput(
     model = requiredString(body, "model");
     effort = optionalEffort(body, provider);
     speed = optionalSpeed(body, provider);
-    orchestrator = optionalBoolean(body, "orchestrator", true);
   }
   return {
     projectId,
@@ -1116,7 +1010,6 @@ function routineInput(
     model,
     effort,
     speed,
-    orchestrator,
     enabled: optionalBoolean(body, "enabled", enabledFallback),
   };
 }
@@ -2118,9 +2011,6 @@ export function createServer(deps: ServerDeps) {
             effort: preset.effort,
             speed: preset.speed,
             permissionMode: preset.permission_mode,
-            orchestrator: preset.orchestrator,
-            subagentPresetId: preset.subagent_preset_id,
-            subagentEffort: preset.subagent_effort,
             worktreePath,
             createdOnBranch: startPoint,
             originType: "sentry",
@@ -2198,9 +2088,6 @@ export function createServer(deps: ServerDeps) {
             effort: preset.effort,
             speed: preset.speed,
             permissionMode: preset.permission_mode,
-            orchestrator: preset.orchestrator,
-            subagentPresetId: preset.subagent_preset_id,
-            subagentEffort: preset.subagent_effort,
             worktreePath,
             createdOnBranch: startPoint,
             ticketId: ticket.id,
@@ -2561,9 +2448,6 @@ export function createServer(deps: ServerDeps) {
             presetId: workflow.preset_id,
             effort: config.effort,
             speed: config.speed,
-            orchestrator: config.orchestrator,
-            subagentPresetId: "subagent_preset_id" in config ? config.subagent_preset_id : null,
-            subagentEffort: "subagent_effort" in config ? config.subagent_effort : null,
             createdOnBranch: snapshot.currentBranch,
             firstMessage: message,
           });
@@ -2698,7 +2582,6 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "POST" && pathname === "/api/presets") {
           const body = await readObject(request);
           const input = presetInput(body);
-          validatePresetSubagentConfig(input, deps);
           try {
             return json(deps.presets.create(input), 201);
           } catch {
@@ -2710,7 +2593,6 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "PUT" && presetId !== null) {
           const body = await readObject(request);
           const input = presetInput(body);
-          validatePresetSubagentConfig(input, deps);
           try {
             const preset = deps.presets.update(presetId, input);
             if (!preset) throw new HttpError(404, "preset inconnu");
@@ -2749,8 +2631,6 @@ export function createServer(deps: ServerDeps) {
         }
 
         if (request.method === "GET" && pathname === "/api/settings") {
-          // Lecture seule, calculée : l'UI en a besoin pour isoler le coût du
-          // bridge conductor dans la jauge de contexte.
           return json(publicSettings(deps));
         }
 
@@ -2880,15 +2760,11 @@ export function createServer(deps: ServerDeps) {
             model,
             effort,
             speed,
-            orchestrator: optionalBoolean(body, "orchestrator", true),
           }, deps);
           if (presetId !== null && !deps.presets.get(presetId)) {
             throw new HttpError(404, "preset inconnu");
           }
           const { message, images, attachments } = messageWithAttachments(body, deps.media);
-          // Défaut ON : une conversation peut déléguer sauf mention contraire.
-          const orchestrator = optionalBoolean(body, "orchestrator", true);
-          const { subagentPresetId, subagentEffort } = conversationSubagentConfig(body, deps);
           // Une conversation peut naître sur sa propre branche : Pupitre lui
           // crée alors un worktree, où tous ses agents travailleront (ADR 0001).
           const branch = optionalTrimmed(body, "branch");
@@ -3043,9 +2919,6 @@ export function createServer(deps: ServerDeps) {
             effort,
             speed,
             permissionMode,
-            orchestrator,
-            subagentPresetId,
-            subagentEffort,
             createdOnBranch: sentryStartPoint ?? snapshot.currentBranch,
             ticketId: ticket?.id ?? null,
             ticketInstruction: ticket?.instruction ?? null,
@@ -3125,9 +2998,6 @@ export function createServer(deps: ServerDeps) {
             effort: selectedPreset?.effort ?? source.effort,
             speed: selectedPreset?.speed ?? source.speed,
             permissionMode: source.permission_mode,
-            orchestrator: source.orchestrator,
-            subagentPresetId: source.subagent_preset_id,
-            subagentEffort: source.subagent_effort,
             worktreePath: source.worktree_path,
             createdOnBranch: source.created_on_branch,
             ticketId: source.ticket_id,
@@ -3487,13 +3357,12 @@ export function createServer(deps: ServerDeps) {
           const model = requiredString(body, "model");
           const effort = optionalEffort(body, provider);
           const speed = optionalSpeed(body, provider);
-          const orchestrator = optionalBoolean(body, "orchestrator", true);
           try {
             return await deps.debriefs.withHandoff(source.id, async (artifact) => {
               return json(await createContinuationFromHandoff(
                 deps,
                 source,
-                { provider, model, effort, speed, orchestrator },
+                { provider, model, effort, speed },
                 artifact,
               ), 201);
             });
@@ -3526,13 +3395,12 @@ export function createServer(deps: ServerDeps) {
           const model = requiredString(body, "model");
           const effort = optionalEffort(body, provider);
           const speed = optionalSpeed(body, provider);
-          const orchestrator = optionalBoolean(body, "orchestrator", true);
           try {
             return await deps.debriefs.withHandoff(source.id, async (artifact) => json(
               await createContinuationFromHandoff(
                 deps,
                 source,
-                { provider, model, effort, speed, orchestrator },
+                { provider, model, effort, speed },
                 artifact,
               ),
               201,
@@ -4140,59 +4008,6 @@ export function createServer(deps: ServerDeps) {
           } catch (error) {
             if (error instanceof DispatchConflictError) throw new HttpError(409, error.message);
             if (error instanceof Error && error.message === "review inconnu") throw new HttpError(404, error.message);
-            throw error;
-          }
-        }
-
-        if (request.method === "POST" && pathname === "/api/subtasks") {
-          const body = await readObject(request);
-          const conversationId = requiredString(body, "conversationId");
-          const conversation = deps.conversations.get(conversationId);
-          if (!conversation) {
-            throw new HttpError(404, "conversation inconnue");
-          }
-          const provider = requiredString(body, "provider");
-          if (!isProvider(provider)) {
-            throw new HttpError(400, "provider invalide");
-          }
-          const model = requiredString(body, "model");
-          // Quand la conversation impose déjà un preset ou un effort, les
-          // valeurs demandées par l'outil MCP sont volontairement ignorées :
-          // cela rend le verrou effectif même si l'orchestrateur demande autre
-          // chose dans son appel delegate.
-          const parentLocksSubagent = conversation.subagent_preset_id !== null
-            || conversation.subagent_effort !== null;
-          const effort = parentLocksSubagent
-            ? null
-            : optionalEffort(body, provider as Provider);
-          const speed = parentLocksSubagent
-            ? null
-            : optionalSpeed(body, provider as Provider);
-          const prompt = requiredString(body, "prompt");
-          const label = optionalLabel(body);
-          const effective = effectiveSubtaskConfig(conversation, {
-            provider: provider as Provider,
-            model,
-            effort,
-            speed,
-          }, deps.presets);
-          try {
-            // Lancement asynchrone : on rend l'id tout de suite, le suivi passe
-            // par /ws?conversation=<id> ou GET /api/subtasks/:id.
-            const subtask = deps.subtasks.start({
-              conversationId,
-              provider: effective.provider,
-              model: effective.model,
-              effort: effective.effort,
-              speed: effective.speed,
-              prompt,
-              label,
-            });
-            return json({ id: subtask.id }, 201);
-          } catch (error) {
-            if (error instanceof SubtaskLimitError) {
-              throw new HttpError(429, error.message);
-            }
             throw error;
           }
         }

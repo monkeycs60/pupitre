@@ -42,9 +42,6 @@ export function SwitchModelModal({
     effort: conversation.effort ?? 'high',
     speed: conversation.speed ?? 'standard',
     permissionMode: conversation.permission_mode ?? null,
-    orchestrator: conversation.orchestrator,
-    subagentPresetId: conversation.subagent_preset_id ?? null,
-    subagentEffort: conversation.subagent_effort ?? null,
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,7 +57,6 @@ export function SwitchModelModal({
       model: config.model,
       effort: config.effort,
       speed: config.provider === 'codex' ? config.speed : null,
-      orchestrator: conversation.orchestrator,
     }
     try {
       if (isHandoff) {
