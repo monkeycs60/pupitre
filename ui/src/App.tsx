@@ -1,9 +1,9 @@
 import { WorkspaceInspector, inspectorGroupOf, type InspectorView } from './WorkspaceInspector'
 import { TodoList } from './TodoList'
 import { WorkflowsView } from './WorkflowsView'
-import { TodoDetail } from './TodoDetail'
 import { linkTodo, useTodos, type TodoItem } from './todos'
 import { ticketLinksOf } from './ticketLinks'
+import { newConversationDraftStorageKey } from './conversationDraft'
 import type { ConversationConfig } from './ConfigPanel'
 import { QuotaBar } from './QuotaBar'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
@@ -159,13 +159,11 @@ function App() {
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
   const [memoryDirty, setMemoryDirty] = useState(false)
   const [inspector, setInspector] = useState<InspectorView | null>(null)
-  const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null)
   const [todoPanelRequest, setTodoPanelRequest] = useState(0)
   const [todoMode, setTodoMode] = useState(false)
   const lastInspectorViews = useRef<Partial<Record<string, InspectorView>>>({})
   const [focusEventId, setFocusEventId] = useState<number | null>(null)
   const todos = useTodos(selectedProject?.id ?? null)
-  const selectedTodo = todos.items.find((item) => item.id === selectedTodoId) ?? null
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const [threadTools, setThreadTools] = useState<ThreadTools | null>(null)
@@ -468,7 +466,6 @@ function App() {
   /** « Nouvelle tâche » : le composer d'une nouvelle conversation, en mode tâche. */
   function handleTodoCreate(seed?: { ticketId: string; ticketKey: string; branch: string | null }) {
     if (!confirmLeaveMemory() || selectedProject === null) return
-    setSelectedTodoId(null)
     setSelectedConversation(null)
     setConversationSeed(seed ?? null)
     setNewConversationDraft('')
@@ -486,7 +483,8 @@ function App() {
   function handleTodoToConversation(item: TodoItem) {
     if (item.conversation_id) { void handleGitConversationSelect(item.conversation_id); return }
     if (!confirmLeaveMemory() || selectedProject === null) return
-    setSelectedTodoId(null)
+    // Le brouillon local du projet primerait sur le message de la tâche.
+    try { localStorage.removeItem(newConversationDraftStorageKey(selectedProject.id, item.ticket_id)) } catch { /* stockage indisponible */ }
     setSelectedConversation(null)
     setConversationSeed({
       todoId: item.id,
@@ -519,7 +517,6 @@ function App() {
 
   function handleProjectSelect(project: Project) {
     if (!confirmLeaveMemory()) return
-    setSelectedTodoId(null)
     setTodoPanelRequest(0)
     if (project.id !== selectedProject?.id) {
       setTodoMode(false)
@@ -537,7 +534,6 @@ function App() {
   }
 
   function handleConversationSelect(conversation: Conversation) {
-    setSelectedTodoId(null)
     setFocusEventId(null)
     if (!confirmLeaveMemory()) return
     setSelectedConversation(conversation)
@@ -550,14 +546,12 @@ function App() {
   }
 
   function handleConversationCreate() {
-    setSelectedTodoId(null)
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setSelectedConversation(null)
     setConversationSeed(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
-    setSelectedTodoId(null)
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
     setWorkspaceView('conversations')
@@ -570,7 +564,6 @@ function App() {
     setSelectedConversation(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
-    setSelectedTodoId(null)
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
     setWorkspaceView('conversations')
@@ -582,7 +575,6 @@ function App() {
     setSelectedConversation(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
-    setSelectedTodoId(null)
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
     setWorkspaceView('conversations')
@@ -752,7 +744,6 @@ function App() {
     setConversationSeed(null)
     setNewConversationDraft(`$${skill.invocation} `)
     setNewConversationAttachments([])
-    setSelectedTodoId(null)
     setIsCreatingConversation(true)
     setWorkspaceView('conversations')
   }
@@ -851,7 +842,7 @@ function App() {
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
       <Titlebar
-        crumbs={[selectedProject?.name, selectedTodo?.title ?? titlebarView]}
+        crumbs={[selectedProject?.name, titlebarView]}
         onSearch={() => setPaletteOpen(true)}
         instance={instance}
         onRestart={restartApp}
@@ -872,7 +863,7 @@ function App() {
       <>
       <Sidebar
         selectedProject={selectedProject}
-        selectedConversation={selectedTodoId ? null : selectedConversation}
+        selectedConversation={selectedConversation}
         quotas={quotas.snapshot}
         time={time.snapshot}
         timeMode={time.mode}
@@ -912,7 +903,7 @@ function App() {
       </>
       ) : null}
 
-      <section className="workspace" aria-label={selectedTodo ? 'Tâche du projet' : titlebarView ?? 'Conversation'}>
+      <section className="workspace" aria-label={titlebarView ?? 'Conversation'}>
         <div className="workspace-split">
         <div className="conversation-workspace">
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
@@ -920,7 +911,6 @@ function App() {
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         : workspaceView === 'settings' ? <AppSettingsView instance={instance} />
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
-        : selectedTodo ? <TodoDetail key={selectedTodo.id} item={selectedTodo} project={selectedProject} quotas={quotas.snapshot} hasTicketIntegration={ticketLinks.size > 0} onChanged={todos.refresh} onDeleted={() => { setSelectedTodoId(null); todos.refresh() }} onOpenConversation={handleTodoToConversation} />
         : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">
             <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Retrouve les tâches et le suivi dans le panneau projet.</p><div className="todo-detail-actions"><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button><button className="secondary-button" onClick={() => openInspector('dashboard')}>Tâches du projet</button></div></div>
@@ -1120,7 +1110,7 @@ function App() {
             onCreateTodoFromTicket={(ticket) => handleTodoCreate({ ticketId: ticket.id, ticketKey: ticket.key, branch: ticketLinksOf(ticket).branch ?? null })}
             todoPanel={() => <div className="project-todos">
               <header className="project-tasks-header"><h2>Tâches du projet</h2><button type="button" className="primary-button" onClick={() => handleTodoCreate()}>+ Nouvelle tâche</button></header>
-              <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={selectedTodoId} ticketLinks={ticketLinks} onSelect={(id) => { setSelectedTodoId(id); setIsCreatingConversation(false) }} onChanged={todos.refresh} onOpenConversation={handleTodoToConversation} />
+              <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={conversationSeed?.todoId ?? null} ticketLinks={ticketLinks} onChanged={todos.refresh} onOpenConversation={handleTodoToConversation} />
             </div>}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
             onStartConversation={handleStartFromTicket}

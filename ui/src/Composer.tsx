@@ -605,6 +605,29 @@ export function Composer({
         onDragLeave={handleDragLeave}
         onDrop={(event) => void handleDrop(event)}
       >
+        {isNewConversation && onTodoModeChange ? (
+          <div className="composer-topbar">
+            {isTodoMode ? (
+              <label className="composer-finish" title="Ce que la file fait du résultat de l’agent">
+                <select value={finish} onChange={(event) => setFinish(event.target.value as TodoFinish)} aria-label="Fin de tâche">
+                  {(Object.keys(TODO_FINISH_LABELS) as TodoFinish[]).map((value) => <option key={value} value={value}>{TODO_FINISH_LABELS[value]}</option>)}
+                </select>
+              </label>
+            ) : null}
+            {isNewConversation && onTodoModeChange ? (
+              <div className="composer-mode" role="group" aria-label="Destination du message">
+                <button type="button" className={!todoMode ? 'is-active' : ''} aria-pressed={!todoMode} onClick={() => onTodoModeChange(false)}>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>
+                  Conversation
+                </button>
+                <button type="button" className={todoMode ? 'is-active' : ''} aria-pressed={todoMode} onClick={() => onTodoModeChange(true)}>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m2.5 4 1.2 1.2L6 2.9M8 4h5.5M2.5 8.3l1.2 1.2L6 7.2M8 8.3h5.5M2.5 12.6l1.2 1.2L6 11.5M8 12.6h5.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  Tâche
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {attachments.length > 0 || pendingUploads > 0 ? (
           <div className="composer-attachments" aria-label="Pièces jointes">
             {attachments.map(({ id, attachment }) => (
@@ -698,18 +721,6 @@ export function Composer({
 
         <div className="composer-actions">
           <div className="composer-tools">
-            {isNewConversation && onTodoModeChange ? (
-              <div className="composer-mode" role="group" aria-label="Destination du message">
-                <button type="button" className={!todoMode ? 'is-active' : ''} aria-pressed={!todoMode} onClick={() => onTodoModeChange(false)}>
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>
-                  Conversation
-                </button>
-                <button type="button" className={todoMode ? 'is-active' : ''} aria-pressed={todoMode} onClick={() => onTodoModeChange(true)}>
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m2.5 4 1.2 1.2L6 2.9M8 4h5.5M2.5 8.3l1.2 1.2L6 7.2M8 8.3h5.5M2.5 12.6l1.2 1.2L6 11.5M8 12.6h5.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  Tâche
-                </button>
-              </div>
-            ) : null}
             {isNewConversation ? (
               <ConfigPanel
                 project={project}
@@ -721,13 +732,6 @@ export function Composer({
                 onError={setToast}
                 onReady={setConfigReady}
               />
-            ) : null}
-            {isTodoMode ? (
-              <label className="composer-finish" title="Ce que la file fait du résultat de l’agent">
-                <select value={finish} onChange={(event) => setFinish(event.target.value as TodoFinish)} aria-label="Fin de tâche">
-                  {(Object.keys(TODO_FINISH_LABELS) as TodoFinish[]).map((value) => <option key={value} value={value}>{TODO_FINISH_LABELS[value]}</option>)}
-                </select>
-              </label>
             ) : null}
             <input
               ref={fileInputRef}

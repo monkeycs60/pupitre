@@ -7,6 +7,13 @@ if (typeof document === 'undefined') GlobalRegistrator.register()
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { AppSettingsView } = await import('./AppSettingsView')
 const defaultFetch = globalThis.fetch
+const DefaultSocket = globalThis.WebSocket
+
+class SilentSocket {
+  constructor(public url: string) {}
+  addEventListener() {}
+  close() {}
+}
 
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -18,6 +25,7 @@ function json(body: unknown): Response {
 afterEach(() => {
   cleanup()
   globalThis.fetch = defaultFetch
+  globalThis.WebSocket = DefaultSocket
 })
 
 const stableHealth = {
@@ -87,6 +95,7 @@ test('affiche le chat et l’état d’une mission en cours', async () => {
 
 test('crée la mission au clic', async () => {
   let started = false
+  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
   globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input)
     const method = init?.method ?? (input instanceof Request ? input.method : 'GET')

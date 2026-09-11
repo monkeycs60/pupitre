@@ -66,13 +66,13 @@
 
 /* Actions sur survol : lancer, conversation, supprimer. */
 .project-task-actions { flex: none; display: flex; gap: 2px; opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
-.project-task-row:hover .project-task-actions, .project-task-row:focus-within .project-task-actions, .project-task-actions:has(.is-linked) { opacity: 1; }
+.project-task-row:hover .project-task-actions, .project-task-row:focus-within .project-task-actions { opacity: 1; }
 .project-task-actions button { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-faint); cursor: pointer; transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
 .project-task-actions button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-strong); }
 .project-task-actions button:disabled { opacity: 0.35; cursor: default; }
-.project-task-actions button.is-linked { color: var(--accent-bright); }
 .project-task-actions button.is-danger:hover:not(:disabled) { color: var(--danger); background: var(--danger-soft); }
-.project-task-row:not(:hover):not(:focus-within) .project-task-actions button:not(.is-linked) { visibility: hidden; }
+.project-task-row:not(:hover):not(:focus-within) .project-task-actions button { visibility: hidden; }
+.project-task-linked { flex: none; display: flex; color: var(--accent-bright); opacity: 0.8; }
 
 .project-task-empty { padding: 20px 0; }
 .project-task-empty strong { font-size: 13px; font-weight: 500; }

@@ -9,15 +9,15 @@ interface Props extends TodoSnapshot {
   loading: boolean
   error: string | null
   ticketLinks?: Map<string, TicketLinks>
-  onSelect: (id: string) => void
   onChanged: () => void
-  /** Conversation liée si elle existe, sinon nouvelle conversation préremplie. */
+  /** Clic sur la ligne : conversation liée si elle existe, sinon nouvelle
+   *  conversation préremplie avec la tâche. */
   onOpenConversation: (item: TodoItem) => void
 }
 
 const LEAVE_DELAY = 900
 
-export function TodoList({ projectId, items, queue, selectedId, loading, error, ticketLinks, onSelect, onChanged, onOpenConversation }: Props) {
+export function TodoList({ projectId, items, queue, selectedId, loading, error, ticketLinks, onChanged, onOpenConversation }: Props) {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -134,7 +134,7 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
             : <button type="button" className={`project-task-check is-${item.status}`} disabled={busy} aria-label={`${isDone ? 'Rouvrir' : 'Terminer'} ${item.title}`} title={isDone ? 'Rouvrir' : 'Marquer terminée'} onClick={() => isDone ? void act(() => reopenTodo(item.id)) : complete(item)}>
                 <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m2.5 6.3 2.3 2.3 4.7-5" /></svg>
               </button>}
-          <button type="button" className="todo-row-main" onClick={() => onSelect(item.id)} onKeyDown={(event) => handleRowKeyDown(event, item)} aria-current={item.id === selectedId ? 'true' : undefined}>
+          <button type="button" className="todo-row-main" title={item.conversation_id ? 'Ouvrir la conversation liée' : 'Ouvrir dans une conversation préremplie'} onClick={() => onOpenConversation(item)} onKeyDown={(event) => handleRowKeyDown(event, item)} aria-current={item.id === selectedId ? 'true' : undefined}>
             <span className="todo-row-title">{item.title}</span>
             <span className="project-task-meta">
               {item.status !== 'backlog' && !isDone ? <span className={`project-task-state is-${item.status}`} title={item.error ?? undefined}>{TODO_LABELS[item.status]}</span> : null}
@@ -147,9 +147,9 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
             {startableItem && !isDone ? <button type="button" disabled={busy || !!queue.activeTodoId} aria-label={`Lancer l’agent sur ${item.title}`} title="Lancer l’agent" onClick={() => void act(() => startTodo(item.id))}>
               <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M4.5 3v10L12.5 8z" /></svg>
             </button> : null}
-            <button type="button" className={item.conversation_id ? 'is-linked' : ''} aria-label={item.conversation_id ? `Ouvrir la conversation de ${item.title}` : `Ouvrir ${item.title} dans une conversation`} title={item.conversation_id ? 'Ouvrir la conversation liée' : 'Ouvrir dans une conversation préremplie'} onClick={() => onOpenConversation(item)}>
-              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" />{item.conversation_id ? <path d="M5.5 7h5" strokeLinecap="round" /> : null}</svg>
-            </button>
+            {item.conversation_id ? <span className="project-task-linked" aria-hidden="true" title="Conversation liée">
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" /><path d="M5.5 7h5" strokeLinecap="round" /></svg>
+            </span> : null}
             <button type="button" className="is-danger" disabled={busy || running} aria-label={`Supprimer ${item.title}`} title="Supprimer" onClick={() => void act(() => deleteTodo(item.id))}>
               <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
             </button>

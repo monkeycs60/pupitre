@@ -13,7 +13,7 @@ const item = (id: string, status: TodoItem['status'], extra: Partial<TodoItem> =
   worktree_path: null, error: null, position: 0, created_at: '', updated_at: '', provider: 'codex',
   model: 'gpt-5.6-sol', effort: 'high', attachments: [], ...extra,
 })
-const defaults = { projectId: 'project', selectedId: null, loading: false, error: null, queue: { running: false, activeTodoId: null }, onSelect: () => {}, onChanged: () => {}, onOpenConversation: () => {} }
+const defaults = { projectId: 'project', selectedId: null, loading: false, error: null, queue: { running: false, activeTodoId: null }, onChanged: () => {}, onOpenConversation: () => {} }
 function recordCalls() {
   const calls: { url: string; body: unknown }[] = []
   globalThis.fetch = (async (url, options) => { calls.push({ url: String(url), body: options?.body ? JSON.parse(String(options.body)) : undefined }); return Response.json({}) }) as typeof fetch
@@ -61,9 +61,10 @@ test('rows expose start, conversation and prefilled-conversation shortcuts', asy
   expect(screen.queryByRole('button', { name: 'Lancer l’agent sur Linked' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Lancer l’agent sur Idea' }))
   await waitFor(() => expect(calls.map((call) => call.url)).toEqual(['/api/todos/Idea/start']))
-  fireEvent.click(screen.getByRole('button', { name: 'Ouvrir la conversation de Linked' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Ouvrir Idea dans une conversation' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Linked À valider' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Idea' }))
   expect(opened).toEqual(['Linked', 'Idea'])
+  expect(document.querySelectorAll('.project-task-linked').length).toBe(1)
 })
 
 test('search matches linked ticket keys and keeps selection', () => {
