@@ -1,5 +1,6 @@
 import { eventIdOfBlock } from './eventBlocks'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import {
   ApiError,
@@ -102,6 +103,7 @@ export function HtmlDocumentCard({
   const [source, setSource] = useState<string | null>(null)
   const [savedSource, setSavedSource] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [isEditing, setIsEditing] = useState(false)
   const now = useNow()
 
   useEffect(() => {
@@ -162,14 +164,26 @@ export function HtmlDocumentCard({
   const editable = ['html', 'csv', 'tsv', 'markdown', 'text', 'json'].includes(documentKind)
 
   useEffect(() => {
-    if (!editable || !previewUrl || source !== null) return
+    if (!editable || !isEditing || !previewUrl || source !== null) return
     const controller = new AbortController()
     void fetch(previewUrl, { signal: controller.signal }).then((response) => response.text()).then((value) => {
       setSource(value)
       setSavedSource(value)
     }).catch(() => {})
     return () => controller.abort()
-  }, [editable, previewUrl, source])
+  }, [editable, isEditing, previewUrl, source])
+
+  useEffect(() => {
+    if (!isExpanded) return
+    // Le focus peut être dans l'iframe ; l'écouteur global garde Échap fiable.
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      event.preventDefault()
+      setIsExpanded(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [isExpanded])
 
   useEffect(() => {
     if (!editable || source === null || savedSource === null || source === savedSource) return
@@ -195,6 +209,7 @@ export function HtmlDocumentCard({
     if (isOpen) {
       setIsOpen(false)
       setIsExpanded(false)
+      setIsEditing(false)
       return
     }
     setBusyAction('preview')
@@ -257,6 +272,7 @@ export function HtmlDocumentCard({
       setIsOpen(false)
       setIsExpanded(false)
       setPreviewUrl(null)
+      setIsEditing(false)
     } catch (reason) {
       setError(errorMessage(reason, 'Suppression impossible'))
     } finally {
@@ -274,24 +290,18 @@ export function HtmlDocumentCard({
           ? 'Disponible'
           : remainingLabel(document.expiresAt, now)
 
-  return (
-    <>
-      {isExpanded ? (
-        <button
-          type="button"
-          className="html-document-backdrop"
-          aria-label="Fermer la vue plein écran"
-          onClick={() => setIsExpanded(false)}
-        />
-      ) : null}
-      <section
+  const card = (
+    <section
         className={`html-document-card is-${effectiveState}${isExpanded ? ' is-expanded' : ''}`}
         data-event-id={eventIdOfBlock(block.id)}
         aria-label={`Document ${documentKind.toUpperCase()} ${document.title}`}
         role={isExpanded ? 'dialog' : undefined}
         aria-modal={isExpanded ? true : undefined}
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && isExpanded) setIsExpanded(false)
+          if (event.key === 'Escape' && isExpanded) {
+            event.preventDefault()
+            setIsExpanded(false)
+          }
         }}
       >
       <header className="html-document-header">
@@ -314,6 +324,14 @@ export function HtmlDocumentCard({
         <div className="html-document-actions">
           {canView ? (
             <>
+              {editable ? (
+                <button type="button" onClick={() => {
+                  setIsEditing((current) => !current)
+                  if (!isOpen) void togglePreview()
+                }} disabled={busyAction !== null} aria-pressed={isEditing}>
+                  {isEditing ? 'Masquer le code' : 'Modifier'}
+                </button>
+              ) : null}
               <button type="button" onClick={() => void openExternally()} disabled={busyAction !== null}>
                 {busyAction === 'open' ? 'Ouverture…' : documentKind === 'docx' || documentKind === 'xlsx' ? 'Modifier dans LibreOffice' : 'Ouvrir ↗'}
               </button>
@@ -348,7 +366,7 @@ export function HtmlDocumentCard({
         </p>
       ) : isOpen ? (
         <div className="html-document-preview">
-          {editable && source !== null ? (
+          {editable && isEditing && source !== null ? (
             <div className="html-document-editor">
               <textarea aria-label={`Modifier ${document.title}`} value={source} onChange={(event) => { setSource(event.target.value); setSaveState('idle') }} spellCheck={false} />
               <span>{saveState === 'saving' ? 'Enregistrement…' : saveState === 'saved' ? 'Enregistré' : source !== savedSource ? 'Modifications…' : ''}</span>
@@ -365,6 +383,19 @@ export function HtmlDocumentCard({
         </div>
       ) : null}
       </section>
-    </>
+  )
+
+  if (!isExpanded) return card
+  return createPortal(
+    <>
+      <button
+        type="button"
+        className="html-document-backdrop"
+        aria-label="Fermer la vue plein écran"
+        onClick={() => setIsExpanded(false)}
+      />
+      {card}
+    </>,
+    window.document.body,
   )
 }

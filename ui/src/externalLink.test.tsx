@@ -4,8 +4,12 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const opened: string[] = []
+const openedPaths: string[] = []
+const revealedPaths: string[] = []
 mock.module('@tauri-apps/plugin-opener', () => ({
   openUrl: async (url: string) => { opened.push(url) },
+  openPath: async (path: string) => { openedPaths.push(path) },
+  revealItemInDir: async (path: string) => { revealedPaths.push(path) },
 }))
 
 const { cleanup, render, fireEvent } = await import('@testing-library/react')
@@ -24,6 +28,8 @@ afterEach(() => {
   cleanup()
   inTauri(false)
   opened.length = 0
+  openedPaths.length = 0
+  revealedPaths.length = 0
 })
 
 test('dans la fenêtre Tauri, le clic délègue au système au lieu de ne rien faire', () => {
@@ -45,6 +51,24 @@ test('un lien web Markdown délègue lui aussi au navigateur système', () => {
   const link = document.querySelector('a') as HTMLAnchorElement
   fireEvent.click(link)
   expect(opened).toEqual(['https://example.com/docs'])
+})
+
+test('un lien local HTML n’est pas interprété comme une route Pupitre', () => {
+  inTauri(true)
+  render(<Markdown>[README](/home/clement/Downloads/readme.html)</Markdown>)
+  const link = document.querySelector('a') as HTMLAnchorElement
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+  fireEvent(link, event)
+  expect(event.defaultPrevented).toBe(true)
+  expect(openedPaths).toEqual(['/home/clement/Downloads/readme.html'])
+  expect(link.getAttribute('href')).toBe('file:///home/clement/Downloads/readme.html')
+})
+
+test('un lien local vers un document révèle le fichier dans l’explorateur', () => {
+  inTauri(true)
+  render(<Markdown>[Rapport](/home/clement/Downloads/rapport.docx)</Markdown>)
+  fireEvent.click(document.querySelector('a') as HTMLAnchorElement)
+  expect(revealedPaths).toEqual(['/home/clement/Downloads/rapport.docx'])
 })
 
 test('dans le navigateur, l’ancre garde son comportement natif', () => {

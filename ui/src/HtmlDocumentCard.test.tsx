@@ -53,14 +53,20 @@ test('ouvre le dernier document dans un iframe doublement sandboxé', async () =
   const iframe = await screen.findByTitle('Aperçu de Audit plateforme')
   expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-modals')
   expect(iframe.getAttribute('src')).toContain('/api/documents/document-1/content?token=token-1')
+  expect(screen.queryByRole('textbox', { name: 'Modifier Audit plateforme' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Modifier' })).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Conserver' })).toBeNull()
   expect(screen.getByRole('button', { name: 'Supprimer' })).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Modifier' }))
+  expect(await screen.findByRole('textbox', { name: 'Modifier Audit plateforme' })).toBeTruthy()
 
   fireEvent.click(screen.getByRole('button', { name: 'Plein écran' }))
   expect(screen.getByRole('dialog', { name: 'Document HTML Audit plateforme' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Réduire' })).toBeTruthy()
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
   expect(screen.queryByRole('dialog')).toBeNull()
+  expect(screen.getByTitle('Aperçu de Audit plateforme')).toBeTruthy()
 });
 
 test('rend une tombstone sans action lorsque le contenu a expiré', async () => {

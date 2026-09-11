@@ -7,7 +7,7 @@ import type { SectionKind } from './taskToggle'
 import { ActionFormatContext, headingKind } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { mediaUrl } from './transport'
-import { ExternalLink } from './externalLink'
+import { ExternalLink, LocalFileLink, localFilePath } from './externalLink'
 
 /** GFM : tableaux, listes de tâches, barré, autolinks. */
 const REMARK_PLUGINS = [remarkGfm]
@@ -322,6 +322,10 @@ function CopyablePre({ node, children, ...props }: any) {
 const COMPONENTS = {
   img: MarkdownImage,
   a: ({ node: _node, href, children, ...props }: any) => {
+    const path = typeof href === 'string' ? localFilePath(href) : null
+    if (path !== null) {
+      return <LocalFileLink path={path} className={props.className} title={props.title} ariaLabel={props['aria-label']}>{children}</LocalFileLink>
+    }
     if (typeof href === 'string' && /^https?:\/\//i.test(href)) {
       return <ExternalLink href={href} title={props.title}>{children}</ExternalLink>
     }

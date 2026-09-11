@@ -1,4 +1,4 @@
-import { openUrl } from '@tauri-apps/plugin-opener'
+import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener'
 import type { MouseEvent, ReactNode } from 'react'
 import { hasTauriRuntime } from './transport'
 
@@ -15,6 +15,52 @@ import { hasTauriRuntime } from './transport'
 export async function openExternal(url: string): Promise<void> {
   if (hasTauriRuntime()) await openUrl(url)
   else window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+function decodePath(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+/**
+ * Les réponses peuvent pointer vers un fichier créé localement. Un chemin
+ * absolu doit être distingué des routes internes, sinon le renderer le traite
+ * comme une navigation vers une nouvelle route Pupitre.
+ */
+export function localFilePath(href: string): string | null {
+  if (/^file:\/\//i.test(href)) {
+    try {
+      const url = new URL(href)
+      if (url.protocol !== 'file:' || url.hostname !== '') return null
+      return decodePath(url.pathname)
+    } catch {
+      return null
+    }
+  }
+  if (/^\/(?:home|tmp|Users|private|mnt)\//i.test(href)) return decodePath(href)
+  if (/^[A-Za-z]:[\\/]/.test(href)) return decodePath(href)
+  return null
+}
+
+function fileUrl(path: string): string {
+  if (/^file:\/\//i.test(path)) return path
+  return `file://${encodeURI(path).replace(/#/g, '%23').replace(/\?/g, '%3F')}`
+}
+
+function shouldRevealInFileManager(path: string): boolean {
+  return !/\.(?:html?|xhtml)$/i.test(path.split(/[?#]/, 1)[0] ?? path)
+}
+
+export async function openLocalFile(path: string): Promise<void> {
+  if (hasTauriRuntime()) {
+    if (shouldRevealInFileManager(path)) await revealItemInDir(path)
+    else await openPath(path)
+    return
+  }
+  window.open(fileUrl(path), '_blank', 'noopener,noreferrer')
 }
 
 /**
@@ -49,6 +95,42 @@ export function ExternalLink({
     <a
       className={className}
       href={href}
+      target="_blank"
+      rel="noreferrer"
+      title={title}
+      aria-label={ariaLabel}
+      onClick={handleClick}
+    >
+      {children}
+    </a>
+  )
+}
+
+export function LocalFileLink({
+  path,
+  className,
+  title,
+  ariaLabel,
+  children,
+}: {
+  path: string
+  className?: string
+  title?: string
+  ariaLabel?: string
+  children: ReactNode
+}) {
+  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (!hasTauriRuntime()) return
+    event.preventDefault()
+    openLocalFile(path).catch((reason: unknown) => {
+      console.error(`[lien] ouverture refusée pour ${path}`, reason)
+    })
+  }
+
+  return (
+    <a
+      className={className}
+      href={fileUrl(path)}
       target="_blank"
       rel="noreferrer"
       title={title}
