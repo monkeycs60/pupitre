@@ -67,6 +67,7 @@ export class TodoService {
   private validate(projectId: string, input: TodoInput, id?: string) {
     this.project(projectId);
     const allowed = new Set([
+      "status",
       "title",
       "message",
       "targetBranch",
@@ -89,6 +90,8 @@ export class TodoService {
     ]);
     if (Object.keys(input).some((key) => !allowed.has(key)))
       throw new TodoError("Champ TODO inconnu");
+    if (input.status !== undefined && !["backlog", "queued"].includes(input.status))
+      throw new TodoError("Statut initial invalide");
     for (const key of [
       "targetBranch",
       "ticketId",
@@ -170,18 +173,35 @@ export class TodoService {
   }
   async create(projectId: string, input: TodoInput) {
     this.validate(projectId, input);
-    const cwd = this.project(projectId).path;
-    const branch =
-      input.targetBranch ||
-      (await todoGit(cwd, ["symbolic-ref", "--short", "HEAD"]));
-    await todoGit(cwd, ["check-ref-format", "--branch", branch]);
-    await todoGit(cwd, ["rev-parse", "--verify", `refs/heads/${branch}`]);
+    const branch = input.status === "backlog"
+      ? input.targetBranch?.trim() || ""
+      : await this.targetBranch(projectId, input.targetBranch);
     this.validate(projectId, input);
     return this.store.create(projectId, { ...input, targetBranch: branch });
   }
+  private async targetBranch(projectId: string, target?: string | null) {
+    const cwd = this.project(projectId).path;
+    const branch =
+      target?.trim() ||
+      (await todoGit(cwd, ["symbolic-ref", "--short", "HEAD"]));
+    await todoGit(cwd, ["check-ref-format", "--branch", branch]);
+    await todoGit(cwd, ["rev-parse", "--verify", `refs/heads/${branch}`]);
+    return branch;
+  }
+  private unstarted(item: TodoItem) {
+    return this.active !== item.id && !item.conversation_id && !item.branch &&
+      !item.worktree_path && !item.execution_completed && !item.publication_pending;
+  }
+  private integrated(item: TodoItem) {
+    return item.status === "done" && item.execution_completed &&
+      !!item.conversation_id && !!item.branch && !!item.worktree_path &&
+      !item.publication_pending;
+  }
   async edit(id: string, patch: Partial<TodoInput>) {
     const item = this.item(id);
-    if (item.status !== "queued" && !(item.status === "blocked" && !item.conversation_id)) {
+    if (Object.hasOwn(patch, "status"))
+      throw new TodoError("Utiliser une action pour changer le statut");
+    if (!["backlog", "queued", "blocked"].includes(item.status) || !this.unstarted(item)) {
       if (
         ["awaiting_validation", "blocked"].includes(item.status) &&
         Object.keys(patch).every((k) => k === "checks") &&
@@ -192,6 +212,7 @@ export class TodoService {
       throw new TodoError("Seuls les TODO en attente sont modifiables", 409);
     }
     const input: TodoInput = {
+      status: item.status === "queued" ? "queued" : "backlog",
       title: item.title,
       message: item.message,
       targetBranch: item.target_branch,
@@ -214,11 +235,9 @@ export class TodoService {
       ...patch,
     };
     this.validate(item.project_id, input, id);
-    await todoGit(this.project(item.project_id).path, [
-      "rev-parse",
-      "--verify",
-      `refs/heads/${input.targetBranch}`,
-    ]);
+    if (input.status === "queued")
+      input.targetBranch = await this.targetBranch(item.project_id, input.targetBranch);
+    else input.targetBranch = input.targetBranch?.trim() || "";
     if (JSON.stringify(this.item(id)) !== JSON.stringify(item))
       throw new TodoError("La TODO a changé ou a démarré pendant l’enregistrement", 409);
     this.validate(item.project_id, input, id);
@@ -235,17 +254,41 @@ export class TodoService {
       id,
       { ...Object.fromEntries(
         Object.entries(input).map(([k, v]) => [mapping[k] ?? k, v]),
-      ), status: "queued", error: null },
+      ), error: null },
     );
   }
   remove(id: string) {
     const t = this.item(id);
     if (
-      t.status !== "queued" ||
+      !["backlog", "queued", "blocked"].includes(t.status) ||
+      !this.unstarted(t) ||
       this.store.list().some((x) => x.depends_on === id)
     )
       throw new TodoError("TODO lancé ou utilisé par une dépendance", 409);
     this.store.delete(id);
+  }
+  complete(id: string) {
+    const item = this.item(id);
+    if (!["backlog", "queued", "blocked"].includes(item.status) || !this.unstarted(item))
+      throw new TodoError("Seule une tâche sans exécution peut être terminée manuellement", 409);
+    return this.store.update(id, { status: "done", error: null });
+  }
+  reopen(id: string) {
+    const item = this.item(id);
+    if (item.status !== "done" || !this.unstarted(item))
+      throw new TodoError("Seule une tâche terminée manuellement peut être rouverte", 409);
+    return this.store.update(id, { status: "backlog", error: null });
+  }
+  async enqueue(id: string) {
+    const item = this.item(id);
+    if (!["backlog", "blocked"].includes(item.status) || !this.unstarted(item))
+      throw new TodoError("Cette tâche ne peut pas être mise en file", 409);
+    const branch = await this.targetBranch(item.project_id, item.target_branch);
+    if (JSON.stringify(this.item(id)) !== JSON.stringify(item))
+      throw new TodoError("La tâche a changé pendant la mise en file", 409);
+    this.store.update(id, { status: "queued", target_branch: branch, error: null });
+    this.pump();
+    return { item: this.item(id) };
   }
   setQueue(projectId: string, running: boolean) {
     this.project(projectId);
@@ -268,9 +311,9 @@ export class TodoService {
   start(id: string) {
     const item = this.item(id);
     if (this.active) throw new TodoError("Une tâche est déjà en cours", 409);
-    if (item.status !== "queued" || item.conversation_id)
+    if (!["backlog", "queued"].includes(item.status) || !this.unstarted(item))
       throw new TodoError("Ce TODO a déjà été lancé", 409);
-    if (item.depends_on && this.item(item.depends_on).status !== "done")
+    if (item.depends_on && !this.integrated(this.item(item.depends_on)))
       throw new TodoError("La dépendance doit être intégrée", 409);
     if (this.publicationBarrier(item)) throw new TodoError("Une intégration de cette branche attend sa réconciliation", 409);
     this.launch(item, false);
@@ -301,14 +344,14 @@ export class TodoService {
     for (let t of this.store.list()) {
       if (
         t.status === "blocked" &&
-        !t.conversation_id &&
+        this.unstarted(t) &&
         t.depends_on &&
         t.error === `Dépendance bloquée : ${t.depends_on}` &&
-        this.item(t.depends_on).status === "done"
+        this.integrated(this.item(t.depends_on))
       ) {
         t = this.store.update(t.id, { status: "queued", error: null });
       }
-      if (!this.enabled.has(t.project_id) || t.status !== "queued") continue;
+      if (!this.enabled.has(t.project_id) || t.status !== "queued" || !this.unstarted(t)) continue;
       if (this.publicationBarrier(t)) continue;
       const dep = t.depends_on ? this.item(t.depends_on) : null;
       if (dep?.status === "blocked") {
@@ -318,7 +361,7 @@ export class TodoService {
         });
         continue;
       }
-      if (dep && dep.status !== "done") continue;
+      if (dep && !this.integrated(dep)) continue;
       this.launch(t, false);
       return;
     }
@@ -330,7 +373,7 @@ export class TodoService {
       .catch((e) => {
         const message = e instanceof Error ? e.message : String(e);
         this.store.update(t.id, { status: "blocked", error: message });
-        if (/quota|rate.?limit|429|usage limit|capacity|crédit/i.test(message))
+        if (/quota|rate.?limit|\b429\b|usage limit|capacity|crédit/i.test(message))
           this.enabled.clear();
       })
       .finally(() => {
@@ -372,11 +415,16 @@ export class TodoService {
           "Quota : réserve de 15 % pour votre activité atteinte",
           409,
         );
+      const target = await this.targetBranch(t.project_id, t.target_branch);
+      t = this.store.update(t.id, { target_branch: target });
+      if (this.publicationBarrier(t))
+        throw new TodoError("Une intégration de cette branche attend sa réconciliation", 409);
       const branch = `codex/todo-${t.id}-${crypto.randomUUID().slice(0, 8)}`;
       const worktree = this.git.createWorktree(t.project_id, {
         branch,
         startPoint: `refs/heads/${t.target_branch}`,
       });
+      t = this.store.update(t.id, { branch, worktree_path: worktree.path });
       const conversation = this.conversations.create({
         projectId: t.project_id,
         provider: t.provider,
@@ -394,8 +442,6 @@ export class TodoService {
         firstMessage: t.message,
       });
       t = this.store.update(t.id, {
-        branch,
-        worktree_path: worktree.path,
         conversation_id: conversation.id,
       });
       const outcome = await this.runner.runTurn(

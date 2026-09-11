@@ -78,6 +78,7 @@ async function fixture(
     repo,
     db,
     project,
+    projects,
     store,
     service,
     calls: () => calls,
@@ -95,9 +96,9 @@ async function fixture(
       }),
   };
 }
-async function idle(f: Awaited<ReturnType<typeof fixture>>) {
+async function idle(f: Awaited<ReturnType<typeof fixture>>, projectId = f.project.id) {
   for (let i = 0; i < 500; i++) {
-    if (!f.service.queue(f.project.id).activeTodoId) return;
+    if (!f.service.queue(projectId).activeTodoId) return;
     await Bun.sleep(10);
   }
   throw new Error("queue stuck");
@@ -287,11 +288,12 @@ test("a rejected push blocks the target chain without advancing its local branch
   const f = await fixture(async cwd => { writeFileSync(join(cwd, `extra-${++n}`), "x"); });
   try {
     const before = await todoGit(f.repo, ["rev-parse", "main"]);
-    writeFileSync(join(f.root, "remote/hooks/pre-receive"), '#!/bin/sh\nrm -- "$0"\nexit 1\n', { mode: 0o755 });
+    writeFileSync(join(f.root, "remote/hooks/pre-receive"), '#!/bin/sh\necho "Rejected branch codex/todo-a429b" >&2\nrm -- "$0"\nexit 1\n', { mode: 0o755 });
     const a = await f.add({ integrate: true, checks: ["true"] });
     const b = await f.add({ integrate: true, checks: ["true"] });
     f.service.setQueue(f.project.id, true); await idle(f);
     expect(f.store.get(a.id)?.status).toBe("blocked");
+    expect(f.service.queue(f.project.id).running).toBe(true);
     expect(f.store.get(b.id)?.status).toBe("queued");
     expect(await todoGit(f.repo, ["rev-parse", "main"])).toBe(before);
     expect(await todoGit(join(f.root, "remote"), ["rev-parse", "main"])).toBe(before);
@@ -315,4 +317,161 @@ test("an edit crossing a start cannot change the running task authorization", as
     release(); await idle(f);
     expect(f.store.get(a.id)?.status).toBe("awaiting_validation");
   } finally { release(); await idle(f); f.clean(); }
+});
+
+test("backlog captures and closes tasks without Git or an agent execution", async () => {
+  const f = await fixture();
+  try {
+    const project = f.projects.create({ name: "Personal notes", path: f.root });
+    const task = await f.service.create(project.id, {
+      status: "backlog",
+      message: "Organiser les notes",
+      provider: "codex",
+      model: "m",
+    });
+    expect(task.target_branch).toBe("");
+    expect(task.status).toBe("backlog");
+    const edited = await f.service.edit(task.id, { title: "Notes du projet" });
+    expect(edited.status).toBe("backlog");
+    f.service.setQueue(project.id, true);
+    expect(f.service.queue(project.id).activeTodoId).toBeNull();
+    expect(f.calls()).toBe(0);
+    const completed = f.service.complete(task.id);
+    expect(completed.status).toBe("done");
+    expect(completed.execution_completed).toBe(false);
+    expect(completed.conversation_id).toBeNull();
+    expect(f.service.reopen(task.id).status).toBe("backlog");
+    await expect(f.service.enqueue(task.id)).rejects.toThrow();
+    expect(f.store.get(task.id)?.status).toBe("backlog");
+    f.service.remove(task.id);
+    expect(f.store.get(task.id)).toBeNull();
+  } finally { f.clean(); }
+});
+
+test("backlog waits for explicit enqueue and resolves the current Git branch then", async () => {
+  const f = await fixture();
+  try {
+    const a = await f.add({ status: "backlog", targetBranch: null });
+    const b = await f.add({ status: "backlog", targetBranch: null });
+    f.service.setQueue(f.project.id, true);
+    expect(f.service.queue(f.project.id).activeTodoId).toBeNull();
+    expect(f.calls()).toBe(0);
+    await f.service.enqueue(a.id);
+    await idle(f);
+    expect(f.store.get(a.id)?.target_branch).toBe("main");
+    expect(f.store.get(a.id)?.status).toBe("awaiting_validation");
+    expect(f.store.get(b.id)?.status).toBe("backlog");
+    expect(f.calls()).toBe(1);
+    f.service.start(b.id);
+    await idle(f);
+    expect(f.store.get(b.id)?.target_branch).toBe("main");
+    expect(f.calls()).toBe(2);
+  } finally { await idle(f); f.clean(); }
+});
+
+test("closing manually never satisfies an integration dependency", async () => {
+  const f = await fixture();
+  try {
+    const parent = await f.add({ status: "backlog" });
+    const dependent = await f.add({ dependsOn: parent.id });
+    f.service.complete(parent.id);
+    expect(() => f.service.start(dependent.id)).toThrow("intégrée");
+    f.service.setQueue(f.project.id, true);
+    expect(f.calls()).toBe(0);
+    expect(f.store.get(dependent.id)?.status).toBe("queued");
+    f.store.update(dependent.id, {
+      status: "blocked",
+      error: `Dépendance bloquée : ${parent.id}`,
+    });
+    f.service.setQueue(f.project.id, true);
+    expect(f.store.get(dependent.id)?.status).toBe("blocked");
+    expect(() => f.service.reconcile(parent.id)).toThrow();
+    expect(f.calls()).toBe(0);
+  } finally { f.clean(); }
+});
+
+test("enqueue rejects a concurrent closure and never launches the closed task", async () => {
+  const f = await fixture();
+  try {
+    const task = await f.add({ status: "backlog" });
+    f.service.setQueue(f.project.id, true);
+    const enqueue = f.service.enqueue(task.id);
+    f.service.complete(task.id);
+    await expect(enqueue).rejects.toThrow("changé");
+    expect(f.store.get(task.id)?.status).toBe("done");
+    expect(f.calls()).toBe(0);
+  } finally { await idle(f); f.clean(); }
+});
+
+test("manual lifecycle and removal refuse a running task or an existing execution branch", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const f = await fixture(async () => gate);
+  try {
+    const task = await f.add({ status: "backlog" });
+    f.service.start(task.id);
+    expect(() => f.service.complete(task.id)).toThrow();
+    expect(() => f.service.reopen(task.id)).toThrow();
+    expect(() => f.service.remove(task.id)).toThrow();
+    await expect(f.service.enqueue(task.id)).rejects.toThrow();
+    release();
+    await idle(f);
+    expect(() => f.service.complete(task.id)).toThrow();
+
+    const orphaned = await f.add({ status: "backlog" });
+    f.store.update(orphaned.id, { status: "blocked", branch: "codex/existing" });
+    expect(() => f.service.complete(orphaned.id)).toThrow();
+    expect(() => f.service.remove(orphaned.id)).toThrow();
+    await expect(f.service.edit(orphaned.id, { message: "Replacement" })).rejects.toThrow();
+    await expect(f.service.enqueue(orphaned.id)).rejects.toThrow();
+
+    const blocked = await f.add({ status: "backlog" });
+    f.store.update(blocked.id, { status: "blocked", error: "Git indisponible" });
+    f.service.remove(blocked.id);
+    expect(f.store.get(blocked.id)).toBeNull();
+  } finally { release(); await idle(f); f.clean(); }
+});
+
+test("queued edits validate Git while backlog edits preserve deferred configuration", async () => {
+  const f = await fixture();
+  try {
+    const backlog = await f.add({ status: "backlog" });
+    await f.service.edit(backlog.id, { targetBranch: "branch missing" });
+    expect(f.store.get(backlog.id)?.status).toBe("backlog");
+    await expect(f.service.enqueue(backlog.id)).rejects.toThrow();
+    await expect(f.service.edit(backlog.id, { status: "queued" })).rejects.toThrow();
+    const queued = await f.add();
+    await expect(f.service.edit(queued.id, { targetBranch: "branch missing" })).rejects.toThrow();
+    expect(f.store.get(queued.id)?.target_branch).toBe("main");
+    await expect(f.add({ status: "done" })).rejects.toThrow();
+  } finally { f.clean(); }
+});
+
+test("editing an unstarted blocked task returns it to backlog without requiring Git", async () => {
+  const f = await fixture();
+  try {
+    const project = f.projects.create({ name: "Personal notes", path: f.root });
+    const task = await f.service.create(project.id, {
+      status: "backlog",
+      message: "Planifier le projet",
+      provider: "codex",
+      model: "m",
+      integrate: true,
+      checks: [],
+    });
+    f.service.setQueue(project.id, true);
+    f.service.start(task.id);
+    await idle(f, project.id);
+    expect(f.store.get(task.id)?.status).toBe("blocked");
+    const edited = await f.service.edit(task.id, { message: "Ajouter les notes", targetBranch: null });
+    expect(edited.status).toBe("backlog");
+    expect(edited.error).toBeNull();
+    expect(edited.target_branch).toBe("");
+    expect(edited.integrate).toBe(true);
+    expect(edited.checks).toEqual([]);
+    expect(f.service.queue(project.id).activeTodoId).toBeNull();
+    expect(f.calls()).toBe(0);
+    f.service.complete(task.id);
+    expect(f.store.get(task.id)?.status).toBe("done");
+  } finally { f.clean(); }
 });

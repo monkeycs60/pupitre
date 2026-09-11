@@ -1,0 +1,248 @@
+.todo-editor,
+.todo-ticket-detail {
+  min-width: 0;
+}
+
+.todo-detail.todo-ticket-detail {
+  padding: 28px clamp(20px, 3vw, 48px) 40px;
+}
+
+.todo-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.todo-editor-heading h1 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.todo-editor-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.todo-editor-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}
+
+.todo-editor .todo-field,
+.todo-ticket-detail .todo-field {
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+
+.todo-editor .todo-field :is(input, textarea, select),
+.todo-ticket-detail .todo-field :is(input, textarea, select) {
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.todo-editor .todo-field :is(input, textarea):focus,
+.todo-ticket-detail .todo-field :is(input, textarea):focus {
+  border-color: var(--accent-border);
+}
+
+.todo-editor .todo-title-field input {
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.todo-editor .todo-field textarea {
+  font-size: var(--text-base);
+}
+
+.todo-optional {
+  margin-left: var(--space-1);
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.todo-editor .todo-attach {
+  margin: 0 0 var(--space-4);
+  gap: var(--space-2);
+}
+
+.todo-editor .todo-attach-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+}
+
+.todo-ticket-field {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.todo-ticket-field:disabled select {
+  opacity: 1;
+  appearance: none;
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.todo-agent-options {
+  margin-top: var(--space-5);
+  padding: var(--space-4) 0 0;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.todo-ticket-detail .todo-agent-options {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+}
+
+.todo-agent-options > summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.todo-agent-options > summary:hover,
+.todo-agent-options[open] > summary {
+  color: var(--text);
+}
+
+.todo-agent-options > summary > span {
+  margin-left: var(--space-2);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.todo-agent-options .todo-model {
+  margin-bottom: var(--space-4);
+}
+
+.todo-agent-options .todo-config {
+  margin: var(--space-4) 0;
+}
+
+.todo-editor .todo-editor-actions {
+  align-items: center;
+  margin-top: var(--space-5);
+}
+
+.todo-shortcut {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.todo-shortcut kbd {
+  font: inherit;
+}
+
+.todo-ticket-detail .todo-title-input {
+  margin: 0;
+  padding: var(--space-1) 0;
+  min-width: 0;
+  field-sizing: content;
+  resize: none;
+  font-size: 20px;
+}
+
+.todo-ticket-detail h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.todo-ticket-meta {
+  margin: var(--space-2) 0 var(--space-6);
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.todo-ticket-detail .todo-description-field textarea[readonly] {
+  border-color: transparent;
+  padding-left: 0;
+  padding-right: 0;
+  resize: none;
+}
+
+.todo-ticket-actions {
+  padding-bottom: var(--space-1);
+}
+
+.todo-save-actions {
+  align-items: center;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.todo-editor.is-compact {
+  flex: none;
+  overflow: visible;
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-workspace);
+}
+
+.todo-editor.is-compact form {
+  max-width: none;
+}
+
+.todo-editor.is-compact .todo-editor-heading {
+  margin-bottom: var(--space-3);
+}
+
+.todo-editor.is-compact .todo-editor-heading h1 {
+  font-size: var(--text-md);
+}
+
+.todo-editor.is-compact .todo-field {
+  margin: var(--space-3) 0;
+}
+
+.todo-editor.is-compact .todo-field :is(input, textarea, select) {
+  padding: var(--space-2) var(--space-3);
+}
+
+.todo-editor.is-compact .todo-agent-options {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.todo-editor.is-compact .todo-config .config-panel {
+  gap: var(--space-3);
+}
+
+.todo-editor.is-compact .todo-config .config-branch,
+.todo-editor.is-compact .todo-config .branch-field,
+.todo-editor.is-compact .todo-config .branch-field input {
+  width: 100%;
+}
+
+.todo-editor.is-compact .todo-settings {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.todo-editor.is-compact .todo-integrate {
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+}
+
+.todo-editor.is-compact .todo-detail-actions {
+  margin-top: var(--space-4);
+  gap: var(--space-2);
+}

@@ -35,9 +35,6 @@
 .workspace-welcome h1 { font-size:22px; font-weight:500; margin:0 0 12px; }
 .workspace-welcome p { line-height:1.6; margin-bottom:24px; }
 .todo-list { display:flex; flex-direction:column; min-height:0; padding-top:4px; }
-.todo-queue-control { padding:4px 12px 14px; display:flex; flex-direction:column; align-items:stretch; gap:8px; }
-.todo-queue-control > span { color:var(--text-faint); font-size:11px; text-align:center; }
-.todo-search { margin:0 12px 8px; min-width:0; }
 .todo-row { display:flex; align-items:center; margin:2px 6px; border-radius:var(--r-sm); transition:background 150ms; }
 .todo-row:hover { background:var(--bg-hover); }
 .todo-row.is-selected { background:var(--accent-soft); }
@@ -149,11 +146,11 @@
 .project-sections-refresh:hover { color:var(--text); }
 /* Le repli suit la largeur du panneau, pas celle de la fenêtre : le panneau
    se redimensionne, un point de rupture sur la fenêtre le raterait. */
-@container inspector (max-width: 568px) {
+@container inspector (max-width: 740px) {
   .project-sections-list button svg { display:none; }
   .project-sections-list button { padding:6px 9px; }
 }
-@container inspector (max-width: 470px) {
+@container inspector (max-width: 630px) {
   .project-sections { gap:6px; padding:9px 10px; }
   .project-sections-list { gap:2px; }
   .project-sections-list button svg { display:block; }
@@ -161,6 +158,10 @@
   .project-sections-list button:not(.is-selected) { padding:6px 7px; }
   .project-sections-refresh > span { display:none; }
   .project-sections-refresh::before { content:'\21bb'; font-size:14px; }
+}
+@container inspector (max-width: 360px) {
+  .project-sections-list button:not(.is-selected) .project-section-count { display:none; }
+  .project-sections-list button { gap:4px; }
 }
 .todo-config { display:flex; flex-direction:column; gap:10px; margin:20px 0; font-size:12px; color:var(--text-muted); }
 .todo-config .config-panel { flex-wrap:wrap; gap:16px; }

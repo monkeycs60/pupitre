@@ -2597,7 +2597,7 @@ export function createServer(deps: ServerDeps) {
         }
 
         const todoProjectRoute = pathname.match(/^\/api\/projects\/([^/]+)\/todos(?:\/(queue|reorder))?$/);
-        const todoRoute = pathname.match(/^\/api\/todos\/([^/]+)(?:\/(start|reconcile))?$/);
+        const todoRoute = pathname.match(/^\/api\/todos\/([^/]+)(?:\/(start|reconcile|complete|reopen|enqueue))?$/);
         if (todoProjectRoute || todoRoute) {
           if (!deps.todos) throw new HttpError(503, "Service TODO indisponible");
           try {
@@ -2623,6 +2623,9 @@ export function createServer(deps: ServerDeps) {
               if (!action && request.method === "DELETE") { deps.todos.remove(id); return empty(204); }
               if (action === "start" && request.method === "POST") return json(deps.todos.start(id), 202);
               if (action === "reconcile" && request.method === "POST") return json(deps.todos.reconcile(id), 202);
+              if (action === "complete" && request.method === "POST") return json(deps.todos.complete(id));
+              if (action === "reopen" && request.method === "POST") return json(deps.todos.reopen(id));
+              if (action === "enqueue" && request.method === "POST") return json(await deps.todos.enqueue(id));
             }
           } catch (error) {
             if (error instanceof TodoError) throw new HttpError(error.status, error.message);

@@ -8,20 +8,22 @@ import { buildTodoInput, type TodoDraftSeed } from './todoDraft'
 import { createTodo, type TodoItem } from './todos'
 import { mediaUrl } from './transport'
 import type { Attachment, Project, QuotaSnapshot } from './types'
+import './styles/todo-editor.css'
 
 interface Props {
   project: Project
   items: TodoItem[]
   quotas: QuotaSnapshot
+  compact?: boolean
+  hasTicketIntegration?: boolean
   initialTicketId?: string | null
-  /** Brouillon repris depuis un composeur : message, pièces jointes, modèle et ticket. */
   initial?: TodoDraftSeed | null
   onCreated: (todo: TodoItem) => void
   onCancel: () => void
 }
 
-export function TodoEditor({ project, items, quotas, initialTicketId = null, initial = null, onCreated, onCancel }: Props) {
-  const [title, setTitle] = useState('')
+export function TodoEditor({ project, items, quotas, compact = false, hasTicketIntegration = false, initialTicketId = null, initial = null, onCreated, onCancel }: Props) {
+  const [title, setTitle] = useState(initial?.message.trim().split('\n')[0].slice(0, 180) ?? '')
   const [message, setMessage] = useState(initial?.message ?? '')
   const [ticketId, setTicketId] = useState<string | null>(initial?.ticketId ?? initialTicketId)
   const [autonomy, setAutonomy] = useState<'local' | 'investigate'>('local')
@@ -46,7 +48,7 @@ export function TodoEditor({ project, items, quotas, initialTicketId = null, ini
   const [error, setError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const dependencies = items.filter((item) => item.ticket_id === ticketId && item.status !== 'done')
-  const canSubmit = configReady && !busy && pending === 0 && message.trim().length > 0 && (!integrate || checks.trim().length > 0)
+  const canSubmit = configReady && !busy && pending === 0 && title.trim().length > 0
 
   async function attach(files: File[]) {
     if (files.length === 0) return
@@ -64,20 +66,25 @@ export function TodoEditor({ project, items, quotas, initialTicketId = null, ini
     setBusy(true)
     setError(null)
     try {
-      const input = buildTodoInput(config, { message: message.trim(), ticketId, integrate, autonomy, checks, attachments })
-      onCreated(await createTodo(project.id, { ...input, title: title.trim() || undefined, dependsOn: dependsOn || null }))
+      const input = buildTodoInput(config, { message: message.trim() || title.trim(), ticketId, integrate, autonomy, checks, attachments })
+      onCreated(await createTodo(project.id, { ...input, title: title.trim(), status: 'backlog', dependsOn: dependsOn || null }))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Création impossible')
       setBusy(false)
     }
   }
 
-  return <section className="todo-detail todo-editor" aria-label="Nouvelle TODO">
-    <header className="todo-detail-header"><span>{project.name} <span aria-hidden="true">/</span> TODO</span><span>Nouvelle</span></header>
-    <form onSubmit={(event) => void submit(event)}>
-      <h1>Nouvelle TODO</h1>
-      <p className="todo-model">Décris la tâche, ajoute-la à la file, puis dépile quand tu es prêt.</p>
-      <label className="todo-field"><span>Consigne</span><textarea aria-label="Consigne de la TODO" autoFocus rows={8} required placeholder="Ce que l’agent doit faire, et le résultat attendu." value={message} onChange={(event) => setMessage(event.target.value)} /></label>
+  return <section className={`todo-detail todo-editor${compact ? ' is-compact' : ''}`} aria-label="Nouvelle tâche">
+    {!compact ? <header className="todo-detail-header"><span>{project.name} <span aria-hidden="true">/</span> Tâches</span><span>À faire</span></header> : null}
+    <form onSubmit={(event) => void submit(event)} onKeyDown={(event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault()
+        if (canSubmit) event.currentTarget.requestSubmit()
+      }
+    }}>
+      <div className="todo-editor-heading"><h1>Nouvelle tâche</h1>{compact ? <button className="todo-editor-close" type="button" aria-label="Fermer la création de tâche" onClick={onCancel} disabled={busy}>×</button> : null}</div>
+      <label className="todo-field todo-title-field"><span>Titre</span><input aria-label="Titre de la tâche" autoFocus required placeholder="Que faut-il faire ?" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+      <label className="todo-field"><span>Description <span className="todo-optional">facultative</span></span><textarea aria-label="Description de la tâche" rows={3} placeholder="Contexte, résultat attendu, liens…" value={message} onChange={(event) => setMessage(event.target.value)} /></label>
       <div className="todo-attach">
         {attachments.length > 0 || pending > 0 ? <div className="composer-attachments" aria-label="Pièces jointes">
           {attachments.map((attachment) => attachment.mimeType.startsWith('image/')
@@ -92,26 +99,25 @@ export function TodoEditor({ project, items, quotas, initialTicketId = null, ini
               </div>)}
           {pending > 0 ? <span className="todo-attach-pending" role="status">Téléversement…</span> : null}
         </div> : null}
-        <button type="button" className="text-button" onClick={() => fileInput.current?.click()}>Joindre des images ou des fichiers</button>
+        <button type="button" className="text-button todo-attach-button" onClick={() => fileInput.current?.click()}><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true"><path d="m5.7 8.9 4.6-4.6a1.8 1.8 0 0 1 2.5 2.5L6.6 13a3 3 0 0 1-4.2-4.2l6.3-6.3" /></svg>Joindre un fichier</button>
         <input ref={fileInput} className="composer-file-input" type="file" multiple accept="image/*,.csv,.doc,.docx,.json,.md,.pdf,.txt,.xls,.xlsx,.xml,.zip" onChange={(event) => { void attach(Array.from(event.target.files ?? [])); event.target.value = '' }} />
       </div>
-      <div className="todo-config">
-        <span>Modèle et branche cible</span>
-        <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onError={setError} onReady={setConfigReady} placement="bottom" applyProjectDefault={initial === null} defaultPresetId={project.default_todo_preset_id ?? null} />
-      </div>
-      <details className="todo-verification">
-        <summary>Options de la tâche</summary>
-        <label className="todo-field"><span>Titre facultatif</span><input aria-label="Titre de la TODO" placeholder="Déduit de la consigne" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-        <div className="todo-settings">
-          <TicketSelect projectId={project.id} value={ticketId} onChange={(ticket) => {
+      {hasTicketIntegration || ticketId ? <div className="todo-ticket-field"><TicketSelect projectId={project.id} value={ticketId} onChange={(ticket) => {
             setTicketId(ticket?.id ?? null)
             setDependsOn('')
             setConfig((current) => ({ ...current, ticketKey: ticket?.key ?? null, branch: ticket ? ticketLinksOf(ticket).branch ?? current.branch : current.branch }))
-          }} />
+          }} /></div> : null}
+      <details className="todo-agent-options">
+        <summary>Options de l’agent</summary>
+        <div className="todo-config">
+          <span>Modèle et branche cible</span>
+          <ConfigPanel project={project} quotas={quotas} config={config} onConfigChange={setConfig} onError={setError} onReady={setConfigReady} placement="bottom" applyProjectDefault={initial === null} defaultPresetId={project.default_todo_preset_id ?? null} />
+        </div>
+        <div className="todo-settings">
           <label className="todo-field"><span>Autonomie</span><select value={autonomy} onChange={(event) => { const value = event.target.value as 'local' | 'investigate'; setAutonomy(value); if (value === 'investigate') setIntegrate(false) }}><option value="local">Corrections locales</option><option value="investigate">Enquête et propositions</option></select></label>
           <label className="todo-field"><span>Après intégration de</span><select value={dependsOn} disabled={dependencies.length === 0} onChange={(event) => setDependsOn(event.target.value)}><option value="">Aucune dépendance</option>{dependencies.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
         </div>
-        <label className="todo-integrate"><input type="checkbox" checked={integrate} disabled={autonomy === 'investigate'} onChange={(event) => setIntegrate(event.target.checked)} /><span><strong>Intégrer et pousser</strong><span>Après vérification, réunir les changements dans la branche cible et les publier. La TODO suivante partira de ce résultat.</span></span></label>
+        <label className="todo-integrate"><input type="checkbox" checked={integrate} disabled={autonomy === 'investigate'} onChange={(event) => setIntegrate(event.target.checked)} /><span><strong>Intégrer et pousser</strong><span>Après vérification, fusionner dans la branche cible et publier les changements.</span></span></label>
         <details className="todo-verification" open={integrate || undefined}>
           <summary>Vérifications avant intégration</summary>
           <label className="todo-field"><span>Commandes à exécuter, une par ligne</span><textarea aria-label="Commandes de vérification" rows={3} value={checks} onChange={(event) => setChecks(event.target.value)} placeholder="bun test" /></label>
@@ -119,9 +125,10 @@ export function TodoEditor({ project, items, quotas, initialTicketId = null, ini
         </details>
       </details>
       {error ? <p className="todo-error" role="alert">{error}</p> : null}
-      <div className="todo-detail-actions">
-        <button className="primary-button" type="submit" disabled={!canSubmit}>{busy ? 'Ajout…' : 'Ajouter à la file'}</button>
-        <button className="secondary-button" type="button" disabled={busy} onClick={onCancel}>Annuler</button>
+      <div className="todo-detail-actions todo-editor-actions">
+        <button className="primary-button" type="submit" disabled={!canSubmit}>{busy ? 'Création…' : 'Créer la tâche'}</button>
+        {!compact ? <button className="secondary-button" type="button" disabled={busy} onClick={onCancel}>Annuler</button> : null}
+        <span className="todo-shortcut"><kbd>Ctrl</kbd> + <kbd>Entrée</kbd></span>
       </div>
     </form>
   </section>

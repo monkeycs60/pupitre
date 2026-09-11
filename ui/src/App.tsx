@@ -1,9 +1,10 @@
 import { WorkspaceInspector, inspectorGroupOf, type InspectorView } from './WorkspaceInspector'
 import { TodoEditor } from './TodoEditor'
+import { TodoList } from './TodoList'
 import type { TodoDraftSeed } from './todoDraft'
 import { WorkflowsView } from './WorkflowsView'
 import { TodoDetail } from './TodoDetail'
-import { useTodos, type TodoItem } from './todos'
+import { useTodos } from './todos'
 import { QuotaBar } from './QuotaBar'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type {
@@ -156,7 +157,8 @@ function App() {
   const [memoryDirty, setMemoryDirty] = useState(false)
   const [inspector, setInspector] = useState<InspectorView | null>(null)
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null)
-  const [sidebarTab, setSidebarTab] = useState<'conversations' | 'todos'>('conversations')
+  const [todoPanelRequest, setTodoPanelRequest] = useState(0)
+  const [todoTicketId, setTodoTicketId] = useState<string | null>(null)
   const [newTodo, setNewTodo] = useState(false)
   const [todoSeed, setTodoSeed] = useState<TodoDraftSeed | null>(null)
   const lastInspectorViews = useRef<Partial<Record<string, InspectorView>>>({})
@@ -456,26 +458,26 @@ function App() {
     if (confirmLeaveMemory()) setInspector(null)
   }
 
-  function handleTodoCreated(todo: TodoItem) {
+  function handleTodoCreated() {
     todos.refresh()
-    setSelectedTodoId(todo.id)
-    setSidebarTab('todos')
+    setTodoTicketId(null)
     setNewTodo(false)
     setTodoSeed(null)
   }
 
   function handleDraftToTodo(seed: TodoDraftSeed) {
+    if (!confirmLeaveMemory()) return
     setTodoSeed(seed)
+    setTodoTicketId(null)
     handleTodoCreate()
   }
 
   function handleTodoCreate() {
     if (!confirmLeaveMemory() || selectedProject === null) return
-    setSelectedTodoId(null)
-    setIsCreatingConversation(false)
     setShowSwitchModel(false)
+    setInspector('dashboard')
+    setTodoPanelRequest((value) => value + 1)
     setNewTodo(true)
-    setSidebarTab('todos')
     setWorkspaceView('conversations')
   }
 
@@ -489,8 +491,10 @@ function App() {
   function handleProjectSelect(project: Project) {
     if (!confirmLeaveMemory()) return
     setSelectedTodoId(null)
-    setSidebarTab('conversations')
     setNewTodo(false)
+    setTodoPanelRequest(0)
+    setTodoSeed(null)
+    setTodoTicketId(null)
     if (project.id !== selectedProject?.id) {
       setSelectedConversation(null)
       setConversationSeed(null)
@@ -508,7 +512,6 @@ function App() {
   function handleConversationSelect(conversation: Conversation) {
     setSelectedTodoId(null)
     setFocusEventId(null)
-    setSidebarTab('conversations')
     setNewTodo(false)
     if (!confirmLeaveMemory()) return
     setSelectedConversation(conversation)
@@ -523,7 +526,6 @@ function App() {
   function handleConversationCreate() {
     setSelectedTodoId(null)
     setNewTodo(false)
-    setSidebarTab('conversations')
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setSelectedConversation(null)
@@ -822,7 +824,7 @@ function App() {
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
       <Titlebar
-        crumbs={[selectedProject?.name, titlebarView]}
+        crumbs={[selectedProject?.name, selectedTodo?.title ?? titlebarView]}
         onSearch={() => setPaletteOpen(true)}
         instance={instance}
         onRestart={restartApp}
@@ -843,13 +845,7 @@ function App() {
       <>
       <Sidebar
         selectedProject={selectedProject}
-        selectedConversation={selectedTodoId || newTodo ? null : selectedConversation}
-        sidebarTab={sidebarTab}
-        onSidebarTabChange={setSidebarTab}
-        todos={todos}
-        selectedTodoId={selectedTodoId}
-        onTodoSelect={(id) => { setSelectedTodoId(id); setIsCreatingConversation(false); setWorkspaceView('conversations') }}
-        onTodoCreate={() => { setTodoSeed(null); handleTodoCreate() }}
+        selectedConversation={selectedTodoId ? null : selectedConversation}
         quotas={quotas.snapshot}
         time={time.snapshot}
         timeMode={time.mode}
@@ -889,7 +885,7 @@ function App() {
       </>
       ) : null}
 
-      <section className="workspace" aria-label={titlebarView ?? 'Conversation'}>
+      <section className="workspace" aria-label={selectedTodo ? 'Tâche du projet' : titlebarView ?? 'Conversation'}>
         <div className="workspace-split">
         <div className="conversation-workspace">
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
@@ -897,11 +893,10 @@ function App() {
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         : workspaceView === 'settings' ? <AppSettingsView instance={instance} />
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
-        : newTodo ? <TodoEditor key={`${selectedProject.id}-${todoSeed ? 'seed' : 'blank'}`} project={selectedProject} items={todos.items} quotas={quotas.snapshot} initial={todoSeed} onCreated={handleTodoCreated} onCancel={() => { setNewTodo(false); setTodoSeed(null) }} />
-        : selectedTodo ? <TodoDetail key={selectedTodo.id} item={selectedTodo} items={todos.items} project={selectedProject} quotas={quotas.snapshot} onChanged={todos.refresh} onDeleted={() => { setSelectedTodoId(null); todos.refresh() }} onConversationSelect={(id) => void handleGitConversationSelect(id)} />
+        : selectedTodo ? <TodoDetail key={selectedTodo.id} item={selectedTodo} items={todos.items} project={selectedProject} quotas={quotas.snapshot} hasTicketIntegration={ticketLinks.size > 0} onChanged={todos.refresh} onDeleted={() => { setSelectedTodoId(null); todos.refresh() }} onConversationSelect={(id) => void handleGitConversationSelect(id)} />
         : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">
-            <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Une conversation pour avancer, une TODO pour préparer la suite.</p><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button></div>
+            <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Retrouve les tâches et le suivi dans le panneau projet.</p><div className="todo-detail-actions"><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button><button className="secondary-button" onClick={() => openInspector('dashboard')}>Tâches du projet</button></div></div>
           </div>
         ) : (
           <>
@@ -1090,6 +1085,15 @@ function App() {
             embedded
             key={selectedProject.id}
             project={selectedProject}
+            todoCount={todos.items.filter((item) => item.status !== 'done').length}
+            todoPanelRequest={todoPanelRequest}
+            onRefreshTodos={todos.refresh}
+            onCreateTodoFromTicket={(ticket) => { setTodoSeed(null); setTodoTicketId(ticket.id); handleTodoCreate() }}
+            todoPanel={(hasTicketIntegration) => <div className="project-todos">
+              <header className="project-tasks-header"><h2>Tâches du projet</h2>{!newTodo ? <button type="button" className="primary-button" onClick={() => { setTodoSeed(null); setTodoTicketId(null); handleTodoCreate() }}>+ Nouvelle tâche</button> : null}</header>
+              {newTodo ? <TodoEditor compact key={`${selectedProject.id}-${todoPanelRequest}`} project={selectedProject} items={todos.items} quotas={quotas.snapshot} initial={todoSeed} initialTicketId={todoTicketId} hasTicketIntegration={hasTicketIntegration} onCreated={handleTodoCreated} onCancel={() => { setNewTodo(false); setTodoSeed(null); setTodoTicketId(null) }} /> : null}
+              <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={selectedTodoId} ticketLinks={ticketLinks} onSelect={(id) => { setSelectedTodoId(id); setIsCreatingConversation(false) }} onChanged={todos.refresh} />
+            </div>}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
             onStartConversation={handleStartFromTicket}
             onOpenSettings={() => setProjectSettingsOpen(true)}

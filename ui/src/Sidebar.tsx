@@ -1,5 +1,3 @@
-import { TodoList } from './TodoList'
-import type { TodoSnapshot } from './todos'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
   associateConversationDomain,
@@ -34,12 +32,6 @@ declare global {
 }
 
 interface SidebarProps {
-  sidebarTab?: 'conversations' | 'todos'
-  onSidebarTabChange?: (tab: 'conversations' | 'todos') => void
-  todos?: TodoSnapshot & { loading: boolean; error: string | null; refresh: () => void }
-  selectedTodoId?: string | null
-  onTodoSelect?: (id: string) => void
-  onTodoCreate?: () => void
   quotas?: QuotaSnapshot
   time?: TimeSnapshot | null
   timeMode?: TimeMode
@@ -241,12 +233,6 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
 
 export const Sidebar = memo(function Sidebar({
   selectedProject,
-  sidebarTab = 'conversations',
-  onSidebarTabChange = () => {},
-  todos,
-  selectedTodoId = null,
-  onTodoSelect = () => {},
-  onTodoCreate = () => {},
   quotas,
   time = null,
   timeMode = 'user',
@@ -610,47 +596,17 @@ export const Sidebar = memo(function Sidebar({
         ) : null}
       </div>
 
-      <div className="sidebar-tabs" role="tablist" aria-label="Contenu de la sidebar">
-        <button
-          id="sidebar-conversations-tab"
-          type="button"
-          role="tab"
-          aria-selected={sidebarTab === 'conversations'}
-          aria-controls="sidebar-conversations-panel"
-          className={sidebarTab === 'conversations' ? 'is-selected' : ''}
-          onClick={() => onSidebarTabChange('conversations')}
-          title={`${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} à lire sur ${conversations.length}`}
-        >
+      <div className="sidebar-tabs conversation-list-heading">
+        <span id="sidebar-conversations-title" title={`${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} à lire sur ${conversations.length}`}>
           Conversations <span>{unreadConversationCount}</span>
-        </button>
-        <button
-          id="sidebar-todos-tab"
-          type="button"
-          role="tab"
-          aria-selected={sidebarTab === 'todos'}
-          aria-controls="sidebar-todos-panel"
-          className={sidebarTab === 'todos' ? 'is-selected' : ''}
-          onClick={() => onSidebarTabChange('todos')}
-        >
-          TODO <span>{todos?.items.filter((item) => item.status !== 'done').length ?? 0}</span>
-        </button>
-        <button
-          type="button"
-          className="sidebar-tabs-create"
-          onClick={sidebarTab === 'todos' ? onTodoCreate : onConversationCreate}
-          disabled={selectedProject === null}
-          title={sidebarTab === 'todos'
-            ? 'Préparer une TODO dans ce projet'
-            : 'Démarrer une nouvelle conversation dans ce projet'}
-        >
-          <span aria-hidden="true">+</span>
-          <span>{sidebarTab === 'todos' ? 'Nouvelle TODO' : 'Nouvelle'}</span>
+        </span>
+        <button type="button" className="sidebar-tabs-create" onClick={onConversationCreate} disabled={selectedProject === null} title="Démarrer une nouvelle conversation dans ce projet">
+          <span aria-hidden="true">+</span><span>Nouvelle</span>
         </button>
       </div>
 
-      <section className="sidebar-section conversations" aria-label="Navigation du projet">
-        {sidebarTab === 'conversations' ? (
-          <div id="sidebar-conversations-panel" role="tabpanel" aria-labelledby="sidebar-conversations-tab">
+      <section className="sidebar-section conversations" aria-label="Conversations du projet">
+          <div id="sidebar-conversations-panel" aria-labelledby="sidebar-conversations-title">
         <div className={`conversation-filter-input${conversationScope !== 'active' ? ' has-scope' : ''}`}>
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
@@ -963,11 +919,6 @@ export const Sidebar = memo(function Sidebar({
           })()}
         </div>
           </div>
-        ) : (
-          <div id="sidebar-todos-panel" role="tabpanel" aria-labelledby="sidebar-todos-tab">
-            {selectedProject && todos ? <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={selectedTodoId} onSelect={onTodoSelect} onChanged={todos.refresh} /> : <p className="list-empty">Sélectionne un projet.</p>}
-          </div>
-        )}
       </section>
 
       {error && (

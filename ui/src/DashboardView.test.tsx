@@ -1,6 +1,6 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
-import { createElement } from 'react'
+import { createElement, type ComponentProps } from 'react'
 import { readFileSync } from 'node:fs'
 import type { DashboardPayload, Project } from './types'
 
@@ -85,7 +85,8 @@ const withGitlab: DashboardPayload = {
   toReview: [],
 }
 
-function mount(payload: DashboardPayload, onStart = mock(() => {})) {
+function mount(payload: DashboardPayload, onStart = mock(() => {}), options: Partial<ComponentProps<typeof DashboardView>> = {}) {
+  if (!window.localStorage.getItem('pupitre:dashboard-tab:p1')) window.localStorage.setItem('pupitre:dashboard-tab:p1', 'tickets')
   globalThis.fetch = mock(async (input) => (
     String(input).includes('/notes') ? Response.json([]) : Response.json(payload)
   )) as typeof fetch
@@ -94,6 +95,7 @@ function mount(payload: DashboardPayload, onStart = mock(() => {})) {
     project,
     onConversationSelect: () => {},
     onStartConversation: onStart,
+    ...options,
   }))
   return onStart
 }
@@ -112,14 +114,14 @@ test('rend une ligne par ticket, la colonne Déployé avec GitLab, et le bandeau
   expect(screen.getByText('preprod')).toBeTruthy()
 })
 
-test('sépare le tableau en quatre onglets et mémorise le dernier onglet du projet', async () => {
+test('affiche les sections disponibles et mémorise le dernier onglet du projet', async () => {
   mount(withGitlab)
 
   await screen.findByText('TECH-24657')
   const tabs = screen.getAllByRole('tab')
   expect(tabs.map((tab) => tab.textContent)).toEqual([
+    'Tâches',
     'Mes tickets',
-    'Issues Sentry',
     'Changelog',
     'Environnements',
   ])
@@ -127,8 +129,8 @@ test('sépare le tableau en quatre onglets et mémorise le dernier onglet du pro
   expect(screen.queryByRole('heading', { name: 'Environnements' })).toBeNull()
 
   fireEvent.keyDown(screen.getByRole('tab', { name: 'Mes tickets' }), { key: 'ArrowRight' })
-  expect(screen.getByRole('tab', { name: 'Issues Sentry' }).getAttribute('aria-selected')).toBe('true')
-  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Issues Sentry' }))
+  expect(screen.getByRole('tab', { name: 'Changelog' }).getAttribute('aria-selected')).toBe('true')
+  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Changelog' }))
 
   fireEvent.click(screen.getByRole('tab', { name: 'Environnements' }))
 
@@ -144,7 +146,7 @@ test('sépare le tableau en quatre onglets et mémorise le dernier onglet du pro
 })
 
 test('Nouvelle conv. transmet ticket et branche ; sans GitLab la colonne Déployé disparaît', async () => {
-  const onStart = mount({ ...withGitlab, integrations: [], environments: [] })
+  const onStart = mount({ ...withGitlab, integrations: [{ ...withGitlab.integrations[0]!, type: 'clickup' }], environments: [] })
 
   const button = await screen.findByRole('button', { name: 'Nouvelle conv.' })
   fireEvent.click(button)
@@ -307,6 +309,7 @@ test('affiche le changelog compact, son échéance au survol et permet une actua
 })
 
 test('le panneau trie par numéro, mise à jour et dernière conversation', async () => {
+  window.localStorage.setItem('pupitre:dashboard-tab:p1', 'tickets')
   const older = {
     ...ticket,
     id: 't2',
@@ -350,6 +353,7 @@ test('le panneau trie par numéro, mise à jour et dernière conversation', asyn
 })
 
 test('le panneau montre les liens ClickUp et GitLab, l’instruction et le départ de conversation', async () => {
+  window.localStorage.setItem('pupitre:dashboard-tab:p1', 'tickets')
   globalThis.fetch = mock(async (input) => (
     String(input).includes('/notes') ? Response.json([]) : Response.json(withGitlab)
   )) as typeof fetch
@@ -379,4 +383,106 @@ test('le panneau montre les liens ClickUp et GitLab, l’instruction et le dépa
   fireEvent.click(screen.getByRole('button', { name: '1 conversation' }))
   fireEvent.click(screen.getByRole('button', { name: /Première passe/ }))
   expect(onConversationSelect).toHaveBeenCalledWith('c1')
+})
+
+test('un projet sans intégration ouvre ses tâches, masque Tickets et Sentry et ne charge pas Sentry', async () => {
+  const requestedUrls: string[] = []
+  globalThis.fetch = mock(async (input) => {
+    requestedUrls.push(String(input))
+    return Response.json({ ...withGitlab, integrations: [], tickets: [], environments: [] })
+  }) as typeof fetch
+  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
+  const refreshTodos = mock(() => {})
+  render(createElement(DashboardView, {
+    embedded: true,
+    project,
+    todoPanel: createElement('p', null, 'Mes tâches personnelles'),
+    todoCount: 3,
+    onRefreshTodos: refreshTodos,
+    onConversationSelect: () => {},
+    onStartConversation: () => {},
+  }))
+
+  await waitFor(() => expect(requestedUrls).toHaveLength(2))
+  expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('title'))).toEqual(['Tâches', 'Changelog', 'Environnements'])
+  const tasksTab = screen.getByRole('tab', { name: 'Tâches 3' })
+  expect(tasksTab.getAttribute('aria-selected')).toBe('true')
+  expect(screen.getByRole('tabpanel', { name: 'Tâches 3' }).textContent).toContain('Mes tâches personnelles')
+  expect(requestedUrls.some((url) => url.includes('/sentry'))).toBe(false)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Actualiser' }))
+  expect(refreshTodos).toHaveBeenCalledTimes(1)
+  fireEvent.keyDown(tasksTab, { key: 'ArrowRight' })
+  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Changelog' }))
+  fireEvent.keyDown(document.activeElement!, { key: 'End' })
+  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Environnements' }))
+  fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
+  expect(document.activeElement).toBe(tasksTab)
+})
+
+test('un onglet Sentry mémorisé mais indisponible revient aux tâches', async () => {
+  window.localStorage.setItem('pupitre:dashboard-tab:p1', 'sentry')
+  const panel = mock((hasTicketIntegration: boolean) => createElement('p', null, hasTicketIntegration ? 'Tickets associés disponibles' : 'Tâches locales'))
+  mount(withGitlab, undefined, { embedded: true, todoPanel: panel })
+
+  expect(await screen.findByText('Tickets associés disponibles')).toBeTruthy()
+  expect(screen.queryByRole('tab', { name: 'Sentry' })).toBeNull()
+  expect(screen.getByRole('tab', { name: 'Tâches' }).getAttribute('aria-selected')).toBe('true')
+  expect(panel).toHaveBeenLastCalledWith(true)
+})
+
+test('une intégration Sentry attachée rend son onglet et charge le compteur', async () => {
+  const requestedUrls: string[] = []
+  globalThis.fetch = mock(async (input) => {
+    const url = String(input)
+    requestedUrls.push(url)
+    return Response.json(url.endsWith('/sentry')
+      ? { issues: [{ id: 'issue1' }, { id: 'issue2' }] }
+      : { ...withGitlab, integrations: [{ ...withGitlab.integrations[0], type: 'sentry', status: 'ok' }] })
+  }) as typeof fetch
+  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
+  render(createElement(DashboardView, {
+    embedded: true,
+    project,
+    todoPanel: createElement('p', null, 'Tâches locales'),
+    onConversationSelect: () => {},
+    onStartConversation: () => {},
+  }))
+
+  expect(await screen.findByRole('tab', { name: 'Sentry 2' })).toBeTruthy()
+  expect(screen.queryByRole('tab', { name: /Tickets/ })).toBeNull()
+  expect(requestedUrls.filter((url) => url.endsWith('/sentry'))).toHaveLength(1)
+  expect(screen.getByRole('tab', { name: 'Tâches' }).getAttribute('aria-selected')).toBe('true')
+})
+
+test('une demande d’ouverture affiche les tâches sans bloquer les changements d’onglet suivants', async () => {
+  window.localStorage.setItem('pupitre:dashboard-tab:p1', 'tickets')
+  globalThis.fetch = mock(async () => Response.json(withGitlab)) as typeof fetch
+  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
+  const props = {
+    embedded: true,
+    project,
+    todoPanel: createElement('p', null, 'Tâche en préparation'),
+    todoPanelRequest: 0,
+    onConversationSelect: () => {},
+    onStartConversation: () => {},
+  }
+  const view = render(createElement(DashboardView, props))
+  await screen.findByText('TECH-24657')
+
+  view.rerender(createElement(DashboardView, { ...props, todoPanelRequest: 1 }))
+  expect(screen.getByRole('tabpanel', { name: 'Tâches' }).textContent).toContain('Tâche en préparation')
+  fireEvent.click(screen.getByRole('tab', { name: 'Tickets 1' }))
+  view.rerender(createElement(DashboardView, { ...props, todoPanelRequest: 1, todoCount: 2 }))
+  expect(screen.getByRole('tab', { name: 'Tickets 1' }).getAttribute('aria-selected')).toBe('true')
+  view.rerender(createElement(DashboardView, { ...props, todoPanelRequest: 2 }))
+  expect(screen.getByRole('tab', { name: 'Tâches' }).getAttribute('aria-selected')).toBe('true')
+})
+
+test('créer une tâche depuis un ticket transmet son contexte complet', async () => {
+  const onCreateTodoFromTicket = mock(() => {})
+  mount(withGitlab, undefined, { embedded: true, onCreateTodoFromTicket })
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Créer une tâche' }))
+  expect(onCreateTodoFromTicket).toHaveBeenCalledWith(ticket)
 })

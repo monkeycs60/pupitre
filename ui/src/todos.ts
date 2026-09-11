@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Attachment, ConversationSpeed, PresetPermissionMode, Provider } from './types'
 import { httpUrl } from './transport'
 
-export type TodoStatus = 'queued' | 'running' | 'awaiting_validation' | 'done' | 'blocked'
+export type TodoStatus = 'backlog' | 'queued' | 'running' | 'awaiting_validation' | 'done' | 'blocked'
 export interface TodoInput {
+  status?: 'backlog' | 'queued'
   title?: string
   message: string
   checks?: string[]
@@ -59,7 +60,7 @@ export interface TodoSnapshot {
   queue: { running: boolean; activeTodoId: string | null }
 }
 export const TODO_LABELS: Record<TodoStatus, string> = {
-  queued: 'À faire', running: 'En cours', awaiting_validation: 'À valider', done: 'Terminée', blocked: 'Bloquée',
+  backlog: 'À faire', queued: 'En file', running: 'En cours', awaiting_validation: 'À valider', done: 'Terminée', blocked: 'Bloquée',
 }
 export async function todoRequest<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(httpUrl(path), {
@@ -74,6 +75,9 @@ export async function todoRequest<T>(path: string, method = 'GET', body?: unknow
 }
 export const createTodo = (projectId: string, input: TodoInput) => todoRequest<TodoItem>(`/api/projects/${encodeURIComponent(projectId)}/todos`, 'POST', input)
 export const updateTodo = (id: string, input: Partial<TodoInput>) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}`, 'PATCH', input)
+export const completeTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/complete`, 'POST', {})
+export const reopenTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/reopen`, 'POST', {})
+export const enqueueTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}/enqueue`, 'POST', {})
 export const startTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}/start`, 'POST', {})
 export const reconcileTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}/reconcile`, 'POST', {})
 export const deleteTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}`, 'DELETE')

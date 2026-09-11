@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { BranchIcon } from './BranchIcon'
 import { TicketLinkIcons } from './TicketLinkIcons'
 import { gitlabContextOf, ticketLinksOf } from './ticketLinks'
@@ -24,20 +24,27 @@ interface DashboardViewProps {
   onConversationSelect: (conversationId: string) => void
   onStartConversation: (seed: { ticketId: string; branch: string | null; ticketKey: string }) => void
   onOpenSettings?: () => void
+  todoPanel?: ReactNode | ((hasTicketIntegration: boolean) => ReactNode)
+  todoCount?: number
+  todoPanelRequest?: number
+  onCreateTodoFromTicket?: (ticket: TicketRow) => void
+  onRefreshTodos?: () => void
 }
 
-type DashboardTab = 'tickets' | 'sentry' | 'changelog' | 'environments'
+type DashboardTab = 'todos' | 'tickets' | 'sentry' | 'changelog' | 'environments'
 
 const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
+  { id: 'todos', label: 'Tâches' },
   { id: 'tickets', label: 'Mes tickets' },
   { id: 'sentry', label: 'Issues Sentry' },
   { id: 'changelog', label: 'Changelog' },
   { id: 'environments', label: 'Environnements' },
 ]
 
-const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements' }
+const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { todos: 'Tâches', tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements' }
 
 const PROJECT_SECTION_ICONS: Record<DashboardTab, ReactNode> = {
+  todos: <path d="m2.5 4 1.2 1.2L6 2.9M8 4h5M2.5 8h3M8 8h5M2.5 12h3M8 12h5" />,
   tickets: <><rect x="2" y="4" width="12" height="8" rx="1.5" /><path d="M2 7h12" /></>,
   sentry: <path d="M8 2.5 13.5 12H10a2 2 0 0 0-2-2 2 2 0 0 0-2 2H2.5Z" />,
   changelog: <path d="M3 4.5h10M3 8h7M3 11.5h9" />,
@@ -50,7 +57,7 @@ function dashboardTabStorageKey(projectId: string): string {
 
 function storedDashboardTab(projectId: string): DashboardTab {
   const stored = window.localStorage.getItem(dashboardTabStorageKey(projectId))
-  return DASHBOARD_TABS.some((tab) => tab.id === stored) ? stored as DashboardTab : 'tickets'
+  return DASHBOARD_TABS.some((tab) => tab.id === stored) ? stored as DashboardTab : 'todos'
 }
 
 const INTEGRATION_LABEL: Record<string, string> = {
@@ -74,7 +81,7 @@ type TicketSortKey = 'ticket' | 'status' | 'updated' | 'conversation'
 
 const TICKET_SORTS: ReadonlyArray<{ key: TicketSortKey; label: string; hint: string }> = [
   { key: 'ticket', label: 'Numéro', hint: 'Trier par numéro de ticket' },
-  { key: 'updated', label: 'Mise à jour', hint: 'Trier par date de mise à jour dans ClickUp' },
+  { key: 'updated', label: 'Mise à jour', hint: 'Trier par date de mise à jour du ticket' },
   { key: 'conversation', label: 'Conversation', hint: 'Trier par date de la dernière conversation créée' },
 ]
 
@@ -190,6 +197,11 @@ export function DashboardView({
   onConversationSelect,
   onStartConversation,
   onOpenSettings,
+  todoPanel,
+  todoCount = 0,
+  todoPanelRequest = 0,
+  onCreateTodoFromTicket,
+  onRefreshTodos,
   embedded = false,
 }: DashboardViewProps) {
   const { data, connected, error } = useDashboard(project.id)
@@ -206,10 +218,24 @@ export function DashboardView({
   /* Le compteur du rail : l'inbox Sentry n'est pas dans le payload du
      tableau de bord, et la section ne se monte qu'une fois ouverte. */
   const [sentryCount, setSentryCount] = useState(0)
-  const sectionsRef = useRef<HTMLElement>(null)
-  const [activeTab, setActiveTab] = useState<DashboardTab>(() => storedDashboardTab(project.id))
+  const [tabSelection, setTabSelection] = useState(() => ({
+    projectId: project.id,
+    request: todoPanelRequest,
+    tab: todoPanelRequest > 0 ? 'todos' as DashboardTab : storedDashboardTab(project.id),
+  }))
+  if (tabSelection.projectId !== project.id || tabSelection.request !== todoPanelRequest) {
+    setTabSelection({
+      projectId: project.id,
+      request: todoPanelRequest,
+      tab: tabSelection.request !== todoPanelRequest ? 'todos' : storedDashboardTab(project.id),
+    })
+  }
   const now = useNow(30_000)
   const hasGitlab = data?.integrations.some((integration) => integration.type === 'gitlab') ?? false
+  const hasSentry = data?.integrations.some((integration) => integration.type === 'sentry') ?? false
+  const hasTicketIntegration = data?.integrations.some((integration) => ['clickup', 'notion', 'gitlab'].includes(integration.type)) ?? false
+  const visibleTabs = DASHBOARD_TABS.filter((tab) => (tab.id !== 'tickets' || hasTicketIntegration) && (tab.id !== 'sentry' || hasSentry))
+  const activeTab = visibleTabs.some((tab) => tab.id === tabSelection.tab) ? tabSelection.tab : 'todos'
   const degradedIntegrations = data?.integrations.filter((integration) => integration.status !== 'ok') ?? []
   const tableClassName = useMemo(
     () => `dashboard-table${hasGitlab ? ' dashboard-table--with-gitlab' : ''}`,
@@ -244,13 +270,13 @@ export function DashboardView({
   }, [project.id])
 
   useEffect(() => {
-    if (!embedded) return
+    if (!embedded || !hasSentry) return
     const controller = new AbortController()
     void getSentryInbox(project.id, controller.signal)
-      .then((payload) => setSentryCount(payload.issues.length))
+      .then((payload) => { if (!controller.signal.aborted) setSentryCount(payload.issues.length) })
       .catch(() => {})
     return () => controller.abort()
-  }, [project.id, embedded])
+  }, [project.id, embedded, hasSentry])
 
   useEffect(() => {
     let cancelled = false
@@ -285,22 +311,22 @@ export function DashboardView({
   }
 
   function selectTab(tab: DashboardTab) {
-    setActiveTab(tab)
+    setTabSelection({ projectId: project.id, request: todoPanelRequest, tab })
     window.localStorage.setItem(dashboardTabStorageKey(project.id), tab)
   }
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, tab: DashboardTab) {
-    const index = DASHBOARD_TABS.findIndex((candidate) => candidate.id === tab)
+    const index = visibleTabs.findIndex((candidate) => candidate.id === tab)
     let nextIndex: number | null = null
-    if (event.key === 'ArrowRight') nextIndex = (index + 1) % DASHBOARD_TABS.length
-    else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + DASHBOARD_TABS.length) % DASHBOARD_TABS.length
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % visibleTabs.length
+    else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + visibleTabs.length) % visibleTabs.length
     else if (event.key === 'Home') nextIndex = 0
-    else if (event.key === 'End') nextIndex = DASHBOARD_TABS.length - 1
+    else if (event.key === 'End') nextIndex = visibleTabs.length - 1
     if (nextIndex === null) return
     event.preventDefault()
-    const nextTab = DASHBOARD_TABS[nextIndex]!
+    const nextTab = visibleTabs[nextIndex]!
     event.currentTarget.parentElement
-      ?.querySelector<HTMLButtonElement>(`#dashboard-tab-${nextTab.id}`)
+      ?.querySelector<HTMLButtonElement>(`#${embedded ? 'project-section' : 'dashboard-tab'}-${nextTab.id}`)
       ?.focus()
     selectTab(nextTab.id)
   }
@@ -333,16 +359,15 @@ export function DashboardView({
 
   const gitlab = gitlabContextOf({ integrations: data?.integrations ?? [], gitlabUsername: data?.gitlabUsername ?? null })
   const sectionCounts: Partial<Record<DashboardTab, number>> = {
+    todos: todoCount,
     tickets: data?.tickets.length ?? 0,
     sentry: sentryCount,
   }
 
-  function moveSectionFocus(current: DashboardTab, step: number) {
-    const index = DASHBOARD_TABS.findIndex((section) => section.id === current)
-    const next = DASHBOARD_TABS[index + step]
-    if (next === undefined) return
-    selectTab(next.id)
-    sectionsRef.current?.querySelector<HTMLButtonElement>(`#project-section-${next.id}`)?.focus()
+  function refreshActiveTab() {
+    if (activeTab === 'todos') onRefreshTodos?.()
+    else if (activeTab === 'changelog') void handleChangelogRefresh()
+    else void handleRefresh()
   }
 
   return (
@@ -352,9 +377,9 @@ export function DashboardView({
       aria-labelledby={embedded ? undefined : 'dashboard-title'}
     >
       {embedded ? (
-        <nav className="project-sections" ref={sectionsRef} aria-label="Sections du projet">
+        <nav className="project-sections" aria-label="Sections du projet">
           <div className="project-sections-list" role="tablist" aria-orientation="horizontal" aria-label="Sections du projet">
-            {DASHBOARD_TABS.map((section) => {
+            {visibleTabs.map((section) => {
               const count = sectionCounts[section.id] ?? 0
               return (
                 <button
@@ -363,15 +388,13 @@ export function DashboardView({
                   type="button"
                   role="tab"
                   aria-selected={activeTab === section.id}
+                  aria-controls={`dashboard-panel-${section.id}`}
                   tabIndex={activeTab === section.id ? 0 : -1}
                   className={activeTab === section.id ? 'is-selected' : ''}
                   title={PROJECT_PANEL_LABELS[section.id]}
+                  aria-label={`${PROJECT_PANEL_LABELS[section.id]}${count > 0 ? ` ${count}` : ''}`}
                   onClick={() => selectTab(section.id)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
-                    event.preventDefault()
-                    moveSectionFocus(section.id, event.key === 'ArrowRight' ? 1 : -1)
-                  }}
+                  onKeyDown={(event) => handleTabKeyDown(event, section.id)}
                 >
                   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
@@ -388,7 +411,7 @@ export function DashboardView({
             type="button"
             className="project-sections-refresh"
             aria-label="Actualiser"
-            onClick={() => void (activeTab === 'changelog' ? handleChangelogRefresh() : handleRefresh())}
+            onClick={refreshActiveTab}
           >
             <span>Actualiser</span>
           </button>
@@ -430,7 +453,7 @@ export function DashboardView({
                 </div>
               ) : null}
             </div>
-            <button type="button" className="secondary-button" onClick={() => void handleRefresh()}>
+            <button type="button" className="secondary-button" onClick={refreshActiveTab}>
               Rafraîchir
             </button>
           </div>
@@ -454,7 +477,7 @@ export function DashboardView({
         ))}
 
         {!embedded ? <div className="dashboard-tabs" role="tablist" aria-label="Sections du tableau de bord">
-          {DASHBOARD_TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               id={`dashboard-tab-${tab.id}`}
@@ -471,12 +494,18 @@ export function DashboardView({
           ))}
         </div> : null}
 
+        {activeTab === 'todos' ? (
+          <section id="dashboard-panel-todos" role="tabpanel" aria-labelledby={embedded ? 'project-section-todos' : 'dashboard-tab-todos'} className="dashboard-todos">
+            {typeof todoPanel === 'function' ? todoPanel(hasTicketIntegration) : todoPanel}
+          </section>
+        ) : null}
+
         {activeTab === 'tickets' ? (
-        <section id="dashboard-panel-tickets" role="tabpanel" aria-label={embedded ? "tickets" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-tickets"} className="dashboard-section">
+        <section id="dashboard-panel-tickets" role="tabpanel" aria-labelledby={embedded ? 'project-section-tickets' : 'dashboard-tab-tickets'} className="dashboard-section">
           <div className="dashboard-section-head">
             {embedded ? (
               <>
-                <p className="project-ticket-caption">Tickets qui te sont attribués dans ClickUp</p>
+                <p className="project-ticket-caption">Tickets synchronisés avec ce projet</p>
                 <div className="project-ticket-sort" role="group" aria-label="Trier les tickets">
                   {TICKET_SORTS.map((option) => (
                     <button
@@ -499,7 +528,7 @@ export function DashboardView({
           {data === null ? null : data.tickets.length === 0 ? (
             <div className="dashboard-empty">
               <strong>Aucun ticket pour ce projet</strong>
-              <p>Configure ClickUp ou GitLab, ou démarre une conversation sur une branche.</p>
+              <p>Les tickets de tes intégrations apparaîtront ici.</p>
             </div>
           ) : embedded ? <div className="project-ticket-list">{sortedTickets.map((ticket) => {
             const links = ticketLinksOf(ticket, gitlab)
@@ -548,6 +577,11 @@ export function DashboardView({
                 >
                   Nouvelle conversation
                 </button>
+                {onCreateTodoFromTicket ? (
+                  <button type="button" className="project-ticket-action" onClick={() => onCreateTodoFromTicket(ticket)}>
+                    Créer une tâche
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="project-ticket-action"
@@ -693,6 +727,11 @@ export function DashboardView({
                         >
                           Nouvelle conv.
                         </button>
+                        {onCreateTodoFromTicket ? (
+                          <button type="button" className="text-button" onClick={() => onCreateTodoFromTicket(ticket)}>
+                            Créer une tâche
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className={`text-button dashboard-instruction-button${ticket.instruction ? ' is-active' : ''}`}
@@ -710,13 +749,13 @@ export function DashboardView({
         ) : null}
 
         {activeTab === 'sentry' ? (
-          <div id="dashboard-panel-sentry" role="tabpanel" aria-label={embedded ? "sentry" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-sentry"}>
+          <div id="dashboard-panel-sentry" role="tabpanel" aria-labelledby={embedded ? 'project-section-sentry' : 'dashboard-tab-sentry'}>
             <SentryInbox projectId={project.id} onConfigure={onOpenSettings} onConversationSelect={onConversationSelect} />
           </div>
         ) : null}
 
         {activeTab === 'changelog' ? (
-        <section id="dashboard-panel-changelog" role="tabpanel" aria-label={embedded ? "changelog" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-changelog"} className="dashboard-section dashboard-changelog">
+        <section id="dashboard-panel-changelog" role="tabpanel" aria-labelledby={embedded ? 'project-section-changelog' : 'dashboard-tab-changelog'} className="dashboard-section dashboard-changelog">
           <div className="dashboard-section-head">
             <div><h2 className="dashboard-section-title">Changelog</h2><p>{changelogTiming(changelogState, now)}</p></div>
             {changelogDomains.length > 1 ? <select aria-label="Filtrer le changelog par domaine" value={changelogDomain} onChange={(event) => setChangelogDomain(event.target.value)}><option value="">Tous les domaines</option>{changelogDomains.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : null}
@@ -726,7 +765,7 @@ export function DashboardView({
         ) : null}
 
         {activeTab === 'environments' ? (
-          <section id="dashboard-panel-environments" role="tabpanel" aria-label={embedded ? "environments" : undefined} aria-labelledby={embedded ? undefined : "dashboard-tab-environments"} className="dashboard-section">
+          <section id="dashboard-panel-environments" role="tabpanel" aria-labelledby={embedded ? 'project-section-environments' : 'dashboard-tab-environments'} className="dashboard-section">
             <div className="dashboard-section-head">
               <h2 className="dashboard-section-title">Environnements</h2>
             </div>

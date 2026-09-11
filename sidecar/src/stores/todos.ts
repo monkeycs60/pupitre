@@ -2,8 +2,9 @@ import type { Database } from "bun:sqlite";
 import type { MediaAttachment, Provider } from "../events";
 import type { PresetPermissionMode } from "./presets";
 export type TodoStatus =
-  "queued" | "running" | "awaiting_validation" | "done" | "blocked";
+  "backlog" | "queued" | "running" | "awaiting_validation" | "done" | "blocked";
 export interface TodoInput {
+  status?: "backlog" | "queued";
   title?: string;
   message: string;
   targetBranch?: string | null;
@@ -102,11 +103,11 @@ export class TodoStore {
       title: input.title?.trim() || input.message.slice(0, 80),
       message: input.message,
       ticket_id: input.ticketId ?? null,
-      target_branch: input.targetBranch!,
+      target_branch: input.targetBranch ?? "",
       integrate: input.integrate ?? false,
       autonomy: input.autonomy ?? "local",
       depends_on: input.dependsOn ?? null,
-      status: "queued",
+      status: input.status ?? "queued",
       execution_completed: false,
       publication_pending: false,
       conversation_id: null,
