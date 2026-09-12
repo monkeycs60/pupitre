@@ -37,7 +37,7 @@ import { newConversationDraftStorageKey } from './conversationDraft'
 import { ThreadSearch } from './ThreadSearch'
 import { PushTimeline } from './PushTimeline'
 import { collectConversationAssets } from './conversationAssets'
-import type { TodoItem } from './todos'
+import type { TodoFinish, TodoItem } from './todos'
 import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
 
 /** Outils du fil pilotés depuis le head : pièces jointes et recherche. */
@@ -51,6 +51,8 @@ interface ChatProps {
   todoMode?: boolean
   onTodoModeChange?: (todoMode: boolean) => void
   onTodoCreated?: (todo: TodoItem) => void
+  editingTodoId?: string | null
+  initialFinish?: TodoFinish
   /** Événement à faire défiler et surligner à l’ouverture (retour depuis un fichier partagé). */
   focusEventId?: number | null
   events: AppEvent[]
@@ -172,6 +174,8 @@ export function Chat({
   todoMode = false,
   onTodoModeChange,
   onTodoCreated,
+  editingTodoId = null,
+  initialFinish,
   onConversationRead,
   onRunningSubtasksChange,
   onThreadToolsChange,
@@ -483,7 +487,12 @@ export function Chat({
             onConversationCreated={handleConversationCreated}
             todoMode={todoMode}
             onTodoModeChange={onTodoModeChange}
-            onTodoCreated={onTodoCreated}
+            onTodoCreated={(todo) => {
+              try { localStorage.removeItem(draftStorageKey) } catch { /* stockage indisponible */ }
+              onTodoCreated?.(todo)
+            }}
+            editingTodoId={editingTodoId}
+            initialFinish={initialFinish}
             message={message}
             onMessageChange={handleMessageChange}
             focusRequest={focusRequest}

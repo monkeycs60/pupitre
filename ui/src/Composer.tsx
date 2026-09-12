@@ -17,7 +17,7 @@ import {
 } from './api'
 import { buildCreateConversationInput } from './conversationDraft'
 import { buildTodoInput } from './todoDraft'
-import { createTodo, TODO_FINISH_LABELS, type TodoFinish, type TodoItem } from './todos'
+import { createTodo, updateTodo, TODO_FINISH_LABELS, type TodoFinish, type TodoItem } from './todos'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { ProviderMark } from './ProviderMark'
 import { ComposerPalette, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
@@ -35,6 +35,9 @@ interface ComposerProps {
   todoMode?: boolean
   onTodoModeChange?: (todoMode: boolean) => void
   onTodoCreated?: (todo: TodoItem) => void
+  /** Tâche rechargée dans le composer : l'envoi la remplace au lieu d'en empiler une. */
+  editingTodoId?: string | null
+  initialFinish?: TodoFinish
   conversationId: string | null
   project: Project
   quotas: QuotaSnapshot
@@ -208,6 +211,8 @@ export function Composer({
   todoMode = false,
   onTodoModeChange,
   onTodoCreated,
+  editingTodoId = null,
+  initialFinish = 'none',
   message,
   onMessageChange,
   focusRequest,
@@ -242,7 +247,7 @@ export function Composer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [configReady, setConfigReady] = useState(!isNewConversation)
-  const [finish, setFinish] = useState<TodoFinish>('none')
+  const [finish, setFinish] = useState<TodoFinish>(initialFinish)
   const isTodoMode = isNewConversation && todoMode && onTodoModeChange !== undefined
   const [toast, setToast] = useState<string | null>(null)
   const [trigger, setTrigger] = useState<ComposerPaletteTrigger | null>(null)
@@ -472,10 +477,10 @@ export function Composer({
 
     try {
       if (isTodoMode) {
-        const todo = await createTodo(project.id, {
-          ...buildTodoInput(config, { message: trimmedMessage, ticketId, finish, attachments: attachmentInputs }),
-          status: 'backlog',
-        })
+        const input = buildTodoInput(config, { message: trimmedMessage, ticketId, finish, attachments: attachmentInputs })
+        const todo = editingTodoId
+          ? await updateTodo(editingTodoId, { ...input, title: input.message.split('\n').map((line) => line.trim()).find(Boolean)?.slice(0, 80) })
+          : await createTodo(project.id, { ...input, status: 'backlog' })
         onMessageChange('')
         setAttachments([])
         setToast(null)
@@ -704,7 +709,7 @@ export function Composer({
           />
           {message === '' && !isRunning ? (
             <div className="composer-placeholder" aria-hidden="true">
-              {isTodoMode ? <>Décris la tâche à empiler : la première ligne sert de titre</> : <>
+              {isTodoMode ? <>{editingTodoId ? 'Modifie la tâche : la première ligne sert de titre' : 'Décris la tâche à empiler : la première ligne sert de titre'}</> : <>
                 Écris ton message, ou <span className="composer-ph-key">/</span> pour une action,{' '}
                 <span className="composer-ph-key">$</span> pour un skill,{' '}
                 <span className="composer-ph-key">@</span> pour un outil
@@ -777,8 +782,8 @@ export function Composer({
             ) : null}
             <button type="submit" className={`send-button${isRunning ? ' is-running' : ''}${isTodoMode ? ' is-todo' : ''}`} disabled={!canSubmit}>
               {isSubmitting
-                ? isTodoMode ? 'Ajout…' : isNewConversation ? 'Création…' : 'Envoi…'
-                : isTodoMode ? 'Empiler' : canSteer ? 'Orienter' : 'Envoyer'}
+                ? isTodoMode ? (editingTodoId ? 'Enregistrement…' : 'Ajout…') : isNewConversation ? 'Création…' : 'Envoi…'
+                : isTodoMode ? (editingTodoId ? 'Enregistrer' : 'Empiler') : canSteer ? 'Orienter' : 'Envoyer'}
               {!isSubmitting ? <kbd aria-hidden="true">⏎</kbd> : null}
             </button>
           </div>

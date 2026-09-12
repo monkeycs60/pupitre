@@ -161,6 +161,7 @@ function App() {
   const [inspector, setInspector] = useState<InspectorView | null>(null)
   const [todoPanelRequest, setTodoPanelRequest] = useState(0)
   const [todoMode, setTodoMode] = useState(false)
+  const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null)
   const lastInspectorViews = useRef<Partial<Record<string, InspectorView>>>({})
   const [focusEventId, setFocusEventId] = useState<number | null>(null)
   const todos = useTodos(selectedProject?.id ?? null)
@@ -458,6 +459,9 @@ function App() {
   }
 
   function handleTodoCreated() {
+    setEditingTodo(null)
+    setNewConversationDraft('')
+    setNewConversationAttachments([])
     todos.refresh()
     setInspector('dashboard')
     setTodoPanelRequest((value) => value + 1)
@@ -468,6 +472,7 @@ function App() {
     if (!confirmLeaveMemory() || selectedProject === null) return
     setSelectedConversation(null)
     setConversationSeed(seed ?? null)
+    setEditingTodo(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
@@ -482,10 +487,20 @@ function App() {
    *  la tâche : message, pièces jointes, modèle, branche et ticket. */
   function handleTodoToConversation(item: TodoItem) {
     if (item.conversation_id) { void handleGitConversationSelect(item.conversation_id); return }
+    loadTodoInComposer(item, false)
+  }
+
+  /** Recharge la tâche dans le composer en mode Tâche : l'envoi la remplace. */
+  function handleTodoEdit(item: TodoItem) {
+    loadTodoInComposer(item, true)
+  }
+
+  function loadTodoInComposer(item: TodoItem, edit: boolean) {
     if (!confirmLeaveMemory() || selectedProject === null) return
     // Le brouillon local du projet primerait sur le message de la tâche.
     try { localStorage.removeItem(newConversationDraftStorageKey(selectedProject.id, item.ticket_id)) } catch { /* stockage indisponible */ }
     setSelectedConversation(null)
+    setEditingTodo(edit ? item : null)
     setConversationSeed({
       todoId: item.id,
       ticketId: item.ticket_id,
@@ -504,7 +519,7 @@ function App() {
     setNewConversationAttachments(item.attachments)
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
-    setTodoMode(false)
+    setTodoMode(edit)
     setWorkspaceView('conversations')
   }
 
@@ -520,6 +535,7 @@ function App() {
     setTodoPanelRequest(0)
     if (project.id !== selectedProject?.id) {
       setTodoMode(false)
+      setEditingTodo(null)
       setSelectedConversation(null)
       setConversationSeed(null)
       setNewConversationDraft('')
@@ -537,6 +553,7 @@ function App() {
     setFocusEventId(null)
     if (!confirmLeaveMemory()) return
     setSelectedConversation(conversation)
+    setEditingTodo(null)
     setConversationSeed(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
@@ -549,6 +566,7 @@ function App() {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setSelectedConversation(null)
+    setEditingTodo(null)
     setConversationSeed(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
@@ -1022,8 +1040,10 @@ function App() {
               onConversationCreated={handleConversationCreated}
               focusEventId={focusEventId}
               todoMode={todoMode}
-              onTodoModeChange={setTodoMode}
+              onTodoModeChange={(mode) => { setTodoMode(mode); if (!mode) setEditingTodo(null) }}
               onTodoCreated={handleTodoCreated}
+              editingTodoId={editingTodo?.id ?? null}
+              initialFinish={editingTodo?.finish}
               onConversationRead={handleConversationRead}
               onRunningSubtasksChange={setRunningSubtasks}
               onThreadToolsChange={setThreadTools}
@@ -1110,7 +1130,7 @@ function App() {
             onCreateTodoFromTicket={(ticket) => handleTodoCreate({ ticketId: ticket.id, ticketKey: ticket.key, branch: ticketLinksOf(ticket).branch ?? null })}
             todoPanel={() => <div className="project-todos">
               <header className="project-tasks-header"><h2>Tâches du projet</h2><button type="button" className="primary-button" onClick={() => handleTodoCreate()}>+ Nouvelle tâche</button></header>
-              <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={conversationSeed?.todoId ?? null} ticketLinks={ticketLinks} onChanged={todos.refresh} onOpenConversation={handleTodoToConversation} />
+              <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={editingTodo?.id ?? conversationSeed?.todoId ?? null} ticketLinks={ticketLinks} onChanged={todos.refresh} onOpenConversation={handleTodoToConversation} onEdit={handleTodoEdit} />
             </div>}
             onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
             onStartConversation={handleStartFromTicket}

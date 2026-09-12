@@ -13,11 +13,13 @@ interface Props extends TodoSnapshot {
   /** Clic sur la ligne : conversation liée si elle existe, sinon nouvelle
    *  conversation préremplie avec la tâche. */
   onOpenConversation: (item: TodoItem) => void
+  /** Recharge la tâche dans le composer en mode Tâche ; l'envoi la remplace. */
+  onEdit: (item: TodoItem) => void
 }
 
 const LEAVE_DELAY = 900
 
-export function TodoList({ projectId, items, queue, selectedId, loading, error, ticketLinks, onChanged, onOpenConversation }: Props) {
+export function TodoList({ projectId, items, queue, selectedId, loading, error, ticketLinks, onChanged, onOpenConversation, onEdit }: Props) {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -144,6 +146,9 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
             </span>
           </button>
           <span className="project-task-actions">
+            {startableItem && !isDone ? <button type="button" disabled={busy} aria-label={`Modifier ${item.title}`} title="Modifier dans le composer" onClick={() => onEdit(item)}>
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m11.2 2.8 2 2L5.5 12.5l-2.7.7.7-2.7z" /></svg>
+            </button> : null}
             {startableItem && !isDone ? <button type="button" disabled={busy || !!queue.activeTodoId} aria-label={`Lancer l’agent sur ${item.title}`} title="Lancer l’agent" onClick={() => void act(() => startTodo(item.id))}>
               <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M4.5 3v10L12.5 8z" /></svg>
             </button> : null}
