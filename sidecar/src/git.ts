@@ -14,7 +14,7 @@ const MAX_COMMITS = 200;
  */
 const SAFE_BRANCH = /^[A-Za-z0-9._/-]+$/;
 
-function normalizeRemoteUrl(value: string | null): string | null {
+export function normalizeRemoteUrl(value: string | null): string | null {
   if (!value) return null;
   const ssh = value.match(/^git@([^:]+):(.+)$/);
   const web = ssh ? `https://${ssh[1]}/${ssh[2]}` : value.replace(/^ssh:\/\/git@/, "https://");

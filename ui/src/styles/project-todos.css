@@ -62,6 +62,8 @@
 .project-task-state.is-blocked { color: var(--warn); background: var(--warn-soft); }
 .project-task-state.is-queued { color: var(--text-muted); }
 .project-task-ticket { font-family: var(--font-mono); font-size: 10px; }
+.project-task-link { color: var(--accent-bright); text-decoration: none; }
+.project-task-link:hover { text-decoration: underline; }
 .project-task-error { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--warn); }
 
 /* Actions sur survol : lancer, conversation, supprimer. */

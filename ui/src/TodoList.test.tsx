@@ -91,3 +91,10 @@ test('drag and drop reorders the whole open pile, keyboard moves one step', asyn
   fireEvent.keyDown(screen.getByRole('button', { name: 'Second En file' }), { key: 'ArrowUp', altKey: true })
   await waitFor(() => expect(calls.at(-1)?.body).toEqual({ ids: ['Second', 'First', 'Third'] }))
 })
+
+test('a pushed task shows its commit and links to the branch and merge request', () => {
+  render(<TodoList {...defaults} items={[item('Pushed', 'awaiting_validation', { conversation_id: 'c', finish: 'commit_push', commit_sha: 'abcdef1234567', commit_message: 'feat: pousse', branch_url: 'https://gitlab.com/acme/mono/-/tree/codex', merge_request_url: 'https://gitlab.com/acme/mono/-/merge_requests/new' })]} />)
+  expect(screen.getByText('Commit & push · abcdef1').getAttribute('title')).toBe('feat: pousse')
+  expect((screen.getByRole('link', { name: 'Branche ↗' }) as HTMLAnchorElement).href).toContain('/-/tree/codex')
+  expect((screen.getByRole('link', { name: 'Créer la MR ↗' }) as HTMLAnchorElement).href).toContain('merge_requests/new')
+})

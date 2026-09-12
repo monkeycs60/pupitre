@@ -34,6 +34,10 @@ export interface TodoItem {
   conversation_id: string | null
   branch: string | null
   worktree_path: string | null
+  commit_sha?: string | null
+  commit_message?: string | null
+  branch_url?: string | null
+  merge_request_url?: string | null
   error: string | null
   position: number
   created_at: string

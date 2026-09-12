@@ -34,6 +34,11 @@ export interface TodoItem {
   conversation_id: string | null;
   branch: string | null;
   worktree_path: string | null;
+  /** Renseignés par la fin de tâche : commit produit et liens vers la branche publiée. */
+  commit_sha: string | null;
+  commit_message: string | null;
+  branch_url: string | null;
+  merge_request_url: string | null;
   error: string | null;
   position: number;
   created_at: string;
@@ -57,7 +62,10 @@ function normalize(raw: Record<string, unknown>): TodoItem {
   const finish = TODO_FINISHES.includes(rest.finish as TodoFinish)
     ? rest.finish as TodoFinish
     : integrate === true ? "commit_push" : "none";
-  return { ...rest, finish } as TodoItem;
+  return {
+    commit_sha: null, commit_message: null, branch_url: null, merge_request_url: null,
+    ...rest, finish,
+  } as TodoItem;
 }
 export class TodoStore {
   constructor(private db: Database) {
@@ -119,6 +127,10 @@ export class TodoStore {
       conversation_id: null,
       branch: null,
       worktree_path: null,
+      commit_sha: null,
+      commit_message: null,
+      branch_url: null,
+      merge_request_url: null,
       error: null,
       position:
         Math.max(-1, ...this.list(projectId).map((t) => t.position)) + 1,

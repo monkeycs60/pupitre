@@ -32,10 +32,28 @@ import { ConversationStore } from "../src/stores/conversations";
 import { TicketStore } from "../src/stores/tickets";
 import { QuotaTracker } from "../src/quotas";
 import { GitProjectService } from "../src/git";
-import { TodoService, todoGit } from "../src/todos";
+import { TodoService, todoGit, commitMessageOf, remoteLinks } from "../src/todos";
+test("commitMessageOf reads the commit block of the final answer and falls back to the title", () => {
+  expect(commitMessageOf("Fait.\n```commit\nfix(todos): corrige le tri\n\nLe rang était perdu.\n```\nVoilà.", "Titre")).toBe("fix(todos): corrige le tri\n\nLe rang était perdu.");
+  expect(commitMessageOf("Aucun bloc", "Titre")).toBe("Titre");
+  expect(commitMessageOf("```commit\n\n```", "Titre")).toBe("Titre");
+  expect(commitMessageOf(`\`\`\`commit\n${"x".repeat(100)}\n\`\`\``, "Titre")).toBe("x".repeat(72));
+});
+test("remoteLinks builds GitLab and GitHub branch and merge-request URLs, none for local remotes", () => {
+  expect(remoteLinks("git@gitlab.com:acme/mono.git", "codex/todo-1", "main")).toEqual({
+    branchUrl: "https://gitlab.com/acme/mono/-/tree/codex%2Ftodo-1",
+    mergeRequestUrl: "https://gitlab.com/acme/mono/-/merge_requests/new?merge_request%5Bsource_branch%5D=codex%2Ftodo-1&merge_request%5Btarget_branch%5D=main",
+  });
+  expect(remoteLinks("https://github.com/acme/mono.git", "codex/todo-1", "main")).toEqual({
+    branchUrl: "https://github.com/acme/mono/tree/codex%2Ftodo-1",
+    mergeRequestUrl: "https://github.com/acme/mono/compare/main...codex%2Ftodo-1?expand=1",
+  });
+  expect(remoteLinks("/tmp/remote", "b", "main")).toEqual({ branchUrl: null, mergeRequestUrl: null });
+});
 async function fixture(
   run?: (cwd: string) => Promise<void>,
   cancelled = false,
+  finalText = "Completed",
 ) {
   const root = mkdtempSync(join(tmpdir(), "pupitre-todos-"));
   const repo = join(root, "repo");
@@ -61,7 +79,7 @@ async function fixture(
       calls++;
       order.push(message);
       await run?.(conversations.get(id)!.worktree_path!);
-      conversations.appendEvent(id, { type: "text-final", text: "Completed" });
+      conversations.appendEvent(id, { type: "text-final", text: finalText });
       return { state: "done" as const, cancelled };
     },
   };
@@ -137,7 +155,7 @@ test("finish none leaves the worktree dirty, commit commits locally, commit_push
   let count = 0;
   const f = await fixture(async (cwd) => {
     writeFileSync(join(cwd, `change-${++count}`), "result");
-  });
+  }, false, "Terminé.\n```commit\nfeat: ajoute le fichier\n\nParce que.\n```");
   try {
     const none = await f.add({ finish: "none", title: "Sans commit" });
     const commit = await f.add({ finish: "commit", title: "Avec commit" });
@@ -152,7 +170,11 @@ test("finish none leaves the worktree dirty, commit commits locally, commit_push
     expect(await todoGit(noneItem.worktree_path!, ["status", "--porcelain"])).not.toBe("");
     const commitItem = f.store.get(commit.id)!;
     expect(await todoGit(commitItem.worktree_path!, ["status", "--porcelain"])).toBe("");
-    expect(await todoGit(commitItem.worktree_path!, ["log", "-1", "--format=%s"])).toBe("Avec commit");
+    expect(await todoGit(commitItem.worktree_path!, ["log", "-1", "--format=%B"])).toBe("feat: ajoute le fichier\n\nParce que.");
+    expect(commitItem.commit_message).toBe("feat: ajoute le fichier\n\nParce que.");
+    expect(commitItem.commit_sha).toBe(await todoGit(commitItem.worktree_path!, ["rev-parse", "HEAD"]));
+    expect(noneItem.commit_sha).toBeNull();
+    expect(commitItem.branch_url).toBeNull();
     await expect(todoGit(join(f.root, "remote"), ["rev-parse", "--verify", `refs/heads/${commitItem.branch}`])).rejects.toThrow();
     const pushItem = f.store.get(push.id)!;
     expect(await todoGit(join(f.root, "remote"), ["rev-parse", `refs/heads/${pushItem.branch}`]))

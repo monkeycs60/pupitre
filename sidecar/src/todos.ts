@@ -3,7 +3,7 @@ import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
 import type { TicketStore } from "./stores/tickets";
 import type { QuotaTracker } from "./quotas";
-import type { GitProjectService } from "./git";
+import { normalizeRemoteUrl, type GitProjectService } from "./git";
 import { TodoStore, TODO_FINISHES, type TodoInput, type TodoItem } from "./stores/todos";
 import { isProvider } from "./events";
 import { PRESET_PERMISSION_MODES } from "./stores/presets";
@@ -30,6 +30,27 @@ export async function todoGit(cwd: string, args: string[]): Promise<string> {
   return out.trim();
 }
 const EDITABLE = ["backlog", "queued", "blocked"];
+/** Bloc \`\`\`commit … \`\`\` de la réponse finale : sujet puis corps facultatif. */
+export function commitMessageOf(text: string, fallback: string): string {
+  const match = text.match(/```commit\s*\n([\s\S]*?)```/);
+  const message = match?.[1]?.trim();
+  if (!message) return fallback;
+  const [subject = "", ...rest] = message.split("\n");
+  const trimmed = subject.trim().slice(0, 72);
+  return trimmed ? [trimmed, ...rest].join("\n").trim() : fallback;
+}
+/** Liens web d'une branche poussée : arborescence et création de MR / PR. */
+export function remoteLinks(remote: string | null, branch: string, target: string): { branchUrl: string | null; mergeRequestUrl: string | null } {
+  const base = normalizeRemoteUrl(remote);
+  if (!base) return { branchUrl: null, mergeRequestUrl: null };
+  const source = encodeURIComponent(branch), into = encodeURIComponent(target);
+  if (new URL(base).hostname.includes("github"))
+    return { branchUrl: `${base}/tree/${source}`, mergeRequestUrl: `${base}/compare/${into}...${source}?expand=1` };
+  return {
+    branchUrl: `${base}/-/tree/${source}`,
+    mergeRequestUrl: `${base}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${source}&merge_request%5Btarget_branch%5D=${into}`,
+  };
+}
 export class TodoService {
   private enabled = new Set<string>();
   private active: string | null = null;
@@ -340,11 +361,12 @@ export class TodoService {
         summary: x.summary.slice(0, 1200),
         updatedAt: x.updated_at,
       }));
+    const commitBlock = "Termine ta réponse par un bloc ```commit contenant le message de commit : un sujet à l'impératif de 72 caractères au plus, une ligne vide, puis un corps facultatif expliquant le pourquoi.";
     const finish = t.finish === "none"
       ? "Laisse les modifications dans le worktree, sans commit : l'utilisateur les relira."
       : t.finish === "commit"
-        ? "Ne committe pas toi-même : la file committera le résultat sur cette branche."
-        : "Ne committe pas et ne pousse pas toi-même : la file committera puis poussera cette branche.";
+        ? `Ne committe pas toi-même : la file committera le résultat sur cette branche. ${commitBlock}`
+        : `Ne committe pas et ne pousse pas toi-même : la file committera puis poussera cette branche. ${commitBlock}`;
     return `TODO ${t.id}. Périmètre strict : projet ${t.project_id}, ticket ${t.ticket_id ?? "aucun"}. Ne pas élargir implicitement le périmètre.\nTravaille exclusivement dans le worktree fourni, sur sa branche dédiée ; ne fusionne aucune branche. ${finish}\nTermine avec le diff, les vérifications exécutées et leurs résultats, et une URL de prévisualisation réellement accessible si possible.\nContexte borné (identifiants pour approfondir) : ${JSON.stringify({ ticket: ticket ? { id: ticket.id, title: ticket.title, instruction: ticket.instruction.slice(0, 6000) } : null, related, digests })}`;
   }
   private async execute(initial: TodoItem) {
@@ -390,10 +412,11 @@ export class TodoService {
     if (outcome.state !== "done" || outcome.cancelled)
       throw new TodoError(outcome.error || "Tour interrompu ou en échec", 409);
     t = this.store.update(t.id, { execution_completed: true });
-    await this.finish(t);
+    const final = this.conversations.listEvents(conversation.id).filter((e) => e.type === "text-final").at(-1);
+    await this.finish(t, commitMessageOf(final?.text ?? "", t.title));
     this.store.update(t.id, { status: "awaiting_validation", error: null });
   }
-  private async finish(t: TodoItem) {
+  private async finish(t: TodoItem, message: string) {
     if (t.finish === "none") return;
     const worktree = t.worktree_path!;
     if (this.runner.isRunning(t.conversation_id!))
@@ -402,9 +425,17 @@ export class TodoService {
       throw new TodoError("La branche du worktree a changé", 409);
     if (await todoGit(worktree, ["status", "--porcelain"])) {
       await todoGit(worktree, ["add", "-A"]);
-      await todoGit(worktree, ["commit", "-m", t.title]);
+      await todoGit(worktree, ["commit", "-m", message]);
+      this.store.update(t.id, {
+        commit_sha: await todoGit(worktree, ["rev-parse", "HEAD"]),
+        commit_message: message,
+      });
     }
-    if (t.finish === "commit_push")
+    if (t.finish === "commit_push") {
       await todoGit(worktree, ["push", "-u", "origin", t.branch!]);
+      const remote = await todoGit(worktree, ["remote", "get-url", "origin"]).catch(() => null);
+      const links = remoteLinks(remote, t.branch!, t.target_branch);
+      this.store.update(t.id, { branch_url: links.branchUrl, merge_request_url: links.mergeRequestUrl });
+    }
   }
 }

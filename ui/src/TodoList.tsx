@@ -141,7 +141,9 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
             <span className="project-task-meta">
               {item.status !== 'backlog' && !isDone ? <span className={`project-task-state is-${item.status}`} title={item.error ?? undefined}>{TODO_LABELS[item.status]}</span> : null}
               {ticket?.ticketKey ? <span className="project-task-ticket">{ticket.ticketKey}</span> : null}
-              {item.finish !== 'none' ? <span>{TODO_FINISH_LABELS[item.finish]}</span> : null}
+              {item.finish !== 'none' ? <span title={item.commit_message ?? undefined}>{item.commit_sha ? `${TODO_FINISH_LABELS[item.finish]} · ${item.commit_sha.slice(0, 7)}` : TODO_FINISH_LABELS[item.finish]}</span> : null}
+              {item.branch_url ? <a className="project-task-link" href={item.branch_url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Branche ↗</a> : null}
+              {item.merge_request_url ? <a className="project-task-link" href={item.merge_request_url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Créer la MR ↗</a> : null}
               {item.error && item.status === 'blocked' ? <span className="project-task-error" title={item.error}>{item.error}</span> : null}
             </span>
           </button>
