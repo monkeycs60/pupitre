@@ -32,7 +32,7 @@ import { ConversationStore } from "../src/stores/conversations";
 import { TicketStore } from "../src/stores/tickets";
 import { QuotaTracker } from "../src/quotas";
 import { GitProjectService } from "../src/git";
-import { TodoService, todoGit, commitMessageOf, remoteLinks } from "../src/todos";
+import { TodoService, todoGit, commitMessageOf, remoteLinks, todoBranchName } from "../src/todos";
 test("commitMessageOf reads the commit block of the final answer and falls back to the title", () => {
   expect(commitMessageOf("Fait.\n```commit\nfix(todos): corrige le tri\n\nLe rang était perdu.\n```\nVoilà.", "Titre")).toBe("fix(todos): corrige le tri\n\nLe rang était perdu.");
   expect(commitMessageOf("Aucun bloc", "Titre")).toBe("Titre");
@@ -44,11 +44,20 @@ test("remoteLinks builds GitLab and GitHub branch and merge-request URLs, none f
     branchUrl: "https://gitlab.com/acme/mono/-/tree/codex%2Ftodo-1",
     mergeRequestUrl: "https://gitlab.com/acme/mono/-/merge_requests/new?merge_request%5Bsource_branch%5D=codex%2Ftodo-1&merge_request%5Btarget_branch%5D=main",
   });
-  expect(remoteLinks("https://github.com/acme/mono.git", "codex/todo-1", "main")).toEqual({
-    branchUrl: "https://github.com/acme/mono/tree/codex%2Ftodo-1",
-    mergeRequestUrl: "https://github.com/acme/mono/compare/main...codex%2Ftodo-1?expand=1",
-  });
+  const gitlab = remoteLinks("git@gitlab.com:acme/mono.git", "codex/TECH-1-todo-1", "main", { title: "TECH-1 Corrige le tri", description: "Ticket : https://app.clickup.com/t/1" });
+  const params = new URL(gitlab.mergeRequestUrl!).searchParams;
+  expect(params.get("merge_request[title]")).toBe("TECH-1 Corrige le tri");
+  expect(params.get("merge_request[description]")).toBe("Ticket : https://app.clickup.com/t/1");
+  expect(params.get("merge_request[source_branch]")).toBe("codex/TECH-1-todo-1");
+  const github = remoteLinks("https://github.com/acme/mono.git", "codex/todo-1", "main", { title: "Corrige" });
+  expect(github.branchUrl).toBe("https://github.com/acme/mono/tree/codex%2Ftodo-1");
+  expect(github.mergeRequestUrl).toBe("https://github.com/acme/mono/compare/main...codex%2Ftodo-1?title=Corrige&expand=1");
   expect(remoteLinks("/tmp/remote", "b", "main")).toEqual({ branchUrl: null, mergeRequestUrl: null });
+});
+test("todoBranchName carries the ticket key so the GitLab refresh links the merge request", () => {
+  expect(todoBranchName("abc", "TECH-24128")).toMatch(/^codex\/TECH-24128-todo-abc-[0-9a-f]{8}$/);
+  expect(todoBranchName("abc", " bad key/here ")).toMatch(/^codex\/bad-key-here-todo-abc-/);
+  expect(todoBranchName("abc", null)).toMatch(/^codex\/todo-abc-[0-9a-f]{8}$/);
 });
 async function fixture(
   run?: (cwd: string) => Promise<void>,
@@ -69,6 +78,7 @@ async function fixture(
   const db = openDb(join(root, "data"));
   const projects = new ProjectStore(db),
     conversations = new ConversationStore(db),
+    tickets = new TicketStore(db),
     store = new TodoStore(db);
   const project = projects.create({ name: "test", path: repo });
   let calls = 0;
@@ -91,11 +101,12 @@ async function fixture(
     new GitProjectService(db, projects, {
       worktreeRoot: join(root, "worktrees"),
     }),
-    new TicketStore(db),
+    tickets,
     new QuotaTracker(db),
   );
   return {
     root,
+    tickets,
     repo,
     db,
     project,
@@ -388,6 +399,18 @@ test("a running task refuses closure and removal; an executed task can be closed
     f.service.remove(blocked.id);
     expect(f.store.get(blocked.id)).toBeNull();
   } finally { release(); await idle(f); f.clean(); }
+});
+
+test("a task with a ticket works on a branch named after the ticket key", async () => {
+  const f = await fixture();
+  try {
+    const ticket = f.tickets.upsert(f.project.id, { key: "TECH-42", source: "git", title: "Tri", status: "", externalUrl: null });
+    const task = await f.add({ ticketId: ticket.id });
+    f.service.start(task.id);
+    await idle(f);
+    expect(f.store.get(task.id)?.branch).toMatch(/^codex\/TECH-42-todo-/);
+    expect(f.store.get(task.id)?.status).toBe("awaiting_validation");
+  } finally { f.clean(); }
 });
 
 test("link attaches a manual conversation and takes the task out of the executable pile", async () => {

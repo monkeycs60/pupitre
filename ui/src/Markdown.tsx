@@ -260,13 +260,38 @@ function MarkdownImage({ node: _node, src, alt, ...props }: any) {
   )
 }
 
-/** Texte brut d'un bloc ```mermaid, ou null si ce n'en est pas un. */
-function mermaidSource(node: any): string | null {
+/** Texte brut d'un bloc ```<language>, ou null si ce n'en est pas un. */
+function fencedSource(node: any, language: string): string | null {
   const code = node?.children?.[0]
   if (code?.tagName !== 'code') return null
   const classes = code.properties?.className
-  if (!Array.isArray(classes) || !classes.includes('language-mermaid')) return null
+  if (!Array.isArray(classes) || !classes.includes(`language-${language}`)) return null
   return code.children?.[0]?.value ?? null
+}
+
+const mermaidSource = (node: any) => fencedSource(node, 'mermaid')
+
+/** Bloc ```commit d'une tâche : le message que la file reprend pour le commit. */
+function CommitBlock({ message }: { message: string }) {
+  const format = useContext(ActionFormatContext)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  if (format.commitBlock === 'hidden') return null
+  const [subject = '', ...rest] = message.trim().split('\n')
+  const body = rest.join('\n').trim()
+  const label = copyState === 'copied' ? 'Copié' : copyState === 'error' ? 'Copie impossible' : 'Copier le message de commit'
+  return (
+    <aside className="markdown-commit" aria-label="Message de commit proposé">
+      <header>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="2.6" stroke="currentColor" strokeWidth="1.4" /><path d="M1.5 8h4M10.5 8h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
+        <span>Message de commit</span>
+        <button type="button" className={`markdown-code-copy${copyState === 'copied' ? ' is-copied' : ''}`} aria-label={label} title={label} onClick={() => { void copyText(message.trim()).then(() => setCopyState('copied')).catch(() => setCopyState('error')) }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.25" y="5.25" width="7.5" height="7.5" rx="1.25" stroke="currentColor" strokeWidth="1.2" /><path d="M10.5 5.25V4.5A1.25 1.25 0 0 0 9.25 3.25H4.5A1.25 1.25 0 0 0 3.25 4.5v4.75A1.25 1.25 0 0 0 4.5 10.5h.75" stroke="currentColor" strokeWidth="1.2" /></svg>
+        </button>
+      </header>
+      <strong>{subject}</strong>
+      {body ? <p>{body}</p> : null}
+    </aside>
+  )
 }
 
 async function copyText(text: string): Promise<void> {
@@ -352,6 +377,8 @@ const COMPONENTS = {
   pre: ({ node, children, ...props }: any) => {
     const chart = mermaidSource(node)
     if (chart !== null) return <Mermaid chart={chart} />
+    const commit = fencedSource(node, 'commit')
+    if (commit !== null) return <CommitBlock message={commit} />
     return <CopyablePre node={node} {...props}>{children}</CopyablePre>
   },
 }

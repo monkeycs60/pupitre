@@ -12,12 +12,18 @@ export interface ActionFormat {
   todoHeadings: string[];
   /** Intitulés reconnus pour le bloc de propositions. */
   followUpHeadings: string[];
+  /** Bloc ```commit d'une tâche : carte stylisée dans le fil, ou masqué. */
+  commitBlock: CommitBlockDisplay;
 }
+
+export type CommitBlockDisplay = "styled" | "hidden";
+export const COMMIT_BLOCK_DISPLAYS: CommitBlockDisplay[] = ["styled", "hidden"];
 
 export const DEFAULT_ACTION_FORMAT: ActionFormat = {
   enabled: true,
   todoHeadings: ["TODO", "DO THIS", "NEXT STEPS", "PROCHAINES ÉTAPES", "À FAIRE"],
   followUpHeadings: ["FOLLOW-UP", "FOLLOW UP", "PISTES", "POUR ALLER PLUS LOIN"],
+  commitBlock: "styled",
 };
 
 const MAX_HEADINGS = 12;
@@ -44,6 +50,9 @@ export function actionFormat(raw: unknown): ActionFormat {
       value.followUpHeadings,
       DEFAULT_ACTION_FORMAT.followUpHeadings,
     ),
+    commitBlock: COMMIT_BLOCK_DISPLAYS.includes(value.commitBlock as CommitBlockDisplay)
+      ? value.commitBlock as CommitBlockDisplay
+      : DEFAULT_ACTION_FORMAT.commitBlock,
   };
 }
 

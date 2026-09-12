@@ -6,12 +6,15 @@ export interface ActionFormat {
   enabled: boolean
   todoHeadings: string[]
   followUpHeadings: string[]
+  /** Bloc ```commit proposé par l'agent d'une tâche : carte dans le fil, ou masqué. */
+  commitBlock: 'styled' | 'hidden'
 }
 
 export const DEFAULT_ACTION_FORMAT: ActionFormat = {
   enabled: true,
   todoHeadings: ['TODO', 'DO THIS', 'NEXT STEPS', 'PROCHAINES ÉTAPES', 'À FAIRE'],
   followUpHeadings: ['FOLLOW-UP', 'FOLLOW UP', 'PISTES', 'POUR ALLER PLUS LOIN'],
+  commitBlock: 'styled',
 }
 
 export const ActionFormatContext = createContext<ActionFormat>(DEFAULT_ACTION_FORMAT)

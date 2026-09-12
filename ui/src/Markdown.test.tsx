@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import Markdown, { taskChoices } from './Markdown'
 import { TaskSelectionContext, TaskToggleContext } from './taskToggle'
+import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 
 afterEach(cleanup)
 
@@ -15,6 +16,24 @@ describe('Markdown code blocks', () => {
 
     await screen.findByRole('button', { name: 'Copié' })
     expect(writeText).toHaveBeenCalledWith('Notice à recopier')
+  })
+})
+
+describe('Markdown commit block', () => {
+  test('présente le bloc ```commit comme une carte avec sujet et corps', () => {
+    render(<Markdown>{'Fait.\n\n```commit\nfix(todos): corrige le tri\n\nLe rang était perdu.\n```'}</Markdown>)
+    const card = screen.getByRole('complementary', { name: 'Message de commit proposé' })
+    expect(card.querySelector('strong')?.textContent).toBe('fix(todos): corrige le tri')
+    expect(card.querySelector('p')?.textContent).toBe('Le rang était perdu.')
+    expect(screen.getByRole('button', { name: 'Copier le message de commit' })).toBeDefined()
+    expect(document.querySelector('pre')).toBeNull()
+  })
+
+  test('se masque quand le réglage le demande', () => {
+    render(<ActionFormatContext.Provider value={{ ...DEFAULT_ACTION_FORMAT, commitBlock: 'hidden' }}><Markdown>{'Avant\n\n```commit\nfeat: x\n```\n\nAprès'}</Markdown></ActionFormatContext.Provider>)
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(document.querySelector('pre')).toBeNull()
+    expect(screen.getByText('Après')).toBeDefined()
   })
 })
 

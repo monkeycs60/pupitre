@@ -546,6 +546,49 @@
 
 .markdown-code-copy.is-copied { color: var(--ok); }
 
+/* Bloc ```commit : le message repris par la file, présenté comme un commit. */
+.markdown-commit {
+  margin: 0 0 var(--space-3);
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.markdown-commit header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.markdown-commit header .markdown-code-copy {
+  position: static;
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+}
+
+.markdown-commit strong {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.markdown-commit p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+}
+
 .assistant-message pre {
   max-height: 360px;
   padding: var(--space-3) 46px var(--space-3) var(--space-3);

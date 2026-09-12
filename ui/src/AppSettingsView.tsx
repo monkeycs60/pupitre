@@ -349,6 +349,22 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
           Séparés par des virgules. Le premier intitulé est celui demandé à l’agent, les
           suivants restent reconnus à l’affichage. Une liste vide rétablit les défauts.
         </p>
+        <label className="settings-select-label" htmlFor="app-commit-block">
+          Bloc de message de commit des tâches
+          <select
+            id="app-commit-block"
+            value={format.commitBlock}
+            disabled={loading || saving}
+            onChange={(event) => void handleFormatChange({ commitBlock: event.target.value as ActionFormat['commitBlock'] })}
+          >
+            <option value="styled">Carte « Message de commit » dans le fil</option>
+            <option value="hidden">Masqué dans le fil</option>
+          </select>
+        </label>
+        <p className="settings-help">
+          Quand une tâche se termine par un commit, l’agent propose son message dans un
+          bloc <code>```commit</code> que la file reprend tel quel.
+        </p>
       </div>
 
       <div className="settings-card">

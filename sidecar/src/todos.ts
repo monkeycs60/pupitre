@@ -39,17 +39,37 @@ export function commitMessageOf(text: string, fallback: string): string {
   const trimmed = subject.trim().slice(0, 72);
   return trimmed ? [trimmed, ...rest].join("\n").trim() : fallback;
 }
-/** Liens web d'une branche poussée : arborescence et création de MR / PR. */
-export function remoteLinks(remote: string | null, branch: string, target: string): { branchUrl: string | null; mergeRequestUrl: string | null } {
+/** Liens web d'une branche poussée : arborescence et création de MR / PR,
+ *  préremplie avec le titre et la description (clé de ticket en tête, pour
+ *  que la relève GitLab rattache la MR au ticket). */
+export function remoteLinks(
+  remote: string | null,
+  branch: string,
+  target: string,
+  draft?: { title: string; description?: string | null },
+): { branchUrl: string | null; mergeRequestUrl: string | null } {
   const base = normalizeRemoteUrl(remote);
   if (!base) return { branchUrl: null, mergeRequestUrl: null };
   const source = encodeURIComponent(branch), into = encodeURIComponent(target);
-  if (new URL(base).hostname.includes("github"))
-    return { branchUrl: `${base}/tree/${source}`, mergeRequestUrl: `${base}/compare/${into}...${source}?expand=1` };
+  const github = new URL(base).hostname.includes("github");
+  const query = new URLSearchParams(github
+    ? {}
+    : { "merge_request[source_branch]": branch, "merge_request[target_branch]": target });
+  if (draft?.title) query.set(github ? "title" : "merge_request[title]", draft.title);
+  if (draft?.description) query.set(github ? "body" : "merge_request[description]", draft.description);
+  if (github) query.set("expand", "1");
   return {
-    branchUrl: `${base}/-/tree/${source}`,
-    mergeRequestUrl: `${base}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${source}&merge_request%5Btarget_branch%5D=${into}`,
+    branchUrl: `${base}/${github ? "tree" : "-/tree"}/${source}`,
+    mergeRequestUrl: github
+      ? `${base}/compare/${into}...${source}?${query}`
+      : `${base}/-/merge_requests/new?${query}`,
   };
+}
+/** Nom de branche d'une tâche : la clé du ticket en tête, comme les branches
+ *  de travail, pour que la relève GitLab relie la future MR au ticket. */
+export function todoBranchName(id: string, ticketKey: string | null): string {
+  const key = ticketKey?.trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return `codex/${key ? `${key}-` : ""}todo-${id}-${crypto.randomUUID().slice(0, 8)}`;
 }
 export class TodoService {
   private enabled = new Set<string>();
@@ -382,7 +402,8 @@ export class TodoService {
       );
     const target = await this.targetBranch(t.project_id, t.target_branch);
     t = this.store.update(t.id, { target_branch: target });
-    const branch = `codex/todo-${t.id}-${crypto.randomUUID().slice(0, 8)}`;
+    const ticket = t.ticket_id ? this.tickets.get(t.ticket_id) : null;
+    const branch = todoBranchName(t.id, ticket?.key ?? null);
     const worktree = this.git.createWorktree(t.project_id, {
       branch,
       startPoint: `refs/heads/${t.target_branch}`,
@@ -434,7 +455,11 @@ export class TodoService {
     if (t.finish === "commit_push") {
       await todoGit(worktree, ["push", "-u", "origin", t.branch!]);
       const remote = await todoGit(worktree, ["remote", "get-url", "origin"]).catch(() => null);
-      const links = remoteLinks(remote, t.branch!, t.target_branch);
+      const ticket = t.ticket_id ? this.tickets.get(t.ticket_id) : null;
+      const links = remoteLinks(remote, t.branch!, t.target_branch, {
+        title: ticket ? `${ticket.key} ${t.title}` : t.title,
+        description: [message.split("\n").slice(2).join("\n").trim(), ticket?.external_url ? `Ticket : ${ticket.external_url}` : ""].filter(Boolean).join("\n\n") || null,
+      });
       this.store.update(t.id, { branch_url: links.branchUrl, merge_request_url: links.mergeRequestUrl });
     }
   }
