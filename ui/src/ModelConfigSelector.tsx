@@ -72,7 +72,7 @@ function providerQuota(provider: Provider, quotas: QuotaSnapshot): {
   }
 }
 
-function Checkmark() {
+export function Checkmark() {
   return (
     <svg className="model-strip-check" viewBox="0 0 14 14" fill="none" aria-hidden="true">
       <path d="m2.5 7.5 3 3 6-6.5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
@@ -80,7 +80,7 @@ function Checkmark() {
   )
 }
 
-function Chevron() {
+export function Chevron() {
   return (
     <svg className="model-strip-chevron" viewBox="0 0 10 10" fill="none" aria-hidden="true">
       <path d="m2 4 3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />

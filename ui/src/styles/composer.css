@@ -1070,12 +1070,31 @@
 
 /* Bascule Conversation / Tâche d'une nouvelle conversation : même formulaire,
    destination différente. */
+.composer {
+  position: relative;
+}
+
+/* Au-dessus de `.config-panel` (40) : le menu de fin de tâche descend sur la
+   barre d'outils. */
 .composer-topbar {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 45;
   display: flex;
-  justify-content: flex-end;
   align-items: center;
   gap: var(--space-2);
-  padding: 8px 10px 0;
+}
+
+.composer-topbar ~ .composer-input-wrap textarea {
+  padding-top: 12px;
+  padding-right: 190px;
+}
+
+.composer-topbar ~ .composer-input-wrap .composer-placeholder {
+  top: 12px;
+  right: 0;
+  padding-right: 190px;
 }
 
 .composer-mode {
@@ -1118,20 +1137,65 @@
   background: var(--accent);
 }
 
-.composer-finish select {
-  height: 22px;
-  padding: 0 22px 0 8px;
+.composer.is-todo .composer-topbar ~ .composer-input-wrap textarea,
+.composer.is-todo .composer-topbar ~ .composer-input-wrap .composer-placeholder {
+  padding-right: 310px;
+}
+
+.composer-finish {
+  position: relative;
+}
+
+.composer-finish-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px 0 11px;
   color: var(--text-muted);
   font: inherit;
   font-size: var(--text-xs);
-  background: var(--bg-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23898691' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 7px center;
+  font-weight: 500;
+  background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-full);
-  appearance: none;
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
 
-.composer-finish select:hover { color: var(--text); border-color: var(--border); }
+.composer-finish-trigger:hover,
+.composer-finish-trigger[aria-expanded='true'] {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.composer-finish-pop.model-strip-pop {
+  top: calc(100% + 6px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+  width: 300px;
+}
+
+.composer-finish-pop button {
+  grid-template-columns: 12px auto minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.composer-finish-pop strong {
+  color: var(--text-strong);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.composer-finish-pop small {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .composer.is-todo {
   border-color: var(--accent-border);

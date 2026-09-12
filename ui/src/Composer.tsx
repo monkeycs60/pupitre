@@ -17,7 +17,8 @@ import {
 } from './api'
 import { buildCreateConversationInput } from './conversationDraft'
 import { buildTodoInput } from './todoDraft'
-import { createTodo, updateTodo, TODO_FINISH_LABELS, type TodoFinish, type TodoItem } from './todos'
+import { createTodo, updateTodo, type TodoFinish, type TodoItem } from './todos'
+import { TodoFinishMenu } from './TodoFinishMenu'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { ProviderMark } from './ProviderMark'
 import { ComposerPalette, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
@@ -612,13 +613,7 @@ export function Composer({
       >
         {isNewConversation && onTodoModeChange ? (
           <div className="composer-topbar">
-            {isTodoMode ? (
-              <label className="composer-finish" title="Ce que la file fait du résultat de l’agent">
-                <select value={finish} onChange={(event) => setFinish(event.target.value as TodoFinish)} aria-label="Fin de tâche">
-                  {(Object.keys(TODO_FINISH_LABELS) as TodoFinish[]).map((value) => <option key={value} value={value}>{TODO_FINISH_LABELS[value]}</option>)}
-                </select>
-              </label>
-            ) : null}
+            {isTodoMode ? <TodoFinishMenu value={finish} onChange={setFinish} /> : null}
             {isNewConversation && onTodoModeChange ? (
               <div className="composer-mode" role="group" aria-label="Destination du message">
                 <button type="button" className={!todoMode ? 'is-active' : ''} aria-pressed={!todoMode} onClick={() => onTodoModeChange(false)}>
