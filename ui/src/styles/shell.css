@@ -991,63 +991,9 @@ button.titlebar-instance {
   display: none;
 }
 
-.project-section-switch button:focus-visible,
-.project-layout-toggle:focus-visible,
-.project-surface-back:focus-visible {
+.project-section-switch button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-
-.project-layout-toggle {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 15px;
-  background: transparent;
-  border: 0;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-
-.project-layout-toggle:hover {
-  color: var(--text-strong);
-  background: var(--bg-hover);
-}
-
-.inspector-header > .project-layout-toggle {
-  align-self: center;
-  margin-left: auto;
-}
-
-.inspector-header > .project-layout-toggle + .inspector-close {
-  margin-left: 0;
-}
-
-.project-surface-back {
-  display: inline-flex;
-  max-width: 210px;
-  flex: none;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
-  overflow: hidden;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--r-full);
-  cursor: pointer;
-}
-
-.project-surface-back:hover {
-  color: var(--text-strong);
-  border-color: var(--border-strong);
 }
 
 .project-surface-header .conversation-title-block h1 {
@@ -1061,7 +1007,7 @@ button.titlebar-instance {
 }
 
 @media (max-width: 900px) {
-  .conversation-title-block > :not(h1):not(.project-surface-back) {
+  .conversation-title-block > :not(h1) {
     display: none;
   }
 }

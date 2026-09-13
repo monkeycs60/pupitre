@@ -64,11 +64,9 @@ import { subscribeVisualFeedbackNavigation } from './visualFeedbackNavigation'
 import { ProjectSectionSwitch } from './ProjectSectionSwitch'
 import {
   PROJECT_SECTIONS,
-  storeProjectLayout,
-  storedProjectLayout,
+  projectNavigationIndexForShortcut,
   storedProjectSection,
   type ProjectSection,
-  type ProjectSurfaceLayout,
 } from './projectSections'
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
@@ -169,7 +167,7 @@ function App() {
   const [inspector, setInspector] = useState<InspectorView | null>(null)
   const [projectSurface, setProjectSurface] = useState<{
     section: ProjectSection
-    layout: ProjectSurfaceLayout
+    layout: 'full' | 'docked'
   } | null>(null)
   const [todoPanelRequest, setTodoPanelRequest] = useState(0)
   const [todoMode, setTodoMode] = useState(false)
@@ -267,9 +265,8 @@ function App() {
         closeProjectSurface()
         return
       }
-      if (!event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return
-      const index = Number.parseInt(event.key, 10) - 1
-      if (!Number.isInteger(index) || index < 0 || index > PROJECT_SECTIONS.length) return
+      const index = projectNavigationIndexForShortcut(event)
+      if (index === null) return
       event.preventDefault()
       if (index === 0) closeProjectSurface()
       else openProjectSection(PROJECT_SECTIONS[index - 1]!.id)
@@ -496,10 +493,9 @@ function App() {
     setInspector(null)
   }
 
-  function openProjectSection(section: ProjectSection, forcedLayout?: ProjectSurfaceLayout) {
+  function openProjectSection(section: ProjectSection) {
     if (selectedProject === null) return
-    const layout = forcedLayout ?? storedProjectLayout(selectedProject.id, section)
-    if (forcedLayout !== undefined) storeProjectLayout(selectedProject.id, section, forcedLayout)
+    const layout = section === 'todos' ? 'docked' : 'full'
     window.localStorage.setItem(`pupitre:dashboard-tab:${selectedProject.id}`, section)
     setProjectSurface({ section, layout })
     setInspector(layout === 'docked' ? 'dashboard' : null)
@@ -511,20 +507,12 @@ function App() {
     if (inspector === 'dashboard') setInspector(null)
   }
 
-  function toggleProjectLayout() {
-    if (selectedProject === null || projectSurface === null) return
-    const layout = projectSurface.layout === 'full' ? 'docked' : 'full'
-    storeProjectLayout(selectedProject.id, projectSurface.section, layout)
-    setProjectSurface({ ...projectSurface, layout })
-    setInspector(layout === 'docked' ? 'dashboard' : null)
-  }
-
   function handleTodoCreated() {
     setEditingTodo(null)
     setNewConversationDraft('')
     setNewConversationAttachments([])
     todos.refresh()
-    openProjectSection('todos', 'docked')
+    openProjectSection('todos')
     setTodoPanelRequest((value) => value + 1)
   }
 
@@ -538,7 +526,7 @@ function App() {
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
-    openProjectSection('todos', 'docked')
+    openProjectSection('todos')
     setTodoPanelRequest((value) => value + 1)
     setTodoMode(true)
     setWorkspaceView('conversations')
@@ -875,7 +863,7 @@ function App() {
       key={`${selectedProject.id}-${projectSurface.layout}`}
       project={selectedProject}
       activeSection={projectSurface.section}
-      onSectionChange={(section) => openProjectSection(section, projectSurface.layout)}
+      onSectionChange={openProjectSection}
       todoCount={todos.items.filter((item) => item.status !== 'done').length}
       todoPanelRequest={todoPanelRequest}
       onRefreshTodos={todos.refresh}
@@ -1023,14 +1011,9 @@ function App() {
           <>
             <header className="conversation-header project-surface-header">
               <div className="conversation-title-block">
-                <button type="button" className="project-surface-back" onClick={closeProjectSurface} title="Revenir à la conversation (Échap)">
-                  <span aria-hidden="true">←</span>
-                  {selectedConversation?.title ?? 'Conversation'}
-                </button>
                 <h1>{PROJECT_SECTIONS.find((section) => section.id === projectSurface.section)?.label}</h1>
               </div>
               <div className="header-actions">
-                <button type="button" className="project-layout-toggle" onClick={toggleProjectLayout} title="Ancrer cette section à droite" aria-label="Ancrer cette section à droite">⇥</button>
                 <ProjectSectionSwitch
                   projectId={selectedProject.id}
                   activeSection={projectSurface.section}
@@ -1200,7 +1183,6 @@ function App() {
           onViewChange={openInspector}
           onClose={closeInspector}
           title={inspector === 'dashboard' && projectSurface ? PROJECT_SECTIONS.find((section) => section.id === projectSurface.section)?.label : undefined}
-          headerAction={inspector === 'dashboard' && projectSurface ? <button type="button" className="project-layout-toggle" onClick={toggleProjectLayout} title="Afficher cette section en pleine largeur" aria-label="Afficher cette section en pleine largeur">⤢</button> : undefined}
         >
           <Suspense fallback={<p className="list-empty">Chargement…</p>}>
         {inspector === 'library' ? (

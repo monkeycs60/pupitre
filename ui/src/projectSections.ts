@@ -1,5 +1,4 @@
 export type ProjectSection = 'todos' | 'tickets' | 'sentry' | 'changelog' | 'environments'
-export type ProjectSurfaceLayout = 'full' | 'docked'
 
 export const PROJECT_SECTIONS: ReadonlyArray<{ id: ProjectSection; label: string }> = [
   { id: 'todos', label: 'Tâches' },
@@ -18,16 +17,8 @@ export function storedProjectSection(projectId: string): ProjectSection {
   return PROJECT_SECTIONS.some((section) => section.id === stored) ? stored as ProjectSection : 'todos'
 }
 
-function projectLayoutStorageKey(projectId: string, section: ProjectSection): string {
-  return `pupitre:project-layout:${projectId}:${section}`
-}
-
-export function storedProjectLayout(projectId: string, section: ProjectSection): ProjectSurfaceLayout {
-  const stored = window.localStorage.getItem(projectLayoutStorageKey(projectId, section))
-  if (stored === 'full' || stored === 'docked') return stored
-  return section === 'todos' ? 'docked' : 'full'
-}
-
-export function storeProjectLayout(projectId: string, section: ProjectSection, layout: ProjectSurfaceLayout): void {
-  window.localStorage.setItem(projectLayoutStorageKey(projectId, section), layout)
+export function projectNavigationIndexForShortcut(event: Pick<KeyboardEvent, 'altKey' | 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey'>): number | null {
+  if (!event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return null
+  const match = /^(?:Digit|Numpad)([1-6])$/.exec(event.code)
+  return match ? Number(match[1]) - 1 : null
 }

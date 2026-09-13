@@ -52,8 +52,8 @@ const PROJECT_SECTION_ICONS: Record<DashboardTab, ReactNode> = {
   todos: <path d="m2.5 4 1.2 1.2L6 2.9M8 4h5M2.5 8h3M8 8h5M2.5 12h3M8 12h5" />,
   tickets: <><rect x="2" y="4" width="12" height="8" rx="1.5" /><path d="M2 7h12" /></>,
   sentry: <path d="M8 2.5 13.5 12H10a2 2 0 0 0-2-2 2 2 0 0 0-2 2H2.5Z" />,
-  changelog: <path d="M3 4.5h10M3 8h7M3 11.5h9" />,
-  environments: <><rect x="2.5" y="3" width="11" height="4" rx="1" /><rect x="2.5" y="9" width="11" height="4" rx="1" /><path d="M5 5h.01M5 11h.01" /></>,
+  changelog: <><path d="M4 4.2A5 5 0 1 1 3 9" /><path d="M4 1.8v2.8H1.2M8 5v3l2 1.2" /></>,
+  environments: <><circle cx="8" cy="3" r="1.5" /><circle cx="3.5" cy="12" r="1.5" /><circle cx="12.5" cy="12" r="1.5" /><path d="M8 4.5v3M3.5 10.5V8h9v2.5" /></>,
 }
 
 function dashboardTabStorageKey(projectId: string): string {
@@ -426,7 +426,7 @@ export function DashboardView({
           </button>
         </nav>
       ) : null}
-      <div className="dashboard-scroll">
+      <div key={sectionOnly ? activeTab : undefined} className={`dashboard-scroll${sectionOnly ? ' project-section-body' : ''}`}>
         {embedded || sectionOnly ? null : <header className="dashboard-header">
           <div className="dashboard-heading">
             <h1 id="dashboard-title">Tableau de bord</h1>
@@ -727,7 +727,7 @@ export function DashboardView({
                       <span className="dashboard-actions">
                         <button
                           type="button"
-                          className="primary-button"
+                          className="dashboard-action is-leading"
                           onClick={() => onStartConversation({
                             ticketId: ticket.id,
                             branch: branch?.ref ?? null,
@@ -737,13 +737,13 @@ export function DashboardView({
                           Nouvelle conv.
                         </button>
                         {onCreateTodoFromTicket ? (
-                          <button type="button" className="text-button" onClick={() => onCreateTodoFromTicket(ticket)}>
+                          <button type="button" className="dashboard-action" onClick={() => onCreateTodoFromTicket(ticket)}>
                             Créer une tâche
                           </button>
                         ) : null}
                         <button
                           type="button"
-                          className={`text-button dashboard-instruction-button${ticket.instruction ? ' is-active' : ''}`}
+                          className={`dashboard-action dashboard-instruction-button${ticket.instruction ? ' is-active' : ''}`}
                           onClick={() => openInstruction(ticket)}
                         >
                           {ticket.instruction ? 'Instruction' : '+ Instruction'}

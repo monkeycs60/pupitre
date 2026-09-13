@@ -6,8 +6,7 @@ if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const {
-  storeProjectLayout,
-  storedProjectLayout,
+  projectNavigationIndexForShortcut,
 } = await import('./projectSections')
 const { ProjectSectionSwitch } = await import('./ProjectSectionSwitch')
 
@@ -53,12 +52,8 @@ test('rend six destinations et les parcourt au clavier', async () => {
   expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Tâches 2' }))
 })
 
-test('mémorise une disposition par projet et par section', () => {
-  expect(storedProjectLayout('p1', 'todos')).toBe('docked')
-  expect(storedProjectLayout('p1', 'tickets')).toBe('full')
-
-  storeProjectLayout('p1', 'tickets', 'docked')
-
-  expect(storedProjectLayout('p1', 'tickets')).toBe('docked')
-  expect(storedProjectLayout('p2', 'tickets')).toBe('full')
+test('utilise le code physique des chiffres pour fonctionner sur AZERTY', () => {
+  expect(projectNavigationIndexForShortcut({ ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, code: 'Digit2' })).toBe(1)
+  expect(projectNavigationIndexForShortcut({ ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, code: 'Numpad6' })).toBe(5)
+  expect(projectNavigationIndexForShortcut({ ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, code: 'Digit3' })).toBeNull()
 })
