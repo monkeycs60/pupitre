@@ -20,7 +20,13 @@ const BASE_BRANCHES = ["origin/develop", "origin/main", "origin/master", "develo
 const FULL_SHA = /^[0-9a-f]{40,64}$/i;
 const SHORT_SHA = /^[0-9a-f]{7,64}$/i;
 const UNCOMMITTED = /^0+$/;
-const LOG_FORMAT = "--format=%H%x00%P%x00%D%x00%an%x00%aI%x00%s";
+const TRAILERS = "%(trailers:key=Co-Authored-By,valueonly,separator=%x1f)";
+const LOG_FORMAT = `--format=%H%x00%P%x00%D%x00%an%x00%aI%x00%s%x00${TRAILERS}`;
+const AGENT_PATTERNS: Array<[CodeAgent["provider"], RegExp]> = [
+  ["claude", /claude|anthropic/i],
+  ["codex", /codex|openai|chatgpt/i],
+  ["grok", /grok|x\.ai/i],
+];
 
 export class CodeExplorerError extends Error {}
 
@@ -28,6 +34,12 @@ export interface CodeConversationLink {
   id: string;
   title: string;
   provider: string;
+}
+
+/** Agent déclaré co-auteur par un trailer `Co-Authored-By` du message de commit. */
+export interface CodeAgent {
+  provider: "claude" | "codex" | "grok";
+  name: string;
 }
 
 export interface CodeSource {
@@ -45,6 +57,8 @@ export type CodeDirtyStatus = "M" | "A" | "D" | "R" | "?";
 
 export interface CodeFileList {
   paths: string[];
+  /** Dépôts imbriqués (sous-modules ou clones non suivis) : des dossiers, jamais des fichiers lisibles. */
+  submodules: string[];
   dirty: Array<{ path: string; status: CodeDirtyStatus }>;
   truncated: boolean;
 }
@@ -67,6 +81,7 @@ export interface CodeBlameGroup {
   summary: string;
   uncommitted: boolean;
   conversations: CodeConversationLink[];
+  agent: CodeAgent | null;
 }
 
 export interface CodeBlame {
@@ -83,6 +98,7 @@ export interface CodeCommitSummary {
   authoredAt: string;
   subject: string;
   conversations: CodeConversationLink[];
+  agent: CodeAgent | null;
 }
 
 export interface CodeGraphPage {
@@ -90,6 +106,8 @@ export interface CodeGraphPage {
   currentBranch: string | null;
   base: string | null;
   focus: string[];
+  /** Commits propres à la branche (base..HEAD), même quand ils sortent de la page chargée. */
+  focusCommits: CodeCommitSummary[];
   commits: CodeCommitSummary[];
   skip: number;
   hasMore: boolean;
@@ -181,13 +199,23 @@ async function optionalGit(cwd: string, args: string[]): Promise<string | null> 
   }
 }
 
+export function agentFromTrailers(trailers: string): CodeAgent | null {
+  for (const value of trailers.split("\x1f")) {
+    const name = value.replace(/\s*<[^>]*>\s*$/, "").trim();
+    if (!name) continue;
+    const match = AGENT_PATTERNS.find(([, pattern]) => pattern.test(value));
+    if (match) return { provider: match[0], name };
+  }
+  return null;
+}
+
 function parseCommitRecords(output: string): Omit<CodeCommitSummary, "conversations">[] {
   const fields = output.split("\0");
   if (fields.at(-1) === "") fields.pop();
   const commits: Omit<CodeCommitSummary, "conversations">[] = [];
-  for (let index = 0; index + 5 < fields.length; index += 6) {
-    const [rawSha = "", rawParents = "", rawRefs = "", author = "", authoredAt = "", subject = ""] =
-      fields.slice(index, index + 6);
+  for (let index = 0; index + 6 < fields.length; index += 7) {
+    const [rawSha = "", rawParents = "", rawRefs = "", author = "", authoredAt = "", subject = "", trailers = ""] =
+      fields.slice(index, index + 7);
     const sha = rawSha.replace(/^\n/, "");
     if (!FULL_SHA.test(sha)) throw new CodeExplorerError("sortie git log invalide");
     commits.push({
@@ -197,6 +225,7 @@ function parseCommitRecords(output: string): Omit<CodeCommitSummary, "conversati
       author,
       authoredAt,
       subject,
+      agent: agentFromTrailers(trailers),
     });
   }
   return commits;
@@ -229,13 +258,30 @@ export class CodeExplorerService {
 
   async files(projectId: string, source: string | null): Promise<CodeFileList> {
     const cwd = await this.sourcePath(projectId, source);
-    const [listed, status] = await Promise.all([
-      runGit(cwd, ["ls-files", "-co", "--exclude-standard", "-z"], { truncate: true }),
+    const [tracked, untracked, status] = await Promise.all([
+      runGit(cwd, ["ls-files", "--stage", "-z"], { truncate: true }),
+      runGit(cwd, ["ls-files", "-o", "--exclude-standard", "-z"], { truncate: true }),
       runGit(cwd, ["status", "--porcelain=v1", "-z", "--untracked-files=all"], { truncate: true }),
     ]);
-    const rawPaths = listed.stdout.split("\0");
-    if (listed.truncated) rawPaths.pop();
-    const unique = [...new Set(rawPaths.filter(Boolean))];
+    const submodules = new Set<string>();
+    const rawPaths: string[] = [];
+    const stageEntries = tracked.stdout.split("\0");
+    if (tracked.truncated) stageEntries.pop();
+    for (const entry of stageEntries) {
+      const tab = entry.indexOf("\t");
+      if (tab === -1) continue;
+      const path = entry.slice(tab + 1);
+      if (entry.startsWith("160000 ")) submodules.add(path);
+      else rawPaths.push(path);
+    }
+    const untrackedEntries = untracked.stdout.split("\0");
+    if (untracked.truncated) untrackedEntries.pop();
+    for (const path of untrackedEntries) {
+      if (!path) continue;
+      if (path.endsWith("/")) submodules.add(path.slice(0, -1));
+      else rawPaths.push(path);
+    }
+    const unique = [...new Set(rawPaths)];
     const paths = unique.slice(0, MAX_TREE_PATHS).sort((left, right) => left.localeCompare(right));
     const dirty: CodeFileList["dirty"] = [];
     const entries = status.stdout.split("\0");
@@ -250,8 +296,9 @@ export class CodeExplorerService {
     const visible = deleted.length === 0 ? paths : paths.filter((path) => !deleted.includes(path));
     return {
       paths: visible,
-      dirty,
-      truncated: listed.truncated || unique.length > MAX_TREE_PATHS,
+      submodules: [...submodules].sort((left, right) => left.localeCompare(right)),
+      dirty: dirty.filter((item) => !submodules.has(item.path.replace(/\/$/, ""))),
+      truncated: tracked.truncated || untracked.truncated || unique.length > MAX_TREE_PATHS,
     };
   }
 
@@ -304,6 +351,7 @@ export class CodeExplorerService {
           summary: "",
           uncommitted: true,
           conversations: [],
+          agent: null,
         }],
       };
     }
@@ -330,6 +378,7 @@ export class CodeExplorerService {
             summary: info?.summary ?? "",
             uncommitted: UNCOMMITTED.test(sha),
             conversations: [],
+            agent: null,
           });
         }
         continue;
@@ -353,7 +402,19 @@ export class CodeExplorerService {
       if (info) Object.assign(group, info);
     }
     const links = this.links(projectId);
-    for (const group of groups) group.conversations = links.get(group.sha) ?? [];
+    const committed = [...new Set(groups.filter((group) => !group.uncommitted).map((group) => group.sha))];
+    const agents = new Map<string, CodeAgent | null>();
+    if (committed.length > 0) {
+      const trailers = await optionalGit(cwd, ["log", "--no-walk=unsorted", "-z", `--format=%H%x00${TRAILERS}`, ...committed]);
+      const fields = (trailers ?? "").split("\0");
+      for (let index = 0; index + 1 < fields.length; index += 2) {
+        agents.set(fields[index]!.replace(/^\n/, ""), agentFromTrailers(fields[index + 1] ?? ""));
+      }
+    }
+    for (const group of groups) {
+      group.conversations = links.get(group.sha) ?? [];
+      group.agent = agents.get(group.sha) ?? null;
+    }
     return { path: safe, lineCount, groups };
   }
 
@@ -381,7 +442,7 @@ export class CodeExplorerService {
     const head = headOutput?.trim() || null;
     const currentBranch = branchOutput?.trim() || null;
     let base: string | null = null;
-    let focus: string[] = [];
+    let focusCommits: CodeCommitSummary[] = [];
     if (offset === 0 && head) {
       for (const candidate of BASE_BRANCHES) {
         if (candidate === currentBranch) continue;
@@ -391,15 +452,16 @@ export class CodeExplorerService {
         }
       }
       if (base) {
-        focus = ((await optionalGit(cwd, ["rev-list", "--max-count=500", `${base}..${head}`])) ?? "")
-          .split("\n").filter(Boolean);
+        const own = await optionalGit(cwd, ["log", "-z", "--topo-order", "--max-count=500", LOG_FORMAT, `${base}..${head}`]);
+        focusCommits = own ? this.withLinks(projectId, parseCommitRecords(own)) : [];
       }
     }
     return {
       head,
       currentBranch,
       base,
-      focus,
+      focus: focusCommits.map((commit) => commit.sha),
+      focusCommits,
       commits: this.withLinks(projectId, records.slice(0, GRAPH_PAGE_SIZE)),
       skip: offset,
       hasMore: records.length > GRAPH_PAGE_SIZE,
@@ -410,9 +472,9 @@ export class CodeExplorerService {
     const cwd = await this.sourcePath(projectId, source);
     if (!SHORT_SHA.test(sha)) throw new CodeExplorerError(`référence Git invalide : ${sha}`);
     const { stdout } = await runGit(cwd, [
-      "show", "-s", "-z", "--format=%H%x00%P%x00%D%x00%an%x00%ae%x00%aI%x00%s%x00%b", sha,
+      "show", "-s", "-z", `--format=%H%x00%P%x00%D%x00%an%x00%ae%x00%aI%x00%s%x00${TRAILERS}%x00%b`, sha,
     ]);
-    const [full = "", rawParents = "", rawRefs = "", author = "", email = "", authoredAt = "", subject = "", body = ""] =
+    const [full = "", rawParents = "", rawRefs = "", author = "", email = "", authoredAt = "", subject = "", trailers = "", body = ""] =
       stdout.split("\0");
     if (!FULL_SHA.test(full)) throw new CodeExplorerError(`commit introuvable : ${sha}`);
     const parents = rawParents.split(" ").filter(Boolean);
@@ -460,6 +522,7 @@ export class CodeExplorerService {
       author,
       authoredAt,
       subject,
+      agent: agentFromTrailers(trailers),
     }]);
     return {
       ...summary!,

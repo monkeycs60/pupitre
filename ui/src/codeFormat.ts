@@ -1,5 +1,3 @@
-import type { CodeSource } from './types'
-
 const MONTHS =['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
 
 export function relativeCodeDate(iso: string | null, now = Date.now()): string {
@@ -31,20 +29,6 @@ export function splitCodePath(path: string): { directory: string, name: string }
 
 export function codeErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-export function defaultCodeSource(
-  sources: CodeSource[],
-  conversationId: string | null,
-  worktreePath: string | null,
-): string | null {
-  if (conversationId) {
-    const holder = sources.find((source) => !source.main && source.conversations.some((item) => item.id === conversationId))
-      ?? sources.find((source) => source.path === worktreePath)
-      ?? sources.find((source) => source.conversations.some((item) => item.id === conversationId))
-    if (holder) return holder.path
-  }
-  return sources[0]?.path ?? null
 }
 
 export const DIRTY_LABELS: Record<string, string> = {

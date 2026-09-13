@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getCodeGraph, listCodeFiles, listCodeSources, listProjectConversations } from './api'
+import { getCodeGraph, listCodeFiles, listCodeSources, listProjectConversations, searchCode } from './api'
 import { CodeCommitDetail } from './CodeCommitDetail'
 import { CodeFileTree } from './CodeFileTree'
-import { codeErrorMessage, defaultCodeSource, splitCodePath } from './codeFormat'
+import { codeErrorMessage, splitCodePath } from './codeFormat'
 import { CodeGraph, type CodeGraphState } from './CodeGraph'
+import { mergeCodeCommits, type CodeGraphCommit } from './codeGraphLayout'
 import { CodeReader, type CodeOpenFile, type CodeReaderMode } from './CodeReader'
+import { buildCodeScopes, defaultCodeScope, fromScopePath, scopePrefixes, toScopePath } from './codeScopes'
 import { CodeSourcePicker } from './CodeSourcePicker'
 import { ancestorDirectories } from './codeTree'
 import type { TicketLinks } from './ticketLinks'
-import type { CodeDirtyStatus, CodeFileList, CodeSource, Conversation, Project } from './types'
+import type { CodeCommitSummary, CodeDirtyStatus, CodeFileList, CodeSearchResult, CodeSource, Conversation, Project } from './types'
 
 const READER_MODE_KEY = 'pupitre:code-reader-mode'
+const AGENT_ONLY_KEY = 'pupitre:code-agent-only'
 
 interface CodeViewProps {
   project: Project
@@ -19,43 +22,86 @@ interface CodeViewProps {
   onOpenConversation: (conversationId: string) => void
 }
 
-function storedReaderMode(): CodeReaderMode {
+interface SourceFiles {
+  list: CodeFileList | null
+  error: string | null
+}
+
+interface SourceGraph {
+  head: string | null
+  currentBranch: string | null
+  base: string | null
+  focus: string[]
+  focusCommits: CodeCommitSummary[]
+  commits: CodeCommitSummary[]
+  hasMore: boolean
+  loadingMore: boolean
+  error: string | null
+}
+
+function readStorage(key: string): string | null {
   try {
-    const stored = window.localStorage.getItem(READER_MODE_KEY)
-    return stored === 'blame' || stored === 'history' ? stored : 'code'
+    return window.localStorage.getItem(key)
   } catch {
-    return 'code'
+    return null
   }
+}
+
+function writeStorage(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    return
+  }
+}
+
+function storedReaderMode(): CodeReaderMode {
+  const stored = readStorage(READER_MODE_KEY)
+  return stored === 'blame' || stored === 'history' ? stored : 'code'
+}
+
+function singleGraphSummary(graph: SourceGraph): string {
+  const branch = graph.currentBranch ?? (graph.head ? `HEAD ${graph.head.slice(0, 7)}` : '')
+  if (!graph.base || graph.focus.length === 0) return branch
+  return `${branch}, ${graph.focus.length} commit${graph.focus.length > 1 ? 's' : ''} d’avance sur ${graph.base}`
 }
 
 export function CodeView({ project, conversation, ticketLinks, onOpenConversation }: CodeViewProps) {
   const [sources, setSources] = useState<CodeSource[] | null>(null)
   const [sourcesError, setSourcesError] = useState<string | null>(null)
-  const [sourcePath, setSourcePath] = useState<string | null>(null)
-  const [files, setFiles] = useState<{ source: string, list: CodeFileList | null, error: string | null } | null>(null)
-  const [graph, setGraph] = useState<CodeGraphState | null>(null)
-  const [graphError, setGraphError] = useState<{ source: string, message: string } | null>(null)
+  const [scopeId, setScopeId] = useState<string | null>(null)
+  const [files, setFiles] = useState<Record<string, SourceFiles>>({})
+  const [graphs, setGraphs] = useState<Record<string, SourceGraph>>({})
   const [openFile, setOpenFile] = useState<CodeOpenFile | null>(null)
   const [expandedDirectories, setExpandedDirectories] = useState<ReadonlySet<string>>(() => new Set())
   const [readerMode, setReaderMode] = useState<CodeReaderMode>(storedReaderMode)
-  const [selectedSha, setSelectedSha] = useState<string | null>(null)
+  const [selected, setSelected] = useState<{ sha: string, source: string } | null>(null)
   const [graphExpanded, setGraphExpanded] = useState(false)
+  const [agentOnly, setAgentOnly] = useState(() => readStorage(AGENT_ONLY_KEY) === 'true')
+  const [branchOnly, setBranchOnly] = useState(false)
   const [conversations, setConversations] = useState<ReadonlyMap<string, Conversation>>(() => new Map())
   const searchRef = useRef<HTMLInputElement | null>(null)
   const openCounter = useRef(0)
   const conversationId = conversation?.id ?? null
   const worktreePath = conversation?.worktree_path ?? null
 
+  const scopes = useMemo(() => buildCodeScopes(sources ?? []), [sources])
+  const scope = scopes.find((item) => item.id === scopeId) ?? null
+  const scopeKey = scope ? scope.sources.map((source) => source.path).join('\n') : ''
+  const prefixes = useMemo(() => (scope ? scopePrefixes(scope) : new Map<string, string>()), [scope])
+
   useEffect(() => {
     const controller = new AbortController()
     listCodeSources(project.id, controller.signal)
       .then((list) => {
+        const nextScopes = buildCodeScopes(list)
         setSources(list)
-        setSourcePath((current) => (
-          current && list.some((source) => source.path === current)
-            ? current
-            : defaultCodeSource(list, conversationId, worktreePath)
-        ))
+        setScopeId((current) => {
+          if (current && nextScopes.some((item) => item.id === current)) return current
+          const chosen = defaultCodeScope(nextScopes, conversationId, worktreePath)
+          setBranchOnly(nextScopes.find((item) => item.id === chosen)?.kind === 'ticket')
+          return chosen
+        })
       })
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) setSourcesError(codeErrorMessage(reason))
@@ -73,39 +119,44 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
   }, [project.id, conversationId, worktreePath])
 
   useEffect(() => {
-    if (!sourcePath) return
+    if (!scopeKey) return
     const controller = new AbortController()
-    listCodeFiles(project.id, sourcePath, controller.signal)
-      .then((list) => setFiles({ source: sourcePath, list, error: null }))
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted) setFiles({ source: sourcePath, list: null, error: codeErrorMessage(reason) })
-      })
+    for (const source of scopeKey.split('\n')) {
+      listCodeFiles(project.id, source, controller.signal)
+        .then((list) => setFiles((current) => ({ ...current, [source]: { list, error: null } })))
+        .catch((reason: unknown) => {
+          if (!controller.signal.aborted) setFiles((current) => ({ ...current, [source]: { list: null, error: codeErrorMessage(reason) } }))
+        })
+    }
     return () => controller.abort()
-  }, [project.id, sourcePath])
+  }, [project.id, scopeKey])
 
   useEffect(() => {
-    if (!sourcePath) return
+    if (!scopeKey) return
     const controller = new AbortController()
-    getCodeGraph(project.id, sourcePath, 0, controller.signal)
-      .then((page) => {
-        setGraph({
-          source: sourcePath,
-          head: page.head,
-          currentBranch: page.currentBranch,
-          base: page.base,
-          focus: new Set(page.focus),
-          commits: page.commits,
-          hasMore: page.hasMore,
-          loadingMore: false,
+    const scopeSources = scopeKey.split('\n')
+    for (const source of scopeSources) {
+      getCodeGraph(project.id, source, 0, controller.signal)
+        .then((page) => {
+          setGraphs((current) => ({
+            ...current,
+            [source]: { ...page, loadingMore: false, error: null },
+          }))
+          if (source === scopeSources[0] && page.head) {
+            const head = page.head
+            setSelected((current) => current ?? { sha: head, source })
+          }
         })
-        setGraphError(null)
-        setSelectedSha((current) => current ?? page.head)
-      })
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted) setGraphError({ source: sourcePath, message: codeErrorMessage(reason) })
-      })
+        .catch((reason: unknown) => {
+          if (controller.signal.aborted) return
+          setGraphs((current) => ({
+            ...current,
+            [source]: { head: null, currentBranch: null, base: null, focus: [], focusCommits: [], commits: [], hasMore: false, loadingMore: false, error: codeErrorMessage(reason) },
+          }))
+        })
+    }
     return () => controller.abort()
-  }, [project.id, sourcePath])
+  }, [project.id, scopeKey])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -131,36 +182,118 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [graphExpanded])
 
-  const currentGraph = graph?.source === sourcePath ? graph : null
-  const currentFiles = files?.source === sourcePath ? files : null
+  const mergedFiles = useMemo((): SourceFiles => {
+    if (!scope) return { list: null, error: null }
+    const entries = scope.sources.map((source) => ({ source, entry: files[source.path] }))
+    if (entries.some(({ entry }) => entry === undefined)) return { list: null, error: null }
+    const merged: CodeFileList = { paths: [], submodules: [], dirty: [], truncated: false }
+    for (const { source, entry } of entries) {
+      const list = entry!.list
+      if (!list) continue
+      const prefix = prefixes.get(source.path) ?? ''
+      const map = (path: string) => (prefix ? `${prefix}/${path}` : path)
+      merged.paths.push(...list.paths.map(map))
+      merged.submodules.push(...list.submodules.map(map))
+      merged.dirty.push(...list.dirty.map((item) => ({ ...item, path: map(item.path) })))
+      merged.truncated ||= list.truncated
+    }
+    const error = entries.find(({ entry }) => entry?.error)?.entry?.error ?? null
+    const anyList = entries.some(({ entry }) => entry?.list)
+    return { list: anyList ? merged : null, error }
+  }, [scope, files, prefixes])
+
+  const graphView = useMemo((): { state: CodeGraphState | null, error: string | null } => {
+    if (!scope) return { state: null, error: null }
+    const entries = scope.sources.map((source) => ({ source, graph: graphs[source.path] }))
+    const error = entries.find(({ graph }) => graph?.error)?.graph?.error ?? null
+    if (entries.some(({ graph }) => graph === undefined)) return { state: null, error }
+    const multi = scope.sources.length > 1
+    const merge = (pick: (graph: SourceGraph) => CodeCommitSummary[]): CodeGraphCommit[] => mergeCodeCommits(entries.map(({ source, graph }, index) => ({
+      source: source.path,
+      repoLabel: multi ? prefixes.get(source.path) ?? null : null,
+      repoIndex: index,
+      commits: pick(graph!),
+    })))
+    const commits = merge((graph) => graph.commits)
+    const focusCommits = merge((graph) => graph.focusCommits)
+    const primary = entries[0]!.graph!
+    return {
+      error,
+      state: {
+        key: scope.id,
+        heads: new Set(entries.map(({ graph }) => graph!.head).filter((head): head is string => head !== null)),
+        centerSha: primary.head,
+        summary: multi ? `${scope.label}, ${scope.sources.length} dépôts` : singleGraphSummary(primary),
+        focus: new Set(focusCommits.map((commit) => commit.sha)),
+        focusCommits,
+        commits,
+        hasMore: entries.some(({ graph }) => graph!.hasMore),
+        loadingMore: entries.some(({ graph }) => graph!.loadingMore),
+      },
+    }
+  }, [scope, graphs, prefixes])
+
   const dirty = useMemo(
-    () => new Map<string, CodeDirtyStatus>((currentFiles?.list?.dirty ?? []).map((item) => [item.path, item.status])),
-    [currentFiles],
+    () => new Map<string, CodeDirtyStatus>((mergedFiles.list?.dirty ?? []).map((item) => [item.path, item.status])),
+    [mergedFiles],
   )
 
-  const ticketForConversation = useCallback((conversationId: string): TicketLinks | null => {
-    const item = conversations.get(conversationId)
+  const ticketForConversation = useCallback((id: string): TicketLinks | null => {
+    const item = conversations.get(id)
     if (!item) return null
     return (item.ticket_key ? ticketLinks.get(item.ticket_key) : undefined)
       ?? (item.ticket_id ? ticketLinks.get(item.ticket_id) : undefined)
       ?? null
   }, [conversations, ticketLinks])
 
-  function changeSource(path: string) {
-    if (path === sourcePath) return
-    setSourcePath(path)
-    setSelectedSha(null)
+  const searchText = useCallback(async (query: string, signal: AbortSignal): Promise<CodeSearchResult> => {
+    if (!scope) return { query, matches: [], truncated: false }
+    const results = await Promise.all(scope.sources.map(async (source) => ({
+      result: await searchCode(project.id, source.path, query, signal),
+      prefix: prefixes.get(source.path) ?? '',
+    })))
+    return {
+      query,
+      matches: results.flatMap(({ result, prefix }) => result.matches.map((match) => ({ ...match, path: prefix ? `${prefix}/${match.path}` : match.path }))),
+      truncated: results.some(({ result }) => result.truncated),
+    }
+  }, [project.id, scope, prefixes])
+
+  function changeScope(id: string) {
+    if (id === scopeId) return
+    const next = scopes.find((item) => item.id === id)
+    if (!next) return
+    setScopeId(id)
+    setSelected(null)
+    setExpandedDirectories(new Set())
+    setBranchOnly(next.kind === 'ticket')
+    setOpenFile((current) => (
+      current && next.sources.some((source) => source.path === current.source)
+        ? { ...current, display: toScopePath(next, current.source, current.path) }
+        : null
+    ))
   }
 
-  function openFileAt(path: string, line: number | null = null) {
+  function openFileAt(display: string, line: number | null = null) {
+    if (!scope) return
+    const location = fromScopePath(scope, display)
+    if (!location) return
     openCounter.current += 1
-    setOpenFile({ path, line, nonce: openCounter.current })
+    setOpenFile({ display, source: location.source, path: location.path, line, nonce: openCounter.current })
     setExpandedDirectories((current) => {
       const next = new Set(current)
-      for (const directory of ancestorDirectories(path)) next.add(directory)
+      for (const directory of ancestorDirectories(display)) next.add(directory)
       return next
     })
     setGraphExpanded(false)
+  }
+
+  function openRepository(display: string) {
+    if (!scope || !sources) return
+    const location = fromScopePath(scope, display)
+    if (!location) return
+    const target = sources.find((source) => source.main && source.path === `${location.source}/${location.path}`)
+    if (target) changeScope(`source:${target.path}`)
   }
 
   function toggleDirectory(path: string) {
@@ -174,29 +307,35 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
 
   function changeReaderMode(mode: CodeReaderMode) {
     setReaderMode(mode)
-    try {
-      window.localStorage.setItem(READER_MODE_KEY, mode)
-    } catch {
-      return
-    }
+    writeStorage(READER_MODE_KEY, mode)
+  }
+
+  function toggleAgentOnly() {
+    setAgentOnly((value) => {
+      writeStorage(AGENT_ONLY_KEY, String(!value))
+      return !value
+    })
   }
 
   function loadMoreCommits() {
-    if (!currentGraph || !currentGraph.hasMore || currentGraph.loadingMore || !sourcePath) return
-    const source = sourcePath
-    setGraph({ ...currentGraph, loadingMore: true })
-    getCodeGraph(project.id, source, currentGraph.commits.length)
-      .then((page) => setGraph((current) => {
-        if (!current || current.source !== source) return current
-        const known = new Set(current.commits.map((commit) => commit.sha))
-        return {
-          ...current,
-          commits: [...current.commits, ...page.commits.filter((commit) => !known.has(commit.sha))],
-          hasMore: page.hasMore,
-          loadingMore: false,
-        }
-      }))
-      .catch(() => setGraph((current) => (current && current.source === source ? { ...current, loadingMore: false } : current)))
+    if (!scope) return
+    for (const source of scope.sources) {
+      const current = graphs[source.path]
+      if (!current || !current.hasMore || current.loadingMore) continue
+      const path = source.path
+      setGraphs((previous) => ({ ...previous, [path]: { ...previous[path]!, loadingMore: true } }))
+      getCodeGraph(project.id, path, current.commits.length)
+        .then((page) => setGraphs((previous) => {
+          const entry = previous[path]
+          if (!entry) return previous
+          const known = new Set(entry.commits.map((commit) => commit.sha))
+          return {
+            ...previous,
+            [path]: { ...entry, commits: [...entry.commits, ...page.commits.filter((commit) => !known.has(commit.sha))], hasMore: page.hasMore, loadingMore: false },
+          }
+        }))
+        .catch(() => setGraphs((previous) => (previous[path] ? { ...previous, [path]: { ...previous[path]!, loadingMore: false } } : previous)))
+    }
   }
 
   if (sourcesError) {
@@ -205,7 +344,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
   if (!sources) {
     return <div className="code-view-message"><div className="code-skeleton" aria-label="Chargement des dépôts" /></div>
   }
-  if (sources.length === 0 || !sourcePath) {
+  if (sources.length === 0 || !scope) {
     return <div className="code-view-message">
       <div className="code-reader-empty">
         <h3>Aucun dépôt Git dans ce projet</h3>
@@ -214,48 +353,52 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     </div>
   }
 
-  const detailProps = {
+  const selectedRepository = selected && scope.sources.length > 1
+    ? { label: prefixes.get(selected.source) ?? '', index: Math.max(scope.sources.findIndex((source) => source.path === selected.source), 0) }
+    : null
+  const detailProps = selected ? {
     projectId: project.id,
-    sourcePath,
+    sourcePath: selected.source,
+    sha: selected.sha,
+    repository: selectedRepository,
     ticketForConversation,
     onOpenConversation,
-    onOpenFile: (path: string) => openFileAt(path),
-    onSelectCommit: setSelectedSha,
-  }
+    onOpenFile: (path: string) => openFileAt(toScopePath(scope, selected.source, path)),
+    onSelectCommit: (sha: string) => setSelected({ sha, source: selected.source }),
+  } : null
 
   return <div className={`code-view${graphExpanded ? ' is-graph-expanded' : ''}`}>
     <aside className="code-sidebar" hidden={graphExpanded} aria-label="Fichiers">
       <CodeSourcePicker
-        sources={sources}
-        value={sourcePath}
-        originConversationId={conversation?.id ?? null}
-        onChange={changeSource}
+        scopes={scopes}
+        value={scope.id}
+        originConversationId={conversationId}
+        onChange={changeScope}
       />
       <CodeFileTree
-        key={sourcePath}
-        projectId={project.id}
-        sourcePath={sourcePath}
-        files={currentFiles?.list ?? null}
-        error={currentFiles?.error ?? null}
+        key={scope.id}
+        files={mergedFiles.list}
+        error={mergedFiles.error}
         expanded={expandedDirectories}
-        openPath={openFile?.path ?? null}
+        openPath={openFile?.display ?? null}
         searchRef={searchRef}
+        searchText={searchText}
         onToggleDirectory={toggleDirectory}
         onOpenFile={openFileAt}
+        onOpenRepository={openRepository}
       />
     </aside>
 
     <section className="code-reader-column" hidden={graphExpanded} aria-label="Lecteur de fichier">
       <CodeReader
         projectId={project.id}
-        sourcePath={sourcePath}
         openFile={openFile}
         mode={readerMode}
         dirty={dirty}
-        selectedSha={selectedSha}
+        selectedSha={selected?.sha ?? null}
         active={!graphExpanded}
         onModeChange={changeReaderMode}
-        onSelectCommit={setSelectedSha}
+        onSelectCommit={(sha) => openFile && setSelected({ sha, source: openFile.source })}
         onOpenFile={(path) => openFileAt(path)}
         onOpenConversation={onOpenConversation}
       />
@@ -263,24 +406,28 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
 
     <section className="code-graph-column" aria-label="Graphe des commits">
       <CodeGraph
-        graph={currentGraph}
-        error={graphError?.source === sourcePath ? graphError.message : null}
+        graph={graphView.state}
+        error={graphView.error}
         layout={graphExpanded ? 'table' : 'compact'}
-        selectedSha={selectedSha}
-        returnLabel={openFile ? splitCodePath(openFile.path).name : null}
-        onSelect={setSelectedSha}
+        selectedSha={selected?.sha ?? null}
+        returnLabel={openFile ? splitCodePath(openFile.display).name : null}
+        agentOnly={agentOnly}
+        branchOnly={branchOnly}
+        onToggleAgentOnly={toggleAgentOnly}
+        onToggleBranchOnly={() => setBranchOnly((value) => !value)}
+        onSelect={(commit) => setSelected({ sha: commit.sha, source: commit.source })}
         onLoadMore={loadMoreCommits}
         onToggleExpanded={() => setGraphExpanded((value) => !value)}
         onOpenConversation={onOpenConversation}
       />
-      {!graphExpanded && selectedSha
-        ? <CodeCommitDetail key={`${sourcePath}-${selectedSha}`} {...detailProps} sha={selectedSha} variant="docked" onClose={() => setSelectedSha(null)} />
+      {!graphExpanded && detailProps
+        ? <CodeCommitDetail key={`${detailProps.sourcePath}-${detailProps.sha}`} {...detailProps} variant="docked" onClose={() => setSelected(null)} />
         : null}
     </section>
 
     {graphExpanded ? <aside className="code-detail-column" aria-label="Détail du commit">
-      {selectedSha
-        ? <CodeCommitDetail key={`${sourcePath}-${selectedSha}`} {...detailProps} sha={selectedSha} variant="side" />
+      {detailProps
+        ? <CodeCommitDetail key={`${detailProps.sourcePath}-${detailProps.sha}`} {...detailProps} variant="side" />
         : <p className="code-empty-note">Choisis un commit dans le graphe pour voir son détail.</p>}
     </aside> : null}
   </div>

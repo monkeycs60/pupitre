@@ -1,7 +1,7 @@
 export interface CodeTreeNode {
   name: string
   path: string
-  kind: 'directory' | 'file'
+  kind: 'directory' | 'file' | 'repository'
   children: CodeTreeNode[]
 }
 
@@ -20,21 +20,27 @@ export interface CodePathMatch {
 }
 
 function compareNodes(left: CodeTreeNode, right: CodeTreeNode): number {
-  if (left.kind !== right.kind) return left.kind === 'directory' ? -1 : 1
+  const leftRank = left.kind === 'file' ? 1 : 0
+  const rightRank = right.kind === 'file' ? 1 : 0
+  if (leftRank !== rightRank) return leftRank - rightRank
   return left.name.localeCompare(right.name, undefined, { sensitivity: 'base', numeric: true })
 }
 
-export function buildCodeTree(paths: string[]): CodeTreeNode {
+export function buildCodeTree(paths: string[], repositories: string[] = []): CodeTreeNode {
   const root: CodeTreeNode = { name: '', path: '', kind: 'directory', children: [] }
   const directories = new Map<string, CodeTreeNode>([['', root]])
-  for (const path of paths) {
+  const leaves = [
+    ...paths.map((path) => ({ path, kind: 'file' as const })),
+    ...repositories.map((path) => ({ path, kind: 'repository' as const })),
+  ]
+  for (const { path, kind } of leaves) {
     const segments = path.split('/').filter(Boolean)
     let parent = root
     for (let index = 0; index < segments.length; index += 1) {
       const name = segments[index]!
       const nodePath = segments.slice(0, index + 1).join('/')
       if (index === segments.length - 1) {
-        parent.children.push({ name, path: nodePath, kind: 'file', children: [] })
+        parent.children.push({ name, path: nodePath, kind, children: [] })
         break
       }
       let directory = directories.get(nodePath)
@@ -54,7 +60,7 @@ export function flattenCodeTree(root: CodeTreeNode, expanded: ReadonlySet<string
   const rows: CodeTreeRow[] = []
   const visit = (nodes: CodeTreeNode[], depth: number) => {
     for (const node of nodes) {
-      if (node.kind === 'file') {
+      if (node.kind !== 'directory') {
         rows.push({ node, label: node.name, depth })
         continue
       }

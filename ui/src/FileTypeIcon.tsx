@@ -129,6 +129,14 @@ export function FileTypeIcon({ path, size = 16 }: { path: string, size?: number 
   </svg>
 }
 
+export function RepositoryIcon({ size = 16 }: { size?: number }) {
+  return <svg className="file-type-icon" width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M3 2.5h8.5a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3Z" fill="#8b7cff" fillOpacity="0.18" stroke="#a396ff" strokeWidth="1" strokeLinejoin="round" />
+    <path d="M3 2.5v11M5.2 11.2h5.3" stroke="#a396ff" strokeWidth="1" strokeLinecap="round" />
+    <circle cx="8.2" cy="5.8" r="1.2" fill="#c4bbff" />
+  </svg>
+}
+
 export function FolderIcon({ open, size = 16 }: { open: boolean, size?: number }) {
   return <svg className="file-type-icon" width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
     {open

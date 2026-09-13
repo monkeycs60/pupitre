@@ -13,6 +13,7 @@ interface CodeCommitDetailProps {
   projectId: string
   sourcePath: string
   sha: string
+  repository: { label: string, index: number } | null
   variant: 'docked' | 'side'
   ticketForConversation: (conversationId: string) => TicketLinks | null
   onOpenConversation: (conversationId: string) => void
@@ -37,6 +38,7 @@ export function CodeCommitDetail({
   projectId,
   sourcePath,
   sha,
+  repository,
   variant,
   ticketForConversation,
   onOpenConversation,
@@ -74,11 +76,15 @@ export function CodeCommitDetail({
   const closeButton = onClose ? <button type="button" className="code-icon-button" title="Fermer le détail" aria-label="Fermer le détail du commit" onClick={onClose}>
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
   </button> : null
+  const repositoryBadge = repository
+    ? <span className={`code-repo-badge is-repo-${repository.index % 6}`} title={`Dépôt ${repository.label}`}>{repository.label}</span>
+    : null
 
   if (!loaded || !loaded.detail) {
     return <section className={`code-commit is-${variant}`} aria-label="Détail du commit" aria-busy={!loaded}>
       <header className="code-commit-header">
         <span className="code-commit-sha">{sha.slice(0, 8)}</span>
+        {repositoryBadge}
         <span className="code-commit-meta" />
         {closeButton}
       </header>
@@ -99,6 +105,7 @@ export function CodeCommitDetail({
         title="Copier le SHA complet"
         onClick={() => void navigator.clipboard?.writeText(detail.sha)}
       >{detail.sha.slice(0, 8)}</button>
+      {repositoryBadge}
       <time className="code-commit-meta" dateTime={detail.authoredAt} title={absoluteCodeDate(detail.authoredAt)}>
         {detail.author}, {relativeCodeDate(detail.authoredAt)}
       </time>
@@ -140,6 +147,14 @@ export function CodeCommitDetail({
         </div> : null}
       </div>
     })}
+
+    {detail.conversations.length === 0 && detail.agent ? <div className="code-commit-origin">
+      <p className="code-commit-origin-label">Co-écrit par un agent</p>
+      <p className="code-commit-agent">
+        <ProviderMark provider={detail.agent.provider} />
+        <span>{detail.agent.name}</span>
+      </p>
+    </div> : null}
 
     {detail.parents.length > 0 ? <p className="code-commit-parents">
       <span>{detail.parents.length > 1 ? 'Parents' : 'Parent'}</span>

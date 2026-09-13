@@ -1,31 +1,53 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BranchIcon } from './BranchIcon'
+import { codeScopeMatches, repositoryShortLabel, sourceBranchLabel, type CodeScope } from './codeScopes'
 import { ProviderMark } from './ProviderMark'
-import type { CodeSource } from './types'
 
 interface CodeSourcePickerProps {
-  sources: CodeSource[]
+  scopes: CodeScope[]
   value: string | null
   originConversationId: string | null
-  onChange: (path: string) => void
+  onChange: (scopeId: string) => void
 }
 
-function sourceKind(source: CodeSource, originConversationId: string | null): string {
-  if (originConversationId && source.conversations.some((item) => item.id === originConversationId) && !source.main) {
+function scopeKind(scope: CodeScope, originConversationId: string | null): string {
+  if (scope.kind === 'ticket') return `Chantier sur ${scope.sources.length} dépôts`
+  if (scope.kind === 'mains') return scope.detail
+  const source = scope.sources[0]!
+  if (originConversationId && !source.main && source.conversations.some((item) => item.id === originConversationId)) {
     return 'Worktree de la conversation'
   }
   return source.main ? 'Checkout principal' : 'Worktree'
 }
 
-function branchLabel(source: CodeSource): string {
-  return source.branch ?? (source.head ? `HEAD détaché ${source.head.slice(0, 7)}` : 'HEAD détaché')
+function isOriginScope(scope: CodeScope, originConversationId: string | null): boolean {
+  if (!originConversationId || scope.kind === 'mains') return false
+  return scope.sources.some((source) => !source.main && source.conversations.some((item) => item.id === originConversationId))
 }
 
-export function CodeSourcePicker({ sources, value, originConversationId, onChange }: CodeSourcePickerProps) {
+export function CodeSourcePicker({ scopes, value, originConversationId, onChange }: CodeSourcePickerProps) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [activeIndex, setActiveIndex] = useState(0)
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const current = sources.find((source) => source.path === value) ?? null
-  const repositories = [...new Set(sources.map((source) => source.repositoryLabel))]
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const current = scopes.find((scope) => scope.id === value) ?? null
+
+  const sections = useMemo(() => {
+    const filtered = scopes.filter((scope) => codeScopeMatches(scope, query))
+    const result: Array<{ label: string, scopes: CodeScope[] }> = []
+    const tickets = filtered.filter((scope) => scope.kind === 'ticket')
+    if (tickets.length > 0) result.push({ label: 'Chantiers multi-dépôts', scopes: tickets })
+    const overview = filtered.filter((scope) => scope.kind === 'mains')
+    if (overview.length > 0) result.push({ label: 'Vue d’ensemble', scopes: overview })
+    const singles = filtered.filter((scope) => scope.kind === 'source')
+    for (const repository of [...new Set(singles.map((scope) => scope.detail))]) {
+      result.push({ label: repository, scopes: singles.filter((scope) => scope.detail === repository) })
+    }
+    return result
+  }, [scopes, query])
+  const ordered = sections.flatMap((section) => section.scopes)
+  const boundedActive = Math.min(activeIndex, Math.max(ordered.length - 1, 0))
 
   useEffect(() => {
     if (!open) return
@@ -36,65 +58,113 @@ export function CodeSourcePicker({ sources, value, originConversationId, onChang
     return () => window.removeEventListener('mousedown', handlePointer)
   }, [open])
 
-  return <div
-    className="code-source-picker"
-    ref={rootRef}
-    onKeyDown={(event) => {
-      if (event.key === 'Escape' && open) {
-        event.preventDefault()
-        setOpen(false)
-      }
-    }}
-  >
+  useEffect(() => {
+    if (!open) return
+    listRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView?.({ block: 'nearest' })
+  }, [open, boundedActive])
+
+  function openMenu() {
+    setQuery('')
+    setActiveIndex(Math.max(scopes.findIndex((scope) => scope.id === value), 0))
+    setOpen(true)
+  }
+
+  function choose(scope: CodeScope | undefined) {
+    if (!scope) return
+    onChange(scope.id)
+    setOpen(false)
+    setQuery('')
+  }
+
+  return <div className="code-source-picker" ref={rootRef}>
     <button
       type="button"
       className="code-source-button"
-      aria-haspopup="menu"
+      aria-haspopup="dialog"
       aria-expanded={open}
-      title={current?.path}
-      onClick={() => setOpen((value) => !value)}
+      title={current?.sources.map((source) => source.path).join('\n')}
+      onClick={() => (open ? setOpen(false) : openMenu())}
     >
       <BranchIcon />
       <span className="code-source-button-text">
-        {current && repositories.length > 1 ? <span className="code-source-repo">{current.repositoryLabel}</span> : null}
-        <span className="code-source-branch">{current ? branchLabel(current) : 'Choisir un état du code'}</span>
-        {current ? <span className="code-source-kind">{sourceKind(current, originConversationId)}</span> : null}
+        {current ? <span className="code-source-repo">{current.kind === 'mains' ? 'Checkouts principaux' : current.detail}</span> : null}
+        <span className="code-source-branch">{current?.label ?? 'Choisir un état du code'}</span>
+        {current ? <span className="code-source-kind">{scopeKind(current, originConversationId)}</span> : null}
       </span>
       <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
     </button>
-    {open ? <div className="code-source-menu" role="menu" aria-label="État du code">
-      {repositories.map((repository) => <div className="code-source-group" key={repository}>
-        {repositories.length > 1 ? <p className="code-source-group-label">{repository}</p> : null}
-        {sources.filter((source) => source.repositoryLabel === repository).map((source) => {
-          const isCurrent = source.path === value
-          const isOrigin = originConversationId !== null && source.conversations.some((item) => item.id === originConversationId)
-          return <button
-            key={source.path}
-            type="button"
-            role="menuitemradio"
-            aria-checked={isCurrent}
-            className={`code-source-option${isCurrent ? ' is-current' : ''}`}
-            title={source.path}
-            onClick={() => {
-              onChange(source.path)
-              setOpen(false)
-            }}
-          >
-            <span className="code-source-option-main">
-              <span className="code-source-branch">{branchLabel(source)}</span>
-              {source.main ? <span className="code-source-badge">principal</span> : null}
-              {isOrigin ? <span className="code-source-badge is-origin">cette conversation</span> : null}
-            </span>
-            {source.conversations.length > 0 && !source.main ? <span className="code-source-conversations">
-              {source.conversations.slice(0, 2).map((item) => <span key={item.id}>
-                <ProviderMark provider={item.provider} />
-                {item.title}
-              </span>)}
-              {source.conversations.length > 2 ? <span>+{source.conversations.length - 2}</span> : null}
-            </span> : <span className="code-source-option-meta">{source.path}</span>}
-          </button>
-        })}
-      </div>)}
+
+    {open ? <div className="code-source-menu" role="dialog" aria-label="Choisir l’état du code">
+      <div className="code-source-filter">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><circle cx="7" cy="7" r="4.2" /><path d="m10.2 10.2 3 3" /></g></svg>
+        <input
+          autoFocus
+          type="search"
+          value={query}
+          placeholder="Filtrer : ticket, branche, dépôt, conversation"
+          aria-label="Filtrer les états du code"
+          spellCheck={false}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setActiveIndex(0)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault()
+              setActiveIndex(Math.min(boundedActive + 1, ordered.length - 1))
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault()
+              setActiveIndex(Math.max(boundedActive - 1, 0))
+            } else if (event.key === 'Enter') {
+              event.preventDefault()
+              choose(ordered[boundedActive])
+            } else if (event.key === 'Escape') {
+              event.preventDefault()
+              if (query) setQuery('')
+              else setOpen(false)
+            }
+          }}
+        />
+        <span className="code-source-count">{ordered.length}</span>
+      </div>
+      <div className="code-source-list" role="listbox" aria-label="États du code" ref={listRef}>
+        {ordered.length === 0 ? <p className="code-empty-note">Aucun état du code ne correspond.</p> : null}
+        {sections.map((section) => <div className="code-source-group" key={section.label}>
+          <p className="code-source-group-label">{section.label}</p>
+          {section.scopes.map((scope) => {
+            const index = ordered.indexOf(scope)
+            const isCurrent = scope.id === value
+            const source = scope.sources[0]!
+            return <button
+              key={scope.id}
+              type="button"
+              role="option"
+              aria-selected={isCurrent}
+              data-active={index === boundedActive}
+              className={`code-source-option${isCurrent ? ' is-current' : ''}${index === boundedActive ? ' is-active' : ''}`}
+              title={scope.sources.map((item) => item.path).join('\n')}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => choose(scope)}
+            >
+              <span className="code-source-option-main">
+                <span className="code-source-branch">{scope.label}</span>
+                {scope.kind === 'source' && source.main ? <span className="code-source-badge">principal</span> : null}
+                {isOriginScope(scope, originConversationId) ? <span className="code-source-badge is-origin">cette conversation</span> : null}
+              </span>
+              {scope.kind === 'ticket' ? <span className="code-source-repos">
+                {scope.sources.map((item) => <span key={item.path}><strong>{repositoryShortLabel(item)}</strong> {sourceBranchLabel(item)}</span>)}
+              </span> : null}
+              {scope.kind === 'mains' ? <span className="code-source-option-meta">{scope.sources.map(repositoryShortLabel).join(', ')}</span> : null}
+              {scope.kind === 'source' ? (source.conversations.length > 0 && !source.main
+                ? <span className="code-source-conversations">
+                  {source.conversations.slice(0, 2).map((item) => <span key={item.id}><ProviderMark provider={item.provider} />{item.title}</span>)}
+                  {source.conversations.length > 2 ? <span>+{source.conversations.length - 2}</span> : null}
+                </span>
+                : <span className="code-source-option-meta">{source.path}</span>) : null}
+            </button>
+          })}
+        </div>)}
+      </div>
     </div> : null}
   </div>
 }

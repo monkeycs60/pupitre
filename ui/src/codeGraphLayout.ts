@@ -6,8 +6,15 @@ export interface CodeGraphSegment {
   kind: 'continuation' | 'parent'
 }
 
-export interface CodeGraphRow {
-  commit: CodeCommitSummary
+export interface CodeGraphCommit extends CodeCommitSummary {
+  source: string
+  /** Dépôt d'origine, renseigné seulement quand plusieurs dépôts partagent le graphe. */
+  repoLabel: string | null
+  repoIndex: number
+}
+
+export interface CodeGraphRow<T extends CodeCommitSummary = CodeCommitSummary> {
+  commit: T
   lane: number
   laneCount: number
   segments: CodeGraphSegment[]
@@ -22,7 +29,43 @@ export interface CodeGraphPath {
 
 export const CODE_GRAPH_LANE_WIDTH = 12
 
-export function layoutCodeGraph(commits: CodeCommitSummary[]): CodeGraphRow[] {
+export function isAgentCommit(commit: CodeCommitSummary): boolean {
+  return commit.agent !== null || commit.conversations.length > 0
+}
+
+/**
+ * Fusion par date de plusieurs historiques : chaque liste garde son ordre
+ * topologique, seule l'alternance entre dépôts suit la date d'auteur.
+ */
+export function mergeCodeCommits(lists: Array<{
+  source: string
+  repoLabel: string | null
+  repoIndex: number
+  commits: CodeCommitSummary[]
+}>): CodeGraphCommit[] {
+  const cursors = lists.map(() => 0)
+  const merged: CodeGraphCommit[] = []
+  while (true) {
+    let best = -1
+    let bestTime = -Infinity
+    lists.forEach((list, index) => {
+      const commit = list.commits[cursors[index]!]
+      if (!commit) return
+      const time = Date.parse(commit.authoredAt) || 0
+      if (time > bestTime) {
+        bestTime = time
+        best = index
+      }
+    })
+    if (best === -1) return merged
+    const list = lists[best]!
+    const commit = list.commits[cursors[best]!]!
+    cursors[best] = cursors[best]! + 1
+    merged.push({ ...commit, source: list.source, repoLabel: list.repoLabel, repoIndex: list.repoIndex })
+  }
+}
+
+export function layoutCodeGraph<T extends CodeCommitSummary>(commits: T[]): CodeGraphRow<T>[] {
   let active: string[] = []
   return commits.map((commit) => {
     let lane = active.indexOf(commit.sha)

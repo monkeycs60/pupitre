@@ -820,6 +820,11 @@ export interface CodeConversationLink {
   provider: Provider
 }
 
+export interface CodeAgent {
+  provider: Provider
+  name: string
+}
+
 export interface CodeSource {
   path: string
   repositoryPath: string
@@ -835,6 +840,7 @@ export type CodeDirtyStatus = 'M' | 'A' | 'D' | 'R' | '?'
 
 export interface CodeFileList {
   paths: string[]
+  submodules: string[]
   dirty: Array<{ path: string, status: CodeDirtyStatus }>
   truncated: boolean
 }
@@ -857,6 +863,7 @@ export interface CodeBlameGroup {
   summary: string
   uncommitted: boolean
   conversations: CodeConversationLink[]
+  agent: CodeAgent | null
 }
 
 export interface CodeBlame {
@@ -873,6 +880,7 @@ export interface CodeCommitSummary {
   authoredAt: string
   subject: string
   conversations: CodeConversationLink[]
+  agent: CodeAgent | null
 }
 
 export interface CodeGraphPage {
@@ -880,6 +888,7 @@ export interface CodeGraphPage {
   currentBranch: string | null
   base: string | null
   focus: string[]
+  focusCommits: CodeCommitSummary[]
   commits: CodeCommitSummary[]
   skip: number
   hasMore: boolean

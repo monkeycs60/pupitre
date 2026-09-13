@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { searchCode } from './api'
 import { codeErrorMessage, DIRTY_LABELS, splitCodePath } from './codeFormat'
 import { ancestorDirectories, buildCodeTree, flattenCodeTree, matchCodePaths } from './codeTree'
-import { FileTypeIcon, FolderIcon } from './FileTypeIcon'
+import { FileTypeIcon, FolderIcon, RepositoryIcon } from './FileTypeIcon'
 import { useVirtualWindow } from './useVirtualWindow'
 import type { CodeDirtyStatus, CodeFileList, CodeSearchResult } from './types'
 
@@ -11,15 +10,15 @@ const FILE_RESULT_LIMIT = 60
 const TEXT_SEARCH_MIN = 3
 
 interface CodeFileTreeProps {
-  projectId: string
-  sourcePath: string | null
   files: CodeFileList | null
   error: string | null
   expanded: ReadonlySet<string>
   openPath: string | null
   searchRef: RefObject<HTMLInputElement | null>
+  searchText: (query: string, signal: AbortSignal) => Promise<CodeSearchResult>
   onToggleDirectory: (path: string) => void
   onOpenFile: (path: string, line?: number | null) => void
+  onOpenRepository: (path: string) => void
 }
 
 type SearchItem = { kind: 'file', path: string, indices: number[] } | { kind: 'line', path: string, line: number, text: string }
@@ -64,15 +63,15 @@ function markedSnippet(text: string, query: string): ReactNode {
 }
 
 export function CodeFileTree({
-  projectId,
-  sourcePath,
   files,
   error,
   expanded,
   openPath,
   searchRef,
+  searchText,
   onToggleDirectory,
   onOpenFile,
+  onOpenRepository,
 }: CodeFileTreeProps) {
   const [query, setQuery] = useState('')
   const [dirtyOnly, setDirtyOnly] = useState(false)
@@ -87,8 +86,11 @@ export function CodeFileTree({
     return files.dirty.filter((item) => item.status !== 'D' && present.has(item.path)).map((item) => item.path)
   }, [files])
   const allPaths = files?.paths
-  const visiblePaths = useMemo(() => (dirtyOnly ? dirtyPaths : allPaths ?? []), [dirtyOnly, dirtyPaths, allPaths])
-  const tree = useMemo(() => buildCodeTree(visiblePaths), [visiblePaths])
+  const submodules = files?.submodules
+  const tree = useMemo(
+    () => (dirtyOnly ? buildCodeTree(dirtyPaths) : buildCodeTree(allPaths ?? [], submodules ?? [])),
+    [dirtyOnly, dirtyPaths, allPaths, submodules],
+  )
   const dirtyExpanded = useMemo(() => new Set(dirtyPaths.flatMap(ancestorDirectories)), [dirtyPaths])
   const rows = useMemo(() => flattenCodeTree(tree, dirtyOnly ? dirtyExpanded : expanded), [tree, dirtyOnly, dirtyExpanded, expanded])
   const treeWindow = useVirtualWindow<HTMLDivElement>(rows.length, TREE_ROW_HEIGHT)
@@ -98,10 +100,10 @@ export function CodeFileTree({
   )
 
   useEffect(() => {
-    if (!sourcePath || trimmed.length < TEXT_SEARCH_MIN) return
+    if (trimmed.length < TEXT_SEARCH_MIN) return
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
-      searchCode(projectId, sourcePath, trimmed, controller.signal)
+      searchText(trimmed, controller.signal)
         .then((result) => setTextSearch({ query: trimmed, result, error: null }))
         .catch((reason: unknown) => {
           if (!controller.signal.aborted) setTextSearch({ query: trimmed, result: null, error: codeErrorMessage(reason) })
@@ -111,7 +113,7 @@ export function CodeFileTree({
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [projectId, sourcePath, trimmed])
+  }, [searchText, trimmed])
 
   const revealedPath = useRef<string | null>(null)
   const { scrollToIndex } = treeWindow
@@ -138,7 +140,6 @@ export function CodeFileTree({
 
   function renderItem(item: SearchItem, index: number) {
     const active = index === boundedActive
-    const { directory } = splitCodePath(item.path)
     if (item.kind === 'file') {
       return <button
         key={`file-${item.path}`}
@@ -151,7 +152,7 @@ export function CodeFileTree({
       >
         <FileTypeIcon path={item.path} />
         <span className="code-search-name">{markedName(item.path, item.indices)}</span>
-        <span className="code-search-dir">{directory}</span>
+        <span className="code-search-dir">{splitCodePath(item.path).directory}</span>
       </button>
     }
     return <button
@@ -253,26 +254,31 @@ export function CodeFileTree({
       <div className="code-tree" ref={treeWindow.ref} role="tree" aria-label="Arborescence">
         <div style={{ paddingTop: treeWindow.before, paddingBottom: treeWindow.after }}>
           {rows.slice(treeWindow.start, treeWindow.end).map((row) => {
-            const isDirectory = row.node.kind === 'directory'
-            const isOpen = isDirectory && (dirtyOnly || expanded.has(row.node.path))
-            const status = isDirectory ? undefined : dirtyStatus.get(row.node.path)
-            const active = row.node.path === openPath
+            const { kind, path } = row.node
+            const isOpen = kind === 'directory' && (dirtyOnly || expanded.has(path))
+            const status = kind === 'file' ? dirtyStatus.get(path) : undefined
+            const active = path === openPath
             return <button
-              key={row.node.path}
+              key={path}
               type="button"
               role="treeitem"
-              aria-expanded={isDirectory ? isOpen : undefined}
+              aria-expanded={kind === 'directory' ? isOpen : undefined}
               aria-selected={active}
               className={`code-tree-row${active ? ' is-active' : ''}`}
               style={{ paddingLeft: 8 + row.depth * 14 }}
-              title={row.node.path}
-              onClick={() => (isDirectory ? onToggleDirectory(row.node.path) : onOpenFile(row.node.path))}
+              title={kind === 'repository' ? `Ouvrir le dépôt ${path}` : path}
+              onClick={() => {
+                if (kind === 'directory') onToggleDirectory(path)
+                else if (kind === 'repository') onOpenRepository(path)
+                else onOpenFile(path)
+              }}
             >
-              {isDirectory
+              {kind === 'directory'
                 ? <svg className={`code-tree-chevron${isOpen ? ' is-open' : ''}`} width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 : <span className="code-tree-spacer" />}
-              {isDirectory ? <FolderIcon open={isOpen} /> : <FileTypeIcon path={row.node.path} />}
+              {kind === 'directory' ? <FolderIcon open={isOpen} /> : kind === 'repository' ? <RepositoryIcon /> : <FileTypeIcon path={path} />}
               <span className="code-tree-label">{row.label}</span>
+              {kind === 'repository' ? <span className="code-tree-repo">dépôt</span> : null}
               {status ? <span className={`code-tree-status is-${statusClass(status)}`} title={DIRTY_LABELS[status]}>{status === '?' ? 'U' : status}</span> : null}
             </button>
           })}

@@ -249,22 +249,104 @@
   top: calc(100% - 2px);
   left: 10px;
   z-index: 30;
-  width: min(460px, calc(100vw - 120px));
+  width: min(480px, calc(100vw - 120px));
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  max-height: 440px;
-  padding: 6px;
-  overflow: auto;
+  max-height: min(520px, 70vh);
+  overflow: hidden;
   background: var(--bg-overlay);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-popover);
 }
 
+.code-source-filter {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 10px;
+  color: var(--text-faint);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.code-source-filter input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  color: var(--text);
+  font-size: var(--text-base);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.code-source-filter input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.code-source-count {
+  flex: none;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.code-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 0;
+  padding: 6px;
+  overflow: auto;
+}
+
 .code-source-group {
   display: flex;
   flex-direction: column;
+}
+
+.code-source-repos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.code-source-repos strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.code-tree-repo {
+  flex: none;
+  padding: 0 6px;
+  color: var(--accent-bright);
+  font-size: 10.5px;
+  background: var(--accent-soft);
+  border-radius: var(--r-full);
+}
+
+.code-blame-agent {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  text-overflow: ellipsis;
+}
+
+.code-commit-agent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-base);
+}
+
+.code-commit-agent .provider-mark {
+  width: 14px;
+  height: 14px;
 }
 
 .code-source-group-label {
@@ -287,7 +369,8 @@
   cursor: pointer;
 }
 
-.code-source-option:hover {
+.code-source-option:hover,
+.code-source-option.is-active {
   background: var(--bg-hover);
 }
 
@@ -1250,12 +1333,119 @@
   text-align: right;
 }
 
-.code-graph-status {
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  color: var(--text-faint);
+.code-graph-more {
+  display: block;
+  width: calc(100% - 24px);
+  height: 28px;
+  margin: 6px 12px 10px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  background: var(--neutral-soft);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.code-graph-more:hover:not(:disabled) {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.code-graph-more:disabled {
+  cursor: default;
+}
+
+.code-graph-message {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.code-graph-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-muted);
   font-size: var(--text-xs);
 }
+
+.code-graph-agent span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-graph-filters {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.code-filter-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.code-filter-toggle:hover {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.code-filter-toggle.is-active {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.code-filter-count {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.code-filter-toggle.is-active .code-filter-count {
+  color: inherit;
+}
+
+.code-repo-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  max-width: 110px;
+  height: 18px;
+  padding: 0 6px;
+  overflow: hidden;
+  color: var(--repo);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--neutral-soft);
+  border-radius: var(--r-xs);
+  box-shadow: inset 2px 0 0 var(--repo);
+}
+
+.code-repo-badge.is-repo-0 { --repo: var(--viz-1); }
+.code-repo-badge.is-repo-1 { --repo: var(--viz-5); }
+.code-repo-badge.is-repo-2 { --repo: var(--ok); }
+.code-repo-badge.is-repo-3 { --repo: var(--warn); }
+.code-repo-badge.is-repo-4 { --repo: var(--viz-7); }
+.code-repo-badge.is-repo-5 { --repo: var(--viz-3); }
 
 /* --- Détail du commit ---------------------------------------------------- */
 

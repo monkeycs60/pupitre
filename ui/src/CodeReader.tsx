@@ -10,6 +10,9 @@ import type { CodeBlame, CodeBlameGroup, CodeCommitSummary, CodeDirtyStatus, Cod
 export type CodeReaderMode = 'code' | 'blame' | 'history'
 
 export interface CodeOpenFile {
+  /** Chemin affiché, préfixé par le dépôt quand plusieurs dépôts sont ouverts. */
+  display: string
+  source: string
   path: string
   line: number | null
   nonce: number
@@ -31,7 +34,6 @@ interface Keyed<T> {
 
 interface CodeReaderProps {
   projectId: string
-  sourcePath: string | null
   openFile: CodeOpenFile | null
   mode: CodeReaderMode
   dirty: ReadonlyMap<string, CodeDirtyStatus>
@@ -62,10 +64,11 @@ function BlameCell({
 }) {
   if (!group) return <span className="code-blame-cell" />
   const linked = group.conversations[0]
+  const provider = linked?.provider ?? group.agent?.provider
   const className = [
     'code-blame-cell',
     offset === 0 ? 'is-group-start' : '',
-    linked ? `is-provider-${linked.provider}` : '',
+    provider ? `is-provider-${provider}` : '',
     group.uncommitted ? 'is-uncommitted' : '',
     selected ? 'is-selected' : '',
   ].filter(Boolean).join(' ')
@@ -75,7 +78,7 @@ function BlameCell({
     content = group.uncommitted
       ? <span className="code-blame-author">Non commité</span>
       : <>
-        {linked ? <ProviderMark provider={linked.provider} /> : null}
+        {provider ? <ProviderMark provider={provider} /> : null}
         <span className="code-blame-author">{group.author}</span>
         <span className="code-blame-date" title={absoluteCodeDate(group.authoredAt)}>{relativeCodeDate(group.authoredAt)}</span>
       </>
@@ -94,6 +97,8 @@ function BlameCell({
       <ProviderMark provider={linked.provider} />
       <span>{linked.title}</span>
     </button>
+  } else if (offset === 2 && group.agent) {
+    content = <span className="code-blame-agent">Co-écrit par {group.agent.name}</span>
   }
 
   if (group.uncommitted) return <span className={className}>{content}</span>
@@ -114,7 +119,6 @@ function BlameCell({
 
 export function CodeReader({
   projectId,
-  sourcePath,
   openFile,
   mode,
   dirty,
@@ -125,7 +129,9 @@ export function CodeReader({
   onOpenFile,
   onOpenConversation,
 }: CodeReaderProps) {
+  const sourcePath = openFile?.source ?? null
   const path = openFile?.path ?? null
+  const displayPath = openFile?.display ?? null
   const nonce = openFile?.nonce ?? 0
   const key = sourcePath && path ? `${sourcePath}\n${path}` : null
   const [file, setFile] = useState<Keyed<CodeFile> | null>(null)
@@ -221,12 +227,12 @@ export function CodeReader({
     if (active && scrollRef.current) scrollRef.current.scrollTop = savedScroll.current
   }, [active, scrollRef])
 
-  const status = path ? dirty.get(path) : undefined
-  const { directory, name } = splitCodePath(path ?? '')
+  const status = displayPath ? dirty.get(displayPath) : undefined
+  const { directory, name } = splitCodePath(displayPath ?? '')
   const dirtyFiles = [...dirty.entries()].filter(([, value]) => value !== 'D')
 
   function renderBody() {
-    if (!path) {
+    if (!displayPath) {
       return <div className="code-reader-empty">
         <h3>Aucun fichier ouvert</h3>
         <p>Parcours l’arborescence, ou ouvre un fichier par son nom avec <kbd>Ctrl</kbd> <kbd>P</kbd>.</p>
@@ -257,9 +263,7 @@ export function CodeReader({
       if (!currentHistory) return <div className="code-skeleton" aria-label="Chargement de l’historique" />
       if (currentHistory.error) return <p className="code-reader-message is-error">{currentHistory.error}</p>
       const commits = currentHistory.value ?? []
-      if (commits.length === 0) {
-        return <p className="code-reader-message">Aucun commit ne touche encore ce fichier.</p>
-      }
+      if (commits.length === 0) return <p className="code-reader-message">Aucun commit ne touche encore ce fichier.</p>
       return <div className="code-history" role="list" aria-label={`Historique de ${name}`}>
         {commits.map((commit) => {
           const linked = commit.conversations[0]
@@ -274,7 +278,9 @@ export function CodeReader({
             <span className="code-history-subject">{commit.subject}</span>
             <span className="code-history-meta">
               <span>{commit.author}</span>
-              {linked ? <span className="code-history-conversation"><ProviderMark provider={linked.provider} />{linked.title}</span> : null}
+              {linked
+                ? <span className="code-history-conversation"><ProviderMark provider={linked.provider} />{linked.title}</span>
+                : commit.agent ? <span className="code-history-conversation"><ProviderMark provider={commit.agent.provider} />{commit.agent.name}</span> : null}
             </span>
             <span className="code-commit-sha">{commit.sha.slice(0, 8)}</span>
           </button>
@@ -312,9 +318,9 @@ export function CodeReader({
 
   return <div className="code-reader">
     <header className="code-reader-header">
-      {path ? <>
+      {displayPath && path ? <>
         <FileTypeIcon path={path} />
-        <nav className="code-breadcrumb" aria-label="Chemin du fichier" title={path}>
+        <nav className="code-breadcrumb" aria-label="Chemin du fichier" title={displayPath}>
           {directory ? directory.split('/').map((segment, index) => <span className="code-breadcrumb-dir" key={`${segment}-${index}`}>{segment}</span>) : null}
           <strong>{name}</strong>
         </nav>

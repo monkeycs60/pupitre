@@ -3,7 +3,7 @@ import type { Database } from "bun:sqlite";
 import { mkdirSync, mkdtempSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CodeExplorerService } from "../src/code-explorer";
+import { agentFromTrailers, CodeExplorerService } from "../src/code-explorer";
 import { openDb } from "../src/db";
 import { GitProjectService } from "../src/git";
 import { ConversationStore } from "../src/stores/conversations";
@@ -95,6 +95,35 @@ test("liste les fichiers suivis et non suivis, avec leur état modifié", async 
   expect(files.truncated).toBe(false);
 });
 
+test("repère l'agent co-auteur par trailer et sort les dépôts imbriqués de la liste des fichiers", async () => {
+  writeFileSync(join(repo, "agent.ts"), "a\nb\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "ajoute agent\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>");
+  const agentSha = git(repo, "rev-parse", "HEAD");
+  const web = join(repo, "apps", "web");
+  initRepo(web);
+  commit(web, "index.ts", "x\n", "web");
+  const vendor = join(root, "vendor-origin");
+  initRepo(vendor);
+  commit(vendor, "lib.ts", "y\n", "lib");
+  git(repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", vendor, "vendor");
+
+  const files = await explorer.files(projectId, repo);
+  expect(files.submodules).toEqual(["apps/web", "vendor"]);
+  expect(files.paths).toContain(".gitmodules");
+  expect(files.paths.some((path) => path === "vendor" || path.startsWith("apps/web"))).toBe(false);
+  expect(files.dirty.some((item) => item.path.startsWith("vendor") || item.path.startsWith("apps/web"))).toBe(false);
+
+  const expected = { provider: "claude" as const, name: "Claude Opus 5 (1M context)" };
+  const graph = await explorer.graph(projectId, repo);
+  expect(graph.commits.find((item) => item.sha === agentSha)?.agent).toEqual(expected);
+  expect(graph.commits.find((item) => item.subject === "socle")?.agent).toBeNull();
+  expect((await explorer.commit(projectId, repo, agentSha)).agent).toEqual(expected);
+  expect((await explorer.blame(projectId, repo, "agent.ts")).groups[0]?.agent).toEqual(expected);
+  expect(agentFromTrailers("Jane Doe <jane@example.test>\x1fCodex <codex@openai.com>")).toEqual({ provider: "codex", name: "Codex" });
+  expect(agentFromTrailers("Jane Doe <jane@example.test>")).toBeNull();
+});
+
 test("lit un fichier du worktree ou d'un commit, et signale un binaire", async () => {
   const first = commit(repo, "src/app.ts", "v1\n", "v1");
   writeFileSync(join(repo, "src/app.ts"), "v2\n");
@@ -156,6 +185,7 @@ test("pagine le graphe et isole les commits propres à la branche du worktree", 
   const graph = await explorer.graph(projectId, worktree);
 
   expect(graph).toMatchObject({ head: own, currentBranch: "feature", base: "main", focus: [own], skip: 0, hasMore: false });
+  expect(graph.focusCommits.map((item) => item.subject)).toEqual(["feature"]);
   expect(graph.commits).toHaveLength(3);
   expect(graph.commits.every((item) => item.parents.length <= 1)).toBe(true);
   const next = await explorer.graph(projectId, worktree, 2);
