@@ -1002,7 +1002,10 @@ function App() {
 
       <section className="workspace" aria-label={titlebarView ?? 'Conversation'}>
         <div className="workspace-split">
-        <div className="conversation-workspace">
+        <div
+          className={`conversation-workspace${workspaceView === 'conversations' && inspector ? ' has-inspector' : ''}`}
+          style={{ '--inspector-width': `${inspectorWidth}px` } as CSSProperties}
+        >
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
         {workspaceView === 'design' ? <DesignView />
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
@@ -1178,10 +1181,8 @@ function App() {
           </>
         )}
         </Suspense>
-        </div>
         <div
           className={`workspace-inspector-slot${workspaceView === 'conversations' && inspector ? ' is-open' : ''}`}
-          style={{ '--inspector-width': `${inspectorWidth}px` } as CSSProperties}
         >
         {workspaceView === 'conversations' && inspector ? <WorkspaceInspector
           view={inspector}
@@ -1234,6 +1235,7 @@ function App() {
         ) : inspector === 'quotas' ? <QuotaBar snapshot={quotas.snapshot} /> : null}
           </Suspense>
         </WorkspaceInspector> : null}
+        </div>
         </div>
         </div>
       </section>
