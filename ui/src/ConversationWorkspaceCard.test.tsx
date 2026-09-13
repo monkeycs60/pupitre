@@ -47,6 +47,7 @@ test('sans commit propre, montre le chantier du ticket et qui l’a commité', a
     repositories: [],
     ticket: {
       key: 'TECH-24128',
+      branchCommits: 177,
       total: 21,
       repositories: [
         { repositoryPath: '/mono/apps/hapigator', repositoryLabel: 'apps/hapigator', commits: [commit('a', 'migration'), commit('b', 'reprise')] },
@@ -60,7 +61,7 @@ test('sans commit propre, montre le chantier du ticket et qui l’a commité', a
 
   render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'reader', onOpenCode }))
 
-  expect(await screen.findByText('TECH-24128 : 21 commits, aucun dans cette conversation')).toBeTruthy()
+  expect(await screen.findByText('TECH-24128 : 177 commits, dont 21 reliés à des conversations')).toBeTruthy()
   expect(screen.getByText('Commité par Script migration Match AI')).toBeTruthy()
   expect(screen.getByRole('article', { name: 'Chantier du ticket' })).toBeTruthy()
   expect(document.querySelectorAll('.code-workspace-card-repos li')).toHaveLength(2)
@@ -69,7 +70,7 @@ test('sans commit propre, montre le chantier du ticket et qui l’a commité', a
 })
 
 test('reste invisible tant que ni la conversation ni son ticket n’ont rien commité', async () => {
-  globalThis.fetch = mock(async () => Response.json({ conversationId: 'c', total: 0, repositories: [], ticket: { key: 'TECH-1', total: 0, repositories: [], conversations: [] } })) as unknown as typeof fetch
+  globalThis.fetch = mock(async () => Response.json({ conversationId: 'c', total: 0, repositories: [], ticket: { key: 'TECH-1', branchCommits: 0, total: 0, repositories: [], conversations: [] } })) as unknown as typeof fetch
   const { container } = render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'c' }))
   await new Promise((resolve) => setTimeout(resolve, 20))
   expect(container.innerHTML).toBe('')

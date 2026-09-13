@@ -19,6 +19,13 @@ function plural(count: number, word: string): string {
   return `${count} ${word}${count > 1 ? 's' : ''}`
 }
 
+function ticketTitle(key: string, commits: number, linked: number): string {
+  const detail = linked === 0
+    ? 'aucun relié à une conversation'
+    : `dont ${linked} relié${linked > 1 ? 's' : ''} à ${linked > 1 ? 'des conversations' : 'une conversation'}`
+  return `${key} : ${plural(commits, 'commit')}, ${detail}`
+}
+
 function authorsLabel(titles: string[]): string {
   if (titles.length === 0) return 'Chantier du ticket'
   const [first, ...others] = titles
@@ -49,12 +56,12 @@ export function ConversationWorkspaceCard({ projectId, conversationId, onOpenCod
   if (!data) return null
   const ticket = data.ticket
   const own = data.total > 0
-  if (!own && !(ticket && ticket.total > 0)) return null
+  if (!own && !(ticket && (ticket.total > 0 || ticket.branchCommits > 0))) return null
 
   const repositories = (own ? data.repositories : ticket!.repositories).filter((repository) => repository.commits.length > 0)
   const title = own
     ? `${plural(data.total, 'commit')} sur ${plural(repositories.length, 'dépôt')}`
-    : `${ticket!.key} : ${plural(ticket!.total, 'commit')}, aucun dans cette conversation`
+    : ticketTitle(ticket!.key, Math.max(ticket!.branchCommits, ticket!.total), ticket!.total)
   const detail = own ? 'Chantier de la conversation' : authorsLabel(ticket!.conversations.map((item) => item.title))
   const target = own ? 'conversation' : 'ticket'
 

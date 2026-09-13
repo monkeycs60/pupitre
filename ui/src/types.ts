@@ -926,6 +926,7 @@ export interface CodeTicketConversation {
 
 export interface CodeTicketCommits {
   key: string
+  branchCommits: number
   total: number
   repositories: CodeConversationRepository[]
   conversations: CodeTicketConversation[]

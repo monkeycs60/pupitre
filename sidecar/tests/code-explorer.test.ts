@@ -337,8 +337,11 @@ test("expose le chantier du ticket à une conversation du même ticket qui n'a r
     projectId, provider: "claude", model: "claude-opus-5", firstMessage: "autre", createdOnBranch: "feature/TECH-9999",
   }).id;
   const insert = db.query("INSERT INTO commit_links (commit_sha, project_id, conversation_id, created_at) VALUES (?, ?, ?, ?)");
+  git(repo, "checkout", "-q", "-b", "feature/TECH-24128");
   insert.run(commit(repo, "a.ts", "1\n", "TECH-24128 migration"), projectId, worker, new Date().toISOString());
   insert.run(commit(repo, "b.ts", "1\n", "TECH-24128 reprise"), projectId, worker, new Date().toISOString());
+  commit(repo, "d.ts", "1\n", "TECH-24128 fait hors Pupitre");
+  git(repo, "checkout", "-q", "main");
   insert.run(commit(repo, "c.ts", "1\n", "TECH-9999 ailleurs"), projectId, other, new Date().toISOString());
 
   const result = await explorer.conversationCommits(projectId, reader);
@@ -346,6 +349,7 @@ test("expose le chantier du ticket à une conversation du même ticket qui n'a r
   expect(result.total).toBe(0);
   expect(result.repositories).toEqual([]);
   expect(result.ticket?.key).toBe("TECH-24128");
+  expect(result.ticket?.branchCommits).toBe(3);
   expect(result.ticket?.total).toBe(2);
   expect(result.ticket?.repositories.map((item) => item.commits.map((entry) => entry.subject).sort())).toEqual([["TECH-24128 migration", "TECH-24128 reprise"]]);
   expect(result.ticket?.conversations.map((item) => [item.id, item.commits])).toEqual([[worker, 2]]);

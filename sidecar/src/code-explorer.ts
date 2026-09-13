@@ -178,6 +178,8 @@ export interface CodeTicketConversation {
 
 export interface CodeTicketCommits {
   key: string;
+  /** Commits portés par les branches du ticket, dépôt par dépôt, fusions et collègues compris. */
+  branchCommits: number;
   total: number;
   repositories: CodeConversationRepository[];
   conversations: CodeTicketConversation[];
@@ -648,6 +650,7 @@ export class CodeExplorerService {
       ticket: key
         ? {
           key,
+          branchCommits: await this.ticketBranchCommits(projectId, key),
           total: found.size,
           repositories: ticketRepositories,
           conversations: members
@@ -957,6 +960,27 @@ export class CodeExplorerService {
       .sort((left, right) => (right.updatedAt ?? "").localeCompare(left.updatedAt ?? ""));
   }
 
+  /** Même choix que l'état « chantier » de l'onglet Code : une source par dépôt, le worktree avant la branche. */
+  private async ticketBranchCommits(projectId: string, key: string): Promise<number> {
+    const rank = (source: CodeSource) => source.ref === null
+      ? (/-before$/i.test(source.path) ? 2 : source.branch === null ? 1 : 0)
+      : (source.ref === source.branch ? 3 : 4);
+    const chosen = new Map<string, CodeSource>();
+    for (const source of await this.sources(projectId)) {
+      if (source.main || ticketKeyOf(source.branch, source.path) !== key) continue;
+      const current = chosen.get(source.repositoryPath);
+      if (!current || rank(source) < rank(current)) chosen.set(source.repositoryPath, source);
+    }
+    const counts = await Promise.all([...chosen.values()].map(async (source) => {
+      const resolved = await this.resolveMatch(source).catch(() => null);
+      if (!resolved) return 0;
+      const { from, head } = await this.branchRange(resolved);
+      if (!from || !head) return 0;
+      return Number((await optionalGit(resolved.cwd, ["rev-list", "--count", `${from}..${head}`]))?.trim()) || 0;
+    }));
+    return counts.reduce((total, count) => total + count, 0);
+  }
+
   private async resolveSource(projectId: string, requested: string | null): Promise<ResolvedSource> {
     const sources = await this.sources(projectId);
     const match = !requested
@@ -967,6 +991,10 @@ export class CodeExplorerService {
     if (!match) {
       throw new CodeExplorerError(requested ? "état du code inconnu pour ce projet" : "aucun dépôt Git dans ce projet");
     }
+    return this.resolveMatch(match);
+  }
+
+  private async resolveMatch(match: CodeSource): Promise<ResolvedSource> {
     if (!match.ref) return { source: match, cwd: match.path, sha: null };
     const sha = (await optionalGit(match.repositoryPath, ["rev-parse", "--verify", "-q", "--end-of-options", `${match.ref}^{commit}`]))?.trim();
     if (!sha) throw new CodeExplorerError(`branche introuvable : ${match.branch}`);
