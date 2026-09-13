@@ -1712,12 +1712,129 @@ a.code-chip:hover {
 .code-commit-file-stat .is-added { color: var(--ok); }
 .code-commit-file-stat .is-removed { color: var(--danger); }
 
-.code-commit-diff {
-  max-height: 440px;
-  margin: 2px 0 10px;
+.code-commit-file.is-active .code-commit-file-name strong {
+  color: var(--accent-bright);
+}
+
+.code-commit-file.is-active {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.code-text-button:disabled {
+  color: var(--text-faint);
+  background: transparent;
+  cursor: default;
+}
+
+/* --- Diff dans le lecteur ------------------------------------------------ */
+
+.code-diff-view {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.code-diff-summary {
+  display: flex;
+  flex: none;
+  gap: 10px;
+  margin: 0;
+  padding: 5px var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.code-diff-summary .is-added { color: var(--ok); }
+.code-diff-summary .is-removed { color: var(--danger); }
+
+.code-diff {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: 20px;
+  background: var(--bg-workspace);
+}
+
+.code-diff-line {
+  display: flex;
+  height: 20px;
+}
+
+.code-diff-line.is-addition {
+  background: rgba(78, 201, 165, 0.1);
+}
+
+.code-diff-line.is-deletion {
+  background: rgba(242, 85, 90, 0.1);
+}
+
+.code-diff-line.is-hunk,
+.code-diff-line.is-meta {
+  background: var(--neutral-soft);
+}
+
+.code-diff-line.is-hunk .code-line-text,
+.code-diff-line.is-meta .code-line-text {
+  color: var(--text-faint);
+}
+
+.code-diff-number {
+  flex: none;
+  width: 46px;
+  padding-right: 10px;
+  color: var(--text-faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.code-diff-sign {
+  flex: none;
+  width: 18px;
+  color: var(--text-faint);
+  text-align: center;
+  user-select: none;
+}
+
+.code-diff-line.is-addition .code-diff-sign { color: var(--ok); }
+.code-diff-line.is-deletion .code-diff-sign { color: var(--danger); }
+
+.code-reader-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 8px;
+  color: var(--accent-bright);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--accent-soft);
+  border-radius: var(--r-full);
+}
+
+.code-reader-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: -4px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-full);
+  cursor: pointer;
+}
+
+.code-reader-chip button:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
 }
 
 /* --- Coloration syntaxique ---------------------------------------------- */

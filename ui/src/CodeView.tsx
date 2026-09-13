@@ -57,7 +57,7 @@ function writeStorage(key: string, value: string): void {
 
 function storedReaderMode(): CodeReaderMode {
   const stored = readStorage(READER_MODE_KEY)
-  return stored === 'blame' || stored === 'history' ? stored : 'code'
+  return stored === 'diff' || stored === 'blame' || stored === 'history' ? stored : 'code'
 }
 
 function singleGraphSummary(graph: SourceGraph): string {
@@ -84,6 +84,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
   const openCounter = useRef(0)
   const conversationId = conversation?.id ?? null
   const worktreePath = conversation?.worktree_path ?? null
+  const createdOnBranch = conversation?.created_on_branch ?? null
 
   const scopes = useMemo(() => buildCodeScopes(sources ?? []), [sources])
   const scope = scopes.find((item) => item.id === scopeId) ?? null
@@ -98,7 +99,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
         setSources(list)
         setScopeId((current) => {
           if (current && nextScopes.some((item) => item.id === current)) return current
-          const chosen = defaultCodeScope(nextScopes, conversationId, worktreePath)
+          const chosen = defaultCodeScope(nextScopes, conversationId, worktreePath, createdOnBranch)
           setBranchOnly(nextScopes.find((item) => item.id === chosen)?.kind === 'ticket')
           return chosen
         })
@@ -116,7 +117,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
       controller.abort()
       active = false
     }
-  }, [project.id, conversationId, worktreePath])
+  }, [project.id, conversationId, worktreePath, createdOnBranch])
 
   useEffect(() => {
     if (!scopeKey) return
@@ -274,12 +275,20 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     ))
   }
 
-  function openFileAt(display: string, line: number | null = null) {
+  function openFileAt(display: string, options: { line?: number | null, diffSha?: string | null, mode?: CodeReaderMode } = {}) {
     if (!scope) return
     const location = fromScopePath(scope, display)
     if (!location) return
     openCounter.current += 1
-    setOpenFile({ display, source: location.source, path: location.path, line, nonce: openCounter.current })
+    setOpenFile({
+      display,
+      source: location.source,
+      path: location.path,
+      line: options.line ?? null,
+      diffSha: options.diffSha ?? null,
+      nonce: openCounter.current,
+    })
+    if (options.mode) changeReaderMode(options.mode)
     setExpandedDirectories((current) => {
       const next = new Set(current)
       for (const directory of ancestorDirectories(display)) next.add(directory)
@@ -361,11 +370,21 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     sourcePath: selected.source,
     sha: selected.sha,
     repository: selectedRepository,
+    activePath: readerMode === 'diff' && openFile?.source === selected.source && openFile.diffSha === selected.sha ? openFile.path : null,
     ticketForConversation,
     onOpenConversation,
-    onOpenFile: (path: string) => openFileAt(toScopePath(scope, selected.source, path)),
+    onOpenDiff: (path: string) => openFileAt(toScopePath(scope, selected.source, path), { diffSha: selected.sha, mode: 'diff' }),
+    onOpenFile: (path: string) => openFileAt(toScopePath(scope, selected.source, path), {
+      mode: readerMode === 'blame' ? 'blame' : 'code',
+    }),
     onSelectCommit: (sha: string) => setSelected({ sha, source: selected.source }),
   } : null
+
+  function selectCommitFromReader(sha: string) {
+    if (!openFile) return
+    setSelected({ sha, source: openFile.source })
+    setOpenFile({ ...openFile, diffSha: sha })
+  }
 
   return <div className={`code-view${graphExpanded ? ' is-graph-expanded' : ''}`}>
     <aside className="code-sidebar" hidden={graphExpanded} aria-label="Fichiers">
@@ -384,7 +403,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
         searchRef={searchRef}
         searchText={searchText}
         onToggleDirectory={toggleDirectory}
-        onOpenFile={openFileAt}
+        onOpenFile={(path, line) => openFileAt(path, { line: line ?? null })}
         onOpenRepository={openRepository}
       />
     </aside>
@@ -398,7 +417,8 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
         selectedSha={selected?.sha ?? null}
         active={!graphExpanded}
         onModeChange={changeReaderMode}
-        onSelectCommit={(sha) => openFile && setSelected({ sha, source: openFile.source })}
+        onSelectCommit={selectCommitFromReader}
+        onClearDiffCommit={() => openFile && setOpenFile({ ...openFile, diffSha: null })}
         onOpenFile={(path) => openFileAt(path)}
         onOpenConversation={onOpenConversation}
       />

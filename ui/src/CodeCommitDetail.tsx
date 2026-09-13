@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { getCodeCommit, getCodeDiff } from './api'
+import { getCodeCommit } from './api'
 import { absoluteCodeDate, codeErrorMessage, relativeCodeDate, splitCodePath } from './codeFormat'
 import { parseCodeRefs } from './codeGraphLayout'
-import { DiffViewer } from './DiffViewer'
 import { ExternalLink } from './externalLink'
 import { FileTypeIcon } from './FileTypeIcon'
 import { ProviderMark } from './ProviderMark'
@@ -15,8 +14,11 @@ interface CodeCommitDetailProps {
   sha: string
   repository: { label: string, index: number } | null
   variant: 'docked' | 'side'
+  /** Fichier du commit dont le diff est ouvert au centre. */
+  activePath: string | null
   ticketForConversation: (conversationId: string) => TicketLinks | null
   onOpenConversation: (conversationId: string) => void
+  onOpenDiff: (path: string) => void
   onOpenFile: (path: string) => void
   onSelectCommit: (sha: string) => void
   onClose?: () => void
@@ -40,15 +42,16 @@ export function CodeCommitDetail({
   sha,
   repository,
   variant,
+  activePath,
   ticketForConversation,
   onOpenConversation,
+  onOpenDiff,
   onOpenFile,
   onSelectCommit,
   onClose,
 }: CodeCommitDetailProps) {
   const [loaded, setLoaded] = useState<{ detail: CommitDetailData | null, error: string | null } | null>(null)
   const [bodyOpen, setBodyOpen] = useState(false)
-  const [diffs, setDiffs] = useState<Record<string, { diff: string | null, error: string | null }>>({})
 
   useEffect(() => {
     const controller = new AbortController()
@@ -59,19 +62,6 @@ export function CodeCommitDetail({
       })
     return () => controller.abort()
   }, [projectId, sourcePath, sha])
-
-  function toggleDiff(path: string) {
-    if (diffs[path]) {
-      setDiffs((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== path)))
-      return
-    }
-    setDiffs((current) => ({ ...current, [path]: { diff: null, error: null } }))
-    getCodeDiff(projectId, sourcePath, sha, path)
-      .then(({ diff }) => setDiffs((current) => (current[path] ? { ...current, [path]: { diff, error: null } } : current)))
-      .catch((reason: unknown) => setDiffs((current) => (
-        current[path] ? { ...current, [path]: { diff: null, error: codeErrorMessage(reason) } } : current
-      )))
-  }
 
   const closeButton = onClose ? <button type="button" className="code-icon-button" title="Fermer le détail" aria-label="Fermer le détail du commit" onClick={onClose}>
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
@@ -170,15 +160,15 @@ export function CodeCommitDetail({
     <ul className="code-commit-files">
       {detail.files.map((file) => {
         const { directory, name } = splitCodePath(file.path)
-        const diff = diffs[file.path]
-        return <li className="code-commit-file" key={file.path}>
+        const active = file.path === activePath
+        return <li className={`code-commit-file${active ? ' is-active' : ''}`} key={file.path}>
           <div className="code-commit-file-main">
             <button
               type="button"
               className="code-commit-file-name"
-              disabled={file.status === 'D'}
-              title={file.status === 'D' ? 'Fichier supprimé par ce commit' : `Ouvrir ${file.path}`}
-              onClick={() => onOpenFile(file.path)}
+              aria-current={active ? 'true' : undefined}
+              title={`Voir le diff de ${file.path} dans ce commit`}
+              onClick={() => onOpenDiff(file.path)}
             >
               <FileTypeIcon path={file.path} />
               <strong>{name}</strong>
@@ -190,20 +180,12 @@ export function CodeCommitDetail({
             </span>
             <button
               type="button"
-              className={`code-text-button${diff ? ' is-active' : ''}`}
-              aria-expanded={Boolean(diff)}
-              onClick={() => toggleDiff(file.path)}
-            >Diff</button>
+              className="code-text-button"
+              disabled={file.status === 'D'}
+              title={file.status === 'D' ? 'Fichier supprimé par ce commit' : 'Ouvrir la version courante du fichier'}
+              onClick={() => onOpenFile(file.path)}
+            >Courant</button>
           </div>
-          {diff ? <div className="code-commit-diff">
-            {diff.error
-              ? <p className="code-empty-note is-error">{diff.error}</p>
-              : diff.diff === null
-                ? <div className="code-skeleton" />
-                : diff.diff.trim() === ''
-                  ? <p className="code-empty-note">Aucune différence textuelle.</p>
-                  : <DiffViewer diff={diff.diff} label={`Diff de ${file.path}`} />}
-          </div> : null}
         </li>
       })}
     </ul>

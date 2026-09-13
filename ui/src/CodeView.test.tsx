@@ -82,6 +82,9 @@ function mockApi(fixture: Fixture): string[] {
     if (url.includes('/code/files')) return Response.json(fixture.files[sourcePath])
     if (url.includes('/code/graph')) return Response.json(fixture.graphs[sourcePath])
     if (url.includes('/code/commit')) return Response.json(fixture.detail)
+    if (url.includes('/code/diff')) {
+      return Response.json({ diff: 'diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1,2 +1,2 @@\n-export const a = 0\n+export const a = 1\n export const b = 2\n' })
+    }
     if (url.includes('/code/file')) {
       return Response.json({ path: params.get('path'), ref: 'worktree', content: 'export const a = 1\nexport const b = 2\n', size: 38, binary: false, tooLarge: false })
     }
@@ -127,6 +130,16 @@ test('ouvre le worktree de la conversation, lit un fichier et remonte à la conv
   expect(await screen.findByText('Produit par une conversation')).toBeTruthy()
   fireEvent.click(screen.getByTitle('Ouvrir la conversation'))
   expect(onOpenConversation).toHaveBeenCalledWith(baseConversation.id)
+
+  fireEvent.click(screen.getByTitle('Voir le diff de src/app.ts dans ce commit'))
+  await waitFor(() => expect(document.querySelectorAll('.code-diff-line.is-addition')).toHaveLength(1))
+  expect(document.querySelectorAll('.code-diff-line.is-deletion')).toHaveLength(1)
+  expect(screen.getByRole('tab', { name: 'Diff' }).getAttribute('aria-selected')).toBe('true')
+  expect(document.querySelector('.code-reader-chip')?.textContent).toContain('Commit bbbbbbbb')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Courant' }))
+  await waitFor(() => expect(document.querySelectorAll('.code-line')).toHaveLength(2))
+  expect(screen.getByRole('tab', { name: 'Code' }).getAttribute('aria-selected')).toBe('true')
 })
 
 test('agrandit le graphe en table puis revient au fichier ouvert avec Échap', async () => {

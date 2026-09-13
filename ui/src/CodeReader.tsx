@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { getCodeBlame, getCodeFile, getCodeHistory } from './api'
+import { getCodeBlame, getCodeDiff, getCodeFile, getCodeHistory } from './api'
+import { CodeDiffView } from './CodeDiffView'
 import { absoluteCodeDate, codeErrorMessage, DIRTY_LABELS, relativeCodeDate, splitCodePath } from './codeFormat'
 import { highlightCode, plainCodeLines } from './codeHighlight'
 import { FileTypeIcon } from './FileTypeIcon'
@@ -7,7 +8,7 @@ import { ProviderMark } from './ProviderMark'
 import { useVirtualWindow } from './useVirtualWindow'
 import type { CodeBlame, CodeBlameGroup, CodeCommitSummary, CodeDirtyStatus, CodeFile } from './types'
 
-export type CodeReaderMode = 'code' | 'blame' | 'history'
+export type CodeReaderMode = 'code' | 'diff' | 'blame' | 'history'
 
 export interface CodeOpenFile {
   /** Chemin affiché, préfixé par le dépôt quand plusieurs dépôts sont ouverts. */
@@ -15,6 +16,8 @@ export interface CodeOpenFile {
   source: string
   path: string
   line: number | null
+  /** Commit dont le mode Diff montre les changements ; `null` : modifications non commitées. */
+  diffSha: string | null
   nonce: number
 }
 
@@ -22,6 +25,7 @@ const LINE_HEIGHT = 20
 
 const MODES: ReadonlyArray<{ id: CodeReaderMode, label: string }> = [
   { id: 'code', label: 'Code' },
+  { id: 'diff', label: 'Diff' },
   { id: 'blame', label: 'Blame' },
   { id: 'history', label: 'Historique' },
 ]
@@ -41,6 +45,7 @@ interface CodeReaderProps {
   active: boolean
   onModeChange: (mode: CodeReaderMode) => void
   onSelectCommit: (sha: string) => void
+  onClearDiffCommit: () => void
   onOpenFile: (path: string) => void
   onOpenConversation: (conversationId: string) => void
 }
@@ -126,15 +131,31 @@ export function CodeReader({
   active,
   onModeChange,
   onSelectCommit,
+  onClearDiffCommit,
   onOpenFile,
   onOpenConversation,
 }: CodeReaderProps) {
   const sourcePath = openFile?.source ?? null
   const path = openFile?.path ?? null
   const displayPath = openFile?.display ?? null
+  const diffSha = openFile?.diffSha ?? null
   const nonce = openFile?.nonce ?? 0
   const key = sourcePath && path ? `${sourcePath}\n${path}` : null
+  const diffKey = key ? `${key}\n${diffSha ?? ''}` : null
   const [file, setFile] = useState<Keyed<CodeFile> | null>(null)
+  const [diff, setDiff] = useState<Keyed<string> | null>(null)
+
+  useEffect(() => {
+    if (mode !== 'diff' || !sourcePath || !path) return
+    const requestKey = `${sourcePath}\n${path}\n${diffSha ?? ''}`
+    const controller = new AbortController()
+    getCodeDiff(projectId, sourcePath, diffSha, path, controller.signal)
+      .then(({ diff: value }) => setDiff({ key: requestKey, value, error: null }))
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) setDiff({ key: requestKey, value: null, error: codeErrorMessage(reason) })
+      })
+    return () => controller.abort()
+  }, [mode, projectId, sourcePath, path, diffSha, nonce])
   const [blame, setBlame] = useState<Keyed<CodeBlame> | null>(null)
   const [history, setHistory] = useState<Keyed<CodeCommitSummary[]> | null>(null)
   const [highlighted, setHighlighted] = useState<{ content: string, lines: string[] } | null>(null)
@@ -250,6 +271,19 @@ export function CodeReader({
         </section> : null}
       </div>
     }
+    if (mode === 'diff' && path) {
+      const currentDiff = diff?.key === diffKey ? diff : null
+      if (!currentDiff) return <div className="code-skeleton" aria-label="Chargement du diff" />
+      if (currentDiff.error) return <p className="code-reader-message is-error">{currentDiff.error}</p>
+      if (!currentDiff.value) {
+        return <p className="code-reader-message">
+          {diffSha
+            ? 'Ce commit ne modifie pas ce fichier.'
+            : 'Aucune modification non commitée sur ce fichier. Choisis un commit dans l’historique, le blame ou le graphe pour afficher son diff.'}
+        </p>
+      }
+      return <CodeDiffView diff={currentDiff.value} path={path} />
+    }
     if (!currentFile) return <div className="code-skeleton" aria-label="Chargement du fichier" />
     if (currentFile.error) return <p className="code-reader-message is-error">{currentFile.error}</p>
     const data = currentFile.value!
@@ -325,6 +359,12 @@ export function CodeReader({
           <strong>{name}</strong>
         </nav>
         {status ? <span className={`code-dirty-badge is-${statusClass(status)}`}>{DIRTY_LABELS[status]}</span> : null}
+        {mode === 'diff' ? <span className="code-reader-chip" title={diffSha ?? 'Modifications non commitées du worktree'}>
+          {diffSha ? `Commit ${diffSha.slice(0, 8)}` : 'Non commité'}
+          {diffSha ? <button type="button" title="Revenir aux modifications non commitées" aria-label="Revenir aux modifications non commitées" onClick={onClearDiffCommit}>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+          </button> : null}
+        </span> : null}
         {mode === 'blame' && !currentBlame ? <span className="code-reader-status">Blame en cours…</span> : null}
         {currentBlame?.error ? <span className="code-reader-status is-error" title={currentBlame.error}>Blame indisponible</span> : null}
       </> : <span className="code-reader-placeholder">Lecteur</span>}

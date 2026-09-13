@@ -1263,7 +1263,7 @@ export function getCodeCommit(projectId: string, source: string, sha: string, si
 export function getCodeDiff(
   projectId: string,
   source: string,
-  sha: string,
+  sha: string | null,
   path: string,
   signal?: AbortSignal,
 ): Promise<{ diff: string }> {

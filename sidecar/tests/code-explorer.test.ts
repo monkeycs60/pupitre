@@ -212,6 +212,16 @@ test("détaille un commit avec ses fichiers, renommages compris, et son diff par
   expect(diff).toContain("+nouveau");
 });
 
+test("sans commit, le diff d'un fichier montre ses modifications non commitées, fichier non suivi compris", async () => {
+  commit(repo, "src/app.ts", "const a = 1\n", "app");
+  writeFileSync(join(repo, "src/app.ts"), "const a = 2\n");
+  writeFileSync(join(repo, "draft.ts"), "brouillon\n");
+
+  expect((await explorer.diff(projectId, repo, "", "src/app.ts")).diff).toContain("+const a = 2");
+  expect((await explorer.diff(projectId, repo, "", "draft.ts")).diff).toContain("+brouillon");
+  expect((await explorer.diff(projectId, repo, "", "README.md")).diff).toBe("");
+});
+
 test("détaille le commit racine", async () => {
   const [first] = (await explorer.graph(projectId, repo)).commits.slice(-1);
 

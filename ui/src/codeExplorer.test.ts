@@ -81,6 +81,8 @@ test('un ticket présent dans plusieurs dépôts devient un chantier multi-dép�
   expect(scopes.filter((scope) => scope.kind === 'source')).toHaveLength(sources.length)
 
   expect(defaultCodeScope(scopes, 'c1', null)).toBe('ticket:TECH-25008')
+  expect(defaultCodeScope(scopes, 'c-gone', '/deleted/worktrees/feature-TECH-25008', 'main')).toBe('ticket:TECH-25008')
+  expect(defaultCodeScope(scopes, 'c-gone', '/deleted/worktrees/feature-TECH-24986', 'main')).toBe('source:/mono/apps/api-tech24986')
   expect(defaultCodeScope(scopes, 'c-root', null)).toBe('source:/mono')
   expect(defaultCodeScope(scopes, null, null)).toBe('source:/mono')
 

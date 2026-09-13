@@ -535,8 +535,16 @@ export class CodeExplorerService {
 
   async diff(projectId: string, source: string | null, sha: string, path: string): Promise<{ diff: string }> {
     const cwd = await this.sourcePath(projectId, source);
-    if (!SHORT_SHA.test(sha)) throw new CodeExplorerError(`référence Git invalide : ${sha}`);
     const safe = this.safePath(cwd, path);
+    if (!sha) {
+      const tracked = await optionalGit(cwd, ["diff", "--no-ext-diff", "-M", "HEAD", "--", safe]);
+      if (tracked) return { diff: tracked };
+      const untracked = await optionalGit(cwd, ["ls-files", "--others", "--exclude-standard", "--", safe]);
+      if (!untracked?.trim()) return { diff: "" };
+      const added = await runGit(cwd, ["diff", "--no-index", "--no-ext-diff", "--", "/dev/null", safe], { accept: [0, 1] });
+      return { diff: added.stdout };
+    }
+    if (!SHORT_SHA.test(sha)) throw new CodeExplorerError(`référence Git invalide : ${sha}`);
     const { stdout } = await runGit(cwd, [
       "show", "--no-ext-diff", "--diff-merges=first-parent", "--root", "-M", "--format=", sha, "--", safe,
     ]);

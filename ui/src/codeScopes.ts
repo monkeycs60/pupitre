@@ -75,17 +75,38 @@ export function buildCodeScopes(sources: CodeSource[]): CodeScope[] {
   return [...tickets, ...overview, ...single]
 }
 
-export function defaultCodeScope(scopes: CodeScope[], conversationId: string | null, worktreePath: string | null): string | null {
+/** Clé de ticket d'une conversation, lue sur sa branche ou le dossier de son worktree (qui peut ne plus exister). */
+export function conversationTicketKey(worktreePath: string | null, branch: string | null): string | null {
+  const fromBranch = branch?.match(BRANCH_TICKET)
+  if (fromBranch) return `${fromBranch[1]!.toUpperCase()}-${fromBranch[2]}`
+  const fromPath = (worktreePath?.split('/').pop() ?? '').match(PATH_TICKET)
+  return fromPath ? `${fromPath[1]!.toUpperCase()}-${fromPath[2]}` : null
+}
+
+export function defaultCodeScope(
+  scopes: CodeScope[],
+  conversationId: string | null,
+  worktreePath: string | null,
+  branch: string | null = null,
+): string | null {
   const singles = scopes.filter((scope) => scope.kind === 'source').map((scope) => scope.sources[0]!)
   const chosen = conversationId
     ? singles.find((source) => !source.main && source.conversations.some((item) => item.id === conversationId))
       ?? singles.find((source) => source.path === worktreePath)
-      ?? singles.find((source) => source.conversations.some((item) => item.id === conversationId))
     : undefined
   if (chosen) {
     const ticket = scopes.find((scope) => scope.kind === 'ticket' && scope.sources.some((source) => source.path === chosen.path))
     return ticket?.id ?? `source:${chosen.path}`
   }
+  const key = conversationId ? conversationTicketKey(worktreePath, branch) : null
+  if (key) {
+    const ticket = scopes.find((scope) => scope.kind === 'ticket' && scope.label === key)
+    if (ticket) return ticket.id
+    const sameTicket = singles.find((source) => !source.main && ticketKeyOfSource(source) === key)
+    if (sameTicket) return `source:${sameTicket.path}`
+  }
+  const holder = conversationId ? singles.find((source) => source.conversations.some((item) => item.id === conversationId)) : undefined
+  if (holder) return `source:${holder.path}`
   return scopes.find((scope) => scope.kind === 'source')?.id ?? null
 }
 
