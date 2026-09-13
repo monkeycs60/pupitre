@@ -10,6 +10,14 @@ import type {
   GitCommitResult,
   GitPushCommit,
   GitSnapshot,
+  CodeBlame,
+  CodeCommitDetail,
+  CodeCommitSummary,
+  CodeFile,
+  CodeFileList,
+  CodeGraphPage,
+  CodeSearchResult,
+  CodeSource,
   FleetItem,
   IntegrationType,
   SearchResult,
@@ -1199,6 +1207,71 @@ export function commitProjectGit(
     `/api/projects/${routeId(projectId)}/git/commit`,
     jsonPost(input),
   )
+}
+
+function codeUrl(
+  projectId: string,
+  action: string,
+  params: Record<string, string | number | null | undefined>,
+): string {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== null && value !== undefined && value !== '') query.set(key, String(value))
+  }
+  const suffix = query.toString()
+  return `/api/projects/${routeId(projectId)}/code/${action}${suffix ? `?${suffix}` : ''}`
+}
+
+export function listCodeSources(projectId: string, signal?: AbortSignal): Promise<CodeSource[]> {
+  return fetchJson(codeUrl(projectId, 'sources', {}), { signal })
+}
+
+export function listCodeFiles(projectId: string, source: string, signal?: AbortSignal): Promise<CodeFileList> {
+  return fetchJson(codeUrl(projectId, 'files', { source }), { signal })
+}
+
+export function getCodeFile(
+  projectId: string,
+  source: string,
+  path: string,
+  signal?: AbortSignal,
+): Promise<CodeFile> {
+  return fetchJson(codeUrl(projectId, 'file', { source, path }), { signal })
+}
+
+export function getCodeBlame(projectId: string, source: string, path: string, signal?: AbortSignal): Promise<CodeBlame> {
+  return fetchJson(codeUrl(projectId, 'blame', { source, path }), { signal })
+}
+
+export function getCodeHistory(
+  projectId: string,
+  source: string,
+  path: string,
+  signal?: AbortSignal,
+): Promise<CodeCommitSummary[]> {
+  return fetchJson(codeUrl(projectId, 'history', { source, path }), { signal })
+}
+
+export function getCodeGraph(projectId: string, source: string, skip: number, signal?: AbortSignal): Promise<CodeGraphPage> {
+  return fetchJson(codeUrl(projectId, 'graph', { source, skip }), { signal })
+}
+
+export function getCodeCommit(projectId: string, source: string, sha: string, signal?: AbortSignal): Promise<CodeCommitDetail> {
+  return fetchJson(codeUrl(projectId, 'commit', { source, sha }), { signal })
+}
+
+export function getCodeDiff(
+  projectId: string,
+  source: string,
+  sha: string,
+  path: string,
+  signal?: AbortSignal,
+): Promise<{ diff: string }> {
+  return fetchJson(codeUrl(projectId, 'diff', { source, sha, path }), { signal })
+}
+
+export function searchCode(projectId: string, source: string, q: string, signal?: AbortSignal): Promise<CodeSearchResult> {
+  return fetchJson(codeUrl(projectId, 'search', { source, q }), { signal })
 }
 
 export function getReview(reviewId: string, signal?: AbortSignal): Promise<Review> {

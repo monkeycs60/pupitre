@@ -80,6 +80,22 @@
   --viz-7: #9085e9;
   --viz-8: #e66767;
 
+  /* Coloration syntaxique du lecteur de code */
+  --code-keyword: #b3a8ff;
+  --code-builtin: #7ad7e0;
+  --code-type: #e9c46a;
+  --code-number: #f0b67a;
+  --code-string: #9fdcc6;
+  --code-regexp: #f7a1c4;
+  --code-comment: #85828d;
+  --code-meta: #9a97a3;
+  --code-title: #8fc1ff;
+  --code-tag: #f28b8b;
+  --code-attr: #c4bbff;
+  --code-property: #d6d4dc;
+  --code-variable: #e9e8ed;
+  --code-punct: #b5b2bd;
+
   /* Rayons */
   --r-xs: 3px;
   --r-sm: 5px;

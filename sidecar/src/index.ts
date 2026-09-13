@@ -23,6 +23,7 @@ import { ReviewRunner } from "./reviews";
 import { DebriefStore } from "./stores/debriefs";
 import { DebriefRunner, generateWithAdapters } from "./debriefs";
 import { GitProjectService } from "./git";
+import { CodeExplorerService } from "./code-explorer";
 import { TestingStore } from "./stores/testing";
 import { TesterRunner } from "./testing";
 import { SkillInventory } from "./skills";
@@ -112,6 +113,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     (input) => generateWithAdapters(input, quotas),
   );
   const git = new GitProjectService(db, projects);
+  const codeExplorer = new CodeExplorerService(db, projects);
   const changelog = new ChangelogService(
     new ChangelogStore(db), projects, domains,
     (input) => generateWithAdapters(input, quotas),
@@ -298,6 +300,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     quotaRefresher,
     authenticateQuotaProvider,
     subtasks,
+    codeExplorer,
     presets,
     settings,
     reviews,

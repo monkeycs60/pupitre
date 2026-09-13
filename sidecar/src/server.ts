@@ -34,6 +34,7 @@ import {
 } from "./debriefs";
 import { DESIGN_URL, isResumableDesignUrl, probeDesignReachability } from "./design";
 import { GitProjectError, type GitProjectService } from "./git";
+import { CodeExplorerError, type CodeExplorerService } from "./code-explorer";
 import {
   TesterBusyError,
   TestScopeAlreadyRunningError,
@@ -145,6 +146,7 @@ export interface ServerDeps {
   reviews: ReviewRunner;
   debriefs: DebriefRunner;
   git: GitProjectService;
+  codeExplorer?: CodeExplorerService;
   testers: TesterRunner;
   skills: SkillInventory;
   skillComposer: SkillComposer;
@@ -1516,6 +1518,35 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(404, "projet ou skill inconnu");
           }
           return empty(204);
+        }
+
+        const codeAction = pathname.match(
+          /^\/api\/projects\/[^/]+\/code\/(sources|files|file|blame|history|graph|commit|diff|search)$/,
+        )?.[1];
+        if (request.method === "GET" && codeAction !== undefined) {
+          const codeProjectId = routeId(pathname, /^\/api\/projects\/([^/]+)\/code\/[a-z]+$/)!;
+          if (!deps.projects.get(codeProjectId)) throw new HttpError(404, "projet inconnu");
+          if (!deps.codeExplorer) throw new HttpError(503, "explorateur de code indisponible");
+          const explorer = deps.codeExplorer;
+          const source = url.searchParams.get("source");
+          const path = url.searchParams.get("path") ?? "";
+          const sha = url.searchParams.get("sha") ?? "";
+          try {
+            switch (codeAction) {
+              case "sources": return json(await explorer.sources(codeProjectId));
+              case "files": return json(await explorer.files(codeProjectId, source));
+              case "file": return json(await explorer.file(codeProjectId, source, path, url.searchParams.get("ref")));
+              case "blame": return json(await explorer.blame(codeProjectId, source, path));
+              case "history": return json(await explorer.history(codeProjectId, source, path));
+              case "graph": return json(await explorer.graph(codeProjectId, source, Number(url.searchParams.get("skip") ?? 0)));
+              case "commit": return json(await explorer.commit(codeProjectId, source, sha));
+              case "diff": return json(await explorer.diff(codeProjectId, source, sha, path));
+              default: return json(await explorer.search(codeProjectId, source, url.searchParams.get("q") ?? ""));
+            }
+          } catch (error) {
+            if (error instanceof CodeExplorerError) throw new HttpError(400, error.message);
+            throw error;
+          }
         }
 
         const projectGitDiffId = routeId(

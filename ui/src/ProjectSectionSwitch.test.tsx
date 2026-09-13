@@ -25,7 +25,7 @@ afterEach(() => {
   globalThis.WebSocket = DefaultSocket
 })
 
-test('rend six destinations et les parcourt au clavier', async () => {
+test('rend sept destinations et les parcourt au clavier', async () => {
   globalThis.fetch = mock(async (input) => Response.json(String(input).includes('/sentry')
     ? { issues: [] }
     : { integrations: [], tickets: [] })) as typeof fetch
@@ -42,9 +42,9 @@ test('rend six destinations et les parcourt au clavier', async () => {
   await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled())
 
   const tabs = screen.getAllByRole('tab')
-  expect(tabs).toHaveLength(6)
+  expect(tabs).toHaveLength(7)
   expect(tabs.map((tab) => tab.getAttribute('aria-label'))).toEqual([
-    'Conversation', 'Tickets', 'Sentry', 'Changelog', 'Environnements', 'Tâches 2',
+    'Conversation', 'Tickets', 'Sentry', 'Changelog', 'Environnements', 'Tâches 2', 'Code',
   ])
 
   fireEvent.keyDown(screen.getByRole('tab', { name: 'Conversation' }), { key: 'ArrowRight' })

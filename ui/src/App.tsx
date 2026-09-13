@@ -79,6 +79,7 @@ const ProgressView = lazy(() => import('./ProgressView').then((module) => ({ def
 const AppSettingsView = lazy(() => import('./AppSettingsView').then((module) => ({ default: module.AppSettingsView })))
 const DesignView = lazy(() => import('./DesignView').then((module) => ({ default: module.DesignView })))
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
+const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })))
 
 const DEFAULT_SIDEBAR_WIDTH = 296
 const MIN_SIDEBAR_WIDTH = 200
@@ -1026,7 +1027,15 @@ function App() {
                 />
               </div>
             </header>
-            {renderProjectDashboard()}
+            {projectSurface.section === 'code'
+              ? <CodeView
+                key={`code-${selectedProject.id}`}
+                project={selectedProject}
+                conversation={selectedConversation}
+                ticketLinks={ticketLinks}
+                onOpenConversation={(conversationId) => void handleGitConversationSelect(conversationId)}
+              />
+              : renderProjectDashboard()}
           </>
         )
         : selectedConversation === null && !isCreatingConversation ? (

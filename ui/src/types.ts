@@ -814,6 +814,104 @@ export interface GitCommitResult {
   paths: string[]
 }
 
+export interface CodeConversationLink {
+  id: string
+  title: string
+  provider: Provider
+}
+
+export interface CodeSource {
+  path: string
+  repositoryPath: string
+  repositoryLabel: string
+  branch: string | null
+  head: string | null
+  detached: boolean
+  main: boolean
+  conversations: CodeConversationLink[]
+}
+
+export type CodeDirtyStatus = 'M' | 'A' | 'D' | 'R' | '?'
+
+export interface CodeFileList {
+  paths: string[]
+  dirty: Array<{ path: string, status: CodeDirtyStatus }>
+  truncated: boolean
+}
+
+export interface CodeFile {
+  path: string
+  ref: string
+  content: string | null
+  size: number
+  binary: boolean
+  tooLarge: boolean
+}
+
+export interface CodeBlameGroup {
+  sha: string
+  start: number
+  count: number
+  author: string
+  authoredAt: string | null
+  summary: string
+  uncommitted: boolean
+  conversations: CodeConversationLink[]
+}
+
+export interface CodeBlame {
+  path: string
+  lineCount: number
+  groups: CodeBlameGroup[]
+}
+
+export interface CodeCommitSummary {
+  sha: string
+  parents: string[]
+  refs: string[]
+  author: string
+  authoredAt: string
+  subject: string
+  conversations: CodeConversationLink[]
+}
+
+export interface CodeGraphPage {
+  head: string | null
+  currentBranch: string | null
+  base: string | null
+  focus: string[]
+  commits: CodeCommitSummary[]
+  skip: number
+  hasMore: boolean
+}
+
+export interface CodeCommitFile {
+  path: string
+  previousPath: string | null
+  status: string
+  added: number | null
+  removed: number | null
+}
+
+export interface CodeCommitDetail extends CodeCommitSummary {
+  email: string
+  body: string
+  files: CodeCommitFile[]
+  filesTruncated: boolean
+}
+
+export interface CodeSearchMatch {
+  path: string
+  line: number
+  text: string
+}
+
+export interface CodeSearchResult {
+  query: string
+  matches: CodeSearchMatch[]
+  truncated: boolean
+}
+
 export type TestScopeStatus = 'pending' | 'running' | 'passed' | 'failed'
 
 export interface TestMethod {

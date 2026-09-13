@@ -11,6 +11,7 @@ const ICONS: Record<ProjectSection, ReactNode> = {
   sentry: <path d="M8 2.5 13.5 12H10a2 2 0 0 0-2-2 2 2 0 0 0-2 2H2.5Z" />,
   changelog: <><path d="M4 4.2A5 5 0 1 1 3 9" /><path d="M4 1.8v2.8H1.2M8 5v3l2 1.2" /></>,
   environments: <><circle cx="8" cy="3" r="1.5" /><circle cx="3.5" cy="12" r="1.5" /><circle cx="12.5" cy="12" r="1.5" /><path d="M8 4.5v3M3.5 10.5V8h9v2.5" /></>,
+  code: <path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5" />,
 }
 
 interface ProjectSectionSwitchProps {
