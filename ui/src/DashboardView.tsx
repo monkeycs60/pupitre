@@ -17,6 +17,7 @@ import { useDashboard } from './useDashboard'
 import { SentryInbox } from './SentryInbox'
 import { ExternalLink } from './externalLink'
 import { useNow } from './useNow'
+import { PROJECT_SECTIONS, projectSectionStorageKey, storedProjectSection, type ProjectSection } from './projectSections'
 
 interface DashboardViewProps {
   embedded?: boolean
@@ -29,9 +30,13 @@ interface DashboardViewProps {
   todoPanelRequest?: number
   onCreateTodoFromTicket?: (ticket: TicketRow) => void
   onRefreshTodos?: () => void
+  activeSection?: ProjectSection
+  onSectionChange?: (section: ProjectSection) => void
+  showSectionNavigation?: boolean
+  sectionOnly?: boolean
 }
 
-type DashboardTab = 'todos' | 'tickets' | 'sentry' | 'changelog' | 'environments'
+type DashboardTab = ProjectSection
 
 const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
   { id: 'todos', label: 'Tâches' },
@@ -52,12 +57,11 @@ const PROJECT_SECTION_ICONS: Record<DashboardTab, ReactNode> = {
 }
 
 function dashboardTabStorageKey(projectId: string): string {
-  return `pupitre:dashboard-tab:${projectId}`
+  return projectSectionStorageKey(projectId)
 }
 
 function storedDashboardTab(projectId: string): DashboardTab {
-  const stored = window.localStorage.getItem(dashboardTabStorageKey(projectId))
-  return DASHBOARD_TABS.some((tab) => tab.id === stored) ? stored as DashboardTab : 'todos'
+  return storedProjectSection(projectId)
 }
 
 const INTEGRATION_LABEL: Record<string, string> = {
@@ -203,6 +207,10 @@ export function DashboardView({
   onCreateTodoFromTicket,
   onRefreshTodos,
   embedded = false,
+  activeSection,
+  onSectionChange,
+  showSectionNavigation = embedded,
+  sectionOnly = false,
 }: DashboardViewProps) {
   const { data, connected, error } = useDashboard(project.id)
   const [openConversations, setOpenConversations] = useState<Record<string, boolean>>({})
@@ -235,7 +243,7 @@ export function DashboardView({
   const hasSentry = data?.integrations.some((integration) => integration.type === 'sentry') ?? false
   const hasTicketIntegration = data?.integrations.some((integration) => ['clickup', 'notion', 'gitlab'].includes(integration.type)) ?? false
   const visibleTabs = DASHBOARD_TABS.filter((tab) => (tab.id !== 'tickets' || hasTicketIntegration) && (tab.id !== 'sentry' || hasSentry))
-  const activeTab = visibleTabs.some((tab) => tab.id === tabSelection.tab) ? tabSelection.tab : 'todos'
+  const activeTab = activeSection ?? (visibleTabs.some((tab) => tab.id === tabSelection.tab) ? tabSelection.tab : 'todos')
   const degradedIntegrations = data?.integrations.filter((integration) => integration.status !== 'ok') ?? []
   const tableClassName = useMemo(
     () => `dashboard-table${hasGitlab ? ' dashboard-table--with-gitlab' : ''}`,
@@ -311,6 +319,7 @@ export function DashboardView({
   }
 
   function selectTab(tab: DashboardTab) {
+    onSectionChange?.(tab)
     setTabSelection({ projectId: project.id, request: todoPanelRequest, tab })
     window.localStorage.setItem(dashboardTabStorageKey(project.id), tab)
   }
@@ -373,13 +382,13 @@ export function DashboardView({
   return (
     <section
       className={`dashboard-view${embedded ? ' is-sectioned' : ''}`}
-      aria-label={embedded ? 'Suivi du projet' : undefined}
-      aria-labelledby={embedded ? undefined : 'dashboard-title'}
+      aria-label={embedded || sectionOnly ? 'Suivi du projet' : undefined}
+      aria-labelledby={embedded || sectionOnly ? undefined : 'dashboard-title'}
     >
-      {embedded ? (
+      {showSectionNavigation ? (
         <nav className="project-sections" aria-label="Sections du projet">
           <div className="project-sections-list" role="tablist" aria-orientation="horizontal" aria-label="Sections du projet">
-            {visibleTabs.map((section) => {
+            {(activeSection === undefined ? visibleTabs : PROJECT_SECTIONS).map((section) => {
               const count = sectionCounts[section.id] ?? 0
               return (
                 <button
@@ -418,7 +427,7 @@ export function DashboardView({
         </nav>
       ) : null}
       <div className="dashboard-scroll">
-        {embedded ? null : <header className="dashboard-header">
+        {embedded || sectionOnly ? null : <header className="dashboard-header">
           <div className="dashboard-heading">
             <h1 id="dashboard-title">Tableau de bord</h1>
             <p className="dashboard-baseline">{project.name}</p>
@@ -476,7 +485,7 @@ export function DashboardView({
           </p>
         ))}
 
-        {!embedded ? <div className="dashboard-tabs" role="tablist" aria-label="Sections du tableau de bord">
+        {!embedded && !sectionOnly ? <div className="dashboard-tabs" role="tablist" aria-label="Sections du tableau de bord">
           {visibleTabs.map((tab) => (
             <button
               key={tab.id}
@@ -495,13 +504,13 @@ export function DashboardView({
         </div> : null}
 
         {activeTab === 'todos' ? (
-          <section id="dashboard-panel-todos" role="tabpanel" aria-labelledby={embedded ? 'project-section-todos' : 'dashboard-tab-todos'} className="dashboard-todos">
+          <section id="dashboard-panel-todos" role="tabpanel" aria-label={sectionOnly ? 'Tâches' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-todos' : 'dashboard-tab-todos'} className="dashboard-todos">
             {typeof todoPanel === 'function' ? todoPanel(hasTicketIntegration) : todoPanel}
           </section>
         ) : null}
 
         {activeTab === 'tickets' ? (
-        <section id="dashboard-panel-tickets" role="tabpanel" aria-labelledby={embedded ? 'project-section-tickets' : 'dashboard-tab-tickets'} className="dashboard-section">
+        <section id="dashboard-panel-tickets" role="tabpanel" aria-label={sectionOnly ? 'Tickets' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-tickets' : 'dashboard-tab-tickets'} className="dashboard-section">
           <div className="dashboard-section-head">
             {embedded ? (
               <>
@@ -749,13 +758,13 @@ export function DashboardView({
         ) : null}
 
         {activeTab === 'sentry' ? (
-          <div id="dashboard-panel-sentry" role="tabpanel" aria-labelledby={embedded ? 'project-section-sentry' : 'dashboard-tab-sentry'}>
+          <div id="dashboard-panel-sentry" role="tabpanel" aria-label={sectionOnly ? 'Sentry' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-sentry' : 'dashboard-tab-sentry'}>
             <SentryInbox projectId={project.id} onConfigure={onOpenSettings} onConversationSelect={onConversationSelect} />
           </div>
         ) : null}
 
         {activeTab === 'changelog' ? (
-        <section id="dashboard-panel-changelog" role="tabpanel" aria-labelledby={embedded ? 'project-section-changelog' : 'dashboard-tab-changelog'} className="dashboard-section dashboard-changelog">
+        <section id="dashboard-panel-changelog" role="tabpanel" aria-label={sectionOnly ? 'Changelog' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-changelog' : 'dashboard-tab-changelog'} className="dashboard-section dashboard-changelog">
           <div className="dashboard-section-head">
             <div><h2 className="dashboard-section-title">Changelog</h2><p>{changelogTiming(changelogState, now)}</p></div>
             {changelogDomains.length > 1 ? <select aria-label="Filtrer le changelog par domaine" value={changelogDomain} onChange={(event) => setChangelogDomain(event.target.value)}><option value="">Tous les domaines</option>{changelogDomains.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : null}
@@ -765,7 +774,7 @@ export function DashboardView({
         ) : null}
 
         {activeTab === 'environments' ? (
-          <section id="dashboard-panel-environments" role="tabpanel" aria-labelledby={embedded ? 'project-section-environments' : 'dashboard-tab-environments'} className="dashboard-section">
+          <section id="dashboard-panel-environments" role="tabpanel" aria-label={sectionOnly ? 'Environnements' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-environments' : 'dashboard-tab-environments'} className="dashboard-section">
             <div className="dashboard-section-head">
               <h2 className="dashboard-section-title">Environnements</h2>
             </div>

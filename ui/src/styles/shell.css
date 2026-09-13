@@ -941,6 +941,131 @@ button.titlebar-instance {
   border-radius: var(--r-full);
 }
 
+.project-section-switch,
+.project-section-switch > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.project-section-switch > div {
+  gap: 2px;
+}
+
+.project-section-switch button {
+  display: inline-flex;
+  min-width: 28px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 7px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.project-section-switch button:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+.project-section-switch button.is-selected {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.project-section-switch svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.project-section-switch button:not(.is-selected) .project-section-label {
+  display: none;
+}
+
+.project-section-switch button:focus-visible,
+.project-layout-toggle:focus-visible,
+.project-surface-back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.project-layout-toggle {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 15px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.project-layout-toggle:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+.inspector-header > .project-layout-toggle {
+  align-self: center;
+  margin-left: auto;
+}
+
+.inspector-header > .project-layout-toggle + .inspector-close {
+  margin-left: 0;
+}
+
+.project-surface-back {
+  display: inline-flex;
+  max-width: 210px;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  cursor: pointer;
+}
+
+.project-surface-back:hover {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.project-surface-header .conversation-title-block h1 {
+  flex: 0 1 auto;
+}
+
+@media (max-width: 1180px) {
+  .project-section-switch .project-section-count {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .conversation-title-block > :not(h1):not(.project-surface-back) {
+    display: none;
+  }
+}
+
 .connection-banner {
   flex: none;
   padding: var(--space-1) var(--space-5);

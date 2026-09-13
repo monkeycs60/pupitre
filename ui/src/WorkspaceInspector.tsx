@@ -22,7 +22,7 @@ function maxInspectorWidth(viewport = window.innerWidth): number {
   return Math.max(MIN_INSPECTOR_WIDTH, Math.round(viewport * 0.9))
 }
 
-export function WorkspaceInspector({ view, onViewChange, onClose, children }: { view: InspectorView; onViewChange: (view: InspectorView) => void; onClose: () => void; children: ReactNode }) {
+export function WorkspaceInspector({ view, onViewChange, onClose, title, headerAction, children }: { view: InspectorView; onViewChange: (view: InspectorView) => void; onClose: () => void; title?: string; headerAction?: ReactNode; children: ReactNode }) {
   const [width, setWidth] = useState(() => {
     const stored = Number(localStorage.getItem('pupitre:inspector-width'))
     return Number.isFinite(stored) && stored >= MIN_INSPECTOR_WIDTH
@@ -50,8 +50,9 @@ export function WorkspaceInspector({ view, onViewChange, onClose, children }: { 
       onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) resize(Number(event.currentTarget.dataset.width) + Number(event.currentTarget.dataset.origin) - event.clientX) }}
       onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }} />
     <header className="inspector-header">
-      <h2>{group.title}</h2>
+      <h2>{title ?? group.title}</h2>
       {group.tabs.length > 1 ? <div className="inspector-tabs" role="tablist" aria-label={group.title}>{group.tabs.map(([id, label]) => <button key={id} id={`inspector-tab-${id}`} type="button" role="tab" aria-selected={view === id} aria-controls="inspector-content" onClick={() => onViewChange(id)}>{label}</button>)}</div> : null}
+      {headerAction}
       <button ref={closeRef} type="button" className="inspector-close" aria-label="Fermer le panneau" onClick={onClose}>×</button>
     </header>
     <div className="inspector-content" id="inspector-content" role={group.tabs.length > 1 ? 'tabpanel' : undefined} aria-labelledby={group.tabs.length > 1 ? `inspector-tab-${view}` : undefined}>{children}</div>

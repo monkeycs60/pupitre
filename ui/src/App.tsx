@@ -17,7 +17,6 @@ import { Sidebar } from './Sidebar'
 import { Rail } from './Rail'
 import { Titlebar, type TitlebarDestination } from './Titlebar'
 import { navigationShortcutLabel } from './navigationShortcuts'
-import { NavIcon } from './NavIcon'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
 import type { Attachment, Conversation, Project } from './types'
@@ -62,6 +61,15 @@ import { AttentionInbox } from './AttentionInbox'
 import type { AttentionTarget } from './types'
 import { retryUntilAvailable } from './startupRetry'
 import { subscribeVisualFeedbackNavigation } from './visualFeedbackNavigation'
+import { ProjectSectionSwitch } from './ProjectSectionSwitch'
+import {
+  PROJECT_SECTIONS,
+  storeProjectLayout,
+  storedProjectLayout,
+  storedProjectSection,
+  type ProjectSection,
+  type ProjectSurfaceLayout,
+} from './projectSections'
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
@@ -159,6 +167,10 @@ function App() {
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
   const [memoryDirty, setMemoryDirty] = useState(false)
   const [inspector, setInspector] = useState<InspectorView | null>(null)
+  const [projectSurface, setProjectSurface] = useState<{
+    section: ProjectSection
+    layout: ProjectSurfaceLayout
+  } | null>(null)
   const [todoPanelRequest, setTodoPanelRequest] = useState(0)
   const [todoMode, setTodoMode] = useState(false)
   const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null)
@@ -246,6 +258,25 @@ function App() {
     window.addEventListener('keydown', handleNavigationShortcut)
     return () => window.removeEventListener('keydown', handleNavigationShortcut)
   }, [])
+
+  useEffect(() => {
+    function handleProjectSectionShortcut(event: KeyboardEvent) {
+      if (event.defaultPrevented) return
+      if (event.key === 'Escape' && projectSurface?.layout === 'full') {
+        event.preventDefault()
+        closeProjectSurface()
+        return
+      }
+      if (!event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return
+      const index = Number.parseInt(event.key, 10) - 1
+      if (!Number.isInteger(index) || index < 0 || index > PROJECT_SECTIONS.length) return
+      event.preventDefault()
+      if (index === 0) closeProjectSurface()
+      else openProjectSection(PROJECT_SECTIONS[index - 1]!.id)
+    }
+    window.addEventListener('keydown', handleProjectSectionShortcut)
+    return () => window.removeEventListener('keydown', handleProjectSectionShortcut)
+  }, [projectSurface, selectedProject?.id, inspector])
   // Le digest est régénéré côté sidecar après un tour : on rafraîchit le titre
   // affiché sans recharger la conversation.
   const digest = lastDigest(events)
@@ -449,13 +480,43 @@ function App() {
 
   function openInspector(view: InspectorView) {
     if (view !== inspector && !confirmLeaveMemory()) return
+    if (view === 'dashboard') {
+      if (selectedProject !== null) openProjectSection(storedProjectSection(selectedProject.id))
+      return
+    }
+    setProjectSurface(null)
     lastInspectorViews.current[inspectorGroupOf(view).title] = view
     setInspector(view)
     setWorkspaceView('conversations')
   }
 
   function closeInspector() {
-    if (confirmLeaveMemory()) setInspector(null)
+    if (!confirmLeaveMemory()) return
+    if (inspector === 'dashboard') setProjectSurface(null)
+    setInspector(null)
+  }
+
+  function openProjectSection(section: ProjectSection, forcedLayout?: ProjectSurfaceLayout) {
+    if (selectedProject === null) return
+    const layout = forcedLayout ?? storedProjectLayout(selectedProject.id, section)
+    if (forcedLayout !== undefined) storeProjectLayout(selectedProject.id, section, forcedLayout)
+    window.localStorage.setItem(`pupitre:dashboard-tab:${selectedProject.id}`, section)
+    setProjectSurface({ section, layout })
+    setInspector(layout === 'docked' ? 'dashboard' : null)
+    setWorkspaceView('conversations')
+  }
+
+  function closeProjectSurface() {
+    setProjectSurface(null)
+    if (inspector === 'dashboard') setInspector(null)
+  }
+
+  function toggleProjectLayout() {
+    if (selectedProject === null || projectSurface === null) return
+    const layout = projectSurface.layout === 'full' ? 'docked' : 'full'
+    storeProjectLayout(selectedProject.id, projectSurface.section, layout)
+    setProjectSurface({ ...projectSurface, layout })
+    setInspector(layout === 'docked' ? 'dashboard' : null)
   }
 
   function handleTodoCreated() {
@@ -463,7 +524,7 @@ function App() {
     setNewConversationDraft('')
     setNewConversationAttachments([])
     todos.refresh()
-    setInspector('dashboard')
+    openProjectSection('todos', 'docked')
     setTodoPanelRequest((value) => value + 1)
   }
 
@@ -477,7 +538,7 @@ function App() {
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
-    setInspector('dashboard')
+    openProjectSection('todos', 'docked')
     setTodoPanelRequest((value) => value + 1)
     setTodoMode(true)
     setWorkspaceView('conversations')
@@ -534,6 +595,8 @@ function App() {
     if (!confirmLeaveMemory()) return
     setTodoPanelRequest(0)
     if (project.id !== selectedProject?.id) {
+      setProjectSurface(null)
+      if (inspector === 'dashboard') setInspector(null)
       setTodoMode(false)
       setEditingTodo(null)
       setSelectedConversation(null)
@@ -559,6 +622,7 @@ function App() {
     setNewConversationAttachments([])
     setIsCreatingConversation(false)
     setShowSwitchModel(false)
+    closeProjectSurface()
     setWorkspaceView('conversations')
   }
 
@@ -572,6 +636,7 @@ function App() {
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
+    closeProjectSurface()
     setWorkspaceView('conversations')
   }
 
@@ -664,13 +729,14 @@ function App() {
   function handleDashboardSelect() {
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
-    openInspector('dashboard')
+    openProjectSection('todos')
     setShowSwitchModel(false)
   }
 
   function handleConversationsSelect() {
     if (!confirmLeaveMemory()) return
     setInspector(null)
+    setProjectSurface(null)
     setWorkspaceView('conversations')
     setShowSwitchModel(false)
   }
@@ -798,6 +864,30 @@ function App() {
     const conversations = await listProjectConversations(selectedProject.id)
     const conversation = conversations.find((item) => item.id === conversationId)
     if (conversation) handleConversationSelect(conversation)
+  }
+
+  function renderProjectDashboard() {
+    if (selectedProject === null || projectSurface === null) return null
+    return <DashboardView
+      embedded={projectSurface.layout === 'docked'}
+      sectionOnly
+      showSectionNavigation={false}
+      key={`${selectedProject.id}-${projectSurface.layout}`}
+      project={selectedProject}
+      activeSection={projectSurface.section}
+      onSectionChange={(section) => openProjectSection(section, projectSurface.layout)}
+      todoCount={todos.items.filter((item) => item.status !== 'done').length}
+      todoPanelRequest={todoPanelRequest}
+      onRefreshTodos={todos.refresh}
+      onCreateTodoFromTicket={(ticket) => handleTodoCreate({ ticketId: ticket.id, ticketKey: ticket.key, branch: ticketLinksOf(ticket).branch ?? null })}
+      todoPanel={() => <div className="project-todos">
+        <header className="project-tasks-header"><h2>Tâches du projet</h2><button type="button" className="primary-button" onClick={() => handleTodoCreate()}>+ Nouvelle tâche</button></header>
+        <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={editingTodo?.id ?? conversationSeed?.todoId ?? null} ticketLinks={ticketLinks} onChanged={todos.refresh} onOpenConversation={handleTodoToConversation} onEdit={handleTodoEdit} />
+      </div>}
+      onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
+      onStartConversation={handleStartFromTicket}
+      onOpenSettings={() => setProjectSettingsOpen(true)}
+    />
   }
 
   const titlebarView = workspaceView === 'conversations'
@@ -929,6 +1019,29 @@ function App() {
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         : workspaceView === 'settings' ? <AppSettingsView instance={instance} />
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
+        : projectSurface?.layout === 'full' ? (
+          <>
+            <header className="conversation-header project-surface-header">
+              <div className="conversation-title-block">
+                <button type="button" className="project-surface-back" onClick={closeProjectSurface} title="Revenir à la conversation (Échap)">
+                  <span aria-hidden="true">←</span>
+                  {selectedConversation?.title ?? 'Conversation'}
+                </button>
+                <h1>{PROJECT_SECTIONS.find((section) => section.id === projectSurface.section)?.label}</h1>
+              </div>
+              <div className="header-actions">
+                <button type="button" className="project-layout-toggle" onClick={toggleProjectLayout} title="Ancrer cette section à droite" aria-label="Ancrer cette section à droite">⇥</button>
+                <ProjectSectionSwitch
+                  projectId={selectedProject.id}
+                  activeSection={projectSurface.section}
+                  todoCount={todos.items.filter((item) => item.status !== 'done').length}
+                  onSelect={(section) => section === null ? closeProjectSurface() : openProjectSection(section)}
+                />
+              </div>
+            </header>
+            {renderProjectDashboard()}
+          </>
+        )
         : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">
             <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Retrouve les tâches et le suivi dans le panneau projet.</p><div className="todo-detail-actions"><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button><button className="secondary-button" onClick={() => openInspector('dashboard')}>Tâches du projet</button></div></div>
@@ -1014,17 +1127,12 @@ function App() {
                     </svg>
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className={`header-action header-action-icon${inspector === 'dashboard' ? ' is-active' : ''}`}
-                  disabled={selectedProject === null}
-                  aria-pressed={inspector === 'dashboard'}
-                  aria-label="Suivi du projet"
-                  title="Suivi du projet"
-                  onClick={() => inspector === 'dashboard' ? closeInspector() : openInspector('dashboard')}
-                >
-                  <NavIcon name="dashboard" />
-                </button>
+                <ProjectSectionSwitch
+                  projectId={selectedProject.id}
+                  activeSection={projectSurface?.section ?? null}
+                  todoCount={todos.items.filter((item) => item.status !== 'done').length}
+                  onSelect={(section) => section === null ? closeProjectSurface() : openProjectSection(section)}
+                />
               </div>
             </header>
             <Chat
@@ -1087,7 +1195,13 @@ function App() {
         )}
         </Suspense>
         </div>
-        {workspaceView === 'conversations' && inspector ? <WorkspaceInspector view={inspector} onViewChange={openInspector} onClose={closeInspector}>
+        {workspaceView === 'conversations' && inspector ? <WorkspaceInspector
+          view={inspector}
+          onViewChange={openInspector}
+          onClose={closeInspector}
+          title={inspector === 'dashboard' && projectSurface ? PROJECT_SECTIONS.find((section) => section.id === projectSurface.section)?.label : undefined}
+          headerAction={inspector === 'dashboard' && projectSurface ? <button type="button" className="project-layout-toggle" onClick={toggleProjectLayout} title="Afficher cette section en pleine largeur" aria-label="Afficher cette section en pleine largeur">⤢</button> : undefined}
+        >
           <Suspense fallback={<p className="list-empty">Chargement…</p>}>
         {inspector === 'library' ? (
           <SkillsLibrary project={selectedProject} />
@@ -1120,22 +1234,7 @@ function App() {
             <p>Sélectionnez un projet pour commencer.</p>
           </div>
         ) : inspector === 'dashboard' ? (
-          <DashboardView
-            embedded
-            key={selectedProject.id}
-            project={selectedProject}
-            todoCount={todos.items.filter((item) => item.status !== 'done').length}
-            todoPanelRequest={todoPanelRequest}
-            onRefreshTodos={todos.refresh}
-            onCreateTodoFromTicket={(ticket) => handleTodoCreate({ ticketId: ticket.id, ticketKey: ticket.key, branch: ticketLinksOf(ticket).branch ?? null })}
-            todoPanel={() => <div className="project-todos">
-              <header className="project-tasks-header"><h2>Tâches du projet</h2><button type="button" className="primary-button" onClick={() => handleTodoCreate()}>+ Nouvelle tâche</button></header>
-              <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={editingTodo?.id ?? conversationSeed?.todoId ?? null} ticketLinks={ticketLinks} onChanged={todos.refresh} onOpenConversation={handleTodoToConversation} onEdit={handleTodoEdit} />
-            </div>}
-            onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
-            onStartConversation={handleStartFromTicket}
-            onOpenSettings={() => setProjectSettingsOpen(true)}
-          />
+          renderProjectDashboard()
         ) : inspector === 'costs' ? (
           <CostsView
             project={selectedProject}
