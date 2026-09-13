@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { dataDir } from "./db";
+import { discoverRepositories, listWorktreePaths, readHead, readRemoteRefs, repositoryOfWorktree, ticketKeyOf } from "./git-repositories";
 import type { ProjectStore } from "./stores/projects";
 
 const MAX_GIT_OUTPUT_BYTES = 2 * 1024 * 1024;
@@ -131,7 +132,22 @@ export interface GitTurnTracking {
   projectId: string;
   before: string | null;
   ambiguous: boolean;
+  conversationCwd: string | null;
+  ticketKey: string | null;
+  heads: Map<string, string | null>;
+  repositoryOf: Map<string, string>;
+  remoteRefs: Map<string, string[]>;
+  /** Tours du même projet qui ont couru en même temps que celui-ci. */
+  peers: Set<GitTurnTracking>;
 }
+
+interface HeadSnapshot {
+  heads: Map<string, string | null>;
+  repositoryOf: Map<string, string>;
+  remoteRefs: Map<string, string[]>;
+}
+
+const MAX_TURN_COMMITS = 2_000;
 
 export class GitProjectService {
   private activeTurns = new Map<string, Set<GitTurnTracking>>();
@@ -477,12 +493,24 @@ export class GitProjectService {
     ]).split("\n").map((sha) => sha.trim()).filter(Boolean);
   }
 
-  beginTurn(projectId: string): GitTurnTracking {
+  /**
+   * Photographie les HEAD de tous les dépôts et worktrees du projet — dépôts
+   * imbriqués compris — pour attribuer à la conversation les commits créés
+   * pendant son tour, où qu'ils aient été faits.
+   */
+  beginTurn(projectId: string, context: { cwd?: string | null } = {}): GitTurnTracking {
+    const projectPath = resolve(this.projectPath(projectId));
+    const conversationCwd = context.cwd ? resolve(context.cwd) : null;
+    const snapshot = this.snapshotHeads(projectPath, conversationCwd);
     const tracking: GitTurnTracking = {
       id: crypto.randomUUID(),
       projectId,
-      before: this.head(projectId),
+      before: snapshot.heads.get(projectPath) ?? null,
       ambiguous: false,
+      conversationCwd,
+      ticketKey: conversationCwd ? ticketKeyOf(readHead(conversationCwd).branch, conversationCwd) : null,
+      ...snapshot,
+      peers: new Set(),
     };
     let active = this.activeTurns.get(projectId);
     if (!active) {
@@ -491,7 +519,11 @@ export class GitProjectService {
     }
     if (active.size > 0) {
       tracking.ambiguous = true;
-      for (const concurrent of active) concurrent.ambiguous = true;
+      for (const concurrent of active) {
+        concurrent.ambiguous = true;
+        concurrent.peers.add(tracking);
+        tracking.peers.add(concurrent);
+      }
     }
     active.add(tracking);
     return tracking;
@@ -502,22 +534,79 @@ export class GitProjectService {
     return () => this.commitListeners.delete(listener);
   }
 
+  /** Cherche le commit dans le dépôt racine puis dans les dépôts imbriqués ; vide s'il est introuvable. */
   commitMessage(projectId: string, sha: string): string {
-    return this.runGit(this.projectPath(projectId), ["show", "-s", "--format=%B", sha]).trim();
+    const projectPath = this.projectPath(projectId);
+    for (const cwd of [projectPath, ...discoverRepositories(projectPath)]) {
+      const message = this.optionalGit(cwd, ["show", "-s", "--format=%B", sha]);
+      if (message !== null) return message.trim();
+    }
+    return "";
   }
 
   finishTurn(tracking: GitTurnTracking, conversationId: string): void {
     const active = this.activeTurns.get(tracking.projectId);
     active?.delete(tracking);
     if (active?.size === 0) this.activeTurns.delete(tracking.projectId);
-    if (tracking.ambiguous) return;
-    const after = this.head(tracking.projectId);
-    if (!after || after === tracking.before) return;
-    this.recordCommitLinks(
-      tracking.projectId,
-      conversationId,
-      this.commitsBetween(tracking.projectId, tracking.before, after),
+    const projectPath = resolve(this.projectPath(tracking.projectId));
+    const after = this.snapshotHeads(projectPath, tracking.conversationCwd);
+    const linked = new Set<string>();
+    for (const [worktree, sha] of after.heads) {
+      if (!sha) continue;
+      const known = tracking.heads.has(worktree);
+      const previous = known ? tracking.heads.get(worktree) ?? null : undefined;
+      if (previous === sha || !this.mayAttributeWorktree(tracking, worktree)) continue;
+      const repository = after.repositoryOf.get(worktree) ?? worktree;
+      const excluded = [
+        ...(previous ? [previous] : []),
+        ...[...tracking.heads].filter(([path, head]) => head && path !== worktree && tracking.repositoryOf.get(path) === repository).map(([, head]) => head!),
+        ...(tracking.remoteRefs.get(repository) ?? []),
+      ];
+      for (const commit of this.commitsNotIn(worktree, sha, previous === null ? [] : excluded)) linked.add(commit);
+    }
+    this.recordCommitLinks(tracking.projectId, conversationId, [...linked]);
+  }
+
+  /**
+   * Pendant des tours concurrents, un commit n'est rattaché que s'il est
+   * fait dans le worktree de la conversation, ou dans un worktree portant
+   * la clé de ticket qu'aucun autre tour en cours ne partage.
+   */
+  private mayAttributeWorktree(tracking: GitTurnTracking, worktree: string): boolean {
+    if (!tracking.ambiguous) return true;
+    if (tracking.conversationCwd === worktree) return true;
+    if (!tracking.ticketKey) return false;
+    if (ticketKeyOf(readHead(worktree).branch, worktree) !== tracking.ticketKey) return false;
+    return ![...tracking.peers].some((peer) => peer.ticketKey === tracking.ticketKey || peer.conversationCwd === worktree);
+  }
+
+  private commitsNotIn(cwd: string, head: string, excluded: string[]): string[] {
+    const result = Bun.spawnSync(
+      ["git", "rev-list", "--reverse", "--topo-order", `--max-count=${MAX_TURN_COMMITS}`, "--stdin"],
+      {
+        cwd,
+        stdin: Buffer.from([head, ...(excluded.length > 0 ? ["--not", ...excluded] : []), ""].join("\n")),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
     );
+    if (result.exitCode !== 0) return [];
+    return result.stdout.toString().split("\n").map((sha) => sha.trim()).filter(Boolean);
+  }
+
+  private snapshotHeads(projectPath: string, conversationCwd: string | null): HeadSnapshot {
+    const repositories = discoverRepositories(projectPath);
+    const conversationRepository = conversationCwd ? repositoryOfWorktree(conversationCwd) : null;
+    if (conversationRepository && !repositories.includes(conversationRepository)) repositories.push(conversationRepository);
+    const snapshot: HeadSnapshot = { heads: new Map(), repositoryOf: new Map(), remoteRefs: new Map() };
+    for (const repository of repositories) {
+      snapshot.remoteRefs.set(repository, readRemoteRefs(repository));
+      for (const worktree of listWorktreePaths(repository)) {
+        snapshot.heads.set(worktree, readHead(worktree).sha);
+        snapshot.repositoryOf.set(worktree, repository);
+      }
+    }
+    return snapshot;
   }
 
   recordCommitLinks(projectId: string, conversationId: string, shas: string[]): void {

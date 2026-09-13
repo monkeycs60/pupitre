@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { ancestorDirectories, buildCodeTree, flattenCodeTree, matchCodePaths } from './codeTree'
 import { codeGraphPaths, layoutCodeGraph, parseCodeRefs } from './codeGraphLayout'
 import { highlightCode, languageForPath, splitHighlightedHtml } from './codeHighlight'
-import { buildCodeScopes, codeScopeMatches, defaultCodeScope, fromScopePath, ticketKeyOfSource, toScopePath } from './codeScopes'
+import { buildCodeScopes, codeScopeMatches, defaultCodeScope, fromScopePath, isStaleScope, ticketKeyOfSource, toScopePath } from './codeScopes'
 import { mergeCodeCommits } from './codeGraphLayout'
 import type { CodeCommitSummary, CodeSource } from './types'
 
@@ -20,8 +20,37 @@ function source(path: string, repositoryLabel: string, branch: string | null, ma
     detached: branch === null,
     main,
     conversations: conversationIds.map((id) => ({ id, title: `conversation ${id}`, provider: 'claude' as const })),
+    ref: null,
+    updatedAt: null,
   }
 }
+
+test('un ticket sans worktree devient un chantier lu depuis ses branches ; les vieilles branches sont masquées', () => {
+  const branch = (repositoryLabel: string, ref: string, updatedAt: string): CodeSource => ({
+    ...source(`/mono/${repositoryLabel}#${ref}`, repositoryLabel, ref.replace(/^origin\//, ''), false),
+    ref,
+    updatedAt,
+  })
+  const now = Date.parse('2026-09-13T12:00:00Z')
+  const sources = [
+    source('/mono/apps/api', 'apps/api', 'develop', true),
+    source('/mono/apps/web', 'apps/web', 'develop', true),
+    source('/mono/wt/feature-TECH-24128', 'mono', 'feature-TECH-24128', false),
+    branch('apps/api', 'feature/TECH-24128', '2026-09-01T10:00:00Z'),
+    branch('apps/api', 'origin/feature/TECH-24128', '2026-09-01T10:00:00Z'),
+    branch('apps/web', 'origin/feature/TECH-24128', '2026-09-02T10:00:00Z'),
+    branch('apps/api', 'feature/TECH-1010', '2025-01-01T10:00:00Z'),
+    branch('apps/web', 'feature/TECH-1010', '2025-01-01T10:00:00Z'),
+  ]
+
+  const scopes = buildCodeScopes(sources)
+  const ticket = scopes.find((scope) => scope.id === 'ticket:TECH-24128')!
+  expect(ticket.sources.map((item) => item.path)).toEqual(['/mono/wt/feature-TECH-24128', '/mono/apps/api#feature/TECH-24128', '/mono/apps/web#origin/feature/TECH-24128'])
+  expect(scopes.filter((scope) => scope.kind === 'ticket').map((scope) => scope.label)).toEqual(['TECH-24128', 'TECH-1010'])
+  expect(isStaleScope(ticket, now)).toBe(false)
+  expect(isStaleScope(scopes.find((scope) => scope.id === 'ticket:TECH-1010')!, now)).toBe(true)
+  expect(defaultCodeScope(scopes, 'gone', '/deleted/feature-TECH-24128', 'main')).toBe('ticket:TECH-24128')
+})
 
 test("l'arbre range les dossiers avant les fichiers et fusionne les dossiers à enfant unique", () => {
   const root = buildCodeTree(['README.md', 'apps/api/src/routes.js', 'apps/api/src/stats.js', 'apps/web/index.ts', 'a.ts'])

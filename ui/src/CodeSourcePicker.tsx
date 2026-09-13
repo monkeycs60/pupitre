@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BranchIcon } from './BranchIcon'
-import { codeScopeMatches, repositoryShortLabel, sourceBranchLabel, type CodeScope } from './codeScopes'
+import { relativeCodeDate } from './codeFormat'
+import { codeScopeMatches, isStaleScope, repositoryShortLabel, sourceBranchLabel, type CodeScope } from './codeScopes'
 import { ProviderMark } from './ProviderMark'
 
 interface CodeSourcePickerProps {
@@ -14,6 +15,7 @@ function scopeKind(scope: CodeScope, originConversationId: string | null): strin
   if (scope.kind === 'ticket') return `Chantier sur ${scope.sources.length} dépôts`
   if (scope.kind === 'mains') return scope.detail
   const source = scope.sources[0]!
+  if (source.ref !== null) return 'Branche sans worktree, lecture seule'
   if (originConversationId && !source.main && source.conversations.some((item) => item.id === originConversationId)) {
     return 'Worktree de la conversation'
   }
@@ -33,8 +35,14 @@ export function CodeSourcePicker({ scopes, value, originConversationId, onChange
   const listRef = useRef<HTMLDivElement | null>(null)
   const current = scopes.find((scope) => scope.id === value) ?? null
 
+  const hiddenCount = useMemo(
+    () => (query ? 0 : scopes.filter((scope) => isStaleScope(scope) && scope.id !== value).length),
+    [scopes, query, value],
+  )
   const sections = useMemo(() => {
-    const filtered = scopes.filter((scope) => codeScopeMatches(scope, query))
+    const filtered = scopes.filter((scope) => (
+      codeScopeMatches(scope, query) && (query !== '' || scope.id === value || !isStaleScope(scope))
+    ))
     const result: Array<{ label: string, scopes: CodeScope[] }> = []
     const tickets = filtered.filter((scope) => scope.kind === 'ticket')
     if (tickets.length > 0) result.push({ label: 'Chantiers multi-dépôts', scopes: tickets })
@@ -42,10 +50,17 @@ export function CodeSourcePicker({ scopes, value, originConversationId, onChange
     if (overview.length > 0) result.push({ label: 'Vue d’ensemble', scopes: overview })
     const singles = filtered.filter((scope) => scope.kind === 'source')
     for (const repository of [...new Set(singles.map((scope) => scope.detail))]) {
-      result.push({ label: repository, scopes: singles.filter((scope) => scope.detail === repository) })
+      const inRepository = singles.filter((scope) => scope.detail === repository)
+      result.push({
+        label: repository,
+        scopes: [
+          ...inRepository.filter((scope) => scope.sources[0]!.ref === null),
+          ...inRepository.filter((scope) => scope.sources[0]!.ref !== null),
+        ],
+      })
     }
     return result
-  }, [scopes, query])
+  }, [scopes, query, value])
   const ordered = sections.flatMap((section) => section.scopes)
   const boundedActive = Math.min(activeIndex, Math.max(ordered.length - 1, 0))
 
@@ -129,6 +144,9 @@ export function CodeSourcePicker({ scopes, value, originConversationId, onChange
       </div>
       <div className="code-source-list" role="listbox" aria-label="États du code" ref={listRef}>
         {ordered.length === 0 ? <p className="code-empty-note">Aucun état du code ne correspond.</p> : null}
+        {hiddenCount > 0
+          ? <p className="code-truncated-note">{hiddenCount} branches sans commit depuis quatre mois sont masquées : filtre pour les retrouver.</p>
+          : null}
         {sections.map((section) => <div className="code-source-group" key={section.label}>
           <p className="code-source-group-label">{section.label}</p>
           {section.scopes.map((scope) => {
@@ -149,13 +167,19 @@ export function CodeSourcePicker({ scopes, value, originConversationId, onChange
               <span className="code-source-option-main">
                 <span className="code-source-branch">{scope.label}</span>
                 {scope.kind === 'source' && source.main ? <span className="code-source-badge">principal</span> : null}
+                {scope.kind === 'source' && source.ref !== null
+                  ? <span className="code-source-badge">{source.ref === source.branch ? 'branche' : 'branche distante'}</span>
+                  : null}
                 {isOriginScope(scope, originConversationId) ? <span className="code-source-badge is-origin">cette conversation</span> : null}
               </span>
               {scope.kind === 'ticket' ? <span className="code-source-repos">
                 {scope.sources.map((item) => <span key={item.path}><strong>{repositoryShortLabel(item)}</strong> {sourceBranchLabel(item)}</span>)}
               </span> : null}
               {scope.kind === 'mains' ? <span className="code-source-option-meta">{scope.sources.map(repositoryShortLabel).join(', ')}</span> : null}
-              {scope.kind === 'source' ? (source.conversations.length > 0 && !source.main
+              {scope.kind === 'source' && source.ref !== null
+                ? <span className="code-source-option-meta">Dernier commit {relativeCodeDate(source.updatedAt)}</span>
+                : null}
+              {scope.kind === 'source' && source.ref === null ? (source.conversations.length > 0 && !source.main
                 ? <span className="code-source-conversations">
                   {source.conversations.slice(0, 2).map((item) => <span key={item.id}><ProviderMark provider={item.provider} />{item.title}</span>)}
                   {source.conversations.length > 2 ? <span>+{source.conversations.length - 2}</span> : null}

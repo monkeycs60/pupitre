@@ -37,10 +37,24 @@ export function ticketKeyOfSource(source: CodeSource): string | null {
   return fromPath ? `${fromPath[1]!.toUpperCase()}-${fromPath[2]}` : null
 }
 
+const STALE_AFTER_MS = 120 * 24 * 60 * 60 * 1000
+
+function sourceRank(source: CodeSource): number {
+  if (source.ref === null) return /-before$/i.test(source.path) ? 2 : source.branch === null ? 1 : 0
+  return source.ref === source.branch ? 3 : 4
+}
+
 function preferredSource(candidates: CodeSource[]): CodeSource {
-  return candidates.find((source) => source.branch !== null && !/-before$/i.test(source.path))
-    ?? candidates.find((source) => !/-before$/i.test(source.path))
-    ?? candidates[0]!
+  return [...candidates].sort((left, right) => sourceRank(left) - sourceRank(right))[0]!
+}
+
+function scopeActivity(scope: CodeScope): number {
+  return Math.max(...scope.sources.map((source) => (source.ref === null ? Infinity : Date.parse(source.updatedAt ?? '') || 0)))
+}
+
+/** Un état fait seulement de branches sans worktree, sans commit depuis quatre mois. */
+export function isStaleScope(scope: CodeScope, now = Date.now()): boolean {
+  return scopeActivity(scope) < now - STALE_AFTER_MS
 }
 
 export function buildCodeScopes(sources: CodeSource[]): CodeScope[] {
@@ -58,7 +72,9 @@ export function buildCodeScopes(sources: CodeSource[]): CodeScope[] {
     const chosen = repositories.map((repository) => preferredSource(candidates.filter((source) => source.repositoryPath === repository)))
     tickets.push({ id: `ticket:${key}`, kind: 'ticket', label: key, detail: chosen.map(repositoryShortLabel).join(' + '), sources: chosen })
   }
-  tickets.sort((left, right) => right.label.localeCompare(left.label, undefined, { numeric: true }))
+  tickets.sort((left, right) => (
+    scopeActivity(right) - scopeActivity(left) || right.label.localeCompare(left.label, undefined, { numeric: true })
+  ))
 
   const mains = sources.filter((source) => source.main)
   const overview: CodeScope[] = mains.length > 1

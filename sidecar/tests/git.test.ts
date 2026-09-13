@@ -249,6 +249,66 @@ test("ne prétend pas attribuer des commits pendant deux tours concurrents", () 
     .toEqual([]);
 });
 
+function gitIn(cwd: string, ...args: string[]): string {
+  const result = Bun.spawnSync(["git", ...args], { cwd });
+  if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+  return result.stdout.toString().trim();
+}
+
+function linkOwner(sha: string): string | null {
+  const row = db.query("SELECT conversation_id FROM commit_links WHERE commit_sha = ?").get(sha) as { conversation_id: string } | null;
+  return row?.conversation_id ?? null;
+}
+
+test("rattache les commits d'un dépôt imbriqué et d'un worktree créé pendant le tour", () => {
+  const nested = join(repo, "apps", "api");
+  mkdirSync(nested, { recursive: true });
+  gitIn(nested, "init", "-q", "-b", "main");
+  gitIn(nested, "config", "user.email", "git@example.test");
+  gitIn(nested, "config", "user.name", "Git Fixture");
+  writeFileSync(join(nested, "base.ts"), "1\n");
+  gitIn(nested, "add", "-A");
+  gitIn(nested, "commit", "-qm", "base");
+  const base = gitIn(nested, "rev-parse", "HEAD");
+
+  const tracking = gitView.beginTurn(projectId, { cwd: repo });
+  writeFileSync(join(nested, "api.ts"), "2\n");
+  gitIn(nested, "add", "-A");
+  gitIn(nested, "commit", "-qm", "api");
+  const nestedCommit = gitIn(nested, "rev-parse", "HEAD");
+  const worktree = join(repo, "..", "api-feature");
+  gitIn(nested, "worktree", "add", "-q", "-b", "feature", worktree);
+  writeFileSync(join(worktree, "feature.ts"), "3\n");
+  gitIn(worktree, "add", "-A");
+  gitIn(worktree, "commit", "-qm", "feature");
+  const worktreeCommit = gitIn(worktree, "rev-parse", "HEAD");
+  gitView.finishTurn(tracking, conversationId);
+
+  expect(linkOwner(nestedCommit)).toBe(conversationId);
+  expect(linkOwner(worktreeCommit)).toBe(conversationId);
+  expect(linkOwner(base)).toBeNull();
+  expect(gitView.commitMessage(projectId, worktreeCommit)).toBe("feature");
+});
+
+test("pendant des tours concurrents, rattache par worktree de la conversation ou par clé de ticket", () => {
+  const ticketTree = join(repo, "..", "repo-tech4242");
+  git("worktree", "add", "-q", "-b", "feature/TECH-4242", ticketTree);
+  const other = conversations.create({ projectId, provider: "claude", model: "claude-opus-5", firstMessage: "autre" }).id;
+
+  const mine = gitView.beginTurn(projectId, { cwd: ticketTree });
+  const theirs = gitView.beginTurn(projectId, { cwd: repo });
+  writeFileSync(join(ticketTree, "ticket.ts"), "1\n");
+  gitIn(ticketTree, "add", "-A");
+  gitIn(ticketTree, "commit", "-qm", "ticket");
+  const ticketCommit = gitIn(ticketTree, "rev-parse", "HEAD");
+  const rootCommit = commit("root.ts", "1\n", "racine");
+  gitView.finishTurn(mine, conversationId);
+  gitView.finishTurn(theirs, other);
+
+  expect(linkOwner(ticketCommit)).toBe(conversationId);
+  expect(linkOwner(rootCommit)).toBe(other);
+});
+
 test("un sujet contenant les anciens séparateurs de parsing reste intact", () => {
   writeFileSync(join(repo, "separator.txt"), "ok\n");
   git("add", ".");

@@ -61,7 +61,7 @@ function summary(sha: string, subject: string, authoredAt: string, extra: Partia
 }
 
 function source(path: string, repositoryLabel: string, branch: string, main: boolean, conversations = [] as CodeSource['conversations']): CodeSource {
-  return { path, repositoryPath: `/tmp/${repositoryLabel}`, repositoryLabel, branch, head: null, detached: false, main, conversations }
+  return { path, repositoryPath: `/tmp/${repositoryLabel}`, repositoryLabel, branch, head: null, detached: false, main, conversations, ref: null, updatedAt: null }
 }
 
 interface Fixture {

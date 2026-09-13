@@ -245,6 +245,46 @@ test("cherche du texte dans les fichiers suivis et non suivis", async () => {
   expect((await explorer.search(projectId, repo, "introuvable")).matches).toEqual([]);
 });
 
+test("expose les branches à clé de ticket sans worktree, en lecture seule, même fusionnées", async () => {
+  git(repo, "checkout", "-q", "-b", "feature/TECH-1234");
+  const own = commit(repo, "ticket.ts", "export const ticket = 1\n", "feat(TECH-1234): ticket");
+  git(repo, "checkout", "-q", "main");
+  commit(repo, "main.ts", "1\n", "main avance");
+  git(repo, "merge", "-q", "--no-ff", "-m", "Merge branch 'feature/TECH-1234'", "feature/TECH-1234");
+  writeFileSync(join(repo, "ticket.ts"), "modifié dans le worktree\n");
+
+  const branch = (await explorer.sources(projectId)).find((source) => source.ref === "feature/TECH-1234");
+  expect(branch).toMatchObject({ path: `${repo}#feature/TECH-1234`, branch: "feature/TECH-1234", main: false, repositoryPath: repo });
+
+  const files = await explorer.files(projectId, branch!.path);
+  expect(files.paths).toContain("ticket.ts");
+  expect(files.dirty).toEqual([]);
+  expect((await explorer.file(projectId, branch!.path, "ticket.ts")).content).toBe("export const ticket = 1\n");
+  const graph = await explorer.graph(projectId, branch!.path);
+  expect(graph.head).toBe(own);
+  expect(graph.focusCommits.map((item) => item.sha)).toEqual([own]);
+  expect((await explorer.search(projectId, branch!.path, "ticket = 1")).matches).toEqual([{ path: "ticket.ts", line: 1, text: "export const ticket = 1" }]);
+  expect((await explorer.blame(projectId, branch!.path, "ticket.ts")).groups[0]?.sha).toBe(own);
+  expect((await explorer.diff(projectId, branch!.path, "", "ticket.ts")).diff).toBe("");
+});
+
+test("rattrape la provenance des commits faits pendant un tour, dépôt imbriqué compris, sans ceux des collègues", async () => {
+  const api = join(repo, "apps", "api");
+  initRepo(api);
+  const started = new Date(Date.now() - 60_000).toISOString();
+  const completed = new Date(Date.now() + 60_000).toISOString();
+  db.query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
+    .run(conversationId, JSON.stringify({ type: "turn-timing", phase: "completed", startedAt: started, completedAt: completed }), completed);
+  const mine = commit(api, "index.ts", "x\n", "api");
+  git(api, "-c", "user.email=collegue@example.test", "commit", "--allow-empty", "-qm", "collègue");
+  const colleague = git(api, "rev-parse", "HEAD");
+
+  const graph = await explorer.graph(projectId, api);
+
+  expect(graph.commits.find((item) => item.sha === mine)?.conversations).toEqual([{ id: conversationId, title: expect.any(String), provider: "claude" }]);
+  expect(graph.commits.find((item) => item.sha === colleague)?.conversations).toEqual([]);
+});
+
 test("refuse un état du code hors du projet et un chemin qui sort du dépôt", async () => {
   const outside = join(root, "outside");
   initRepo(outside);

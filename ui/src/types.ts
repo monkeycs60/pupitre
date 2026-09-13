@@ -834,6 +834,9 @@ export interface CodeSource {
   detached: boolean
   main: boolean
   conversations: CodeConversationLink[]
+  /** Référence lue en lecture seule quand aucun worktree ne porte la branche. */
+  ref: string | null
+  updatedAt: string | null
 }
 
 export type CodeDirtyStatus = 'M' | 'A' | 'D' | 'R' | '?'

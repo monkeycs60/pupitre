@@ -198,7 +198,7 @@ export class ConversationRunner {
     const project = this.projects.get(conv.project_id)!;
     let gitTracking: GitTurnTracking | null = null;
     try {
-      gitTracking = this.git?.beginTurn(project.id) ?? null;
+      gitTracking = this.git?.beginTurn(project.id, { cwd: conversationCwd(project, conv) }) ?? null;
     } catch {
       // Un projet hors Git ne doit jamais empêcher le tour.
     }
