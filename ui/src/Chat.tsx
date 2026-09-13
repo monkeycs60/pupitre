@@ -82,7 +82,7 @@ interface ChatProps {
   onHandoff: () => void
   onSwitchModel: () => void
   /** Ouvre l'onglet Code filtré sur les commits de la conversation. */
-  onOpenCode?: (conversationId: string) => void
+  onOpenCode?: (conversationId: string, target: 'conversation' | 'ticket') => void
 }
 
 interface LightboxImage {

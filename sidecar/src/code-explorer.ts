@@ -170,10 +170,25 @@ export interface CodeConversationRepository {
   commits: CodeCommitSummary[];
 }
 
+export interface CodeTicketConversation {
+  id: string;
+  title: string;
+  commits: number;
+}
+
+export interface CodeTicketCommits {
+  key: string;
+  total: number;
+  repositories: CodeConversationRepository[];
+  conversations: CodeTicketConversation[];
+}
+
 export interface CodeConversationCommits {
   conversationId: string;
   total: number;
   repositories: CodeConversationRepository[];
+  /** Commits reliés aux conversations qui partagent la clé de ticket de celle-ci, elle comprise. */
+  ticket: CodeTicketCommits | null;
 }
 
 export interface CodeBranchChanges {
@@ -598,13 +613,54 @@ export class CodeExplorerService {
     return { base, from, head, files: files.slice(0, MAX_COMMIT_FILES), filesTruncated: files.length > MAX_COMMIT_FILES };
   }
 
-  /** Commits reliés à une conversation, regroupés par dépôt du projet. */
+  /** Commits reliés à une conversation, regroupés par dépôt du projet, et ceux de son ticket. */
   async conversationCommits(projectId: string, conversationId: string): Promise<CodeConversationCommits> {
     await this.backfillCommitLinks(projectId);
+    const conversations = this.db.query(`
+      SELECT id, title, worktree_path, created_on_branch FROM conversations
+      WHERE project_id = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC
+    `).all(projectId) as Array<{ id: string; title: string; worktree_path: string | null; created_on_branch: string | null }>;
+    const current = conversations.find((row) => row.id === conversationId);
+    const key = current ? ticketKeyOf(current.created_on_branch, current.worktree_path) : null;
+    const members = key
+      ? conversations.filter((row) => row.id === conversationId || ticketKeyOf(row.created_on_branch, row.worktree_path) === key)
+      : [{ id: conversationId, title: "" }];
+    const links = this.db.query(`
+      SELECT commit_sha, conversation_id FROM commit_links
+      WHERE project_id = ? AND conversation_id IN (SELECT value FROM json_each(?))
+    `).all(projectId, JSON.stringify(members.map((row) => row.id))) as Array<{ commit_sha: string; conversation_id: string }>;
+
+    const ticketRepositories = await this.commitsByRepository(projectId, links.map((link) => link.commit_sha));
+    const own = new Set(links.filter((link) => link.conversation_id === conversationId).map((link) => link.commit_sha));
+    const repositories = ticketRepositories
+      .map((repository) => ({ ...repository, commits: repository.commits.filter((entry) => own.has(entry.sha)) }))
+      .filter((repository) => repository.commits.length > 0);
+    const found = new Set(ticketRepositories.flatMap((repository) => repository.commits.map((entry) => entry.sha)));
+    const counts = new Map<string, number>();
+    for (const link of links) {
+      if (found.has(link.commit_sha)) counts.set(link.conversation_id, (counts.get(link.conversation_id) ?? 0) + 1);
+    }
+    return {
+      conversationId,
+      total: repositories.reduce((total, repository) => total + repository.commits.length, 0),
+      repositories,
+      ticket: key
+        ? {
+          key,
+          total: found.size,
+          repositories: ticketRepositories,
+          conversations: members
+            .filter((row) => counts.has(row.id))
+            .map((row) => ({ id: row.id, title: row.title, commits: counts.get(row.id)! })),
+        }
+        : null,
+    };
+  }
+
+  private async commitsByRepository(projectId: string, shas: string[]): Promise<CodeConversationRepository[]> {
     const projectPath = resolve(this.projectPath(projectId));
-    const remaining = new Set((this.db.query(`
-      SELECT commit_sha FROM commit_links WHERE project_id = ? AND conversation_id = ?
-    `).all(projectId, conversationId) as Array<{ commit_sha: string }>).map((row) => row.commit_sha));
+    const remaining = new Set(shas);
     const repositories: CodeConversationRepository[] = [];
     for (const repository of discoverRepositories(projectPath)) {
       if (remaining.size === 0) break;
@@ -624,11 +680,7 @@ export class CodeExplorerService {
         commits: this.withLinks(projectId, parseCommitRecords(log.stdout)),
       });
     }
-    return {
-      conversationId,
-      total: repositories.reduce((total, repository) => total + repository.commits.length, 0),
-      repositories,
-    };
+    return repositories;
   }
 
   async diff(projectId: string, source: string | null, sha: string, path: string, range: string | null = null): Promise<{ diff: string }> {

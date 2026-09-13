@@ -918,10 +918,24 @@ export interface CodeConversationRepository {
   commits: CodeCommitSummary[]
 }
 
+export interface CodeTicketConversation {
+  id: string
+  title: string
+  commits: number
+}
+
+export interface CodeTicketCommits {
+  key: string
+  total: number
+  repositories: CodeConversationRepository[]
+  conversations: CodeTicketConversation[]
+}
+
 export interface CodeConversationCommits {
   conversationId: string
   total: number
   repositories: CodeConversationRepository[]
+  ticket: CodeTicketCommits | null
 }
 
 export interface CodeBranchChanges {

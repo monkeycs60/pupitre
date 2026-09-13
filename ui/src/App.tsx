@@ -505,15 +505,11 @@ function App() {
     setWorkspaceView('conversations')
   }
 
-  function openCodeForConversation(conversationId: string) {
+  function openCodeForConversation(conversationId: string, target: 'conversation' | 'ticket' = 'conversation') {
     if (selectedProject === null) return
-    writeCodeViewMemory(codeViewMemoryKey(selectedProject.id, conversationId), {
-      scopeId: null,
-      conversationFilter: `conversation:${conversationId}`,
-      branchOnly: false,
-      graphExpanded: false,
-      detailView: 'commit',
-    })
+    writeCodeViewMemory(codeViewMemoryKey(selectedProject.id, conversationId), target === 'ticket'
+      ? { scopeId: null, conversationFilter: 'all', branchOnly: true, graphExpanded: false, detailView: 'changes' }
+      : { scopeId: null, conversationFilter: `conversation:${conversationId}`, branchOnly: false, graphExpanded: false, detailView: 'commit' })
     openProjectSection('code')
   }
 

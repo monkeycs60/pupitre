@@ -322,6 +322,37 @@ test("regroupe par dépôt les commits reliés à une conversation", async () =>
     ["mono", ["racine"]],
     ["apps/api", ["api"]],
   ]);
+  expect(result.ticket).toBeNull();
+});
+
+test("expose le chantier du ticket à une conversation du même ticket qui n'a rien commité", async () => {
+  const conversations = new ConversationStore(db);
+  const worker = conversations.create({
+    projectId, provider: "claude", model: "claude-opus-5", firstMessage: "migre", createdOnBranch: "feature/TECH-24128",
+  }).id;
+  const reader = conversations.create({
+    projectId, provider: "claude", model: "claude-opus-5", firstMessage: "outil", worktreePath: join(root, "feature-TECH-24128"),
+  }).id;
+  const other = conversations.create({
+    projectId, provider: "claude", model: "claude-opus-5", firstMessage: "autre", createdOnBranch: "feature/TECH-9999",
+  }).id;
+  const insert = db.query("INSERT INTO commit_links (commit_sha, project_id, conversation_id, created_at) VALUES (?, ?, ?, ?)");
+  insert.run(commit(repo, "a.ts", "1\n", "TECH-24128 migration"), projectId, worker, new Date().toISOString());
+  insert.run(commit(repo, "b.ts", "1\n", "TECH-24128 reprise"), projectId, worker, new Date().toISOString());
+  insert.run(commit(repo, "c.ts", "1\n", "TECH-9999 ailleurs"), projectId, other, new Date().toISOString());
+
+  const result = await explorer.conversationCommits(projectId, reader);
+
+  expect(result.total).toBe(0);
+  expect(result.repositories).toEqual([]);
+  expect(result.ticket?.key).toBe("TECH-24128");
+  expect(result.ticket?.total).toBe(2);
+  expect(result.ticket?.repositories.map((item) => item.commits.map((entry) => entry.subject).sort())).toEqual([["TECH-24128 migration", "TECH-24128 reprise"]]);
+  expect(result.ticket?.conversations.map((item) => [item.id, item.commits])).toEqual([[worker, 2]]);
+
+  const own = await explorer.conversationCommits(projectId, worker);
+  expect(own.total).toBe(2);
+  expect(own.ticket?.total).toBe(2);
 });
 
 test("refuse un état du code hors du projet et un chemin qui sort du dépôt", async () => {
