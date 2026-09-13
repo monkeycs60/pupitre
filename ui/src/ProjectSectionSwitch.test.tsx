@@ -44,12 +44,12 @@ test('rend six destinations et les parcourt au clavier', async () => {
   const tabs = screen.getAllByRole('tab')
   expect(tabs).toHaveLength(6)
   expect(tabs.map((tab) => tab.getAttribute('aria-label'))).toEqual([
-    'Conversation', 'Tâches 2', 'Tickets', 'Sentry', 'Changelog', 'Environnements',
+    'Conversation', 'Tickets', 'Sentry', 'Changelog', 'Environnements', 'Tâches 2',
   ])
 
   fireEvent.keyDown(screen.getByRole('tab', { name: 'Conversation' }), { key: 'ArrowRight' })
-  expect(onSelect).toHaveBeenCalledWith('todos')
-  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Tâches 2' }))
+  expect(onSelect).toHaveBeenCalledWith('tickets')
+  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Tickets' }))
 })
 
 test('utilise le code physique des chiffres pour fonctionner sur AZERTY', () => {

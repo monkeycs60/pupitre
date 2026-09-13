@@ -1,4 +1,4 @@
-import { WorkspaceInspector, inspectorGroupOf, type InspectorView } from './WorkspaceInspector'
+import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type InspectorView } from './WorkspaceInspector'
 import { TodoList } from './TodoList'
 import { WorkflowsView } from './WorkflowsView'
 import { linkTodo, useTodos, type TodoItem } from './todos'
@@ -165,6 +165,7 @@ function App() {
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
   const [memoryDirty, setMemoryDirty] = useState(false)
   const [inspector, setInspector] = useState<InspectorView | null>(null)
+  const [inspectorWidth, setInspectorWidth] = useState(storedInspectorWidth)
   const [projectSurface, setProjectSurface] = useState<{
     section: ProjectSection
     layout: 'full' | 'docked'
@@ -1178,8 +1179,14 @@ function App() {
         )}
         </Suspense>
         </div>
+        <div
+          className={`workspace-inspector-slot${workspaceView === 'conversations' && inspector ? ' is-open' : ''}`}
+          style={{ '--inspector-width': `${inspectorWidth}px` } as CSSProperties}
+        >
         {workspaceView === 'conversations' && inspector ? <WorkspaceInspector
           view={inspector}
+          width={inspectorWidth}
+          onWidthChange={setInspectorWidth}
           onViewChange={openInspector}
           onClose={closeInspector}
           title={inspector === 'dashboard' && projectSurface ? PROJECT_SECTIONS.find((section) => section.id === projectSurface.section)?.label : undefined}
@@ -1227,6 +1234,7 @@ function App() {
         ) : inspector === 'quotas' ? <QuotaBar snapshot={quotas.snapshot} /> : null}
           </Suspense>
         </WorkspaceInspector> : null}
+        </div>
         </div>
       </section>
       <CommandPalette

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 export type InspectorView = 'dashboard' | 'attention' | 'fleet' | 'library' | 'memory' | 'routines' | 'workflows' | 'costs' | 'quotas' | 'progress'
 export const INSPECTOR_GROUPS = [
@@ -18,17 +18,18 @@ const MIN_INSPECTOR_WIDTH = 280
 
 /* Comme la sidebar, le panneau se borne à la fenêtre plutôt qu'à un palier
    fixe : sur un grand écran il peut couvrir la quasi-totalité de la surface. */
-function maxInspectorWidth(viewport = window.innerWidth): number {
+export function maxInspectorWidth(viewport = window.innerWidth): number {
   return Math.max(MIN_INSPECTOR_WIDTH, Math.round(viewport * 0.9))
 }
 
-export function WorkspaceInspector({ view, onViewChange, onClose, title, children }: { view: InspectorView; onViewChange: (view: InspectorView) => void; onClose: () => void; title?: string; children: ReactNode }) {
-  const [width, setWidth] = useState(() => {
-    const stored = Number(localStorage.getItem('pupitre:inspector-width'))
-    return Number.isFinite(stored) && stored >= MIN_INSPECTOR_WIDTH
-      ? Math.min(stored, maxInspectorWidth())
-      : 480
-  })
+export function storedInspectorWidth(): number {
+  const stored = Number(localStorage.getItem('pupitre:inspector-width'))
+  return Number.isFinite(stored) && stored >= MIN_INSPECTOR_WIDTH
+    ? Math.min(stored, maxInspectorWidth())
+    : 480
+}
+
+export function WorkspaceInspector({ view, width, onWidthChange, onViewChange, onClose, title, children }: { view: InspectorView; width: number; onWidthChange: (width: number) => void; onViewChange: (view: InspectorView) => void; onClose: () => void; title?: string; children: ReactNode }) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const group = inspectorGroupOf(view)
   useEffect(() => {
@@ -38,7 +39,7 @@ export function WorkspaceInspector({ view, onViewChange, onClose, title, childre
   }, [])
   function resize(value: number) {
     const next = Math.min(maxInspectorWidth(), Math.max(MIN_INSPECTOR_WIDTH, value))
-    setWidth(next)
+    onWidthChange(next)
     localStorage.setItem('pupitre:inspector-width', String(next))
   }
   return <aside className="workspace-inspector" aria-label={group.title} style={{ width }} onKeyDown={(event) => {
