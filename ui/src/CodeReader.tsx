@@ -18,6 +18,10 @@ export interface CodeOpenFile {
   line: number | null
   /** Commit dont le mode Diff montre les changements ; `null` : modifications non commitées. */
   diffSha: string | null
+  /** Le mode Diff montre tout ce que la branche change sur ce fichier. */
+  branchDiff?: boolean
+  /** Position de lecture à restaurer au retour dans l'onglet. */
+  scrollTop?: number | null
   nonce: number
 }
 
@@ -48,6 +52,7 @@ interface CodeReaderProps {
   onClearDiffCommit: () => void
   onOpenFile: (path: string) => void
   onOpenConversation: (conversationId: string) => void
+  onScrollPositionChange?: (scrollTop: number) => void
 }
 
 function statusClass(status: CodeDirtyStatus): string {
@@ -134,28 +139,30 @@ export function CodeReader({
   onClearDiffCommit,
   onOpenFile,
   onOpenConversation,
+  onScrollPositionChange,
 }: CodeReaderProps) {
   const sourcePath = openFile?.source ?? null
   const path = openFile?.path ?? null
   const displayPath = openFile?.display ?? null
-  const diffSha = openFile?.diffSha ?? null
+  const branchDiff = openFile?.branchDiff ?? false
+  const diffSha = branchDiff ? null : openFile?.diffSha ?? null
   const nonce = openFile?.nonce ?? 0
   const key = sourcePath && path ? `${sourcePath}\n${path}` : null
-  const diffKey = key ? `${key}\n${diffSha ?? ''}` : null
+  const diffKey = key ? `${key}\n${diffSha ?? ''}\n${branchDiff}` : null
   const [file, setFile] = useState<Keyed<CodeFile> | null>(null)
   const [diff, setDiff] = useState<Keyed<string> | null>(null)
 
   useEffect(() => {
     if (mode !== 'diff' || !sourcePath || !path) return
-    const requestKey = `${sourcePath}\n${path}\n${diffSha ?? ''}`
+    const requestKey = `${sourcePath}\n${path}\n${diffSha ?? ''}\n${branchDiff}`
     const controller = new AbortController()
-    getCodeDiff(projectId, sourcePath, diffSha, path, controller.signal)
+    getCodeDiff(projectId, sourcePath, diffSha, path, controller.signal, branchDiff ? 'branch' : null)
       .then(({ diff: value }) => setDiff({ key: requestKey, value, error: null }))
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) setDiff({ key: requestKey, value: null, error: codeErrorMessage(reason) })
       })
     return () => controller.abort()
-  }, [mode, projectId, sourcePath, path, diffSha, nonce])
+  }, [mode, projectId, sourcePath, path, diffSha, branchDiff, nonce])
   const [blame, setBlame] = useState<Keyed<CodeBlame> | null>(null)
   const [history, setHistory] = useState<Keyed<CodeCommitSummary[]> | null>(null)
   const [highlighted, setHighlighted] = useState<{ content: string, lines: string[] } | null>(null)
@@ -232,17 +239,19 @@ export function CodeReader({
     if (!openFile || lines.length === 0 || !scrollElement || handledNonce.current === openFile.nonce) return
     handledNonce.current = openFile.nonce
     if (openFile.line) scrollToIndex(openFile.line - 1, 'center')
-    else scrollElement.scrollTop = 0
+    else scrollElement.scrollTop = openFile.scrollTop ?? 0
   }, [openFile, lines.length, scrollToIndex, scrollElement])
 
   useEffect(() => {
     if (!scrollElement) return
     const save = () => {
-      if (scrollElement.clientHeight > 0) savedScroll.current = scrollElement.scrollTop
+      if (scrollElement.clientHeight === 0) return
+      savedScroll.current = scrollElement.scrollTop
+      onScrollPositionChange?.(scrollElement.scrollTop)
     }
     scrollElement.addEventListener('scroll', save, { passive: true })
     return () => scrollElement.removeEventListener('scroll', save)
-  }, [scrollElement])
+  }, [scrollElement, onScrollPositionChange])
 
   useLayoutEffect(() => {
     if (active && scrollRef.current) scrollRef.current.scrollTop = savedScroll.current
@@ -277,7 +286,9 @@ export function CodeReader({
       if (currentDiff.error) return <p className="code-reader-message is-error">{currentDiff.error}</p>
       if (!currentDiff.value) {
         return <p className="code-reader-message">
-          {diffSha
+          {branchDiff
+            ? 'La branche ne modifie pas ce fichier.'
+            : diffSha
             ? 'Ce commit ne modifie pas ce fichier.'
             : 'Aucune modification non commitée sur ce fichier. Choisis un commit dans l’historique, le blame ou le graphe pour afficher son diff.'}
         </p>
@@ -359,9 +370,9 @@ export function CodeReader({
           <strong>{name}</strong>
         </nav>
         {status ? <span className={`code-dirty-badge is-${statusClass(status)}`}>{DIRTY_LABELS[status]}</span> : null}
-        {mode === 'diff' ? <span className="code-reader-chip" title={diffSha ?? 'Modifications non commitées du worktree'}>
-          {diffSha ? `Commit ${diffSha.slice(0, 8)}` : 'Non commité'}
-          {diffSha ? <button type="button" title="Revenir aux modifications non commitées" aria-label="Revenir aux modifications non commitées" onClick={onClearDiffCommit}>
+        {mode === 'diff' ? <span className="code-reader-chip" title={branchDiff ? 'Tout ce que la branche change sur ce fichier' : diffSha ?? 'Modifications non commitées du worktree'}>
+          {branchDiff ? 'Diff du chantier' : diffSha ? `Commit ${diffSha.slice(0, 8)}` : 'Non commité'}
+          {diffSha || branchDiff ? <button type="button" title="Revenir aux modifications non commitées" aria-label="Revenir aux modifications non commitées" onClick={onClearDiffCommit}>
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
           </button> : null}
         </span> : null}

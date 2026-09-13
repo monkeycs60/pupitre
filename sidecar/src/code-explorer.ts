@@ -161,12 +161,68 @@ interface GitOptions {
   accept?: number[];
   maxBytes?: number;
   truncate?: boolean;
+  stdin?: string;
+}
+
+export interface CodeConversationRepository {
+  repositoryPath: string;
+  repositoryLabel: string;
+  commits: CodeCommitSummary[];
+}
+
+export interface CodeConversationCommits {
+  conversationId: string;
+  total: number;
+  repositories: CodeConversationRepository[];
+}
+
+export interface CodeBranchChanges {
+  base: string | null;
+  /** Point de départ du diff : la base, ou le premier parent de la fusion pour une branche intégrée. */
+  from: string | null;
+  head: string | null;
+  files: CodeCommitFile[];
+  filesTruncated: boolean;
+}
+
+function parseDiffFiles(numstat: string, nameStatus: string): CodeCommitFile[] {
+  const stats = new Map<string, { added: number | null; removed: number | null }>();
+  const numFields = numstat.split("\0");
+  for (let index = 0; index < numFields.length; index += 1) {
+    const field = numFields[index] ?? "";
+    const match = field.match(/^(-|\d+)\t(-|\d+)\t(.*)$/s);
+    if (!match) continue;
+    const counts = {
+      added: match[1] === "-" ? null : Number(match[1]),
+      removed: match[2] === "-" ? null : Number(match[2]),
+    };
+    if (match[3] === "") {
+      stats.set(numFields[index + 2] ?? "", counts);
+      index += 2;
+    } else {
+      stats.set(match[3]!, counts);
+    }
+  }
+
+  const files: CodeCommitFile[] = [];
+  const statusFields = nameStatus.split("\0").filter((field) => field !== "");
+  for (let index = 0; index < statusFields.length; index += 1) {
+    const status = statusFields[index] ?? "";
+    if (!/^[A-Z]\d*$/.test(status)) continue;
+    const renamed = status.startsWith("R") || status.startsWith("C");
+    const previousPath = renamed ? statusFields[index + 1] ?? null : null;
+    const path = renamed ? statusFields[index + 2] ?? "" : statusFields[index + 1] ?? "";
+    index += renamed ? 2 : 1;
+    files.push({ path, previousPath, status: status[0]!, ...(stats.get(path) ?? { added: null, removed: null }) });
+  }
+  return files;
 }
 
 async function runGit(cwd: string, args: string[], options: GitOptions = {}): Promise<GitOutput> {
   const maxBytes = options.maxBytes ?? MAX_OUTPUT_BYTES;
   const child = Bun.spawn(["git", ...args], {
     cwd,
+    ...(options.stdin !== undefined ? { stdin: Buffer.from(options.stdin) } : {}),
     stdout: "pipe",
     stderr: "pipe",
     env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" },
@@ -476,18 +532,10 @@ export class CodeExplorerService {
     let base: string | null = null;
     let focusCommits: CodeCommitSummary[] = [];
     if (offset === 0 && head) {
-      for (const candidate of BASE_BRANCHES) {
-        if (candidate === currentBranch) continue;
-        if (await optionalGit(cwd, ["rev-parse", "--verify", "-q", `${candidate}^{commit}`])) {
-          base = candidate;
-          break;
-        }
-      }
-      if (base) {
-        let own = await optionalGit(cwd, ["log", "-z", "--topo-order", "--max-count=500", LOG_FORMAT, `${base}..${head}`]);
-        if (!own && !resolved.main) own = await this.mergedBranchLog(cwd, head, base);
-        focusCommits = own ? this.withLinks(projectId, parseCommitRecords(own)) : [];
-      }
+      base = await this.findBase(cwd, currentBranch);
+      const from = base ? await this.branchStart(cwd, head, base, resolved.main) : null;
+      const own = from ? await optionalGit(cwd, ["log", "-z", "--topo-order", "--max-count=500", LOG_FORMAT, `${from}..${head}`]) : null;
+      focusCommits = own ? this.withLinks(projectId, parseCommitRecords(own)) : [];
     }
     return {
       head,
@@ -516,37 +564,7 @@ export class CodeExplorerService {
       runGit(cwd, ["diff-tree", "-r", "-M", "-z", "--no-commit-id", "--numstat", ...range]),
       runGit(cwd, ["diff-tree", "-r", "-M", "-z", "--no-commit-id", "--name-status", ...range]),
     ]);
-
-    const stats = new Map<string, { added: number | null; removed: number | null }>();
-    const numFields = numstat.stdout.split("\0");
-    for (let index = 0; index < numFields.length; index += 1) {
-      const field = numFields[index] ?? "";
-      const match = field.match(/^(-|\d+)\t(-|\d+)\t(.*)$/s);
-      if (!match) continue;
-      const counts = {
-        added: match[1] === "-" ? null : Number(match[1]),
-        removed: match[2] === "-" ? null : Number(match[2]),
-      };
-      if (match[3] === "") {
-        stats.set(numFields[index + 2] ?? "", counts);
-        index += 2;
-      } else {
-        stats.set(match[3]!, counts);
-      }
-    }
-
-    const files: CodeCommitFile[] = [];
-    const statusFields = nameStatus.stdout.split("\0").filter((field) => field !== "");
-    for (let index = 0; index < statusFields.length; index += 1) {
-      const status = statusFields[index] ?? "";
-      if (!/^[A-Z]\d*$/.test(status)) continue;
-      const renamed = status.startsWith("R") || status.startsWith("C");
-      const previousPath = renamed ? statusFields[index + 1] ?? null : null;
-      const path = renamed ? statusFields[index + 2] ?? "" : statusFields[index + 1] ?? "";
-      index += renamed ? 2 : 1;
-      const counts = stats.get(path) ?? { added: null, removed: null };
-      files.push({ path, previousPath, status: status[0]!, ...counts });
-    }
+    const files = parseDiffFiles(numstat.stdout, nameStatus.stdout);
 
     const [summary] = this.withLinks(projectId, [{
       sha: full,
@@ -566,9 +584,63 @@ export class CodeExplorerService {
     };
   }
 
-  async diff(projectId: string, source: string | null, sha: string, path: string): Promise<{ diff: string }> {
-    const { cwd, sha: refSha } = await this.resolveSource(projectId, source);
+  /** Fichiers modifiés par la branche de cet état du code, tous commits confondus. */
+  async changes(projectId: string, source: string | null): Promise<CodeBranchChanges> {
+    const resolved = await this.resolveSource(projectId, source);
+    const { base, from, head } = await this.branchRange(resolved);
+    if (!from || !head) return { base, from: null, head, files: [], filesTruncated: false };
+    const range = `${from}...${head}`;
+    const [numstat, nameStatus] = await Promise.all([
+      runGit(resolved.cwd, ["diff", "--no-ext-diff", "-M", "-z", "--numstat", range]),
+      runGit(resolved.cwd, ["diff", "--no-ext-diff", "-M", "-z", "--name-status", range]),
+    ]);
+    const files = parseDiffFiles(numstat.stdout, nameStatus.stdout);
+    return { base, from, head, files: files.slice(0, MAX_COMMIT_FILES), filesTruncated: files.length > MAX_COMMIT_FILES };
+  }
+
+  /** Commits reliés à une conversation, regroupés par dépôt du projet. */
+  async conversationCommits(projectId: string, conversationId: string): Promise<CodeConversationCommits> {
+    await this.backfillCommitLinks(projectId);
+    const projectPath = resolve(this.projectPath(projectId));
+    const remaining = new Set((this.db.query(`
+      SELECT commit_sha FROM commit_links WHERE project_id = ? AND conversation_id = ?
+    `).all(projectId, conversationId) as Array<{ commit_sha: string }>).map((row) => row.commit_sha));
+    const repositories: CodeConversationRepository[] = [];
+    for (const repository of discoverRepositories(projectPath)) {
+      if (remaining.size === 0) break;
+      const check = await runGit(repository, ["cat-file", "--batch-check=%(objectname) %(objecttype)"], {
+        stdin: `${[...remaining].join("\n")}\n`,
+      }).catch(() => null);
+      const found = (check?.stdout ?? "").split("\n")
+        .map((line) => line.split(" "))
+        .filter(([sha, type]) => type === "commit" && sha && remaining.has(sha))
+        .map(([sha]) => sha!);
+      if (found.length === 0) continue;
+      for (const sha of found) remaining.delete(sha);
+      const log = await runGit(repository, ["log", "--no-walk=sorted", "-z", LOG_FORMAT, "--stdin"], { stdin: `${found.join("\n")}\n` });
+      repositories.push({
+        repositoryPath: repository,
+        repositoryLabel: repository === projectPath ? basename(projectPath) : relative(projectPath, repository),
+        commits: this.withLinks(projectId, parseCommitRecords(log.stdout)),
+      });
+    }
+    return {
+      conversationId,
+      total: repositories.reduce((total, repository) => total + repository.commits.length, 0),
+      repositories,
+    };
+  }
+
+  async diff(projectId: string, source: string | null, sha: string, path: string, range: string | null = null): Promise<{ diff: string }> {
+    const resolved = await this.resolveSource(projectId, source);
+    const { cwd, sha: refSha } = resolved;
     const safe = this.safePath(cwd, path);
+    if (range === "branch") {
+      const { from, head } = await this.branchRange(resolved);
+      if (!from || !head) return { diff: "" };
+      const { stdout } = await runGit(cwd, ["diff", "--no-ext-diff", "-M", `${from}...${head}`, "--", safe]);
+      return { diff: stdout };
+    }
     if (!sha) {
       if (refSha) return { diff: "" };
       const tracked = await optionalGit(cwd, ["diff", "--no-ext-diff", "-M", "HEAD", "--", safe]);
@@ -697,17 +769,36 @@ export class CodeExplorerService {
     return count;
   }
 
+  private async findBase(cwd: string, currentBranch: string | null): Promise<string | null> {
+    for (const candidate of BASE_BRANCHES) {
+      if (candidate === currentBranch) continue;
+      if (await optionalGit(cwd, ["rev-parse", "--verify", "-q", `${candidate}^{commit}`])) return candidate;
+    }
+    return null;
+  }
+
   /**
-   * Commits d'une branche déjà fusionnée : ceux qu'apporte la fusion qui l'a
-   * intégrée à la base, retrouvée sur la lignée principale de la base.
+   * Début de la branche : la base tant qu'elle a des commits d'avance ; pour
+   * une branche déjà fusionnée, le premier parent de la fusion qui l'a
+   * intégrée, retrouvée sur la lignée principale de la base.
    */
-  private async mergedBranchLog(cwd: string, head: string, base: string): Promise<string | null> {
+  private async branchStart(cwd: string, head: string, base: string, main: boolean): Promise<string | null> {
+    const ahead = Number((await optionalGit(cwd, ["rev-list", "--count", `${base}..${head}`]))?.trim() ?? 0);
+    if (ahead > 0) return base;
+    if (main) return null;
     const merges = (await optionalGit(cwd, ["rev-list", "--ancestry-path", "--merges", "--reverse", `${head}..${base}`])) ?? "";
     if (!merges.trim()) return null;
     const mainline = new Set(((await optionalGit(cwd, ["rev-list", "--first-parent", "--max-count=5000", base])) ?? "").split("\n"));
     const merge = merges.split("\n").find((sha) => sha && mainline.has(sha));
-    if (!merge) return null;
-    return optionalGit(cwd, ["log", "-z", "--topo-order", "--max-count=500", LOG_FORMAT, head, `^${merge}^1`]);
+    return merge ? `${merge}^1` : null;
+  }
+
+  private async branchRange({ cwd, sha, source }: ResolvedSource): Promise<{ base: string | null; from: string | null; head: string | null }> {
+    const head = sha ?? ((await optionalGit(cwd, ["rev-parse", "--verify", "-q", "HEAD"]))?.trim() || null);
+    const branch = sha ? source.branch : ((await optionalGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"]))?.trim() || null);
+    if (!head) return { base: null, from: null, head: null };
+    const base = await this.findBase(cwd, branch);
+    return { base, from: base ? await this.branchStart(cwd, head, base, source.main) : null, head };
   }
 
   private async loadSources(projectId: string): Promise<CodeSource[]> {

@@ -11,6 +11,8 @@ import type {
   GitPushCommit,
   GitSnapshot,
   CodeBlame,
+  CodeBranchChanges,
+  CodeConversationCommits,
   CodeCommitDetail,
   CodeCommitSummary,
   CodeFile,
@@ -1266,8 +1268,21 @@ export function getCodeDiff(
   sha: string | null,
   path: string,
   signal?: AbortSignal,
+  range: 'branch' | null = null,
 ): Promise<{ diff: string }> {
-  return fetchJson(codeUrl(projectId, 'diff', { source, sha, path }), { signal })
+  return fetchJson(codeUrl(projectId, 'diff', { source, sha, path, range }), { signal })
+}
+
+export function getCodeChanges(projectId: string, source: string, signal?: AbortSignal): Promise<CodeBranchChanges> {
+  return fetchJson(codeUrl(projectId, 'changes', { source }), { signal })
+}
+
+export function getCodeConversationCommits(
+  projectId: string,
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<CodeConversationCommits> {
+  return fetchJson(codeUrl(projectId, 'conversation', { conversationId }), { signal })
 }
 
 export function searchCode(projectId: string, source: string, q: string, signal?: AbortSignal): Promise<CodeSearchResult> {

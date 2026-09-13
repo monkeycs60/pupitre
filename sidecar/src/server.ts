@@ -1521,7 +1521,7 @@ export function createServer(deps: ServerDeps) {
         }
 
         const codeAction = pathname.match(
-          /^\/api\/projects\/[^/]+\/code\/(sources|files|file|blame|history|graph|commit|diff|search)$/,
+          /^\/api\/projects\/[^/]+\/code\/(sources|files|file|blame|history|graph|commit|diff|search|changes|conversation)$/,
         )?.[1];
         if (request.method === "GET" && codeAction !== undefined) {
           const codeProjectId = routeId(pathname, /^\/api\/projects\/([^/]+)\/code\/[a-z]+$/)!;
@@ -1540,7 +1540,13 @@ export function createServer(deps: ServerDeps) {
               case "history": return json(await explorer.history(codeProjectId, source, path));
               case "graph": return json(await explorer.graph(codeProjectId, source, Number(url.searchParams.get("skip") ?? 0)));
               case "commit": return json(await explorer.commit(codeProjectId, source, sha));
-              case "diff": return json(await explorer.diff(codeProjectId, source, sha, path));
+              case "diff": return json(await explorer.diff(codeProjectId, source, sha, path, url.searchParams.get("range")));
+              case "changes": return json(await explorer.changes(codeProjectId, source));
+              case "conversation": {
+                const conversationId = url.searchParams.get("conversationId");
+                if (!conversationId) throw new HttpError(400, "conversation manquante");
+                return json(await explorer.conversationCommits(codeProjectId, conversationId));
+              }
               default: return json(await explorer.search(codeProjectId, source, url.searchParams.get("q") ?? ""));
             }
           } catch (error) {

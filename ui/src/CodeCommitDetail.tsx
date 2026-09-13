@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { getCodeCommit } from './api'
-import { absoluteCodeDate, codeErrorMessage, relativeCodeDate, splitCodePath } from './codeFormat'
+import { CodeChangedFile } from './CodeChangedFile'
+import { absoluteCodeDate, codeErrorMessage, relativeCodeDate } from './codeFormat'
 import { parseCodeRefs } from './codeGraphLayout'
 import { ExternalLink } from './externalLink'
-import { FileTypeIcon } from './FileTypeIcon'
 import { ProviderMark } from './ProviderMark'
 import type { TicketLinks } from './ticketLinks'
 import type { CodeCommitDetail as CommitDetailData } from './types'
@@ -22,15 +22,6 @@ interface CodeCommitDetailProps {
   onOpenFile: (path: string) => void
   onSelectCommit: (sha: string) => void
   onClose?: () => void
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  A: 'ajouté',
-  M: 'modifié',
-  D: 'supprimé',
-  R: 'renommé',
-  C: 'copié',
-  T: 'type modifié',
 }
 
 const BODY_PREVIEW_LINES = 6
@@ -158,36 +149,14 @@ export function CodeCommitDetail({
       {detail.filesTruncated ? ' (liste tronquée)' : ''}
     </h4>
     <ul className="code-commit-files">
-      {detail.files.map((file) => {
-        const { directory, name } = splitCodePath(file.path)
-        const active = file.path === activePath
-        return <li className={`code-commit-file${active ? ' is-active' : ''}`} key={file.path}>
-          <div className="code-commit-file-main">
-            <button
-              type="button"
-              className="code-commit-file-name"
-              aria-current={active ? 'true' : undefined}
-              title={`Voir le diff de ${file.path} dans ce commit`}
-              onClick={() => onOpenDiff(file.path)}
-            >
-              <FileTypeIcon path={file.path} />
-              <strong>{name}</strong>
-              <span className="code-commit-file-dir">{file.previousPath ? `depuis ${file.previousPath}` : directory}</span>
-            </button>
-            <span className="code-commit-file-stat" title={STATUS_LABELS[file.status] ?? file.status}>
-              {file.added === null ? <span>binaire</span> : <span className="is-added">+{file.added}</span>}
-              {file.removed === null ? null : <span className="is-removed">−{file.removed}</span>}
-            </span>
-            <button
-              type="button"
-              className="code-text-button"
-              disabled={file.status === 'D'}
-              title={file.status === 'D' ? 'Fichier supprimé par ce commit' : 'Ouvrir la version courante du fichier'}
-              onClick={() => onOpenFile(file.path)}
-            >Courant</button>
-          </div>
-        </li>
-      })}
+      {detail.files.map((file) => <CodeChangedFile
+        key={file.path}
+        file={file}
+        active={file.path === activePath}
+        diffTitle={`Voir le diff de ${file.path} dans ce commit`}
+        onOpenDiff={() => onOpenDiff(file.path)}
+        onOpenFile={() => onOpenFile(file.path)}
+      />)}
     </ul>
   </section>
 }

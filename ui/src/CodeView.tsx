@@ -1,19 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getCodeGraph, listCodeFiles, listCodeSources, listProjectConversations, searchCode } from './api'
+import { getCodeConversationCommits, getCodeGraph, listCodeFiles, listCodeSources, listProjectConversations, searchCode } from './api'
+import { CodeChangesPanel } from './CodeChangesPanel'
 import { CodeCommitDetail } from './CodeCommitDetail'
 import { CodeFileTree } from './CodeFileTree'
 import { codeErrorMessage, splitCodePath } from './codeFormat'
-import { CodeGraph, type CodeGraphState } from './CodeGraph'
+import { CodeGraph, type CodeGraphConversationOption, type CodeGraphState } from './CodeGraph'
 import { mergeCodeCommits, type CodeGraphCommit } from './codeGraphLayout'
 import { CodeReader, type CodeOpenFile, type CodeReaderMode } from './CodeReader'
 import { buildCodeScopes, defaultCodeScope, fromScopePath, scopePrefixes, toScopePath } from './codeScopes'
 import { CodeSourcePicker } from './CodeSourcePicker'
 import { ancestorDirectories } from './codeTree'
+import { codeViewMemoryKey, readCodeViewMemory, writeCodeViewMemory } from './codeViewMemory'
 import type { TicketLinks } from './ticketLinks'
-import type { CodeCommitSummary, CodeDirtyStatus, CodeFileList, CodeSearchResult, CodeSource, Conversation, Project } from './types'
+import type {
+  CodeCommitSummary,
+  CodeConversationCommits,
+  CodeDirtyStatus,
+  CodeFileList,
+  CodeSearchResult,
+  CodeSource,
+  Conversation,
+  Project,
+} from './types'
 
 const READER_MODE_KEY = 'pupitre:code-reader-mode'
-const AGENT_ONLY_KEY = 'pupitre:code-agent-only'
+const CONVERSATION_PREFIX = 'conversation:'
 
 interface CodeViewProps {
   project: Project
@@ -62,34 +73,59 @@ function storedReaderMode(): CodeReaderMode {
 
 function singleGraphSummary(graph: SourceGraph): string {
   const branch = graph.currentBranch ?? (graph.head ? `HEAD ${graph.head.slice(0, 7)}` : '')
-  if (!graph.base || graph.focus.length === 0) return branch
-  return `${branch}, ${graph.focus.length} commit${graph.focus.length > 1 ? 's' : ''} d’avance sur ${graph.base}`
+  if (!graph.base || graph.focusCommits.length === 0) return branch
+  return `${branch}, ${graph.focusCommits.length} commit${graph.focusCommits.length > 1 ? 's' : ''} sur la branche depuis ${graph.base}`
 }
 
 export function CodeView({ project, conversation, ticketLinks, onOpenConversation }: CodeViewProps) {
-  const [sources, setSources] = useState<CodeSource[] | null>(null)
-  const [sourcesError, setSourcesError] = useState<string | null>(null)
-  const [scopeId, setScopeId] = useState<string | null>(null)
-  const [files, setFiles] = useState<Record<string, SourceFiles>>({})
-  const [graphs, setGraphs] = useState<Record<string, SourceGraph>>({})
-  const [openFile, setOpenFile] = useState<CodeOpenFile | null>(null)
-  const [expandedDirectories, setExpandedDirectories] = useState<ReadonlySet<string>>(() => new Set())
-  const [readerMode, setReaderMode] = useState<CodeReaderMode>(storedReaderMode)
-  const [selected, setSelected] = useState<{ sha: string, source: string } | null>(null)
-  const [graphExpanded, setGraphExpanded] = useState(false)
-  const [agentOnly, setAgentOnly] = useState(() => readStorage(AGENT_ONLY_KEY) === 'true')
-  const [branchOnly, setBranchOnly] = useState(false)
-  const [conversations, setConversations] = useState<ReadonlyMap<string, Conversation>>(() => new Map())
-  const searchRef = useRef<HTMLInputElement | null>(null)
-  const openCounter = useRef(0)
   const conversationId = conversation?.id ?? null
   const worktreePath = conversation?.worktree_path ?? null
   const createdOnBranch = conversation?.created_on_branch ?? null
+  const memoryKey = codeViewMemoryKey(project.id, conversationId)
+  const [memory] = useState(() => readCodeViewMemory(memoryKey))
+
+  const [sources, setSources] = useState<CodeSource[] | null>(null)
+  const [sourcesError, setSourcesError] = useState<string | null>(null)
+  const [scopeId, setScopeId] = useState<string | null>(memory.scopeId ?? null)
+  const [files, setFiles] = useState<Record<string, SourceFiles>>({})
+  const [graphs, setGraphs] = useState<Record<string, SourceGraph>>({})
+  const [openFile, setOpenFile] = useState<CodeOpenFile | null>(() => (
+    memory.openFile ? { ...memory.openFile, scrollTop: memory.readerScrollTop ?? null } : null
+  ))
+  const [expandedDirectories, setExpandedDirectories] = useState<ReadonlySet<string>>(() => new Set(memory.expandedDirectories ?? []))
+  const [readerMode, setReaderMode] = useState<CodeReaderMode>(storedReaderMode)
+  const [selected, setSelected] = useState<{ sha: string, source: string } | null>(memory.selected ?? null)
+  const [detailView, setDetailView] = useState<'commit' | 'changes'>(memory.detailView ?? 'commit')
+  const [graphExpanded, setGraphExpanded] = useState(memory.graphExpanded ?? false)
+  const [branchOnly, setBranchOnly] = useState(memory.branchOnly ?? false)
+  const [conversationFilter, setConversationFilter] = useState(memory.conversationFilter ?? 'all')
+  const [hiddenRepositories, setHiddenRepositories] = useState<ReadonlySet<string>>(() => new Set(memory.hiddenRepositories ?? []))
+  const [conversationCommitData, setConversationCommitData] = useState<Record<string, CodeConversationCommits>>({})
+  const [conversations, setConversations] = useState<ReadonlyMap<string, Conversation>>(() => new Map())
+  const searchRef = useRef<HTMLInputElement | null>(null)
+  const openCounter = useRef(memory.openFile?.nonce ?? 0)
 
   const scopes = useMemo(() => buildCodeScopes(sources ?? []), [sources])
   const scope = scopes.find((item) => item.id === scopeId) ?? null
   const scopeKey = scope ? scope.sources.map((source) => source.path).join('\n') : ''
   const prefixes = useMemo(() => (scope ? scopePrefixes(scope) : new Map<string, string>()), [scope])
+  const specificConversation = conversationFilter.startsWith(CONVERSATION_PREFIX)
+    ? conversationFilter.slice(CONVERSATION_PREFIX.length)
+    : null
+
+  useEffect(() => {
+    writeCodeViewMemory(memoryKey, {
+      scopeId,
+      openFile,
+      expandedDirectories: [...expandedDirectories],
+      selected,
+      detailView,
+      graphExpanded,
+      branchOnly,
+      conversationFilter,
+      hiddenRepositories: [...hiddenRepositories],
+    })
+  }, [memoryKey, scopeId, openFile, expandedDirectories, selected, detailView, graphExpanded, branchOnly, conversationFilter, hiddenRepositories])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -100,7 +136,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
         setScopeId((current) => {
           if (current && nextScopes.some((item) => item.id === current)) return current
           const chosen = defaultCodeScope(nextScopes, conversationId, worktreePath, createdOnBranch)
-          setBranchOnly(nextScopes.find((item) => item.id === chosen)?.kind === 'ticket')
+          if (memory.branchOnly === undefined) setBranchOnly(nextScopes.find((item) => item.id === chosen)?.kind === 'ticket')
           return chosen
         })
       })
@@ -117,7 +153,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
       controller.abort()
       active = false
     }
-  }, [project.id, conversationId, worktreePath, createdOnBranch])
+  }, [project.id, conversationId, worktreePath, createdOnBranch, memory])
 
   useEffect(() => {
     if (!scopeKey) return
@@ -139,10 +175,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     for (const source of scopeSources) {
       getCodeGraph(project.id, source, 0, controller.signal)
         .then((page) => {
-          setGraphs((current) => ({
-            ...current,
-            [source]: { ...page, loadingMore: false, error: null },
-          }))
+          setGraphs((current) => ({ ...current, [source]: { ...page, loadingMore: false, error: null } }))
           if (source === scopeSources[0] && page.head) {
             const head = page.head
             setSelected((current) => current ?? { sha: head, source })
@@ -158,6 +191,18 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     }
     return () => controller.abort()
   }, [project.id, scopeKey])
+
+  const wantedConversations = [...new Set([conversationId, specificConversation].filter((id): id is string => Boolean(id)))].join('\n')
+  useEffect(() => {
+    if (!wantedConversations) return
+    const controller = new AbortController()
+    for (const id of wantedConversations.split('\n')) {
+      getCodeConversationCommits(project.id, id, controller.signal)
+        .then((data) => setConversationCommitData((current) => ({ ...current, [id]: data })))
+        .catch(() => {})
+    }
+    return () => controller.abort()
+  }, [project.id, wantedConversations])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -199,8 +244,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
       merged.truncated ||= list.truncated
     }
     const error = entries.find(({ entry }) => entry?.error)?.entry?.error ?? null
-    const anyList = entries.some(({ entry }) => entry?.list)
-    return { list: anyList ? merged : null, error }
+    return { list: entries.some(({ entry }) => entry?.list) ? merged : null, error }
   }, [scope, files, prefixes])
 
   const graphView = useMemo((): { state: CodeGraphState | null, error: string | null } => {
@@ -234,6 +278,48 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     }
   }, [scope, graphs, prefixes])
 
+  const conversationGraph = useMemo((): { commits: CodeGraphCommit[] | null, outside: number } => {
+    if (!scope || !specificConversation) return { commits: null, outside: 0 }
+    const data = conversationCommitData[specificConversation]
+    if (!data) return { commits: null, outside: 0 }
+    const multi = scope.sources.length > 1
+    const lists = []
+    let outside = 0
+    for (const group of data.repositories) {
+      const index = scope.sources.findIndex((source) => source.repositoryPath === group.repositoryPath)
+      if (index === -1) {
+        outside += group.commits.length
+        continue
+      }
+      const source = scope.sources[index]!
+      lists.push({ source: source.path, repoLabel: multi ? prefixes.get(source.path) ?? null : null, repoIndex: index, commits: group.commits })
+    }
+    return { commits: mergeCodeCommits(lists), outside }
+  }, [scope, specificConversation, conversationCommitData, prefixes])
+
+  const conversationOptions = useMemo((): CodeGraphConversationOption[] => {
+    const options = new Map<string, CodeGraphConversationOption>()
+    const pool = graphView.state ? (branchOnly ? graphView.state.focusCommits : graphView.state.commits) : []
+    for (const commit of pool) {
+      for (const link of commit.conversations) {
+        const entry = options.get(link.id) ?? { id: link.id, title: link.title, provider: link.provider, count: 0 }
+        entry.count += 1
+        options.set(link.id, entry)
+      }
+    }
+    for (const id of [conversationId, specificConversation]) {
+      if (!id) continue
+      const total = conversationCommitData[id]?.total
+      const known = options.get(id)
+      const item = conversations.get(id) ?? (id === conversation?.id ? conversation : undefined)
+      if (known && total !== undefined) known.count = total
+      if (!known && item && (total ?? 0) > 0) options.set(id, { id, title: item.title, provider: item.provider, count: total ?? 0 })
+    }
+    return [...options.values()].sort((left, right) => (
+      Number(right.id === conversationId) - Number(left.id === conversationId) || right.count - left.count
+    ))
+  }, [graphView.state, branchOnly, conversationId, specificConversation, conversationCommitData, conversations, conversation])
+
   const dirty = useMemo(
     () => new Map<string, CodeDirtyStatus>((mergedFiles.list?.dirty ?? []).map((item) => [item.path, item.status])),
     [mergedFiles],
@@ -260,6 +346,10 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     }
   }, [project.id, scope, prefixes])
 
+  const rememberScroll = useCallback((scrollTop: number) => {
+    writeCodeViewMemory(memoryKey, { readerScrollTop: scrollTop })
+  }, [memoryKey])
+
   function changeScope(id: string) {
     if (id === scopeId) return
     const next = scopes.find((item) => item.id === id)
@@ -268,6 +358,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     setSelected(null)
     setExpandedDirectories(new Set())
     setBranchOnly(next.kind === 'ticket')
+    setHiddenRepositories(new Set())
     setOpenFile((current) => (
       current && next.sources.some((source) => source.path === current.source)
         ? { ...current, display: toScopePath(next, current.source, current.path) }
@@ -275,7 +366,15 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     ))
   }
 
-  function openFileAt(display: string, options: { line?: number | null, diffSha?: string | null, mode?: CodeReaderMode } = {}) {
+  function changeReaderMode(mode: CodeReaderMode) {
+    setReaderMode(mode)
+    writeStorage(READER_MODE_KEY, mode)
+  }
+
+  function openFileAt(
+    display: string,
+    options: { line?: number | null, diffSha?: string | null, branchDiff?: boolean, mode?: CodeReaderMode } = {},
+  ) {
     if (!scope) return
     const location = fromScopePath(scope, display)
     if (!location) return
@@ -286,6 +385,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
       path: location.path,
       line: options.line ?? null,
       diffSha: options.diffSha ?? null,
+      branchDiff: options.branchDiff ?? false,
       nonce: openCounter.current,
     })
     if (options.mode) changeReaderMode(options.mode)
@@ -314,16 +414,20 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     })
   }
 
-  function changeReaderMode(mode: CodeReaderMode) {
-    setReaderMode(mode)
-    writeStorage(READER_MODE_KEY, mode)
+  function toggleRepository(source: string) {
+    setHiddenRepositories((current) => {
+      const next = new Set(current)
+      if (next.has(source)) next.delete(source)
+      else next.add(source)
+      return next
+    })
   }
 
-  function toggleAgentOnly() {
-    setAgentOnly((value) => {
-      writeStorage(AGENT_ONLY_KEY, String(!value))
-      return !value
-    })
+  function selectCommitFromReader(sha: string) {
+    if (!openFile) return
+    setSelected({ sha, source: openFile.source })
+    setDetailView('commit')
+    setOpenFile({ ...openFile, diffSha: sha, branchDiff: false })
   }
 
   function loadMoreCommits() {
@@ -362,7 +466,14 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     </div>
   }
 
-  const selectedRepository = selected && scope.sources.length > 1
+  const multi = scope.sources.length > 1
+  const graphRepositories = multi
+    ? scope.sources.map((source, index) => ({ source: source.path, label: prefixes.get(source.path) ?? source.repositoryLabel, index, hidden: hiddenRepositories.has(source.path) }))
+    : []
+  const conversationNote = conversationGraph.outside > 0
+    ? `${conversationGraph.outside} commit${conversationGraph.outside > 1 ? 's' : ''} de cette conversation dans d’autres dépôts ou worktrees.`
+    : null
+  const selectedRepository = selected && multi
     ? { label: prefixes.get(selected.source) ?? '', index: Math.max(scope.sources.findIndex((source) => source.path === selected.source), 0) }
     : null
   const detailProps = selected ? {
@@ -370,20 +481,33 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
     sourcePath: selected.source,
     sha: selected.sha,
     repository: selectedRepository,
-    activePath: readerMode === 'diff' && openFile?.source === selected.source && openFile.diffSha === selected.sha ? openFile.path : null,
+    activePath: readerMode === 'diff' && openFile && !openFile.branchDiff && openFile.source === selected.source && openFile.diffSha === selected.sha ? openFile.path : null,
     ticketForConversation,
     onOpenConversation,
     onOpenDiff: (path: string) => openFileAt(toScopePath(scope, selected.source, path), { diffSha: selected.sha, mode: 'diff' }),
-    onOpenFile: (path: string) => openFileAt(toScopePath(scope, selected.source, path), {
-      mode: readerMode === 'blame' ? 'blame' : 'code',
-    }),
+    onOpenFile: (path: string) => openFileAt(toScopePath(scope, selected.source, path), { mode: readerMode === 'blame' ? 'blame' : 'code' }),
     onSelectCommit: (sha: string) => setSelected({ sha, source: selected.source }),
   } : null
+  const changesProps = {
+    projectId: project.id,
+    scopeLabel: scope.kind === 'source' ? scope.label : `${scope.label}, ${scope.sources.length} dépôts`,
+    sources: scope.sources.filter((source) => !hiddenRepositories.has(source.path)),
+    prefixes,
+    activeDisplay: readerMode === 'diff' && openFile?.branchDiff ? openFile.display : null,
+    onOpenDiff: (source: string, path: string) => openFileAt(toScopePath(scope, source, path), { branchDiff: true, mode: 'diff' }),
+    onOpenFile: (source: string, path: string) => openFileAt(toScopePath(scope, source, path), { mode: readerMode === 'blame' ? 'blame' : 'code' }),
+    onClose: () => setDetailView('commit'),
+  }
 
-  function selectCommitFromReader(sha: string) {
-    if (!openFile) return
-    setSelected({ sha, source: openFile.source })
-    setOpenFile({ ...openFile, diffSha: sha })
+  function renderDetail(variant: 'docked' | 'side') {
+    if (detailView === 'changes') return <CodeChangesPanel key={`changes-${scope!.id}`} {...changesProps} variant={variant} />
+    if (!detailProps) return variant === 'side' ? <p className="code-empty-note">Choisis un commit dans le graphe pour voir son détail.</p> : null
+    return <CodeCommitDetail
+      key={`${detailProps.sourcePath}-${detailProps.sha}`}
+      {...detailProps}
+      variant={variant}
+      onClose={variant === 'docked' ? () => setSelected(null) : undefined}
+    />
   }
 
   return <div className={`code-view${graphExpanded ? ' is-graph-expanded' : ''}`}>
@@ -418,9 +542,10 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
         active={!graphExpanded}
         onModeChange={changeReaderMode}
         onSelectCommit={selectCommitFromReader}
-        onClearDiffCommit={() => openFile && setOpenFile({ ...openFile, diffSha: null })}
+        onClearDiffCommit={() => openFile && setOpenFile({ ...openFile, diffSha: null, branchDiff: false })}
         onOpenFile={(path) => openFileAt(path)}
         onOpenConversation={onOpenConversation}
+        onScrollPositionChange={rememberScroll}
       />
     </section>
 
@@ -431,24 +556,28 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
         layout={graphExpanded ? 'table' : 'compact'}
         selectedSha={selected?.sha ?? null}
         returnLabel={openFile ? splitCodePath(openFile.display).name : null}
-        agentOnly={agentOnly}
         branchOnly={branchOnly}
-        onToggleAgentOnly={toggleAgentOnly}
         onToggleBranchOnly={() => setBranchOnly((value) => !value)}
-        onSelect={(commit) => setSelected({ sha: commit.sha, source: commit.source })}
+        conversationFilter={conversationFilter}
+        conversationOptions={conversationOptions}
+        conversationCommits={conversationGraph.commits}
+        conversationNote={conversationNote}
+        onConversationFilterChange={setConversationFilter}
+        repositories={graphRepositories}
+        onToggleRepository={toggleRepository}
+        changesActive={detailView === 'changes'}
+        onToggleChanges={() => setDetailView((value) => (value === 'changes' ? 'commit' : 'changes'))}
+        onSelect={(commit) => {
+          setSelected({ sha: commit.sha, source: commit.source })
+          setDetailView('commit')
+        }}
         onLoadMore={loadMoreCommits}
         onToggleExpanded={() => setGraphExpanded((value) => !value)}
         onOpenConversation={onOpenConversation}
       />
-      {!graphExpanded && detailProps
-        ? <CodeCommitDetail key={`${detailProps.sourcePath}-${detailProps.sha}`} {...detailProps} variant="docked" onClose={() => setSelected(null)} />
-        : null}
+      {!graphExpanded ? renderDetail('docked') : null}
     </section>
 
-    {graphExpanded ? <aside className="code-detail-column" aria-label="Détail du commit">
-      {detailProps
-        ? <CodeCommitDetail key={`${detailProps.sourcePath}-${detailProps.sha}`} {...detailProps} variant="side" />
-        : <p className="code-empty-note">Choisis un commit dans le graphe pour voir son détail.</p>}
-    </aside> : null}
+    {graphExpanded ? <aside className="code-detail-column" aria-label="Détail">{renderDetail('side')}</aside> : null}
   </div>
 }

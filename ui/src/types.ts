@@ -912,6 +912,26 @@ export interface CodeCommitDetail extends CodeCommitSummary {
   filesTruncated: boolean
 }
 
+export interface CodeConversationRepository {
+  repositoryPath: string
+  repositoryLabel: string
+  commits: CodeCommitSummary[]
+}
+
+export interface CodeConversationCommits {
+  conversationId: string
+  total: number
+  repositories: CodeConversationRepository[]
+}
+
+export interface CodeBranchChanges {
+  base: string | null
+  from: string | null
+  head: string | null
+  files: CodeCommitFile[]
+  filesTruncated: boolean
+}
+
 export interface CodeSearchMatch {
   path: string
   line: number

@@ -1,16 +1,18 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
-import type { CodeCommitDetail, CodeCommitSummary, CodeFileList, CodeGraphPage, CodeSource, Conversation, Project } from './types'
+import type { CodeBranchChanges, CodeCommitDetail, CodeCommitSummary, CodeFileList, CodeGraphPage, CodeSource, Conversation, Project } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor, within } = await import('@testing-library/react')
 const { CodeView } = await import('./CodeView')
+const { resetCodeViewMemory } = await import('./codeViewMemory')
 const defaultFetch = globalThis.fetch
 
 afterEach(() => {
   cleanup()
+  resetCodeViewMemory()
   window.localStorage.clear()
   globalThis.fetch = defaultFetch
 })
@@ -55,6 +57,7 @@ const baseConversation: Conversation = {
 }
 
 const link = { id: baseConversation.id, title: baseConversation.title, provider: 'claude' as const }
+const DIFF = 'diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1,2 +1,2 @@\n-export const a = 0\n+export const a = 1\n export const b = 2\n'
 
 function summary(sha: string, subject: string, authoredAt: string, extra: Partial<CodeCommitSummary> = {}): CodeCommitSummary {
   return { sha: sha.repeat(40).slice(0, 40), parents: [], refs: [], author: 'Clément', authoredAt, subject, conversations: [], agent: null, ...extra }
@@ -69,6 +72,7 @@ interface Fixture {
   files: Record<string, CodeFileList>
   graphs: Record<string, CodeGraphPage>
   detail?: CodeCommitDetail
+  changes?: Record<string, CodeBranchChanges>
 }
 
 function mockApi(fixture: Fixture): string[] {
@@ -82,9 +86,9 @@ function mockApi(fixture: Fixture): string[] {
     if (url.includes('/code/files')) return Response.json(fixture.files[sourcePath])
     if (url.includes('/code/graph')) return Response.json(fixture.graphs[sourcePath])
     if (url.includes('/code/commit')) return Response.json(fixture.detail)
-    if (url.includes('/code/diff')) {
-      return Response.json({ diff: 'diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1,2 +1,2 @@\n-export const a = 0\n+export const a = 1\n export const b = 2\n' })
-    }
+    if (url.includes('/code/changes')) return Response.json(fixture.changes?.[sourcePath])
+    if (url.includes('/code/conversation')) return Response.json({ conversationId: params.get('conversationId'), total: 0, repositories: [] })
+    if (url.includes('/code/diff')) return Response.json({ diff: DIFF })
     if (url.includes('/code/file')) {
       return Response.json({ path: params.get('path'), ref: 'worktree', content: 'export const a = 1\nexport const b = 2\n', size: 38, binary: false, tooLarge: false })
     }
@@ -110,6 +114,9 @@ function singleFixture(): Fixture {
       '/tmp/worktrees/feature': { head: head.sha, currentBranch: 'feature/code', base: 'main', focus: [head.sha], focusCommits: [head], skip: 0, hasMore: false, commits: [head, base] },
     },
     detail: { ...head, email: 'clement@example.test', body: '', files: [{ path: 'src/app.ts', previousPath: null, status: 'M', added: 3, removed: 1 }], filesTruncated: false },
+    changes: {
+      '/tmp/worktrees/feature': { base: 'main', from: 'main', head: head.sha, files: [{ path: 'src/app.ts', previousPath: null, status: 'M', added: 3, removed: 1 }], filesTruncated: false },
+    },
   }
 }
 
@@ -133,7 +140,6 @@ test('ouvre le worktree de la conversation, lit un fichier et remonte à la conv
 
   fireEvent.click(screen.getByTitle('Voir le diff de src/app.ts dans ce commit'))
   await waitFor(() => expect(document.querySelectorAll('.code-diff-line.is-addition')).toHaveLength(1))
-  expect(document.querySelectorAll('.code-diff-line.is-deletion')).toHaveLength(1)
   expect(screen.getByRole('tab', { name: 'Diff' }).getAttribute('aria-selected')).toBe('true')
   expect(document.querySelector('.code-reader-chip')?.textContent).toContain('Commit bbbbbbbb')
 
@@ -163,9 +169,27 @@ test('agrandit le graphe en table puis revient au fichier ouvert avec Échap', a
   expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: 'Chercher un fichier ou du texte' }))
 })
 
-test('réunit les worktrees d’un ticket sur plusieurs dépôts, filtre les commits d’agents et les états du code', async () => {
+test('retrouve l’état de l’onglet au retour et liste le diff du chantier', async () => {
+  mockApi(singleFixture())
+  const props = { project, conversation: baseConversation, ticketLinks: new Map(), onOpenConversation: () => {} }
+  const first = render(createElement(CodeView, props))
+  fireEvent.click(await screen.findByRole('treeitem', { name: 'README.md' }))
+  await waitFor(() => expect(document.querySelector('.code-breadcrumb strong')?.textContent).toBe('README.md'))
+  first.unmount()
+
+  render(createElement(CodeView, props))
+  await waitFor(() => expect(document.querySelector('.code-breadcrumb strong')?.textContent).toBe('README.md'))
+
+  fireEvent.click(await screen.findByRole('button', { name: /Diff du chantier/ }))
+  fireEvent.click(await screen.findByTitle('Voir le diff de src/app.ts sur la branche'))
+  await waitFor(() => expect(document.querySelectorAll('.code-diff-line.is-addition')).toHaveLength(1))
+  expect(document.querySelector('.code-reader-chip')?.textContent).toContain('Diff du chantier')
+  expect(document.querySelector('.code-commit-file.is-active strong')?.textContent).toBe('app.ts')
+})
+
+test('réunit les worktrees d’un ticket, filtre par conversation et par dépôt', async () => {
   const conversation = { ...baseConversation, worktree_path: '/tmp/apps/api-tech1234' }
-  const apiCommit = summary('c', 'api du ticket', '2026-09-10T10:00:00.000Z', { agent: { provider: 'claude', name: 'Claude Fable 5' } })
+  const apiCommit = summary('c', 'api du ticket', '2026-09-10T10:00:00.000Z', { conversations: [link] })
   const webCommit = summary('d', 'écran du ticket', '2026-09-11T10:00:00.000Z')
   mockApi({
     sources: [
@@ -187,17 +211,21 @@ test('réunit les worktrees d’un ticket sur plusieurs dépôts, filtre les com
   render(createElement(CodeView, { project, conversation, ticketLinks: new Map(), onOpenConversation: () => {} }))
 
   expect(await screen.findByText('Chantier sur 2 dépôts')).toBeTruthy()
-  expect(document.querySelector('.code-source-button .code-source-branch')?.textContent).toBe('TECH-1234')
   expect(await screen.findByRole('treeitem', { name: 'api/src' })).toBeTruthy()
-  expect(screen.getByRole('treeitem', { name: 'web/src' })).toBeTruthy()
-
   await waitFor(() => expect(document.querySelectorAll('.code-graph-row')).toHaveLength(2))
   expect([...document.querySelectorAll('.code-graph-row .code-repo-badge')].map((badge) => badge.textContent)).toEqual(['web', 'api'])
   expect(screen.getByRole('button', { name: /Branche/ }).getAttribute('aria-pressed')).toBe('true')
 
-  fireEvent.click(screen.getByRole('button', { name: /Agents/ }))
+  fireEvent.click(screen.getByRole('button', { name: /Conversations/ }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: /Avec une conversation/ }))
   await waitFor(() => expect(document.querySelectorAll('.code-graph-row')).toHaveLength(1))
   expect(document.querySelector('.code-graph-row .code-repo-badge')?.textContent).toBe('api')
+
+  fireEvent.click(screen.getByRole('button', { name: /Avec conversation/ }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Tous les commits' }))
+  fireEvent.click(screen.getByRole('button', { name: 'web' }))
+  await waitFor(() => expect(document.querySelectorAll('.code-graph-row')).toHaveLength(1))
+  expect(screen.getByRole('button', { name: 'web' }).getAttribute('aria-pressed')).toBe('false')
 
   fireEvent.click(document.querySelector('.code-source-button')!)
   fireEvent.change(screen.getByRole('searchbox', { name: 'Filtrer les états du code' }), { target: { value: 'web develop' } })

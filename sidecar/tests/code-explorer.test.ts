@@ -285,6 +285,45 @@ test("rattrape la provenance des commits faits pendant un tour, dépôt imbriqu�
   expect(graph.commits.find((item) => item.sha === colleague)?.conversations).toEqual([]);
 });
 
+test("liste les fichiers changés par la branche et leur diff cumulé, branche fusionnée comprise", async () => {
+  git(repo, "checkout", "-q", "-b", "feature/TECH-777");
+  commit(repo, "a.ts", "a\n", "a");
+  commit(repo, "a.ts", "a\nb\n", "a encore");
+  commit(repo, "c.ts", "c\n", "c");
+  git(repo, "checkout", "-q", "main");
+  commit(repo, "main.ts", "1\n", "main avance");
+  const worktree = join(root, "tech-777");
+  git(repo, "worktree", "add", "-q", worktree, "feature/TECH-777");
+
+  const open = await explorer.changes(projectId, worktree);
+  expect(open.base).toBe("main");
+  expect(open.files.map((file) => [file.path, file.status, file.added])).toEqual([["a.ts", "A", 2], ["c.ts", "A", 1]]);
+  expect((await explorer.diff(projectId, worktree, "", "a.ts", "branch")).diff).toContain("+b");
+
+  git(repo, "merge", "-q", "--no-ff", "-m", "Merge feature", "feature/TECH-777");
+  const merged = await explorer.changes(projectId, worktree);
+  expect(merged.from).toMatch(/\^1$/);
+  expect(merged.files.map((file) => file.path)).toEqual(["a.ts", "c.ts"]);
+});
+
+test("regroupe par dépôt les commits reliés à une conversation", async () => {
+  const api = join(repo, "apps", "api");
+  initRepo(api);
+  const rootCommit = commit(repo, "root.ts", "1\n", "racine");
+  const apiCommit = commit(api, "api.ts", "1\n", "api");
+  const insert = db.query("INSERT INTO commit_links (commit_sha, project_id, conversation_id, created_at) VALUES (?, ?, ?, ?)");
+  insert.run(rootCommit, projectId, conversationId, new Date().toISOString());
+  insert.run(apiCommit, projectId, conversationId, new Date().toISOString());
+
+  const result = await explorer.conversationCommits(projectId, conversationId);
+
+  expect(result.total).toBe(2);
+  expect(result.repositories.map((item) => [item.repositoryLabel, item.commits.map((entry) => entry.subject)])).toEqual([
+    ["mono", ["racine"]],
+    ["apps/api", ["api"]],
+  ]);
+});
+
 test("refuse un état du code hors du projet et un chemin qui sort du dépôt", async () => {
   const outside = join(root, "outside");
   initRepo(outside);

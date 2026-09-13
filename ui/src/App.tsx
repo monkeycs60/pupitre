@@ -62,6 +62,7 @@ import type { AttentionTarget } from './types'
 import { retryUntilAvailable } from './startupRetry'
 import { subscribeVisualFeedbackNavigation } from './visualFeedbackNavigation'
 import { ProjectSectionSwitch } from './ProjectSectionSwitch'
+import { codeViewMemoryKey, writeCodeViewMemory } from './codeViewMemory'
 import {
   PROJECT_SECTIONS,
   projectNavigationIndexForShortcut,
@@ -502,6 +503,18 @@ function App() {
     setProjectSurface({ section, layout })
     setInspector(layout === 'docked' ? 'dashboard' : null)
     setWorkspaceView('conversations')
+  }
+
+  function openCodeForConversation(conversationId: string) {
+    if (selectedProject === null) return
+    writeCodeViewMemory(codeViewMemoryKey(selectedProject.id, conversationId), {
+      scopeId: null,
+      conversationFilter: `conversation:${conversationId}`,
+      branchOnly: false,
+      graphExpanded: false,
+      detailView: 'commit',
+    })
+    openProjectSection('code')
   }
 
   function closeProjectSurface() {
@@ -1029,7 +1042,7 @@ function App() {
             </header>
             {projectSurface.section === 'code'
               ? <CodeView
-                key={`code-${selectedProject.id}`}
+                key={`code-${selectedProject.id}-${selectedConversation?.id ?? 'none'}`}
                 project={selectedProject}
                 conversation={selectedConversation}
                 ticketLinks={ticketLinks}
@@ -1166,6 +1179,7 @@ function App() {
               reviewStatus={fleet.reviewStatus}
               onHandoff={() => setShowHandoff(true)}
               onSwitchModel={() => setShowSwitchModel(true)}
+              onOpenCode={openCodeForConversation}
             />
             {showSwitchModel && selectedConversation !== null ? (
               <SwitchModelModal

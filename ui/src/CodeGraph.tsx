@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { absoluteCodeDate, relativeCodeDate } from './codeFormat'
 import {
   CODE_GRAPH_LANE_WIDTH,
   codeGraphLaneX,
   codeGraphPaths,
-  isAgentCommit,
   layoutCodeGraph,
   parseCodeRefs,
   type CodeGraphCommit,
@@ -13,6 +12,7 @@ import {
 } from './codeGraphLayout'
 import { ProviderMark } from './ProviderMark'
 import { useVirtualWindow } from './useVirtualWindow'
+import type { Provider } from './types'
 
 export interface CodeGraphState {
   key: string
@@ -26,6 +26,20 @@ export interface CodeGraphState {
   loadingMore: boolean
 }
 
+export interface CodeGraphConversationOption {
+  id: string
+  title: string
+  provider: Provider
+  count: number
+}
+
+export interface CodeGraphRepository {
+  source: string
+  label: string
+  index: number
+  hidden: boolean
+}
+
 type CodeGraphLayout = 'compact' | 'table'
 
 interface CodeGraphProps {
@@ -34,10 +48,18 @@ interface CodeGraphProps {
   layout: CodeGraphLayout
   selectedSha: string | null
   returnLabel: string | null
-  agentOnly: boolean
   branchOnly: boolean
-  onToggleAgentOnly: () => void
   onToggleBranchOnly: () => void
+  /** `all`, `linked`, `unlinked` ou `conversation:<id>`. */
+  conversationFilter: string
+  conversationOptions: CodeGraphConversationOption[]
+  conversationCommits: CodeGraphCommit[] | null
+  conversationNote: string | null
+  onConversationFilterChange: (value: string) => void
+  repositories: CodeGraphRepository[]
+  onToggleRepository: (source: string) => void
+  changesActive: boolean
+  onToggleChanges: () => void
   onSelect: (commit: CodeGraphCommit) => void
   onLoadMore: () => void
   onToggleExpanded: () => void
@@ -46,7 +68,7 @@ interface CodeGraphProps {
 
 const ROW_HEIGHTS: Record<CodeGraphLayout, number> = { compact: 28, table: 34 }
 const LANE_LIMITS: Record<CodeGraphLayout, number> = { compact: 8, table: 14 }
-const AGENT_CELL_WIDTH = 20
+const DOT_CELL_WIDTH = 20
 
 function RefPill({ gitRef }: { gitRef: CodeRef }) {
   return <span className={`code-ref is-${gitRef.kind}`} title={gitRef.label}>{gitRef.label}</span>
@@ -84,10 +106,88 @@ function GraphCell({ row, height, width, isHead }: {
   </svg>
 }
 
-function AgentCell({ commit, height, isHead }: { commit: CodeGraphCommit, height: number, isHead: boolean }) {
-  return <svg className="code-graph-cell" width={AGENT_CELL_WIDTH} height={height} viewBox={`0 0 ${AGENT_CELL_WIDTH} ${height}`} aria-hidden="true">
-    <circle cx={AGENT_CELL_WIDTH / 2} cy={height / 2} r={isHead ? 4.6 : 3.6} className={`code-graph-dot code-graph-lane-${commit.repoIndex % 8}${isHead ? ' is-head' : ''}`} />
+function DotCell({ commit, height, isHead }: { commit: CodeGraphCommit, height: number, isHead: boolean }) {
+  return <svg className="code-graph-cell" width={DOT_CELL_WIDTH} height={height} viewBox={`0 0 ${DOT_CELL_WIDTH} ${height}`} aria-hidden="true">
+    <circle cx={DOT_CELL_WIDTH / 2} cy={height / 2} r={isHead ? 4.6 : 3.6} className={`code-graph-dot code-graph-lane-${commit.repoIndex % 8}${isHead ? ' is-head' : ''}`} />
   </svg>
+}
+
+function ConversationFilterMenu({ value, options, linkedCount, unlinkedCount, onChange }: {
+  value: string
+  options: CodeGraphConversationOption[]
+  linkedCount: number
+  unlinkedCount: number
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const chosen = options.find((option) => `conversation:${option.id}` === value)
+  const label = value === 'linked'
+    ? 'Avec conversation'
+    : value === 'unlinked' ? 'Sans conversation' : chosen ? chosen.title : 'Conversations'
+
+  useEffect(() => {
+    if (!open) return
+    function handlePointer(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', handlePointer)
+    return () => window.removeEventListener('mousedown', handlePointer)
+  }, [open])
+
+  function choose(next: string) {
+    onChange(next)
+    setOpen(false)
+  }
+
+  function option(optionValue: string, content: React.ReactNode, title?: string) {
+    return <button
+      key={optionValue}
+      type="button"
+      role="menuitemradio"
+      aria-checked={value === optionValue}
+      className={`code-conversation-option${value === optionValue ? ' is-current' : ''}`}
+      title={title}
+      onClick={() => choose(optionValue)}
+    >{content}</button>
+  }
+
+  return <div
+    className="code-conversation-filter"
+    ref={rootRef}
+    onKeyDown={(event) => {
+      if (event.key === 'Escape' && open) {
+        event.preventDefault()
+        setOpen(false)
+      }
+    }}
+  >
+    <button
+      type="button"
+      className={`code-filter-toggle${value !== 'all' ? ' is-active' : ''}`}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      title="Filtrer par conversation d’origine"
+      onClick={() => setOpen((current) => !current)}
+    >
+      {chosen
+        ? <ProviderMark provider={chosen.provider} />
+        : <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>}
+      <span className="code-conversation-filter-label">{label}</span>
+      <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    </button>
+    {open ? <div className="code-conversation-menu" role="menu" aria-label="Filtrer par conversation">
+      {option('all', <span>Tous les commits</span>)}
+      {option('linked', <><span>Avec une conversation</span><span className="code-filter-count">{linkedCount}</span></>)}
+      {option('unlinked', <><span>Sans conversation</span><span className="code-filter-count">{unlinkedCount}</span></>)}
+      {options.length > 0 ? <p className="code-conversation-menu-label">Conversations</p> : null}
+      {options.map((item) => option(
+        `conversation:${item.id}`,
+        <><ProviderMark provider={item.provider} /><span className="code-conversation-menu-title">{item.title}</span><span className="code-filter-count">{item.count}</span></>,
+        item.title,
+      ))}
+    </div> : null}
+  </div>
 }
 
 export function CodeGraph({
@@ -96,10 +196,17 @@ export function CodeGraph({
   layout,
   selectedSha,
   returnLabel,
-  agentOnly,
   branchOnly,
-  onToggleAgentOnly,
   onToggleBranchOnly,
+  conversationFilter,
+  conversationOptions,
+  conversationCommits,
+  conversationNote,
+  onConversationFilterChange,
+  repositories,
+  onToggleRepository,
+  changesActive,
+  onToggleChanges,
   onSelect,
   onLoadMore,
   onToggleExpanded,
@@ -107,23 +214,34 @@ export function CodeGraph({
 }: CodeGraphProps) {
   const commits = graph?.commits
   const focusCommits = graph?.focusCommits
-  const filtered = agentOnly || branchOnly
-  const visible = useMemo(
-    () => ((branchOnly ? focusCommits : commits) ?? []).filter((commit) => !agentOnly || isAgentCommit(commit)),
-    [commits, focusCommits, agentOnly, branchOnly],
+  const focus = graph?.focus
+  const specific = conversationFilter.startsWith('conversation:')
+  const hidden = useMemo(() => new Set(repositories.filter((repository) => repository.hidden).map((repository) => repository.source)), [repositories])
+  const pool = useMemo(
+    () => ((branchOnly ? focusCommits : commits) ?? []).filter((commit) => !hidden.has(commit.source)),
+    [branchOnly, focusCommits, commits, hidden],
   )
-  const rows = useMemo(() => (filtered ? null : layoutCodeGraph(visible)), [visible, filtered])
-  const agentCount = useMemo(() => ((branchOnly ? focusCommits : commits) ?? []).filter(isAgentCommit).length, [commits, focusCommits, branchOnly])
+  const visible = useMemo(() => {
+    if (specific) {
+      return (conversationCommits ?? []).filter((commit) => !hidden.has(commit.source) && (!branchOnly || Boolean(focus?.has(commit.sha))))
+    }
+    if (conversationFilter === 'linked') return pool.filter((commit) => commit.conversations.length > 0)
+    if (conversationFilter === 'unlinked') return pool.filter((commit) => commit.conversations.length === 0)
+    return pool
+  }, [specific, conversationCommits, hidden, branchOnly, focus, conversationFilter, pool])
+  const lanes = !branchOnly && conversationFilter === 'all'
+  const rows = useMemo(() => (lanes ? layoutCodeGraph(visible) : null), [visible, lanes])
+  const linkedCount = useMemo(() => pool.filter((commit) => commit.conversations.length > 0).length, [pool])
   const branchCount = focusCommits?.length ?? 0
   const rowHeight = ROW_HEIGHTS[layout]
   const listWindow = useVirtualWindow<HTMLDivElement>(visible.length, rowHeight)
   const { scrollToIndex } = listWindow
   const maxLanes = useMemo(() => (rows ?? []).reduce((max, row) => Math.max(max, row.laneCount), 1), [rows])
-  const cellWidth = rows ? Math.min(maxLanes, LANE_LIMITS[layout]) * CODE_GRAPH_LANE_WIDTH + 4 : AGENT_CELL_WIDTH
+  const cellWidth = rows ? Math.min(maxLanes, LANE_LIMITS[layout]) * CODE_GRAPH_LANE_WIDTH + 4 : DOT_CELL_WIDTH
   const indexBySha = useMemo(() => new Map(visible.map((commit, index) => [commit.sha, index])), [visible])
 
   const centeredKey = useRef<string | null>(null)
-  const centerKey = graph ? `${graph.key}\n${layout}\n${agentOnly}\n${branchOnly}` : null
+  const centerKey = graph ? `${graph.key}\n${layout}\n${branchOnly}\n${conversationFilter}\n${[...hidden].join(',')}` : null
   useEffect(() => {
     if (!graph || centerKey === null || centeredKey.current === centerKey) return
     const index = indexBySha.get(selectedSha ?? graph.centerSha ?? '')
@@ -165,19 +283,19 @@ export function CodeGraph({
     const row = rows?.[index]
     const selected = commit.sha === selectedSha
     const isHead = Boolean(graph?.heads.has(commit.sha))
-    const focus = isHead || Boolean(graph?.focus.has(commit.sha))
+    const inFocus = isHead || Boolean(graph?.focus.has(commit.sha))
     const refs = parseCodeRefs(commit.refs)
     const linked = commit.conversations[0]
     const className = [
       'code-graph-row',
       `is-${layout}`,
       selected ? 'is-selected' : '',
-      focus ? 'is-focus' : '',
+      inFocus ? 'is-focus' : '',
       commit.parents.length > 1 ? 'is-merge' : '',
     ].filter(Boolean).join(' ')
     const cell = row
       ? <GraphCell row={row} height={rowHeight} width={cellWidth} isHead={isHead} />
-      : <AgentCell commit={commit} height={rowHeight} isHead={isHead} />
+      : <DotCell commit={commit} height={rowHeight} isHead={isHead} />
 
     if (layout === 'compact') {
       return <div
@@ -234,6 +352,8 @@ export function CodeGraph({
     </div>
   }
 
+  const filtered = !lanes || hidden.size > 0
+
   return <div className={`code-graph is-${layout}`} style={{ '--graph-cell-width': `${cellWidth}px` } as CSSProperties}>
     <header className="code-pane-header">
       {layout === 'table' ? <button type="button" className="code-back-button" onClick={onToggleExpanded}>
@@ -255,29 +375,49 @@ export function CodeGraph({
         type="button"
         className={`code-filter-toggle${branchOnly ? ' is-active' : ''}`}
         aria-pressed={branchOnly}
-        title="N’afficher que les commits d’avance sur la branche de base"
+        title="N’afficher que les commits de la branche"
         onClick={onToggleBranchOnly}
       >
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><circle cx="4.5" cy="3.5" r="1.5" /><circle cx="4.5" cy="12.5" r="1.5" /><circle cx="11.5" cy="5.5" r="1.5" /><path d="M4.5 5v6M11.5 7c0 3-7 2-7 4" /></g></svg>
         <span>Branche</span>
         <span className="code-filter-count">{branchCount}</span>
       </button> : null}
-      <button
+      <ConversationFilterMenu
+        value={conversationFilter}
+        options={conversationOptions}
+        linkedCount={linkedCount}
+        unlinkedCount={pool.length - linkedCount}
+        onChange={onConversationFilterChange}
+      />
+      {branchCount > 0 ? <button
         type="button"
-        className={`code-filter-toggle${agentOnly ? ' is-active' : ''}`}
-        aria-pressed={agentOnly}
-        title="N’afficher que les commits produits par un agent ou une conversation"
-        onClick={onToggleAgentOnly}
+        className={`code-filter-toggle${changesActive ? ' is-active' : ''}`}
+        aria-pressed={changesActive}
+        title="Lister les fichiers modifiés par la branche, sur tous les dépôts"
+        onClick={onToggleChanges}
       >
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5 9.4 6.6 14.5 8 9.4 9.4 8 14.5 6.6 9.4 1.5 8l5.1-1.4Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>
-        <span>Agents</span>
-        <span className="code-filter-count">{agentCount}</span>
-      </button>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 2.5v6M2 5.5h6M9 12.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
+        <span>Diff du chantier</span>
+      </button> : null}
     </div> : null}
+    {repositories.length > 1 ? <div className="code-graph-repos" role="group" aria-label="Dépôts affichés">
+      {repositories.map((repository) => <button
+        key={repository.source}
+        type="button"
+        className={`code-repo-chip is-repo-${repository.index % 6}${repository.hidden ? ' is-hidden' : ''}`}
+        aria-pressed={!repository.hidden}
+        title={repository.hidden ? `Afficher ${repository.label}` : `Masquer ${repository.label}`}
+        onClick={() => onToggleRepository(repository.source)}
+      >{repository.label}</button>)}
+    </div> : null}
+    {conversationNote ? <p className="code-graph-note">{conversationNote}</p> : null}
     {error ? <p className="code-empty-note is-error">{error}</p> : null}
     {!graph && !error ? <div className="code-skeleton" aria-label="Chargement du graphe" /> : null}
+    {graph && specific && conversationCommits === null ? <div className="code-skeleton" aria-label="Chargement des commits de la conversation" /> : null}
     {graph && !filtered && visible.length === 0 ? <p className="code-empty-note">Aucun commit dans ce dépôt.</p> : null}
-    {graph && filtered && visible.length === 0 ? <p className="code-empty-note">Aucun commit ne correspond aux filtres parmi les commits chargés.</p> : null}
+    {graph && filtered && visible.length === 0 && !(specific && conversationCommits === null)
+      ? <p className="code-empty-note">Aucun commit ne correspond aux filtres.</p>
+      : null}
     <div
       className="code-graph-list"
       ref={listWindow.ref}
@@ -287,7 +427,7 @@ export function CodeGraph({
       onKeyDown={handleKeyDown}
       onScroll={(event) => {
         const element = event.currentTarget
-        if (graph?.hasMore && !graph.loadingMore && element.scrollTop + element.clientHeight > element.scrollHeight - rowHeight * 30) {
+        if (!branchOnly && !specific && graph?.hasMore && !graph.loadingMore && element.scrollTop + element.clientHeight > element.scrollHeight - rowHeight * 30) {
           onLoadMore()
         }
       }}
@@ -303,7 +443,7 @@ export function CodeGraph({
       <div style={{ paddingTop: listWindow.before, paddingBottom: listWindow.after }}>
         {visible.slice(listWindow.start, listWindow.end).map((commit, offset) => renderRow(commit, listWindow.start + offset))}
       </div>
-      {graph?.hasMore && !branchOnly ? <button type="button" className="code-graph-more" disabled={graph.loadingMore} onClick={onLoadMore}>
+      {graph?.hasMore && !branchOnly && !specific ? <button type="button" className="code-graph-more" disabled={graph.loadingMore} onClick={onLoadMore}>
         {graph.loadingMore ? 'Chargement des commits suivants…' : 'Charger plus de commits'}
       </button> : null}
     </div>

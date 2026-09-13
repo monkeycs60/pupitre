@@ -36,6 +36,7 @@ import { toggleAction, withTaskActions } from './taskDraft'
 import { newConversationDraftStorageKey } from './conversationDraft'
 import { ThreadSearch } from './ThreadSearch'
 import { PushTimeline } from './PushTimeline'
+import { ConversationWorkspaceCard } from './ConversationWorkspaceCard'
 import { collectConversationAssets } from './conversationAssets'
 import type { TodoFinish, TodoItem } from './todos'
 import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
@@ -80,6 +81,8 @@ interface ChatProps {
   reviewStatus: ReviewStatusSnapshot | null
   onHandoff: () => void
   onSwitchModel: () => void
+  /** Ouvre l'onglet Code filtré sur les commits de la conversation. */
+  onOpenCode?: (conversationId: string) => void
 }
 
 interface LightboxImage {
@@ -192,6 +195,7 @@ export function Chat({
   reviewStatus,
   onHandoff,
   onSwitchModel,
+  onOpenCode,
 }: ChatProps) {
   const draftStorageKey = conversation === null
     ? newConversationDraftStorageKey(project.id, ticketId, originType, originKey, problemPlanIndex, problemIds)
@@ -464,6 +468,7 @@ export function Chat({
                       conversationId={conversation?.id}
                     />
                     {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
+                    {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onOpenCode={onOpenCode} /> : null}
                     {!isRunning && conversation !== null ? (
                       <GuardianLine
                         conversation={conversation}

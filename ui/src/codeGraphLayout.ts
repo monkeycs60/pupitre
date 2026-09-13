@@ -29,10 +29,6 @@ export interface CodeGraphPath {
 
 export const CODE_GRAPH_LANE_WIDTH = 12
 
-export function isAgentCommit(commit: CodeCommitSummary): boolean {
-  return commit.agent !== null || commit.conversations.length > 0
-}
-
 /**
  * Fusion par date de plusieurs historiques : chaque liste garde son ordre
  * topologique, seule l'alternance entre dépôts suit la date d'auteur.
