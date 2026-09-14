@@ -58,6 +58,7 @@ import { backgroundJobsEnabled, readInstance } from "./instance";
 import { PromotionRunner } from "./promotion";
 import { PromotionAgentService } from "./promotion-agent";
 import { VisualFeedbackService } from "./visual-feedback";
+import { TicketAuditService } from "./ticket-audits";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -195,6 +196,10 @@ if (process.argv.includes("--pupitre-mcp")) {
     problemAxisRuns,
   );
   const todos = new TodoService(new TodoStore(db), projects, conversations, runner, git, tickets, quotas);
+  const ticketAudits = new TicketAuditService(
+    db, tickets, conversations, projects, settings, integrationsRefresher, runner,
+  );
+  integrationsRefresher.subscribe((projectId) => ticketAudits.scan(projectId));
   const promotionAgent = instance.name === "dev"
     ? new PromotionAgentService(join(import.meta.dir, "..", ".."), projects, conversations, runner)
     : undefined;

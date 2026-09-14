@@ -173,6 +173,12 @@ export interface Settings {
   designLastUrl?: string | null
   /** Lecture seule : un jeton d'extension Chrome existe côté sidecar. */
   visualFeedbackPaired?: boolean
+  ticketAuditConfig?: {
+    provider: Provider
+    model: string
+    effort: string
+    speed: ConversationSpeed
+  }
 }
 
 export class ApiError extends Error {

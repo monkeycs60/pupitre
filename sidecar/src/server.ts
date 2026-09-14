@@ -2720,6 +2720,15 @@ export function createServer(deps: ServerDeps) {
             deps.settings.set("actionFormat", actionFormat(body.actionFormat));
             updated = true;
           }
+          if ("ticketAuditConfig" in body) {
+            const config = body.ticketAuditConfig as Record<string, unknown> | null;
+            if (!config || (config.provider !== "codex" && config.provider !== "claude" && config.provider !== "grok") || typeof config.model !== "string"
+              || typeof config.effort !== "string" || (config.speed !== "standard" && config.speed !== "fast")) {
+              throw new HttpError(400, "configuration de relecture de ticket invalide");
+            }
+            deps.settings.set("ticketAuditConfig", config);
+            updated = true;
+          }
           if (INTEGRATION_TOKENS_KEY in body) {
             const tokens = body[INTEGRATION_TOKENS_KEY];
             if (typeof tokens !== "object" || tokens === null || Array.isArray(tokens)) {

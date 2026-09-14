@@ -1,5 +1,4 @@
 const BASE_URL = "https://api.clickup.com/api/v2";
-const MAX_TASK_DESCRIPTION_CHARS = 2000;
 
 export class ClickUpHttpError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -31,6 +30,7 @@ export interface ClickUpTask {
 export interface ClickUpTaskContext {
   description: string;
   comments: Array<{ author: string; text: string; at: string }>;
+  attachments: Array<{ title: string; url: string; mimeType: string | null }>;
 }
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -136,15 +136,16 @@ export class ClickUpClient {
     return tasks;
   }
 
-  async taskContext(taskId: string, maxComments = 8): Promise<ClickUpTaskContext> {
+  async taskContext(taskId: string): Promise<ClickUpTaskContext> {
     const [task, comments] = await Promise.all([
-      this.request<{ description?: unknown }>(`/task/${encodeURIComponent(taskId)}`),
+      this.request<{ description?: unknown; attachments?: unknown }>(`/task/${encodeURIComponent(taskId)}`),
       this.request<{ comments?: unknown }>(`/task/${encodeURIComponent(taskId)}/comment`),
     ]);
 
-    const commentList = Array.isArray(comments.comments) ? comments.comments.slice(0, maxComments) : [];
+    const commentList = Array.isArray(comments.comments) ? comments.comments : [];
+    const attachments = Array.isArray(task.attachments) ? task.attachments : [];
     return {
-      description: toStringValue(task.description).slice(0, MAX_TASK_DESCRIPTION_CHARS),
+      description: toStringValue(task.description),
       comments: commentList.map((comment) => {
         const typedComment = comment as {
           user?: { username?: unknown };
@@ -157,6 +158,14 @@ export class ClickUpClient {
           at: toIsoEpoch(typedComment.date),
         };
       }),
+      attachments: attachments.map((attachment) => {
+        const item = attachment as { title?: unknown; url?: unknown; mimetype?: unknown };
+        return {
+          title: toStringValue(item.title) || "pièce jointe",
+          url: toStringValue(item.url),
+          mimeType: item.mimetype ? String(item.mimetype) : null,
+        };
+      }).filter((attachment) => attachment.url !== ""),
     };
   }
 

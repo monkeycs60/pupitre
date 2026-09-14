@@ -60,15 +60,15 @@ test("assignedTasks continue au-delà de 100 pages jusqu'à last_page", async ()
   expect(pages.at(-1)).toBe(100);
 });
 
-test("taskContext tronque la description à 2000 caractères", async () => {
+test("taskContext conserve la description entière", async () => {
   const client = new ClickUpClient("pk", async (input) => {
     const url = String(input);
     if (url.endsWith("/comment")) return Response.json({ comments: [] });
     return Response.json({ id: "86caw5afd", description: "x".repeat(2500) });
   });
   const context = await client.taskContext("86caw5afd");
-  expect(context.description).toHaveLength(2000);
-  expect(context.description).toBe("x".repeat(2000));
+  expect(context.description).toHaveLength(2500);
+  expect(context.description).toBe("x".repeat(2500));
 });
 
 test("401 devient une ClickUpAuthError", async () => {

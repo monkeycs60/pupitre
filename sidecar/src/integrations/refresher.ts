@@ -66,7 +66,11 @@ export interface SentryHandle {
   issueEvents?(org: string, id: string, input: { environment: "production"; statsPeriod: string }): Promise<unknown>;
 }
 
-type ClickUpContext = { description: string; comments: Array<{ author: string; text: string; at: string }> };
+export type ClickUpContext = {
+  description: string;
+  comments: Array<{ author: string; text: string; at: string }>;
+  attachments: Array<{ title: string; url: string; mimeType: string | null }>;
+};
 
 export interface ClickUpHandle {
   me(): Promise<number>;
@@ -202,7 +206,7 @@ export class IntegrationsRefresher {
   async clickUpContext(
     projectId: string,
     ticketKey: string,
-  ): Promise<{ description: string; comments: Array<{ author: string; text: string; at: string }> } | null> {
+  ): Promise<ClickUpContext | null> {
     const integration = this.stores.integrations.find(projectId, "clickup");
     if (!integration) return null;
     const client = this.clickUp(integration);
@@ -401,6 +405,7 @@ export class IntegrationsRefresher {
   }
 
   private upsertClickUpTask(projectId: string, task: ClickUpTask): void {
+    const previous = this.stores.tickets.findByKey(projectId, task.key);
     this.stores.tickets.upsert(projectId, {
       key: task.key,
       source: "clickup",
@@ -415,6 +420,7 @@ export class IntegrationsRefresher {
         labels: task.labels,
         updatedAt: task.updatedAt,
         assignedToMe: true,
+        previousClickUpStatus: previous?.status ?? null,
       },
     });
   }

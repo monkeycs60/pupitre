@@ -21,7 +21,7 @@ export interface ComposerPaletteTrigger {
   query: string
 }
 
-export type ComposerAction = 'summary' | 'test' | 'review' | 'switch-model' | 'handoff'
+export type ComposerAction = 'summary' | 'test' | 'switch-model' | 'handoff'
 
 export interface ComposerActionItem {
   id: ComposerAction
@@ -42,7 +42,6 @@ export const COMPOSER_TOOLS: ComposerToolItem[] = [
 
 export const COMPOSER_ACTIONS: ComposerActionItem[] = [
   { id: 'summary', label: 'Résumé de session', detail: 'Lister les changements et les éléments à terminer' },
-  { id: 'review', label: 'Relire le diff', detail: 'Analyser le diff Git avec le modèle de review' },
   { id: 'switch-model', label: 'Changer de modèle', detail: 'Provider, modèle ou effort de la conversation' },
   { id: 'handoff', label: 'Passation', detail: 'Transmettre le travail à une nouvelle conversation' },
   { id: 'test', label: 'Tester', detail: 'Proposer des vérifications ciblées' },

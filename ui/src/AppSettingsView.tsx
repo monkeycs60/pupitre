@@ -12,6 +12,8 @@ import { DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { VisualFeedbackSettings } from './VisualFeedbackSettings'
 import { PromotionChat } from './PromotionChat'
+import { ModelConfigSelector } from './ModelConfigSelector'
+import type { ConversationConfig } from './ConfigPanel'
 
 const DEFAULT_SCOPE: FilesystemScope = 'project-and-ai-roots'
 
@@ -48,6 +50,9 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
   const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
   const [longTaskThreshold, setLongTaskThreshold] = useState(120)
   const [visualFeedbackPaired, setVisualFeedbackPaired] = useState(false)
+  const [ticketAuditConfig, setTicketAuditConfig] = useState<ConversationConfig>({
+    provider: 'codex', model: 'gpt-5.6-sol', effort: 'medium', speed: 'standard', permissionMode: null,
+  })
 
   useEffect(() => {
     let ignore = false
@@ -57,6 +62,9 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
         setScope(settings.filesystemScope ?? DEFAULT_SCOPE)
         setLongTaskThreshold(settings.longTaskThresholdSeconds ?? 120)
         setVisualFeedbackPaired(settings.visualFeedbackPaired === true)
+        if (settings.ticketAuditConfig) {
+          setTicketAuditConfig({ ...settings.ticketAuditConfig, permissionMode: null })
+        }
         const stored = { ...DEFAULT_ACTION_FORMAT, ...(settings.actionFormat ?? {}) }
         setFormat(stored)
         setTodoDraft(stored.todoHeadings.join(', '))
@@ -204,6 +212,24 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
     }
   }
 
+  async function handleTicketAuditConfig(next: ConversationConfig) {
+    setTicketAuditConfig(next)
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      const settings = await updateSettings({ ticketAuditConfig: {
+        provider: next.provider, model: next.model, effort: next.effort, speed: next.speed,
+      } })
+      if (settings.ticketAuditConfig) setTicketAuditConfig({ ...settings.ticketAuditConfig, permissionMode: null })
+      setSaved(true)
+    } catch (saveError: unknown) {
+      setError(errorMessage(saveError))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <section className="settings-view" aria-labelledby="app-settings-title">
       <header className="settings-view-header">
@@ -249,6 +275,21 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
           ) : null}
         </div>
       ) : null}
+
+      <div className="settings-card" id="settings-ticket-audit">
+        <div>
+          <h2>Relecture de ticket</h2>
+          <p>Modèle utilisé pour l’audit automatique au passage en « code review ».</p>
+        </div>
+        <ModelConfigSelector
+          config={ticketAuditConfig}
+          quotas={{ codex: null, claude: null, grok: null }}
+          isBusy={saving}
+          showConversationSettings={false}
+          onConfigChange={(next) => void handleTicketAuditConfig(next)}
+          placement="bottom"
+        />
+      </div>
 
       <VisualFeedbackSettings initialPaired={visualFeedbackPaired} />
 

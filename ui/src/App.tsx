@@ -33,7 +33,7 @@ import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { useAppNotifications } from './useAppNotifications'
 import { CommandPalette } from './CommandPalette'
-import { createSessionSummary, createTestInventory, startReview } from './api'
+import { createSessionSummary, createTestInventory } from './api'
 import type { SkillSummary } from './types'
 import type { AppEvent, WorkspaceView } from './types'
 import { useTimeTracking } from './useTimeTracking'
@@ -798,7 +798,7 @@ function App() {
 
   function handleHelpSelect(slug?: string) {
     if (!confirmLeaveMemory()) return
-    const nextSlug = slug ?? helpSlug ?? 'gardien'
+    const nextSlug = slug ?? helpSlug ?? 'conversations'
     setHelpSlug(nextSlug)
     setWorkspaceView('help')
     window.location.hash = `help/${nextSlug}`
@@ -831,12 +831,8 @@ function App() {
     setWorkspaceView('conversations')
   }
 
-  async function handlePaletteAction(action: 'test' | 'summary' | 'review') {
+  async function handlePaletteAction(action: 'test' | 'summary') {
     if (!selectedConversation) return
-    if (action === 'review') {
-      await startReview({ conversationId: selectedConversation.id, scope: 'worktree' })
-      return
-    }
     setWorkspaceView('conversations')
     if (action === 'test') await createTestInventory(selectedConversation.id)
     else {
@@ -1172,7 +1168,6 @@ function App() {
               problemIds={conversationSeed?.problemIds}
               problemPlanIndices={conversationSeed?.problemPlanIndices}
               missionTitle={conversationSeed?.missionTitle}
-              reviewStatus={fleet.reviewStatus}
               onHandoff={() => setShowHandoff(true)}
               onSwitchModel={() => setShowSwitchModel(true)}
               onOpenCode={openCodeForConversation}

@@ -475,6 +475,14 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_review_flags_review
       ON review_flags(review_id, severity, line_start);
+    CREATE TABLE IF NOT EXISTS ticket_audits (
+      ticket_id TEXT PRIMARY KEY REFERENCES tickets(id) ON DELETE CASCADE,
+      conversation_id TEXT NULL REFERENCES conversations(id) ON DELETE SET NULL,
+      state TEXT NOT NULL CHECK (state IN ('reserved', 'running', 'done', 'error')),
+      error TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS skills (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,

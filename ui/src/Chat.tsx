@@ -13,7 +13,7 @@ import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
 import type { ConversationConfig } from './ConfigPanel'
 import { modelLabel } from './modelOptions'
-import { createSessionSummary, createTestInventory, startReview } from './api'
+import { createSessionSummary, createTestInventory } from './api'
 import type { ComposerAction } from './ComposerPalette'
 import type {
   AppEvent,
@@ -22,9 +22,7 @@ import type {
   Project,
   QuotaSnapshot,
   SubtaskStatus,
-  ReviewStatusSnapshot,
 } from './types'
-import { GuardianLine } from './GuardianLine'
 import { ContextGauge } from './ContextGauge'
 import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
@@ -78,7 +76,6 @@ interface ChatProps {
   problemIds?: string[]
   problemPlanIndices?: Record<string, number[]>
   missionTitle?: string
-  reviewStatus: ReviewStatusSnapshot | null
   onHandoff: () => void
   onSwitchModel: () => void
   /** Ouvre l'onglet Code filtré sur les commits de la conversation. */
@@ -192,7 +189,6 @@ export function Chat({
   problemIds,
   problemPlanIndices,
   missionTitle,
-  reviewStatus,
   onHandoff,
   onSwitchModel,
   onOpenCode,
@@ -370,11 +366,6 @@ export function Chat({
     if (next.length === 0) setSelectedActions([])
   }
 
-  const relire = useCallback(() => {
-    if (!conversation) return
-    void startReview({ conversationId: conversation.id, scope: 'worktree' }).catch(() => {})
-  }, [conversation])
-
   // Identité stable exigée : ce fragment est une prop d'EventStream, et un JSX
   // inline recréé à chaque frappe dans le composer annulait son memo() — le
   // fil entier était reconstruit à chaque touche.
@@ -392,10 +383,6 @@ export function Chat({
 
   async function handleComposerAction(action: ComposerAction) {
     if (!conversation) return
-    if (action === 'review') {
-      await startReview({ conversationId: conversation.id, scope: 'worktree' }).catch(() => {})
-      return
-    }
     if (action === 'test') {
       await createTestInventory(conversation.id).catch(() => {})
       return
@@ -469,14 +456,6 @@ export function Chat({
                     />
                     {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
                     {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onOpenCode={onOpenCode} /> : null}
-                    {!isRunning && conversation !== null ? (
-                      <GuardianLine
-                        conversation={conversation}
-                        project={project}
-                        reviewStatus={reviewStatus}
-                        onRelire={relire}
-                      />
-                    ) : null}
                   </TaskSelectionContext.Provider>
                 </TaskToggleContext.Provider>
               )}
