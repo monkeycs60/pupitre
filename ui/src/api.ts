@@ -20,6 +20,7 @@ import type {
   CodeGraphPage,
   CodeSearchResult,
   CodeSource,
+  CodeSyncStatus,
   FleetItem,
   IntegrationType,
   SearchResult,
@@ -1236,6 +1237,18 @@ export function getCodeDiff(
 
 export function getCodeChanges(projectId: string, source: string, signal?: AbortSignal): Promise<CodeBranchChanges> {
   return fetchJson(codeUrl(projectId, 'changes', { source }), { signal })
+}
+
+export function getCodeSync(projectId: string, source: string, fetch: boolean, signal?: AbortSignal): Promise<CodeSyncStatus> {
+  return fetchJson(codeUrl(projectId, 'sync', { source, fetch: fetch ? 1 : null }), { signal })
+}
+
+export function mergeCodeBase(projectId: string, source: string): Promise<CodeSyncStatus> {
+  return fetchJson(codeUrl(projectId, 'merge', {}), jsonPost({ source }))
+}
+
+export function resolveCodeConflicts(projectId: string, source: string): Promise<Conversation> {
+  return fetchJson(codeUrl(projectId, 'resolve', {}), jsonPost({ source }))
 }
 
 export function getCodeConversationCommits(

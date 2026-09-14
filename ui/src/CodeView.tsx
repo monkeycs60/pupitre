@@ -9,6 +9,7 @@ import { mergeCodeCommits, type CodeGraphCommit } from './codeGraphLayout'
 import { CodeReader, type CodeOpenFile, type CodeReaderMode } from './CodeReader'
 import { buildCodeScopes, defaultCodeScope, fromScopePath, scopePrefixes, toScopePath } from './codeScopes'
 import { CodeSourcePicker } from './CodeSourcePicker'
+import { CodeSyncBar } from './CodeSyncBar'
 import { ancestorDirectories } from './codeTree'
 import { codeViewMemoryKey, readCodeViewMemory, writeCodeViewMemory } from './codeViewMemory'
 import type { TicketLinks } from './ticketLinks'
@@ -97,6 +98,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
   const [selected, setSelected] = useState<{ sha: string, source: string } | null>(memory.selected ?? null)
   const [detailView, setDetailView] = useState<'commit' | 'changes'>(memory.detailView ?? 'commit')
   const [graphExpanded, setGraphExpanded] = useState(memory.graphExpanded ?? false)
+  const [graphRevision, setGraphRevision] = useState(0)
   const [branchOnly, setBranchOnly] = useState(memory.branchOnly ?? false)
   const [conversationFilter, setConversationFilter] = useState(memory.conversationFilter ?? 'all')
   const [hiddenRepositories, setHiddenRepositories] = useState<ReadonlySet<string>>(() => new Set(memory.hiddenRepositories ?? []))
@@ -190,7 +192,7 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
         })
     }
     return () => controller.abort()
-  }, [project.id, scopeKey])
+  }, [project.id, scopeKey, graphRevision])
 
   const wantedConversations = [...new Set([conversationId, specificConversation].filter((id): id is string => Boolean(id)))].join('\n')
   useEffect(() => {
@@ -574,6 +576,14 @@ export function CodeView({ project, conversation, ticketLinks, onOpenConversatio
         onLoadMore={loadMoreCommits}
         onToggleExpanded={() => setGraphExpanded((value) => !value)}
         onOpenConversation={onOpenConversation}
+        syncBar={<CodeSyncBar
+          key={scope.id}
+          projectId={project.id}
+          sources={scope.sources.filter((source) => !hiddenRepositories.has(source.path))}
+          prefixes={prefixes}
+          onMerged={() => setGraphRevision((value) => value + 1)}
+          onOpenConversation={onOpenConversation}
+        />}
       />
       {!graphExpanded ? renderDetail('docked') : null}
     </section>

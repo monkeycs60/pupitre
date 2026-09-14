@@ -1,7 +1,7 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
-import type { CodeBranchChanges, CodeCommitDetail, CodeCommitSummary, CodeFileList, CodeGraphPage, CodeSource, Conversation, Project } from './types'
+import type { CodeBranchChanges, CodeCommitDetail, CodeCommitSummary, CodeFileList, CodeGraphPage, CodeSource, CodeSyncStatus, Conversation, Project } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
@@ -71,13 +71,19 @@ interface Fixture {
   graphs: Record<string, CodeGraphPage>
   detail?: CodeCommitDetail
   changes?: Record<string, CodeBranchChanges>
+  sync?: Record<string, CodeSyncStatus>
 }
 
 function mockApi(fixture: Fixture): string[] {
   const calls: string[] = []
-  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
-    calls.push(url)
+    calls.push(init?.method === 'POST' ? `POST ${url} ${String(init.body)}` : url)
+    if (url.includes('/code/resolve')) return Response.json({ ...baseConversation, id: 'conversation-conflits' }, { status: 201 })
+    if (url.includes('/code/sync')) {
+      const syncSource = new URL(url, 'http://pupitre.test').searchParams.get('source') ?? ''
+      return Response.json(fixture.sync?.[syncSource] ?? {})
+    }
     const params = new URL(url, 'http://pupitre.test').searchParams
     const sourcePath = params.get('source') ?? ''
     if (url.includes('/code/sources')) return Response.json(fixture.sources)
@@ -229,4 +235,30 @@ test('réunit les worktrees d’un ticket, filtre par conversation et par dépô
   fireEvent.change(screen.getByRole('searchbox', { name: 'Filtrer les états du code' }), { target: { value: 'web develop' } })
   const options = within(screen.getByRole('listbox', { name: 'États du code' })).getAllByRole('option')
   expect(options.map((option) => option.getAttribute('title'))).toEqual(['/tmp/apps/api\n/tmp/apps/web', '/tmp/apps/web'])
+})
+
+test('signale le retard et les conflits avec la base, puis ouvre la conversation de résolution', async () => {
+  const fixture = singleFixture()
+  fixture.sync = {
+    '/tmp/worktrees/feature': {
+      path: '/tmp/worktrees/feature', branch: 'feature/code', base: 'origin/develop', head: 'b'.repeat(40),
+      ahead: 3, behind: 12, conflicts: ['src/app.ts', 'README.md'], dirty: false, mergeable: true,
+      fetchedAt: '2026-09-14T10:00:00.000Z', fetchError: null,
+    },
+  }
+  const calls = mockApi(fixture)
+  const onOpenConversation = mock(() => {})
+  render(createElement(CodeView, { project, conversation: baseConversation, ticketLinks: new Map(), onOpenConversation }))
+
+  const bar = await screen.findByLabelText('Écart avec la branche de base')
+  expect(await within(bar).findByText('12 commits')).toBeTruthy()
+  expect(calls.some((url) => url.includes('/code/sync') && url.includes('fetch=1'))).toBe(true)
+  expect(within(bar).queryByRole('button', { name: /Fusionner/ })).toBeNull()
+
+  fireEvent.click(within(bar).getByRole('button', { name: '2 conflits' }))
+  expect(within(bar).getByText('src/app.ts')).toBeTruthy()
+
+  fireEvent.click(within(bar).getByRole('button', { name: 'Résoudre dans une conversation' }))
+  await waitFor(() => expect(onOpenConversation).toHaveBeenCalledWith('conversation-conflits'))
+  expect(calls.some((call) => call.startsWith('POST') && call.includes('/code/resolve') && call.includes('/tmp/worktrees/feature'))).toBe(true)
 })

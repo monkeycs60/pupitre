@@ -162,6 +162,7 @@ interface GitOptions {
   maxBytes?: number;
   truncate?: boolean;
   stdin?: string;
+  timeoutMs?: number;
 }
 
 export interface CodeConversationRepository {
@@ -200,6 +201,32 @@ export interface CodeBranchChanges {
   head: string | null;
   files: CodeCommitFile[];
   filesTruncated: boolean;
+}
+
+export interface CodeSyncStatus {
+  path: string;
+  branch: string | null;
+  base: string | null;
+  head: string | null;
+  ahead: number;
+  behind: number;
+  conflicts: string[];
+  dirty: boolean;
+  /** Worktree sur une branche : une fusion peut y être écrite. */
+  mergeable: boolean;
+  fetchedAt: string | null;
+  fetchError: string | null;
+}
+
+export function conflictResolutionPrompt(branch: string, base: string, conflicts: string[]): string {
+  return `Mets la branche ${branch} à jour avec ${base} et résous les conflits de fusion.
+
+1. Vérifie que tu es sur ${branch} et que le worktree est propre. ${base} vient d'être récupérée : lance \`git merge ${base}\`, sans rebase.
+2. Conflits prévus : ${conflicts.map((path) => `\`${path}\``).join(", ")}. Pour chaque fichier, comprends l'intention des deux côtés (\`git log --oneline ${base} -- <fichier>\` et les commits de la branche) et combine-les. Ne sacrifie aucun des deux côtés sans le dire.
+3. Vérifie qu'aucun marqueur de conflit ne reste, puis lance les tests et vérifications des dépôts touchés.
+4. Committe la fusion. Ne pousse pas.
+
+Termine par un récapitulatif fichier par fichier des choix de résolution, et signale explicitement tout arbitrage incertain.`;
 }
 
 function parseDiffFiles(numstat: string, nameStatus: string): CodeCommitFile[] {
@@ -242,9 +269,14 @@ async function runGit(cwd: string, args: string[], options: GitOptions = {}): Pr
     ...(options.stdin !== undefined ? { stdin: Buffer.from(options.stdin) } : {}),
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" },
+    env: {
+      ...process.env,
+      GIT_OPTIONAL_LOCKS: "0",
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? "ssh -o BatchMode=yes",
+    },
   });
-  const timer = setTimeout(() => child.kill(), GIT_TIMEOUT_MS);
+  const timer = setTimeout(() => child.kill(), options.timeoutMs ?? GIT_TIMEOUT_MS);
   const stderrPromise = new Response(child.stderr).text();
   const reader = child.stdout.getReader();
   const chunks: Uint8Array[] = [];
@@ -613,6 +645,71 @@ export class CodeExplorerService {
     ]);
     const files = parseDiffFiles(numstat.stdout, nameStatus.stdout);
     return { base, from, head, files: files.slice(0, MAX_COMMIT_FILES), filesTruncated: files.length > MAX_COMMIT_FILES };
+  }
+
+  private fetches = new Map<string, Promise<string | null>>();
+
+  /** Écart de la branche avec sa base, et fichiers qu'une fusion de la base mettrait en conflit. */
+  async sync(projectId: string, source: string | null, options: { fetch?: boolean } = {}): Promise<CodeSyncStatus> {
+    const resolved = await this.resolveSource(projectId, source);
+    const { cwd, sha } = resolved;
+    const branch = sha ? resolved.source.branch : ((await optionalGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"]))?.trim() || null);
+    const base = await this.findBase(cwd, branch);
+    const fetched = options.fetch && base?.startsWith("origin/")
+      ? await this.fetchBase(resolved.source.repositoryPath, base)
+      : null;
+    const head = sha ?? ((await optionalGit(cwd, ["rev-parse", "--verify", "-q", "HEAD"]))?.trim() || null);
+    const status: CodeSyncStatus = {
+      path: resolved.source.path,
+      branch,
+      base,
+      head,
+      ahead: 0,
+      behind: 0,
+      conflicts: [],
+      dirty: false,
+      mergeable: !sha && branch !== null,
+      fetchedAt: fetched && fetched.error === null ? new Date(fetched.at).toISOString() : null,
+      fetchError: fetched?.error ?? null,
+    };
+    if (!base || !head) return status;
+    const [counts, dirty] = await Promise.all([
+      runGit(cwd, ["rev-list", "--left-right", "--count", `${base}...${head}`]),
+      sha ? Promise.resolve("") : optionalGit(cwd, ["status", "--porcelain", "--untracked-files=no"]),
+    ]);
+    const [behind = "0", ahead = "0"] = counts.stdout.trim().split(/\s+/);
+    status.behind = Number(behind) || 0;
+    status.ahead = Number(ahead) || 0;
+    status.dirty = Boolean(dirty?.trim());
+    if (status.behind > 0 && status.ahead > 0) {
+      const { stdout } = await runGit(cwd, ["merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", head, base], { accept: [0, 1] });
+      status.conflicts = [...new Set(stdout.split("\0").slice(1).filter(Boolean))];
+    }
+    return status;
+  }
+
+  /** Fusionne la base dans le worktree, seulement quand aucun conflit n'est prévu. */
+  async merge(projectId: string, source: string | null): Promise<CodeSyncStatus> {
+    const status = await this.sync(projectId, source);
+    if (!status.mergeable || !status.base) throw new CodeExplorerError("seul un worktree sur une branche peut être mis à jour");
+    if (status.behind === 0) return status;
+    if (status.dirty) throw new CodeExplorerError("le worktree a des modifications non commitées");
+    if (status.conflicts.length > 0) throw new CodeExplorerError(`fusion bloquée : ${status.conflicts.length} fichier(s) en conflit`);
+    await runGit(status.path, ["merge", "--no-edit", status.base], { timeoutMs: 60_000 });
+    return this.sync(projectId, source);
+  }
+
+  private async fetchBase(repositoryPath: string, base: string): Promise<{ at: number; error: string | null }> {
+    const key = `${repositoryPath}\n${base}`;
+    let pending = this.fetches.get(key);
+    if (!pending) {
+      pending = runGit(repositoryPath, ["fetch", "--quiet", "--no-tags", "origin", base.slice("origin/".length)], { timeoutMs: 60_000 })
+        .then(() => null, (error: unknown) => (error instanceof Error ? error.message : "fetch impossible"))
+        .finally(() => this.fetches.delete(key));
+      this.fetches.set(key, pending);
+    }
+    const error = await pending;
+    return { at: Date.now(), error };
   }
 
   /** Commits reliés à une conversation, regroupés par dépôt du projet, et ceux de son ticket. */

@@ -367,3 +367,41 @@ test("refuse un état du code hors du projet et un chemin qui sort du dépôt", 
   await expect(explorer.file(projectId, repo, "../outside/x")).rejects.toThrow("chemin de fichier invalide");
   await expect(explorer.commit(projectId, repo, "HEAD; rm")).rejects.toThrow("référence Git invalide");
 });
+
+test("mesure l'écart avec la base, prévoit les conflits et ne fusionne que sans conflit", async () => {
+  const origin = join(root, "origin.git");
+  git(root, "clone", "-q", "--bare", repo, origin);
+  git(repo, "remote", "add", "origin", origin);
+  git(repo, "fetch", "-q", "origin");
+  git(repo, "branch", "develop", "main");
+  git(repo, "push", "-q", "origin", "develop");
+  const worktree = join(root, "feature");
+  git(repo, "worktree", "add", "-q", "-b", "feature", worktree, "origin/develop");
+  commit(worktree, "src/shared.ts", "feature\n", "feature");
+  commit(worktree, "src/own.ts", "own\n", "own");
+
+  const upstream = join(root, "upstream");
+  git(root, "clone", "-q", "-b", "develop", origin, upstream);
+  git(upstream, "config", "user.email", "git@example.test");
+  git(upstream, "config", "user.name", "Git Fixture");
+  commit(upstream, "src/other.ts", "other\n", "autre travail");
+  git(upstream, "push", "-q", "origin", "develop");
+
+  const stale = await explorer.sync(projectId, worktree);
+  expect(stale).toMatchObject({ base: "origin/develop", branch: "feature", behind: 0, ahead: 2, mergeable: true });
+
+  const fetched = await explorer.sync(projectId, worktree, { fetch: true });
+  expect(fetched).toMatchObject({ behind: 1, ahead: 2, conflicts: [], fetchError: null });
+
+  const merged = await explorer.merge(projectId, worktree);
+  expect(merged).toMatchObject({ behind: 0, ahead: 3 });
+
+  commit(upstream, "src/shared.ts", "develop\n", "même fichier");
+  git(upstream, "push", "-q", "origin", "develop");
+  const conflicted = await explorer.sync(projectId, worktree, { fetch: true });
+  expect(conflicted.conflicts).toEqual(["src/shared.ts"]);
+  const before = git(worktree, "rev-parse", "HEAD");
+  await expect(explorer.merge(projectId, worktree)).rejects.toThrow("conflit");
+  expect(git(worktree, "rev-parse", "HEAD")).toBe(before);
+  expect(git(worktree, "status", "--porcelain")).toBe("");
+});

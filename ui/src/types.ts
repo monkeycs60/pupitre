@@ -773,6 +773,20 @@ export interface CodeSource {
   updatedAt: string | null
 }
 
+export interface CodeSyncStatus {
+  path: string
+  branch: string | null
+  base: string | null
+  head: string | null
+  ahead: number
+  behind: number
+  conflicts: string[]
+  dirty: boolean
+  mergeable: boolean
+  fetchedAt: string | null
+  fetchError: string | null
+}
+
 export type CodeDirtyStatus = 'M' | 'A' | 'D' | 'R' | '?'
 
 export interface CodeFileList {

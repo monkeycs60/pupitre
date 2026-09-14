@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { absoluteCodeDate, relativeCodeDate } from './codeFormat'
 import {
   CODE_GRAPH_LANE_WIDTH,
@@ -64,6 +64,7 @@ interface CodeGraphProps {
   onLoadMore: () => void
   onToggleExpanded: () => void
   onOpenConversation: (conversationId: string) => void
+  syncBar?: ReactNode
 }
 
 const ROW_HEIGHTS: Record<CodeGraphLayout, number> = { compact: 28, table: 34 }
@@ -195,6 +196,7 @@ export function CodeGraph({
   error,
   layout,
   selectedSha,
+  syncBar,
   returnLabel,
   branchOnly,
   onToggleBranchOnly,
@@ -370,6 +372,7 @@ export function CodeGraph({
         <span>Agrandir</span>
       </button> : null}
     </header>
+    {syncBar}
     {graph ? <div className="code-graph-filters" role="group" aria-label="Filtrer le graphe">
       {branchCount > 0 ? <button
         type="button"
