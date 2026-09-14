@@ -69,7 +69,7 @@
 }
 
 .code-graph {
-  flex: 1 1 55%;
+  flex: 1 1 0;
 }
 
 .code-detail-column {
@@ -1707,8 +1707,7 @@
 }
 
 .code-commit.is-docked {
-  flex: 0 1 auto;
-  max-height: 52%;
+  flex: 0 0 50%;
   overflow: auto;
   border-top: 1px solid var(--border);
 }
