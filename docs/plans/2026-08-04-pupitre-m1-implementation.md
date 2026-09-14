@@ -11,7 +11,7 @@
 
 **Modèle par tour (décision clé):** on ne garde PAS un process CLI vivant par conversation. Chaque tour utilisateur = une invocation CLI qui se termine (`claude -p` puis `claude -p -r <id>` ; `codex exec` puis `codex exec resume <id>`). La reprise d'une conversation (aujourd'hui ou dans une semaine) est donc le même code que le tour n°2. Les sessions sont persistées par les CLIs eux-mêmes.
 
-**Non-goals M1** (viennent en M2/M3) : orchestration/Conductor, quotas, Gardien, Débrief, Tester, bibliothèque de skills, approbations interactives (M1 tourne en `--permission-mode acceptEdits` / `-s workspace-write`), tray/autostart, packaging.
+**Non-goals M1** (viennent en M2/M3) : orchestration/Conductor, quotas, Débrief, Tester, bibliothèque de skills, approbations interactives (M1 tourne en `--permission-mode acceptEdits` / `-s workspace-write`), tray/autostart, packaging.
 
 ---
 

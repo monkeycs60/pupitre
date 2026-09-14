@@ -6,8 +6,6 @@ export interface Project {
   id: string; name: string; path: string;
   permission_mode: PresetPermissionMode; pinned: boolean; created_at: string;
   default_preset_id: string | null;
-  default_review_preset_id: string | null;
-  default_correction_preset_id: string | null;
   default_scout_preset_id: string | null;
   /**
    * Preset appliqué aux nouvelles TODO. `null` = suivre `default_preset_id`,
@@ -78,14 +76,6 @@ export class ProjectStore {
 
   setDefaultPreset(id: string, presetId: string | null): void {
     this.db.query("UPDATE projects SET default_preset_id = ? WHERE id = ?").run(presetId, id);
-  }
-
-  setDefaultReviewPreset(id: string, presetId: string | null): void {
-    this.db.query("UPDATE projects SET default_review_preset_id = ? WHERE id = ?").run(presetId, id);
-  }
-
-  setDefaultCorrectionPreset(id: string, presetId: string | null): void {
-    this.db.query("UPDATE projects SET default_correction_preset_id = ? WHERE id = ?").run(presetId, id);
   }
 
   setDefaultScoutPreset(id: string, presetId: string | null): void {

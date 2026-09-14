@@ -6,7 +6,7 @@ import type { Conversation } from "./stores/conversations";
  *
  * Une conversation peut naître sur une branche : Pupitre lui crée alors un
  * worktree git dédié, et tout ce qu'elle lance — tours, sous-tâches, débriefs,
- * tests, reviews — doit s'exécuter dedans. Sans quoi deux conversations sur des
+ * tests et sous-tâches — doit s'exécuter dedans. Sans quoi deux conversations sur des
  * branches différentes se contaminent, et un agent qui change de branche casse
  * les autres.
  *

@@ -12,11 +12,8 @@ structured_turn() {
 }
 
 case "$prompt" in
-  *"Tu es le Gardien de Pupitre"*)
-    structured_turn '"{\"flags\":[]}"'
-    ;;
   *"produis un inventaire concret"*)
-    structured_turn '"{\"items\":[{\"title\":\"Smoke UI M3\",\"description\":\"Vérifier le parcours principal dans le navigateur.\",\"methods\":[{\"kind\":\"browser\",\"label\":\"Parcours Pupitre\",\"instructions\":\"Ouvrir les vues Conversation, Git, Gardien et Tester.\"}],\"guardian_flag_ids\":[]}] }"'
+    structured_turn '"{\"items\":[{\"title\":\"Smoke UI M3\",\"description\":\"Vérifier le parcours principal dans le navigateur.\",\"methods\":[{\"kind\":\"browser\",\"label\":\"Parcours Pupitre\",\"instructions\":\"Ouvrir les vues Conversation, Code et Tester.\"}]}"'
     ;;
   *"Tu exécutes un scope de validation"*)
     structured_turn '"Parcours navigateur déterministe terminé.\n<test-result>{\"verdict\":\"passed\",\"summary\":\"Les vues M3 demandées sont accessibles.\"}</test-result>"'

@@ -60,8 +60,6 @@ export function TestInventoryCard({ block, onImageOpen, onImageLoad }: TestInven
         {block.scopes.map((scope, index) => {
           const status = scope.status
           const evidence = scope.evidenceMd ?? scope.evidence_md ?? null
-          const flagIds = scope.guardianFlagIds ?? scope.guardian_flag_ids ?? []
-          const ackedFlagIds = scope.guardianFlagIdsAcked ?? []
           return (
             <article className={`test-scope is-${status}`} key={scope.id}>
               <div className="test-scope-number">{String(index + 1).padStart(2, '0')}</div>
@@ -89,11 +87,7 @@ export function TestInventoryCard({ block, onImageOpen, onImageLoad }: TestInven
                   ))}
                 </div>
                 <div className="test-scope-actions">
-                  {flagIds.length > 0 ? (
-                    <span title="Ces alertes Gardien seront acquittées seulement si le scope réussit">
-                      Gardien · {flagIds.length} point{flagIds.length === 1 ? '' : 's'} lié{flagIds.length === 1 ? '' : 's'}
-                    </span>
-                  ) : <span />}
+                  <span />
                   <button
                     type="button"
                     onClick={() => void start(scope)}
@@ -117,11 +111,6 @@ export function TestInventoryCard({ block, onImageOpen, onImageLoad }: TestInven
                   onImageOpen={onImageOpen}
                   onImageLoad={onImageLoad}
                 />
-                {ackedFlagIds.length > 0 ? (
-                  <p className="test-guardian-acked">
-                    Gardien · {ackedFlagIds.length} point{ackedFlagIds.length === 1 ? '' : 's'} acquitté{ackedFlagIds.length === 1 ? '' : 's'}
-                  </p>
-                ) : null}
                 {scope.error ? <p className="test-card-error">{scope.error}</p> : null}
               </div>
             </article>

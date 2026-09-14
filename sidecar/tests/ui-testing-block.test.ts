@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { groupEvents, guardianAckCount } from '../../ui/src/groupEvents'
+import { groupEvents } from '../../ui/src/groupEvents'
 import type { AppEvent } from '../../ui/src/types'
 
 test('l inventaire reste une carte unique dont le scope reçoit son résultat', () => {
@@ -12,7 +12,6 @@ test('l inventaire reste une carte unique dont le scope reçoit son résultat', 
       title: 'API',
       description: 'Contrat',
       methods: [{ kind: 'unit', label: 'bun test', instructions: 'bun test' }],
-      guardianFlagIds: ['flag'],
       status: 'pending',
       subtaskId: null,
       evidenceMd: null,
@@ -32,7 +31,6 @@ test('l inventaire reste une carte unique dont le scope reçoit son résultat', 
     status: 'passed',
     evidenceMd: '12 tests passent',
     images: ['capture.png'],
-    guardianFlagIdsAcked: ['flag'],
     completedAt: '2026-08-04T12:02:00Z',
   }]
 
@@ -45,9 +43,7 @@ test('l inventaire reste une carte unique dont le scope reçoit son résultat', 
         subtaskId: 'subtask',
         evidenceMd: '12 tests passent',
         images: ['capture.png'],
-        guardianFlagIdsAcked: ['flag'],
       })],
     }),
   ])
-  expect(guardianAckCount(events)).toBe(1)
 })

@@ -43,18 +43,6 @@ test("les racines IA sont la portée filesystem par défaut", () => {
   expect(store.get(p.id)?.filesystem_scope).toBe("full-system");
 });
 
-test("sépare les presets par défaut du chat, de la review et de la correction", () => {
-  const p = store.create({ name: "a", path: "/tmp/preset-defaults" });
-  store.setDefaultPreset(p.id, "chat-preset");
-  store.setDefaultReviewPreset(p.id, "review-preset");
-  store.setDefaultCorrectionPreset(p.id, "correction-preset");
-  expect(store.get(p.id)).toEqual(expect.objectContaining({
-    default_preset_id: "chat-preset",
-    default_review_preset_id: "review-preset",
-    default_correction_preset_id: "correction-preset",
-  }));
-});
-
 test("le preset des TODO est nul par défaut, puis réglable", () => {
   const p = store.create({ name: "a", path: "/tmp/todo-preset" });
   // `null` = suivre le défaut conversationnel : les projets existants ne

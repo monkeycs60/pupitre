@@ -19,7 +19,7 @@ export interface TurnOptions {
    * fonctionne depuis le worktree.
    */
   extraWorkspaceRoots?: string[];
-  /** Sandbox Codex ; les scans Gardien sont explicitement en lecture seule. */
+  /** Sandbox Codex. */
   sandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
   images: string[]; // chemins absolus d'images jointes par l'utilisateur
   attachments?: MediaAttachment[];

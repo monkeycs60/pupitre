@@ -98,14 +98,8 @@ export type AppEvent =
       status: "passed" | "failed";
       evidenceMd: string;
       images: string[];
-      guardianFlagIdsAcked: string[];
       completedAt: string;
       error?: string;
-    }
-  | {
-      type: "review-report-ref";
-      reviewId: string;
-      createdAt: string;
     }
   /** Titre et résumé régénérés après un tour : la sidebar se met à jour. */
   | {
@@ -126,7 +120,6 @@ export interface TestScopeEvent {
     label: string;
     instructions: string;
   }>;
-  guardianFlagIds: string[];
   status: "pending" | "running" | "passed" | "failed";
   subtaskId: string | null;
   evidenceMd: string | null;

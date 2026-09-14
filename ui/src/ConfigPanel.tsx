@@ -77,7 +77,7 @@ function keepBranch(next: ConversationConfig, current: ConversationConfig): Conv
 /**
  * Réglette de lancement : provider, modèle, effort et branche. La
  * configuration d'ouverture vient de la mémoire du projet, à défaut du preset
- * par défaut que Gardien et les TODO continuent d'utiliser.
+ * par défaut que les TODO continuent d'utiliser.
  */
 export function ConfigPanel({
   project,

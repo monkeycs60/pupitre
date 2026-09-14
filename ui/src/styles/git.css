@@ -1,4 +1,4 @@
-/* --- Vue Code : diff de la conversation, calque Gardien, historique ---- */
+/* --- Vue Code : diff de la conversation et historique ----------------- */
 
 .code-workspace {
   display: flex;
@@ -182,8 +182,7 @@
 
 .changes-diff { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
 .changes-diff.is-scanning { opacity: .6; transition: opacity .3s ease; }
-.changes-diff .diff-table,
-.changes-main .diff-table { flex: 1; min-height: 0; overflow: auto; }
+.changes-main .diff-viewer { flex: 1; min-height: 0; overflow: auto; }
 
 /* --- Onglet Historique ----------------------------------------------------- */
 
@@ -197,17 +196,11 @@
 .code-commit-row > code,
 .code-commit-date { color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; }
 .code-commit-row > strong { overflow: hidden; color: var(--text); font-size: var(--text-sm); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.code-shield { color: var(--text-faint); font-size: 14px; text-align: center; opacity: 0.45; }
-.code-shield.is-sealed { color: var(--ok); opacity: 1; }
-.code-guardian-state { padding: 2px 5px; font-size: 10px; border-radius: var(--r-xs); white-space: nowrap; }
-.code-guardian-state.is-sealed { color: var(--ok); background: var(--ok-soft); }
-.code-guardian-state.is-warning { color: var(--warn); background: var(--warn-soft); }
-.code-guardian-state.is-unreviewed { color: var(--text-faint); background: var(--neutral-soft); }
 .code-commit-action { color: var(--accent-hover); font-size: 10px; white-space: nowrap; }
 
 .history-detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .code-commit-detail-header { display: flex; align-items: center; gap: var(--space-3); flex: none; min-height: 42px; padding: 0 var(--space-4); color: var(--text-strong); background: var(--bg-raised); border-bottom: 1px solid var(--border-subtle); }
-.history-detail .diff-table { flex: 1; min-height: 0; overflow: auto; }
+.history-detail .diff-viewer { flex: 1; min-height: 0; overflow: auto; }
 
 @media (max-width: 980px) {
   .changes-tab,

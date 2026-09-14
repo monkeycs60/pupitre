@@ -59,7 +59,7 @@ export interface ProjectCostReport {
 
 export interface FleetItem {
   id: string
-  kind: 'turn' | 'subtask' | 'routine' | 'review'
+  kind: 'turn' | 'subtask' | 'routine'
   projectId: string
   projectName: string
   conversationId: string
@@ -223,8 +223,6 @@ export interface Project {
   pinned: boolean
   created_at: string
   default_preset_id: string | null
-  default_review_preset_id?: string | null
-  default_correction_preset_id?: string | null
   default_scout_preset_id?: string | null
   /** Preset des nouvelles TODO ; `null` = suivre `default_preset_id`. */
   default_todo_preset_id?: string | null
@@ -239,9 +237,6 @@ export interface Preset {
   effort: string | null
   speed: ConversationSpeed | null
   permission_mode: PresetPermissionMode | null
-  review_provider: Provider
-  review_model: string
-  review_effort: string
   built_in: boolean
   created_at: string
   updated_at: string
@@ -660,66 +655,6 @@ export interface SubtaskResult {
   error: string | null
   subtask: Subtask
 }
-
-export type ReviewStatus = 'running' | 'done' | 'error'
-export type ReviewSeverity = 'red' | 'orange' | 'grey'
-export type ReviewFlagStatus = 'open' | 'agent_running' | 'treated' | 'ignored' | 'resolved'
-
-export interface ReviewFlag {
-  id: string
-  review_id: string
-  file: string
-  line_start: number
-  line_end: number
-  severity: ReviewSeverity
-  category: string
-  message: string
-  test_gap?: boolean
-  status: ReviewFlagStatus
-  hunk_hash?: string | null
-  subtask_id?: string | null
-  user_message?: string | null
-  code_provider: Provider
-}
-
-export interface Review {
-  id: string
-  project_id: string
-  conversation_id: string
-  git_ref_base: string
-  git_ref_head: string
-  status: ReviewStatus
-  review_provider: Provider
-  review_model: string
-  review_effort: string
-  review_speed: ConversationSpeed
-  diff_text: string
-  error: string | null
-  created_at: string
-  updated_at: string
-  flags: ReviewFlag[]
-  code_provider: Provider
-  scope: 'worktree' | 'comparison'
-  parent_review_id: string | null
-}
-
-export interface ReviewStatusSnapshot {
-  openBySeverity: Record<ReviewSeverity, number>
-  running: { reviewId: string, zoneDone: number, zoneTotal: number } | null
-}
-
-/** Événement poussé sur le canal Fleet, ciblé sur un projet. */
-export interface ReviewStatusEvent extends ReviewStatusSnapshot {
-  projectId: string
-}
-
-export interface GitGuardianReview {
-  reviewId: string
-  red: number
-  orange: number
-  grey: number
-}
-
 export interface GitCommit {
   sha: string
   parents: string[]
@@ -728,7 +663,6 @@ export interface GitCommit {
   authoredAt: string
   subject: string
   conversations: Array<{ id: string; title: string }>
-  guardian: GitGuardianReview[]
 }
 
 export interface GitPushCommit {
@@ -973,15 +907,12 @@ export interface TestScope {
   title: string
   description: string
   methods: TestMethod[]
-  guardian_flag_ids?: string[]
-  guardianFlagIds?: string[]
   status: TestScopeStatus
   subtask_id?: string | null
   subtaskId?: string | null
   evidence_md?: string | null
   evidenceMd?: string | null
   images: string[]
-  guardianFlagIdsAcked?: string[]
   error: string | null
 }
 
@@ -1087,14 +1018,8 @@ export type AppEvent =
       status: 'passed' | 'failed'
       evidenceMd: string
       images: string[]
-      guardianFlagIdsAcked: string[]
       completedAt: string
       error?: string
-    }
-  | {
-      type: 'review-report-ref'
-      reviewId: string
-      createdAt: string
     }
   // Introspection de quota native du provider (payload brut, interprété côté
   // sidecar par le QuotaTracker — cf. sidecar/src/events.ts).

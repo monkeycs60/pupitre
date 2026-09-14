@@ -34,10 +34,6 @@ import type {
   PresetPermissionMode,
   Provider,
   QuotaSnapshot,
-  Review,
-  ReviewFlag,
-  ReviewFlagStatus,
-  ReviewStatusSnapshot,
   Routine,
   RoutineRun,
   SessionSummary,
@@ -121,9 +117,6 @@ export interface PresetInput {
   effort: string | null
   speed: ConversationSpeed | null
   permission_mode?: PresetPermissionMode | null
-  review_provider?: Provider
-  review_model?: string
-  review_effort?: string
 }
 
 export interface WorkflowInput {
@@ -150,14 +143,6 @@ export interface RoutineInput {
   effort: string | null
   speed: ConversationSpeed | null
   enabled: boolean
-}
-
-export interface StartReviewInput {
-  conversationId: string
-  scope?: 'worktree' | 'comparison'
-  gitRefBase?: string
-  gitRefHead?: string
-  incremental?: boolean
 }
 
 export interface Settings {
@@ -621,26 +606,6 @@ export function setProjectDefaultPreset(
 ): Promise<Project> {
   return fetchJson(
     `/api/projects/${routeId(id)}/default-preset`,
-    jsonPut({ presetId }),
-  )
-}
-
-export function setProjectDefaultReviewPreset(
-  id: string,
-  presetId: string | null,
-): Promise<Project> {
-  return fetchJson(
-    `/api/projects/${routeId(id)}/default-review-preset`,
-    jsonPut({ presetId }),
-  )
-}
-
-export function setProjectDefaultCorrectionPreset(
-  id: string,
-  presetId: string | null,
-): Promise<Project> {
-  return fetchJson(
-    `/api/projects/${routeId(id)}/default-correction-preset`,
     jsonPut({ presetId }),
   )
 }
@@ -1156,7 +1121,7 @@ export async function getConversationEventPage(
   return Array.isArray(page) ? { events: page, nextBefore: null } : page
 }
 
-/** Le diff exact que lit le Gardien pour scanner cette conversation. */
+/** Le diff de travail associé à cette conversation. */
 export function getConversationDiff(
   conversationId: string,
   signal?: AbortSignal,
@@ -1172,16 +1137,6 @@ export function acknowledgeConversationPush(conversationId: string, sha: string)
   return fetchJson(`/api/conversations/${routeId(conversationId)}/pushes/${routeId(sha)}/ack`, jsonPost({}))
 }
 
-export function startReview(input: StartReviewInput): Promise<Review> {
-  return fetchJson('/api/reviews', jsonPost(input))
-}
-
-export function listProjectReviews(
-  projectId: string,
-  signal?: AbortSignal,
-): Promise<Review[]> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/reviews`, { signal })
-}
 
 export function getProjectGit(
   projectId: string,
@@ -1293,57 +1248,6 @@ export function getCodeConversationCommits(
 
 export function searchCode(projectId: string, source: string, q: string, signal?: AbortSignal): Promise<CodeSearchResult> {
   return fetchJson(codeUrl(projectId, 'search', { source, q }), { signal })
-}
-
-export function getReview(reviewId: string, signal?: AbortSignal): Promise<Review> {
-  return fetchJson(`/api/reviews/${routeId(reviewId)}`, { signal })
-}
-
-export function setReviewFlagStatus(
-  flagId: string,
-  status: Extract<ReviewFlagStatus, 'open' | 'treated' | 'ignored'>,
-): Promise<ReviewFlag> {
-  return fetchJson(`/api/review-flags/${routeId(flagId)}`, jsonPatch({ status }))
-}
-
-export function getReviewStatus(
-  projectId: string,
-  signal?: AbortSignal,
-): Promise<ReviewStatusSnapshot> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/review-status`, { signal })
-}
-
-export function dispatchFlag(flagId: string, message?: string): Promise<{ subtaskId: string }> {
-  return fetchJson(`/api/review-flags/${routeId(flagId)}/dispatch`, jsonPost({ message }))
-}
-
-// Un serveur plus ancien ne renvoie que `dispatched` : sans liste, on n'invente
-// aucun identifiant — l'appel a réussi, c'est le rafraîchissement qui dira quels
-// signalements sont partis.
-function dispatchedFlagIds(payload: { flagIds?: unknown }): string[] {
-  return Array.isArray(payload.flagIds) ? payload.flagIds.filter((id) => typeof id === 'string') : []
-}
-
-export async function dispatchAllFlags(
-  reviewId: string,
-  severities: Array<'red' | 'orange' | 'grey'> = ['red', 'orange'],
-): Promise<{ dispatched: number, flagIds: string[] }> {
-  const payload = await fetchJson<{ dispatched: number, flagIds?: unknown }>(
-    `/api/reviews/${routeId(reviewId)}/dispatch-all`,
-    jsonPost({ severities }),
-  )
-  return { dispatched: payload.dispatched, flagIds: dispatchedFlagIds(payload) }
-}
-
-export async function dispatchGroupedFlags(
-  reviewId: string,
-  severities: Array<'red' | 'orange' | 'grey'> = ['red', 'orange'],
-): Promise<{ subtaskId: string, dispatched: number, flagIds: string[] }> {
-  const payload = await fetchJson<{ subtaskId: string, dispatched: number, flagIds?: unknown }>(
-    `/api/reviews/${routeId(reviewId)}/dispatch-grouped`,
-    jsonPost({ severities }),
-  )
-  return { subtaskId: payload.subtaskId, dispatched: payload.dispatched, flagIds: dispatchedFlagIds(payload) }
 }
 
 interface PendingSubtaskRequest {

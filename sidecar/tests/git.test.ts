@@ -7,7 +7,6 @@ import { openDb } from "../src/db";
 import { GitProjectService } from "../src/git";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
-import { ReviewStore } from "../src/stores/reviews";
 
 let db: Database;
 let repo: string;
@@ -75,63 +74,6 @@ test("retourne commits, branches, HEAD, worktrees et conversations d'origine", (
     expect.objectContaining({ name: "feature", current: false }),
   ]));
   expect(snapshot.worktrees.map((item) => item.path)).toContain(worktree);
-});
-
-test("ancre les flags Gardien sur le commit visé par la review", () => {
-  const head = commit("danger.ts", "export const secret = true\n", "risque");
-  const store = new ReviewStore(db);
-  const review = store.create({
-    projectId,
-    conversationId,
-    gitRefBase: "HEAD^",
-    gitRefHead: head,
-    provider: "codex",
-    model: "gpt-5.6-sol",
-    effort: "high",
-  });
-  store.complete(review.id, [{
-    file: "danger.ts",
-    line_start: 1,
-    line_end: 1,
-    severity: "red",
-    category: "secret",
-    message: "Ne pas exposer ce secret.",
-  }]);
-  const cleanReview = store.create({
-    projectId,
-    conversationId,
-    gitRefBase: "HEAD^",
-    gitRefHead: head,
-    provider: "codex",
-    model: "gpt-5.6-sol",
-    effort: "high",
-  });
-  store.complete(cleanReview.id, []);
-
-  expect(gitView.snapshot(projectId).commits[0]?.guardian).toEqual(expect.arrayContaining([
-    { reviewId: review.id, red: 1, orange: 0, grey: 0 },
-    { reviewId: cleanReview.id, red: 0, orange: 0, grey: 0 },
-  ]));
-});
-
-test("ne rattache jamais une ancienne review WORKTREE au nouveau HEAD", () => {
-  const reviewedHead = commit("reviewed.ts", "export const reviewed = true\n", "reviewed");
-  const store = new ReviewStore(db);
-  const review = store.create({
-    projectId,
-    conversationId,
-    gitRefBase: "HEAD^",
-    gitRefHead: "WORKTREE",
-    provider: "codex",
-    model: "gpt-5.6-sol",
-    effort: "high",
-  });
-  store.complete(review.id, []);
-  const newerHead = commit("newer.ts", "export const newer = true\n", "newer");
-
-  const snapshot = gitView.snapshot(projectId);
-  expect(snapshot.commits.find((item) => item.sha === reviewedHead)?.guardian).toEqual([]);
-  expect(snapshot.commits.find((item) => item.sha === newerHead)?.guardian).toEqual([]);
 });
 
 test("produit un diff entre refs validées et refuse une référence invalide", async () => {

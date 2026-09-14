@@ -13,7 +13,7 @@
   background: var(--bg-app);
 }
 
-/* Vues plein cadre (progression, fleet, gardien…) : pas de sidebar
+/* Vues plein cadre (progression, fleet…) : pas de sidebar
    conversations, la vue s'étend juste après le rail. */
 .app-shell--no-sidebar {
   grid-template-columns: 56px minmax(0, 1fr);

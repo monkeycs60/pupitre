@@ -14,8 +14,6 @@ import { INTEGRATION_TOKENS_KEY, SettingsStore } from "../src/stores/settings";
 import { QuotaTracker } from "../src/quotas";
 import { QuotaRefresher } from "../src/quota-refresh";
 import { SubtaskRunner } from "../src/subtasks";
-import { ReviewStore } from "../src/stores/reviews";
-import { ReviewRunner } from "../src/reviews";
 import { DebriefStore } from "../src/stores/debriefs";
 import { DebriefRunner } from "../src/debriefs";
 import { GitProjectService } from "../src/git";
@@ -179,15 +177,6 @@ beforeEach(() => {
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
-  const reviewStore = new ReviewStore(db);
-  const reviews = new ReviewRunner(
-    reviewStore,
-    projects,
-    conversations,
-    quotas,
-    async () => "{\"flags\":[]}",
-    subtasks,
-  );
   const debriefs = new DebriefRunner(
     new DebriefStore(db),
     conversations,
@@ -201,7 +190,6 @@ beforeEach(() => {
     new TestingStore(db),
     conversations,
     projects,
-    reviewStore,
     quotas,
     events.broadcast,
     subtasks,
@@ -267,7 +255,6 @@ beforeEach(() => {
     subtasks,
     presets,
     settings,
-    reviews,
     debriefs,
     git,
     testers,

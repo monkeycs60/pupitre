@@ -18,8 +18,6 @@ import { SubtaskRunner } from "./subtasks";
 import { claudeSessions } from "./adapters/claude-session";
 import { codexAppServer } from "./adapters/codex-app-server";
 import { runPupitreMcp } from "./pupitre-mcp";
-import { ReviewStore } from "./stores/reviews";
-import { ReviewRunner } from "./reviews";
 import { DebriefStore } from "./stores/debriefs";
 import { DebriefRunner, generateWithAdapters } from "./debriefs";
 import { GitProjectService } from "./git";
@@ -87,7 +85,6 @@ if (process.argv.includes("--pupitre-mcp")) {
   htmlDocuments.sweepExpired();
   const quotas = new QuotaTracker(db);
   const quotaRefresher = new QuotaRefresher(quotas);
-  const reviewStore = new ReviewStore(db);
   const skills = new SkillInventory(db, projects);
   skills.start();
   const skillComposer = new SkillComposer(skills, projects, quotas);
@@ -206,23 +203,6 @@ if (process.argv.includes("--pupitre-mcp")) {
   // Les sous-tâches ne prennent PAS le verrou de conversation du runner : elles
   // tournent en parallèle du tour parent qui les a demandées.
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
-  const reviews = new ReviewRunner(
-    reviewStore,
-    projects,
-    conversations,
-    quotas,
-    undefined,
-    subtasks,
-    (conversationId, review) => {
-      const event = {
-        type: "review-report-ref" as const,
-        reviewId: review.id,
-        createdAt: review.updated_at,
-      };
-      const id = conversations.appendEvent(conversationId, event);
-      events.broadcast(conversationId, { ...event, id });
-    },
-  );
   const debriefs = new DebriefRunner(
     new DebriefStore(db),
     conversations,
@@ -236,7 +216,6 @@ if (process.argv.includes("--pupitre-mcp")) {
     new TestingStore(db),
     conversations,
     projects,
-    reviewStore,
     quotas,
     events.broadcast,
     subtasks,
@@ -308,7 +287,6 @@ if (process.argv.includes("--pupitre-mcp")) {
     codeExplorer,
     presets,
     settings,
-    reviews,
     debriefs,
     git,
     testers,

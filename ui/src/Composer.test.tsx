@@ -29,7 +29,6 @@ const project: Project = {
   filesystem_scope: 'project-and-ai-roots',
   pinned: false,
   default_preset_id: null,
-  default_review_preset_id: null,
   auto_rescan: false,
   created_at: '2026-08-17T00:00:00.000Z',
 }

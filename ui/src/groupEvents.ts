@@ -52,13 +52,6 @@ export interface HtmlDocumentBlock {
   expiresAt: string | null
 }
 
-export interface ReviewReportBlock {
-  kind: 'review-report'
-  id: string
-  reviewId: string
-  createdAt: string
-}
-
 export type StreamBlock =
   | EventBlock
   | SubtaskBlock
@@ -66,7 +59,6 @@ export type StreamBlock =
   | SessionSummaryBlock
   | TestInventoryBlock
   | HtmlDocumentBlock
-  | ReviewReportBlock
 
 function lineCount(text: string): number {
   return text.length === 0 ? 0 : text.split('\n').length
@@ -208,15 +200,6 @@ function shellApplyPatchEdits(
   }
 
   return edits
-}
-
-export function guardianAckCount(events: ReadonlyArray<AppEvent>): number {
-  return events.reduce(
-    (count, event) => event.type === 'test-scope-result'
-      ? count + (event.guardianFlagIdsAcked?.length ?? 0)
-      : count,
-    0,
-  )
 }
 
 /** Regroupe les événements bruts d'une conversation en blocs affichables. */
@@ -417,20 +400,10 @@ export function groupEvents(
           scope.status = event.status
           scope.evidenceMd = event.evidenceMd
           scope.images = event.images ?? []
-          scope.guardianFlagIdsAcked = event.guardianFlagIdsAcked ?? []
           scope.error = event.error ?? null
         }
         break
       }
-      case 'review-report-ref':
-        assistant = null
-        blocks.push({
-          kind: 'review-report',
-          id: `review-report-${eventKey}-${event.reviewId}`,
-          reviewId: event.reviewId,
-          createdAt: event.createdAt,
-        })
-        break
       case 'usage': {
         const footer = ensureTurnFooter()
         footer.usage = {

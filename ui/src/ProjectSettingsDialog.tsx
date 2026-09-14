@@ -6,10 +6,8 @@ import {
   listPresets,
   measureProjectMcpServers,
   saveProjectIntegration,
-  setProjectDefaultCorrectionPreset,
   setProjectDefaultScoutPreset,
   setProjectDefaultTodoPreset,
-  setProjectDefaultReviewPreset,
   setProjectFilesystemScope,
   setProjectPermissionMode,
   updateProjectMcpServers,
@@ -76,10 +74,8 @@ function projectPresetId(value: string | null | undefined, legacy: string | null
   return value === undefined ? legacy ?? '' : value ?? ''
 }
 
-function presetLabel(preset: Preset, kind: 'review' | 'correction' | 'todo'): string {
-  const model = kind === 'review' ? preset.review_model : preset.model
-  const effort = kind === 'review' ? preset.review_effort : (preset.effort ?? '—')
-  return `${preset.name} · ${model} · ${effort}`
+function presetLabel(preset: Preset): string {
+  return `${preset.name} · ${preset.model} · ${preset.effort ?? '—'}`
 }
 
 function emptyGitLabProject(): GitLabProjectForm {
@@ -181,8 +177,6 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
   const [scope, setScope] = useState<FilesystemScope>(project.filesystem_scope)
   const [permissionMode, setPermissionMode] = useState<PresetPermissionMode>(project.permission_mode)
   const [presets, setPresets] = useState<Preset[]>([])
-  const [reviewPresetId, setReviewPresetId] = useState(() => projectPresetId(project.default_review_preset_id, project.default_preset_id))
-  const [correctionPresetId, setCorrectionPresetId] = useState(() => projectPresetId(project.default_correction_preset_id, project.default_preset_id))
   const [scoutPresetId, setScoutPresetId] = useState(() => projectPresetId(project.default_scout_preset_id, project.default_preset_id))
   // Pas de reprise de `default_preset_id` à l'affichage : `null` veut dire
   // « suivre le défaut du projet », et l'éditeur de TODO applique ce repli.
@@ -313,8 +307,6 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
     try {
       let updated = await setProjectFilesystemScope(project.id, scope)
       updated = await setProjectPermissionMode(project.id, permissionMode)
-      updated = await setProjectDefaultReviewPreset(project.id, reviewPresetId || null)
-      updated = await setProjectDefaultCorrectionPreset(project.id, correctionPresetId || null)
       updated = await setProjectDefaultScoutPreset(project.id, scoutPresetId || null)
       updated = await setProjectDefaultTodoPreset(project.id, todoPresetId || null)
       for (const type of ['clickup', 'gitlab', 'sentry'] as const) {
@@ -383,47 +375,23 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
           <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">×</button>
         </header>
         <div className="project-settings-body">
-          <section className="project-settings-defaults" aria-labelledby="project-gardien-defaults-title">
+          <section className="project-settings-defaults" aria-labelledby="project-defaults-title">
             <div className="project-settings-section-heading">
-              <strong id="project-gardien-defaults-title">Presets par défaut</strong>
-              <span>Gardien (review, correction, Scout) et nouvelles TODO. Appliqués au prochain lancement, y compris dans les conversations en cours.</span>
+              <strong id="project-defaults-title">Presets par défaut</strong>
+              <span>Scout et nouvelles TODO. Appliqués au prochain lancement, y compris dans les conversations en cours.</span>
             </div>
-            <label htmlFor="project-review-preset">
-              <strong>Preset de review</strong>
-              <select
-                id="project-review-preset"
-                value={reviewPresetId}
-                disabled={saving}
-                onChange={(event) => setReviewPresetId(event.target.value)}
-              >
-                <option value="">Automatique · modèle de la conversation</option>
-                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset, 'review')}</option>)}
-              </select>
-            </label>
-            <label htmlFor="project-correction-preset">
-              <strong>Preset de correction</strong>
-              <select
-                id="project-correction-preset"
-                value={correctionPresetId}
-                disabled={saving}
-                onChange={(event) => setCorrectionPresetId(event.target.value)}
-              >
-                <option value="">Automatique · modèle de la conversation</option>
-                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset, 'correction')}</option>)}
-              </select>
-            </label>
             <label htmlFor="project-scout-preset">
               <strong>Preset Scout Sentry</strong>
               <select id="project-scout-preset" value={scoutPresetId} disabled={saving} onChange={(event) => setScoutPresetId(event.target.value)}>
                 <option value="">Automatique · preset général</option>
-                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset, 'review')}</option>)}
+                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset)}</option>)}
               </select>
             </label>
             <label htmlFor="project-todo-preset">
               <strong>Preset des TODO</strong>
               <select id="project-todo-preset" value={todoPresetId} disabled={saving} onChange={(event) => setTodoPresetId(event.target.value)}>
                 <option value="">Automatique · preset du projet</option>
-                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset, 'todo')}</option>)}
+                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset)}</option>)}
               </select>
             </label>
             <p>

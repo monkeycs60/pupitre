@@ -307,7 +307,7 @@ export class SubtaskRunner {
             .filter(([name]) => project.mcp_servers!.includes(name)),
         );
       // La sous-tâche travaille dans le worktree de sa conversation parente :
-      // un agent du Gardien doit voir la branche qu'il est chargé de corriger.
+      // L'agent délégué doit voir la branche qu'il est chargé de modifier.
       const parent = this.convs.get(subtask.conversation_id);
       const cwd = conversationCwd(project, parent);
       const opts = {

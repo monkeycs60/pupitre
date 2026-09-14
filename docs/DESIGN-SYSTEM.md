@@ -15,7 +15,7 @@ les tokens ci-dessous.
    des cadres.
 2. **Une seule couleur d'accent**, réservée à l'état actif, au focus et aux
    actions primaires. Les couleurs sémantiques (rouge/ambre/vert) ne servent
-   qu'au sens : sévérité Gardien, diff, statut de tour.
+   qu'au sens : diff et statut de tour.
 3. **Élévation par la valeur, pas par l'ombre.** Une surface au-dessus d'une
    autre est plus claire d'un cran. Les ombres portées sont réservées aux
    éléments réellement flottants (dialogs, menus, lightbox).
@@ -126,7 +126,6 @@ Tout ce qui bouge doit être neutralisé sous `@media (prefers-reduced-motion: r
 - **Un champ** = `--bg-input` + `1px solid var(--border)` + `--r-sm` ; au focus, bordure `--accent-border` + ring accent.
 - **Un bouton primaire** = fond `--accent`, texte `#0b0c0e`. **Secondaire** = fond transparent, bordure `--border`, texte `--text`. **Discret** = pas de bordure, survol `--bg-hover`.
 - **Diff** : ajout = fond `--ok-soft` + liseré gauche 2px `--ok` ; suppression = `--danger-soft` + liseré `--danger`. Les numéros de ligne sont en `--text-faint`, mono, `tabular-nums`, non sélectionnables.
-- **Sévérités Gardien** : rouge `--danger`, orange `--warn`, gris `--neutral-soft`. Toujours accompagnées d'un libellé texte, jamais de la couleur seule.
 - **Scrollbars** : `scrollbar-width: thin`, pouce `--border-strong`, piste transparente.
 - Aucun `px` de couleur ou de taille en dur dans un composant : si un token manque, l'ajouter ici d'abord.
 
@@ -159,7 +158,6 @@ styles/shell.css       app-shell, titlebar, en-têtes de vue, onglets
 styles/sidebar.css     projets, conversations, quotas, jauge de contexte
 styles/chat.css        fil, blocs d'événements, cartes outil, lightbox
 styles/composer.css    zone de saisie, actions, sélecteurs de modèle
-styles/guardian.css    vue Gardien, flags, décisions, contre-avis
 styles/diff.css        DiffViewer, numéros de ligne, zones thermiques
 styles/git.css         graphe Git, branches, commits, worktrees
 styles/cards.css       sous-tâches, débrief, inventaire de test

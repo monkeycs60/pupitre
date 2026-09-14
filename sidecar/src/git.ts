@@ -25,13 +25,6 @@ export function normalizeRemoteUrl(value: string | null): string | null {
 
 export class GitProjectError extends Error {}
 
-export interface GitGuardianReview {
-  reviewId: string;
-  red: number;
-  orange: number;
-  grey: number;
-}
-
 export interface GitCommit {
   sha: string;
   parents: string[];
@@ -40,7 +33,6 @@ export interface GitCommit {
   authoredAt: string;
   subject: string;
   conversations: Array<{ id: string; title: string }>;
-  guardian: GitGuardianReview[];
 }
 
 export interface GitBranch {
@@ -298,7 +290,6 @@ export class GitProjectService {
     const currentBranch = this.optionalGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"])
       ?.trim() || null;
     const links = this.commitLinks(projectId);
-    const guardian = this.guardianByCommit(projectId, cwd);
     const branches = this.branches(cwd);
     let commits = head ? this.parseCommits(this.runGit(cwd, [
       "log", "-z", "--all", "--topo-order",
@@ -317,7 +308,6 @@ export class GitProjectService {
     const hydrated = commits.map((commit) => ({
       ...commit,
       conversations: links.get(commit.sha) ?? [],
-      guardian: guardian.get(commit.sha) ?? [],
     }));
     const baseBranch = branches.find((branch) => branch.name === "origin/master")
       ?? branches.find((branch) => branch.name === "origin/main")
@@ -853,11 +843,11 @@ export class GitProjectService {
     return this.optionalGit(cwd, ["rev-parse", "--is-inside-work-tree"])?.trim() === "true";
   }
 
-  private parseCommits(output: string): Omit<GitCommit, "conversations" | "guardian">[] {
+  private parseCommits(output: string): Omit<GitCommit, "conversations">[] {
     const fields = output.split("\0");
     if (fields.at(-1) === "") fields.pop();
     if (fields.length % 6 !== 0) throw new GitProjectError("sortie git log invalide");
-    const commits: Omit<GitCommit, "conversations" | "guardian">[] = [];
+    const commits: Omit<GitCommit, "conversations">[] = [];
     for (let index = 0; index < fields.length; index += 6) {
       const [sha = "", rawParents = "", rawRefs = "", author = "", authoredAt = "", subject = ""] =
         fields.slice(index, index + 6);
@@ -932,47 +922,4 @@ export class GitProjectService {
     return links;
   }
 
-  private guardianByCommit(projectId: string, cwd: string): Map<string, GitGuardianReview[]> {
-    const rows = this.db.query(`
-      SELECT r.id AS review_id, r.git_ref_head, f.severity, COUNT(f.id) AS count
-      FROM reviews r
-      LEFT JOIN review_flags f ON f.review_id = r.id
-      WHERE r.project_id = ? AND r.status = 'done'
-      GROUP BY r.id, r.git_ref_head, f.severity
-      ORDER BY r.created_at
-    `).all(projectId) as Array<{
-      review_id: string;
-      git_ref_head: string;
-      severity: "red" | "orange" | "grey" | null;
-      count: number | bigint;
-    }>;
-    const summaries = new Map<string, GitGuardianReview[]>();
-    // `setDiff` fige un SHA complet : la quasi-totalité des lignes n'a plus
-    // besoin d'un `rev-parse`. Les rares références héritées sont résolues une
-    // seule fois — sans cela, la vue Git enchaîne jusqu'à quatre spawns
-    // synchrones par review et fige le sidecar sur un projet chargé.
-    const resolved = new Map<string, string | null>();
-    const resolveHead = (ref: string): string | null => {
-      if (/^[0-9a-f]{40}$/.test(ref)) return ref;
-      if (!resolved.has(ref)) resolved.set(ref, this.tryResolve(cwd, ref));
-      return resolved.get(ref) ?? null;
-    };
-    for (const row of rows) {
-      // Les reviews WORKTREE récentes sont figées sur le SHA observé au scan.
-      // Ne jamais résoudre un ancien marqueur WORKTREE sur le HEAD courant :
-      // cela afficherait la review sur un commit qui n'a pas été analysé.
-      if (row.git_ref_head === "WORKTREE") continue;
-      const sha = resolveHead(row.git_ref_head);
-      if (!sha) continue;
-      const commitReviews = summaries.get(sha) ?? [];
-      let summary = commitReviews.find((review) => review.reviewId === row.review_id);
-      if (!summary) {
-        summary = { reviewId: row.review_id, red: 0, orange: 0, grey: 0 };
-        commitReviews.push(summary);
-      }
-      if (row.severity) summary[row.severity] += Number(row.count);
-      summaries.set(sha, commitReviews);
-    }
-    return summaries;
-  }
 }

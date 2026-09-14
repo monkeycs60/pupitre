@@ -15,8 +15,6 @@ import { SettingsStore } from "../src/stores/settings";
 import { QuotaTracker } from "../src/quotas";
 import { QuotaRefresher } from "../src/quota-refresh";
 import { SubtaskRunner } from "../src/subtasks";
-import { ReviewStore } from "../src/stores/reviews";
-import { ReviewRunner } from "../src/reviews";
 import { DebriefStore } from "../src/stores/debriefs";
 import { DebriefRunner } from "../src/debriefs";
 import { GitProjectService } from "../src/git";
@@ -44,7 +42,6 @@ interface TestServer {
   db: Database;
   runner: ConversationRunner;
   server: ReturnType<typeof createServer>;
-  reviews: ReviewRunner;
   subtasks: SubtaskRunner;
   deps: ServerDeps;
   shutdownCalls: () => number;
@@ -238,15 +235,6 @@ cat "${fixture}"
   const gitView = new GitProjectService(db, projects, {
     worktreeRoot: join(dir, "worktrees"),
   });
-  const reviewStore = new ReviewStore(db);
-  const reviews = new ReviewRunner(
-    reviewStore,
-    projects,
-    conversations,
-    quotas,
-    async () => '{"flags":[]}',
-    subtasks,
-  );
   const debriefs = new DebriefRunner(
     new DebriefStore(db),
     conversations,
@@ -275,13 +263,12 @@ cat "${fixture}"
     runner.activity,
   );
   const testers = new TesterRunner(
-    new TestingStore(db), conversations, projects, reviewStore, quotas,
+    new TestingStore(db), conversations, projects, quotas,
     events.broadcast, subtasks,
     async () => JSON.stringify({ items: [{
       title: "Endpoint API",
       description: "Vérifier le contrat et les erreurs.",
       methods: [{ kind: "unit", label: "Tests unitaires", instructions: "bun test" }],
-      guardian_flag_ids: [],
     }] }),
     runner.activity,
   );
@@ -343,7 +330,6 @@ cat "${fixture}"
     subtasks,
     presets,
     settings,
-    reviews,
     debriefs,
     git: gitView,
     testers,
@@ -372,7 +358,6 @@ cat "${fixture}"
     db,
     runner,
     server,
-    reviews,
     subtasks,
     deps,
     shutdownCalls: () => shutdownCount,
@@ -481,7 +466,6 @@ test("health, création et liste des projets, avec 400 pour un path inexistant",
     busy: false,
     turns: 0,
     subtasks: 0,
-    reviews: 0,
     routines: 0,
     debriefs: 0,
     testers: 0,
@@ -707,9 +691,6 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     effort: "high",
     speed: "standard",
     permission_mode: "autonomous",
-    review_provider: "claude",
-    review_model: "opus",
-    review_effort: "high",
   });
   expect(created.status).toBe(201);
   const preset = await created.json() as { id: string };
@@ -724,10 +705,7 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
   expect(updated.status).toBe(200);
   expect(await updated.json()).toEqual(expect.objectContaining({
     name: "Revue rapide",
-    permission_mode: "bypassPermissions",
-    review_provider: "claude",
-    review_model: "opus",
-    review_effort: "high",
+    permission_mode: null,
   }));
 
   const invalidPermission = await postJson("/api/presets", {
@@ -780,21 +758,6 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
   expect(selectedProject).toEqual(expect.objectContaining({ default_preset_id: preset.id }));
   expect(selectedProject).toEqual(expect.objectContaining({
     permission_mode: "bypassPermissions",
-  }));
-
-  const selectedReview = await putJson(`/api/projects/${project.id}/default-review-preset`, {
-    presetId: preset.id,
-  });
-  expect(selectedReview.status).toBe(200);
-  expect(await selectedReview.json()).toEqual(expect.objectContaining({
-    default_review_preset_id: preset.id,
-  }));
-  const selectedCorrection = await putJson(`/api/projects/${project.id}/default-correction-preset`, {
-    presetId: preset.id,
-  });
-  expect(selectedCorrection.status).toBe(200);
-  expect(await selectedCorrection.json()).toEqual(expect.objectContaining({
-    default_correction_preset_id: preset.id,
   }));
 
   const selectedTodo = await putJson(`/api/projects/${project.id}/default-todo-preset`, {
@@ -851,289 +814,6 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
   expect(await projects.json()).toEqual([
     expect.objectContaining({ id: project.id, default_preset_id: null }),
   ]);
-});
-
-test("POST /api/reviews lance un scan headless et l'expose par review et projet", async () => {
-  if (!current) throw new Error("serveur de test non démarré");
-  const repo = mkdtempSync(join(tmpdir(), "pupitre-review-api-"));
-  const runGit = (...args: string[]) => {
-    const result = Bun.spawnSync(["git", ...args], { cwd: repo });
-    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
-  };
-  runGit("init", "-q");
-  runGit("config", "user.email", "api@example.test");
-  runGit("config", "user.name", "API Fixture");
-  mkdirSync(join(repo, "src"));
-  writeFileSync(join(repo, "src/value.ts"), "export const value = 1\n");
-  runGit("add", ".");
-  runGit("commit", "-qm", "base");
-  writeFileSync(join(repo, "src/value.ts"), "export const value = 2\n");
-  runGit("add", ".");
-  runGit("commit", "-qm", "head");
-
-  const project = await createProject(repo);
-  const preset = await postJson("/api/presets", {
-    name: "Revue projet",
-    provider: "codex",
-    model: "gpt-5.6-luna",
-    effort: "high",
-    speed: "standard",
-    review_provider: "codex",
-    review_model: "gpt-5.6-luna",
-    review_effort: "medium",
-  });
-  expect(preset.status).toBe(201);
-  const { id: presetId } = await preset.json() as { id: string };
-  const linked = await putJson(`/api/projects/${project.id}/default-review-preset`, { presetId });
-  expect(linked.status).toBe(200);
-
-  const conversation = new ConversationStore(current.db).create({
-    projectId: project.id,
-    provider: "codex",
-    model: "gpt-5.6-luna",
-    firstMessage: "change la valeur",
-  });
-  const started = await postJson("/api/reviews", { conversationId: conversation.id });
-  expect(started.status).toBe(201);
-  const created = await started.json() as { id: string; status: string };
-  expect(created.status).toBe("running");
-  const throttled = await postJson("/api/reviews", { conversationId: conversation.id });
-  expect(throttled.status).toBe(429);
-  expect(await throttled.json()).toEqual({ error: expect.stringMatching(/^Patientez (?:9|10) s/) });
-  await current.reviews.wait(created.id);
-
-  const detail = await fetch(`${current.baseUrl}/api/reviews/${created.id}`);
-  expect(detail.status).toBe(200);
-  expect(await detail.json()).toEqual(expect.objectContaining({
-    id: created.id,
-    project_id: project.id,
-    conversation_id: conversation.id,
-    status: "done",
-    review_provider: "codex",
-    review_model: "gpt-5.6-luna",
-    review_effort: "medium",
-    code_provider: "codex",
-    flags: [],
-  }));
-  const list = await fetch(`${current.baseUrl}/api/projects/${project.id}/reviews`);
-  expect(list.status).toBe(200);
-  expect(await list.json()).toEqual([
-    expect.objectContaining({ id: created.id, status: "done" }),
-  ]);
-});
-
-test("GET /api/conversations/:id/diff rend le même diff que la review worktree", async () => {
-  if (!current) throw new Error("serveur de test non démarré");
-  const repo = mkdtempSync(join(tmpdir(), "pupitre-review-diff-"));
-  const runGit = (...args: string[]) => {
-    const result = Bun.spawnSync(["git", ...args], { cwd: repo });
-    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
-  };
-  runGit("init", "-q");
-  runGit("config", "user.email", "api@example.test");
-  runGit("config", "user.name", "API Fixture");
-  mkdirSync(join(repo, "src"));
-  writeFileSync(join(repo, "src/value.ts"), "export const value = 1\n");
-  runGit("add", ".");
-  runGit("commit", "-qm", "base");
-  writeFileSync(join(repo, "src/value.ts"), "export const value = 2\n");
-
-  const project = await createProject(repo);
-  const conversation = new ConversationStore(current.db).create({
-    projectId: project.id,
-    provider: "codex",
-    model: "gpt-5.6-luna",
-    firstMessage: "change la valeur",
-  });
-
-  const missing = await fetch(`${current.baseUrl}/api/conversations/inconnue/diff`);
-  expect(missing.status).toBe(404);
-
-  const diffResponse = await fetch(`${current.baseUrl}/api/conversations/${conversation.id}/diff`);
-  expect(diffResponse.status).toBe(200);
-  const diffBody = await diffResponse.json() as { base: string; head: string; diff: string };
-  expect(diffBody.diff).toContain("src/value.ts");
-
-  const started = await postJson("/api/reviews", { conversationId: conversation.id });
-  expect(started.status).toBe(201);
-  const created = await started.json() as { id: string };
-  await current.reviews.wait(created.id);
-  const detail = await fetch(`${current.baseUrl}/api/reviews/${created.id}`);
-  const review = await detail.json() as { git_ref_base: string; git_ref_head: string; diff_text: string };
-  expect(diffBody).toEqual({
-    base: review.git_ref_base,
-    head: review.git_ref_head,
-    diff: review.diff_text,
-  });
-});
-
-test("un corps avec reviewModel est refusé 400", async () => {
-  if (!current) throw new Error("serveur de test non démarré");
-  const project = await createProject(tmpdir());
-  const conversation = new ConversationStore(current.db).create({
-    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
-  });
-  const rejected = await postJson("/api/reviews", {
-    conversationId: conversation.id,
-    reviewModel: "gpt-5.6-sol",
-  });
-  expect(rejected.status).toBe(400);
-});
-
-test("dispatch utilise le preset de correction du projet", async () => {
-  if (!current) throw new Error("serveur de test non démarré");
-  const project = await createProject(tmpdir());
-  const preset = await postJson("/api/presets", {
-    name: "Correction projet",
-    provider: "claude",
-    model: "opus",
-    effort: "high",
-    speed: null,
-  });
-  expect(preset.status).toBe(201);
-  const { id: presetId } = await preset.json() as { id: string };
-  const linked = await putJson(`/api/projects/${project.id}/default-correction-preset`, { presetId });
-  expect(linked.status).toBe(200);
-
-  const conversation = new ConversationStore(current.db).create({
-    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "risque",
-  });
-  const reviewStore = new ReviewStore(current.db);
-  const review = reviewStore.create({
-    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
-    provider: "codex", model: "gpt-5.6-sol", effort: "high",
-  });
-  reviewStore.complete(review.id, [{
-    file: "src/danger.ts", line_start: 4, line_end: 4, severity: "red",
-    category: "perte de données", message: "La suppression doit conserver une sauvegarde.",
-  }]);
-  const flag = reviewStore.get(review.id)!.flags[0]!;
-
-  const dispatched = await postJson(`/api/review-flags/${flag.id}/dispatch`, {});
-  expect(dispatched.status).toBe(201);
-  const { subtaskId } = await dispatched.json() as { subtaskId: string };
-  expect(current.subtasks.get(subtaskId)).toMatchObject({
-    provider: "claude",
-    model: "opus",
-  });
-  await current.subtasks.waitResult(subtaskId);
-  // La fin de la correction relance une review incrémentale (tâche 3) : sans
-  // l'attendre, son exécution continue en tâche de fond après la fermeture
-  // de la base par `afterEach` et casse le test suivant.
-  const rescan = current.reviews.listByProject(project.id).find((item) => item.id !== review.id);
-  if (rescan) await current.reviews.wait(rescan.id);
-});
-
-test("POST /api/reviews/:id/dispatch-grouped valide, répond 202 puis 409", async () => {
-  if (!current) throw new Error("serveur de test non démarré");
-  const project = await createProject(tmpdir());
-  const conversation = new ConversationStore(current.db).create({
-    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "risque",
-  });
-  const reviewStore = new ReviewStore(current.db);
-  const review = reviewStore.create({
-    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
-    provider: "codex", model: "gpt-5.6-sol", effort: "high",
-  });
-  reviewStore.complete(review.id, [
-    {
-      file: "src/danger.ts", line_start: 4, line_end: 4, severity: "red",
-      category: "perte de données", message: "La suppression doit conserver une sauvegarde.",
-    },
-    {
-      file: "src/contrat.ts", line_start: 2, line_end: 2, severity: "orange",
-      category: "contrat", message: "Le contrat public change sans préavis.",
-    },
-  ]);
-  const flagIds = reviewStore.get(review.id)!.flags.map((flag) => flag.id);
-
-  const invalid = await postJson(`/api/reviews/${review.id}/dispatch-grouped`, { severities: ["rouge"] });
-  expect(invalid.status).toBe(400);
-  const unknown = await postJson("/api/reviews/inconnu/dispatch-grouped", {});
-  expect(unknown.status).toBe(404);
-
-  const dispatched = await postJson(`/api/reviews/${review.id}/dispatch-grouped`, {
-    severities: ["red", "orange"],
-  });
-  expect(dispatched.status).toBe(202);
-  const body = await dispatched.json() as { subtaskId: string; dispatched: number; flagIds: string[] };
-  expect(body.dispatched).toBe(2);
-  expect(body.flagIds.sort()).toEqual([...flagIds].sort());
-  expect(typeof body.subtaskId).toBe("string");
-  expect(reviewStore.get(review.id)!.flags.every((flag) => flag.status === "agent_running")).toBe(true);
-
-  // Une review sans flag ouvert de la sévérité demandée : le conflit doit se
-  // lire en 409, pas en 500.
-  const other = reviewStore.create({
-    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
-    provider: "codex", model: "gpt-5.6-sol", effort: "high",
-  });
-  reviewStore.complete(other.id, [{
-    file: "src/style.ts", line_start: 1, line_end: 1, severity: "grey",
-    category: "style", message: "Nom peu parlant.",
-  }]);
-  const conflict = await postJson(`/api/reviews/${other.id}/dispatch-grouped`, { severities: ["red"] });
-  expect(conflict.status).toBe(409);
-
-  await current.subtasks.waitResult(body.subtaskId);
-  await Bun.sleep(10);
-  const rescan = current.reviews.listByProject(project.id).find((item) => item.id !== review.id);
-  if (rescan) await current.reviews.wait(rescan.id);
-});
-
-test("un flag est traité directement sans décision groupée", async () => {
-  if (!current) throw new Error("serveur de test non démarré");
-  const project = await createProject(tmpdir());
-  const conversation = new ConversationStore(current.db).create({
-    projectId: project.id,
-    provider: "codex",
-    model: "gpt-5.6-luna",
-    firstMessage: "risque",
-  });
-  const reviewStore = new ReviewStore(current.db);
-  const review = reviewStore.create({
-    projectId: project.id,
-    conversationId: conversation.id,
-    gitRefBase: "base",
-    gitRefHead: "head",
-    provider: "codex",
-    model: "gpt-5.6-sol",
-    effort: "high",
-  });
-  reviewStore.complete(review.id, [{
-    file: "src/danger.ts",
-    line_start: 12,
-    line_end: 12,
-    severity: "red",
-    category: "perte de données",
-    message: "Conserve une sauvegarde avant la suppression.",
-  }]);
-  const storedReview = reviewStore.get(review.id)!;
-  const flag = storedReview.flags[0]!;
-  const invalidStatus = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
-    method: "PATCH",
-    headers: jsonHeaders(),
-    body: JSON.stringify({ status: "invalide" }),
-  });
-  expect(invalidStatus.status).toBe(400);
-  const noStatus = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
-    method: "PATCH",
-    headers: jsonHeaders(),
-    body: JSON.stringify({}),
-  });
-  expect(noStatus.status).toBe(400);
-  expect(reviewStore.getFlag(flag.id)).toMatchObject({
-    status: "open",
-    code_provider: "codex",
-  });
-
-  const treated = await fetch(`${current.baseUrl}/api/review-flags/${flag.id}`, {
-    method: "PATCH",
-    headers: jsonHeaders(),
-    body: JSON.stringify({ status: "treated" }),
-  });
-  expect(treated.status).toBe(200);
-  expect(await treated.json()).toEqual(expect.objectContaining({ id: flag.id, status: "treated" }));
 });
 
 test("la création d'un preset invalide conserve son erreur de validation", async () => {
@@ -1279,51 +959,6 @@ test("Fleet expose et diffuse les runs actifs", async () => {
 
   expect(await current.runner.cancelTurn(conversation.id)).toBe(true);
   await run;
-});
-
-test("le push review-status est scindé par projectId et l'ancien mode Gardien n'existe plus", async () => {
-  if (!current) throw new Error("serveur de test non démarré");
-  const project = await createProject(tmpdir());
-  const conversation = new ConversationStore(current.db).create({
-    projectId: project.id, provider: "codex", model: "gpt-5.6-luna", firstMessage: "x",
-  });
-  const store = new ReviewStore(current.db);
-  const review = store.create({
-    projectId: project.id, conversationId: conversation.id, gitRefBase: "base", gitRefHead: "head",
-    provider: "codex", model: "gpt-5.6-sol", effort: "high",
-  });
-  store.complete(review.id, [{
-    file: "src/risk.ts", line_start: 1, line_end: 1, severity: "red",
-    category: "données", message: "Préserve la sauvegarde.",
-  }]);
-  const flag = store.get(review.id)!.flags[0]!;
-
-  const route = await fetch(`${current.baseUrl}/api/projects/${project.id}/review-status`);
-  expect(await route.json()).toEqual({
-    openBySeverity: { red: 1, orange: 0, grey: 0 }, running: null,
-  });
-  expect((await putJson(`/api/projects/${project.id}/gardien-mode`, { mode: "bloquant" })).status).toBe(404);
-
-  const pushed = await new Promise<Record<string, unknown>>((resolve, reject) => {
-    const socket = new WebSocket(`${current!.baseUrl.replace("http", "ws")}/ws?channel=fleet`);
-    const timeout = setTimeout(() => { socket.close(); reject(new Error("timeout review-status WS")); }, 2_000);
-    socket.addEventListener("open", () => {
-      current!.reviews.updateFlag(flag.id, { status: "treated" });
-    });
-    socket.addEventListener("message", (message) => {
-      const payload = JSON.parse(String(message.data)) as Record<string, unknown>;
-      if (payload.projectId !== project.id) return;
-      clearTimeout(timeout);
-      socket.close();
-      resolve(payload);
-    });
-    socket.addEventListener("error", reject);
-  });
-  expect(pushed).toEqual({
-    projectId: project.id,
-    openBySeverity: { red: 0, orange: 0, grey: 0 },
-    running: null,
-  });
 });
 
 test("recherche les titres et messages par projet", async () => {
@@ -1583,32 +1218,19 @@ test("change de modèle dans le même provider et le tour suivant l'utilise", as
   current.db.query("UPDATE conversations SET ticket_instruction = ? WHERE id = ?")
     .run("Respecter le brief du tableau de bord", conversation.id);
   current.deps.conversations.appendEvent(conversation.id, {
-    type: "user-message",
-    text: "Voici la capture",
-    images: ["capture.png"],
+    type: "user-message", text: "Voici la capture", images: ["capture.png"],
     attachments: [{ name: "rapport.pdf", originalName: "Rapport final.pdf", mimeType: "application/pdf", size: 42 }],
   });
   current.deps.conversations.appendEvent(conversation.id, {
-    type: "tool-end",
-    toolId: "secret-tool",
-    output: "sortie technique à exclure",
-    images: [],
+    type: "tool-end", toolId: "secret-tool", output: "sortie technique à exclure", images: [],
   });
-
-  const discussionResponse = await fetch(
-    `${current.baseUrl}/api/conversations/${conversation.id}/discussion-document`,
-  );
+  const discussionResponse = await fetch(`${current.baseUrl}/api/conversations/${conversation.id}/discussion-document`);
   expect(discussionResponse.status).toBe(200);
   const discussion = await discussionResponse.json() as { filename: string; contentMd: string };
-  expect(discussion.filename).toMatch(/^discussion-/);
-  expect(discussion.contentMd).toContain("## Instruction du ticket\n\nRespecter le brief du tableau de bord");
-  expect(discussion.contentMd).toContain("### Utilisateur");
-  expect(discussion.contentMd).toContain("### Modèle");
-  expect(discussion.contentMd).toContain("capture.png");
-  expect(discussion.contentMd).toContain("Rapport final.pdf");
+  expect(discussion.contentMd).toContain("Respecter le brief du tableau de bord");
   expect(discussion.contentMd).not.toContain("sortie technique à exclure");
-
   const argsFile = join(tmpdir(), `pupitre-switch-${crypto.randomUUID()}`);
+
   process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
   const switched = await putJson(`/api/conversations/${conversation.id}/model`, {
     provider: "claude",

@@ -15,7 +15,7 @@ Mission control bureau pour Linux : une app qui pilote **Claude Code**, **Codex 
 │  serveur HTTP+WS · Git · tests · media       │
 ├─────────────────────────────────────────────┤
 │  Frontend React + Vite (webview)            │
-│  chat · Gardien · Résumé · Handoff · Tester │
+│  chat · Code · Résumé · Handoff · Tester    │
 │  bibliothèque · suggestions · lightbox       │
 └─────────────────────────────────────────────┘
 ```
@@ -28,23 +28,17 @@ Les CLIs sont normalisés en un schéma d'événements unifié (`sidecar/src/eve
 
 ## Contrôle des changements (M3)
 
-- **Gardien** analyse le diff Git avec un modèle fort et ancre ses signalements
-  sur les lignes concernées, inline dans l'onglet Changements. Il surligne,
-  l'utilisateur dirige : par signalement, envoyer un agent avec une consigne,
-  marquer vu ou ignorer. Une fois toutes les corrections en cours terminées,
-  la relecture repart automatiquement, en incrémental.
 - **Résumé session** produit un bilan court des fonctionnalités et correctifs
   implémentés, avec les éléments restant explicitement à terminer. Le **Handoff**
   conserve le débrief complet pour transférer le travail à une nouvelle session.
 - **Git** affiche branches, commits, HEAD et worktrees, relie les commits à leur
-  conversation d'origine ; Historique des commits avec review par commit.
+  conversation d'origine et présente l'historique des commits.
 - **Tester** relit le fil, propose des scopes et méthodes concrètes, puis exécute
   le choix en sous-tâche. Sorties bornées tête/fin, captures navigateur, preuves
-  et verdict restent inline ; un succès acquitte atomiquement les alertes
-  « absence de test » liées et rafraîchit Gardien dans tout le projet.
+  et verdict restent inline.
 
 Les opérations longues d'une conversation partagent un verrou explicite. Au
-redémarrage, les reviews, sous-tâches et scopes interrompus sont clôturés, et une
+redémarrage, les sous-tâches et scopes interrompus sont clôturés, et une
 continuation de passation restée incomplète est retirée plutôt que laissée dans
 la sidebar. Exception contrôlée : pendant un tour Codex ou Claude, le composeur
 reste ouvert et les précisions — captures comprises — sont injectées dans le tour
@@ -96,8 +90,8 @@ et lit les captures depuis leur chemin local. Un tour Grok est one-shot
   quitte la machine pour rechercher.
 - **Ctrl+K** ouvre la palette depuis n'importe quel écran. Elle navigue vers les
   projets et conversations, interroge la recherche globale, lance workflows et
-  skills, ouvre Fleet/Routines/Bibliothèque et déclenche Tester, Résumé session ou
-  Gardien sur le fil courant.
+  skills, ouvre Fleet/Routines/Bibliothèque et déclenche Tester ou Résumé session
+  sur le fil courant.
 
 ## Tableau de bord (tranche A)
 
@@ -153,8 +147,7 @@ et lit les captures depuis leur chemin local. Un tour Grok est one-shot
 
 Pupitre ne délègue plus de travail à la main du modèle principal : les
 sous-agents s'invoquent depuis le prompt, avec les outils natifs du CLI. Le
-moteur `sidecar/src/subtasks.ts` reste le lanceur de tours headless de Pupitre
-lui-même — c'est par lui que Gardien dispatche ses corrections.
+moteur `sidecar/src/subtasks.ts` reste le lanceur de tours headless de Pupitre.
 
 - `SubtaskRunner.start({conversationId, provider, model, effort?, speed?, prompt, label?, readOnly?})`
   lance un tour en arrière-plan dans le cwd du projet parent, **sans prendre le
@@ -344,8 +337,8 @@ Protocole e2e : `e2e/basic-flow.md`.
 
 **M2 (fait)** : sous-tâches, quotas des deux abonnements, presets et changement de modèle. La délégation pilotée par le modèle (Conductor) a été retirée : les sous-agents s'invoquent depuis le prompt.
 
-**M3 (fait)** : Gardien, résumé de session, handoff, bouton Tester avec
-preuves, vue Git et durcissement du sidecar.
+**M3 (fait)** : résumé de session, handoff, bouton Tester avec preuves, vue Git
+et durcissement du sidecar.
 
 **M4 (fait)** : bibliothèque de skills, suggestions et workflows, routines,
 Fleet, recherche globale et palette, coûts en tokens, mémoire, reprise terminal

@@ -33,8 +33,6 @@ export function openDb(dir: string = dataDir()): Database {
       permission_mode TEXT NOT NULL DEFAULT 'acceptEdits',
       filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots',
       pinned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
-      default_review_preset_id TEXT NULL,
-      default_correction_preset_id TEXT NULL,
       default_scout_preset_id TEXT NULL,
       default_todo_preset_id TEXT NULL
     );
@@ -436,7 +434,6 @@ export function openDb(dir: string = dataDir()): Database {
       title TEXT NOT NULL,
       description TEXT NOT NULL,
       methods_json TEXT NOT NULL,
-      guardian_flag_ids TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending', 'running', 'passed', 'failed')),
       subtask_id TEXT NULL,
@@ -448,33 +445,6 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_test_scopes_inventory
       ON test_scopes(inventory_id, created_at, id);
-    CREATE TABLE IF NOT EXISTS reviews (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(id),
-      conversation_id TEXT NOT NULL REFERENCES conversations(id),
-      git_ref_base TEXT NOT NULL, git_ref_head TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'running'
-        CHECK (status IN ('running', 'done', 'error')),
-      review_provider TEXT NOT NULL, review_model TEXT NOT NULL,
-      review_effort TEXT NOT NULL, review_speed TEXT NOT NULL DEFAULT 'standard', code_provider TEXT NULL,
-      diff_text TEXT NOT NULL DEFAULT '', error TEXT NULL,
-      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_reviews_project
-      ON reviews(project_id, created_at DESC);
-    CREATE TABLE IF NOT EXISTS review_flags (
-      id TEXT PRIMARY KEY,
-      review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
-      file TEXT NOT NULL, line_start INTEGER NOT NULL, line_end INTEGER NOT NULL,
-      severity TEXT NOT NULL CHECK (severity IN ('red', 'orange', 'grey')),
-      category TEXT NOT NULL, message TEXT NOT NULL,
-      code_provider TEXT NULL,
-      is_test_gap INTEGER NOT NULL DEFAULT 0,
-      status TEXT NOT NULL DEFAULT 'open'
-        CHECK (status IN ('open', 'agent_running', 'treated', 'ignored', 'resolved'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_review_flags_review
-      ON review_flags(review_id, severity, line_start);
     CREATE TABLE IF NOT EXISTS ticket_audits (
       ticket_id TEXT PRIMARY KEY REFERENCES tickets(id) ON DELETE CASCADE,
       conversation_id TEXT NULL REFERENCES conversations(id) ON DELETE SET NULL,
@@ -651,92 +621,16 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "origin_key TEXT NULL");
   migrateConversationMessageCounts(db);
   addColumn(db, "projects", "default_preset_id TEXT NULL");
-  const addedDefaultReviewPreset = addColumn(db, "projects", "default_review_preset_id TEXT NULL");
-  const addedDefaultCorrectionPreset = addColumn(db, "projects", "default_correction_preset_id TEXT NULL");
   const addedDefaultScoutPreset = addColumn(db, "projects", "default_scout_preset_id TEXT NULL");
-  if (addedDefaultReviewPreset || addedDefaultCorrectionPreset) {
-    // Les anciens projets utilisaient le preset conversationnel comme défaut
-    // du Gardien ; le recopier conserve leur comportement tout en séparant
-    // désormais les trois usages dans les réglages.
-    db.exec(`
-      UPDATE projects
-      SET default_review_preset_id = default_preset_id
-      WHERE default_review_preset_id IS NULL AND default_preset_id IS NOT NULL;
-      UPDATE projects
-      SET default_correction_preset_id = default_preset_id
-      WHERE default_correction_preset_id IS NULL AND default_preset_id IS NOT NULL;
-    `);
-  }
   if (addedDefaultScoutPreset) db.exec("UPDATE projects SET default_scout_preset_id = default_preset_id WHERE default_scout_preset_id IS NULL");
-  // Aucun report ici : `NULL` signifie « suivre le défaut du projet », donc les
-  // projets existants gardent exactement le modèle qu'ils utilisaient pour
-  // leurs TODO.
   addColumn(db, "projects", "default_todo_preset_id TEXT NULL");
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
   addColumn(db, "projects", "auto_rescan INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "project_changelog_state", "backfill_version INTEGER NOT NULL DEFAULT 0");
-  addColumn(db, "reviews", "code_provider TEXT NULL");
-  addColumn(db, "reviews", "review_speed TEXT NOT NULL DEFAULT 'standard'");
-  addColumn(db, "review_flags", "code_provider TEXT NULL");
-  addColumn(db, "review_flags", "hunk_hash TEXT NULL");
-  addColumn(db, "review_flags", "subtask_id TEXT NULL");
-  addColumn(db, "review_flags", "user_message TEXT NULL");
-  addColumn(db, "reviews", "scope TEXT NOT NULL DEFAULT 'worktree'");
-  addColumn(db, "reviews", "parent_review_id TEXT NULL");
-  const addedTestGap = addColumn(
-    db,
-    "review_flags",
-    "is_test_gap INTEGER NOT NULL DEFAULT 0",
-  );
-  // Les bases historiques n'ont pas encore `is_test_gap` : la reconstruction
-  // de la contrainte de statut doit donc se produire après cet ajout.
-  migrateReviewFlagStatuses(db);
-  // Résidus de l'ancien mode Gardien informatif/bloquant, supprimé par la
-  // refonte « calque Git » — les bases historiques les portent encore.
-  dropColumn(db, "projects", "gardien_mode");
-  dropColumn(db, "review_flags", "decision");
-  // Résidu du contre-avis, jamais utilisé (M3-J) — les bases historiques
-  // portent encore ces colonnes et l'option projet.
-  db.exec("UPDATE review_flags SET status = 'open' WHERE status = 'countered'");
-  dropColumn(db, "review_flags", "counter_state");
-  dropColumn(db, "review_flags", "counter_verdict");
-  dropColumn(db, "review_flags", "counter_text");
-  dropColumn(db, "review_flags", "counter_provider");
-  dropColumn(db, "review_flags", "counter_model");
-  dropColumn(db, "review_flags", "counter_effort");
-  dropColumn(db, "review_flags", "counter_subtask_id");
-  dropColumn(db, "review_flags", "counter_error");
-  dropColumn(db, "projects", "auto_counter_red");
-  // Résidu de la review et du rescan automatique par conversation, remplacés
-  // par les presets de review/correction du projet, résolus côté serveur.
-  dropColumn(db, "conversations", "auto_review");
-  dropColumn(db, "conversations", "review_provider");
-  dropColumn(db, "conversations", "review_model");
-  dropColumn(db, "conversations", "review_effort");
-  dropColumn(db, "conversations", "review_speed");
-  // Migration de vocabulaire : « acquitté/écarté » devient « traité/ignoré ».
-  db.exec("UPDATE review_flags SET status = 'treated' WHERE status = 'acked'");
-  db.exec("UPDATE review_flags SET status = 'ignored' WHERE status = 'dismissed'");
-  if (addedTestGap) {
-    // Les flags créés avant M3-I n'avaient pas de champ structuré. Cette
-    // reprise unique conserve les alertes de tests déjà visibles dans Tester.
-    db.exec(`
-      UPDATE review_flags
-      SET is_test_gap = 1
-      WHERE lower(category || ' ' || message) LIKE '%test%'
-        AND (
-          lower(category || ' ' || message) LIKE '%absence%'
-          OR lower(category || ' ' || message) LIKE '%manque%'
-          OR lower(category || ' ' || message) LIKE '%sans%'
-          OR lower(category || ' ' || message) LIKE '%non %'
-          OR lower(category || ' ' || message) LIKE '%absent%'
-          OR lower(category || ' ' || message) LIKE '%manquant%'
-          OR lower(category || ' ' || message) LIKE '%critique%'
-          OR lower(category || ' ' || message) LIKE '%couverture%'
-          OR lower(category || ' ' || message) LIKE '%coverage%'
-        )
-    `);
-  }
+  dropColumn(db, "projects", "default_review_preset_id");
+  dropColumn(db, "projects", "default_correction_preset_id");
+  dropColumn(db, "test_scopes", "guardian_flag_ids");
+  db.exec("DROP TABLE IF EXISTS review_flags; DROP TABLE IF EXISTS reviews;");
   addColumn(db, "test_scopes", "images_json TEXT NOT NULL DEFAULT '[]'");
   const addedRoutineTokens = addColumn(
     db,
@@ -780,62 +674,6 @@ export function openDb(dir: string = dataDir()): Database {
   dropColumn(db, "presets", "subagent_effort");
   dropColumn(db, "workflows", "orchestrator");
   dropColumn(db, "routines", "orchestrator");
-  const addedReviewProvider = addColumn(
-    db,
-    "presets",
-    "review_provider TEXT NOT NULL DEFAULT 'codex'",
-  );
-  addColumn(db, "presets", "review_model TEXT NOT NULL DEFAULT 'gpt-5.6-sol'");
-  addColumn(db, "presets", "review_effort TEXT NOT NULL DEFAULT 'high'");
-  // Marqueur d'héritage : sans lui, une configuration de review égale aux
-  // anciens defaults est indiscernable d'un choix délibéré identique.
-  const addedReviewExplicit = addColumn(
-    db,
-    "presets",
-    "review_explicit INTEGER NOT NULL DEFAULT 0",
-  );
-  if (addedReviewExplicit && !addedReviewProvider) {
-    // La base porte déjà des reviews saisies sans marqueur : on les déclare
-    // explicites, faute de pouvoir les distinguer d'un héritage. Préserver un
-    // héritage coûte un réglage à refaire ; écraser un choix le perd.
-    db.exec("UPDATE presets SET review_explicit = 1");
-  }
-  if (addedReviewProvider) {
-    // Lors du passage M2 → M3, aucune review n'a encore pu être choisie : tout
-    // ce qui existe est un héritage, donc alignable sans risque. Un preset
-    // Claude hérite du reviewer fort Claude, un preset personnalisé de sa
-    // propre configuration.
-    db.exec(`
-      UPDATE presets
-      SET review_provider = 'claude', review_model = 'opus', review_effort = 'high'
-      WHERE provider = 'claude'
-    `);
-    // `effort` peut être NULL sur un preset personnalisé : le laisser de côté
-    // abandonnerait son reviewer aux anciens defaults Codex. On retombe alors
-    // sur l'effort par défaut du provider.
-    db.exec(`
-      UPDATE presets
-      SET review_provider = provider,
-          review_model = model,
-          review_effort = COALESCE(effort, 'high')
-      WHERE built_in = 0
-    `);
-  }
-  const speedReviewMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
-    .get(SPEED_REVIEW_MIGRATION_KEY);
-  if (!speedReviewMigrated) {
-    // L'ancien preset Vitesse utilisait Sol/high pour Gardien alors que son nom
-    // désigne le réglage Luna rapide du chat. On répare une seule fois le preset.
-    db.exec(`
-      UPDATE presets
-      SET review_provider = provider, review_model = model, review_effort = effort
-      WHERE id = 'builtin-speed'
-        AND review_provider = 'codex'
-        AND review_model = 'gpt-5.6-sol'
-        AND review_effort = 'high';
-    `);
-    new SettingsStore(db).set(SPEED_REVIEW_MIGRATION_KEY, true);
-  }
   const qualityFableMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
     .get(QUALITY_FABLE_51_MIGRATION_KEY);
   if (!qualityFableMigrated) {
@@ -1026,38 +864,6 @@ function migrateDocuments(db: Database): void {
 // qui passe encore par cette étape, des lignes peuvent porter ce statut — il
 // n'est neutralisé en 'open' que par la migration suivante (voir plus bas
 // dans migrate(), juste avant les dropColumn de counter_*).
-function migrateReviewFlagStatuses(db: Database): void {
-  const sql = (db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'review_flags'")
-    .get() as { sql?: string } | null)?.sql ?? "";
-  if (!sql.includes("'acked'")) return;
-  db.exec(`
-    CREATE TABLE review_flags_new (
-      id TEXT PRIMARY KEY,
-      review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
-      file TEXT NOT NULL, line_start INTEGER NOT NULL, line_end INTEGER NOT NULL,
-      severity TEXT NOT NULL CHECK (severity IN ('red', 'orange', 'grey')),
-      category TEXT NOT NULL, message TEXT NOT NULL,
-      code_provider TEXT NULL, is_test_gap INTEGER NOT NULL DEFAULT 0,
-      status TEXT NOT NULL DEFAULT 'open'
-        CHECK (status IN ('open', 'countered', 'agent_running', 'treated', 'ignored', 'resolved')),
-      counter_state TEXT NOT NULL DEFAULT 'idle', counter_verdict TEXT NULL,
-      counter_text TEXT NULL, counter_provider TEXT NULL, counter_model TEXT NULL,
-      counter_effort TEXT NULL, counter_subtask_id TEXT NULL, counter_error TEXT NULL,
-      hunk_hash TEXT NULL, subtask_id TEXT NULL, user_message TEXT NULL
-    );
-    INSERT INTO review_flags_new
-    SELECT id, review_id, file, line_start, line_end, severity, category, message,
-      code_provider, is_test_gap,
-      CASE status WHEN 'acked' THEN 'treated' WHEN 'dismissed' THEN 'ignored' ELSE status END,
-      counter_state, counter_verdict, counter_text, counter_provider, counter_model,
-      counter_effort, counter_subtask_id, counter_error, hunk_hash, subtask_id, user_message
-    FROM review_flags;
-    DROP TABLE review_flags;
-    ALTER TABLE review_flags_new RENAME TO review_flags;
-    CREATE INDEX IF NOT EXISTS idx_review_flags_review
-      ON review_flags(review_id, severity, line_start);
-  `);
-}
 
 /**
  * Migration idempotente : les bases d'avant M2-D1 ont `events.conversation_id

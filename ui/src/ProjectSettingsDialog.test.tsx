@@ -20,8 +20,6 @@ const project: Project = {
   pinned: false,
   created_at: '2026-08-19T08:00:00.000Z',
   default_preset_id: null,
-  default_review_preset_id: null,
-  default_correction_preset_id: null,
   auto_rescan: true,
 }
 
@@ -51,8 +49,6 @@ test('enregistre une intégration GitLab avec son motif de branche', async () =>
     if (url.endsWith('/api/projects/p1/domains') && method === 'GET') return json([])
     if (url.endsWith('/api/projects/p1/filesystem-scope')) return json(project)
     if (url.endsWith('/api/projects/p1/permission-mode')) return json(project)
-    if (url.endsWith('/api/projects/p1/default-review-preset')) return json(project)
-    if (url.endsWith('/api/projects/p1/default-correction-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/default-scout-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/default-todo-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/integrations/gitlab') && method === 'PUT') {
@@ -103,9 +99,6 @@ test('enregistre le preset par défaut des TODO', async () => {
     effort: 'medium',
     speed: null,
     permission_mode: null,
-    review_provider: 'claude',
-    review_model: 'opus',
-    review_effort: 'high',
     built_in: false,
     created_at: '2026-08-19T08:00:00.000Z',
     updated_at: '2026-08-19T08:00:00.000Z',

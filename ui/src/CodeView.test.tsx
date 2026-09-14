@@ -26,8 +26,6 @@ const project: Project = {
   pinned: false,
   created_at: '2026-08-17T00:00:00.000Z',
   default_preset_id: null,
-  default_review_preset_id: null,
-  default_correction_preset_id: null,
   auto_rescan: false,
 }
 

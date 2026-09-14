@@ -16,7 +16,6 @@ export interface TestScope {
   title: string;
   description: string;
   methods: TestMethod[];
-  guardian_flag_ids: string[];
   status: TestScopeStatus;
   subtask_id: string | null;
   evidence_md: string | null;
@@ -39,7 +38,6 @@ export interface TestScopeInput {
   title: string;
   description: string;
   methods: TestMethod[];
-  guardianFlagIds: string[];
 }
 
 export class TestScopeAlreadyRunningError extends Error {}
@@ -83,14 +81,14 @@ export class TestingStore {
       `).run(id, input.conversationId, input.eventIdFrom, input.eventIdTo, now);
       const insert = this.db.query(`
         INSERT INTO test_scopes
-          (id, inventory_id, title, description, methods_json, guardian_flag_ids,
+          (id, inventory_id, title, description, methods_json,
            status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
       `);
       for (const scope of input.scopes) {
         insert.run(
           crypto.randomUUID(), id, scope.title, scope.description,
-          JSON.stringify(scope.methods), JSON.stringify(scope.guardianFlagIds), now, now,
+          JSON.stringify(scope.methods), now, now,
         );
       }
       const inventory = this.getInventory(id)!;
@@ -154,8 +152,7 @@ export class TestingStore {
     evidenceMd: string;
     images?: string[];
     error?: string | null;
-    guardianFlagIdsAcked: string[];
-  }, ackFlags?: () => string[]): { scope: TestScope; event: StoredEvent } {
+  }): { scope: TestScope; event: StoredEvent } {
     const complete = this.db.transaction(() => {
       const now = new Date().toISOString();
       this.db.query(`
@@ -172,9 +169,6 @@ export class TestingStore {
       );
       const scope = this.getScope(input.id);
       if (!scope) throw new Error("scope de test inconnu");
-      const guardianFlagIdsAcked = input.status === "passed" && ackFlags
-        ? ackFlags()
-        : input.guardianFlagIdsAcked;
       const conversationId = this.conversationId(scope.inventory_id);
       const event: AppEvent = {
         type: "test-scope-result",
@@ -183,7 +177,6 @@ export class TestingStore {
         status: input.status,
         evidenceMd: input.evidenceMd,
         images: input.images ?? [],
-        guardianFlagIdsAcked,
         completedAt: now,
         ...(input.error ? { error: input.error } : {}),
       };
@@ -237,7 +230,6 @@ export class TestingStore {
           status: "failed",
           evidenceMd: evidence,
           images: [],
-          guardianFlagIdsAcked: [],
           completedAt: now,
           error: "interrompu (sidecar redémarré)",
         }, now);
@@ -251,7 +243,6 @@ function hydrateScope(row: any): TestScope {
   return {
     ...row,
     methods: parseArray<TestMethod>(row.methods_json),
-    guardian_flag_ids: parseArray<string>(row.guardian_flag_ids),
     images: parseArray<string>(row.images_json),
   } as TestScope;
 }
@@ -271,7 +262,6 @@ function scopeEvent(scope: TestScope): TestScopeEvent {
     title: scope.title,
     description: scope.description,
     methods: scope.methods,
-    guardianFlagIds: scope.guardian_flag_ids,
     status: scope.status,
     subtaskId: scope.subtask_id,
     evidenceMd: scope.evidence_md,

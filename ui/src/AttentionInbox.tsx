@@ -13,7 +13,6 @@ const TYPE_LABEL: Record<string, string> = {
   'problem-axis': 'PROBLÉMATIQUE',
   'turn-error': 'TOUR',
   routine: 'ROUTINE',
-  guardian: 'GARDIEN',
   sentry: 'SENTRY',
   pipeline: 'PIPELINE',
 }

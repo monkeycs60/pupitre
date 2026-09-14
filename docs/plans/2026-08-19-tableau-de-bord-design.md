@@ -102,7 +102,7 @@ La sidebar groupe les conversations par ticket sous le projet (repli possible), 
 
 Une Répétition est une conversation marquée `rehearsal`, avec consigne explicite, dans un worktree jetable ou en lecture sur le dépôt. Sortie obligatoire : un document HTML publié via `pupitre-mcp` (brief, points d'entrée, plan, questions, risques), attaché à l'item/ticket, « répété » coché dans Notion. Échec ou timeout (15 min) → `error` visible, pas de nouvelle tentative automatique avant 24 h sur le même item.
 
-**Mode actif**, désactivé par défaut, réglable par item ou par projet : la Répétition peut écrire du code dans un worktree sur une branche dédiée, pousser et commenter le ticket. Même en mode actif : jamais de merge, jamais de déploiement, et le Gardien passe sur le diff produit avant ouverture. La carte de proposition affiche toujours « lecture seule » ou « actif ».
+**Mode actif**, désactivé par défaut, réglable par item ou par projet : la Répétition peut écrire du code dans un worktree sur une branche dédiée, pousser et commenter le ticket. Même en mode actif : jamais de merge ni de déploiement. La carte de proposition affiche toujours « lecture seule » ou « actif ».
 
 ## 8. Tests
 

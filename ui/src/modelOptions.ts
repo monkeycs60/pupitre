@@ -170,8 +170,6 @@ export function formatModelPrice(model: string): string {
   return pricing === null ? '—' : `${frenchAmount(pricing.input)} / ${frenchAmount(pricing.output)} $`
 }
 
-/** Gardien propose exactement le même catalogue que le chat. */
-export const REVIEW_MODELS = PROVIDER_MODELS
 
 /**
  * Échelle d'autonomie, du plus borné au plus ouvert. Le rang alimente la jauge

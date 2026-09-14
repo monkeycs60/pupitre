@@ -15,8 +15,6 @@ import { SettingsStore } from "../src/stores/settings";
 import { QuotaTracker } from "../src/quotas";
 import { MAX_CONCURRENT_SUBTASKS, SubtaskLimitError, SubtaskRunner } from "../src/subtasks";
 import { codexAppServer } from "../src/adapters/codex-app-server";
-import { ReviewStore } from "../src/stores/reviews";
-import { ReviewRunner } from "../src/reviews";
 import { DebriefRunner } from "../src/debriefs";
 import { GitProjectService } from "../src/git";
 import { TestingStore } from "../src/stores/testing";
@@ -67,8 +65,7 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 /**
- * Le moteur n'a plus de façade HTTP : Gardien appelle `start` directement,
- * et c'est donc ce chemin-là que les tests doivent exercer.
+ * Le moteur n'a pas de façade HTTP : les tests exercent directement `start`.
  */
 function spawnSubtask(input: {
   conversationId: string;
@@ -148,13 +145,11 @@ cat "${fixture}"
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
   const git = new GitProjectService(db, projects);
-  const reviewStore = new ReviewStore(db);
-  const reviews = new ReviewRunner(reviewStore, projects, conversations, quotas);
   const debriefs = new DebriefRunner(
     new DebriefStore(db), conversations, projects, quotas, events.broadcast,
   );
   const testers = new TesterRunner(
-    new TestingStore(db), conversations, projects, reviewStore, quotas,
+    new TestingStore(db), conversations, projects, quotas,
     events.broadcast, subtasks, async () => '{"items":[]}', runner.activity,
   );
   const skills = new SkillInventory(db, projects, { homeDir: dir });
@@ -179,7 +174,7 @@ cat "${fixture}"
     port: 0, projects, conversations, media, runner, events, quotas,
     quotaRefresher: stubQuotaRefresher(quotas),
     subtasks, presets, settings,
-    reviews, debriefs, git, testers, skills, skillComposer, workflows,
+    debriefs, git, testers, skills, skillComposer, workflows,
     notifications, routineStore, routines, search: new SearchIndex(db), costs: new CostStore(db),
     memory: new MemoryStore(join(dir, "memory")),
     integrations, tickets, integrationsRefresher,

@@ -38,7 +38,6 @@ test('le pied de tour expose seulement le statut et la durée du run', () => {
   expect(document.body.textContent).not.toContain('50')
   expect(document.body.textContent).not.toContain('16 083')
   expect(document.body.textContent).not.toContain('1er retour')
-  expect(document.body.textContent).not.toContain('Lancer le Gardien')
   expect(document.body.textContent).not.toContain('+0 min')
   cleanup()
 })

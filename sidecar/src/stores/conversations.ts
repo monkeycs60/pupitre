@@ -315,7 +315,7 @@ export class ConversationStore {
 
   /**
    * Vide la corbeille : supprime définitivement les conversations jetées, leurs
-   * événements, leurs sous-tâches et les reviews qui en dépendent. Sans ce
+   * événements et leurs sous-tâches. Sans ce
    * ménage, les événements resteraient orphelins — rien ne les relie par clé
    * étrangère, puisque `conversation_id` désigne aussi bien une sous-tâche.
    */
@@ -331,7 +331,6 @@ export class ConversationStore {
         ).all(conversation.id) as Array<{ id: string }>;
         for (const subtask of subtasks) deleteEvents.run(subtask.id);
         this.db.query("DELETE FROM subtasks WHERE conversation_id = ?").run(conversation.id);
-        this.db.query("DELETE FROM reviews WHERE conversation_id = ?").run(conversation.id);
         deleteEvents.run(conversation.id);
         this.db.query("DELETE FROM conversations WHERE id = ?").run(conversation.id);
       }
@@ -353,9 +352,6 @@ export class ConversationStore {
       const deleteEvents = this.db.query("DELETE FROM events WHERE conversation_id = ?");
       for (const subtask of subtasks) deleteEvents.run(subtask.id);
       this.db.query("DELETE FROM subtasks WHERE conversation_id = ?").run(id);
-      // Par prudence, une intégration future peut avoir attaché une review
-      // pendant le seed ; ses flags/décisions suivent par ON DELETE CASCADE.
-      this.db.query("DELETE FROM reviews WHERE conversation_id = ?").run(id);
       this.db.query("DELETE FROM events WHERE conversation_id = ?").run(id);
       return this.db.query("DELETE FROM conversations WHERE id = ?").run(id).changes === 1;
     });

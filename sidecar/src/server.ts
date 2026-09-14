@@ -16,15 +16,11 @@ import type {
   PresetPermissionMode,
   PresetStore,
 } from "./stores/presets";
-import {
-  defaultReviewConfig,
-  normalizePresetPermissionMode,
-} from "./stores/presets";
+import { normalizePresetPermissionMode } from "./stores/presets";
 import { INTEGRATION_TOKENS_KEY, type SettingsStore } from "./stores/settings";
 import type { QuotaTracker } from "./quotas";
 import type { QuotaRefresher } from "./quota-refresh";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
-import { dispatchAgentConfig, DispatchConflictError, type CorrectionAgentConfig, type ReviewRunner } from "./reviews";
 import {
   DebriefAlreadyRunningError,
   NoNewSessionSummaryEventsError,
@@ -143,7 +139,6 @@ export interface ServerDeps {
   subtasks: SubtaskRunner;
   presets: PresetStore;
   settings: SettingsStore;
-  reviews: ReviewRunner;
   debriefs: DebriefRunner;
   git: GitProjectService;
   codeExplorer?: CodeExplorerService;
@@ -280,7 +275,6 @@ const MODELS_BY_PROVIDER = {
 } as const satisfies Record<Provider, readonly string[]>;
 const SPEEDS = ["standard", "fast"] as const;
 const DEFAULT_MESSAGE_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
-const REVIEW_COOLDOWN_MS = 10_000;
 
 class HttpError extends Error {
   constructor(
@@ -469,14 +463,6 @@ function htmlDocumentHttpError(error: unknown): never {
     default:
       throw new HttpError(400, error.message);
   }
-}
-
-function reviewModel(model: string, provider: Provider, field: string): string {
-  const value = model.trim();
-  if (!(MODELS_BY_PROVIDER[provider] as readonly string[]).includes(value)) {
-    throw new HttpError(400, `${field} invalide pour ${provider}`);
-  }
-  return value;
 }
 
 function optionalImages(body: Record<string, unknown>): string[] {
@@ -709,34 +695,6 @@ function presetInput(body: Record<string, unknown>): PresetInput {
   if (!isProvider(provider)) {
     throw new HttpError(400, "provider invalide");
   }
-  const reviewProviderValue = body.review_provider;
-  if (
-    reviewProviderValue !== undefined
-    && !isProvider(reviewProviderValue)
-  ) {
-    throw new HttpError(400, "review_provider invalide");
-  }
-  const reviewProvider = reviewProviderValue as Provider | undefined;
-  const reviewModelValue = body.review_model;
-  if (
-    reviewModelValue !== undefined
-    && (typeof reviewModelValue !== "string" || reviewModelValue.trim() === "")
-  ) {
-    throw new HttpError(400, "review_model invalide");
-  }
-  if (typeof reviewModelValue === "string") {
-    reviewModel(reviewModelValue, reviewProvider ?? provider, "review_model");
-  }
-  const reviewEffortValue = body.review_effort;
-  if (reviewEffortValue !== undefined) {
-    const effortProvider = reviewProvider ?? provider;
-    if (
-      typeof reviewEffortValue !== "string"
-      || !(EFFORTS_BY_PROVIDER[effortProvider] as readonly string[]).includes(reviewEffortValue)
-    ) {
-      throw new HttpError(400, `review_effort invalide pour ${effortProvider}`);
-    }
-  }
   const permissionMode = optionalPresetPermissionMode(body);
   return {
     name,
@@ -745,9 +703,6 @@ function presetInput(body: Record<string, unknown>): PresetInput {
     effort: optionalEffort(body, provider),
     speed: optionalSpeed(body, provider),
     ...(permissionMode !== undefined ? { permission_mode: permissionMode } : {}),
-    ...(reviewProvider ? { review_provider: reviewProvider } : {}),
-    ...(typeof reviewModelValue === "string" ? { review_model: reviewModelValue } : {}),
-    ...(typeof reviewEffortValue === "string" ? { review_effort: reviewEffortValue } : {}),
   };
 }
 
@@ -783,47 +738,6 @@ function requiredPinned(body: Record<string, unknown>): boolean {
   return body.pinned;
 }
 
-function resolveReviewConfig(
-  project: { default_review_preset_id: string | null; default_preset_id: string | null },
-  conversation: { provider: Provider },
-  presets: PresetStore,
-): { provider: Provider; model: string; effort: string; speed: "standard" | "fast" } {
-  const presetId = project.default_review_preset_id ?? project.default_preset_id;
-  const preset = presetId ? presets.get(presetId) : null;
-  if (!preset) return { ...defaultReviewConfig(conversation.provider), speed: "standard" };
-  return {
-    provider: preset.review_provider,
-    model: preset.review_model,
-    effort: preset.review_effort,
-    speed: preset.review_provider === "codex" && preset.speed === "fast" ? "fast" : "standard",
-  };
-}
-
-function resolveCorrectionConfig(
-  project: { default_correction_preset_id: string | null },
-  conversation: Conversation,
-  codeProvider: Provider,
-  presets: PresetStore,
-): CorrectionAgentConfig {
-  const preset = project.default_correction_preset_id ? presets.get(project.default_correction_preset_id) : null;
-  if (!preset) return dispatchAgentConfig(conversation, codeProvider);
-  return {
-    provider: preset.provider,
-    model: preset.model,
-    effort: preset.effort ?? defaultReviewConfig(preset.provider).effort,
-    speed: preset.provider === "codex" ? (preset.speed ?? "standard") : null,
-  };
-}
-
-function reviewCooldownSeconds(
-  reviews: ReturnType<ReviewRunner["listByProject"]>,
-  conversationId: string,
-  now = Date.now(),
-): number {
-  const latest = reviews.find((review) => review.conversation_id === conversationId);
-  if (!latest) return 0;
-  return Math.max(0, Math.ceil((REVIEW_COOLDOWN_MS - (now - Date.parse(latest.created_at))) / 1_000));
-}
 
 function mediaMimeType(contentType: string | null, fileName: string | null): string {
   const declared = contentType?.split(";", 1)[0]?.trim().toLowerCase();
@@ -1088,26 +1002,6 @@ export function createServer(deps: ServerDeps) {
       fleetTimer = null;
     }
   };
-  const broadcastReviewStatus = () => {
-    // Le canal Fleet porte aussi le statut des reviews : l'UI garde un unique
-    // flux temps réel pour la barre globale et le bouton Git.
-    broadcastFleet();
-    for (const project of deps.projects.list()) {
-      const status = deps.reviews.reviewStatus(project.id);
-      if (!status) continue;
-      // Le canal est global à l'application : l'id évite qu'un push provenant
-      // d'un autre projet écrase le statut actuellement affiché par le client.
-      const message = JSON.stringify({ projectId: project.id, ...status });
-      for (const socket of fleetSockets) {
-        try {
-          socket.send(message);
-        } catch {
-          fleetSockets.delete(socket);
-        }
-      }
-    }
-  };
-  deps.reviews.subscribeStatus(broadcastReviewStatus);
   const broadcastDashboard = (projectId: string) => {
     const subscribers = ticketSockets.get(projectId);
     if (!subscribers || subscribers.size === 0) return;
@@ -1243,13 +1137,12 @@ export function createServer(deps: ServerDeps) {
           const counts = {
             turns: 0,
             subtasks: 0,
-            reviews: 0,
             routines: 0,
             debriefs: deps.debriefs.activeCount(),
             testers: deps.runner.activity.activeCount(["test-inventory", "test-scope"]),
           };
           for (const item of currentFleet()) {
-            counts[`${item.kind}s` as "turns" | "subtasks" | "reviews" | "routines"] += 1;
+            counts[`${item.kind}s` as "turns" | "subtasks" | "routines"] += 1;
           }
           return json({ busy: Object.values(counts).some((count) => count > 0), ...counts });
         }
@@ -2108,8 +2001,7 @@ export function createServer(deps: ServerDeps) {
           if (!ticket) throw new HttpError(500, "ticket ClickUp créé mais introuvable");
           const project = deps.projects.get(issue.project_id);
           if (!project) throw new HttpError(404, "projet inconnu");
-          const preset = (project.default_correction_preset_id ? deps.presets.get(project.default_correction_preset_id) : null)
-            ?? (project.default_preset_id ? deps.presets.get(project.default_preset_id) : null)
+          const preset = (project.default_preset_id ? deps.presets.get(project.default_preset_id) : null)
             ?? deps.presets.list()[0];
           if (!preset) throw new HttpError(409, "aucun preset de correction disponible");
           const branch = `issue/${task.key}`;
@@ -2171,46 +2063,6 @@ export function createServer(deps: ServerDeps) {
             deps.projects.setPermissionMode(projectDefaultPresetId, preset.permission_mode);
           }
           return json(deps.projects.get(projectDefaultPresetId));
-        }
-
-        const projectDefaultReviewPresetId = routeId(
-          pathname,
-          /^\/api\/projects\/([^/]+)\/default-review-preset$/,
-        );
-        if (request.method === "PUT" && projectDefaultReviewPresetId !== null) {
-          if (!deps.projects.get(projectDefaultReviewPresetId)) {
-            throw new HttpError(404, "projet inconnu");
-          }
-          const body = await readObject(request);
-          const presetId = body.presetId;
-          if (presetId !== null && typeof presetId !== "string") {
-            throw new HttpError(400, "champ presetId invalide");
-          }
-          if (typeof presetId === "string" && !deps.presets.get(presetId)) {
-            throw new HttpError(404, "preset inconnu");
-          }
-          deps.projects.setDefaultReviewPreset(projectDefaultReviewPresetId, presetId as string | null);
-          return json(deps.projects.get(projectDefaultReviewPresetId));
-        }
-
-        const projectDefaultCorrectionPresetId = routeId(
-          pathname,
-          /^\/api\/projects\/([^/]+)\/default-correction-preset$/,
-        );
-        if (request.method === "PUT" && projectDefaultCorrectionPresetId !== null) {
-          if (!deps.projects.get(projectDefaultCorrectionPresetId)) {
-            throw new HttpError(404, "projet inconnu");
-          }
-          const body = await readObject(request);
-          const presetId = body.presetId;
-          if (presetId !== null && typeof presetId !== "string") {
-            throw new HttpError(400, "champ presetId invalide");
-          }
-          if (typeof presetId === "string" && !deps.presets.get(presetId)) {
-            throw new HttpError(404, "preset inconnu");
-          }
-          deps.projects.setDefaultCorrectionPreset(projectDefaultCorrectionPresetId, presetId as string | null);
-          return json(deps.projects.get(projectDefaultCorrectionPresetId));
         }
 
         const projectDefaultScoutPresetId = routeId(pathname, /^\/api\/projects\/([^/]+)\/default-scout-preset$/);
@@ -3661,17 +3513,8 @@ export function createServer(deps: ServerDeps) {
           if (!deps.conversations.get(conversationDiffId)) {
             throw new HttpError(404, "conversation inconnue");
           }
-          try {
-            return json(await deps.reviews.conversationDiff(conversationDiffId));
-          } catch (error) {
-            if (
-              error instanceof Error
-              && (error.message.includes("trop volumineux") || error.message.includes("HEAD a changé"))
-            ) {
-              throw new HttpError(400, error.message);
-            }
-            throw error;
-          }
+          const conversation = deps.conversations.get(conversationDiffId)!;
+          return json(await deps.git.workingTreeDiff(conversation.project_id, conversation.worktree_path));
         }
 
         const conversationPushesId = routeId(
@@ -3894,174 +3737,6 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
-        if (request.method === "POST" && pathname === "/api/reviews") {
-          const body = await readObject(request);
-          const conversationId = requiredString(body, "conversationId");
-          const conversation = deps.conversations.get(conversationId);
-          if (!conversation) throw new HttpError(404, "conversation inconnue");
-          const project = deps.projects.get(conversation.project_id);
-          if (!project) throw new HttpError(404, "projet inconnu");
-          const cooldown = reviewCooldownSeconds(deps.reviews.listByProject(project.id), conversationId);
-          if (cooldown > 0) {
-            throw new HttpError(429, `Patientez ${cooldown} s avant une nouvelle review.`);
-          }
-          for (const field of ["reviewProvider", "reviewModel", "reviewEffort", "reviewSpeed", "presetId", "codeProvider"]) {
-            if (body[field] !== undefined) {
-              throw new HttpError(400, "configuration de review portée par le projet");
-            }
-          }
-          const scope = body.scope === undefined ? "worktree" : requiredString(body, "scope");
-          const gitRefBase = body.gitRefBase === undefined
-            ? "CONVERSATION"
-            : requiredString(body, "gitRefBase");
-          const gitRefHead = body.gitRefHead === undefined
-            ? "WORKTREE"
-            : requiredString(body, "gitRefHead");
-          if (body.incremental !== undefined && typeof body.incremental !== "boolean") {
-            throw new HttpError(400, "incremental invalide");
-          }
-          const incremental = body.incremental === undefined
-            ? scope === "worktree"
-            : body.incremental;
-          const config = resolveReviewConfig(project, conversation, deps.presets);
-          try {
-            return json(deps.reviews.start({
-              projectId: project.id,
-              conversationId,
-              gitRefBase,
-              gitRefHead,
-              provider: config.provider,
-              model: config.model,
-              effort: config.effort,
-              speed: config.speed,
-              codeProvider: conversation.provider,
-              scope,
-              incremental,
-            }), 201);
-          } catch (error) {
-            if (error instanceof Error && error.message.includes("inconnu")) {
-              throw new HttpError(404, error.message);
-            }
-            throw error;
-          }
-        }
-
-        const projectReviewsId = routeId(
-          pathname,
-          /^\/api\/projects\/([^/]+)\/reviews$/,
-        );
-        if (request.method === "GET" && projectReviewsId !== null) {
-          if (!deps.projects.get(projectReviewsId)) {
-            throw new HttpError(404, "projet inconnu");
-          }
-          return json(deps.reviews.listSummariesByProject(projectReviewsId));
-        }
-
-        const projectReviewStatusId = routeId(
-          pathname,
-          /^\/api\/projects\/([^/]+)\/review-status$/,
-        );
-        if (request.method === "GET" && projectReviewStatusId !== null) {
-          const status = deps.reviews.reviewStatus(projectReviewStatusId);
-          if (!status) throw new HttpError(404, "projet inconnu");
-          return json(status);
-        }
-
-        const reviewId = routeId(pathname, /^\/api\/reviews\/([^/]+)$/);
-        if (request.method === "GET" && reviewId !== null) {
-          const review = deps.reviews.get(reviewId);
-          if (!review) throw new HttpError(404, "review inconnue");
-          return json(review);
-        }
-
-        const reviewFlagId = routeId(pathname, /^\/api\/review-flags\/([^/]+)$/);
-        if (request.method === "PATCH" && reviewFlagId !== null) {
-          const body = await readObject(request);
-          if (body.status !== undefined) {
-            if (body.status !== "open" && body.status !== "agent_running" && body.status !== "treated"
-              && body.status !== "ignored" && body.status !== "resolved") {
-              throw new HttpError(400, "statut de flag invalide");
-            }
-          }
-          if (body.status === undefined) {
-            throw new HttpError(400, "aucune modification de flag demandée");
-          }
-          const flag = deps.reviews.updateFlag(reviewFlagId, { status: body.status });
-          if (!flag) throw new HttpError(404, "flag inconnu");
-          return json(flag);
-        }
-
-        const reviewFlagDispatchId = routeId(
-          pathname,
-          /^\/api\/review-flags\/([^/]+)\/dispatch$/,
-        );
-        if (request.method === "POST" && reviewFlagDispatchId !== null) {
-          const body = await readObject(request);
-          if (body.message !== undefined && typeof body.message !== "string") {
-            throw new HttpError(400, "message invalide");
-          }
-          const flag = deps.reviews.getFlag(reviewFlagDispatchId);
-          if (!flag) throw new HttpError(404, "flag inconnu");
-          const review = deps.reviews.get(flag.review_id);
-          if (!review) throw new HttpError(404, "review inconnue");
-          const conversation = deps.conversations.get(review.conversation_id);
-          if (!conversation) throw new HttpError(404, "conversation inconnue");
-          const project = deps.projects.get(conversation.project_id);
-          if (!project) throw new HttpError(404, "projet inconnu");
-          const agentConfig = resolveCorrectionConfig(project, conversation, flag.code_provider, deps.presets);
-          try {
-            return json(deps.reviews.dispatchFlag(reviewFlagDispatchId, body.message, agentConfig), 201);
-          } catch (error) {
-            if (error instanceof DispatchConflictError) throw new HttpError(409, error.message);
-            if (error instanceof Error && error.message === "flag inconnu") throw new HttpError(404, error.message);
-            throw error;
-          }
-        }
-
-        const reviewDispatchAllId = routeId(pathname, /^\/api\/reviews\/([^/]+)\/dispatch-all$/);
-        if (request.method === "POST" && reviewDispatchAllId !== null) {
-          const body = await readObject(request);
-          const severities = body.severities === undefined ? ["red", "orange"] : body.severities;
-          if (!Array.isArray(severities) || !severities.every((item) => item === "red" || item === "orange" || item === "grey")) {
-            throw new HttpError(400, "sévérités invalides");
-          }
-          const review = deps.reviews.get(reviewDispatchAllId);
-          if (!review) throw new HttpError(404, "review inconnu");
-          const conversation = deps.conversations.get(review.conversation_id);
-          if (!conversation) throw new HttpError(404, "conversation inconnue");
-          const project = deps.projects.get(conversation.project_id);
-          if (!project) throw new HttpError(404, "projet inconnu");
-          const agentConfig = resolveCorrectionConfig(project, conversation, review.code_provider, deps.presets);
-          try {
-            return json(deps.reviews.dispatchAll(reviewDispatchAllId, severities, agentConfig), 202);
-          } catch (error) {
-            if (error instanceof Error && error.message === "review inconnu") throw new HttpError(404, error.message);
-            throw error;
-          }
-        }
-
-        const reviewDispatchGroupedId = routeId(pathname, /^\/api\/reviews\/([^/]+)\/dispatch-grouped$/);
-        if (request.method === "POST" && reviewDispatchGroupedId !== null) {
-          const body = await readObject(request);
-          const severities = body.severities === undefined ? ["red", "orange"] : body.severities;
-          if (!Array.isArray(severities) || !severities.every((item) => item === "red" || item === "orange" || item === "grey")) {
-            throw new HttpError(400, "sévérités invalides");
-          }
-          const review = deps.reviews.get(reviewDispatchGroupedId);
-          if (!review) throw new HttpError(404, "review inconnu");
-          const conversation = deps.conversations.get(review.conversation_id);
-          if (!conversation) throw new HttpError(404, "conversation inconnue");
-          const project = deps.projects.get(conversation.project_id);
-          if (!project) throw new HttpError(404, "projet inconnu");
-          const agentConfig = resolveCorrectionConfig(project, conversation, review.code_provider, deps.presets);
-          try {
-            return json(await deps.reviews.dispatchGrouped(reviewDispatchGroupedId, severities, agentConfig), 202);
-          } catch (error) {
-            if (error instanceof DispatchConflictError) throw new HttpError(409, error.message);
-            if (error instanceof Error && error.message === "review inconnu") throw new HttpError(404, error.message);
-            throw error;
-          }
-        }
 
         if (request.method === "GET" && pathname === "/api/subtasks/batch") {
           const ids = [...new Set((url.searchParams.get("ids") ?? "").split(",").filter(Boolean))];

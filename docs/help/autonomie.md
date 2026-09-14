@@ -28,5 +28,4 @@ Le périmètre filesystem est un réglage à part, décrit dans
 
 Pupitre ne délègue plus de travail à un second modèle pour vous. Les CLIs ont
 leurs propres sous-agents : demandez-les dans le prompt, ils s'exécutent avec
-les outils natifs du provider. Gardien, lui, continue de lancer ses corrections
-dans des tours séparés, qui apparaissent comme des cartes dans le fil.
+les outils natifs du provider.

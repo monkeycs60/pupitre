@@ -85,7 +85,6 @@ export function FleetView({ onConversationSelect, projectId }: FleetViewProps) {
       { key: 'turn', label: 'Tours actifs', value: items.filter((item) => item.kind === 'turn').length, color: 'accent' as const },
       { key: 'subtask', label: 'Sub-agents', value: items.filter((item) => item.kind === 'subtask').length, color: 'warn' as const },
       { key: 'routine', label: 'Routines', value: items.filter((item) => item.kind === 'routine').length, color: 'ok' as const },
-      { key: 'review', label: 'Reviews', value: items.filter((item) => item.kind === 'review').length, color: 'warn' as const },
       { key: 'projects', label: 'Projets', value: projectIds.size, color: 'muted' as const },
     ]
   }, [items])
@@ -97,7 +96,7 @@ export function FleetView({ onConversationSelect, projectId }: FleetViewProps) {
   const emptyCopy: Record<FleetTab, { title: string; body: string }> = {
     active: {
       title: 'Aucun run actif',
-      body: 'Les tours, sous-tâches, reviews et routines apparaîtront ici dès leur lancement.',
+      body: 'Les tours, sous-tâches et routines apparaîtront ici dès leur lancement.',
     },
     recent: {
       title: 'Aucun run récent',

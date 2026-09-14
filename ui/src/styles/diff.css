@@ -1,117 +1,17 @@
-/* DiffViewer : table de diff, numéros de ligne, zones thermiques. */
-
-.diff-table {
-  min-width: 620px;
+.diff-viewer {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: var(--space-4);
+  overflow: auto;
   color: var(--text);
   font-family: var(--font-mono);
   font-size: var(--text-code);
   line-height: 1.6;
-}
-
-/* En-tête de fichier collant dans le panneau de scroll. */
-.diff-file-header {
-  position: sticky;
-  z-index: 2;
-  top: 0;
-  display: flex;
-  align-items: center;
-  min-height: 40px;
-  padding: 10px 14px;
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: var(--bg-raised);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-/* Le liseré gauche (ajout / suppression) vit dans la bordure : la largeur
-   des colonnes reste stable, ligne colorée ou non. */
-.diff-line {
-  display: grid;
-  grid-template-columns: 52px 3px 16px minmax(320px, 1fr);
-  min-height: 20px;
-}
-
-.diff-line > code {
-  display: block;
-  min-width: 0;
-  padding: 2px var(--space-2);
-  padding-right: 14px;
-  padding-left: 4px;
-  overflow: hidden;
-  color: inherit;
-  font: inherit;
   white-space: pre;
+  background: var(--bg-panel);
 }
 
-.diff-number {
-  padding: 2px 12px 2px 4px;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  user-select: none;
+.diff-viewer code {
+  font: inherit;
 }
-
-.diff-rail { width: 3px; background: transparent; }
-.diff-rail.risk-grey { background: var(--border-strong); }
-.diff-rail.risk-orange { background: var(--streak); }
-.diff-rail.risk-red { background: var(--danger); }
-.diff-sign { color: var(--text-faint); text-align: center; user-select: none; }
-.diff-sign.is-addition { color: var(--ok); }.diff-sign.is-deletion { color: var(--danger); }
-
-.diff-line.is-addition {
-  background-color: var(--ok-soft);
-}
-
-.diff-line.is-deletion {
-  background-color: var(--danger-soft);
-}
-
-.diff-line.is-hunk {
-  color: var(--text-muted);
-  background-color: var(--bg-raised);
-}
-
-.diff-line.is-meta {
-  color: var(--text-faint);
-}
-
-/* Surbrillance des lignes signalées : une teinte se superpose au fond de la
-   ligne (gradient) et une bande interne marque la sévérité, sans déplacer le
-   liseré ajout/suppression. */
-.diff-line.risk-grey {
-  background-image: linear-gradient(var(--neutral-soft), var(--neutral-soft));
-}
-
-.diff-line.risk-orange {
-  background-image: linear-gradient(var(--warn-soft), var(--warn-soft));
-}
-
-.diff-line.risk-red {
-  background-image: linear-gradient(var(--danger-soft), var(--danger-soft));
-}
-
-/* --- Carte de signalement dans le flux ----------------------------------- */
-
-.diff-flag-card-row { display: grid; grid-template-columns: 52px 3px 16px minmax(0, 1fr); background: color-mix(in srgb, var(--streak) 6%, transparent); border-bottom: 1px solid var(--border-subtle); }
-.diff-card-rail { grid-column: 2; width: 3px; }.diff-card-rail.risk-grey { background: var(--border-strong); }.diff-card-rail.risk-orange { background: var(--streak); }.diff-card-rail.risk-red { background: var(--danger); }
-.diff-flag-card-content { grid-column: 4; min-width: 0; padding: 10px 16px 14px 18px; }
-.diff-flag-card { max-width: 820px; padding: 13px 15px; background: var(--bg-raised); border: 1px solid color-mix(in srgb, var(--streak) 32%, transparent); border-radius: 9px; box-shadow: var(--shadow-popover); font-family: var(--font-sans); }
-.diff-flag-card.severity-red { border-color: color-mix(in srgb, var(--danger) 32%, transparent); }
-.diff-flag-card header, .diff-flag-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; color: var(--text-muted); font-size: var(--text-sm); }
-.diff-flag-card header { min-width: 0; }
-.diff-severity { display: inline-flex; flex: none; align-items: center; gap: 5px; padding: 1px 8px; color: var(--streak); font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .03em; background: var(--streak-soft); border-radius: var(--r-full); }
-.diff-severity i { width: 5px; height: 5px; border-radius: var(--r-full); background: currentColor; }
-.severity-red .diff-severity { color: var(--danger); background: var(--danger-soft); }.severity-grey .diff-severity { color: var(--text-faint); background: var(--neutral-soft); }
-.diff-theme { flex: none; max-width: min(56ch, 100%); padding: 1px 7px; overflow: hidden; color: var(--text-muted); font-family: var(--font-mono); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; background: var(--neutral-soft); border-radius: var(--r-xs); }
-.diff-flag-meta { margin-left: auto; color: var(--text-faint); font-family: var(--font-mono); font-size: 10.5px; }
-.diff-flag-message { max-width: 820px; margin: 9px 0; color: var(--text-strong) !important; font-family: var(--font-sans); font-size: var(--text-base) !important; line-height: 1.6; text-wrap: pretty; }
-.diff-test-gap { display: inline-block; padding: 1px var(--space-1); color: var(--streak); font-size: var(--text-xs); background: var(--streak-soft); border-radius: var(--r-xs); }
-.diff-agent-message { display: grid; gap: var(--space-1); margin: var(--space-2) 0; color: var(--text-muted); font-size: var(--text-sm); }.diff-agent-message textarea { min-height: 52px; resize: vertical; }
-.diff-flag-actions-spacer { flex: 1; }.diff-flag-actions button { min-height: 28px; }.diff-flag-actions .primary-button { padding: 0 12px; }.diff-flag-actions .secondary-button { padding: 0 11px; }.diff-agent-note-toggle, .diff-quiet-action { padding: 0; color: var(--text-faint); font-family: var(--font-sans); font-size: var(--text-sm); background: transparent; border: 0; cursor: pointer; }.diff-agent-note-toggle:hover, .diff-quiet-action:hover { color: var(--text-strong); }.diff-quiet-action { color: var(--text-faint); }
-.diff-flag-state { color: var(--text-muted) !important; }.diff-flag-error { color: var(--danger) !important; }
-.diff-flag-closed { display: block; width: 100%; margin: 6px 0; padding: 6px 10px; color: var(--text-faint); font-family: var(--font-sans); font-size: var(--text-sm); text-align: left; background: transparent; border: 1px dashed var(--border-subtle); border-radius: var(--r-sm); cursor: pointer; }
-.diff-flag-closed:hover { color: var(--text-muted); border-color: var(--border-strong); }

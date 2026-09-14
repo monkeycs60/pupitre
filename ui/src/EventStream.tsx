@@ -6,7 +6,6 @@ import type { DebriefBlock, StreamBlock } from './groupEvents'
 import type { SubtaskStatus } from './types'
 import { TestInventoryCard } from './TestInventoryCard'
 import { HtmlDocumentCard } from './HtmlDocumentCard'
-import { ReviewReportCard } from './ReviewReportCard'
 import { memo } from 'react'
 import type { ReactNode } from 'react'
 import type { EventBlock } from './eventBlocks'
@@ -35,7 +34,6 @@ function EventStreamImpl({
   onSubtaskStatusChange,
   onDebriefQuestion,
   turnFooterAction,
-  conversationId,
 }: EventStreamProps) {
   const rendered: ReactNode[] = []
   const newestHtmlDocumentId = blocks.findLast((item) => item.kind === 'html-document')?.id
@@ -96,8 +94,6 @@ function EventStreamImpl({
             block={block}
             defaultOpen={block.id === newestHtmlDocumentId}
           />
-        ) : block.kind === 'review-report' ? (
-          conversationId ? <ReviewReportCard key={block.id} block={block} conversationId={conversationId} /> : null
         ) : (
           <EventView
             key={block.id}

@@ -7,7 +7,6 @@ import type { AppEvent, Provider, StoredEvent } from "./events";
 import type { QuotaTracker } from "./quotas";
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
-import type { ReviewFlag, ReviewStore } from "./stores/reviews";
 import {
   TestScopeAlreadyRunningError,
   type TestInventory,
@@ -61,7 +60,6 @@ export class TesterRunner {
     private store: TestingStore,
     private conversations: ConversationStore,
     private projects: ProjectStore,
-    private reviews: ReviewStore,
     private quotas: QuotaTracker,
     private broadcast: BroadcastFn,
     private subtasks: TestSubtasks,
@@ -88,18 +86,15 @@ export class TesterRunner {
         const project = this.projects.get(conversation.project_id);
         if (!project) throw new Error("projet inconnu");
         const events = this.conversations.listEvents(conversationId);
-        const testingFlags = this.reviews.listTestingFlags(project.id);
-        const knownFlagIds = new Set(testingFlags.map((flag) => flag.id));
         const output = await this.generator({
           cwd: conversationCwd(project, conversation),
           provider: conversation.provider,
           model: conversation.model,
           effort: conversation.effort ?? undefined,
           speed: conversation.speed ?? undefined,
-          prompt: inventoryPrompt(transcript(events), testingFlags),
+          prompt: inventoryPrompt(transcript(events)),
         });
-        const scopes = parseTestInventory(output, knownFlagIds);
-        appendMissingGuardianScopes(scopes, testingFlags);
+        const scopes = parseTestInventory(output);
         const created = this.store.createWithReference({
           conversationId,
           eventIdFrom: events[0]?.id ?? 0,
@@ -153,7 +148,6 @@ export class TesterRunner {
         status: "failed",
         evidenceMd: "Le scope n'a pas pu démarrer.",
         error: error instanceof Error ? error.message : String(error),
-        guardianFlagIdsAcked: [],
       });
       this.broadcast(conversation.id, completed.event);
       releaseActivity();
@@ -170,7 +164,6 @@ export class TesterRunner {
         status: "failed",
         evidenceMd: "Le scope n'a pas pu être relié à sa sous-tâche.",
         error: error instanceof Error ? error.message : String(error),
-        guardianFlagIdsAcked: [],
       });
       this.broadcast(conversation.id, completed.event);
       releaseActivity();
@@ -222,15 +215,13 @@ export class TesterRunner {
       evidenceMd: evidence,
       images: artifacts.images,
       error: waitError ?? result?.error ?? (parsed ? null : "verdict structuré absent"),
-      guardianFlagIdsAcked: [],
-    }, passed ? () => this.reviews.ackFlags(scope.guardian_flag_ids) : undefined);
+    });
     this.broadcast(conversationId, completed.event);
   }
 }
 
 export function parseTestInventory(
   output: string,
-  knownFlagIds: Set<string>,
 ): TestScopeInput[] {
   const parsed = JSON.parse(extractJson(output)) as { items?: unknown };
   if (!Array.isArray(parsed.items) || parsed.items.length > 12) {
@@ -256,30 +247,8 @@ export function parseTestInventory(
         instructions: boundedString(method.instructions, 2_000, "instructions de méthode"),
       };
     });
-    const guardianFlagIds = Array.isArray(item.guardian_flag_ids)
-      ? [...new Set(item.guardian_flag_ids.filter(
-          (id): id is string => typeof id === "string" && knownFlagIds.has(id),
-        ))]
-      : [];
-    return { title, description, methods, guardianFlagIds };
+    return { title, description, methods };
   });
-}
-
-function appendMissingGuardianScopes(scopes: TestScopeInput[], flags: ReviewFlag[]): void {
-  const assigned = new Set(scopes.flatMap((scope) => scope.guardianFlagIds));
-  for (const flag of flags) {
-    if (assigned.has(flag.id) || scopes.length >= 12) continue;
-    scopes.push({
-      title: `Couvrir ${flag.file}:${flag.line_start}`,
-      description: flag.message,
-      methods: [{
-        kind: "unit",
-        label: "Test ciblé du risque Gardien",
-        instructions: `Ajouter ou exécuter le test qui couvre ${flag.file}:${flag.line_start}-${flag.line_end}.`,
-      }],
-      guardianFlagIds: [flag.id],
-    });
-  }
 }
 
 function boundedString(value: unknown, max: number, label: string): string {
@@ -318,21 +287,12 @@ function transcript(events: StoredEvent[]): string {
   return `${joined.slice(0, half)}\n\n[… historique intermédiaire tronqué …]\n\n${joined.slice(-half)}`;
 }
 
-function inventoryPrompt(source: string, flags: ReviewFlag[]): string {
+function inventoryPrompt(source: string): string {
   return [
     "Relis la conversation et produis un inventaire concret de ce qui a été implémenté et est testable.",
     "N'exécute aucun outil. Retourne uniquement un objet JSON de cette forme :",
-    '{"items":[{"title":"...","description":"...","methods":[{"kind":"unit|browser|manual","label":"...","instructions":"..."}],"guardian_flag_ids":["..."]}]}',
+    '{"items":[{"title":"...","description":"...","methods":[{"kind":"unit|browser|manual","label":"...","instructions":"..."}]}]}',
     "Chaque item doit représenter un scope choisissable. Donne des pistes précises adaptées au projet.",
-    "Réutilise uniquement les ids Gardien listés ci-dessous et rattache-les au scope qui les vérifiera.",
-    "",
-    "FLAGS GARDIEN LIÉS AUX TESTS",
-    flags.length === 0
-      ? "Aucun."
-      : flags.map((flag) =>
-          `- ${flag.id} · ${flag.file}:${flag.line_start}-${flag.line_end} · ${flag.message}`,
-        ).join("\n"),
-    "",
     "CONVERSATION",
     source || "Conversation sans événement textuel exploitable.",
   ].join("\n");
