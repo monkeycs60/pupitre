@@ -30,6 +30,7 @@ function plural(count: number, word: string): string {
 export function CodeSyncBar({ projectId, sources, prefixes, onMerged, onOpenConversation }: CodeSyncBarProps) {
   const [entries, setEntries] = useState<Record<string, SyncEntry>>({})
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
   const sourceKey = sources.map((source) => source.path).join('\n')
 
   const update = useCallback((path: string, patch: Partial<SyncEntry>) => {
@@ -71,13 +72,48 @@ export function CodeSyncBar({ projectId, sources, prefixes, onMerged, onOpenConv
       .catch((reason: unknown) => update(path, { error: codeErrorMessage(reason), busy: null }))
   }
 
-  const rows = sources.map((source, index) => ({ source, index, entry: entries[source.path] }))
-  if (rows.every(({ entry }) => entry?.status && !entry.status.base && !entry.error)) return null
+  const visible = sources
+    .map((source, index) => ({ source, index, entry: entries[source.path] }))
+    .filter(({ entry }) => !(entry?.status && !entry.status.base && !entry.error))
+  if (visible.length === 0) return null
+  const multi = visible.length > 1
+  const statuses = visible.map(({ entry }) => entry?.status).filter((status): status is CodeSyncStatus => Boolean(status))
+  const conflictTotal = statuses.reduce((total, status) => total + status.conflicts.length, 0)
+  const behindCount = statuses.filter((status) => status.behind > 0).length
+  const anyBusy = visible.some(({ entry }) => entry?.busy)
+  const anyFetching = visible.some(({ entry }) => entry?.busy === 'fetch')
+  const summaryTone = visible.some(({ entry }) => entry?.error || entry?.status?.fetchError)
+    ? 'is-error'
+    : conflictTotal > 0 ? 'is-conflict' : behindCount > 0 ? 'is-behind' : 'is-clean'
+  const summaryText = statuses.length < visible.length
+    ? `Comparaison de ${visible.length} dépôts avec leur base…`
+    : behindCount === 0
+      ? `${visible.length} dépôts à jour avec leur base`
+      : `${behindCount} dépôt${behindCount > 1 ? 's' : ''} sur ${visible.length} en retard sur leur base`
 
   return <div className="code-sync" aria-label="Écart avec la branche de base">
-    {rows.map(({ source, index, entry }) => {
+    {multi ? <div className={`code-sync-line code-sync-summary ${summaryTone}`}>
+      <button type="button" className="code-sync-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <svg className={open ? 'is-open' : ''} width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 4 4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        <span className="code-sync-dot" aria-hidden="true" />
+        <span className="code-sync-text">{summaryText}</span>
+      </button>
+      {conflictTotal > 0 ? <span className="code-sync-conflicts is-static">{plural(conflictTotal, 'conflit')}</span> : null}
+      <button
+        type="button"
+        className="code-icon-button code-sync-refresh"
+        title="Récupérer la dernière version des bases"
+        aria-label="Récupérer les bases"
+        disabled={anyBusy}
+        onClick={() => { for (const { source } of visible) refresh(source.path, true) }}
+      >
+        <svg className={anyFetching ? 'is-spinning' : ''} width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+    </div> : null}
+    {!multi || open ? <div className={multi ? 'code-sync-list' : undefined}>{visible.map(({ source, index, entry }) => {
       const status = entry?.status ?? null
-      if (status && !status.base && !entry?.error) return null
       const prefix = prefixes.get(source.path) ?? ''
       const busy = entry?.busy ?? null
       const conflicts = status?.conflicts ?? []
@@ -94,6 +130,7 @@ export function CodeSyncBar({ projectId, sources, prefixes, onMerged, onOpenConv
             {status && !upToDate ? <><b>{plural(behind, 'commit')}</b> de retard sur <b>{shortBase(status.base!)}</b></> : null}
             {status && status.ahead > 0 ? <span className="code-sync-ahead">, {status.ahead} d’avance</span> : null}
           </span>
+          {status && behind > 0 && !status.mergeable ? <span className="code-sync-tag" title="Aucun worktree ne porte cette branche : ouvre-la dans une conversation pour la mettre à jour">sans worktree</span> : null}
           {status && conflicts.length > 0 ? <button
             type="button"
             className="code-sync-conflicts"
@@ -102,7 +139,7 @@ export function CodeSyncBar({ projectId, sources, prefixes, onMerged, onOpenConv
           >
             {plural(conflicts.length, 'conflit')}
           </button> : null}
-          <button
+          {multi ? null : <button
             type="button"
             className="code-icon-button code-sync-refresh"
             title={status?.fetchedAt ? `Récupérer la base (dernier fetch ${new Date(status.fetchedAt).toLocaleTimeString('fr-FR')})` : 'Récupérer la dernière version de la base'}
@@ -113,7 +150,7 @@ export function CodeSyncBar({ projectId, sources, prefixes, onMerged, onOpenConv
             <svg className={busy === 'fetch' ? 'is-spinning' : ''} width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-          </button>
+          </button>}
         </div>
         {status && behind > 0 && status.mergeable ? <div className="code-sync-actions">
           {conflicts.length === 0 ? <button
@@ -135,13 +172,12 @@ export function CodeSyncBar({ projectId, sources, prefixes, onMerged, onOpenConv
           </button>}
           {status.dirty && conflicts.length === 0 ? <span className="code-sync-hint">Modifications non commitées</span> : null}
         </div> : null}
-        {status && behind > 0 && !status.mergeable ? <p className="code-sync-hint">Branche sans worktree : ouvre-la dans une conversation pour la mettre à jour.</p> : null}
         {status && expanded === source.path && conflicts.length > 0 ? <ul className="code-sync-files">
           {conflicts.map((path) => <li key={path} title={path}>{path}</li>)}
         </ul> : null}
         {entry?.error ? <p className="code-sync-error">{entry.error}</p> : null}
         {!entry?.error && status?.fetchError ? <p className="code-sync-error">Fetch impossible, écart calculé sur la dernière version connue : {status.fetchError}</p> : null}
       </div>
-    })}
+    })}</div> : null}
   </div>
 }
