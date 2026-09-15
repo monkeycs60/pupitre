@@ -364,7 +364,7 @@ export function summaryPrompt(day: string, projects: ActivityReportProject[]): s
     "",
     `- summary : deux ou trois phrases en français (${SUMMARY_MAX} caractères maximum), ton de constat, au passé composé.`,
     "- Commence par ce qui a occupé le plus de temps, nomme les tickets par leur clé, termine par ce qui reste ouvert si c'est visible.",
-    "- Pas de chiffres d'heures ni de lignes : ils sont déjà affichés à côté.",
+    "- Aucune durée (ni heures ni minutes) et aucun nombre de lignes ou de commits : ces chiffres sont déjà affichés à côté.",
     "",
     `JOURNÉE : ${JSON.stringify(material)}`,
   ].join("\n");
