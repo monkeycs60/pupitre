@@ -26,7 +26,9 @@ import {
   type ActivityReportTicketReady,
   type ActivityReportTodo,
   type ActivityReportTopic,
+  type ActivitySpan,
   type ActivityState,
+  type ActivityTimeline,
 } from "./stores/activity";
 import {
   applyRetroOperations,
@@ -44,6 +46,8 @@ const TOPIC_TITLE_MAX = 90;
 const TOPIC_DETAIL_MAX = 280;
 const TOPICS_MAX = 10;
 const SUMMARY_MAX = 600;
+/** Deux tranches de présence séparées de moins que ça forment un seul intervalle. */
+const PRESENCE_GAP_MS = 120_000;
 
 /** Statuts ClickUp qui valent « prêt pour la production », comparés en minuscules. */
 export const READY_STATUS_PATTERN = /ready\s*(for|to)\s*prod/i;
@@ -235,6 +239,30 @@ export class ActivityJournal {
       .map((item) => ({ id: item.id, title: item.title, ticketId: item.ticket_id }));
   }
 
+  /** Intervalles de présence et d'agent du jour, tours horodatés : la matière de la frise. */
+  timelineOfDay(projectId: string, window: DayWindow): ActivityTimeline {
+    const entries = this.db.query(`
+      SELECT source, started_at, ended_at FROM time_entries
+      WHERE project_id = ? AND source IN ('presence', 'agent') AND started_at < ? AND ended_at > ?
+      ORDER BY started_at
+    `).all(projectId, window.endIso, window.startIso) as Array<{ source: string; started_at: string; ended_at: string }>;
+    const clip = (entry: { started_at: string; ended_at: string }) => ({
+      from: Math.max(Date.parse(entry.started_at), window.startMs),
+      to: Math.min(Date.parse(entry.ended_at), window.endMs),
+    });
+    const presence = mergeSpans(entries.filter((entry) => entry.source === "presence").map(clip), PRESENCE_GAP_MS);
+    const agent = mergeSpans(entries.filter((entry) => entry.source === "agent").map(clip), 0);
+    const turns = this.db.query(`
+      SELECT e.created_at FROM events e
+      JOIN conversations c ON c.id = e.conversation_id
+      WHERE c.project_id = ? AND c.deleted_at IS NULL
+        AND e.created_at >= ? AND e.created_at < ?
+        AND json_valid(e.payload) AND json_extract(e.payload, '$.type') = 'user-message'
+      ORDER BY e.created_at
+    `).all(projectId, window.startIso, window.endIso) as Array<{ created_at: string }>;
+    return { presence, agent, turns: turns.map((row) => new Date(row.created_at).toISOString()) };
+  }
+
   /**
    * MR ouvertes ce jour par l'utilisateur GitLab de l'intégration. Une MR
    * n'est connue que si la relève l'a vue ouverte : celle créée et fusionnée
@@ -346,6 +374,18 @@ export class ActivityJournal {
     if (!row?.value) return null;
     try { return JSON.parse(row.value) as Record<string, unknown>; } catch { return null; }
   }
+}
+
+/** Fusionne les intervalles triés qui se touchent à `gapMs` près ; ignore les vides. */
+export function mergeSpans(spans: Array<{ from: number; to: number }>, gapMs: number): ActivitySpan[] {
+  const out: Array<{ from: number; to: number }> = [];
+  for (const span of spans) {
+    if (span.to <= span.from) continue;
+    const last = out[out.length - 1];
+    if (last && span.from <= last.to + gapMs) last.to = Math.max(last.to, span.to);
+    else out.push({ ...span });
+  }
+  return out.map((span) => ({ from: new Date(span.from).toISOString(), to: new Date(span.to).toISOString() }));
 }
 
 export function summaryPrompt(day: string, projects: ActivityReportProject[]): string {
@@ -576,8 +616,14 @@ export class ActivityReportService {
   }
 
   report(day: string): ActivityReport | null {
-    const report = this.store.report(day);
-    return report ? hydrateReport(report, this.changelog) : null;
+    const stored = this.store.report(day);
+    if (!stored) return null;
+    const report = hydrateReport(stored, this.changelog);
+    const window = dayWindow(day);
+    return {
+      ...report,
+      projects: report.projects.map((project) => ({ ...project, timeline: this.journal.timelineOfDay(project.projectId, window) })),
+    };
   }
 
   /**

@@ -94,6 +94,15 @@ export interface ActivityReportTicketReady {
   changedAt: string;
 }
 
+export interface ActivitySpan { from: string; to: string }
+
+/** Frise du jour, calculée à la lecture depuis les entrées de temps et les tours. */
+export interface ActivityTimeline {
+  presence: ActivitySpan[];
+  agent: ActivitySpan[];
+  turns: string[];
+}
+
 export interface ActivityReportTodo {
   id: string;
   title: string;
@@ -116,6 +125,7 @@ export interface ActivityReportProject {
   mergeRequests: ActivityReportMergeRequest[];
   ticketsReady: ActivityReportTicketReady[];
   todosDone: ActivityReportTodo[];
+  timeline?: ActivityTimeline;
 }
 
 export interface ActivityReportRetro {

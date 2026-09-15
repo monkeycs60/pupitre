@@ -10,6 +10,7 @@ import {
   type ActivityReportProject,
   type ActivityReportTicket,
 } from './api'
+import { ActivityTimeline } from './ActivityTimeline'
 import { ExternalLink } from './externalLink'
 
 const hours = (ms: number) => ms < 60_000 ? '0 h' : `${(ms / 3_600_000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} h`
@@ -231,6 +232,7 @@ export function ActivityReportView({ onOpenConversation }: { onOpenConversation:
             <div><dd>{hours(report.totals.userMs)}</dd><dt>de présence</dt></div>
             <div><dd>{hours(report.totals.agentMs)}</dd><dt>d’agent</dt></div>
           </dl>
+          <ActivityTimeline day={report.day} projects={report.projects} onOpenConversation={onOpenConversation} />
         </section>
 
         <section className="activity-journal" aria-label="Journal par projet">

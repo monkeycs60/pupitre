@@ -28,6 +28,34 @@
 .activity-totals .is-outcome.is-zero dd, .activity-totals .is-outcome.is-zero dt { color: var(--text-faint); }
 .activity-totals .is-outcome + div:not(.is-outcome) { margin-left: 12px; padding-left: 36px; border-left: 1px solid var(--border-subtle); }
 
+.activity-timeline { --lane-h: 40px; display: grid; grid-template-columns: 130px minmax(0, 1fr); column-gap: 14px; margin-top: 22px; }
+.activity-timeline-axis { position: relative; grid-column: 2; height: 18px; }
+.activity-timeline-hour { position: absolute; top: 0; transform: translateX(-50%); font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.activity-timeline-row { display: contents; }
+.activity-timeline-name { align-self: center; overflow: hidden; font-size: 12px; font-weight: 600; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.activity-lane { position: relative; height: var(--lane-h); border-top: 1px solid var(--border-subtle); }
+.activity-timeline-row:last-of-type .activity-lane { border-bottom: 1px solid var(--border-subtle); }
+.activity-lane-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border-subtle); }
+.activity-lane-presence { position: absolute; top: 9px; height: 13px; min-width: 2px; background: var(--accent); opacity: 0.38; border-radius: 2px; }
+.activity-lane-agent { position: absolute; top: 25px; height: 5px; min-width: 2px; background: var(--ok); opacity: 0.55; border-radius: 2px; }
+.activity-lane-turn { position: absolute; top: 5px; width: 1px; height: 21px; background: var(--text-faint); opacity: 0.8; }
+.activity-lane-commit { position: absolute; top: 50%; padding: 0; background: var(--accent); border: 2px solid var(--bg-workspace); border-radius: 50%; transform: translate(-50%, -50%); cursor: pointer; }
+.activity-lane-commit.is-unlinked { background: var(--text-faint); cursor: default; }
+button.activity-lane-commit:hover { background: var(--accent-hover); }
+button.activity-lane-commit:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 1px; }
+.activity-lane-mr, .activity-lane-ready { position: absolute; top: 50%; width: 12px; height: 12px; border: 2px solid var(--bg-workspace); transform: translate(-50%, -50%) rotate(45deg); }
+.activity-lane-mr { background: #fc6d26; }
+.activity-lane-ready { background: var(--ok); border-radius: 2px; }
+a.activity-lane-mr:hover, a.activity-lane-ready:hover { transform: translate(-50%, -50%) rotate(45deg) scale(1.25); }
+.activity-timeline-legend { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 8px; font-size: 11px; color: var(--text-faint); }
+.activity-timeline-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.activity-timeline-legend i { position: static; display: inline-block; transform: none; }
+.activity-timeline-legend .activity-lane-presence { width: 16px; height: 8px; }
+.activity-timeline-legend .activity-lane-agent { width: 16px; height: 4px; }
+.activity-timeline-legend .activity-lane-turn { width: 1px; height: 10px; }
+.activity-timeline-legend .activity-lane-commit { width: 9px; height: 9px; border-width: 1px; }
+.activity-timeline-legend .activity-lane-mr, .activity-timeline-legend .activity-lane-ready { width: 8px; height: 8px; border-width: 1px; transform: rotate(45deg); }
+
 .activity-lines { display: inline-flex; gap: 6px; font-variant-numeric: tabular-nums; }
 .activity-lines i, .activity-lines em { font-style: normal; font-weight: 600; }
 .activity-lines i { color: var(--ok); }
@@ -113,6 +141,7 @@ a.activity-outcome:focus-visible { outline: 2px solid var(--accent); outline-off
 }
 @media (max-width: 620px) {
   .activity-report-view { padding: 20px; }
+  .activity-timeline { grid-template-columns: 70px minmax(0, 1fr); }
   .activity-day h2 { font-size: 24px; }
   .activity-totals { gap: 14px 24px; }
   .activity-totals .is-outcome + div:not(.is-outcome) { margin-left: 0; padding-left: 0; border-left: 0; }

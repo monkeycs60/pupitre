@@ -181,6 +181,8 @@ export interface ActivityReportTicket { id: string; key: string; title: string; 
 export interface ActivityReportMergeRequest { ref: string; iid: number; project: string; title: string; url: string; state: string; ticketKey: string; createdAt: string }
 export interface ActivityReportTicketReady { ticketId: string; key: string; title: string; externalUrl: string | null; toStatus: string; changedAt: string }
 export interface ActivityReportCommit { sha: string; repositoryPath: string; branch: string; subject: string; productMessage: string | null; linesAdded: number | null; linesRemoved: number | null; committedAt: string; conversationId: string | null }
+export interface ActivitySpan { from: string; to: string }
+export interface ActivityTimeline { presence: ActivitySpan[]; agent: ActivitySpan[]; turns: string[] }
 export interface ActivityReportProject {
   projectId: string; projectName: string; userMs: number; agentMs: number; linesAdded: number; linesRemoved: number; unlinkedCommitCount: number
   topics: Array<{ title: string; detail: string; conversationIds: string[] }>
@@ -190,6 +192,7 @@ export interface ActivityReportProject {
   mergeRequests: ActivityReportMergeRequest[]
   ticketsReady: ActivityReportTicketReady[]
   todosDone: Array<{ id: string; title: string }>
+  timeline?: ActivityTimeline
 }
 export interface ActivityReport {
   day: string; generatedAt: string; summary: string | null
