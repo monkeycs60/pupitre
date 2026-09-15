@@ -1,21 +1,38 @@
 import type { Database } from "bun:sqlite";
-import type { StoredEvent } from "./events";
+import { isProvider, type Provider, type StoredEvent } from "./events";
+import type { DebriefGenerator } from "./debriefs";
 import type { ChangelogStore } from "./stores/changelog";
+import type { ConversationStore } from "./stores/conversations";
+import type { PresetStore } from "./stores/presets";
+import type { ProblemStore } from "./stores/problems";
 import type { ProjectStore } from "./stores/projects";
 import type { TicketStore } from "./stores/tickets";
-import type { TodoStore } from "./stores/todos";
+import type { TodoItem, TodoStore } from "./stores/todos";
+import type { TodoService } from "./todos";
 import { localDay, type TimeTrackingService } from "./time-tracking";
+import { projectCwd } from "./workspace";
 import {
   ActivityStore,
+  type ActivityEvidenceKind,
+  type ActivityMotif,
   type ActivityReport,
   type ActivityReportCommit,
   type ActivityReportConversation,
   type ActivityReportProject,
   type ActivityReportRetro,
+  type ActivityReportSummary,
   type ActivityReportTicket,
   type ActivityReportTodo,
   type ActivityReportTopic,
+  type ActivityState,
 } from "./stores/activity";
+import {
+  applyRetroOperations,
+  knownRefsFor,
+  parseRetroOperations,
+  retroPrompt,
+  type RetroChanges,
+} from "./activity-retro";
 
 /** Bornes de la synthèse bon marché des sujets : jamais un vrai tour. */
 const TOPIC_USER_MESSAGE_MAX = 600;
@@ -42,7 +59,8 @@ export interface JournalConversation extends ActivityReportConversation {
 }
 
 export interface JournalProject extends Omit<ActivityReportProject, "topics" | "topicsSource"> {
-  path: string;
+  /** Répertoire de la passe : celui du projet, le travail n'appartient à aucune conversation. */
+  cwd: string;
   conversations: JournalConversation[];
 }
 
@@ -100,7 +118,7 @@ export class ActivityJournal {
       out.push({
         projectId: project.id,
         projectName: project.name,
-        path: project.path,
+        cwd: projectCwd(project),
         userMs: hours.userMs,
         agentMs: hours.agentMs,
         conversations,
@@ -304,7 +322,7 @@ export function toReportProject(
   project: JournalProject,
   topics: ActivityReportTopic[] | null,
 ): ActivityReportProject {
-  const { path: _path, conversations, ...rest } = project;
+  const { cwd: _cwd, conversations, ...rest } = project;
   return {
     ...rest,
     topics: topics ?? fallbackTopics(project),
@@ -336,3 +354,254 @@ export function assembleReport(
 }
 
 export { ActivityStore };
+
+export interface StrongModelConfig {
+  provider: Provider;
+  model: string;
+  effort: string;
+  speed: "standard" | "fast";
+}
+
+export const DEFAULT_ACTIVITY_MODEL: StrongModelConfig = {
+  provider: "codex", model: "gpt-5.6-luna", effort: "high", speed: "standard",
+};
+
+export interface ActivityRetroPayload {
+  state: ActivityState;
+  cumulative: {
+    firstDay: string | null;
+    activeDays: number;
+    userMs: number;
+    agentMs: number;
+    commits: number;
+    linesAdded: number;
+    linesRemoved: number;
+    projects: number;
+  };
+  trends: Array<{ days: number; userMs: number; agentMs: number; activeDays: number; commits: number; linesAdded: number; linesRemoved: number }>;
+  motifs: ActivityMotif[];
+}
+
+export interface ActivityRunState {
+  running: boolean;
+  runningDay: string | null;
+  state: ActivityState;
+}
+
+export class ActivityReportService {
+  private runningDay: string | null = null;
+
+  constructor(
+    private store: ActivityStore,
+    private journal: ActivityJournal,
+    private projects: ProjectStore,
+    private problems: ProblemStore,
+    private todos: TodoService,
+    private conversations: ConversationStore,
+    private presets: PresetStore,
+    private time: TimeTrackingService,
+    private changelog: ChangelogStore,
+    private cheap: CheapJsonGenerator,
+    private strong: DebriefGenerator,
+    private strongConfig: () => StrongModelConfig = () => DEFAULT_ACTIVITY_MODEL,
+    private now: () => Date = () => new Date(),
+  ) {}
+
+  runState(): ActivityRunState {
+    return { running: this.runningDay !== null, runningDay: this.runningDay, state: this.store.state() };
+  }
+
+  days(): ActivityReportSummary[] {
+    return this.store.days();
+  }
+
+  report(day: string): ActivityReport | null {
+    return this.store.report(day);
+  }
+
+  /**
+   * Passe complète d'un jour : journal déterministe, sujets bon marché, puis
+   * recul projet par projet. Le journal est sauvé même si le recul échoue ;
+   * un jour sans activité ne laisse aucun rapport. Une seule passe à la fois.
+   */
+  async generate(day: string): Promise<ActivityReport | null> {
+    dayWindow(day);
+    if (this.runningDay !== null) throw new ActivityBusyError(`passe déjà en cours pour le ${this.runningDay}`);
+    this.runningDay = day;
+    try {
+      const journal = this.journal.build(day);
+      if (journal.length === 0) {
+        this.store.deleteReport(day);
+        return null;
+      }
+      const projects: ActivityReportProject[] = [];
+      const retro: ActivityReportRetro = { created: [], updated: [], stabilized: [], returned: [], error: null };
+      const errors: string[] = [];
+      for (const project of journal) {
+        let topics: ActivityReportTopic[] | null = null;
+        if (project.conversations.length > 0) {
+          try {
+            topics = parseTopics(await this.cheap(topicsPrompt(project), project.cwd), project);
+          } catch (error) {
+            console.error(`[activité] sujets de ${project.projectName} impossibles`, error);
+          }
+        }
+        projects.push(toReportProject(project, topics));
+        try {
+          const changes = await this.retroPass(project, day);
+          retro.created.push(...changes.created);
+          retro.updated.push(...changes.updated);
+          retro.stabilized.push(...changes.stabilized);
+          retro.returned.push(...changes.returned);
+        } catch (error) {
+          errors.push(`${project.projectName} : ${error instanceof Error ? error.message : "recul impossible"}`);
+        }
+      }
+      retro.error = errors.length > 0 ? errors.join(" · ") : null;
+      const generatedAt = this.now().toISOString();
+      const report = assembleReport(day, generatedAt, projects, retro);
+      this.store.saveReport(report);
+      this.store.markProcessed(day, generatedAt);
+      if (retro.error) this.store.setState({ last_error: retro.error });
+      return report;
+    } catch (error) {
+      this.store.setState({ last_run_at: this.now().toISOString(), last_error: error instanceof Error ? error.message : "passe impossible" });
+      throw error;
+    } finally {
+      this.runningDay = null;
+    }
+  }
+
+  private async retroPass(project: JournalProject, day: string): Promise<RetroChanges> {
+    const motifs = this.store.listMotifs({ projectId: project.projectId });
+    const problems = this.problems.listProject(project.projectId, "open").problems;
+    const config = this.strongConfig();
+    const raw = await this.strong({
+      cwd: project.cwd,
+      provider: config.provider,
+      model: config.model,
+      effort: config.effort,
+      speed: config.speed,
+      prompt: retroPrompt(project, day, motifs, problems),
+    });
+    const operations = parseRetroOperations(raw, knownRefsFor(project, problems), motifs);
+    return applyRetroOperations(this.store, project.projectId, day, operations, this.now().toISOString());
+  }
+
+  /** Bilan cumulé et tendances calculés par SQL à la lecture ; les motifs viennent de l'état entretenu. */
+  retro(): ActivityRetroPayload {
+    const state = this.store.state();
+    const snapshot = this.time.snapshot();
+    const totals = this.changelog.totals();
+    const nowMs = this.now().getTime();
+    const trends = [7, 30].map((days) => {
+      const start = new Date(nowMs);
+      start.setHours(0, 0, 0, 0);
+      start.setDate(start.getDate() - (days - 1));
+      const end = new Date(start);
+      end.setDate(end.getDate() + days);
+      const range = this.time.rangeTotals(start.getTime(), end.getTime());
+      const commits = this.changelog.totals(undefined, start.toISOString(), end.toISOString());
+      return { days, ...range, ...commits };
+    });
+    const firstEntry = this.time.activeDays()[0] ?? null;
+    return {
+      state,
+      cumulative: {
+        firstDay: firstEntry && (state.first_day === null || firstEntry < state.first_day) ? firstEntry : state.first_day,
+        activeDays: snapshot.activeDays,
+        userMs: snapshot.user.ms,
+        agentMs: snapshot.agent.ms,
+        commits: totals.commits,
+        linesAdded: totals.linesAdded,
+        linesRemoved: totals.linesRemoved,
+        projects: snapshot.projectCount,
+      },
+      trends,
+      motifs: this.store.listMotifs().filter((motif) => motif.status !== "dismissed" || motif.returned_at !== null),
+    };
+  }
+
+  motif(id: string): ActivityMotif {
+    const motif = this.store.motif(id);
+    if (!motif) throw new ActivityNotFoundError("motif inconnu");
+    return motif;
+  }
+
+  dismiss(id: string): ActivityMotif {
+    const motif = this.motif(id);
+    const now = this.now().toISOString();
+    return this.store.updateMotif(motif.id, { status: "dismissed", dismissed_at: now, returned_at: null }, now);
+  }
+
+  /**
+   * Crée une tâche en backlog dans le projet du motif, jamais en file : le
+   * constat et les preuves forment le message. La configuration vient de
+   * l'appelant (mémoire de lancement du projet), sinon du preset de tâches
+   * du projet, puis de sa dernière conversation, puis du défaut.
+   */
+  async createTask(id: string, config?: Partial<StrongModelConfig> | null): Promise<{ motif: ActivityMotif; todo: TodoItem }> {
+    const motif = this.motif(id);
+    if (motif.todo_id && this.todos.store.get(motif.todo_id)) {
+      return { motif, todo: this.todos.store.get(motif.todo_id)! };
+    }
+    const launch = this.launchConfig(motif.project_id, config);
+    const tickets = motif.evidence.filter((item) => item.kind === "ticket");
+    const todo = await this.todos.create(motif.project_id, {
+      status: "backlog",
+      title: motif.title,
+      message: motifTaskMessage(motif),
+      ticketId: tickets.length === 1 ? tickets[0]!.ref : null,
+      provider: launch.provider,
+      model: launch.model,
+      effort: launch.effort,
+      speed: launch.speed,
+    });
+    const now = this.now().toISOString();
+    const updated = this.store.updateMotif(motif.id, { status: "handled", todo_id: todo.id }, now);
+    return { motif: updated, todo };
+  }
+
+  private launchConfig(projectId: string, config?: Partial<StrongModelConfig> | null): StrongModelConfig {
+    if (config && isProvider(config.provider) && typeof config.model === "string" && config.model.trim()) {
+      return {
+        provider: config.provider,
+        model: config.model,
+        effort: typeof config.effort === "string" ? config.effort : "medium",
+        speed: config.speed === "fast" ? "fast" : "standard",
+      };
+    }
+    const project = this.projects.get(projectId);
+    const presetId = project?.default_todo_preset_id ?? project?.default_preset_id ?? null;
+    const preset = presetId ? this.presets.get(presetId) : null;
+    if (preset) {
+      return { provider: preset.provider, model: preset.model, effort: preset.effort ?? "medium", speed: preset.speed ?? "standard" };
+    }
+    const latest = this.conversations.listByProject(projectId)[0];
+    if (latest) {
+      return { provider: latest.provider, model: latest.model, effort: latest.effort ?? "medium", speed: latest.speed ?? "standard" };
+    }
+    return DEFAULT_ACTIVITY_MODEL;
+  }
+}
+
+export class ActivityBusyError extends Error {}
+export class ActivityNotFoundError extends Error {}
+
+const EVIDENCE_LABELS: Record<ActivityEvidenceKind, string> = {
+  conversation: "Conversation",
+  commit: "Commit",
+  ticket: "Ticket",
+  problem: "Problème",
+};
+
+export function motifTaskMessage(motif: ActivityMotif): string {
+  return [
+    motif.title,
+    "",
+    motif.statement,
+    "",
+    `Preuves relevées par le rapport d'activité (motif ${motif.id}) :`,
+    ...motif.evidence.map((item) => `- ${EVIDENCE_LABELS[item.kind]} ${item.kind === "commit" ? item.ref.slice(0, 7) : item.ref} · ${item.label} (${item.day})`),
+  ].join("\n");
+}

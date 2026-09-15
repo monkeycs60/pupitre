@@ -400,6 +400,23 @@ export class TimeTrackingService {
     return { day, projects, conversations, turnCount };
   }
 
+  /** Présence, agent et jours actifs sur une fenêtre [from, to) en ms. */
+  rangeTotals(from: number, to: number): { userMs: number; agentMs: number; activeDays: number } {
+    this.syncAgentSegments();
+    const rows = this.db.query(`
+      SELECT project_id, conversation_id, source, started_at, ended_at, day, backfilled
+      FROM time_entries
+      WHERE started_at < ? AND ended_at > ?
+      ORDER BY started_at
+    `).all(new Date(to).toISOString(), new Date(from).toISOString()) as EntryRow[];
+    const window = { start: from, end: to };
+    const user = clip(merge(rows.filter((row) => row.source === "presence").map(toSpan)), window);
+    const agent = clip(merge(rows.filter((row) => row.source === "agent").map(toSpan)), window);
+    const days = new Set<string>();
+    for (const span of [...user, ...agent]) days.add(localDay(new Date(span.start)));
+    return { userMs: total(user), agentMs: total(agent), activeDays: days.size };
+  }
+
   /** Jours locaux ayant au moins une tranche de présence ou un tour. */
   activeDays(): string[] {
     this.syncAgentSegments();
