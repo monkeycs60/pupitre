@@ -204,6 +204,9 @@ if (process.argv.includes("--pupitre-mcp")) {
       return match ? JSON.parse(match[0]) : null;
     },
     (input) => generateWithAdapters(input, quotas),
+    undefined,
+    undefined,
+    async () => { await Promise.all(projects.list().map((project) => changelog.refreshNow(project.id))); },
   );
   const runScheduledActivityReport = () => {
     if (!backgroundJobsEnabled()) return;

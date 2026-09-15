@@ -405,6 +405,7 @@ export class ActivityReportService {
     private strong: DebriefGenerator,
     private strongConfig: () => StrongModelConfig = () => DEFAULT_ACTIVITY_MODEL,
     private now: () => Date = () => new Date(),
+    private prepare: () => Promise<void> = async () => {},
   ) {}
 
   runState(): ActivityRunState {
@@ -429,6 +430,7 @@ export class ActivityReportService {
     if (this.runningDay !== null) throw new ActivityBusyError(`passe déjà en cours pour le ${this.runningDay}`);
     this.runningDay = day;
     try {
+      await this.prepare();
       const journal = this.journal.build(day);
       if (journal.length === 0) {
         this.store.deleteReport(day);
