@@ -46,6 +46,8 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   const args = [
     "-p", "--input-format", "stream-json", "--output-format", "stream-json",
     "--include-partial-messages",
+    // Sans ce flag, les thinking_delta du stream-json arrivent vides.
+    "--thinking-display", "summarized",
     "--verbose", "--model", model, "--permission-mode", permissionMode,
     // Le cwd reste le projet, mais les instructions globales et la mémoire
     // sont aussi des surfaces de travail légitimes pour Pupitre.

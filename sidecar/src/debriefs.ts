@@ -233,8 +233,7 @@ export class DebriefRunner {
       contentMd,
       createdAt,
     };
-    const eventId = this.conversations.appendEvent(conversationId, event);
-    this.broadcast(conversationId, { ...event, id: eventId });
+    this.broadcast(conversationId, this.conversations.appendStoredEvent(conversationId, event));
     return {
       id: summaryId,
       conversation_id: conversationId,

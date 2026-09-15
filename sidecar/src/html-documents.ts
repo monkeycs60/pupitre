@@ -330,8 +330,7 @@ export class HtmlDocumentService {
       const event: AppEvent = kind === "html"
         ? { type: "html-document-ref", ...shared, kind: "html", mimeType: "text/html" }
         : { type: "document-ref", ...shared, kind, mimeType };
-      const eventId = this.conversations.appendEvent(conversationId, event);
-      storedEvent = { ...event, id: eventId };
+      storedEvent = this.conversations.appendStoredEvent(conversationId, event);
     } catch (error) {
       this.db.query("DELETE FROM documents WHERE id = ?").run(id);
       rmSync(documentDirectory, { recursive: true, force: true });

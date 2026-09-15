@@ -437,9 +437,8 @@ export class ConversationStore {
   }
 
   // Retourne l'id de la ligne insérée : le broadcast WS le rediffuse tel quel.
-  appendEvent(conversationId: string, event: AppEvent): number {
+  appendEvent(conversationId: string, event: AppEvent, createdAt = new Date().toISOString()): number {
     const append = this.db.transaction(() => {
-      const now = new Date().toISOString();
       let assistantResponseCounted = false;
       if (event.type === "text-final") {
         const lastMessageEvent = this.db.query(
@@ -455,16 +454,26 @@ export class ConversationStore {
       }
       const result = this.db
         .query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
-        .run(conversationId, JSON.stringify(event), now);
+        .run(conversationId, JSON.stringify(event), createdAt);
       const messageIncrement = messageCountIncrement(event.type, assistantResponseCounted);
       this.db.query(
         `UPDATE conversations
          SET updated_at = ?, message_count = message_count + ?
          WHERE id = ?`,
-      ).run(now, messageIncrement, conversationId);
+      ).run(createdAt, messageIncrement, conversationId);
       return Number(result.lastInsertRowid);
     });
     return append();
+  }
+
+  /**
+   * Événement prêt à diffuser en WS, avec le `createdAt` exact de sa ligne : sans
+   * lui, le bus en horodate une copie quelques millisecondes après l'insertion.
+   */
+  appendStoredEvent(conversationId: string, event: AppEvent): StoredEvent & { createdAt: string } {
+    const payloadCreatedAt = (event as { createdAt?: unknown }).createdAt;
+    const createdAt = typeof payloadCreatedAt === "string" ? payloadCreatedAt : new Date().toISOString();
+    return { ...event, id: this.appendEvent(conversationId, event, createdAt), createdAt };
   }
 
   /**

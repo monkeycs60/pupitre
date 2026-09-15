@@ -228,8 +228,7 @@ export class ConversationRunner {
       // Les events de quota restent des events de conversation (replay intact)
       // ET alimentent le tracker global au passage.
       this.quotas.ingest(event);
-      const id = this.convs.appendEvent(conversationId, event);
-      this.broadcast(conversationId, { ...event, id });
+      this.broadcast(conversationId, this.convs.appendStoredEvent(conversationId, event));
     };
 
     this.active.set(conversationId, {

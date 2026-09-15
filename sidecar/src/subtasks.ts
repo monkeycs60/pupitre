@@ -202,8 +202,7 @@ export class SubtaskRunner {
       model: subtask.model,
       ...(subtask.label ? { label: subtask.label } : {}),
     };
-    const refId = this.convs.appendEvent(input.conversationId, ref);
-    this.broadcast(input.conversationId, { ...ref, id: refId });
+    this.broadcast(input.conversationId, this.convs.appendStoredEvent(input.conversationId, ref));
 
     const controller = new AbortController();
     this.controllers.set(subtask.id, controller);
@@ -292,8 +291,7 @@ export class SubtaskRunner {
       this.quotas.ingest(event);
       // Les events de la subtask vivent dans la table events sous SON id : le
       // replay HTTP et le WS par conversation marchent tels quels.
-      const id = this.convs.appendEvent(subtask.id, event);
-      this.broadcast(subtask.id, { ...event, id });
+      this.broadcast(subtask.id, this.convs.appendStoredEvent(subtask.id, event));
     };
 
     try {

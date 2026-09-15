@@ -203,7 +203,7 @@ export class TestingStore {
     `).run(conversationId, JSON.stringify(event), now);
     this.db.query("UPDATE conversations SET updated_at = ? WHERE id = ?")
       .run(now, conversationId);
-    return { ...event, id: Number(result.lastInsertRowid) };
+    return { ...event, id: Number(result.lastInsertRowid), createdAt: now };
   }
 
   private sweepInterruptedScopes(): void {

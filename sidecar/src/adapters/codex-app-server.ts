@@ -224,6 +224,8 @@ export class CodexAppServerClient {
         ],
         model: opts.model,
         ...(opts.effort ? { effort: opts.effort } : {}),
+        // Sans résumé demandé, l'app-server n'émet aucune notification item/reasoning/*.
+        summary: "auto",
         serviceTier: opts.speed === "fast" ? "fast" : null,
       });
       ctx.turnId = (started?.turn as { id?: string } | undefined)?.id ?? null;
