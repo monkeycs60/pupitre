@@ -394,6 +394,20 @@ test("compacte les suites de text-delta sans déplacer les autres événements",
   expect(convs.compactTextDeltas(c.id)).toBe(0);
 });
 
+test("la compaction supprime les aperçus de réflexion sans couper le texte", () => {
+  const c = convs.create({ projectId, provider: "reasonix", model: "flash", firstMessage: "x" });
+  convs.appendEvent(c.id, { type: "reasoning-delta", text: "je cherche" });
+  const firstDeltaId = convs.appendEvent(c.id, { type: "text-delta", text: "bon" });
+  convs.appendEvent(c.id, { type: "turn-phase", phase: "implementing" });
+  convs.appendEvent(c.id, { type: "reasoning-delta", text: "encore" });
+  convs.appendEvent(c.id, { type: "text-delta", text: "jour" });
+
+  expect(convs.compactTextDeltas(c.id)).toBe(4);
+  expect(convs.listEvents(c.id)).toEqual([
+    { id: firstDeltaId, type: "text-delta", text: "bonjour" },
+  ]);
+});
+
 test("appendEvent retourne l'id inséré, exposé par listEvents en ordre croissant", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
   const firstId = convs.appendEvent(c.id, { type: "text-delta", text: "a" });

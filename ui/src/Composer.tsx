@@ -262,7 +262,7 @@ export function Composer({
   const importPathsRef = useRef<(paths: string[]) => void>(() => {})
   const canSteer = conversationId !== null
     && isRunning
-    && (provider === 'codex' || provider === 'claude')
+    && (provider === 'codex' || provider === 'claude' || provider === 'reasonix')
   const canSubmit =
     (message.trim().length > 0 || attachments.length > 0) &&
     pendingUploads === 0 &&

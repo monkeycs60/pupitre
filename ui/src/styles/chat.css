@@ -1291,8 +1291,32 @@
 .running-dots i:nth-child(3) { animation-delay: 0.32s; }
 
 /* Le libellé change de phase (réfléchit… / écrit…) : il entre en fondu. */
-.running-label {
+.running-label,
+.running-phase {
   animation: msg-in 260ms var(--ease) both;
+}
+
+.running-phase {
+  color: var(--text-muted);
+}
+
+.running-phase::before {
+  margin-right: 7px;
+  content: '·';
+}
+
+.turn-reasoning-preview {
+  display: -webkit-box;
+  max-width: 620px;
+  margin: 0 0 var(--space-1) auto;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.5;
+  text-align: right;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 @keyframes running-dot {

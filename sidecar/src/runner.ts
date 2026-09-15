@@ -209,6 +209,7 @@ export class ConversationRunner {
       finish = resolve;
     });
     const supportsSteer = conv.provider === "claude"
+      || conv.provider === "reasonix"
       || (conv.provider === "codex" && process.env.PUPITRE_CODEX_MODE !== "exec");
     let acceptSteer: ((steer: SteerFn) => void) | null = null;
     const steerReady = supportsSteer
@@ -259,6 +260,7 @@ export class ConversationRunner {
       if (
         firstResponseAt === undefined
         && (event.type === "text-delta"
+          || event.type === "reasoning-delta"
           || event.type === "text-final"
           || event.type === "tool-start")
       ) {

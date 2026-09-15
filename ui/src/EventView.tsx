@@ -103,15 +103,42 @@ function TurnFiles({ files }: { files: Array<{ path: string; added: number; remo
   )
 }
 
-/**
- * Libellé du tour en cours : « réfléchit » ouvre le tour, puis alterne avec
- * « écrit ». Ambiance temporelle, pas une télémétrie — le flux d'événements
- * ne distingue pas les phases, et la rotation suffit à rendre l'attente
- * vivante sans prétendre plus qu'elle ne sait.
- */
-function runningLabel(totalMs: number | null): string {
-  if (totalMs === null || totalMs < 6_000) return 'réfléchit…'
-  return Math.floor(totalMs / 6_000) % 2 === 1 ? 'écrit…' : 'réfléchit…'
+const ACTIVITY_LABELS = {
+  thinking: 'réfléchit…',
+  writing: 'écrit…',
+  tool: 'agit…',
+} as const
+
+const PROVIDER_PHASE_LABELS: Record<string, string> = {
+  starting: 'démarrage',
+  planning: 'planification',
+  implementing: 'implémentation',
+  reading: 'lecture',
+  thinking: 'réflexion',
+  streaming: 'rédaction',
+  executing: 'exécution',
+  tool_running: 'outil',
+  verifying: 'vérification',
+  reviewing: 'relecture',
+  compacting: 'compaction du contexte',
+  summarizing: 'résumé',
+  retrying: 'nouvel essai',
+  waiting_permission: 'attente d’autorisation',
+  waiting_confirmation: 'attente de confirmation',
+}
+
+function providerPhaseLabel(phase: string): string {
+  return PROVIDER_PHASE_LABELS[phase] ?? phase.replaceAll('_', ' ')
+}
+
+const REASONING_PREVIEW_VISIBLE_CHARS = 280
+
+function reasoningPreview(text: string | undefined): string | null {
+  const flat = text?.replace(/\s+/g, ' ').trim()
+  if (!flat) return null
+  return flat.length > REASONING_PREVIEW_VISIBLE_CHARS
+    ? `…${flat.slice(-REASONING_PREVIEW_VISIBLE_CHARS)}`
+    : flat
 }
 
 function TurnFooter({ block, action }: {
@@ -131,10 +158,13 @@ function TurnFooter({ block, action }: {
   const turnError = isError
     ? summarizeTurnError(block.status?.error ?? 'Une erreur est survenue.')
     : null
+  const runningLabel = ACTIVITY_LABELS[block.activity ?? 'thinking']
+  const preview = isRunning && block.activity === 'thinking' ? reasoningPreview(block.reasoning) : null
 
   return (
     <footer className="turn-footer">
       {block.files ? <TurnFiles files={block.files} /> : null}
+      {preview ? <p className="turn-reasoning-preview" title="Aperçu de la réflexion en cours">{preview}</p> : null}
       {isError ? (
         <div className="turn-error" role="alert">
           <div>
@@ -153,7 +183,10 @@ function TurnFooter({ block, action }: {
         {isRunning ? (
           <span className="running-indicator" role="status">
             <span className="running-dots" aria-hidden="true"><i /><i /><i /></span>
-            <span className="running-label" key={runningLabel(totalMs)}>{runningLabel(totalMs)}</span>
+            <span className="running-label" key={runningLabel}>{runningLabel}</span>
+            {block.phase ? (
+              <span className="running-phase" key={block.phase}>{providerPhaseLabel(block.phase)}</span>
+            ) : null}
           </span>
         ) : null}
         {isDone ? (

@@ -24,6 +24,8 @@ function eventLabel(event: StoredEvent | undefined): string {
     case "user-message": return "demande envoyée";
     case "text-delta":
     case "text-final": return "réponse du modèle";
+    case "reasoning-delta": return "réflexion";
+    case "turn-phase": return `phase · ${event.phase}`;
     case "tool-start": return `outil · ${event.toolName}`;
     case "tool-end": return "outil terminé";
     case "turn-timing": return event.phase === "first-response" ? "premier retour" : event.phase;

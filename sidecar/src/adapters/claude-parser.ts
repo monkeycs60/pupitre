@@ -22,6 +22,12 @@ export function parseClaudeLine(line: string, provider: Provider = "claude"): Ap
       const ev = obj.event as any;
       if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta") {
         out.push({ type: "text-delta", text: ev.delta.text });
+      } else if (
+        ev?.type === "content_block_delta"
+        && ev.delta?.type === "thinking_delta"
+        && typeof ev.delta.thinking === "string"
+      ) {
+        out.push({ type: "reasoning-delta", text: ev.delta.thinking });
       }
       break;
     }

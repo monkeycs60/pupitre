@@ -202,6 +202,8 @@ function shellApplyPatchEdits(
   return edits
 }
 
+const REASONING_PREVIEW_CHARS = 600
+
 /** Regroupe les événements bruts d'une conversation en blocs affichables. */
 export function groupEvents(
   events: ReadonlyArray<AppEvent & { id?: number }>,
@@ -246,7 +248,18 @@ export function groupEvents(
           ...(event.steering ? { steering: true } : {}),
         })
         break
+      case 'reasoning-delta': {
+        const footer = ensureTurnFooter()
+        const previous = footer.activity === 'thinking' ? footer.reasoning ?? '' : ''
+        footer.reasoning = (previous + event.text).slice(-REASONING_PREVIEW_CHARS)
+        footer.activity = 'thinking'
+        break
+      }
+      case 'turn-phase':
+        ensureTurnFooter().phase = event.phase
+        break
       case 'text-delta':
+        ensureTurnFooter().activity = 'writing'
         if (assistant === null) {
           assistant = {
             kind: 'assistant',
@@ -276,6 +289,7 @@ export function groupEvents(
         break
       case 'tool-start': {
         assistant = null
+        ensureTurnFooter().activity = 'tool'
         const tool: Extract<EventBlock, { kind: 'tool' }> = {
           kind: 'tool',
           id: `tool-${eventKey}-${event.toolId}`,

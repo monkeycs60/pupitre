@@ -963,6 +963,8 @@ export type AppEvent =
   | { type: 'user-message'; text: string; images: string[]; attachments?: Attachment[]; steering?: boolean }
   | { type: 'text-delta'; text: string }
   | { type: 'text-final'; text: string }
+  | { type: 'reasoning-delta'; text: string }
+  | { type: 'turn-phase'; phase: string }
   | { type: 'tool-start'; toolId: string; toolName: string; input: unknown }
   | { type: 'tool-end'; toolId: string; output: string; images: string[] }
   | {

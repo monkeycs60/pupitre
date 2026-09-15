@@ -12,6 +12,10 @@ export type AppEvent =
     }
   | { type: "text-delta"; text: string }
   | { type: "text-final"; text: string }
+  /** Aperçu de la réflexion du modèle, supprimé du stockage à la fin du tour. */
+  | { type: "reasoning-delta"; text: string }
+  /** Phase brute annoncée par le provider (ReasonX : starting, implementing…). */
+  | { type: "turn-phase"; phase: string }
   | { type: "tool-start"; toolId: string; toolName: string; input: unknown }
   | { type: "tool-end"; toolId: string; output: string; images: string[] }
   | {

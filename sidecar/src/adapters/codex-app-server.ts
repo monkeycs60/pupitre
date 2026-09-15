@@ -625,6 +625,17 @@ export class CodexAppServerClient {
         }
         return;
       }
+      case "item/reasoning/summaryTextDelta":
+      case "item/reasoning/textDelta": {
+        if (typeof params.delta === "string" && params.delta) {
+          ctx.emit({ type: "reasoning-delta", text: params.delta });
+        }
+        return;
+      }
+      case "item/reasoning/summaryPartAdded": {
+        ctx.emit({ type: "reasoning-delta", text: "\n\n" });
+        return;
+      }
       case "item/started":
       case "item/completed": {
         this.handleItem(ctx, method === "item/started", params.item);
