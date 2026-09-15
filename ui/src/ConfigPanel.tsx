@@ -11,6 +11,7 @@ import type {
   Project,
   Provider,
   QuotaSnapshot,
+  GitBranchOption,
 } from './types'
 
 /** Les décisions de lancement d'une conversation, sans son premier message. */
@@ -23,6 +24,7 @@ export interface ConversationConfig {
   permissionMode: PresetPermissionMode | null
   /** Branche sur laquelle isoler la conversation ; vide = dépôt principal. */
   branch?: string | null
+  repositoryPath?: string | null
   ticketKey?: string | null
 }
 
@@ -49,6 +51,8 @@ interface ConfigPanelProps {
    */
   memoryKey?: string | null
   placement?: 'top' | 'bottom'
+  /** Les tâches restent ancrées au dépôt racine ; les conversations savent choisir un dépôt applicatif. */
+  includeNestedRepositories?: boolean
 }
 
 function errorMessage(error: unknown): string {
@@ -70,6 +74,7 @@ function keepBranch(next: ConversationConfig, current: ConversationConfig): Conv
   return {
     ...next,
     branch: current.branch ?? null,
+    repositoryPath: current.repositoryPath ?? null,
     ticketKey: current.ticketKey ?? null,
   }
 }
@@ -91,8 +96,9 @@ export function ConfigPanel({
   showConversationSettings = true,
   memoryKey = null,
   placement = 'top',
+  includeNestedRepositories = true,
 }: ConfigPanelProps) {
-  const [branches, setBranches] = useState<string[]>([])
+  const [branches, setBranches] = useState<GitBranchOption[]>([])
   const [currentBranch, setCurrentBranch] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const configRef = useRef(config)
@@ -105,12 +111,19 @@ export function ConfigPanel({
     void getProjectGit(project.id, null, controller.signal)
       .then((snapshot) => {
         if (controller.signal.aborted) return
-        setBranches(branchSuggestions(snapshot.branches))
+        const options = includeNestedRepositories
+          ? snapshot.branchOptions ?? []
+          : snapshot.branches.map((branch) => ({
+              ...branch,
+              repositoryPath: project.path,
+              repositoryLabel: project.name,
+            }))
+        setBranches(branchSuggestions(options))
         setCurrentBranch(snapshot.currentBranch)
       })
       .catch(() => {})
     return () => controller.abort()
-  }, [project.id])
+  }, [includeNestedRepositories, project.id, project.name, project.path])
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -175,7 +188,7 @@ export function ConfigPanel({
           currentBranch={currentBranch}
           disabled={isLoading}
           placement={placement}
-          onChange={(branch) => onConfigChange({ ...config, branch })}
+          onChange={(branch, repositoryPath) => onConfigChange({ ...config, branch, repositoryPath })}
         />
         {config.ticketKey ? <small className="config-ticket">Ticket {config.ticketKey}</small> : null}
       </div>

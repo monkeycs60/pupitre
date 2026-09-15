@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { dataDir } from "./db";
 import { discoverRepositories, listWorktreePaths, readHead, readRemoteRefs, repositoryOfWorktree, ticketKeyOf } from "./git-repositories";
 import type { ProjectStore } from "./stores/projects";
@@ -43,6 +43,11 @@ export interface GitBranch {
   remote: boolean;
 }
 
+export interface GitBranchOption extends GitBranch {
+  repositoryPath: string;
+  repositoryLabel: string;
+}
+
 export interface GitWorktree {
   path: string;
   head: string | null;
@@ -81,6 +86,8 @@ export interface GitSnapshot {
   branchCommitShas: string[];
   branchBase: string | null;
   branches: GitBranch[];
+  /** Branches de tous les dépôts du projet, destinées au sélecteur de worktree. */
+  branchOptions: GitBranchOption[];
   worktrees: GitWorktree[];
   dirtyFiles: GitDirtyFile[];
   filePaths: string[];
@@ -171,19 +178,28 @@ export class GitProjectService {
     if (existing && existsSync(existing.path)) return existing;
     if (existing) this.runGit(cwd, ["worktree", "prune"]);
 
-    const directory = join(this.worktreeRoot, projectId, branch.replaceAll("/", "-"));
+    const repositoryDirectory = input.repositoryPath
+      ? relative(this.projectPath(projectId), cwd).replaceAll(/[\\/]/g, "-")
+      : null;
+    const directory = join(
+      this.worktreeRoot,
+      projectId,
+      ...(repositoryDirectory ? [repositoryDirectory] : []),
+      branch.replaceAll("/", "-"),
+    );
     if (!resolve(directory).startsWith(resolve(this.worktreeRoot))) {
       throw new GitProjectError(`nom de branche invalide : ${input.branch}`);
     }
-    mkdirSync(join(this.worktreeRoot, projectId), { recursive: true });
+    mkdirSync(dirname(directory), { recursive: true });
     // Un dossier résiduel d'un worktree que git ne connaît plus ferait échouer
     // `worktree add` sans qu'aucune conversation ne s'y rattache.
     if (existsSync(directory)) rmSync(directory, { recursive: true, force: true });
 
     const known = this.runGit(cwd, ["branch", "--list", branch]).trim() !== "";
+    const remote = this.runGit(cwd, ["branch", "--remotes", "--list", `origin/${branch}`]).trim() !== "";
     this.runGit(cwd, known
       ? ["worktree", "add", directory, branch]
-      : ["worktree", "add", "-b", branch, directory, input.startPoint ?? "HEAD"]);
+      : ["worktree", "add", "-b", branch, directory, input.startPoint ?? (remote ? `origin/${branch}` : "HEAD")]);
 
     const created = this.worktrees(cwd).find((item) => item.path === directory);
     if (!created) throw new GitProjectError("worktree créé mais introuvable");
@@ -277,6 +293,7 @@ export class GitProjectService {
         branchCommitShas: [],
         branchBase: null,
         branches: [],
+        branchOptions: [],
         worktrees: [],
         dirtyFiles: [],
         filePaths: [],
@@ -291,6 +308,15 @@ export class GitProjectService {
       ?.trim() || null;
     const links = this.commitLinks(projectId);
     const branches = this.branches(cwd);
+    const projectPath = this.projectPath(projectId);
+    const branchOptions = discoverRepositories(projectPath).flatMap((repositoryPath) => {
+      const repositoryLabel = relative(projectPath, repositoryPath) || basename(projectPath);
+      return this.branches(repositoryPath).map((branch) => ({
+        ...branch,
+        repositoryPath,
+        repositoryLabel,
+      }));
+    });
     let commits = head ? this.parseCommits(this.runGit(cwd, [
       "log", "-z", "--all", "--topo-order",
       `--max-count=${MAX_COMMITS}`,
@@ -333,6 +359,7 @@ export class GitProjectService {
       branchCommitShas,
       branchBase: baseBranch?.name ?? null,
       branches,
+      branchOptions,
       worktrees: this.worktrees(cwd),
       dirtyFiles,
       filePaths,

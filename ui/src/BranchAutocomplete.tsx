@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { BranchIcon } from './BranchIcon'
+import type { GitBranchOption } from './types'
 
 /** Le composer touche le bas de la fenêtre : la liste y remonte au lieu d'être coupée. */
 function opensUpward(field: HTMLElement | null, placement: 'top' | 'bottom'): boolean {
@@ -11,25 +12,26 @@ function opensUpward(field: HTMLElement | null, placement: 'top' | 'bottom'): bo
 
 export function BranchAutocomplete({ value, branches, currentBranch, disabled, placement = 'top', onChange }: {
   value: string
-  branches: string[]
+  branches: GitBranchOption[]
   currentBranch?: string | null
   disabled: boolean
   placement?: 'top' | 'bottom'
-  onChange: (value: string) => void
+  onChange: (value: string, repositoryPath: string | null) => void
 }) {
   const id = useId()
   const fieldRef = useRef<HTMLDivElement | null>(null)
   const [open, setOpen] = useState(false)
   const [upward, setUpward] = useState(false)
   const [active, setActive] = useState(-1)
-  const matches = branches.filter((branch) => branch.toLowerCase().includes(value.toLowerCase()))
+  const matches = branches.filter((branch) =>
+    `${branch.name} ${branch.repositoryLabel}`.toLowerCase().includes(value.toLowerCase()))
 
   useLayoutEffect(() => {
     if (open) setUpward(opensUpward(fieldRef.current, placement))
   }, [open, placement])
 
-  function choose(branch: string) {
-    onChange(branch)
+  function choose(branch: GitBranchOption) {
+    onChange(branch.name, branch.repositoryPath)
     setOpen(false)
     setActive(-1)
   }
@@ -40,7 +42,7 @@ export function BranchAutocomplete({ value, branches, currentBranch, disabled, p
       aria-autocomplete="list" aria-activedescendant={open && active >= 0 ? `${id}-${active}` : undefined}
       value={value} placeholder={currentBranch ?? 'branche du projet'} disabled={disabled}
       onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}
-      onChange={(event) => { onChange(event.target.value); setOpen(true); setActive(-1) }}
+      onChange={(event) => { onChange(event.target.value, null); setOpen(true); setActive(-1) }}
       onKeyDown={(event) => {
         if (event.key === 'Escape') { setOpen(false); return }
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -55,10 +57,12 @@ export function BranchAutocomplete({ value, branches, currentBranch, disabled, p
         }
       }} />
     {value !== '' ? <button type="button" className="branch-field-clear" aria-label="Revenir au dépôt principal"
-      disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => onChange('')}>×</button> : null}
+      disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => onChange('', null)}>×</button> : null}
     {open ? <ul className={`branch-suggestions${upward ? ' is-up' : ''}`} id={id} role="listbox" aria-label="Branches existantes">
       {matches.map((branch, index) => <li role="option" id={`${id}-${index}`} aria-selected={active === index}
-        key={branch} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(branch)}>{branch}</li>)}
+        key={`${branch.repositoryPath}:${branch.name}`} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(branch)}>
+        <span>{branch.name}</span><span className="branch-suggestion-repository">{branch.repositoryLabel}</span>
+      </li>)}
       {!matches.length ? <li role="presentation">Aucune branche correspondante</li> : null}
     </ul> : null}
   </div>

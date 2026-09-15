@@ -11,6 +11,7 @@ interface ConversationDraft {
   permissionMode?: PresetPermissionMode | null
   /** Branche saisie par l'utilisateur ; vide = travailler dans le dépôt. */
   branch?: string | null
+  repositoryPath?: string | null
   ticketId?: string | null
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
@@ -55,6 +56,7 @@ export function buildCreateConversationInput(
     speed: draft.provider === 'codex' ? draft.speed : undefined,
     permissionMode: draft.permissionMode ?? null,
     branch: draft.branch?.trim() || null,
+    ...(draft.repositoryPath ? { repositoryPath: draft.repositoryPath } : {}),
     ticketId: draft.ticketId ?? null,
     ...(draft.originType ? {
       originType: draft.originType,

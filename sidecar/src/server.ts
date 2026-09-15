@@ -2727,6 +2727,7 @@ export function createServer(deps: ServerDeps) {
           // Une conversation peut naître sur sa propre branche : Pupitre lui
           // crée alors un worktree, où tous ses agents travailleront (ADR 0001).
           const branch = optionalTrimmed(body, "branch");
+          const repositoryPath = optionalTrimmed(body, "repositoryPath");
           const ticketId = optionalTrimmed(body, "ticketId");
           let originType = optionalTrimmed(body, "originType");
           let originKey = optionalTrimmed(body, "originKey");
@@ -2842,7 +2843,10 @@ export function createServer(deps: ServerDeps) {
           let sentryStartPoint: string | null = null;
           if (effectiveBranch !== null) {
             try {
-              worktreePath = deps.git.createWorktree(projectId, { branch: effectiveBranch }).path;
+              worktreePath = deps.git.createWorktree(projectId, {
+                branch: effectiveBranch,
+                repositoryPath: repositoryPath ?? undefined,
+              }).path;
             } catch (error) {
               throw new HttpError(
                 400,

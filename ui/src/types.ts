@@ -682,6 +682,11 @@ export interface GitBranch {
   remote: boolean
 }
 
+export interface GitBranchOption extends GitBranch {
+  repositoryPath: string
+  repositoryLabel: string
+}
+
 export interface GitWorktree {
   path: string
   head: string | null
@@ -719,6 +724,7 @@ export interface GitSnapshot {
   branchCommitShas?: string[]
   branchBase?: string | null
   branches: GitBranch[]
+  branchOptions?: GitBranchOption[]
   worktrees: GitWorktree[]
   dirtyFiles?: GitDirtyFile[]
   filePaths?: string[]

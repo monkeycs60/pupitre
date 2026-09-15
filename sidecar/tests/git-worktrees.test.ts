@@ -105,6 +105,50 @@ test("crée le worktree Scout depuis le dépôt applicatif demandé", () => {
     .toBe(inHapigator("rev-parse", "develop"));
 });
 
+test("liste les branches des dépôts applicatifs avec leur provenance", () => {
+  const hapigator = join(repo, "apps", "hapigator");
+  mkdirSync(hapigator, { recursive: true });
+  const inHapigator = (...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: hapigator });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+    return result.stdout.toString().trim();
+  };
+  inHapigator("init", "-q", "-b", "develop");
+  inHapigator("config", "user.email", "git@example.test");
+  inHapigator("config", "user.name", "Git Fixture");
+  writeFileSync(join(hapigator, "package.json"), "{}\n");
+  inHapigator("add", "package.json");
+  inHapigator("commit", "-qm", "hapigator");
+  inHapigator("branch", "feature/TECH-25008");
+
+  const option = git.snapshot(projectId).branchOptions.find((item) => item.name === "feature/TECH-25008");
+
+  expect(option).toMatchObject({ repositoryPath: hapigator, repositoryLabel: "apps/hapigator" });
+});
+
+test("crée le worktree dans le dépôt qui porte la branche choisie", () => {
+  const hapigator = join(repo, "apps", "hapigator");
+  mkdirSync(hapigator, { recursive: true });
+  const inHapigator = (...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: hapigator });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+    return result.stdout.toString().trim();
+  };
+  inHapigator("init", "-q", "-b", "develop");
+  inHapigator("config", "user.email", "git@example.test");
+  inHapigator("config", "user.name", "Git Fixture");
+  writeFileSync(join(hapigator, "package.json"), "{}\n");
+  inHapigator("add", "package.json");
+  inHapigator("commit", "-qm", "hapigator");
+  inHapigator("branch", "feature/TECH-25008");
+
+  const created = git.createWorktree(projectId, { branch: "feature/TECH-25008", repositoryPath: hapigator });
+
+  expect(created.path).toContain("apps-hapigator");
+  expect(Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], { cwd: created.path }).stdout.toString().trim()).toBe(created.path);
+  expect(inHapigator("worktree", "list", "--porcelain")).toContain(created.path);
+});
+
 test("crée une branche de correction explicitement depuis develop", () => {
   run("branch", "develop");
   writeFileSync(join(repo, "README.md"), "branche courante\n");

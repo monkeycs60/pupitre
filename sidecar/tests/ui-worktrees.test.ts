@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import { branchSuggestions, cleanupInvitation, disposableWorktrees, isRemovable, worktreeLabel, worktreeRows } from "../../ui/src/worktrees";
-import type { GitWorktree } from "../../ui/src/types";
+import type { GitBranchOption, GitWorktree } from "../../ui/src/types";
+
+function branch(name: string, fullName: string, remote = false, repositoryPath = "/depot"): GitBranchOption {
+  return { name, fullName, sha: name, current: name === "master", remote, repositoryPath, repositoryLabel: repositoryPath === "/depot" ? "depot" : "apps/hapigator" };
+}
 
 function worktree(overrides: Partial<GitWorktree> = {}): GitWorktree {
   return {
@@ -75,25 +79,34 @@ test("aucune invite sans worktree fusionné", () => {
 
 test("la complétion propose les branches locales, puis les distantes inédites", () => {
   const branches = [
-    { name: "master", fullName: "refs/heads/master", sha: "a", current: true, remote: false },
-    { name: "ticket-42", fullName: "refs/heads/ticket-42", sha: "b", current: false, remote: false },
-    { name: "origin/master", fullName: "refs/remotes/origin/master", sha: "a", current: false, remote: true },
-    { name: "origin/ticket-99", fullName: "refs/remotes/origin/ticket-99", sha: "c", current: false, remote: true },
-    { name: "origin/HEAD", fullName: "refs/remotes/origin/HEAD", sha: "a", current: false, remote: true },
+    branch("master", "refs/heads/master"),
+    branch("ticket-42", "refs/heads/ticket-42"),
+    branch("origin/master", "refs/remotes/origin/master", true),
+    branch("origin/ticket-99", "refs/remotes/origin/ticket-99", true),
+    branch("origin/HEAD", "refs/remotes/origin/HEAD", true),
   ];
 
   // master existe en local : sa jumelle distante n'est pas reproposée.
-  expect(branchSuggestions(branches)).toEqual(["master", "ticket-42", "ticket-99"]);
+  expect(branchSuggestions(branches).map((item) => item.name)).toEqual(["master", "ticket-42", "ticket-99"]);
+});
+
+test("conserve une même branche quand elle appartient à deux dépôts", () => {
+  const suggestions = branchSuggestions([
+    branch("issue/TECH-1", "refs/heads/issue/TECH-1"),
+    branch("issue/TECH-1", "refs/heads/issue/TECH-1", false, "/depot/apps/hapigator"),
+  ]);
+
+  expect(suggestions.map((item) => item.repositoryLabel)).toEqual(["depot", "apps/hapigator"]);
 });
 
 test("l'alias HEAD d'un dépôt distant n'est pas proposé comme branche", () => {
   // Forme réelle observée dans l'app : refs/remotes/origin/HEAD est exposé
   // sous le nom « origin », qu'un filtre sur « HEAD » laisse passer.
   const branches = [
-    { name: "master", fullName: "refs/heads/master", sha: "a", current: true, remote: false },
-    { name: "origin", fullName: "refs/remotes/origin/HEAD", sha: "a", current: false, remote: true },
-    { name: "origin/codex/ui", fullName: "refs/remotes/origin/codex/ui", sha: "b", current: false, remote: true },
+    branch("master", "refs/heads/master"),
+    branch("origin", "refs/remotes/origin/HEAD", true),
+    branch("origin/codex/ui", "refs/remotes/origin/codex/ui", true),
   ];
 
-  expect(branchSuggestions(branches)).toEqual(["master", "codex/ui"]);
+  expect(branchSuggestions(branches).map((item) => item.name)).toEqual(["master", "codex/ui"]);
 });

@@ -86,6 +86,8 @@ export interface CreateConversationInput {
   permissionMode?: PresetPermissionMode | null
   /** Fait naître la conversation sur cette branche, dans un worktree dédié. */
   branch?: string | null
+  /** Dépôt du projet qui porte la branche ; absent = dépôt racine. */
+  repositoryPath?: string | null
   ticketId?: string | null
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null

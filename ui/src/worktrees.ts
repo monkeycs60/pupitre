@@ -1,4 +1,4 @@
-import type { GitBranch, GitWorktree } from './types'
+import type { GitBranchOption, GitWorktree } from './types'
 
 export interface WorktreeRow {
   worktree: GitWorktree
@@ -70,9 +70,9 @@ export function cleanupInvitation(rows: WorktreeRow[]): string | null {
  * Sans cette liste, une faute de frappe crée une branche jumelle au lieu de
  * rejoindre la bonne.
  */
-export function branchSuggestions(branches: GitBranch[]): string[] {
-  const local = branches.filter((branch) => !branch.remote).map((branch) => branch.name)
-  const seen = new Set(local)
+export function branchSuggestions(branches: GitBranchOption[]): GitBranchOption[] {
+  const local = branches.filter((branch) => !branch.remote)
+  const seen = new Set(local.map((branch) => `${branch.repositoryPath}\0${branch.name}`))
   const remote = branches
     // `refs/remotes/origin/HEAD` est un alias, pas une branche — et il est
     // exposé sous le nom « origin », que filtrer sur « HEAD » ne rattrape pas.
@@ -80,8 +80,13 @@ export function branchSuggestions(branches: GitBranch[]): string[] {
     .flatMap((branch) => {
       const separator = branch.name.indexOf('/')
       // Un nom sans « / » ne désigne pas une branche distante suivable.
-      return separator === -1 ? [] : [branch.name.slice(separator + 1)]
+      return separator === -1 ? [] : [{ ...branch, name: branch.name.slice(separator + 1) }]
     })
-    .filter((name) => name !== '' && !seen.has(name))
-  return [...local, ...new Set(remote)]
+    .filter((branch) => {
+      const key = `${branch.repositoryPath}\0${branch.name}`
+      if (branch.name === '' || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  return [...local, ...remote]
 }

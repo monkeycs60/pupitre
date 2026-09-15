@@ -27,7 +27,7 @@ test("le brouillon de conversation transmet explicitement le choix orchestrateur
   });
 });
 
-test("le brouillon transmet la branche choisie, et rien quand il n'y en a pas", () => {
+test("le brouillon transmet la branche et son dépôt, et rien quand il n'y en a pas", () => {
   const base = {
     projectId: "project-1",
     provider: "claude" as const,
@@ -39,11 +39,15 @@ test("le brouillon transmet la branche choisie, et rien quand il n'y en a pas", 
     attachments: [],
   };
 
-  expect(buildCreateConversationInput({ ...base, branch: "ticket-42" }).branch)
-    .toBe("ticket-42");
+  expect(buildCreateConversationInput({
+    ...base,
+    branch: "ticket-42",
+    repositoryPath: "/project/apps/api",
+  })).toMatchObject({ branch: "ticket-42", repositoryPath: "/project/apps/api" });
   // Un champ vide ou absent vaut « travaille dans le dépôt principal ».
   expect(buildCreateConversationInput({ ...base, branch: "  " }).branch).toBeNull();
   expect(buildCreateConversationInput(base).branch).toBeNull();
+  expect(buildCreateConversationInput(base)).not.toHaveProperty("repositoryPath");
 });
 
 test("le brouillon transmet ticketId et nettoie la branche", () => {

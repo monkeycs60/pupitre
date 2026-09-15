@@ -728,6 +728,7 @@ export function Composer({
                 config={config}
                 memoryKey={project.id}
                 applyProjectDefault={initialConfig?.provider === undefined}
+                includeNestedRepositories={!isTodoMode}
                 onConfigChange={setConfig}
                 onError={setToast}
                 onReady={setConfigReady}
