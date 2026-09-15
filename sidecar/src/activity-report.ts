@@ -46,7 +46,7 @@ const TOPIC_DETAIL_MAX = 280;
 const TOPICS_MAX = 10;
 const SUMMARY_MAX = 600;
 /** Semaines complètes affichées par le calendrier, semaine en cours comprise. */
-export const CALENDAR_WEEKS = 16;
+export const CALENDAR_WEEKS = 53;
 
 /** Statuts ClickUp qui valent « prêt pour la production », comparés en minuscules. */
 export const READY_STATUS_PATTERN = /ready\s*(for|to)\s*prod/i;
@@ -245,6 +245,11 @@ export class ActivityJournal {
    * création n'ont pas de `createdAt`, donc restent absentes.
    */
   private mergeRequestsOfDay(projectId: string, window: DayWindow): ActivityReportMergeRequest[] {
+    return this.mergeRequestsBetween(projectId, window.startMs, window.endMs);
+  }
+
+  /** MR ouvertes par moi dont la création tombe dans [startMs, endMs), triées par date. */
+  mergeRequestsBetween(projectId: string, startMs: number, endMs: number): ActivityReportMergeRequest[] {
     const me = this.integrationSnapshot(projectId, "gitlab")?.username;
     if (typeof me !== "string" || !me) return [];
     const rows = this.db.query(`
@@ -260,7 +265,7 @@ export class ActivityJournal {
       try { payload = JSON.parse(row.payload_json) as Record<string, unknown>; } catch { continue; }
       if (payload.author !== me || typeof payload.createdAt !== "string") continue;
       const createdMs = Date.parse(payload.createdAt);
-      if (!(createdMs >= window.startMs && createdMs < window.endMs)) continue;
+      if (!(createdMs >= startMs && createdMs < endMs)) continue;
       seen.add(row.ref);
       out.push({
         ref: row.ref,
@@ -585,8 +590,8 @@ export class ActivityReportService {
 
   /**
    * Calendrier de chaleur : un jour par case du lundi d'il y a
-   * CALENDAR_WEEKS − 1 semaines jusqu'à aujourd'hui, commits et lignes par
-   * projet depuis le changelog, présence depuis les entrées de temps.
+   * CALENDAR_WEEKS − 1 semaines jusqu'à aujourd'hui, commits, lignes et MR
+   * ouvertes par projet, présence depuis les entrées de temps.
    */
   calendar(): { from: string; to: string; days: ActivityCalendarDay[] } {
     const today = new Date(this.now());
@@ -599,18 +604,40 @@ export class ActivityReportService {
     const commits = this.changelog.dailyTotals(from, to);
     const presence = this.time.dailyPresence(from, to);
     const reports = new Set(this.store.days().map((item) => item.day));
+    const endMs = today.getTime() + 86_400_000;
+    const mergeRequests = new Map<string, number>();
+    for (const projectId of names.keys()) {
+      for (const mr of this.journal.mergeRequestsBetween(projectId, start.getTime(), endMs)) {
+        const key = `${localDay(new Date(mr.createdAt))}:${projectId}`;
+        mergeRequests.set(key, (mergeRequests.get(key) ?? 0) + 1);
+      }
+    }
     const days: ActivityCalendarDay[] = [];
     for (const cursor = new Date(start); cursor <= today; cursor.setDate(cursor.getDate() + 1)) {
       const day = localDay(cursor);
       const rows = commits.filter((row) => row.day === day);
+      const projectIds = new Set(rows.map((row) => row.projectId));
+      for (const key of mergeRequests.keys()) if (key.startsWith(`${day}:`)) projectIds.add(key.slice(day.length + 1));
+      const projects = [...projectIds].map((projectId) => {
+        const row = rows.find((item) => item.projectId === projectId);
+        return {
+          projectId,
+          projectName: names.get(projectId) ?? projectId,
+          commits: row?.commits ?? 0,
+          linesAdded: row?.linesAdded ?? 0,
+          linesRemoved: row?.linesRemoved ?? 0,
+          mergeRequests: mergeRequests.get(`${day}:${projectId}`) ?? 0,
+        };
+      });
       days.push({
         day,
-        commits: rows.reduce((sum, row) => sum + row.commits, 0),
-        linesAdded: rows.reduce((sum, row) => sum + row.linesAdded, 0),
-        linesRemoved: rows.reduce((sum, row) => sum + row.linesRemoved, 0),
+        commits: projects.reduce((sum, row) => sum + row.commits, 0),
+        linesAdded: projects.reduce((sum, row) => sum + row.linesAdded, 0),
+        linesRemoved: projects.reduce((sum, row) => sum + row.linesRemoved, 0),
+        mergeRequests: projects.reduce((sum, row) => sum + row.mergeRequests, 0),
         userMs: presence[day] ?? 0,
         hasReport: reports.has(day),
-        projects: rows.map((row) => ({ projectId: row.projectId, projectName: names.get(row.projectId) ?? row.projectId, commits: row.commits, linesAdded: row.linesAdded, linesRemoved: row.linesRemoved })),
+        projects,
       });
     }
     return { from, to, days };

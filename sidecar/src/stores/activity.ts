@@ -100,9 +100,10 @@ export interface ActivityCalendarDay {
   commits: number;
   linesAdded: number;
   linesRemoved: number;
+  mergeRequests: number;
   userMs: number;
   hasReport: boolean;
-  projects: Array<{ projectId: string; projectName: string; commits: number; linesAdded: number; linesRemoved: number }>;
+  projects: Array<{ projectId: string; projectName: string; commits: number; linesAdded: number; linesRemoved: number; mergeRequests: number }>;
 }
 
 export interface ActivityReportTodo {

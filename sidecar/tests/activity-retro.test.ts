@@ -29,6 +29,7 @@ import { ConversationStore } from "../src/stores/conversations";
 import { PresetStore } from "../src/stores/presets";
 import { ProblemStore } from "../src/stores/problems";
 import { ProjectStore } from "../src/stores/projects";
+import { IntegrationStore } from "../src/stores/integrations";
 import { TicketStore } from "../src/stores/tickets";
 import { TodoStore } from "../src/stores/todos";
 import { TimeTrackingService } from "../src/time-tracking";
@@ -331,9 +332,14 @@ test("le bilan cumulé et les tendances viennent du suivi de temps et du changel
   db.close();
 });
 
-test("le calendrier couvre seize semaines jusqu'à aujourd'hui, du lundi, avec commits, présence et rapport par jour", () => {
-  const { db, project, changelog, service, seedDay, clock } = setup();
+test("le calendrier couvre un an jusqu'à aujourd'hui, du lundi, avec commits, MR, présence et rapport par jour", () => {
+  const { db, project, changelog, service, seedDay, clock, tickets } = setup();
   seedDay();
+  const integrations = new IntegrationStore(db);
+  const gitlab = integrations.upsert(project.id, "gitlab", { config: { host: "https://git", projects: [] } });
+  integrations.markOk(gitlab.id, { username: "clement.serizay" });
+  const ticket = tickets.upsert(project.id, { key: "TECH-1", source: "git", title: "MR", status: "", externalUrl: null });
+  tickets.upsertRef(ticket.id, { kind: "mr", ref: "reactor!1", payload: { iid: 1, project: "reactor", title: "MR", url: "https://git/1", state: "opened", author: "clement.serizay", createdAt: `${DAY}T09:00:00.000+02:00` } });
   changelog.import(project.id, [
     { repositoryPath: ".", sha: "9".repeat(40), branch: "master", subject: "cal", committedAt: `${DAY}T10:00:00+02:00` },
   ], `${DAY}T12:00:00.000Z`);
@@ -342,10 +348,10 @@ test("le calendrier couvre seize semaines jusqu'à aujourd'hui, du lundi, avec c
   const calendar = service.calendar();
   expect(calendar.to).toBe(DAY);
   expect(new Date(`${calendar.from}T12:00:00`).getDay()).toBe(1);
-  expect(calendar.days).toHaveLength(15 * 7 + ((new Date(`${DAY}T12:00:00`).getDay() + 6) % 7) + 1);
+  expect(calendar.days).toHaveLength(52 * 7 + ((new Date(`${DAY}T12:00:00`).getDay() + 6) % 7) + 1);
   expect(calendar.days[calendar.days.length - 1]).toEqual(expect.objectContaining({
-    day: DAY, hasReport: false, linesAdded: 12, linesRemoved: 3,
-    projects: [expect.objectContaining({ projectName: "Pupitre", commits: 2 })],
+    day: DAY, hasReport: false, linesAdded: 12, linesRemoved: 3, mergeRequests: 1,
+    projects: [expect.objectContaining({ projectName: "Pupitre", commits: 2, mergeRequests: 1 })],
   }));
   expect(calendar.days[calendar.days.length - 1]!.commits).toBe(2);
   expect(calendar.days[0]!.commits).toBe(0);

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ActivityCalendarDay } from './api'
 
 export type CalendarMetric = 'lines' | 'commits'
@@ -9,8 +9,16 @@ const hours = (ms: number) => ms < 60_000 ? null : ms < 3_600_000 ? `${Math.roun
 const dayLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
 const monthLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('fr-FR', { month: 'short' })
 
-export function metricValue(day: ActivityCalendarDay, metric: CalendarMetric): number {
-  return metric === 'lines' ? day.linesAdded + day.linesRemoved : day.commits
+/** Chiffres d'un jour, réduits à un projet quand un filtre est posé ; la présence n'est connue que tous projets confondus. */
+export function dayFigures(day: ActivityCalendarDay, projectId: string | null): { commits: number; linesAdded: number; linesRemoved: number; mergeRequests: number; userMs: number | null } {
+  if (projectId === null) return { commits: day.commits, linesAdded: day.linesAdded, linesRemoved: day.linesRemoved, mergeRequests: day.mergeRequests, userMs: day.userMs }
+  const project = day.projects.find((item) => item.projectId === projectId)
+  return { commits: project?.commits ?? 0, linesAdded: project?.linesAdded ?? 0, linesRemoved: project?.linesRemoved ?? 0, mergeRequests: project?.mergeRequests ?? 0, userMs: null }
+}
+
+export function metricValue(day: ActivityCalendarDay, metric: CalendarMetric, projectId: string | null = null): number {
+  const figures = dayFigures(day, projectId)
+  return metric === 'lines' ? figures.linesAdded + figures.linesRemoved : figures.commits
 }
 
 /** Valeurs des jours actifs, triées : la référence du rang de chaque jour. */
@@ -27,12 +35,27 @@ export function levelOf(value: number, sorted: number[]): number {
   return 1 + Math.min(3, Math.floor((below / (sorted.length - 1)) * 4))
 }
 
-export function dayTitle(day: ActivityCalendarDay): string {
-  const parts = [`${number(day.commits)} commit${day.commits > 1 ? 's' : ''}`, `+${number(day.linesAdded)} −${number(day.linesRemoved)}`]
-  const presence = hours(day.userMs)
+export function dayTitle(day: ActivityCalendarDay, projectId: string | null = null): string {
+  const figures = dayFigures(day, projectId)
+  const parts = [`${number(figures.commits)} commit${figures.commits > 1 ? 's' : ''}`, `+${number(figures.linesAdded)} −${number(figures.linesRemoved)}`]
+  if (figures.mergeRequests > 0) parts.push(`${figures.mergeRequests} MR ouverte${figures.mergeRequests > 1 ? 's' : ''}`)
+  const presence = figures.userMs === null ? null : hours(figures.userMs)
   if (presence) parts.push(`${presence} de présence`)
-  const projects = day.projects.map((project) => `${project.projectName} ${project.commits}`).join(', ')
+  const projects = projectId === null ? day.projects.filter((project) => project.commits > 0).map((project) => `${project.projectName} ${project.commits}`).join(', ') : ''
   return `${dayLabel(day.day)} : ${parts.join(', ')}${projects ? ` (${projects})` : ''}${day.hasReport ? '. Ouvrir le rapport' : ''}`
+}
+
+/** Projets rencontrés sur la période, du plus actif au moins actif. */
+export function projectsOf(days: ActivityCalendarDay[]): Array<{ projectId: string; projectName: string; commits: number }> {
+  const totals = new Map<string, { projectId: string; projectName: string; commits: number }>()
+  for (const day of days) {
+    for (const project of day.projects) {
+      const entry = totals.get(project.projectId) ?? { projectId: project.projectId, projectName: project.projectName, commits: 0 }
+      entry.commits += project.commits
+      totals.set(project.projectId, entry)
+    }
+  }
+  return [...totals.values()].sort((left, right) => right.commits - left.commits)
 }
 
 /** Colonnes de sept jours du lundi au dimanche ; la première commence par des cases vides jusqu'au premier jour. */
@@ -55,8 +78,15 @@ export function ActivityCalendar({ calendar, selectedDay, onSelect }: {
   onSelect: (day: string) => void
 }) {
   const [metric, setMetric] = useState<CalendarMetric>('lines')
+  const [projectId, setProjectId] = useState<string | null>(null)
   const weeks = useMemo(() => weeksOf(calendar.days), [calendar.days])
-  const sorted = useMemo(() => activeValues(calendar.days.map((day) => metricValue(day, metric))), [calendar.days, metric])
+  const projects = useMemo(() => projectsOf(calendar.days), [calendar.days])
+  const sorted = useMemo(() => activeValues(calendar.days.map((day) => metricValue(day, metric, projectId))), [calendar.days, metric, projectId])
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (scroller) scroller.scrollLeft = scroller.scrollWidth
+  }, [calendar.days])
   const months = useMemo(() => {
     const out: Array<{ label: string; column: number }> = []
     weeks.forEach((week, column) => {
@@ -72,7 +102,8 @@ export function ActivityCalendar({ calendar, selectedDay, onSelect }: {
   const thisMonth = calendar.to.slice(0, 7)
   const monthTotals = useMemo(() => calendar.days
     .filter((day) => day.day.startsWith(thisMonth))
-    .reduce((sum, day) => ({ commits: sum.commits + day.commits, linesAdded: sum.linesAdded + day.linesAdded, linesRemoved: sum.linesRemoved + day.linesRemoved, active: sum.active + (day.commits > 0 || day.userMs >= 60_000 ? 1 : 0) }), { commits: 0, linesAdded: 0, linesRemoved: 0, active: 0 }), [calendar.days, thisMonth])
+    .map((day) => dayFigures(day, projectId))
+    .reduce((sum, day) => ({ commits: sum.commits + day.commits, linesAdded: sum.linesAdded + day.linesAdded, linesRemoved: sum.linesRemoved + day.linesRemoved, mergeRequests: sum.mergeRequests + day.mergeRequests, active: sum.active + (day.commits > 0 || (day.userMs ?? 0) >= 60_000 ? 1 : 0) }), { commits: 0, linesAdded: 0, linesRemoved: 0, mergeRequests: 0, active: 0 }), [calendar.days, thisMonth, projectId])
   const monthName = new Date(`${calendar.to}T12:00:00`).toLocaleDateString('fr-FR', { month: 'long' })
 
   return (
@@ -80,14 +111,20 @@ export function ActivityCalendar({ calendar, selectedDay, onSelect }: {
       <div className="activity-calendar-head">
         <div>
           <h2>{`${monthName.charAt(0).toUpperCase()}${monthName.slice(1)}`}</h2>
-          <p>{`${number(monthTotals.commits)} commit${monthTotals.commits > 1 ? 's' : ''}, +${number(monthTotals.linesAdded)} −${number(monthTotals.linesRemoved)}, ${monthTotals.active} jour${monthTotals.active > 1 ? 's' : ''} actif${monthTotals.active > 1 ? 's' : ''}`}</p>
+          <p>{`${number(monthTotals.commits)} commit${monthTotals.commits > 1 ? 's' : ''}, +${number(monthTotals.linesAdded)} −${number(monthTotals.linesRemoved)}${monthTotals.mergeRequests > 0 ? `, ${monthTotals.mergeRequests} MR ouverte${monthTotals.mergeRequests > 1 ? 's' : ''}` : ''}, ${monthTotals.active} jour${monthTotals.active > 1 ? 's' : ''} actif${monthTotals.active > 1 ? 's' : ''}`}</p>
         </div>
+        {projects.length > 1 ? (
+          <div className="activity-calendar-projects" role="radiogroup" aria-label="Projet du calendrier">
+            <button type="button" role="radio" aria-checked={projectId === null} className={projectId === null ? 'is-active' : ''} onClick={() => setProjectId(null)}>Tous les projets</button>
+            {projects.map((project) => <button type="button" role="radio" key={project.projectId} aria-checked={projectId === project.projectId} className={projectId === project.projectId ? 'is-active' : ''} onClick={() => setProjectId(project.projectId)}>{project.projectName}</button>)}
+          </div>
+        ) : null}
         <div className="activity-calendar-metric" role="radiogroup" aria-label="Mesure du calendrier">
           <button type="button" role="radio" aria-checked={metric === 'lines'} className={metric === 'lines' ? 'is-active' : ''} onClick={() => setMetric('lines')}>Lignes</button>
           <button type="button" role="radio" aria-checked={metric === 'commits'} className={metric === 'commits' ? 'is-active' : ''} onClick={() => setMetric('commits')}>Commits</button>
         </div>
       </div>
-      <div className="activity-calendar-grid">
+      <div className="activity-calendar-grid" ref={scrollerRef}>
         <div className="activity-calendar-months" aria-hidden="true">
           {months.map((month) => <span key={`${month.label}-${month.column}`} style={{ left: `calc(${month.column} * (var(--cell) + var(--gap)))` }}>{month.label}</span>)}
         </div>
@@ -95,9 +132,9 @@ export function ActivityCalendar({ calendar, selectedDay, onSelect }: {
         <div className="activity-calendar-weeks">
           {weeks.map((week, column) => week.map((day, row) => {
             if (!day) return <i key={`${column}-${row}`} className="activity-calendar-day is-empty" aria-hidden="true" />
-            const level = levelOf(metricValue(day, metric), sorted)
+            const level = levelOf(metricValue(day, metric, projectId), sorted)
             const className = `activity-calendar-day is-${level}${day.hasReport ? ' is-report' : ''}${day.day === selectedDay ? ' is-selected' : ''}`
-            const title = dayTitle(day)
+            const title = dayTitle(day, projectId)
             return day.hasReport
               ? <button type="button" key={day.day} className={className} data-day={day.day} data-level={level} title={title} aria-label={title} aria-pressed={day.day === selectedDay} onClick={() => onSelect(day.day)} />
               : <i key={day.day} className={className} data-day={day.day} data-level={level} title={title} role="img" aria-label={title} />
