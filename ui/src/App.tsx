@@ -621,7 +621,6 @@ function App() {
     setNewConversationAttachments([])
     setIsCreatingConversation(false)
     setShowSwitchModel(false)
-    closeProjectSurface()
     setWorkspaceView('conversations')
   }
 
