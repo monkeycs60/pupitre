@@ -114,7 +114,11 @@ export class ConversationEventBus {
   private listeners = new Set<EventListener>();
 
   broadcast = (conversationId: string, event: StoredEvent): void => {
-    for (const listener of this.listeners) listener(conversationId, event);
+    const eventRecord = event as StoredEvent & { createdAt?: unknown };
+    const liveEvent = typeof eventRecord.createdAt === "string"
+      ? event
+      : { ...event, createdAt: new Date().toISOString() };
+    for (const listener of this.listeners) listener(conversationId, liveEvent);
   };
 
   subscribe(listener: EventListener): () => void {
@@ -3627,9 +3631,9 @@ export function createServer(deps: ServerDeps) {
               || (beforeValue !== null && (!Number.isInteger(before) || before! <= 0))) {
               throw new HttpError(400, "pagination invalide");
             }
-            return json(deps.conversations.listReplayEventPage(conversationEventsId, before, parsedLimit));
+            return json(deps.conversations.listReplayEventPage(conversationEventsId, before, parsedLimit, true));
           }
-          return json(deps.conversations.listReplayEvents(conversationEventsId));
+          return json(deps.conversations.listReplayEvents(conversationEventsId, true));
         }
 
         const conversationDiffId = routeId(
@@ -3895,9 +3899,9 @@ export function createServer(deps: ServerDeps) {
               || (beforeValue !== null && (!Number.isInteger(before) || before! <= 0))) {
               throw new HttpError(400, "pagination invalide");
             }
-            return json(deps.conversations.listReplayEventPage(subtaskEventsId, before, parsedLimit));
+            return json(deps.conversations.listReplayEventPage(subtaskEventsId, before, parsedLimit, true));
           }
-          return json(deps.conversations.listReplayEvents(subtaskEventsId));
+          return json(deps.conversations.listReplayEvents(subtaskEventsId, true));
         }
 
         const subtaskCancelId = routeId(

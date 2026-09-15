@@ -570,7 +570,7 @@ export class ConversationStore {
    * ajouter d'information visible. Les deltas postérieurs au dernier final
    * restent présents pour restaurer un tour interrompu en plein streaming.
    */
-  listReplayEvents(conversationId: string): StoredEvent[] {
+  listReplayEvents(conversationId: string, includeCreatedAt = false): StoredEvent[] {
     const rows = this.db.query(`
       WITH last_final AS (
         SELECT COALESCE(MAX(id), 0) AS id
@@ -579,7 +579,7 @@ export class ConversationStore {
           AND json_valid(payload)
           AND json_extract(payload, '$.type') = 'text-final'
       )
-      SELECT events.id, events.payload
+      SELECT events.id, events.payload, events.created_at
       FROM events, last_final
       WHERE events.conversation_id = ?
         AND (
@@ -592,11 +592,15 @@ export class ConversationStore {
           OR events.id > last_final.id
         )
       ORDER BY events.id
-    `).all(conversationId, conversationId) as Array<{ id: number | bigint; payload: string }>;
+    `).all(conversationId, conversationId) as Array<{ id: number | bigint; payload: string; created_at: string }>;
     const events: StoredEvent[] = [];
     for (const row of rows) {
       try {
-        events.push({ ...JSON.parse(row.payload), id: Number(row.id) });
+        events.push({
+          ...JSON.parse(row.payload),
+          id: Number(row.id),
+          ...(includeCreatedAt ? { createdAt: row.created_at } : {}),
+        });
       } catch (error) {
         console.error("Événement de conversation corrompu, ligne ignorée", error);
       }
@@ -608,6 +612,7 @@ export class ConversationStore {
     conversationId: string,
     before: number | null,
     limit: number,
+    includeCreatedAt = false,
   ): { events: StoredEvent[]; nextBefore: number | null } {
     const rows = this.db.query(`
       WITH last_final AS (
@@ -617,7 +622,7 @@ export class ConversationStore {
           AND json_valid(payload)
           AND json_extract(payload, '$.type') = 'text-final'
       )
-      SELECT events.id, events.payload
+      SELECT events.id, events.payload, events.created_at
       FROM events, last_final
       WHERE events.conversation_id = ?
         AND (? IS NULL OR events.id < ?)
@@ -629,11 +634,15 @@ export class ConversationStore {
         )
       ORDER BY events.id DESC
       LIMIT ?
-    `).all(conversationId, conversationId, before, before, limit) as Array<{ id: number | bigint; payload: string }>;
+    `).all(conversationId, conversationId, before, before, limit) as Array<{ id: number | bigint; payload: string; created_at: string }>;
     const events: StoredEvent[] = [];
     for (const row of rows.reverse()) {
       try {
-        events.push({ ...JSON.parse(row.payload), id: Number(row.id) });
+        events.push({
+          ...JSON.parse(row.payload),
+          id: Number(row.id),
+          ...(includeCreatedAt ? { createdAt: row.created_at } : {}),
+        });
       } catch (error) {
         console.error("Événement de conversation corrompu, ligne ignorée", error);
       }

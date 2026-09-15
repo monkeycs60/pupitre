@@ -17,12 +17,14 @@ const assets: ConversationAsset[] = [
     label: 'Capture envoyée',
     reference: 'capture.png',
     source: 'user',
+    createdAt: '2026-09-15T12:34:00.000Z',
   },
   {
     kind: 'attachment',
     id: 'file-1',
     label: 'brief.txt',
     source: 'user',
+    createdAt: '2026-09-15T12:34:00.000Z',
     attachment: {
       name: 'brief.txt',
       originalName: 'brief.txt',
@@ -67,7 +69,9 @@ test('ouvre le catalogue, annonce son compte et prévisualise une image', () => 
 
   expect(screen.getByRole('dialog', { name: 'Pièces jointes' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Télécharger' })).toBeTruthy()
+  expect(screen.getAllByText(/15 septembre/).length).toBeGreaterThanOrEqual(2)
   expect(document.querySelector('time')?.getAttribute('datetime')).toBe('2026-09-15T12:34:00.000Z')
+  expect(screen.getByRole('link', { name: 'Télécharger Capture envoyée' }).getAttribute('download')).toBe('Capture envoyée')
   fireEvent.click(screen.getByRole('button', { name: 'Agrandir capture envoyée' }))
   expect(opened).toEqual(['/media/capture.png', 'Capture envoyée'])
 })

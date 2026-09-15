@@ -1058,7 +1058,7 @@ export type AppEvent =
 
 // Tout événement venant du sidecar (replay HTTP ou WS) porte l'id de sa ligne :
 // c'est la clé de dédup du raccord replay/live.
-export type StoredEvent = AppEvent & { id: number }
+export type StoredEvent = AppEvent & { id: number; createdAt?: string }
 
 export type HtmlDocumentState = 'available' | 'retained' | 'expired' | 'deleted'
 

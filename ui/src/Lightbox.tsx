@@ -75,13 +75,14 @@ export function Lightbox({ alt, src, onClose }: LightboxProps) {
       <button ref={closeRef} type="button" className="lightbox-close" onClick={onClose}>
         Fermer
       </button>
-      <div className="lightbox-viewport" onClick={(event) => event.stopPropagation()}>
+      <div className="lightbox-viewport">
         <img
           src={src}
           alt={alt}
           draggable={false}
           className={scale > 1 ? 'is-zoomed' : ''}
           style={{ transform: `translate(${offset.x / scale}px, ${offset.y / scale}px) scale(${scale})` }}
+          onClick={(event) => event.stopPropagation()}
           onDoubleClick={() => setScale((current) => current === 1 ? 2 : 1)}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}

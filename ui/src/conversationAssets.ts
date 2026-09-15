@@ -41,7 +41,13 @@ function markdownImages(text: string): Array<{ alt: string; reference: string }>
   return images
 }
 
-export function collectConversationAssets(events: ReadonlyArray<AppEvent & { eventCreatedAt?: string }>): ConversationAsset[] {
+type AssetEvent = AppEvent & { createdAt?: string; eventCreatedAt?: string }
+
+function eventCreatedAt(event: AssetEvent): string | undefined {
+  return event.createdAt ?? event.eventCreatedAt
+}
+
+export function collectConversationAssets(events: ReadonlyArray<AssetEvent>): ConversationAsset[] {
   const assets: ConversationAsset[] = []
 
   events.forEach((event, eventIndex) => {
@@ -55,7 +61,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent & { eve
           label: attachment?.originalName ?? `Image jointe ${imageIndex + 1}`,
           reference: name,
           source: 'user',
-          createdAt: event.eventCreatedAt,
+          createdAt: eventCreatedAt(event),
         })
       })
       event.attachments?.forEach((attachment, attachmentIndex) => {
@@ -67,7 +73,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent & { eve
             label: attachment.originalName,
             reference: attachment.name,
             source: 'user',
-            createdAt: event.eventCreatedAt,
+            createdAt: eventCreatedAt(event),
           })
           return
         }
@@ -77,7 +83,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent & { eve
           label: attachment.originalName,
           attachment,
           source: 'user',
-          createdAt: event.eventCreatedAt,
+          createdAt: eventCreatedAt(event),
         })
       })
       return
@@ -91,7 +97,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent & { eve
           label: image.alt,
           reference: image.reference,
           source: 'assistant',
-          createdAt: event.eventCreatedAt,
+          createdAt: eventCreatedAt(event),
         })
       })
       return
@@ -105,7 +111,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent & { eve
           label: 'Image produite',
           reference: name,
           source: 'assistant',
-          createdAt: event.eventCreatedAt,
+          createdAt: eventCreatedAt(event),
         })
       })
       return

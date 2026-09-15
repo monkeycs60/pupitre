@@ -129,7 +129,7 @@ export interface TestScopeEvent {
 
 // Un événement persisté porte l'id (rowid) de sa ligne : c'est la clé de dédup
 // entre le replay HTTP et le flux WS côté UI.
-export type StoredEvent = AppEvent & { id: number };
+export type StoredEvent = AppEvent & { id: number; createdAt?: string };
 
 export const PROVIDERS = ["claude", "codex", "grok", "reasonix"] as const;
 export type Provider = (typeof PROVIDERS)[number];

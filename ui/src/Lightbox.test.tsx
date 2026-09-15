@@ -20,3 +20,14 @@ test('zoome, réinitialise et ferme l’aperçu', () => {
   fireEvent.keyDown(window, { key: 'Escape' })
   expect(onClose).toHaveBeenCalledTimes(1)
 })
+
+test('ferme au clic hors de l’image sans fermer au clic sur l’image', () => {
+  const onClose = mock(() => undefined)
+  render(createElement(Lightbox, { src: '/capture.png', alt: 'Capture', onClose }))
+
+  fireEvent.click(document.querySelector('.lightbox-viewport')!)
+  expect(onClose).toHaveBeenCalledTimes(1)
+
+  fireEvent.click(screen.getByRole('img', { name: 'Capture' }))
+  expect(onClose).toHaveBeenCalledTimes(1)
+})
