@@ -151,6 +151,8 @@ export interface RoutineInput {
 
 export interface Settings {
   quotaThresholds?: QuotaThresholds
+  /** Providers dont la barre latérale affiche le quota. Absent : tous. */
+  quotaVisibleProviders?: Provider[]
   longTaskThresholdSeconds?: number
   filesystemScope?: FilesystemScope
   actionFormat?: ActionFormat

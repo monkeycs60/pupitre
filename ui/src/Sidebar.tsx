@@ -12,7 +12,7 @@ import {
   setConversationPinned,
   setConversationPermissionMode,
 } from './api'
-import type { Conversation, FleetItem, Project, ProjectDomain, QuotaSnapshot, TimeMode, TimeSnapshot, WorkspaceView } from './types'
+import type { Conversation, FleetItem, Project, ProjectDomain, Provider, QuotaSnapshot, TimeMode, TimeSnapshot, WorkspaceView } from './types'
 import { QuotaStatus } from './QuotaBar'
 import { LevelCard } from './LevelCard'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
@@ -33,6 +33,7 @@ declare global {
 
 interface SidebarProps {
   quotas?: QuotaSnapshot
+  quotaProviders?: Provider[]
   time?: TimeSnapshot | null
   timeMode?: TimeMode
   onTimeModeToggle?: () => void
@@ -234,6 +235,7 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
 export const Sidebar = memo(function Sidebar({
   selectedProject,
   quotas,
+  quotaProviders,
   time = null,
   timeMode = 'user',
   onTimeModeToggle = () => {},
@@ -944,9 +946,9 @@ export const Sidebar = memo(function Sidebar({
             onToggle={onTimeModeToggle}
           />
         ) : null}
-        {quotas ? (
+        {quotas && quotaProviders?.length !== 0 ? (
           <div className="sidebar-quotas">
-            <QuotaStatus snapshot={quotas} />
+            <QuotaStatus snapshot={quotas} providers={quotaProviders} />
           </div>
         ) : null}
       </div>

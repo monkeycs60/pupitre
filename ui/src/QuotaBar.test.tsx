@@ -50,3 +50,10 @@ test('un clic sur une jauge périmée lance la reconnexion du provider', async (
 
   await waitFor(() => expect(authenticate).toHaveBeenCalledWith('claude'))
 })
+
+test('n’affiche que les providers choisis dans les réglages', () => {
+  render(<QuotaStatus snapshot={staleSnapshot()} providers={['codex', 'grok']} onRefresh={async () => staleSnapshot()} />)
+
+  const names = [...document.querySelectorAll('.quota-status-provider')].map((node) => node.textContent)
+  expect(names).toEqual(['Codex', 'Grok'])
+})

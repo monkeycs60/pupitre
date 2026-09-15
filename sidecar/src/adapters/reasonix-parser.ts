@@ -63,11 +63,11 @@ export function parseReasonixLine(line: string): AppEvent[] {
       }
       output.push(event.subtype === "success" && event.is_error !== true
         ? { type: "status", state: "done" }
-        : { type: "status", state: "error", error: String(event.result ?? event.subtype ?? "échec ReasonX") });
+        : { type: "status", state: "error", error: String(event.result ?? event.subtype ?? "échec OpenCode Go") });
       return output;
     }
     case "error":
-      return [{ type: "status", state: "error", error: String(event.message ?? "erreur ReasonX") }];
+      return [{ type: "status", state: "error", error: String(event.message ?? "erreur OpenCode Go") }];
     default:
       return [];
   }

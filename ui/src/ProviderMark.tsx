@@ -1,13 +1,30 @@
+import { PROVIDER_LABELS } from './modelOptions'
 import type { Provider } from './types'
 
 type ProviderBrand = Provider | 'sentry'
 
-const PROVIDER_LABELS: Record<ProviderBrand, string> = {
-  claude: 'Claude',
+/**
+ * Le libellé vient de `modelOptions` — un seul endroit nomme les providers.
+ * Seul Codex diffère ici : la marque de la pastille nomme l'abonnement
+ * (ChatGPT) là où la réglette nomme le CLI (Codex).
+ */
+const MARK_LABELS: Record<ProviderBrand, string> = {
+  ...PROVIDER_LABELS,
   codex: 'ChatGPT',
-  grok: 'Grok',
-  reasonix: 'ReasonX',
   sentry: 'Sentry',
+}
+
+/**
+ * Cadrage propre à chaque marque : les tracés officiels ne partagent pas le
+ * même repère, et aucun ne doit être rogné ni flotter dans sa boîte.
+ */
+const VIEW_BOXES: Record<ProviderBrand, string> = {
+  claude: '0 0 24 24',
+  codex: '0 0 24 24',
+  grok: '0 0 34 33',
+  // OpenCode : cadre et carré intérieur du logo officiel (favicon.svg).
+  reasonix: '128 96 256 320',
+  sentry: '0 0 24 24',
 }
 
 /** Marque visuelle compacte utilisée dans les listes où le nom du provider est implicite. */
@@ -18,19 +35,29 @@ export function ProviderMark({
   provider: ProviderBrand
   className?: string
 }) {
-  const label = PROVIDER_LABELS[provider]
+  const label = MARK_LABELS[provider]
 
   return (
     <svg
       className={`provider-mark is-${provider}${className ? ` ${className}` : ''}`}
       role="img"
       aria-label={label}
-      viewBox={provider === 'grok' ? '0 0 34 33' : '0 0 24 24'}
+      viewBox={VIEW_BOXES[provider]}
       focusable="false"
     >
       <title>{label}</title>
         {provider === 'reasonix' ? (
-          <text x="12" y="16" textAnchor="middle" fontSize="10" fontWeight="700" fill="currentColor">RX</text>
+          <>
+            <path
+              fillRule="evenodd"
+              clipRule="evenodd"
+              d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z"
+              fill="currentColor"
+            />
+            {/* Carré intérieur en retrait, comme la version officielle : deux
+                tons d'une même encre plutôt qu'une seconde couleur. */}
+            <path d="M320 224V352H192V224H320Z" fill="currentColor" fillOpacity="0.55" />
+          </>
         ) : provider === 'grok' ? (
           <>
             <path d="M13.2371 21.0407L24.3186 12.8506C24.8619 12.4491 25.6384 12.6057 25.8973 13.2294C27.2597 16.5185 26.651 20.4712 23.9403 23.1851C21.2297 25.8989 17.4581 26.4941 14.0108 25.1386L10.2449 26.8843C15.6463 30.5806 22.2053 29.6665 26.304 25.5601C29.5551 22.3051 30.562 17.8683 29.6205 13.8673L29.629 13.8758C28.2637 7.99809 29.9647 5.64871 33.449 0.844576C33.5314 0.730667 33.6139 0.616757 33.6964 0.5L29.1113 5.09055V5.07631L13.2343 21.0436" fill="currentColor" />

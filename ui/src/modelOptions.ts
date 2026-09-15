@@ -3,11 +3,27 @@ import type { PresetPermissionMode, Provider } from './types'
 /** Ordre des providers dans toutes les listes et sélecteurs. */
 export const PROVIDERS = ['codex', 'claude', 'grok', 'reasonix'] as const satisfies readonly Provider[]
 
+/**
+ * Nom affiché d'un provider. Il nomme l'abonnement consommé, pas le binaire
+ * lancé : `reasonix` consomme l'abonnement OpenCode Go (base_url
+ * `https://opencode.ai/zen/go`, clé `OPENCODE_API_KEY`), d'où « OpenCode Go
+ * (Reasonix) » — l'abonnement d'abord, le CLI entre parenthèses pour qui lit
+ * les journaux.
+ */
 export const PROVIDER_LABELS: Record<Provider, string> = {
   codex: 'Codex',
   claude: 'Claude',
   grok: 'Grok',
-  reasonix: 'ReasonX',
+  reasonix: 'OpenCode Go (Reasonix)',
+}
+
+/**
+ * Variante pour les colonnes à largeur bornée : la barre de quotas compacte
+ * n'accorde que 44 px au nom du provider, qui y serait tronqué.
+ */
+export const PROVIDER_SHORT_LABELS: Record<Provider, string> = {
+  ...PROVIDER_LABELS,
+  reasonix: 'OpenCode Go',
 }
 
 export const PROVIDER_MODELS = {

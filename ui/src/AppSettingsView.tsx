@@ -7,7 +7,10 @@ import {
   updateIntegrationTokens,
   updateSettings,
 } from './api'
-import type { FilesystemScope, InstanceHealth, PromotionMission } from './types'
+import type { FilesystemScope, InstanceHealth, PromotionMission, Provider } from './types'
+import { QUOTA_PROVIDERS, QUOTA_PROVIDERS_EVENT, visibleQuotaProviders } from './quotaProviders'
+import { PROVIDER_LABELS } from './modelOptions'
+import { ProviderMark } from './ProviderMark'
 import { DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { VisualFeedbackSettings } from './VisualFeedbackSettings'
@@ -59,6 +62,7 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
   const [longTaskThreshold, setLongTaskThreshold] = useState(120)
   const [activityReportHour, setActivityReportHour] = useState('18:00')
   const [visualFeedbackPaired, setVisualFeedbackPaired] = useState(false)
+  const [quotaProviders, setQuotaProviders] = useState<Provider[]>(() => [...QUOTA_PROVIDERS])
   const [ticketAuditConfig, setTicketAuditConfig] = useState<ConversationConfig>({
     provider: 'codex', model: 'gpt-5.6-sol', effort: 'medium', speed: 'standard', permissionMode: null,
   })
@@ -72,6 +76,7 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
         setLongTaskThreshold(settings.longTaskThresholdSeconds ?? 120)
         setActivityReportHour(settings.activityReportHour ?? '18:00')
         setVisualFeedbackPaired(settings.visualFeedbackPaired === true)
+        setQuotaProviders(visibleQuotaProviders(settings.quotaVisibleProviders))
         if (settings.ticketAuditConfig) {
           setTicketAuditConfig({ ...settings.ticketAuditConfig, permissionMode: null })
         }
@@ -231,6 +236,22 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
     } catch (saveError: unknown) { setError(errorMessage(saveError)) } finally { setSaving(false) }
   }
 
+  async function handleQuotaProviderToggle(provider: Provider, visible: boolean) {
+    const next = QUOTA_PROVIDERS.filter((candidate) => candidate === provider ? visible : quotaProviders.includes(candidate))
+    const previous = quotaProviders
+    setQuotaProviders(next)
+    setError(null)
+    try {
+      const settings = await updateSettings({ quotaVisibleProviders: next })
+      const stored = visibleQuotaProviders(settings.quotaVisibleProviders ?? next)
+      setQuotaProviders(stored)
+      window.dispatchEvent(new CustomEvent(QUOTA_PROVIDERS_EVENT, { detail: stored }))
+    } catch (saveError: unknown) {
+      setQuotaProviders(previous)
+      setError(errorMessage(saveError))
+    }
+  }
+
   async function handleTicketAuditConfig(next: ConversationConfig) {
     setTicketAuditConfig(next)
     setSaving(true)
@@ -308,6 +329,30 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
           onConfigChange={(next) => void handleTicketAuditConfig(next)}
           placement="bottom"
         />
+      </div>
+
+      <div className="settings-card" id="settings-quota-providers" role="group" aria-labelledby="settings-quota-providers-title">
+        <div>
+          <h2 id="settings-quota-providers-title">Quotas affichés</h2>
+          <p>Choisissez les abonnements dont la jauge reste visible sous la liste des conversations.</p>
+        </div>
+        <div className="settings-quota-providers">
+          {QUOTA_PROVIDERS.map((provider) => (
+            <label className="settings-quota-provider" key={provider}>
+              <input
+                type="checkbox"
+                checked={quotaProviders.includes(provider)}
+                disabled={loading}
+                onChange={(event) => void handleQuotaProviderToggle(provider, event.target.checked)}
+              />
+              <span className="settings-quota-provider-mark" aria-hidden="true"><ProviderMark provider={provider} /></span>
+              <span>{PROVIDER_LABELS[provider]}</span>
+            </label>
+          ))}
+        </div>
+        {quotaProviders.length === 0 ? (
+          <p className="settings-help">Aucune jauge ne s’affiche dans la barre latérale.</p>
+        ) : null}
       </div>
 
       <VisualFeedbackSettings initialPaired={visualFeedbackPaired} />

@@ -15,13 +15,15 @@ import {
 import type { Provider, QuotaSnapshot, QuotaState, QuotaWindow } from './types'
 import { useNow } from './useNow'
 import { HelpLink } from './HelpLink'
+import { PROVIDER_LABELS, PROVIDER_SHORT_LABELS } from './modelOptions'
+import { QUOTA_PROVIDERS } from './quotaProviders'
 
-const PROVIDER_NAMES: Record<Provider, string> = {
-  claude: 'Claude',
-  codex: 'Codex',
-  grok: 'Grok',
-  reasonix: 'ReasonX',
-}
+/**
+ * Nom affiché du provider, pris à la source unique (`modelOptions`) : deux
+ * tables finissaient par diverger. La ligne compacte ci-dessous, bornée à
+ * 44 px pour ce nom, prend la variante courte.
+ */
+const PROVIDER_NAMES = PROVIDER_LABELS
 
 /* Seuil réellement critique : la couleur d'alerte n'apparaît qu'à partir
    de 90 % d'usage, jamais avant. */
@@ -138,7 +140,10 @@ function CompactProviderQuota({ provider, state, now, onAuthenticate, authentica
       aria-describedby={tooltipId}
       aria-label={`${PROVIDER_NAMES[provider]} — ${stale ? `données périmées, dernier relevé ${freshness.label}` : detail}`}
     >
-      <span className="quota-status-provider">{PROVIDER_NAMES[provider]}</span>
+      {/* La colonne fait 44 px : « OpenCode Go (Reasonix) » y serait tronqué,
+          d'où la variante courte — le nom complet reste dans les libellés
+          d'accessibilité et dans l'infobulle. */}
+      <span className="quota-status-provider">{PROVIDER_SHORT_LABELS[provider]}</span>
       {usedPercent !== null ? (
         <span
           className={`${gaugeClassName}${usedPercent >= CRITICAL_PERCENT ? ' is-critical' : ''}`}
@@ -220,10 +225,12 @@ function CompactProviderQuota({ provider, state, now, onAuthenticate, authentica
 /** Résumé permanent et compact affiché sous la liste des conversations. */
 export function QuotaStatus({
   snapshot,
+  providers = QUOTA_PROVIDERS,
   onRefresh = refreshQuotas,
   onAuthenticate = authenticateQuotaProvider,
 }: {
   snapshot: QuotaSnapshot
+  providers?: readonly Provider[]
   onRefresh?: () => Promise<QuotaSnapshot>
   onAuthenticate?: (provider: Provider) => Promise<QuotaSnapshot>
 }) {
@@ -261,7 +268,7 @@ export function QuotaStatus({
 
   return (
     <section className="quota-status" aria-label="Usage des quotas">
-      {(['claude', 'codex', 'grok', 'reasonix'] as const).map((provider) => (
+      {providers.map((provider) => (
         <CompactProviderQuota
           key={provider}
           provider={provider}

@@ -8,8 +8,9 @@ import {
   quotaAlerts,
   type QuotaThresholds,
 } from './quotaSignals'
-import type { QuotaSnapshot, QuotaState } from './types'
+import type { Provider, QuotaSnapshot, QuotaState } from './types'
 import { loadQuotaThresholds } from './quotaSettings'
+import { QUOTA_PROVIDERS, QUOTA_PROVIDERS_EVENT, visibleQuotaProviders } from './quotaProviders'
 
 const EMPTY_SNAPSHOT: QuotaSnapshot = { claude: null, codex: null, grok: null, reasonix: null }
 
@@ -37,6 +38,28 @@ function persistNotifiedKeys(keys: string[]): void {
 
 export interface Quotas {
   snapshot: QuotaSnapshot
+  visibleProviders: Provider[]
+}
+
+function useVisibleQuotaProviders(): Provider[] {
+  const [providers, setProviders] = useState<Provider[]>(() => [...QUOTA_PROVIDERS])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void getSettings(controller.signal)
+      .then((settings) => setProviders(visibleQuotaProviders(settings.quotaVisibleProviders)))
+      .catch(() => {})
+    function handleChange(event: Event) {
+      setProviders(visibleQuotaProviders((event as CustomEvent<unknown>).detail))
+    }
+    window.addEventListener(QUOTA_PROVIDERS_EVENT, handleChange)
+    return () => {
+      controller.abort()
+      window.removeEventListener(QUOTA_PROVIDERS_EVENT, handleChange)
+    }
+  }, [])
+
+  return providers
 }
 
 /**
@@ -46,6 +69,7 @@ export interface Quotas {
  */
 export function useQuotas(): Quotas {
   const [snapshot, setSnapshot] = useState<QuotaSnapshot>(EMPTY_SNAPSHOT)
+  const visibleProviders = useVisibleQuotaProviders()
   const notifiedRef = useRef<Set<string> | null>(null)
 
   useEffect(() => {
@@ -158,7 +182,7 @@ export function useQuotas(): Quotas {
 
   // L'absence de relevé n'est plus un état global : chaque provider explique
   // lui-même ce qui lui manque (cf. QuotaBar).
-  return { snapshot }
+  return { snapshot, visibleProviders }
 }
 
 /**

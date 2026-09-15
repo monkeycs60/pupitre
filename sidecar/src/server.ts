@@ -2667,6 +2667,15 @@ export function createServer(deps: ServerDeps) {
             deps.settings.set("actionFormat", actionFormat(body.actionFormat));
             updated = true;
           }
+          if ("quotaVisibleProviders" in body) {
+            const providers = body.quotaVisibleProviders;
+            if (
+              !Array.isArray(providers)
+              || providers.some((provider) => !["claude", "codex", "grok", "reasonix"].includes(provider as string))
+            ) throw new HttpError(400, "providers de quota invalides");
+            deps.settings.set("quotaVisibleProviders", [...new Set(providers)]);
+            updated = true;
+          }
           if ("ticketAuditConfig" in body) {
             const config = body.ticketAuditConfig as Record<string, unknown> | null;
             if (!config || (config.provider !== "codex" && config.provider !== "claude" && config.provider !== "grok") || typeof config.model !== "string"

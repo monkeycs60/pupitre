@@ -24,7 +24,7 @@ describe("parseReasonixLine", () => {
     ]);
   });
 
-  test("normalise l'usage camelCase de ReasonX", () => {
+  test("normalise l'usage camelCase d'OpenCode Go (CLI reasonix)", () => {
     expect(parseReasonixLine('{"kind":"usage","usage":{"promptTokens":12,"completionTokens":3}}')).toEqual([
       { type: "usage", inputTokens: 12, outputTokens: 3 },
     ]);

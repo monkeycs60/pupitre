@@ -978,6 +978,7 @@ function App() {
         selectedProject={selectedProject}
         selectedConversation={selectedConversation}
         quotas={quotas.snapshot}
+        quotaProviders={quotas.visibleProviders}
         time={time.snapshot}
         timeMode={time.mode}
         onTimeModeToggle={time.toggleMode}

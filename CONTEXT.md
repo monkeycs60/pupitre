@@ -48,3 +48,16 @@ _Avoid_ : tag, catégorie, module
 **Répétition** :
 Le pré-mâchage d'un item de backlog ou d'un ticket, en lecture seule par défaut, qui produit un dossier injecté au démarrage du travail. Déclenchée à la main, sur proposition quota, ou automatiquement.
 _Avoid_ : pré-mâchage (acceptable à l'oral), warm-up, préparation
+
+### Providers
+
+**Provider** :
+L'abonnement consommé, pas le binaire : le CLI n'est que le moyen de l'atteindre. Le nom affiché dit l'abonnement, la clé interne garde le nom du CLI, d'où les parenthèses quand les deux diffèrent.
+_Avoid_ : moteur, agent (l'agent est le tour, pas l'abonnement)
+
+**OpenCode Go** :
+L'abonnement consommé par la clé interne `reasonix` : quota lu sur `opencode.ai/zen/go/v1/usage` avec `OPENCODE_API_KEY`, modèles servis par `opencode.ai/zen/go` (dont `go41`), tours exécutés par le CLI `reasonix`. Affiché « OpenCode Go (Reasonix) », et « OpenCode Go » seul là où la place manque.
+_Avoid_ : ReasonX, Zen, Reasonix seul (c'est le CLI, pas l'abonnement)
+
+**Claude, Codex, Grok** :
+Les trois autres abonnements. Leur CLI porte le même nom, d'où l'absence de parenthèses — sauf la marque de Codex, qui nomme l'abonnement (ChatGPT) là où la réglette nomme le CLI.

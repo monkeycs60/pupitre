@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getProjectCosts } from './api'
 import type { Project, ProjectCostReport, Provider, QuotaState } from './types'
 import { HelpLink } from './HelpLink'
-import { modelLabel } from './modelOptions'
+import { modelLabel, PROVIDER_LABELS } from './modelOptions'
 import { useQuotas } from './useQuotas'
 import { useNow } from './useNow'
 import {
@@ -23,7 +23,8 @@ const VIZ_COLORS = [
 /* Au-delà, la couleur passe à l'alerte — même seuil que QuotaBar/QuotaMeter. */
 const CRITICAL_PERCENT = 90
 
-const PROVIDER_NAMES: Record<Provider, string> = { claude: 'CLAUDE', codex: 'CODEX', grok: 'GROK', reasonix: 'REASONX' }
+/* Le nom du provider vient de `modelOptions` : la puce ne fait que le crier en
+   capitales, elle ne le réécrit pas. */
 const PROVIDER_COLORS: Record<Provider, string> = { claude: 'var(--accent)', codex: 'var(--warn)', grok: 'var(--prov-grok)', reasonix: 'var(--prov-reasonix)' }
 const PROVIDER_CHIP_BG: Record<Provider, string> = { claude: 'var(--accent-soft)', codex: 'var(--warn-soft)', grok: 'var(--prov-grok-soft)', reasonix: 'var(--prov-reasonix-soft)' }
 
@@ -132,7 +133,7 @@ function QuotaCard({ provider, state, now }: { provider: Provider; state: QuotaS
     <div className="quota-card" style={{ borderColor: (summary.usedPercent ?? 0) >= CRITICAL_PERCENT ? 'var(--danger)' : undefined }}>
       <div className="quota-card-head">
         <span className="quota-card-badge" style={{ color: PROVIDER_COLORS[provider], background: PROVIDER_CHIP_BG[provider] }}>
-          {PROVIDER_NAMES[provider]}
+          {PROVIDER_LABELS[provider].toUpperCase()}
         </span>
         <span className="quota-card-headline" style={{ color }}>
           {summary.usedPercent === null ? summary.headline : `${Math.round(summary.usedPercent)} %`}

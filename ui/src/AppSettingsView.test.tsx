@@ -179,3 +179,28 @@ test('enregistre puis efface un token d’intégration sans jamais le relire', a
   await waitFor(() => expect(writes).toContainEqual({ integrationTokens: { clickup: null } }))
   expect(screen.getByLabelText('Statut token ClickUp').textContent).toContain('non défini')
 })
+
+test('enregistre les quotas affichés et prévient la barre latérale', async () => {
+  const bodies: unknown[] = []
+  globalThis.fetch = mock(async (_input: string | URL | Request, init?: RequestInit) => {
+    if (init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>
+      bodies.push(body)
+      return json(body)
+    }
+    return json({ quotaVisibleProviders: ['claude', 'codex'] })
+  }) as typeof fetch
+  const received: unknown[] = []
+  const listener = (event: Event) => received.push((event as CustomEvent).detail)
+  window.addEventListener('pupitre:quota-providers', listener)
+
+  render(createElement(AppSettingsView))
+  const codex = await screen.findByRole('checkbox', { name: 'Codex' })
+  await waitFor(() => expect((codex as HTMLInputElement).checked).toBe(true))
+  expect((screen.getByRole('checkbox', { name: 'Grok' }) as HTMLInputElement).checked).toBe(false)
+
+  fireEvent.click(codex)
+  await waitFor(() => expect(received).toEqual([['claude']]))
+  expect(bodies).toEqual([{ quotaVisibleProviders: ['claude'] }])
+  window.removeEventListener('pupitre:quota-providers', listener)
+})

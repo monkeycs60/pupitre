@@ -7,7 +7,7 @@ import {
   type DiscussionDocument,
   type HandoffDocument,
 } from './api'
-import { PROVIDER_EFFORTS, PROVIDER_MODELS } from './modelOptions'
+import { PROVIDER_EFFORTS, PROVIDER_LABELS, PROVIDER_MODELS } from './modelOptions'
 import Markdown from './Markdown'
 import type { Conversation, ConversationSpeed, Provider } from './types'
 
@@ -223,7 +223,7 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
                     <option value="claude">claude</option>
                     <option value="codex">codex</option>
                     <option value="grok">grok</option>
-                    <option value="reasonix">ReasonX</option>
+                    <option value="reasonix">{PROVIDER_LABELS.reasonix}</option>
                   </select>
                 </label>
                 <label>

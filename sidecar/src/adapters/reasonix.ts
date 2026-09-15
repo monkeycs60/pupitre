@@ -46,6 +46,33 @@ function isWithin(path: string, roots: string[]): boolean {
   });
 }
 
+/**
+ * Choisit l'option ReasonX. Une autorisation vaut pour la session, afin que la
+ * même racine ne soit plus redemandée ; `reasonix_write_project` écrirait dans
+ * le reasonix.toml du dépôt.
+ */
+export function reasonixPermissionOption(
+  options: Array<Record<string, unknown>>,
+  allow: boolean,
+): Record<string, unknown> | undefined {
+  if (!allow) return options.find((option) => option?.kind === "reject_once");
+  return options.find((option) => option?.kind === "allow_always" && option.optionId !== "reasonix_write_project")
+    ?? options.find((option) => option?.kind === "allow_once");
+}
+
+/** Annonce au modèle le périmètre que reasonixPermissionAllowed fera respecter. */
+export function reasonixPromptWithPerimeter(
+  prompt: string,
+  opts: Pick<TurnOptions, "permissionMode" | "filesystemScope" | "cwd" | "extraWorkspaceRoots">,
+): string {
+  if (opts.permissionMode === "bypassPermissions" || opts.filesystemScope === "full-system") return prompt;
+  if (opts.permissionMode === "plan") return prompt;
+  const roots = [...new Set([opts.cwd, ...(opts.extraWorkspaceRoots ?? [])])];
+  const commands = opts.permissionMode === "acceptEdits" ? " Les commandes shell seront refusées." : "";
+  return `[Pupitre] Écritures autorisées uniquement dans : ${roots.join(", ")}. `
+    + `Toute écriture ailleurs sera refusée : ne la tente pas.${commands}\n\n${prompt}`;
+}
+
 /** Réponse de Pupitre à une demande d'autorisation de ReasonX, selon le rang d'autonomie. */
 export function reasonixPermissionAllowed(
   opts: Pick<TurnOptions, "permissionMode" | "filesystemScope" | "cwd" | "extraWorkspaceRoots">,
@@ -133,7 +160,7 @@ export function runReasonixTurn(opts: TurnOptions, emit: EmitFn): Promise<void> 
       const options: Array<Record<string, unknown>> = Array.isArray(message.params?.options)
         ? message.params.options
         : [];
-      const option = options.find((item) => item?.kind === (allow ? "allow_once" : "reject_once"));
+      const option = reasonixPermissionOption(options, allow);
       write({
         id: message.id,
         result: {
@@ -219,7 +246,7 @@ export function runReasonixTurn(opts: TurnOptions, emit: EmitFn): Promise<void> 
       prompting = true;
       const response = request("session/prompt", {
         sessionId: activeSession,
-        prompt: textPrompt(withImages(opts.prompt, opts.images)),
+        prompt: textPrompt(reasonixPromptWithPerimeter(withImages(opts.prompt, opts.images), opts)),
       });
       const queuedTexts = new Map<string, string>();
       opts.registerSteer?.(async (input) => {

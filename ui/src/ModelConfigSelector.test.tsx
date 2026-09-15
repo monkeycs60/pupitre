@@ -34,7 +34,7 @@ test('les quatre providers sont proposés, seul le provider courant est coché',
   render(selector())
 
   const providers = screen.getAllByRole('radio')
-  expect(providers.map((button) => button.getAttribute('aria-label'))).toEqual(['Codex', 'Claude', 'Grok', 'ReasonX'])
+  expect(providers.map((button) => button.getAttribute('aria-label'))).toEqual(['Codex', 'Claude', 'Grok', 'OpenCode Go (Reasonix)'])
   expect(providers.filter((button) => button.getAttribute('aria-checked') === 'true'))
     .toEqual([screen.getByRole('radio', { name: 'Claude' })])
 })
