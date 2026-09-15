@@ -472,8 +472,9 @@ export class ConversationStore {
    * Seules les suites CONTIGUËS de deltas sont fusionnées : un outil ou tout
    * autre événement conserve ainsi exactement sa position dans le transcript.
    * L'id du premier delta est conservé, les suivants sont supprimés.
-   * Les aperçus de réflexion et les phases ne servent qu'au tour en cours :
-   * ils sont supprimés sans couper la suite de deltas qui les entoure.
+   * La réflexion est fusionnée de la même façon, par suite distincte du texte.
+   * Les phases ne servent qu'au tour en cours : elles sont supprimées sans
+   * couper la suite de deltas qui les entoure.
    */
   compactTextDeltas(conversationId: string): number {
     const compact = this.db.transaction(() => {
@@ -481,7 +482,7 @@ export class ConversationStore {
         "SELECT id, payload FROM events WHERE conversation_id = ? ORDER BY id",
       ).all(conversationId) as Array<{ id: number | bigint; payload: string }>;
       let removed = 0;
-      let run: Array<{ id: number; event: { type: "text-delta"; text: string } }> = [];
+      let run: Array<{ id: number; event: { type: "text-delta" | "reasoning-delta"; text: string } }> = [];
 
       const flush = () => {
         if (run.length < 2) {
@@ -500,15 +501,19 @@ export class ConversationStore {
       for (const row of rows) {
         try {
           const event = JSON.parse(row.payload) as Partial<AppEvent>;
-          if (event.type === "reasoning-delta" || event.type === "turn-phase") {
+          if (event.type === "turn-phase") {
             this.db.query("DELETE FROM events WHERE id = ?").run(Number(row.id));
             removed += 1;
             continue;
           }
-          if (event.type === "text-delta" && typeof event.text === "string") {
+          if (
+            (event.type === "text-delta" || event.type === "reasoning-delta")
+            && typeof event.text === "string"
+          ) {
+            if (run.length > 0 && run[0].event.type !== event.type) flush();
             run.push({
               id: Number(row.id),
-              event: { type: "text-delta", text: event.text },
+              event: { type: event.type, text: event.text },
             });
             continue;
           }

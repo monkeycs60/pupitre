@@ -181,6 +181,7 @@ export class ConversationRunner {
       images: imageNames,
       ...(attachments.length > 0 ? { attachments } : {}),
       steering: true,
+      ...(accepted === "queued" ? { queued: true } : {}),
     });
     return true;
   }

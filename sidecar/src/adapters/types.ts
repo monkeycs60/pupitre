@@ -53,5 +53,8 @@ export interface SteerInput {
   images: string[];
 }
 
-/** `false` signifie que le tour s'est terminé avant d'accepter le message. */
-export type SteerFn = (input: SteerInput) => Promise<boolean>;
+/**
+ * `false` signifie que le tour s'est terminé avant d'accepter le message.
+ * `"queued"` : le provider traitera le message après l'étape en cours, dans le même tour.
+ */
+export type SteerFn = (input: SteerInput) => Promise<boolean | "queued">;

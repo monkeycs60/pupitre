@@ -58,11 +58,21 @@ test('une nouvelle réflexion repart de zéro après une autre activité', () =>
     { type: 'text-delta', text: 'x' },
     { type: 'reasoning-delta', text: 'nouvelle' },
   ])
-  expect(footer.reasoning).toBe('nouvelle')
+  expect(footer.reasoningSegments).toEqual(['ancienne', 'nouvelle'])
 })
 
-test('aucun aperçu une fois le tour terminé', () => {
-  renderFooter([running, { type: 'reasoning-delta', text: 'hmm' }, { type: 'status', state: 'done' }])
+test('une fois le tour terminé, la réflexion complète reste repliée sous le tour', () => {
+  const { container } = renderFooter([
+    running,
+    { type: 'reasoning-delta', text: 'Je lis ' },
+    { type: 'reasoning-delta', text: 'le fichier.' },
+    { type: 'tool-start', toolId: 't', toolName: 'bash', input: {} },
+    { type: 'reasoning-delta', text: 'Puis je conclus.' },
+    { type: 'status', state: 'done' },
+  ])
   expect(screen.queryByTitle('Aperçu de la réflexion en cours')).toBeNull()
+  const details = container.querySelector('details.turn-reasoning') as HTMLDetailsElement
+  expect(details.open).toBe(false)
+  expect([...details.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['Je lis le fichier.', 'Puis je conclus.'])
   cleanup()
 })

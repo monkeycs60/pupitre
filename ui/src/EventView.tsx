@@ -134,11 +134,22 @@ function providerPhaseLabel(phase: string): string {
 const REASONING_PREVIEW_VISIBLE_CHARS = 280
 
 function reasoningPreview(text: string | undefined): string | null {
-  const flat = text?.replace(/\s+/g, ' ').trim()
+  const flat = text?.slice(-REASONING_PREVIEW_VISIBLE_CHARS * 2).replace(/\s+/g, ' ').trim()
   if (!flat) return null
   return flat.length > REASONING_PREVIEW_VISIBLE_CHARS
     ? `…${flat.slice(-REASONING_PREVIEW_VISIBLE_CHARS)}`
     : flat
+}
+
+function TurnReasoning({ segments }: { segments: string[] }) {
+  return (
+    <details className="turn-reasoning">
+      <summary>Réflexion</summary>
+      <div className="turn-reasoning-body">
+        {segments.map((segment, index) => <p key={index}>{segment.trim()}</p>)}
+      </div>
+    </details>
+  )
 }
 
 function TurnFooter({ block, action }: {
@@ -159,12 +170,13 @@ function TurnFooter({ block, action }: {
     ? summarizeTurnError(block.status?.error ?? 'Une erreur est survenue.')
     : null
   const runningLabel = ACTIVITY_LABELS[block.activity ?? 'thinking']
-  const preview = isRunning && block.activity === 'thinking' ? reasoningPreview(block.reasoning) : null
+  const preview = isRunning && block.activity === 'thinking' ? reasoningPreview(block.reasoningSegments?.at(-1)) : null
 
   return (
     <footer className="turn-footer">
       {block.files ? <TurnFiles files={block.files} /> : null}
       {preview ? <p className="turn-reasoning-preview" title="Aperçu de la réflexion en cours">{preview}</p> : null}
+      {!isRunning && block.reasoningSegments?.length ? <TurnReasoning segments={block.reasoningSegments} /> : null}
       {isError ? (
         <div className="turn-error" role="alert">
           <div>
@@ -222,7 +234,11 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: Ev
       return (
         <article className="message-row message-row-user" data-event-id={eventIdOfBlock(block.id)}>
           <div className="message-bubble user-message">
-            {block.steering ? <span className="message-steering-label">Ajouté au tour en cours</span> : null}
+            {block.steering ? (
+              <span className="message-steering-label">
+                {block.queued ? 'En file : traité après l’étape en cours' : 'Ajouté au tour en cours'}
+              </span>
+            ) : null}
             {block.text ? <p>{block.text}</p> : null}
             <ImageGallery
               images={block.images}

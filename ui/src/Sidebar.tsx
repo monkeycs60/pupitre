@@ -444,7 +444,7 @@ export const Sidebar = memo(function Sidebar({
   async function handleConversationYolo(conversation: Conversation) {
     const enabling = conversation.permission_mode !== 'bypassPermissions'
     if (enabling && !window.confirm(
-      `Activer YOLO pour « ${conversation.title} » ?\n\nClaude ignorera les demandes de permission pour les tours suivants.`,
+      `Activer YOLO pour « ${conversation.title} » ?\n\nL’agent ignorera les demandes de permission pour les tours suivants.`,
     )) return
     setError(null)
     try {

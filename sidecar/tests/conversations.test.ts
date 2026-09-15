@@ -394,17 +394,20 @@ test("compacte les suites de text-delta sans déplacer les autres événements",
   expect(convs.compactTextDeltas(c.id)).toBe(0);
 });
 
-test("la compaction supprime les aperçus de réflexion sans couper le texte", () => {
+test("la compaction fusionne la réflexion à part du texte et supprime les phases", () => {
   const c = convs.create({ projectId, provider: "reasonix", model: "flash", firstMessage: "x" });
-  convs.appendEvent(c.id, { type: "reasoning-delta", text: "je cherche" });
-  const firstDeltaId = convs.appendEvent(c.id, { type: "text-delta", text: "bon" });
+  const reasoningId = convs.appendEvent(c.id, { type: "reasoning-delta", text: "je " });
+  convs.appendEvent(c.id, { type: "reasoning-delta", text: "cherche" });
+  const textId = convs.appendEvent(c.id, { type: "text-delta", text: "bon" });
   convs.appendEvent(c.id, { type: "turn-phase", phase: "implementing" });
-  convs.appendEvent(c.id, { type: "reasoning-delta", text: "encore" });
   convs.appendEvent(c.id, { type: "text-delta", text: "jour" });
+  const secondReasoningId = convs.appendEvent(c.id, { type: "reasoning-delta", text: "encore" });
 
-  expect(convs.compactTextDeltas(c.id)).toBe(4);
+  expect(convs.compactTextDeltas(c.id)).toBe(3);
   expect(convs.listEvents(c.id)).toEqual([
-    { id: firstDeltaId, type: "text-delta", text: "bonjour" },
+    { id: reasoningId, type: "reasoning-delta", text: "je cherche" },
+    { id: textId, type: "text-delta", text: "bonjour" },
+    { id: secondReasoningId, type: "reasoning-delta", text: "encore" },
   ]);
 });
 

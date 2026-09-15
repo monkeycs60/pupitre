@@ -202,8 +202,6 @@ function shellApplyPatchEdits(
   return edits
 }
 
-const REASONING_PREVIEW_CHARS = 600
-
 /** Regroupe les événements bruts d'une conversation en blocs affichables. */
 export function groupEvents(
   events: ReadonlyArray<AppEvent & { id?: number }>,
@@ -246,12 +244,14 @@ export function groupEvents(
           images: event.images,
           attachments: event.attachments ?? [],
           ...(event.steering ? { steering: true } : {}),
+          ...(event.queued ? { queued: true } : {}),
         })
         break
       case 'reasoning-delta': {
         const footer = ensureTurnFooter()
-        const previous = footer.activity === 'thinking' ? footer.reasoning ?? '' : ''
-        footer.reasoning = (previous + event.text).slice(-REASONING_PREVIEW_CHARS)
+        const segments = footer.reasoningSegments ??= []
+        if (footer.activity === 'thinking' && segments.length > 0) segments[segments.length - 1] += event.text
+        else segments.push(event.text)
         footer.activity = 'thinking'
         break
       }

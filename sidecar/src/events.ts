@@ -9,10 +9,12 @@ export type AppEvent =
       attachments?: MediaAttachment[];
       /** Précision injectée dans le tour actif, pas début d'un nouveau tour. */
       steering?: boolean;
+      /** Précision mise en file par le provider, traitée après l'étape en cours du même tour. */
+      queued?: boolean;
     }
   | { type: "text-delta"; text: string }
   | { type: "text-final"; text: string }
-  /** Aperçu de la réflexion du modèle, supprimé du stockage à la fin du tour. */
+  /** Réflexion du modèle, fusionnée à la compaction et relisible sous le tour. */
   | { type: "reasoning-delta"; text: string }
   /** Phase brute annoncée par le provider (ReasonX : starting, implementing…). */
   | { type: "turn-phase"; phase: string }

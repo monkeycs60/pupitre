@@ -292,13 +292,13 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
   async function handleSave() {
     if (permissionMode === 'bypassPermissions' && project.permission_mode !== 'bypassPermissions') {
       const confirmed = window.confirm(
-        `Activer YOLO pour « ${project.name} » ? Claude, Codex et Grok pourront agir sans demander de permissions.`,
+        `Activer YOLO pour « ${project.name} » ? Tous les providers pourront agir sans demander de permissions.`,
       )
       if (!confirmed) return
     }
     if (scope === 'full-system' && project.filesystem_scope !== 'full-system') {
       const confirmed = window.confirm(
-        `Autoriser Claude et Codex à modifier tout le système pour « ${project.name} » ?`,
+        `Autoriser tous les providers à modifier tout le système pour « ${project.name} » ?`,
       )
       if (!confirmed) return
     }

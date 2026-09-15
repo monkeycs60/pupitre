@@ -960,7 +960,7 @@ export type AppEvent =
   // Titre et résumé régénérés après un tour : met la sidebar à jour, ne s'affiche
   // pas dans le fil.
   | { type: 'conversation-digest'; title: string; summary: string; domains?: ConversationDomain[]; proposedDomainCount?: number }
-  | { type: 'user-message'; text: string; images: string[]; attachments?: Attachment[]; steering?: boolean }
+  | { type: 'user-message'; text: string; images: string[]; attachments?: Attachment[]; steering?: boolean; queued?: boolean }
   | { type: 'text-delta'; text: string }
   | { type: 'text-final'; text: string }
   | { type: 'reasoning-delta'; text: string }

@@ -7,6 +7,7 @@ interface UserBlock {
   images: string[]
   attachments: Attachment[]
   steering?: boolean
+  queued?: boolean
 }
 
 interface AssistantBlock {
@@ -41,7 +42,7 @@ interface TurnFooterBlock {
   }
   activity?: 'thinking' | 'writing' | 'tool'
   phase?: string
-  reasoning?: string
+  reasoningSegments?: string[]
   files?: Array<{ path: string; added: number; removed: number }>
   /**
    * Nombre de sous-tâches réellement lancées pendant ce tour. Absent quand il

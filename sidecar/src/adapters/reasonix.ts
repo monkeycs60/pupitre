@@ -1,3 +1,4 @@
+import { isAbsolute, relative, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { AppEvent } from "../events";
 import { killGroup, spawnGroup } from "../process-group";
@@ -20,6 +21,43 @@ function withImages(prompt: string, images: string[]): string {
 
 function textPrompt(text: string) {
   return [{ type: "text", text }];
+}
+
+// Hors YOLO, ReasonX reste en `ask` : en `auto`, il écrit hors du projet sans
+// passer par reasonixPermissionAllowed.
+const TOOL_APPROVAL_BY_PERMISSION_MODE: Record<string, string> = {
+  bypassPermissions: "yolo",
+};
+
+function requestedPaths(toolCall: unknown): string[] {
+  const call = toolCall as { rawInput?: Record<string, unknown>; locations?: Array<{ path?: unknown }> } | undefined;
+  const input = call?.rawInput ?? {};
+  const writeDirs = Array.isArray(input.additional_write_dirs) ? input.additional_write_dirs : [];
+  const locations = Array.isArray(call?.locations) ? call.locations.map((location) => location?.path) : [];
+  return [input.path, ...writeDirs, ...locations]
+    .filter((path): path is string => typeof path === "string" && isAbsolute(path));
+}
+
+function isWithin(path: string, roots: string[]): boolean {
+  const target = resolve(path);
+  return roots.some((root) => {
+    const rest = relative(resolve(root), target);
+    return rest === "" || (!rest.startsWith("..") && !isAbsolute(rest));
+  });
+}
+
+/** Réponse de Pupitre à une demande d'autorisation de ReasonX, selon le rang d'autonomie. */
+export function reasonixPermissionAllowed(
+  opts: Pick<TurnOptions, "permissionMode" | "filesystemScope" | "cwd" | "extraWorkspaceRoots">,
+  toolCall: unknown,
+): boolean {
+  if (opts.permissionMode === "plan") return false;
+  if (opts.permissionMode === "bypassPermissions" || opts.filesystemScope === "full-system") return true;
+  if (opts.permissionMode === "acceptEdits" && (toolCall as { kind?: unknown } | undefined)?.kind === "execute") {
+    return false;
+  }
+  const roots = [opts.cwd, ...(opts.extraWorkspaceRoots ?? [])];
+  return requestedPaths(toolCall).every((path) => isWithin(path, roots));
 }
 
 /**
@@ -91,7 +129,7 @@ export function runReasonixTurn(opts: TurnOptions, emit: EmitFn): Promise<void> 
         write({ id: message.id, error: { code: -32601, message: `${message.method} non pris en charge` } });
         return;
       }
-      const allow = opts.permissionMode !== "plan" && opts.permissionMode !== "dontAsk";
+      const allow = reasonixPermissionAllowed(opts, message.params?.toolCall);
       const options: Array<Record<string, unknown>> = Array.isArray(message.params?.options)
         ? message.params.options
         : [];
@@ -169,6 +207,10 @@ export function runReasonixTurn(opts: TurnOptions, emit: EmitFn): Promise<void> 
       if (opts.effort) {
         await request("session/set_config_option", { sessionId: activeSession, configId: "effort", value: opts.effort });
       }
+      const toolApproval = TOOL_APPROVAL_BY_PERMISSION_MODE[opts.permissionMode];
+      if (toolApproval) {
+        await request("session/set_config_option", { sessionId: activeSession, configId: "tool_approval", value: toolApproval });
+      }
       if (opts.permissionMode === "plan") {
         await request("session/set_mode", { sessionId: activeSession, modeId: "plan" });
       }
@@ -179,15 +221,41 @@ export function runReasonixTurn(opts: TurnOptions, emit: EmitFn): Promise<void> 
         sessionId: activeSession,
         prompt: textPrompt(withImages(opts.prompt, opts.images)),
       });
+      const queuedTexts = new Map<string, string>();
       opts.registerSteer?.(async (input) => {
+        const text = withImages(input.prompt, input.images);
         const steered = await request("_reasonix.io/session/steer", {
           sessionId: activeSession,
-          prompt: textPrompt(withImages(input.prompt, input.images)),
+          prompt: textPrompt(text),
         });
-        return steered.result?.disposition === "steer_accepted";
+        const disposition = steered.result?.disposition;
+        if (disposition === "steer_accepted") return true;
+        if (disposition !== "queued_followup") return false;
+        if (typeof steered.result?.itemId === "string") queuedTexts.set(steered.result.itemId, text);
+        return "queued";
       });
 
-      const outcome = await response;
+      let outcome = await response;
+      // Un élément resté en file au-delà du prompt n'est plus traité : au redémarrage,
+      // ReasonX met la file en pause et injecte un avertissement dans la réponse suivante.
+      while (!finished && outcome.result?.stopReason === "end_turn") {
+        const inbox = await request("_reasonix.io/session/inbox/list", { sessionId: activeSession });
+        const items: Array<{ id?: unknown; preview?: unknown }> = Array.isArray(inbox.result?.items)
+          ? inbox.result.items
+          : [];
+        const leftovers: string[] = [];
+        for (const item of items) {
+          if (typeof item.id !== "string") continue;
+          await request("_reasonix.io/session/inbox/delete", { sessionId: activeSession, itemId: item.id });
+          const text = queuedTexts.get(item.id) ?? (typeof item.preview === "string" ? item.preview : "");
+          if (text) leftovers.push(text);
+        }
+        if (leftovers.length === 0 || finished) break;
+        outcome = await request("session/prompt", {
+          sessionId: activeSession,
+          prompt: textPrompt(leftovers.join("\n\n")),
+        });
+      }
       if (finished) return;
       if (outcome.error) {
         finish({ type: "status", state: "error", error: outcome.error.message ?? "échec OpenCode Go" });
