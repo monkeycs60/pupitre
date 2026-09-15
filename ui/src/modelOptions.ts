@@ -60,6 +60,13 @@ export const MODEL_LABELS: Record<string, string> = {
   go41: 'GO 4.1',
 }
 
+/** Modèles dont un lancement par inadvertance entame fortement le quota. */
+const CONFIRMED_MODELS: ReadonlySet<string> = new Set(['fable-5.1', 'fable-5', 'gpt-6-astra'])
+
+export function requiresLaunchConfirmation(model: string): boolean {
+  return CONFIRMED_MODELS.has(model)
+}
+
 /** Un modèle inconnu s'affiche tel quel plutôt que de disparaître. */
 export function modelLabel(model: string): string {
   return MODEL_LABELS[model] ?? model

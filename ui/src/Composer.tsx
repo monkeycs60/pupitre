@@ -24,7 +24,8 @@ import { ProviderMark } from './ProviderMark'
 import { ComposerPalette, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
 import type { ComposerAction, ComposerPaletteTrigger, ComposerToolItem } from './ComposerPalette'
 import type { Attachment, Conversation, Project, Provider, QuotaSnapshot, SkillSummary } from './types'
-import { PROVIDER_MODELS } from './modelOptions'
+import { PROVIDER_MODELS, requiresLaunchConfirmation } from './modelOptions'
+import { LaunchConfirmModal } from './LaunchConfirmModal'
 import { mediaUrl } from './transport'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
@@ -249,6 +250,7 @@ export function Composer({
   const [isDragActive, setIsDragActive] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [confirmingLaunch, setConfirmingLaunch] = useState(false)
   const [configReady, setConfigReady] = useState(!isNewConversation)
   const [finish, setFinish] = useState<TodoFinish>(initialFinish)
   const isTodoMode = isNewConversation && todoMode && onTodoModeChange !== undefined
@@ -466,10 +468,14 @@ export function Composer({
     }
   }, [])
 
-  async function handleSubmit(event?: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event?: FormEvent<HTMLFormElement>, launchConfirmed = false) {
     event?.preventDefault()
     const trimmedMessage = message.trim()
     if ((!trimmedMessage && attachments.length === 0) || !canSubmit) return
+    if (isNewConversation && !launchConfirmed && requiresLaunchConfirmation(config.model)) {
+      setConfirmingLaunch(true)
+      return
+    }
 
     setIsSubmitting(true)
     setToast(null)
@@ -795,6 +801,21 @@ export function Composer({
           </div>
         </div>
       </form>
+      {confirmingLaunch ? (
+        <LaunchConfirmModal
+          provider={config.provider}
+          model={config.model}
+          isTodo={isTodoMode}
+          onCancel={() => {
+            setConfirmingLaunch(false)
+            textareaRef.current?.focus()
+          }}
+          onConfirm={() => {
+            setConfirmingLaunch(false)
+            void handleSubmit(undefined, true)
+          }}
+        />
+      ) : null}
     </div>
   )
 }
