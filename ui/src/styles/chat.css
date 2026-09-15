@@ -131,6 +131,7 @@
   background: rgba(0, 0, 0, 0.28);
   border: 0;
   cursor: default;
+  animation: thread-assets-backdrop-appear 200ms ease-out both;
 }
 
 .thread-assets-drawer {
@@ -146,6 +147,17 @@
   background: var(--bg-panel);
   border-left: 1px solid var(--border);
   box-shadow: var(--shadow-popover);
+  animation: thread-assets-drawer-appear 200ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+@keyframes thread-assets-backdrop-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes thread-assets-drawer-appear {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .thread-assets-header {
@@ -290,6 +302,11 @@
 .thread-asset-download:hover { color: var(--text-strong); border-color: var(--border-strong); }
 .thread-asset-source { display: flex; flex-direction: column; gap: 2px; padding: 5px 2px 0; }
 .thread-asset-source time { font: var(--text-xs)/1.4 var(--font-mono); }
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-assets-backdrop,
+  .thread-assets-drawer { animation: none; }
+}
 
 .thread-asset .event-attachment { margin: 0; }
 
