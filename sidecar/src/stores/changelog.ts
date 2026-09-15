@@ -175,6 +175,47 @@ export class ChangelogStore {
     })();
   }
 
+  /**
+   * Commits dont la date tombe dans [from, to) : `committed_at` porte le
+   * décalage horaire du commit, donc le tri fin se fait sur l'horodatage
+   * parsé, après un dégrossissage SQL sur le jour à un jour près.
+   */
+  listBetween(projectId: string, from: string, to: string): ProjectChangelogEntry[] {
+    const start = Date.parse(from);
+    const end = Date.parse(to);
+    const low = new Date(start - 86_400_000).toISOString().slice(0, 10);
+    const high = new Date(end + 86_400_000).toISOString().slice(0, 10);
+    return (this.db.query(`
+      SELECT pce.*, d.name AS domain_name
+      FROM project_changelog_entries pce
+      LEFT JOIN domains d ON d.id = pce.domain_id
+      WHERE pce.project_id = ? AND substr(pce.committed_at, 1, 10) BETWEEN ? AND ?
+      ORDER BY pce.committed_at ASC, pce.commit_sha ASC
+    `).all(projectId, low, high) as ProjectChangelogEntry[]).filter((entry) => {
+      const at = Date.parse(entry.committed_at);
+      return at >= start && at < end;
+    });
+  }
+
+  /** Totaux d'un projet ou de tous : commits et lignes, bornés à une fenêtre facultative. */
+  totals(projectId?: string, from?: string, to?: string): { commits: number; linesAdded: number; linesRemoved: number } {
+    const entries = projectId && from && to
+      ? this.listBetween(projectId, from, to)
+      : (this.db.query(`
+          SELECT commit_sha, committed_at, lines_added, lines_removed
+          FROM project_changelog_entries ${projectId ? "WHERE project_id = ?" : ""}
+        `).all(...(projectId ? [projectId] : [])) as ProjectChangelogEntry[]).filter((entry) => {
+          if (!from || !to) return true;
+          const at = Date.parse(entry.committed_at);
+          return at >= Date.parse(from) && at < Date.parse(to);
+        });
+    return entries.reduce((sum, entry) => ({
+      commits: sum.commits + 1,
+      linesAdded: sum.linesAdded + (entry.lines_added ?? 0),
+      linesRemoved: sum.linesRemoved + (entry.lines_removed ?? 0),
+    }), { commits: 0, linesAdded: 0, linesRemoved: 0 });
+  }
+
   state(projectId: string): ProjectChangelogState {
     return this.db.query(
       "SELECT * FROM project_changelog_state WHERE project_id = ?",

@@ -574,6 +574,43 @@ export function openDb(dir: string = dataDir()): Database {
       started_at TEXT NOT NULL UNIQUE,
       ended_at TEXT NOT NULL
     );
+    -- Rapport d'activité quotidien : un document par jour actif, et l'état de
+    -- recul (motifs + preuves) que chaque passe met à jour sans le recalculer.
+    CREATE TABLE IF NOT EXISTS activity_reports (
+      day TEXT PRIMARY KEY,
+      generated_at TEXT NOT NULL,
+      payload TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS activity_motifs (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('recurrence', 'stabilize', 'practice', 'idea')),
+      title TEXT NOT NULL,
+      statement TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('open', 'stabilized', 'dismissed', 'handled')),
+      first_seen_day TEXT NOT NULL,
+      last_seen_day TEXT NOT NULL,
+      returned_at TEXT NULL,
+      dismissed_at TEXT NULL,
+      todo_id TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_activity_motifs_project
+      ON activity_motifs(project_id, status, last_seen_day DESC);
+    CREATE TABLE IF NOT EXISTS activity_motif_evidence (
+      motif_id TEXT NOT NULL REFERENCES activity_motifs(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('conversation', 'commit', 'ticket', 'problem')),
+      ref TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      day TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (motif_id, kind, ref)
+    );
+    CREATE TABLE IF NOT EXISTS activity_state (
+      key TEXT PRIMARY KEY, value TEXT NOT NULL
+    );
   `);
   migrateProjectChangelogEntries(db);
   dropEventsForeignKey(db);

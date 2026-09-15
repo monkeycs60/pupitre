@@ -76,6 +76,13 @@ export interface TimeSnapshot {
   conversations: Record<string, { userMs: number; agentMs: number }>;
 }
 
+export interface DayTotals {
+  day: string;
+  projects: Record<string, { userMs: number; agentMs: number }>;
+  conversations: Record<string, { userMs: number; agentMs: number }>;
+  turnCount: number;
+}
+
 export interface PresenceSlice {
   projectId: string;
   conversationId?: string | null;
@@ -149,7 +156,7 @@ function clip(spans: Span[], window: Span): Span[] {
   return intersect(spans, [window]);
 }
 
-function localDay(value: Date): string {
+export function localDay(value: Date): string {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, "0");
   const day = String(value.getDate()).padStart(2, "0");
@@ -346,6 +353,58 @@ export class TimeTrackingService {
       projects,
       conversations,
     };
+  }
+
+  /**
+   * Heures d'une journée locale, par projet et par conversation, calculées
+   * comme `todayMs` de l'instantané : tranches fusionnées puis rognées à la
+   * fenêtre du jour, ce qui compte juste une tranche qui enjambe minuit.
+   */
+  dayTotals(day: string): DayTotals {
+    this.syncAgentSegments();
+    const window = dayWindow(new Date(`${day}T00:00:00`));
+    const rows = this.db.query(`
+      SELECT project_id, conversation_id, source, started_at, ended_at, day, backfilled
+      FROM time_entries
+      WHERE started_at < ? AND ended_at > ?
+      ORDER BY started_at
+    `).all(new Date(window.end).toISOString(), new Date(window.start).toISOString()) as EntryRow[];
+    const projects: Record<string, { userMs: number; agentMs: number }> = {};
+    const conversations: Record<string, { userMs: number; agentMs: number }> = {};
+    const byProject = new Map<string, { presence: Span[]; agent: Span[] }>();
+    const byConversation = new Map<string, { presence: Span[]; agent: Span[] }>();
+    let turnCount = 0;
+    for (const row of rows) {
+      const span = toSpan(row);
+      const project = byProject.get(row.project_id) ?? { presence: [], agent: [] };
+      (row.source === "presence" ? project.presence : project.agent).push(span);
+      byProject.set(row.project_id, project);
+      if (row.source === "agent") turnCount += 1;
+      if (!row.conversation_id) continue;
+      const conversation = byConversation.get(row.conversation_id) ?? { presence: [], agent: [] };
+      (row.source === "presence" ? conversation.presence : conversation.agent).push(span);
+      byConversation.set(row.conversation_id, conversation);
+    }
+    for (const [id, entry] of byProject) {
+      projects[id] = {
+        userMs: total(clip(entry.presence, window)),
+        agentMs: total(clip(entry.agent, window)),
+      };
+    }
+    for (const [id, entry] of byConversation) {
+      conversations[id] = {
+        userMs: total(clip(entry.presence, window)),
+        agentMs: total(clip(entry.agent, window)),
+      };
+    }
+    return { day, projects, conversations, turnCount };
+  }
+
+  /** Jours locaux ayant au moins une tranche de présence ou un tour. */
+  activeDays(): string[] {
+    this.syncAgentSegments();
+    return (this.db.query("SELECT DISTINCT day FROM time_entries ORDER BY day").all() as Array<{ day: string }>)
+      .map((row) => row.day);
   }
 
   /**

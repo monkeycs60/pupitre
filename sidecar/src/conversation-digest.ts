@@ -139,6 +139,23 @@ function runClaude(prompt: string, cwd: string): Promise<string> {
 }
 
 /**
+ * Un objet JSON produit par le même modèle bon marché que le digest, pour les
+ * synthèses annexes (sujets du rapport d'activité). Renvoie null à la moindre
+ * anomalie : l'appelant a toujours un repli déterministe.
+ */
+export async function generateCheapJson(prompt: string, cwd: string): Promise<unknown> {
+  let raw: string;
+  try {
+    raw = await runClaude(prompt, cwd);
+  } catch (error) {
+    console.error("Synthèse bon marché impossible", error);
+    return null;
+  }
+  const envelope = extractJson(raw) as { result?: unknown } | null;
+  return typeof envelope?.result === "string" ? extractJson(envelope.result) : envelope;
+}
+
+/**
  * Titre + résumé générés par un modèle bon marché. Renvoie null à la moindre
  * anomalie : l'appelant garde alors le digest précédent, jamais d'échec visible.
  */
