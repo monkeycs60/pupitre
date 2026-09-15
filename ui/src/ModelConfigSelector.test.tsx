@@ -30,11 +30,11 @@ function selector(overrides: Partial<Parameters<typeof ModelConfigSelector>[0]> 
   })
 }
 
-test('les trois providers sont proposés, seul le provider courant est coché', () => {
+test('les quatre providers sont proposés, seul le provider courant est coché', () => {
   render(selector())
 
   const providers = screen.getAllByRole('radio')
-  expect(providers.map((button) => button.getAttribute('aria-label'))).toEqual(['Codex', 'Claude', 'Grok'])
+  expect(providers.map((button) => button.getAttribute('aria-label'))).toEqual(['Codex', 'Claude', 'Grok', 'ReasonX'])
   expect(providers.filter((button) => button.getAttribute('aria-checked') === 'true'))
     .toEqual([screen.getByRole('radio', { name: 'Claude' })])
 })

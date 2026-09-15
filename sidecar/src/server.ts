@@ -269,11 +269,13 @@ const EFFORTS_BY_PROVIDER = {
   claude: ["low", "medium", "high", "xhigh", "max"],
   codex: ["low", "medium", "high", "xhigh"],
   grok: ["low", "medium", "high", "xhigh"],
+  reasonix: ["disabled", "low", "high", "max"],
 } as const satisfies Record<Provider, readonly string[]>;
 const MODELS_BY_PROVIDER = {
   claude: ["fable-5.1", "fable-5", "opus", "sonnet", "haiku"],
   codex: ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra"],
   grok: ["grok-4.6", "grok-4.5"],
+  reasonix: ["go41"],
 } as const satisfies Record<Provider, readonly string[]>;
 const SPEEDS = ["standard", "fast"] as const;
 const DEFAULT_MESSAGE_MEDIA_MAX_BYTES = 25 * 1024 * 1024;

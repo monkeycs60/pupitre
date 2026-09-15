@@ -36,6 +36,7 @@ export interface QuotaSnapshot {
   claude: QuotaState | null;
   codex: QuotaState | null;
   grok: QuotaState | null;
+  reasonix?: QuotaState | null;
 }
 
 type QuotaListener = (state: QuotaState) => void;
@@ -59,7 +60,7 @@ export class QuotaTracker {
       value: string;
     }[];
     for (const row of rows) {
-      if (row.key !== "claude" && row.key !== "codex" && row.key !== "grok") continue;
+      if (row.key !== "claude" && row.key !== "codex" && row.key !== "grok" && row.key !== "reasonix") continue;
       try {
         this.states.set(row.key, JSON.parse(row.value) as QuotaState);
       } catch (error) {
@@ -73,7 +74,7 @@ export class QuotaTracker {
   }
 
   snapshot(): QuotaSnapshot {
-    return { claude: this.get("claude"), codex: this.get("codex"), grok: this.get("grok") };
+    return { claude: this.get("claude"), codex: this.get("codex"), grok: this.get("grok"), reasonix: this.get("reasonix") };
   }
 
   subscribe(listener: QuotaListener): () => void {
@@ -109,6 +110,8 @@ export class QuotaTracker {
         ? codexQuota(payload)
         : provider === "grok"
           ? grokQuota(payload)
+          : provider === "reasonix"
+            ? openCodeGoQuota(payload)
           : { windows: [] as QuotaWindow[], isComplete: false };
     // Un payload clairsemé reste clairsemé même si l'appelant croit tenir un
     // snapshot : la forme du payload a le dernier mot sur son exhaustivité.
@@ -344,4 +347,21 @@ function grokQuota(payload: unknown): ParsedQuota {
       windowDurationMins,
     }],
   };
+}
+
+function openCodeGoQuota(payload: unknown): ParsedQuota {
+  const root = asRecord(payload);
+  const usage = asRecord(root?.usage) ?? root;
+  if (!usage) return { windows: [], isComplete: false };
+  const windows: QuotaWindow[] = [];
+  for (const [label, duration] of [["rolling", 300], ["weekly", 10_080], ["monthly", 43_200]] as const) {
+    const window = asRecord(usage[label]);
+    if (!window) continue;
+    const usedPercent = optionalNumber(window.percent);
+    const resetsAt = toIsoDate(window.resetsAt ?? window.resets_at);
+    if (usedPercent !== null || resetsAt !== null) {
+      windows.push({ label: label === "rolling" ? "five_hour" : label, usedPercent, resetsAt, windowDurationMins: duration });
+    }
+  }
+  return { windows, isComplete: "rolling" in usage || "weekly" in usage || "monthly" in usage };
 }

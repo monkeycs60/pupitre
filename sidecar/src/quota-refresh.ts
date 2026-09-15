@@ -1,6 +1,7 @@
 import type { QuotaSnapshot, QuotaTracker } from "./quotas";
 import { readClaudeUsage } from "./adapters/claude-usage";
 import { readGrokUsage } from "./adapters/grok-usage";
+import { readOpenCodeGoUsage } from "./adapters/opencode-go-usage";
 import { codexAppServer } from "./adapters/codex-app-server";
 
 // Les providers exposent une lecture d'état pure et gratuite :
@@ -17,6 +18,7 @@ interface QuotaRefreshDeps {
   readCodexRateLimits?: () => Promise<unknown>;
   readClaudeUsage?: () => Promise<unknown | null>;
   readGrokUsage?: () => Promise<unknown | null>;
+  readOpenCodeGoUsage?: () => Promise<unknown | null>;
 }
 
 export class QuotaRefresher {
@@ -25,12 +27,14 @@ export class QuotaRefresher {
   private readCodex: () => Promise<unknown>;
   private readClaude: () => Promise<unknown | null>;
   private readGrok: () => Promise<unknown | null>;
+  private readReasonix: () => Promise<unknown | null>;
 
   constructor(private quotas: QuotaTracker, deps: QuotaRefreshDeps = {}) {
     this.readCodex = deps.readCodexRateLimits
       ?? (() => codexAppServer.readRateLimits());
     this.readClaude = deps.readClaudeUsage ?? (() => readClaudeUsage());
     this.readGrok = deps.readGrokUsage ?? (() => readGrokUsage());
+    this.readReasonix = deps.readOpenCodeGoUsage ?? (() => readOpenCodeGoUsage());
   }
 
   refresh(): Promise<QuotaSnapshot> {
@@ -76,6 +80,11 @@ export class QuotaRefresher {
       this.readGrok()
         .then((usage) => {
           if (usage) this.quotas.ingestPayload("grok", usage);
+        })
+        .catch(() => {}),
+      this.readReasonix()
+        .then((usage) => {
+          if (usage) this.quotas.ingestPayload("reasonix", usage);
         })
         .catch(() => {}),
     ]);

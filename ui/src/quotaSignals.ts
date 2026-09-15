@@ -9,6 +9,7 @@ export const EXPENSIVE_MODELS = {
   claude: ['fable-5.1', 'fable-5', 'opus'],
   codex: ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra'],
   grok: ['grok-4.6'],
+  reasonix: ['go41'],
 } as const satisfies Record<Provider, readonly string[]>
 
 /** Pulse : beaucoup de quota restant ET fenêtre qui expire bientôt. */
@@ -237,6 +238,8 @@ export function quotaSummary(
         ? 'Usage illisible : session Claude Code absente ou expirée. Relancez `claude` puis actualisez.'
         : provider === 'grok'
           ? 'Usage illisible : session Grok absente ou expirée. Relancez `grok login` puis actualisez.'
+          : provider === 'reasonix'
+            ? 'Usage illisible : clé OpenCode Go absente ou invalide. Relancez `reasonix setup` puis actualisez.'
         : 'Aucun relevé reçu de l’app-server codex.',
     }
   }

@@ -12,7 +12,7 @@ export interface FleetItem {
   projectName: string;
   conversationId: string;
   title: string;
-  provider: "claude" | "codex" | "grok";
+  provider: "claude" | "codex" | "grok" | "reasonix";
   model: string;
   startedAt: string;
   lastEvent: string;

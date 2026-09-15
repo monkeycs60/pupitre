@@ -194,6 +194,7 @@
 .model-strip-provider.is-codex.is-active { color: var(--prov-codex); background: var(--prov-codex-soft); }
 .model-strip-provider.is-claude.is-active { color: var(--prov-claude); background: var(--prov-claude-soft); }
 .model-strip-provider.is-grok.is-active { color: var(--prov-grok); background: var(--prov-grok-soft); }
+.model-strip-provider.is-reasonix.is-active { color: var(--prov-reasonix); background: var(--prov-reasonix-soft); }
 
 .model-strip-provider .provider-mark {
   width: 13px;

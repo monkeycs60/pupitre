@@ -24,7 +24,7 @@ function isFleetItem(value: unknown): value is FleetItem {
     && typeof item.projectName === 'string'
     && typeof item.conversationId === 'string'
     && typeof item.title === 'string'
-    && (item.provider === 'claude' || item.provider === 'codex' || item.provider === 'grok')
+    && (item.provider === 'claude' || item.provider === 'codex' || item.provider === 'grok' || item.provider === 'reasonix')
     && typeof item.model === 'string'
     && typeof item.startedAt === 'string'
     && typeof item.lastEvent === 'string'

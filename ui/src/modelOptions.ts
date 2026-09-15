@@ -1,24 +1,27 @@
 import type { PresetPermissionMode, Provider } from './types'
 
 /** Ordre des providers dans toutes les listes et sélecteurs. */
-export const PROVIDERS = ['codex', 'claude', 'grok'] as const satisfies readonly Provider[]
+export const PROVIDERS = ['codex', 'claude', 'grok', 'reasonix'] as const satisfies readonly Provider[]
 
 export const PROVIDER_LABELS: Record<Provider, string> = {
   codex: 'Codex',
   claude: 'Claude',
   grok: 'Grok',
+  reasonix: 'ReasonX',
 }
 
 export const PROVIDER_MODELS = {
   claude: ['fable-5.1', 'fable-5', 'opus', 'sonnet', 'haiku'],
   codex: ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra'],
   grok: ['grok-4.6', 'grok-4.5'],
+  reasonix: ['go41'],
 } as const satisfies Record<Provider, readonly string[]>
 
 export const PROVIDER_EFFORTS = {
   claude: ['low', 'medium', 'high', 'xhigh', 'max'],
   codex: ['low', 'medium', 'high', 'xhigh'],
   grok: ['low', 'medium', 'high', 'xhigh'],
+  reasonix: ['disabled', 'low', 'high', 'max'],
 } as const satisfies Record<Provider, readonly string[]>
 
 /**
@@ -38,6 +41,7 @@ export const MODEL_LABELS: Record<string, string> = {
   'gpt-5.6-terra': 'GPT-5.6 Terra',
   'grok-4.6': 'Grok 4.6',
   'grok-4.5': 'Grok 4.5',
+  go41: 'GO 4.1',
 }
 
 /** Un modèle inconnu s'affiche tel quel plutôt que de disparaître. */
@@ -74,6 +78,7 @@ export const MODEL_HINTS: Record<string, string> = {
   'gpt-5.6-terra': 'polyvalent',
   'grok-4.6': 'le plus capable',
   'grok-4.5': 'génération précédente',
+  go41: 'DeepSeek V4.1 Flash',
 }
 
 /** Un échange représentatif, utilisé uniquement pour comparer les tarifs API. */
@@ -111,6 +116,7 @@ export const MODEL_PRICING: readonly ModelPricing[] = [
   { provider: 'claude', model: 'haiku', input: 1, output: 5 },
   { provider: 'grok', model: 'grok-4.6', input: 2, output: 6 },
   { provider: 'grok', model: 'grok-4.5', input: 2, output: 6 },
+  { provider: 'reasonix', model: 'go41', input: 0.22, output: 0.88 },
 ]
 
 export function modelPricing(model: string): ModelPricing | null {

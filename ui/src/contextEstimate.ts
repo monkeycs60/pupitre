@@ -20,12 +20,14 @@ const MODEL_CONTEXT_WINDOWS: Partial<Record<Provider, Record<string, number>>> =
     'grok-4.6': 500_000,
     'grok-4.5': 500_000,
   },
+  reasonix: { go41: 1_000_000 },
 }
 
 const FALLBACK_CONTEXT_WINDOWS: Record<Provider, number> = {
   claude: 200_000,
   codex: 400_000,
   grok: 500_000,
+  reasonix: 1_000_000,
 }
 
 export interface ContextEstimate {

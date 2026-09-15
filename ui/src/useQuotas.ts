@@ -11,7 +11,7 @@ import {
 import type { QuotaSnapshot, QuotaState } from './types'
 import { loadQuotaThresholds } from './quotaSettings'
 
-const EMPTY_SNAPSHOT: QuotaSnapshot = { claude: null, codex: null, grok: null }
+const EMPTY_SNAPSHOT: QuotaSnapshot = { claude: null, codex: null, grok: null, reasonix: null }
 
 // Clés d'alertes déjà poussées, persistées pour ne pas re-notifier au rechargement.
 const NOTIFIED_KEY = 'pupitre.quota-notified'

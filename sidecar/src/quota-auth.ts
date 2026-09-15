@@ -11,6 +11,8 @@ export function quotaAuthCommand(
       return [env.PUPITRE_CODEX_BIN ?? 'codex', 'login']
     case 'grok':
       return [env.PUPITRE_GROK_BIN ?? 'grok', 'login', '--oauth']
+    case 'reasonix':
+      return [env.PUPITRE_REASONIX_BIN ?? 'reasonix', 'setup']
   }
 }
 

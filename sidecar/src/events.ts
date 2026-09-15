@@ -131,11 +131,11 @@ export interface TestScopeEvent {
 // entre le replay HTTP et le flux WS côté UI.
 export type StoredEvent = AppEvent & { id: number };
 
-export const PROVIDERS = ["claude", "codex", "grok"] as const;
+export const PROVIDERS = ["claude", "codex", "grok", "reasonix"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
 export function isProvider(value: unknown): value is Provider {
-  return value === "claude" || value === "codex" || value === "grok";
+  return value === "claude" || value === "codex" || value === "grok" || value === "reasonix";
 }
 
 export interface MediaAttachment {

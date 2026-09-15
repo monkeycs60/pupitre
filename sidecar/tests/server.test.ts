@@ -610,7 +610,7 @@ test("expose le graphe Git et un diff entre deux références", async () => {
 test("POST /api/quotas/refresh relève les deux providers et rend le snapshot", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const vide = await fetch(`${current.baseUrl}/api/quotas`);
-  expect(await vide.json()).toEqual({ claude: null, codex: null, grok: null });
+  expect(await vide.json()).toEqual({ claude: null, codex: null, grok: null, reasonix: null });
 
   const resetsAt = Math.floor(Date.now() / 1000) + 3_600;
   const resetsAtIso = new Date(resetsAt * 1000).toISOString();
@@ -1835,7 +1835,7 @@ test("GET /api/quotas est vide au démarrage puis reflète le tour claude", asyn
   if (!current) throw new Error("serveur de test non démarré");
   const empty = await fetch(`${current.baseUrl}/api/quotas`);
   expect(empty.status).toBe(200);
-  expect(await empty.json()).toEqual({ claude: null, codex: null, grok: null });
+  expect(await empty.json()).toEqual({ claude: null, codex: null, grok: null, reasonix: null });
 
   const project = await createProject(tmpdir());
   const created = await postJson("/api/conversations", {

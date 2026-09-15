@@ -20,6 +20,7 @@ const PROVIDER_NAMES: Record<Provider, string> = {
   claude: 'Claude',
   codex: 'Codex',
   grok: 'Grok',
+  reasonix: 'ReasonX',
 }
 
 /* Seuil réellement critique : la couleur d'alerte n'apparaît qu'à partir
@@ -260,7 +261,7 @@ export function QuotaStatus({
 
   return (
     <section className="quota-status" aria-label="Usage des quotas">
-      {(['claude', 'codex', 'grok'] as const).map((provider) => (
+      {(['claude', 'codex', 'grok', 'reasonix'] as const).map((provider) => (
         <CompactProviderQuota
           key={provider}
           provider={provider}
@@ -330,6 +331,7 @@ export function QuotaBar({ snapshot }: { snapshot: QuotaSnapshot }) {
       <ProviderQuota provider="claude" state={snapshot.claude} now={now} />
       <ProviderQuota provider="codex" state={snapshot.codex} now={now} />
       <ProviderQuota provider="grok" state={snapshot.grok ?? null} now={now} />
+      <ProviderQuota provider="reasonix" state={snapshot.reasonix ?? null} now={now} />
 
       <div className="quota-bar-footer">
         {freshness !== null ? <span className="quota-freshness">{freshness}</span> : null}

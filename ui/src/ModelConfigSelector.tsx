@@ -165,6 +165,7 @@ export function ModelConfigSelector({
     codex: PROVIDER_MODELS.codex[0],
     claude: PROVIDER_MODELS.claude[0],
     grok: PROVIDER_MODELS.grok[0],
+    reasonix: PROVIDER_MODELS.reasonix[0],
   })
   const disabled = isLoading || isBusy
   const efforts = PROVIDER_EFFORTS[config.provider] as readonly string[]

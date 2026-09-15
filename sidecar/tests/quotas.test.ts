@@ -149,7 +149,7 @@ test("ignore les events non rate-limit et les payloads inexploitables", () => {
   expect(tracker.ingestPayload("claude", { status: "allowed" })).toBeNull();
   expect(tracker.ingestPayload("codex", { status: "allowed" })).toBeNull();
   expect(tracker.ingestPayload("codex", "pas un objet")).toBeNull();
-  expect(tracker.snapshot()).toEqual({ claude: null, codex: null, grok: null });
+  expect(tracker.snapshot()).toEqual({ claude: null, codex: null, grok: null, reasonix: null });
 });
 
 test("ingère le payload crédits Grok", () => {

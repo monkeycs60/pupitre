@@ -1,4 +1,4 @@
-export type Provider = 'claude' | 'codex' | 'grok'
+export type Provider = 'claude' | 'codex' | 'grok' | 'reasonix'
 export type ConversationSpeed = 'standard' | 'fast'
 export type PresetPermissionMode =
   'plan' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions'
@@ -627,6 +627,7 @@ export interface QuotaSnapshot {
   claude: QuotaState | null
   codex: QuotaState | null
   grok: QuotaState | null
+  reasonix?: QuotaState | null
 }
 
 // Miroir de sidecar/src/subtasks.ts : une sous-tâche déléguée par une

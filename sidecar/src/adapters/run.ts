@@ -3,6 +3,7 @@ import { runClaudeTurn } from "./claude";
 import { runCodexTurn } from "./codex";
 import { runCodexAppServerTurn } from "./codex-app-server";
 import { runGrokTurn } from "./grok";
+import { runReasonixTurn } from "./reasonix";
 import type { EmitFn, TurnOptions } from "./types";
 
 /** Point d'entrée unique : un troisième provider ne se câble qu'ici. */
@@ -13,6 +14,7 @@ export function runProviderTurn(
 ): Promise<void> {
   if (provider === "claude") return runClaudeTurn(opts, emit);
   if (provider === "grok") return runGrokTurn(opts, emit);
+  if (provider === "reasonix") return runReasonixTurn(opts, emit);
   if (provider !== "codex") return Promise.reject(new Error(`provider inconnu : ${provider}`));
   if (process.env.PUPITRE_CODEX_MODE === "exec") return runCodexTurn(opts, emit);
   return runCodexAppServerTurn(opts, emit);

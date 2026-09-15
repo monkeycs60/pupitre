@@ -483,7 +483,7 @@ export function openDb(dir: string = dataDir()): Database {
       skill_invocation TEXT NOT NULL,
       prompt TEXT NOT NULL,
       preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
-      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex', 'grok')),
+      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex', 'grok', 'reasonix')),
       model TEXT NOT NULL,
       effort TEXT NULL,
       speed TEXT NULL,
@@ -500,7 +500,7 @@ export function openDb(dir: string = dataDir()): Database {
       workflow_id TEXT NULL REFERENCES workflows(id) ON DELETE SET NULL,
       prompt TEXT NULL,
       preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL,
-      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex', 'grok')),
+      provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex', 'grok', 'reasonix')),
       model TEXT NOT NULL,
       effort TEXT NULL,
       speed TEXT NULL,
@@ -806,12 +806,19 @@ function widenProviderCheck(db: Database, table: string): void {
   const row = db.query(
     "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
   ).get(table) as { sql: string } | null;
-  if (!row?.sql.includes("CHECK (provider IN ('claude', 'codex'))")) return;
-  const rebuilt = row.sql.replace(
-    "CHECK (provider IN ('claude', 'codex'))",
-    "CHECK (provider IN ('claude', 'codex', 'grok'))",
-  );
-  const staging = `${table}__grok_provider`;
+  if (!row) return;
+  const legacy = row.sql.includes("CHECK (provider IN ('claude', 'codex'))")
+    ? "CHECK (provider IN ('claude', 'codex'))"
+    : row.sql.includes("CHECK (provider IN ('claude', 'codex', 'grok'))")
+      ? "CHECK (provider IN ('claude', 'codex', 'grok'))"
+      : null;
+  if (!legacy) return;
+  const target = table === "skills"
+    ? "CHECK (provider IN ('claude', 'codex', 'grok'))"
+    : "CHECK (provider IN ('claude', 'codex', 'grok', 'reasonix'))";
+  if (legacy === target) return;
+  const rebuilt = row.sql.replace(legacy, target);
+  const staging = `${table}__provider_migration`;
   db.exec(`ALTER TABLE ${table} RENAME TO ${staging}`);
   db.exec(rebuilt);
   db.exec(`INSERT INTO ${table} SELECT * FROM ${staging}`);
