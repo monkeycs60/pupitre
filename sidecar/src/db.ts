@@ -598,6 +598,8 @@ export function openDb(dir: string = dataDir()): Database {
   // Nombre de tours au moment du dernier digest (0 = jamais généré).
   addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "ticket_id TEXT NULL REFERENCES tickets(id) ON DELETE SET NULL");
+  addColumn(db, "project_changelog_entries", "lines_added INTEGER NULL");
+  addColumn(db, "project_changelog_entries", "lines_removed INTEGER NULL");
   addColumn(db, "conversations", "ticket_instruction TEXT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS idx_conversations_ticket ON conversations(ticket_id)");
   const addedTicketInstruction = addColumn(db, "tickets", "instruction TEXT NOT NULL DEFAULT ''");

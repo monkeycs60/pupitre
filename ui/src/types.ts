@@ -588,6 +588,8 @@ export interface ProjectChangelogEntry {
   enrichment_status: 'pending' | 'enriched'
   imported_at: string
   enriched_at: string | null
+  lines_added: number | null
+  lines_removed: number | null
 }
 
 export interface ProjectChangelogState {

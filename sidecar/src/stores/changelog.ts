@@ -25,6 +25,15 @@ export interface ProjectChangelogEntry {
   enrichment_status: ChangelogEnrichmentStatus;
   imported_at: string;
   enriched_at: string | null;
+  /** null tant que `git show --numstat` n'a pas été lu pour ce commit. */
+  lines_added: number | null;
+  lines_removed: number | null;
+}
+
+export interface CommitLineStats {
+  sha: string;
+  added: number;
+  removed: number;
 }
 
 export interface ProjectChangelogState {
@@ -142,6 +151,27 @@ export class ChangelogStore {
           value.sha,
         );
       }
+    })();
+  }
+
+  missingLineStats(projectId: string, limit: number): Array<{ repository_path: string; commit_sha: string }> {
+    return this.db.query(`
+      SELECT repository_path, commit_sha
+      FROM project_changelog_entries
+      WHERE project_id = ? AND lines_added IS NULL
+      ORDER BY committed_at DESC, commit_sha DESC
+      LIMIT ?
+    `).all(projectId, limit) as Array<{ repository_path: string; commit_sha: string }>;
+  }
+
+  setLineStats(projectId: string, values: CommitLineStats[]): void {
+    const update = this.db.query(`
+      UPDATE project_changelog_entries
+      SET lines_added = ?, lines_removed = ?
+      WHERE project_id = ? AND commit_sha = ?
+    `);
+    this.db.transaction(() => {
+      for (const value of values) update.run(value.added, value.removed, projectId, value.sha);
     })();
   }
 

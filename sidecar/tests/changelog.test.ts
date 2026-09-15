@@ -7,10 +7,13 @@ import {
   CHANGELOG_BACKFILL_VERSION,
   CHANGELOG_BATCH_SIZE,
   CHANGELOG_ENRICHMENT_ATTEMPTS,
+  CHANGELOG_LINE_STATS_BATCH,
   CHANGELOG_REFRESH_INTERVAL_MS,
   ChangelogService,
+  parseCommitLineStats,
   parseEnrichments,
   discoverGitRepositories,
+  readCommitLineStats,
   readGitHistory,
 } from "../src/changelog";
 import { openDb } from "../src/db";
@@ -24,6 +27,7 @@ function setup(options: {
   history?: ConstructorParameters<typeof ChangelogService>[4];
   repositories?: ConstructorParameters<typeof ChangelogService>[6];
   email?: ConstructorParameters<typeof ChangelogService>[7];
+  lineStats?: ConstructorParameters<typeof ChangelogService>[8];
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-project-"));
   const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-changelog-db-")));
@@ -55,6 +59,7 @@ function setup(options: {
     () => new Date(now),
     options.repositories ?? (async () => [{ path: root, relativePath: "." }]),
     options.email ?? (async () => "test@example.com"),
+    options.lineStats ?? (async (_cwd, shas) => shas.map((sha) => ({ sha, added: 3, removed: 1 }))),
   );
   return { db, root, project, projects, domain, store, service, now };
 }
@@ -364,4 +369,79 @@ test("migre le catalogue historique vers une clé projet plus SHA", () => {
   expect(primaryKey).toEqual(["project_id", "commit_sha"]);
   expect(new ChangelogStore(db).state(project.id).backfill_version).toBe(0);
   db.close();
+});
+
+test("parse un lot de commits en lignes ajoutées et supprimées, binaires ignorés", () => {
+  const first = "a".repeat(40);
+  const second = "b".repeat(40);
+  const merge = "c".repeat(40);
+  const raw = [
+    `\x01${first}\n\n3\t1\tsrc/a.ts\n10\t0\tsrc/b.ts\n-\t-\tlogo.png\n`,
+    `\x01${merge}\n\n`,
+    `\x01${second}\n\n0\t7\tREADME.md\n`,
+  ].join("");
+  expect(parseCommitLineStats(raw)).toEqual([
+    { sha: first, added: 13, removed: 1 },
+    { sha: second, added: 0, removed: 7 },
+  ]);
+});
+
+test("remplit les lignes +/− des commits importés par dépôt, par lots bornés", async () => {
+  const reads: Array<{ cwd: string; count: number }> = [];
+  const context = setup({
+    commits: commits(CHANGELOG_LINE_STATS_BATCH + 5),
+    lineStats: async (cwd, shas) => {
+      reads.push({ cwd, count: shas.length });
+      return shas.map((sha) => ({ sha, added: Number(sha.slice(-2)), removed: 2 }));
+    },
+  });
+
+  const first = await context.service.refreshNow(context.project.id);
+  const filled = first.entries.filter((entry) => entry.lines_added !== null);
+  expect(filled).toHaveLength(CHANGELOG_LINE_STATS_BATCH);
+  expect(reads.every((read) => read.cwd === context.root && read.count <= 100)).toBe(true);
+  expect(reads.reduce((sum, read) => sum + read.count, 0)).toBe(CHANGELOG_LINE_STATS_BATCH);
+  const sample = filled.find((entry) => entry.commit_sha.endsWith("12"));
+  expect(sample).toEqual(expect.objectContaining({ lines_added: 12, lines_removed: 2 }));
+
+  const second = await context.service.refreshNow(context.project.id);
+  expect(second.entries.every((entry) => entry.lines_added !== null)).toBe(true);
+  expect(reads.reduce((sum, read) => sum + read.count, 0)).toBe(CHANGELOG_LINE_STATS_BATCH + 5);
+  context.db.close();
+});
+
+test("un commit sans numstat (fusion) est compté 0/0 et n'est plus redemandé", async () => {
+  let calls = 0;
+  const context = setup({
+    commits: commits(2),
+    lineStats: async (_cwd, shas) => {
+      calls += 1;
+      return shas.slice(0, 1).map((sha) => ({ sha, added: 4, removed: 4 }));
+    },
+  });
+  await context.service.refreshNow(context.project.id);
+  await context.service.refreshNow(context.project.id);
+  expect(calls).toBe(1);
+  const entries = context.store.list(context.project.id);
+  expect(entries.map((entry) => [entry.lines_added, entry.lines_removed]).sort()).toEqual([[0, 0], [4, 4]]);
+  context.db.close();
+});
+
+test("lit les lignes +/− réelles d'un dépôt Git", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-numstat-"));
+  const git = (...args: string[]) => Bun.spawnSync([
+    "git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args,
+  ]);
+  git("init", "-q");
+  writeFileSync(join(root, "a.txt"), "one\ntwo\nthree\n");
+  git("add", ".");
+  git("commit", "-qm", "feat: a");
+  writeFileSync(join(root, "a.txt"), "one\nthree\nfour\nfive\n");
+  git("add", ".");
+  git("commit", "-qm", "feat: b");
+  const history = await readGitHistory(root, { repositoryPath: "." });
+  const stats = await readCommitLineStats(root, history.map((entry) => entry.sha));
+  const bySubject = new Map(history.map((entry) => [entry.subject, entry.sha]));
+  expect(stats).toContainEqual({ sha: bySubject.get("feat: a")!, added: 3, removed: 0 });
+  expect(stats).toContainEqual({ sha: bySubject.get("feat: b")!, added: 2, removed: 1 });
 });

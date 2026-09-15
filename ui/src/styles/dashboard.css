@@ -177,6 +177,9 @@
 .dashboard-repository-label { color: var(--text-muted); font: 600 11px/1 var(--font-mono); }
 .dashboard-branch-label { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 11px; }
 .dashboard-branch-label svg { width: 12px; height: 12px; }
+.dashboard-line-stats { display: inline-flex; gap: 6px; font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+.dashboard-line-stats ins { color: var(--ok); text-decoration: none; }
+.dashboard-line-stats del { color: var(--danger); text-decoration: none; }
 .dashboard-changelog-list time { margin-left: auto; color: var(--text-faint); font-size: 11px; }
 .dashboard-changelog-list p, .dashboard-changelog-list small { margin: 0; }
 .dashboard-changelog-list p { color: var(--text-muted); }

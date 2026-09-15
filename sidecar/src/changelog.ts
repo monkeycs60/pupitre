@@ -5,6 +5,7 @@ import type { DomainStore } from "./stores/domains";
 import type { ProjectStore } from "./stores/projects";
 import {
   ChangelogStore,
+  type CommitLineStats,
   type GitChangelogCommit,
   type ProjectChangelogPayload,
   type ProjectChangelogState,
@@ -16,6 +17,9 @@ export const CHANGELOG_BACKFILL_VERSION = 2;
 export const CHANGELOG_ENRICHMENT_ATTEMPTS = 3;
 export const CHANGELOG_REFRESH_INTERVAL_MS = 2 * 60 * 60_000;
 export const CHANGELOG_SINCE = "2026-01-01T00:00:00Z";
+/** Commits dont les lignes +/− sont lues à chaque passage ; le reliquat suit au passage d'après. */
+export const CHANGELOG_LINE_STATS_BATCH = 400;
+const LINE_STATS_SHAS_PER_GIT = 100;
 
 export interface GitRepository {
   path: string;
@@ -32,6 +36,7 @@ export interface GitHistoryOptions {
 type GitHistoryReader = (cwd: string, options: GitHistoryOptions) => Promise<GitChangelogCommit[]>;
 type GitRepositoryFinder = (cwd: string) => Promise<GitRepository[]>;
 type GitEmailReader = (cwd: string) => Promise<string | null>;
+type GitLineStatsReader = (cwd: string, shas: string[]) => Promise<CommitLineStats[]>;
 
 export class ChangelogService {
   private active = new Set<string>();
@@ -49,6 +54,7 @@ export class ChangelogService {
     private now: () => Date = () => new Date(),
     private repositories: GitRepositoryFinder = discoverGitRepositories,
     private email: GitEmailReader = readGitEmail,
+    private lineStats: GitLineStatsReader = readCommitLineStats,
   ) {}
 
   subscribeCommits(listener: (projectId: string, commits: GitChangelogCommit[]) => void): () => void {
@@ -135,6 +141,7 @@ export class ChangelogService {
       if (backfill) this.store.reconcile(projectId, commits);
       this.store.import(projectId, commits, this.now().toISOString());
       for (const listener of this.commitListeners) listener(projectId, commits);
+      await this.fillLineStats(projectId, repositories);
       await this.enrichPending(projectId, path, backfill);
       const refreshedAt = this.now();
       this.store.markFinished(
@@ -150,6 +157,29 @@ export class ChangelogService {
         error instanceof Error ? error.message : "actualisation du changelog impossible",
         new Date(failedAt.getTime() + CHANGELOG_REFRESH_INTERVAL_MS).toISOString(),
       );
+    }
+  }
+
+  private async fillLineStats(projectId: string, repositories: GitRepository[]): Promise<void> {
+    const missing = this.store.missingLineStats(projectId, CHANGELOG_LINE_STATS_BATCH);
+    if (missing.length === 0) return;
+    const byRepository = new Map<string, string[]>();
+    for (const entry of missing) {
+      const list = byRepository.get(entry.repository_path) ?? [];
+      list.push(entry.commit_sha);
+      byRepository.set(entry.repository_path, list);
+    }
+    for (const [relativePath, shas] of byRepository) {
+      const repository = repositories.find((item) => item.relativePath === relativePath);
+      if (!repository) continue;
+      for (let index = 0; index < shas.length; index += LINE_STATS_SHAS_PER_GIT) {
+        const slice = shas.slice(index, index + LINE_STATS_SHAS_PER_GIT);
+        const stats = await this.lineStats(repository.path, slice);
+        // Un SHA absent de la sortie (commit de fusion, historique réécrit)
+        // est compté 0/0 : il ne sera plus redemandé à chaque passage.
+        const known = new Map(stats.map((item) => [item.sha, item]));
+        this.store.setLineStats(projectId, slice.map((sha) => known.get(sha) ?? { sha, added: 0, removed: 0 }));
+      }
     }
   }
 
@@ -316,6 +346,38 @@ export async function readGitHistory(
     });
   }
   return commits;
+}
+
+/**
+ * Un seul `git show` pour tout un lot : chaque commit ouvre par son SHA
+ * précédé de \x01, suivi de ses lignes numstat. Les binaires (`-\t-`) sont
+ * ignorés, un commit de fusion n'a pas de numstat et reste absent.
+ */
+export function parseCommitLineStats(raw: string): CommitLineStats[] {
+  const stats: CommitLineStats[] = [];
+  for (const block of raw.split("\x01")) {
+    const lines = block.split("\n");
+    const sha = lines[0]?.trim() ?? "";
+    if (!/^[0-9a-f]{40}$/.test(sha)) continue;
+    let added = 0;
+    let removed = 0;
+    let seen = false;
+    for (const line of lines.slice(1)) {
+      const match = line.match(/^(-|\d+)\t(-|\d+)\t/);
+      if (!match) continue;
+      seen = true;
+      if (match[1] !== "-") added += Number(match[1]);
+      if (match[2] !== "-") removed += Number(match[2]);
+    }
+    if (seen) stats.push({ sha, added, removed });
+  }
+  return stats;
+}
+
+export async function readCommitLineStats(cwd: string, shas: string[]): Promise<CommitLineStats[]> {
+  if (shas.length === 0) return [];
+  const raw = await runGit(cwd, ["show", "--numstat", "--format=%x01%H", "--no-color", ...shas]);
+  return parseCommitLineStats(raw);
 }
 
 function enrichmentPrompt(
