@@ -28,7 +28,9 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   });
   const permissionMode = opts.permissionMode;
   const model = CLAUDE_MODEL_IDS[opts.model] ?? opts.model;
-  const accessDirs = opts.filesystemScope === "full-system" ? ["/"] : aiRoots();
+  const accessDirs = opts.filesystemScope === "full-system"
+    ? ["/"]
+    : [...new Set([...(opts.extraWorkspaceRoots ?? []), ...aiRoots()])];
   // `--add-dir` élargit la racine visible, mais ne suffit pas pour les fichiers
   // d'instructions globaux : Claude les traite comme des fichiers sensibles.
   // Ces règles restent bornées aux deux racines IA et ne donnent pas le bypass

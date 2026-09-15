@@ -1966,6 +1966,46 @@ test("une conversation peut naître sur sa branche, dans un worktree dédié", a
   expect(refused.status).toBe(409);
 });
 
+test("une conversation full-stack crée et protège un worktree par dépôt", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const root = mkdtempSync(join(tmpdir(), "pupitre-srv-fullstack-"));
+  cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+  const repositories = [join(root, "apps", "api"), join(root, "apps", "web")];
+  for (const repository of repositories) {
+    mkdirSync(repository, { recursive: true });
+    runGit(repository, "init", "-q", "-b", "main");
+    runGit(repository, "config", "user.email", "git@example.test");
+    runGit(repository, "config", "user.name", "Git Fixture");
+    writeFileSync(join(repository, "README.md"), "base\n");
+    runGit(repository, "add", "README.md");
+    runGit(repository, "commit", "-qm", "socle");
+    runGit(repository, "branch", "feature/TECH-42");
+  }
+  const project = await createProject(root);
+
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "haiku",
+    message: "back et front",
+    workspaces: repositories.map((repositoryPath) => ({ branch: "feature/TECH-42", repositoryPath })),
+  });
+
+  expect(created.status).toBe(201);
+  const conversation = await created.json() as { id: string; worktree_path: string; worktree_paths: string[] };
+  expect(conversation.worktree_paths).toHaveLength(2);
+  expect(conversation.worktree_path).toBe(conversation.worktree_paths[0]);
+  for (const path of conversation.worktree_paths) expect(existsSync(path)).toBe(true);
+
+  const refused = await fetch(`${current.baseUrl}/api/projects/${project.id}/worktrees`, {
+    method: "DELETE",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ path: conversation.worktree_paths[1] }),
+  });
+  expect(refused.status).toBe(409);
+  await waitForPersistedEvent(conversation.id, (event) => event.type === "status" && event.state === "done");
+});
+
 test("un nom de branche qui s'évaderait du dossier géré est refusé", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const repo = mkdtempSync(join(tmpdir(), "pupitre-srv-wt-"));

@@ -1091,10 +1091,11 @@ function App() {
                 && branchOfWorktree(selectedConversation.worktree_path) !== null ? (
                   <span
                     className="conversation-branch"
-                    title={`Worktree dédié : ${selectedConversation.worktree_path}`}
+                    title={`Worktrees dédiés : ${(selectedConversation.worktree_paths?.length ? selectedConversation.worktree_paths : [selectedConversation.worktree_path]).join(', ')}`}
                   >
                     <BranchIcon />
                     {branchOfWorktree(selectedConversation.worktree_path)}
+                    {(selectedConversation.worktree_paths?.length ?? 0) > 1 ? ` +${selectedConversation.worktree_paths!.length - 1}` : ''}
                   </span>
                 ) : null}
                 {threadTools !== null && threadTools.assetCount > 0 ? (

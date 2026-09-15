@@ -23,6 +23,15 @@ export function conversationCwd(
   return conversation?.worktree_path ?? project.path;
 }
 
+/** Worktrees possédés par la conversation, sans doublon et principal en tête. */
+export function conversationWorktrees(conversation: Conversation | null | undefined): string[] {
+  if (!conversation) return [];
+  return [...new Set([
+    ...(conversation.worktree_path ? [conversation.worktree_path] : []),
+    ...(conversation.worktree_paths ?? []),
+  ])];
+}
+
 /**
  * Le dépôt principal, pour ce qui n'appartient à aucune conversation — la
  * composition de skills et les suggestions travaillent sur le projet entier.

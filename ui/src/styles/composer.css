@@ -659,6 +659,14 @@
   outline: none;
 }
 
+.branch-field-count {
+  flex: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .branch-field input::placeholder {
   color: var(--text-faint);
 }
@@ -722,8 +730,17 @@
   cursor: pointer;
 }
 
-.branch-suggestions li > span:first-child {
+.branch-suggestion-name {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
   white-space: nowrap;
+}
+
+.branch-suggestion-name i {
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-style: normal;
 }
 
 .branch-suggestion-repository {
@@ -740,7 +757,8 @@
 }
 
 .branch-suggestions li:hover,
-.branch-suggestions li[aria-selected='true'] {
+.branch-suggestions li[aria-selected='true'],
+.branch-suggestions li.is-active {
   background: var(--bg-hover);
 }
 

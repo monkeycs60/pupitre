@@ -24,6 +24,22 @@ test("crée une conversation avec titre dérivé du premier message", () => {
   expect(c.speed).toBeNull();
 });
 
+test("persiste tous les worktrees d'une conversation multi-dépôts", () => {
+  const paths = ["/worktrees/hapigator/TECH-1", "/worktrees/reactor/TECH-1"];
+  const conversation = convs.create({
+    projectId,
+    provider: "claude",
+    model: "opus",
+    worktreePath: paths[0],
+    worktreePaths: paths,
+    firstMessage: "Traite le back et le front",
+  });
+
+  expect(conversation.worktree_path).toBe(paths[0]);
+  expect(conversation.worktree_paths).toEqual(paths);
+  expect(convs.listByProject(projectId)[0]?.worktree_paths).toEqual(paths);
+});
+
 test("crée une conversation avec une vitesse persistée", () => {
   const c = convs.create({
     projectId,

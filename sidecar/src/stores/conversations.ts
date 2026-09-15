@@ -25,6 +25,8 @@ export interface Conversation {
   routine_id: string | null;
   /** Worktree git dédié ; null = dossier principal du projet. Voir ADR 0001. */
   worktree_path: string | null;
+  /** Tous les worktrees de la conversation, principal inclus. */
+  worktree_paths?: string[];
   /** Branche courante du projet au moment de la création ; null = non capturé (avant la migration). */
   created_on_branch: string | null;
   ticket_id: string | null;
@@ -36,6 +38,16 @@ export interface Conversation {
 }
 
 const TITLE_MAX = 120;
+
+function parseWorktreePaths(raw: unknown, fallback: string | null): string[] {
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (Array.isArray(parsed) && parsed.every((path) => typeof path === "string")) return parsed;
+  } catch {
+    // Une ancienne valeur illisible retombe sur le worktree principal historique.
+  }
+  return fallback ? [fallback] : [];
+}
 
 function matchesPreset(conversation: Pick<Conversation, "provider" | "model" | "effort" | "speed">, preset: Preset): boolean {
   return conversation.provider === preset.provider
@@ -85,6 +97,7 @@ export class ConversationStore {
     routineId?: string | null;
     /** Worktree déjà créé par le service Git ; null = dépôt principal. */
     worktreePath?: string | null;
+    worktreePaths?: string[];
     /** Branche courante du projet au moment de la création. */
     createdOnBranch?: string | null;
     ticketId?: string | null;
@@ -100,8 +113,8 @@ export class ConversationStore {
     this.db.query(
       `INSERT INTO conversations
          (id, project_id, title, summary, provider, model, preset_id, effort, speed, permission_mode,
-          continued_from, handoff_pending, routine_id, worktree_path, created_on_branch, ticket_id, ticket_instruction, origin_type, origin_key, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          continued_from, handoff_pending, routine_id, worktree_path, worktree_paths, created_on_branch, ticket_id, ticket_instruction, origin_type, origin_key, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.projectId,
@@ -117,6 +130,7 @@ export class ConversationStore {
       input.handoffPending ? 1 : 0,
       input.routineId ?? null,
       input.worktreePath ?? null,
+      JSON.stringify(input.worktreePaths?.length ? input.worktreePaths : (input.worktreePath ? [input.worktreePath] : [])),
       input.createdOnBranch ?? null,
       input.ticketId ?? null,
       input.ticketInstruction?.trim() || null,
@@ -165,6 +179,7 @@ export class ConversationStore {
       handoff_pending: !!row.handoff_pending,
       archived: !!row.archived,
       deleted_at: row.deleted_at ?? null,
+      worktree_paths: parseWorktreePaths(row.worktree_paths, row.worktree_path),
     } : null;
   }
 
@@ -197,6 +212,7 @@ export class ConversationStore {
       handoff_pending: !!r.handoff_pending,
       archived: !!r.archived,
       deleted_at: r.deleted_at ?? null,
+      worktree_paths: parseWorktreePaths(r.worktree_paths, r.worktree_path),
     }));
   }
 

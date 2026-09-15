@@ -13,7 +13,7 @@ import type { DomainStore } from "./stores/domains";
 import { DEFAULT_ACTION_FORMAT, withActionFormat } from "./response-format";
 import { claudeServerDefinitions } from "./mcp-inventory";
 import type { ActionFormat } from "./response-format";
-import { conversationCwd } from "./workspace";
+import { conversationCwd, conversationWorktrees } from "./workspace";
 import type { SteerFn } from "./adapters/types";
 import { withToolMentions } from "./tool-mentions";
 import { assistantImageRoots, importLocalMarkdownImages } from "./assistant-media";
@@ -198,7 +198,7 @@ export class ConversationRunner {
     const project = this.projects.get(conv.project_id)!;
     let gitTracking: GitTurnTracking | null = null;
     try {
-      gitTracking = this.git?.beginTurn(project.id, { cwd: conversationCwd(project, conv) }) ?? null;
+      gitTracking = this.git?.beginTurn(project.id, { cwds: conversationWorktrees(conv) }) ?? null;
     } catch {
       // Un projet hors Git ne doit jamais empêcher le tour.
     }
@@ -301,8 +301,15 @@ export class ConversationRunner {
       }
       const permissionMode = conv.permission_mode ?? project.permission_mode;
       const cwd = conversationCwd(project, conv)
+      const worktrees = conversationWorktrees(conv)
       const toolPrompt = withToolMentions(prompt, conv.provider);
-      const providerPrompt = (options.preamble ? `${options.preamble}\n\n---\n\n` : "")
+      const workspacePreamble = worktrees.length > 1
+        ? `Espaces de travail Git de cette conversation :\n${worktrees.map((path) => `- ${path}`).join("\n")}\nTravaille dans chacun selon les besoins du chantier ; ne modifie pas les checkouts sources du projet.`
+        : null;
+      const preamble = [options.preamble, workspacePreamble].filter(Boolean).join("\n\n");
+      const providerPrompt = (preamble
+        ? `${preamble}\n\n---\n\n`
+        : "")
         + (this.skills?.augmentPrompt(toolPrompt, project.id, {
           cwd: conversationCwd(project, conv),
           projectPath: project.path,
@@ -312,7 +319,10 @@ export class ConversationRunner {
         cwd,
         // Depuis un worktree, le dépôt principal doit rester lisible : le
         // `.git` du worktree n'est qu'un renvoi vers lui.
-        extraWorkspaceRoots: cwd === project.path ? undefined : [project.path],
+        extraWorkspaceRoots: [...new Set([
+          ...(cwd === project.path ? [] : [project.path]),
+          ...worktrees.filter((path) => path !== cwd),
+        ])],
         model: conv.model,
         effort: conv.effort ?? undefined,
         speed: conv.speed ?? undefined,

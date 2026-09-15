@@ -148,6 +148,37 @@ test("Claude reçoit l'autonomie héritée du projet à chaque nouveau tour", as
   expect(readFileSync(argsFile, "utf8")).toContain("--permission-mode bypassPermissions");
 });
 
+test("une conversation multi-dépôts expose tous ses worktrees et les nomme dans le prompt", async () => {
+  const argsFile = join(dataDir, "claude-workspaces-args");
+  const stdinFile = join(dataDir, "claude-workspaces-stdin");
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  process.env.FAKE_CLAUDE_STDIN_FILE = stdinFile;
+  process.env.PUPITRE_CLAUDE_PERSISTENT = "0";
+  const paths = [join(dataDir, "hapigator-TECH-1"), join(dataDir, "reactor-TECH-1")];
+  for (const path of paths) mkdirSync(path);
+  const conversation = convs.create({
+    projectId,
+    provider: "claude",
+    model: "haiku",
+    worktreePath: paths[0],
+    worktreePaths: paths,
+    firstMessage: "full stack",
+  });
+
+  try {
+    await runner.runTurn(conversation.id, "implémente", []);
+
+    const args = readFileSync(argsFile, "utf8");
+    expect(args).toContain(paths[1]!);
+    const input = JSON.parse(readFileSync(stdinFile, "utf8"));
+    expect(input.message.content[0].text).toContain(paths.join("\n- "));
+  } finally {
+    delete process.env.FAKE_CLAUDE_ARGS_FILE;
+    delete process.env.FAKE_CLAUDE_STDIN_FILE;
+    delete process.env.PUPITRE_CLAUDE_PERSISTENT;
+  }
+});
+
 test("Grok reçoit l'autonomie héritée du projet", async () => {
   const argsFile = join(dataDir, "grok-inherited-args");
   process.env.PUPITRE_GROK_BIN = join(import.meta.dir, "fake-bins/fake-grok");

@@ -132,6 +132,7 @@ export interface GitTurnTracking {
   before: string | null;
   ambiguous: boolean;
   conversationCwd: string | null;
+  conversationCwds: Set<string>;
   ticketKey: string | null;
   heads: Map<string, string | null>;
   repositoryOf: Map<string, string>;
@@ -206,6 +207,29 @@ export class GitProjectService {
     return created;
   }
 
+  /** Crée un lot indivisible : si un dépôt échoue, les nouveaux worktrees précédents sont retirés. */
+  createWorktrees(
+    projectId: string,
+    inputs: Array<{ branch: string; repositoryPath: string }>,
+  ): GitWorktree[] {
+    const created: Array<{ worktree: GitWorktree; preexisting: boolean }> = [];
+    try {
+      for (const input of inputs) {
+        const cwd = this.repositoryPath(projectId, input.repositoryPath);
+        const before = new Set(this.worktrees(cwd).map((item) => resolve(item.path)));
+        const worktree = this.createWorktree(projectId, input);
+        created.push({ worktree, preexisting: before.has(resolve(worktree.path)) });
+      }
+      return created.map((item) => item.worktree);
+    } catch (error) {
+      for (const item of created.reverse()) {
+        if (item.preexisting) continue;
+        try { this.removeWorktree(projectId, item.worktree.path); } catch { /* préserver l'erreur de création */ }
+      }
+      throw error;
+    }
+  }
+
   createDetachedWorktree(projectId: string, input: { name: string; startPoint: string; repositoryPath?: string }): GitWorktree {
     const cwd = this.repositoryPath(projectId, input.repositoryPath);
     const name = input.name.trim();
@@ -247,8 +271,13 @@ export class GitProjectService {
       throw new GitProjectError("le dépôt principal ne peut pas être retiré");
     }
     const holders = this.db.query(
-      "SELECT count(*) AS total FROM conversations WHERE worktree_path = ? AND deleted_at IS NULL",
-    ).get(path) as { total: number };
+      `SELECT count(*) AS total FROM conversations
+       WHERE deleted_at IS NULL AND (
+         worktree_path = ? OR EXISTS (
+           SELECT 1 FROM json_each(conversations.worktree_paths) WHERE value = ?
+         )
+       )`,
+    ).get(path, path) as { total: number };
     if (holders.total > 0) {
       throw new GitProjectError(
         `worktree encore utilisé par ${holders.total} conversation(s)`,
@@ -515,9 +544,10 @@ export class GitProjectService {
    * imbriqués compris — pour attribuer à la conversation les commits créés
    * pendant son tour, où qu'ils aient été faits.
    */
-  beginTurn(projectId: string, context: { cwd?: string | null } = {}): GitTurnTracking {
+  beginTurn(projectId: string, context: { cwd?: string | null; cwds?: string[] } = {}): GitTurnTracking {
     const projectPath = resolve(this.projectPath(projectId));
-    const conversationCwd = context.cwd ? resolve(context.cwd) : null;
+    const conversationCwds = new Set((context.cwds ?? (context.cwd ? [context.cwd] : [])).map((cwd) => resolve(cwd)));
+    const conversationCwd = context.cwd ? resolve(context.cwd) : conversationCwds.values().next().value ?? null;
     const snapshot = this.snapshotHeads(projectPath, conversationCwd);
     const tracking: GitTurnTracking = {
       id: crypto.randomUUID(),
@@ -525,6 +555,7 @@ export class GitProjectService {
       before: snapshot.heads.get(projectPath) ?? null,
       ambiguous: false,
       conversationCwd,
+      conversationCwds,
       ticketKey: conversationCwd ? ticketKeyOf(readHead(conversationCwd).branch, conversationCwd) : null,
       ...snapshot,
       peers: new Set(),
@@ -591,10 +622,10 @@ export class GitProjectService {
    */
   private mayAttributeWorktree(tracking: GitTurnTracking, worktree: string): boolean {
     if (!tracking.ambiguous) return true;
-    if (tracking.conversationCwd === worktree) return true;
+    if (tracking.conversationCwds.has(worktree)) return true;
     if (!tracking.ticketKey) return false;
     if (ticketKeyOf(readHead(worktree).branch, worktree) !== tracking.ticketKey) return false;
-    return ![...tracking.peers].some((peer) => peer.ticketKey === tracking.ticketKey || peer.conversationCwd === worktree);
+    return ![...tracking.peers].some((peer) => peer.ticketKey === tracking.ticketKey || peer.conversationCwds.has(worktree));
   }
 
   private commitsNotIn(cwd: string, head: string, excluded: string[]): string[] {

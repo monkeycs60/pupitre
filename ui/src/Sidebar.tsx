@@ -794,8 +794,8 @@ export const Sidebar = memo(function Sidebar({
                         </span>
                       ))}
                       {branch !== null ? (
-                        <span className="conv-row-branch" title={`Branche du worktree : ${conversation.worktree_path}`}>
-                          <BranchIcon />{branch}
+                        <span className="conv-row-branch" title={`Worktrees : ${(conversation.worktree_paths?.length ? conversation.worktree_paths : [conversation.worktree_path]).join(', ')}`}>
+                          <BranchIcon />{branch}{(conversation.worktree_paths?.length ?? 0) > 1 ? ` +${conversation.worktree_paths!.length - 1}` : ''}
                         </span>
                       ) : conversation.created_on_branch !== null ? (
                         <span className="conv-row-branch" title={`Branche à la création`}>

@@ -149,6 +149,18 @@ test("crée le worktree dans le dépôt qui porte la branche choisie", () => {
   expect(inHapigator("worktree", "list", "--porcelain")).toContain(created.path);
 });
 
+test("annule les worktrees du lot si un dépôt sélectionné échoue", () => {
+  const branch = "feature/TECH-25008";
+
+  expect(() => git.createWorktrees(projectId, [
+    { branch, repositoryPath: repo },
+    { branch, repositoryPath: join(root, "hors-projet") },
+  ])).toThrow(/dépôt applicatif invalide/);
+
+  expect(run("worktree", "list", "--porcelain")).not.toContain(branch.replaceAll("/", "-"));
+  expect(run("branch", "--list", branch)).toBe(branch);
+});
+
 test("crée une branche de correction explicitement depuis develop", () => {
   run("branch", "develop");
   writeFileSync(join(repo, "README.md"), "branche courante\n");

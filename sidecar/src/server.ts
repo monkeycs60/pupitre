@@ -2728,6 +2728,25 @@ export function createServer(deps: ServerDeps) {
           // crée alors un worktree, où tous ses agents travailleront (ADR 0001).
           const branch = optionalTrimmed(body, "branch");
           const repositoryPath = optionalTrimmed(body, "repositoryPath");
+          const rawWorkspaces = body.workspaces;
+          let requestedWorkspaces: Array<{ branch: string; repositoryPath: string }> | null = null;
+          if (rawWorkspaces !== undefined) {
+            if (!Array.isArray(rawWorkspaces) || rawWorkspaces.length < 1 || rawWorkspaces.length > 8) {
+              throw new HttpError(400, "sélection de dépôts invalide");
+            }
+            requestedWorkspaces = rawWorkspaces.map((raw) => {
+              if (typeof raw !== "object" || raw === null) throw new HttpError(400, "dépôt de branche invalide");
+              const candidate = raw as Record<string, unknown>;
+              if (typeof candidate.branch !== "string" || typeof candidate.repositoryPath !== "string"
+                || !candidate.branch.trim() || !candidate.repositoryPath.trim()) {
+                throw new HttpError(400, "branche et dépôt requis");
+              }
+              return { branch: candidate.branch.trim(), repositoryPath: candidate.repositoryPath.trim() };
+            });
+            if (new Set(requestedWorkspaces.map((item) => item.repositoryPath)).size !== requestedWorkspaces.length) {
+              throw new HttpError(400, "un seul worktree par dépôt est permis");
+            }
+          }
           const ticketId = optionalTrimmed(body, "ticketId");
           let originType = optionalTrimmed(body, "originType");
           let originKey = optionalTrimmed(body, "originKey");
@@ -2831,7 +2850,9 @@ export function createServer(deps: ServerDeps) {
               `Tout commit qui résout cette problématique doit inclure exactement [${problem.public_id}] dans son message.`,
             ].join("\n");
           }
-          let effectiveBranch = branch ?? (ticket ? deps.tickets.branchesOf(ticket.id)[0] ?? null : null);
+          let effectiveBranch = requestedWorkspaces?.[0]?.branch
+            ?? branch
+            ?? (ticket ? deps.tickets.branchesOf(ticket.id)[0] ?? null : null);
           if (!ticket && effectiveBranch) {
             const patternSource = deps.integrations.listByProject(projectId)
               .find((integration) => integration.branch_pattern)?.branch_pattern ?? null;
@@ -2840,13 +2861,22 @@ export function createServer(deps: ServerDeps) {
             ticket = key ? deps.tickets.findByKey(projectId, key) : null;
           }
           let worktreePath: string | null = null;
+          let worktreePaths: string[] = [];
           let sentryStartPoint: string | null = null;
-          if (effectiveBranch !== null) {
+          if (requestedWorkspaces !== null) {
+            try {
+              worktreePaths = deps.git.createWorktrees(projectId, requestedWorkspaces).map((item) => item.path);
+              worktreePath = worktreePaths[0] ?? null;
+            } catch (error) {
+              throw new HttpError(400, error instanceof Error ? error.message : "worktrees impossibles");
+            }
+          } else if (effectiveBranch !== null) {
             try {
               worktreePath = deps.git.createWorktree(projectId, {
                 branch: effectiveBranch,
                 repositoryPath: repositoryPath ?? undefined,
               }).path;
+              worktreePaths = [worktreePath];
             } catch (error) {
               throw new HttpError(
                 400,
@@ -2875,6 +2905,7 @@ export function createServer(deps: ServerDeps) {
           const snapshot = deps.git.snapshot(projectId);
           let conversation = deps.conversations.create({
             worktreePath,
+            worktreePaths,
             projectId,
             provider: provider as Provider,
             model,
@@ -2962,6 +2993,7 @@ export function createServer(deps: ServerDeps) {
             speed: selectedPreset?.speed ?? source.speed,
             permissionMode: source.permission_mode,
             worktreePath: source.worktree_path,
+            worktreePaths: source.worktree_paths,
             createdOnBranch: source.created_on_branch,
             ticketId: source.ticket_id,
             ticketInstruction: source.ticket_instruction,

@@ -256,6 +256,7 @@ export interface Conversation {
   routine_id: string | null
   /** Worktree git dédié ; null = dossier principal du projet (ADR 0001). */
   worktree_path: string | null
+  worktree_paths?: string[]
   /** Branche courante du projet au moment de la création. */
   created_on_branch: string | null
   ticket_id: string | null
@@ -683,6 +684,12 @@ export interface GitBranch {
 }
 
 export interface GitBranchOption extends GitBranch {
+  repositoryPath: string
+  repositoryLabel: string
+}
+
+export interface GitWorkspaceSelection {
+  branch: string
   repositoryPath: string
   repositoryLabel: string
 }

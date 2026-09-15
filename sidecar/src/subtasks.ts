@@ -6,7 +6,7 @@ import type { QuotaTracker } from "./quotas";
 import { runProviderTurn } from "./adapters/run";
 import { claudeServerDefinitions } from "./mcp-inventory";
 import type { FilesystemScope } from "./access";
-import { conversationCwd } from "./workspace";
+import { conversationCwd, conversationWorktrees } from "./workspace";
 
 /**
  * Nombre maximum de sous-tâches simultanées PAR conversation parente.
@@ -310,15 +310,21 @@ export class SubtaskRunner {
       // L'agent délégué doit voir la branche qu'il est chargé de modifier.
       const parent = this.convs.get(subtask.conversation_id);
       const cwd = conversationCwd(project, parent);
+      const worktrees = conversationWorktrees(parent);
       const opts = {
         cwd,
         // Même raison que pour un tour : le dépôt principal porte le `.git`
         // réel du worktree.
-        extraWorkspaceRoots: cwd === project.path ? undefined : [project.path],
+        extraWorkspaceRoots: [...new Set([
+          ...(cwd === project.path ? [] : [project.path]),
+          ...worktrees.filter((path) => path !== cwd),
+        ])],
         model: subtask.model,
         effort: subtask.effort ?? undefined,
         speed: subtask.speed ?? undefined,
-        prompt: subtask.prompt,
+        prompt: worktrees.length > 1
+          ? `Espaces de travail Git disponibles :\n${worktrees.map((path) => `- ${path}`).join("\n")}\n\n${subtask.prompt}`
+          : subtask.prompt,
         cliSessionId: null, // une subtask est un one-shot : jamais de reprise
         permissionMode,
         filesystemScope,

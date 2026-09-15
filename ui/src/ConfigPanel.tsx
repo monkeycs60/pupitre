@@ -12,6 +12,7 @@ import type {
   Provider,
   QuotaSnapshot,
   GitBranchOption,
+  GitWorkspaceSelection,
 } from './types'
 
 /** Les décisions de lancement d'une conversation, sans son premier message. */
@@ -25,6 +26,7 @@ export interface ConversationConfig {
   /** Branche sur laquelle isoler la conversation ; vide = dépôt principal. */
   branch?: string | null
   repositoryPath?: string | null
+  workspaces?: GitWorkspaceSelection[]
   ticketKey?: string | null
 }
 
@@ -75,6 +77,7 @@ function keepBranch(next: ConversationConfig, current: ConversationConfig): Conv
     ...next,
     branch: current.branch ?? null,
     repositoryPath: current.repositoryPath ?? null,
+    workspaces: current.workspaces ?? [],
     ticketKey: current.ticketKey ?? null,
   }
 }
@@ -169,6 +172,24 @@ export function ConfigPanel({
     onConfigChange(next)
   }
 
+  function toggleWorkspace(option: GitBranchOption) {
+    const current = config.workspaces ?? (config.branch && config.repositoryPath
+      ? [{ branch: config.branch, repositoryPath: config.repositoryPath, repositoryLabel: option.repositoryLabel }]
+      : [])
+    const key = `${option.repositoryPath}\0${option.name}`
+    const exists = current.some((item) => `${item.repositoryPath}\0${item.branch}` === key)
+    const workspaces = exists
+      ? current.filter((item) => `${item.repositoryPath}\0${item.branch}` !== key)
+      : [...current, { branch: option.name, repositoryPath: option.repositoryPath, repositoryLabel: option.repositoryLabel }]
+    const primary = workspaces[0] ?? null
+    onConfigChange({
+      ...config,
+      branch: primary?.branch ?? null,
+      repositoryPath: primary?.repositoryPath ?? null,
+      workspaces,
+    })
+  }
+
   return (
     <div className="config-panel" aria-label="Configuration de la conversation">
       <ModelConfigSelector
@@ -185,10 +206,12 @@ export function ConfigPanel({
         <BranchAutocomplete
           value={config.branch ?? ''}
           branches={branches}
+          selected={config.workspaces ?? []}
           currentBranch={currentBranch}
           disabled={isLoading}
           placement={placement}
-          onChange={(branch, repositoryPath) => onConfigChange({ ...config, branch, repositoryPath })}
+          onChange={(branch, repositoryPath) => onConfigChange({ ...config, branch, repositoryPath, workspaces: [] })}
+          onToggle={toggleWorkspace}
         />
         {config.ticketKey ? <small className="config-ticket">Ticket {config.ticketKey}</small> : null}
       </div>

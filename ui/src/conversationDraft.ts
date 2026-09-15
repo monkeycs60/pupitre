@@ -1,5 +1,5 @@
 import type { CreateConversationInput } from './api'
-import type { Attachment, ConversationSpeed, PresetPermissionMode, Provider } from './types'
+import type { Attachment, ConversationSpeed, GitWorkspaceSelection, PresetPermissionMode, Provider } from './types'
 
 interface ConversationDraft {
   projectId: string
@@ -12,6 +12,7 @@ interface ConversationDraft {
   /** Branche saisie par l'utilisateur ; vide = travailler dans le dépôt. */
   branch?: string | null
   repositoryPath?: string | null
+  workspaces?: GitWorkspaceSelection[]
   ticketId?: string | null
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
@@ -57,6 +58,9 @@ export function buildCreateConversationInput(
     permissionMode: draft.permissionMode ?? null,
     branch: draft.branch?.trim() || null,
     ...(draft.repositoryPath ? { repositoryPath: draft.repositoryPath } : {}),
+    ...(draft.workspaces?.length ? {
+      workspaces: draft.workspaces.map(({ branch, repositoryPath }) => ({ branch, repositoryPath })),
+    } : {}),
     ticketId: draft.ticketId ?? null,
     ...(draft.originType ? {
       originType: draft.originType,

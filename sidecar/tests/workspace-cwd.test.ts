@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { conversationCwd, projectCwd } from "../src/workspace";
+import { conversationCwd, conversationWorktrees, projectCwd } from "../src/workspace";
 import type { Conversation } from "../src/stores/conversations";
 import type { Project } from "../src/stores/projects";
 
@@ -49,6 +49,18 @@ test("une conversation sans worktree travaille dans le dépôt", () => {
 test("une conversation avec worktree y travaille", () => {
   const conversation = { worktree_path: "/worktrees/p/ticket-42" } as Conversation;
   expect(conversationCwd(project, conversation)).toBe("/worktrees/p/ticket-42");
+});
+
+test("une conversation multi-dépôts expose le principal puis ses worktrees associés", () => {
+  const conversation = {
+    worktree_path: "/worktrees/hapigator/TECH-42",
+    worktree_paths: ["/worktrees/reactor/TECH-42", "/worktrees/hapigator/TECH-42"],
+  } as Conversation;
+
+  expect(conversationWorktrees(conversation)).toEqual([
+    "/worktrees/hapigator/TECH-42",
+    "/worktrees/reactor/TECH-42",
+  ]);
 });
 
 test("projectCwd reste le dépôt, quoi qu'il arrive", () => {

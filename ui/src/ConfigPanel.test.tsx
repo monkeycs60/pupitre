@@ -246,3 +246,32 @@ test('la branche courante du dépôt sert de repère dans le champ', async () =>
     expect(screen.getByRole('combobox', { name: 'Branche cible' }).getAttribute('placeholder')).toBe('develop')
   })
 })
+
+test('cumule la même branche dans plusieurs dépôts', async () => {
+  const options = [
+    { name: 'feature/TECH-25008', fullName: 'refs/heads/feature/TECH-25008', sha: 'a', current: false, remote: false, repositoryPath: '/mono/apps/hapigator', repositoryLabel: 'apps/hapigator' },
+    { name: 'feature/TECH-25008', fullName: 'refs/heads/feature/TECH-25008', sha: 'b', current: false, remote: false, repositoryPath: '/mono/apps/reactor', repositoryLabel: 'apps/reactor' },
+  ]
+  globalThis.fetch = mock((input: string | URL) => Promise.resolve(new Response(JSON.stringify(
+    String(input).endsWith('/git')
+      ? { branches: [], branchOptions: options, worktrees: [], commits: [], currentBranch: 'main' }
+      : [speedPreset],
+  ), { status: 200, headers: { 'content-type': 'application/json' } }))) as unknown as typeof fetch
+  let latest = initialConfig
+  function Controlled() {
+    const [config, setConfig] = useState(initialConfig)
+    latest = config
+    return createElement(ConfigPanel, {
+      project, quotas, config, onConfigChange: setConfig, onError: () => undefined, applyProjectDefault: false,
+    })
+  }
+  render(createElement(Controlled))
+
+  const input = await screen.findByRole('combobox', { name: 'Branche cible' })
+  fireEvent.change(input, { target: { value: '25008' } })
+  fireEvent.click((await screen.findAllByRole('option'))[0]!)
+  fireEvent.click((await screen.findAllByRole('option'))[1]!)
+
+  expect(latest.workspaces?.map((item) => item.repositoryLabel)).toEqual(['apps/hapigator', 'apps/reactor'])
+  expect(screen.getByText('2 dépôts')).toBeTruthy()
+})

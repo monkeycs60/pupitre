@@ -43,7 +43,18 @@ test("le brouillon transmet la branche et son dépôt, et rien quand il n'y en a
     ...base,
     branch: "ticket-42",
     repositoryPath: "/project/apps/api",
-  })).toMatchObject({ branch: "ticket-42", repositoryPath: "/project/apps/api" });
+    workspaces: [
+      { branch: "ticket-42", repositoryPath: "/project/apps/api", repositoryLabel: "apps/api" },
+      { branch: "ticket-42", repositoryPath: "/project/apps/web", repositoryLabel: "apps/web" },
+    ],
+  })).toMatchObject({
+    branch: "ticket-42",
+    repositoryPath: "/project/apps/api",
+    workspaces: [
+      { branch: "ticket-42", repositoryPath: "/project/apps/api" },
+      { branch: "ticket-42", repositoryPath: "/project/apps/web" },
+    ],
+  });
   // Un champ vide ou absent vaut « travaille dans le dépôt principal ».
   expect(buildCreateConversationInput({ ...base, branch: "  " }).branch).toBeNull();
   expect(buildCreateConversationInput(base).branch).toBeNull();

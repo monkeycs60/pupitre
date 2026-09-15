@@ -88,6 +88,7 @@ export interface CreateConversationInput {
   branch?: string | null
   /** Dépôt du projet qui porte la branche ; absent = dépôt racine. */
   repositoryPath?: string | null
+  workspaces?: Array<{ branch: string; repositoryPath: string }>
   ticketId?: string | null
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
