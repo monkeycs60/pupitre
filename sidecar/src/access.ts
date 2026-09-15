@@ -19,4 +19,3 @@ export function aiRoots(): string[] {
   const home = homedir();
   return [join(home, ".claude"), join(home, ".codex"), join(home, ".grok")];
 }
-

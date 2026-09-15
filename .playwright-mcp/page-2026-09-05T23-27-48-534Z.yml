@@ -1,0 +1,616 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: Pupitre
+      - generic [ref=e814]:
+        - generic [aria-hidden] [ref=e815]: /
+        - generic [ref=e816]: pupitre
+      - button "Rechercher partout Ctrl K" [ref=e7] [cursor=pointer]:
+        - generic [ref=e12]: Rechercher partout
+        - generic [ref=e13]: Ctrl K
+    - generic [ref=e137]:
+      - button "dev · 4d3923e · périmé (4)" [ref=e138] [cursor=pointer]
+      - generic "Temps actif aujourd'hui" [ref=e817]: 10 min
+  - navigation "Projets et navigation" [ref=e14]:
+    - generic [ref=e139]:
+      - button "coworker-malin" [ref=e141] [cursor=pointer]:
+        - generic [ref=e142]: CM
+      - button "pupitre" [ref=e144] [cursor=pointer]:
+        - generic [ref=e145]: PU
+      - button "affilae-mono" [ref=e148] [cursor=pointer]:
+        - generic [ref=e149]: AM
+      - button "recall-people-2026" [ref=e151] [cursor=pointer]:
+        - generic [ref=e152]: RP
+      - button "coworking" [ref=e154] [cursor=pointer]:
+        - generic [ref=e155]: CO
+    - generic [ref=e16]:
+      - button "Conversations" [ref=e17] [cursor=pointer]:
+        - generic:
+          - generic: Conversations
+          - generic [ref=e22]: Ctrl Maj C
+      - button "Tableau de bord" [ref=e23] [cursor=pointer]:
+        - generic:
+          - generic: Tableau de bord
+          - generic [ref=e27]: Ctrl Maj T
+      - button "Inbox" [ref=e28] [cursor=pointer]
+      - button "Fleet" [ref=e32] [cursor=pointer]:
+        - generic:
+          - generic: Fleet
+          - generic [ref=e36]: Ctrl Maj F
+      - button "Documents" [ref=e37] [cursor=pointer]:
+        - generic:
+          - generic: Documents
+          - generic [ref=e42]: Ctrl Maj D
+      - button "Skills" [ref=e43] [cursor=pointer]
+      - button "Mémoire" [ref=e47] [cursor=pointer]
+      - button "Routines" [ref=e53] [cursor=pointer]
+      - button "Coûts & quotas" [ref=e58] [cursor=pointer]
+      - button "Progression" [ref=e63] [cursor=pointer]
+      - button "Réglages" [ref=e68] [cursor=pointer]
+      - button "Aide" [ref=e73] [cursor=pointer]
+  - complementary [ref=e78]:
+    - generic [ref=e79]:
+      - generic [ref=e80]:
+        - generic [ref=e81]: pupitre
+        - generic "/home/clement/Desktop/pupitre" [ref=e854]
+      - button "Paramètres de pupitre, 3 domaines proposés" [ref=e855] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e162]: "3"
+    - region "Navigation du projet" [ref=e83]:
+      - tablist "Contenu de la sidebar" [ref=e84]:
+        - tab "Conversations 40" [selected] [ref=e856] [cursor=pointer]:
+          - text: Conversations
+          - generic [ref=e86]: "40"
+        - tab "Workflows 0" [ref=e87] [cursor=pointer]:
+          - text: Workflows
+          - generic [ref=e88]: "0"
+      - tabpanel "Conversations 40" [ref=e857]:
+        - button "Nouvelle conversation" [ref=e91] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e92]: +
+        - generic [ref=e94]:
+          - textbox "Filtrer les conversations" [ref=e99]:
+            - /placeholder: Filtrer les conversations actives…
+          - 'button "Choisir le périmètre : actives, archives ou corbeille" [ref=e100] [cursor=pointer]'
+        - generic [ref=e103]:
+          - generic [ref=e165]:
+            - generic [ref=e166]:
+              - button "Replier Cette semaine" [expanded] [ref=e167] [cursor=pointer]:
+                - generic [ref=e170]: Cette semaine
+              - generic [ref=e172]: "2"
+            - generic [ref=e858]:
+              - button "Promotion et vérification de Pupitre ven ChatGPT" [ref=e859] [cursor=pointer]:
+                - generic [ref=e860]:
+                  - generic [ref=e862]: Promotion et vérification de Pupitre
+                  - generic [ref=e863]: ven
+                - img "ChatGPT" [ref=e865]
+              - generic [ref=e867]:
+                - button "Épingler Promotion et vérification de Pupitre" [ref=e868] [cursor=pointer]: ◇
+                - button "Actions pour Promotion et vérification de Pupitre" [ref=e869] [cursor=pointer]: ⋯
+            - generic [ref=e870]:
+              - button "Capture d'écran de Pupitre lun ChatGPT master" [ref=e871] [cursor=pointer]:
+                - generic [ref=e872]:
+                  - generic [ref=e874]: Capture d'écran de Pupitre
+                  - generic [ref=e875]: lun
+                - generic [ref=e876]:
+                  - img "ChatGPT" [ref=e877]
+                  - generic "Branche à la création" [ref=e879]: master
+              - generic [ref=e885]:
+                - button "Épingler Capture d'écran de Pupitre" [ref=e886] [cursor=pointer]: ◇
+                - button "Actions pour Capture d'écran de Pupitre" [ref=e887] [cursor=pointer]: ⋯
+          - generic [ref=e591]:
+            - generic [ref=e592]:
+              - button "Replier Plus ancien" [expanded] [ref=e593] [cursor=pointer]:
+                - generic [ref=e596]: Plus ancien
+              - generic [ref=e598]: "37"
+            - generic [ref=e888]:
+              - button "Alias shell pupitre pour lancer Tauri dev 20/08 ChatGPT master" [ref=e889] [cursor=pointer]:
+                - generic [ref=e890]:
+                  - generic [ref=e892]: Alias shell pupitre pour lancer Tauri dev
+                  - generic [ref=e893]: 20/08
+                - generic [ref=e894]:
+                  - img "ChatGPT" [ref=e895]
+                  - generic "Branche à la création" [ref=e897]: master
+              - generic [ref=e903]:
+                - button "Épingler Alias shell pupitre pour lancer Tauri dev" [ref=e904] [cursor=pointer]: ◇
+                - button "Actions pour Alias shell pupitre pour lancer Tauri dev" [ref=e905] [cursor=pointer]: ⋯
+            - generic [ref=e906]:
+              - button "Poème avec rimes rares en -ctum 18/08 ChatGPT master" [ref=e907] [cursor=pointer]:
+                - generic [ref=e908]:
+                  - generic [ref=e910]: Poème avec rimes rares en -ctum
+                  - generic [ref=e911]: 18/08
+                - generic [ref=e912]:
+                  - img "ChatGPT" [ref=e913]
+                  - generic "Branche à la création" [ref=e915]: master
+              - generic [ref=e921]:
+                - button "Épingler Poème avec rimes rares en -ctum" [ref=e922] [cursor=pointer]: ◇
+                - button "Actions pour Poème avec rimes rares en -ctum" [ref=e923] [cursor=pointer]: ⋯
+            - generic [ref=e924]:
+              - button "coucou tu peux m'écrire un poème 18/08 ChatGPT master" [ref=e925] [cursor=pointer]:
+                - generic [ref=e926]:
+                  - generic [ref=e928]: coucou tu peux m'écrire un poème
+                  - generic [ref=e929]: 18/08
+                - generic [ref=e930]:
+                  - img "ChatGPT" [ref=e931]
+                  - generic "Branche à la création" [ref=e933]: master
+              - generic [ref=e939]:
+                - button "Épingler coucou tu peux m'écrire un poème" [ref=e940] [cursor=pointer]: ◇
+                - button "Actions pour coucou tu peux m'écrire un poème" [ref=e941] [cursor=pointer]: ⋯
+            - generic [ref=e942]:
+              - button "Prévenir l'overlap de placeholder au lancement 18/08 ChatGPT master" [ref=e943] [cursor=pointer]:
+                - generic [ref=e944]:
+                  - generic [ref=e946]: Prévenir l'overlap de placeholder au lancement
+                  - generic [ref=e947]: 18/08
+                - generic [ref=e948]:
+                  - img "ChatGPT" [ref=e949]
+                  - generic "Branche à la création" [ref=e951]: master
+              - generic [ref=e957]:
+                - button "Épingler Prévenir l'overlap de placeholder au lancement" [ref=e958] [cursor=pointer]: ◇
+                - button "Actions pour Prévenir l'overlap de placeholder au lancement" [ref=e959] [cursor=pointer]: ⋯
+            - generic [ref=e960]:
+              - button "Tests visuels et validations de steering 16/08 ChatGPT" [ref=e961] [cursor=pointer]:
+                - generic [ref=e962]:
+                  - generic [ref=e964]: Tests visuels et validations de steering
+                  - generic [ref=e965]: 16/08
+                - img "ChatGPT" [ref=e967]
+              - generic [ref=e969]:
+                - button "Épingler Tests visuels et validations de steering" [ref=e970] [cursor=pointer]: ◇
+                - button "Actions pour Tests visuels et validations de steering" [ref=e971] [cursor=pointer]: ⋯
+            - generic [ref=e972]:
+              - button "Publication de 11 commits sur origin/master 14/08 ChatGPT master" [ref=e973] [cursor=pointer]:
+                - generic [ref=e974]:
+                  - generic [ref=e976]: Publication de 11 commits sur origin/master
+                  - generic [ref=e977]: 14/08
+                - generic [ref=e978]:
+                  - img "ChatGPT" [ref=e979]
+                  - generic "Branche à la création" [ref=e981]: master
+              - generic [ref=e987]:
+                - button "Épingler Publication de 11 commits sur origin/master" [ref=e988] [cursor=pointer]: ◇
+                - button "Actions pour Publication de 11 commits sur origin/master" [ref=e989] [cursor=pointer]: ⋯
+            - generic [ref=e990]:
+              - button "Test steering image Claude et branche Git 14/08 Claude" [ref=e991] [cursor=pointer]:
+                - generic [ref=e992]:
+                  - generic [ref=e994]: Test steering image Claude et branche Git
+                  - generic [ref=e995]: 14/08
+                - img "Claude" [ref=e997]
+              - generic [ref=e999]:
+                - button "Épingler Test steering image Claude et branche Git" [ref=e1000] [cursor=pointer]: ◇
+                - button "Actions pour Test steering image Claude et branche Git" [ref=e1001] [cursor=pointer]: ⋯
+            - generic [ref=e1002]:
+              - button "Aucune tâche de codage 13/08 ChatGPT" [ref=e1003] [cursor=pointer]:
+                - generic [ref=e1004]:
+                  - generic [ref=e1006]: Aucune tâche de codage
+                  - generic [ref=e1007]: 13/08
+                - img "ChatGPT" [ref=e1009]
+              - generic [ref=e1011]:
+                - button "Épingler Aucune tâche de codage" [ref=e1012] [cursor=pointer]: ◇
+                - button "Actions pour Aucune tâche de codage" [ref=e1013] [cursor=pointer]: ⋯
+            - generic [ref=e1014]:
+              - button "Ouverture de session 13/08 ChatGPT" [ref=e1015] [cursor=pointer]:
+                - generic [ref=e1016]:
+                  - generic [ref=e1018]: Ouverture de session
+                  - generic [ref=e1019]: 13/08
+                - img "ChatGPT" [ref=e1021]
+              - generic [ref=e1023]:
+                - button "Épingler Ouverture de session" [ref=e1024] [cursor=pointer]: ◇
+                - button "Actions pour Ouverture de session" [ref=e1025] [cursor=pointer]: ⋯
+            - generic [ref=e1026]:
+              - button "Conversation initiée, travail non défini 13/08 ChatGPT" [ref=e1027] [cursor=pointer]:
+                - generic [ref=e1028]:
+                  - generic [ref=e1030]: Conversation initiée, travail non défini
+                  - generic [ref=e1031]: 13/08
+                - img "ChatGPT" [ref=e1033]
+              - generic [ref=e1035]:
+                - button "Épingler Conversation initiée, travail non défini" [ref=e1036] [cursor=pointer]: ◇
+                - button "Actions pour Conversation initiée, travail non défini" [ref=e1037] [cursor=pointer]: ⋯
+            - generic [ref=e1038]:
+              - button "Execute pwd et donne son resultat brut. 12/08 ChatGPT" [ref=e1039] [cursor=pointer]:
+                - generic [ref=e1040]:
+                  - generic [ref=e1042]: Execute pwd et donne son resultat brut.
+                  - generic [ref=e1043]: 12/08
+                - img "ChatGPT" [ref=e1045]
+              - generic [ref=e1047]:
+                - button "Épingler Execute pwd et donne son resultat brut." [ref=e1048] [cursor=pointer]: ◇
+                - button "Actions pour Execute pwd et donne son resultat brut." [ref=e1049] [cursor=pointer]: ⋯
+            - generic [ref=e1050]:
+              - button "Claude Design dans Pupitre avec corrections 11/08 Claude" [ref=e1051] [cursor=pointer]:
+                - generic [ref=e1052]:
+                  - generic [ref=e1054]: Claude Design dans Pupitre avec corrections
+                  - generic [ref=e1055]: 11/08
+                - img "Claude" [ref=e1057]
+              - generic [ref=e1059]:
+                - button "Épingler Claude Design dans Pupitre avec corrections" [ref=e1060] [cursor=pointer]: ◇
+                - button "Actions pour Claude Design dans Pupitre avec corrections" [ref=e1061] [cursor=pointer]: ⋯
+            - generic [ref=e1062]:
+              - button "Affiner les indicateurs de progression 10/08 ChatGPT" [ref=e1063] [cursor=pointer]:
+                - generic [ref=e1064]:
+                  - generic [ref=e1066]: Affiner les indicateurs de progression
+                  - generic [ref=e1067]: 10/08
+                - img "ChatGPT" [ref=e1069]
+              - generic [ref=e1071]:
+                - button "Épingler Affiner les indicateurs de progression" [ref=e1072] [cursor=pointer]: ◇
+                - button "Actions pour Affiner les indicateurs de progression" [ref=e1073] [cursor=pointer]: ⋯
+            - generic [ref=e1074]:
+              - button "Remplacer badges cx/cl par icônes SVG 10/08 ChatGPT" [ref=e1075] [cursor=pointer]:
+                - generic [ref=e1076]:
+                  - generic [ref=e1078]: Remplacer badges cx/cl par icônes SVG
+                  - generic [ref=e1079]: 10/08
+                - img "ChatGPT" [ref=e1081]
+              - generic [ref=e1083]:
+                - button "Épingler Remplacer badges cx/cl par icônes SVG" [ref=e1084] [cursor=pointer]: ◇
+                - button "Actions pour Remplacer badges cx/cl par icônes SVG" [ref=e1085] [cursor=pointer]: ⋯
+            - generic [ref=e1086]:
+              - button "Attente des instructions 10/08 ChatGPT" [ref=e1087] [cursor=pointer]:
+                - generic [ref=e1088]:
+                  - generic [ref=e1090]: Attente des instructions
+                  - generic [ref=e1091]: 10/08
+                - img "ChatGPT" [ref=e1093]
+              - generic [ref=e1095]:
+                - button "Épingler Attente des instructions" [ref=e1096] [cursor=pointer]: ◇
+                - button "Actions pour Attente des instructions" [ref=e1097] [cursor=pointer]: ⋯
+            - generic [ref=e1098]:
+              - button "Bouton Créer centré dans le rail 10/08 ChatGPT" [ref=e1099] [cursor=pointer]:
+                - generic [ref=e1100]:
+                  - generic [ref=e1102]: Bouton Créer centré dans le rail
+                  - generic [ref=e1103]: 10/08
+                - img "ChatGPT" [ref=e1105]
+              - generic [ref=e1107]:
+                - button "Épingler Bouton Créer centré dans le rail" [ref=e1108] [cursor=pointer]: ◇
+                - button "Actions pour Bouton Créer centré dans le rail" [ref=e1109] [cursor=pointer]: ⋯
+            - generic [ref=e1110]:
+              - button "Audit produit avec gestion des documents 10/08 ChatGPT" [ref=e1111] [cursor=pointer]:
+                - generic [ref=e1112]:
+                  - generic [ref=e1114]: Audit produit avec gestion des documents
+                  - generic [ref=e1115]: 10/08
+                - img "ChatGPT" [ref=e1117]
+              - generic [ref=e1119]:
+                - button "Épingler Audit produit avec gestion des documents" [ref=e1120] [cursor=pointer]: ◇
+                - button "Actions pour Audit produit avec gestion des documents" [ref=e1121] [cursor=pointer]: ⋯
+            - generic [ref=e1122]:
+              - button "générer un html à partir du readme stp 10/08 ChatGPT" [ref=e1123] [cursor=pointer]:
+                - generic [ref=e1124]:
+                  - generic [ref=e1126]: générer un html à partir du readme stp
+                  - generic [ref=e1127]: 10/08
+                - img "ChatGPT" [ref=e1129]
+              - generic [ref=e1131]:
+                - button "Épingler générer un html à partir du readme stp" [ref=e1132] [cursor=pointer]: ◇
+                - button "Actions pour générer un html à partir du readme stp" [ref=e1133] [cursor=pointer]: ⋯
+            - generic [ref=e1134]:
+              - button "Audit de la revue de code dans l'onglet Git 10/08 ChatGPT" [ref=e1135] [cursor=pointer]:
+                - generic [ref=e1136]:
+                  - generic [ref=e1138]: Audit de la revue de code dans l'onglet Git
+                  - generic [ref=e1139]: 10/08
+                - img "ChatGPT" [ref=e1141]
+              - generic [ref=e1143]:
+                - button "Épingler Audit de la revue de code dans l'onglet Git" [ref=e1144] [cursor=pointer]: ◇
+                - button "Actions pour Audit de la revue de code dans l'onglet Git" [ref=e1145] [cursor=pointer]: ⋯
+            - generic [ref=e1146]:
+              - button "Alignement des sous-menus déroulants 09/08 ChatGPT" [ref=e1147] [cursor=pointer]:
+                - generic [ref=e1148]:
+                  - generic [ref=e1150]: Alignement des sous-menus déroulants
+                  - generic [ref=e1151]: 09/08
+                - img "ChatGPT" [ref=e1153]
+              - generic [ref=e1155]:
+                - button "Épingler Alignement des sous-menus déroulants" [ref=e1156] [cursor=pointer]: ◇
+                - button "Actions pour Alignement des sous-menus déroulants" [ref=e1157] [cursor=pointer]: ⋯
+            - generic [ref=e1158]:
+              - button "Clarification affichage diff Gardien 08/08 ChatGPT" [ref=e1159] [cursor=pointer]:
+                - generic [ref=e1160]:
+                  - generic [ref=e1162]: Clarification affichage diff Gardien
+                  - generic [ref=e1163]: 08/08
+                - img "ChatGPT" [ref=e1165]
+              - generic [ref=e1167]:
+                - button "Épingler Clarification affichage diff Gardien" [ref=e1168] [cursor=pointer]: ◇
+                - button "Actions pour Clarification affichage diff Gardien" [ref=e1169] [cursor=pointer]: ⋯
+            - generic [ref=e1170]:
+              - button "Workflows en onglets sidebar avec recherche 08/08 ChatGPT" [ref=e1171] [cursor=pointer]:
+                - generic [ref=e1172]:
+                  - generic [ref=e1174]: Workflows en onglets sidebar avec recherche
+                  - generic [ref=e1175]: 08/08
+                - img "ChatGPT" [ref=e1177]
+              - generic [ref=e1179]:
+                - button "Épingler Workflows en onglets sidebar avec recherche" [ref=e1180] [cursor=pointer]: ◇
+                - button "Actions pour Workflows en onglets sidebar avec recherche" [ref=e1181] [cursor=pointer]: ⋯
+            - generic [ref=e1182]:
+              - button "Fonctionnement d'une interface de code review 08/08 ChatGPT" [ref=e1183] [cursor=pointer]:
+                - generic [ref=e1184]:
+                  - generic [ref=e1186]: Fonctionnement d'une interface de code review
+                  - generic [ref=e1187]: 08/08
+                - img "ChatGPT" [ref=e1189]
+              - generic [ref=e1191]:
+                - button "Épingler Fonctionnement d'une interface de code review" [ref=e1192] [cursor=pointer]: ◇
+                - button "Actions pour Fonctionnement d'une interface de code review" [ref=e1193] [cursor=pointer]: ⋯
+            - generic [ref=e1194]:
+              - button "Restauration UI et optimisation du build 08/08 ChatGPT" [ref=e1195] [cursor=pointer]:
+                - generic [ref=e1196]:
+                  - generic [ref=e1198]: Restauration UI et optimisation du build
+                  - generic [ref=e1199]: 08/08
+                - img "ChatGPT" [ref=e1201]
+              - generic [ref=e1203]:
+                - button "Épingler Restauration UI et optimisation du build" [ref=e1204] [cursor=pointer]: ◇
+                - button "Actions pour Restauration UI et optimisation du build" [ref=e1205] [cursor=pointer]: ⋯
+            - generic [ref=e1206]:
+              - button "Élargissement du panneau de contexte 08/08 ChatGPT" [ref=e1207] [cursor=pointer]:
+                - generic [ref=e1208]:
+                  - generic [ref=e1210]: Élargissement du panneau de contexte
+                  - generic [ref=e1211]: 08/08
+                - img "ChatGPT" [ref=e1213]
+              - generic [ref=e1215]:
+                - button "Épingler Élargissement du panneau de contexte" [ref=e1216] [cursor=pointer]: ◇
+                - button "Actions pour Élargissement du panneau de contexte" [ref=e1217] [cursor=pointer]: ⋯
+            - generic [ref=e1218]:
+              - button "Correction de la ventilation des parts du conte 08/08 ChatGPT ↳ suite de Correction du calcul des parts du contexte" [ref=e1219] [cursor=pointer]:
+                - generic [ref=e1220]:
+                  - generic [ref=e1222]: Correction de la ventilation des parts du conte
+                  - generic [ref=e1223]: 08/08
+                - img "ChatGPT" [ref=e1225]
+                - generic [ref=e1227]: ↳ suite de Correction du calcul des parts du contexte
+              - generic [ref=e1228]:
+                - button "Épingler Correction de la ventilation des parts du conte" [ref=e1229] [cursor=pointer]: ◇
+                - button "Actions pour Correction de la ventilation des parts du conte" [ref=e1230] [cursor=pointer]: ⋯
+            - generic [ref=e1231]:
+              - button "Correction du calcul des parts du contexte 08/08 ChatGPT → passation vers Correction de la ventilation des parts du conte" [ref=e1232] [cursor=pointer]:
+                - generic [ref=e1233]:
+                  - generic [ref=e1235]: Correction du calcul des parts du contexte
+                  - generic [ref=e1236]: 08/08
+                - img "ChatGPT" [ref=e1238]
+                - generic [ref=e1240]: → passation vers Correction de la ventilation des parts du conte
+              - generic [ref=e1241]:
+                - button "Épingler Correction du calcul des parts du contexte" [ref=e1242] [cursor=pointer]: ◇
+                - button "Actions pour Correction du calcul des parts du contexte" [ref=e1243] [cursor=pointer]: ⋯
+            - generic [ref=e1244]:
+              - button "Handoff complet avec création de conversation 08/08 ChatGPT" [ref=e1245] [cursor=pointer]:
+                - generic [ref=e1246]:
+                  - generic [ref=e1248]: Handoff complet avec création de conversation
+                  - generic [ref=e1249]: 08/08
+                - img "ChatGPT" [ref=e1251]
+              - generic [ref=e1253]:
+                - button "Épingler Handoff complet avec création de conversation" [ref=e1254] [cursor=pointer]: ◇
+                - button "Actions pour Handoff complet avec création de conversation" [ref=e1255] [cursor=pointer]: ⋯
+            - generic [ref=e1256]:
+              - button "Exploration d'app locale et captures écran 08/08 ChatGPT" [ref=e1257] [cursor=pointer]:
+                - generic [ref=e1258]:
+                  - generic [ref=e1260]: Exploration d'app locale et captures écran
+                  - generic [ref=e1261]: 08/08
+                - img "ChatGPT" [ref=e1263]
+              - generic [ref=e1265]:
+                - button "Épingler Exploration d'app locale et captures écran" [ref=e1266] [cursor=pointer]: ◇
+                - button "Actions pour Exploration d'app locale et captures écran" [ref=e1267] [cursor=pointer]: ⋯
+            - generic [ref=e1268]:
+              - button "Recalibrage des coûts MCP surestimés 08/08 Claude" [ref=e1269] [cursor=pointer]:
+                - generic [ref=e1270]:
+                  - generic [ref=e1272]: Recalibrage des coûts MCP surestimés
+                  - generic [ref=e1273]: 08/08
+                - img "Claude" [ref=e1275]
+              - generic [ref=e1277]:
+                - button "Épingler Recalibrage des coûts MCP surestimés" [ref=e1278] [cursor=pointer]: ◇
+                - button "Actions pour Recalibrage des coûts MCP surestimés" [ref=e1279] [cursor=pointer]: ⋯
+            - generic [ref=e1280]:
+              - button "Gamification avec XP persistant et niveaux 07/08 ChatGPT" [ref=e1281] [cursor=pointer]:
+                - generic [ref=e1282]:
+                  - generic [ref=e1284]: Gamification avec XP persistant et niveaux
+                  - generic [ref=e1285]: 07/08
+                - img "ChatGPT" [ref=e1287]
+              - generic [ref=e1289]:
+                - button "Épingler Gamification avec XP persistant et niveaux" [ref=e1290] [cursor=pointer]: ◇
+                - button "Actions pour Gamification avec XP persistant et niveaux" [ref=e1291] [cursor=pointer]: ⋯
+            - generic [ref=e1292]:
+              - button "Analyse du potentiel produit de Pupitre 07/08 ChatGPT" [ref=e1293] [cursor=pointer]:
+                - generic [ref=e1294]:
+                  - generic [ref=e1296]: Analyse du potentiel produit de Pupitre
+                  - generic [ref=e1297]: 07/08
+                - img "ChatGPT" [ref=e1299]
+              - generic [ref=e1301]:
+                - button "Épingler Analyse du potentiel produit de Pupitre" [ref=e1302] [cursor=pointer]: ◇
+                - button "Actions pour Analyse du potentiel produit de Pupitre" [ref=e1303] [cursor=pointer]: ⋯
+            - generic [ref=e1304]:
+              - button "hello tu peux lire ce fichier docs/audits/2026-… 07/08 ChatGPT" [ref=e1305] [cursor=pointer]:
+                - generic [ref=e1306]:
+                  - generic [ref=e1308]: hello tu peux lire ce fichier docs/audits/2026-…
+                  - generic [ref=e1309]: 07/08
+                - img "ChatGPT" [ref=e1311]
+              - generic [ref=e1313]:
+                - button "Épingler hello tu peux lire ce fichier docs/audits/2026-…" [ref=e1314] [cursor=pointer]: ◇
+                - button "Actions pour hello tu peux lire ce fichier docs/audits/2026-…" [ref=e1315] [cursor=pointer]: ⋯
+            - generic [ref=e1316]:
+              - button "hello mec, tu as un document product-ui-ux-revi… 06/08 ChatGPT" [ref=e1317] [cursor=pointer]:
+                - generic [ref=e1318]:
+                  - generic [ref=e1320]: hello mec, tu as un document product-ui-ux-revi…
+                  - generic [ref=e1321]: 06/08
+                - img "ChatGPT" [ref=e1323]
+              - generic [ref=e1325]:
+                - button "Épingler hello mec, tu as un document product-ui-ux-revi…" [ref=e1326] [cursor=pointer]: ◇
+                - button "Actions pour hello mec, tu as un document product-ui-ux-revi…" [ref=e1327] [cursor=pointer]: ⋯
+            - generic [ref=e1328]:
+              - button "quand tu fais plein d'appels shell ça devient v… 06/08 ChatGPT" [ref=e1329] [cursor=pointer]:
+                - generic [ref=e1330]:
+                  - generic [ref=e1332]: quand tu fais plein d'appels shell ça devient v…
+                  - generic [ref=e1333]: 06/08
+                - img "ChatGPT" [ref=e1335]
+              - generic [ref=e1337]:
+                - button "Épingler quand tu fais plein d'appels shell ça devient v…" [ref=e1338] [cursor=pointer]: ◇
+                - button "Actions pour quand tu fais plein d'appels shell ça devient v…" [ref=e1339] [cursor=pointer]: ⋯
+            - generic [ref=e1340]:
+              - button "il manque le model codex gpt 5 6 terra sur l'en… 06/08 ChatGPT" [ref=e1341] [cursor=pointer]:
+                - generic [ref=e1342]:
+                  - generic [ref=e1344]: il manque le model codex gpt 5 6 terra sur l'en…
+                  - generic [ref=e1345]: 06/08
+                - img "ChatGPT" [ref=e1347]
+              - generic [ref=e1349]:
+                - button "Épingler il manque le model codex gpt 5 6 terra sur l'en…" [ref=e1350] [cursor=pointer]: ◇
+                - button "Actions pour il manque le model codex gpt 5 6 terra sur l'en…" [ref=e1351] [cursor=pointer]: ⋯
+            - generic [ref=e1352]:
+              - button "hello mec, tu peux me dire à quoi sert la featu… 06/08 ChatGPT" [ref=e1353] [cursor=pointer]:
+                - generic [ref=e1354]:
+                  - generic [ref=e1356]: hello mec, tu peux me dire à quoi sert la featu…
+                  - generic [ref=e1357]: 06/08
+                - img "ChatGPT" [ref=e1359]
+              - generic [ref=e1361]:
+                - button "Épingler hello mec, tu peux me dire à quoi sert la featu…" [ref=e1362] [cursor=pointer]: ◇
+                - button "Actions pour hello mec, tu peux me dire à quoi sert la featu…" [ref=e1363] [cursor=pointer]: ⋯
+          - generic [ref=e1364]:
+            - generic [ref=e1365]:
+              - button "Replier testalanoix" [expanded] [ref=e1366] [cursor=pointer]:
+                - generic [ref=e1369]: testalanoix
+              - button "Nouvelle conversation dans testalanoix" [ref=e1371] [cursor=pointer]: +
+              - generic [ref=e1372]: "1"
+            - generic [ref=e1373]:
+              - button "Composant React d'anti-patterns pédagogiques 16/08 ChatGPT testalanoix testalanoix" [ref=e1374] [cursor=pointer]:
+                - generic [ref=e1375]:
+                  - generic [ref=e1377]: Composant React d'anti-patterns pédagogiques
+                  - generic [ref=e1378]: 16/08
+                - generic [ref=e1379]:
+                  - img "ChatGPT" [ref=e1380]
+                  - generic [ref=e1382]: testalanoix
+                  - 'generic "Branche du worktree : /home/clement/.local/share/pupitre/worktrees/f2e93170-af82-4a38-8756-ed8b52e76806/testalanoix" [ref=e1383]': testalanoix
+              - generic [ref=e1389]:
+                - button "Épingler Composant React d'anti-patterns pédagogiques" [ref=e1390] [cursor=pointer]: ◇
+                - button "Actions pour Composant React d'anti-patterns pédagogiques" [ref=e1391] [cursor=pointer]: ⋯
+    - generic [ref=e105]:
+      - button "Utilisateur 10 min aujourd’hui" [ref=e1871] [cursor=pointer]:
+        - generic [ref=e728]: "10"
+        - generic [ref=e729]:
+          - strong [ref=e731]: Utilisateur
+          - generic [ref=e732]: 10 min aujourd’hui
+      - region "Usage des quotas" [ref=e107]:
+        - generic "Claude — données périmées, dernier relevé il y a 1 j" [ref=e734] [cursor=pointer]:
+          - generic [ref=e109]: Claude
+          - 'meter "Claude — dernier relevé périmé : 36 % utilisé" [ref=e735]'
+          - generic [ref=e111]: données périmées
+          - button "Reconnecter Claude" [ref=e112]
+        - generic "Codex — données périmées, dernier relevé il y a 1 j" [ref=e737] [cursor=pointer]:
+          - generic [ref=e114]: Codex
+          - 'meter "Codex — dernier relevé périmé : 72 % utilisé" [ref=e738]'
+          - generic [ref=e116]: données périmées
+          - button "Reconnecter Codex" [ref=e117]
+        - generic "Grok — données périmées, dernier relevé il y a 1 j" [ref=e740] [cursor=pointer]:
+          - generic [ref=e119]: Grok
+          - generic [ref=e121]: données périmées
+          - button "Reconnecter Grok" [ref=e122]
+        - button "Actualiser les quotas" [ref=e124] [cursor=pointer]: Actualiser
+  - separator "Redimensionner la barre latérale" [ref=e125]
+  - region "Conversation" [ref=e1393]:
+    - heading "Nouvelle conversation" [level=1] [ref=e1398]
+    - generic [ref=e1400]:
+      - generic [ref=e1401]:
+        - button "Rechercher dans le fil" [ref=e1402] [cursor=pointer]
+        - paragraph [ref=e1409]: Écrivez un premier message pour créer la conversation.
+      - generic [ref=e1411]:
+        - generic [ref=e1412]:
+          - textbox "Message" [ref=e1413]:
+            - /placeholder: ""
+          - generic [aria-hidden]: Écris ton message, ou / pour une action, $ pour un skill, @ pour un outil
+        - generic [ref=e1414]:
+          - generic [ref=e1415]:
+            - generic "Configuration de la conversation" [ref=e1416]:
+              - generic [ref=e1417]:
+                - button "Sol low modifié fable 5.1 · high" [expanded] [ref=e1872] [cursor=pointer]:
+                  - generic [ref=e1420]: Sol low
+                  - generic [ref=e1873]: modifié
+                  - generic [ref=e1421]: fable 5.1 · high
+                - menu "Configuration de la conversation" [ref=e1440]:
+                  - generic [ref=e1874]:
+                    - paragraph [ref=e1875]: Réglages différents de Sol low
+                    - generic [ref=e1876]: fable 5.1 · high au lieu de 5.6 sol · low
+                    - button "Enregistrer comme preset…" [ref=e1877] [cursor=pointer]
+                    - button "Écraser Sol low" [ref=e1878] [cursor=pointer]
+                    - button "Revenir à Sol low" [ref=e1879] [cursor=pointer]
+                  - generic [ref=e1441]: Presets
+                  - generic "Presets disponibles" [ref=e1442]:
+                    - menuitemradio "Éco 5.6 luna · xhigh · rapide" [ref=e1443] [cursor=pointer]:
+                      - generic [ref=e1444]: Éco
+                      - generic [ref=e1445]: 5.6 luna · xhigh · rapide
+                    - menuitemradio "Qualité max fable 5 · high" [ref=e1446] [cursor=pointer]:
+                      - generic [ref=e1447]: Qualité max
+                      - generic [ref=e1448]: fable 5 · high
+                    - menuitemradio "Sol low défaut" [checked] [ref=e1449] [cursor=pointer]:
+                      - generic [ref=e1453]: Sol low
+                      - generic [ref=e1454]: défaut
+                    - menuitemradio "sol-high 5.6 sol · high" [ref=e1455] [cursor=pointer]:
+                      - generic [ref=e1456]: sol-high
+                      - generic [ref=e1457]: 5.6 sol · high
+                    - menuitemradio "opus high opus 5 · high" [ref=e1458] [cursor=pointer]:
+                      - generic [ref=e1459]: opus high
+                      - generic [ref=e1460]: opus 5 · high
+                    - menuitemradio "sol medium 5.6 sol · medium" [ref=e1461] [cursor=pointer]:
+                      - generic [ref=e1462]: sol medium
+                      - generic [ref=e1463]: 5.6 sol · medium
+                    - menuitemradio "opus low opus 5 · low" [ref=e1464] [cursor=pointer]:
+                      - generic [ref=e1465]: opus low
+                      - generic [ref=e1466]: opus 5 · low
+                    - menuitemradio "grok low grok 4.6 · low" [ref=e1467] [cursor=pointer]:
+                      - generic [ref=e1468]: grok low
+                      - generic [ref=e1469]: grok 4.6 · low
+                  - generic [ref=e1471]:
+                    - generic [ref=e1472]:
+                      - button "Modèle" [active] [ref=e1473] [cursor=pointer]:
+                        - generic [ref=e1475]: Fable 5.1
+                      - menu "Choisir un modèle" [ref=e1880]:
+                        - generic [ref=e1881]:
+                          - generic [ref=e1883]:
+                            - strong [ref=e1884]: codex
+                            - generic [ref=e1885]: 28 % restants · hebdo · reset dans 1 j 7 h
+                          - menuitemradio "6 Astra" [ref=e1907] [cursor=pointer]:
+                            - generic [ref=e1930]: le plus cher
+                            - strong [ref=e1931]: ×1
+                            - generic [ref=e1932]: 10 / 50 $
+                          - menuitemradio "5.6 Sol" [ref=e1933] [cursor=pointer]:
+                            - strong [ref=e1956]: ÷2
+                            - generic [ref=e1957]: 5 / 30 $
+                          - menuitemradio "5.6 Luna" [ref=e1958] [cursor=pointer]:
+                            - generic [ref=e1981]: le moins cher
+                            - strong [ref=e1982]: ÷47
+                            - generic [ref=e1983]: 0,20 / 1,20 $
+                          - menuitemradio "5.6 Terra" [ref=e1984] [cursor=pointer]:
+                            - strong [ref=e2007]: ÷5
+                            - generic [ref=e2008]: 2 / 12 $
+                        - generic [ref=e2009]:
+                          - generic [ref=e2011]:
+                            - strong [ref=e2012]: claude
+                            - generic [ref=e2013]: 64 % restants · hebdo · reset dans 3 j 12 h
+                          - menuitemradio "Fable 5.1" [checked] [ref=e2035] [cursor=pointer]:
+                            - generic [ref=e2061]: le plus cher
+                            - strong [ref=e2062]: ×1
+                            - generic [ref=e2063]: 10 / 50 $
+                          - menuitemradio "Fable 5" [ref=e2064] [cursor=pointer]:
+                            - generic [ref=e2087]: le plus cher
+                            - strong [ref=e2088]: ×1
+                            - generic [ref=e2089]: 10 / 50 $
+                          - menuitemradio "Opus 5" [ref=e2090] [cursor=pointer]:
+                            - strong [ref=e2113]: ÷2
+                            - generic [ref=e2114]: 5 / 25 $
+                          - menuitemradio "Sonnet 5" [ref=e2115] [cursor=pointer]:
+                            - strong [ref=e2138]: ÷5
+                            - generic [ref=e2139]: 2 / 10 $
+                          - menuitemradio "Haiku 4.5" [ref=e2140] [cursor=pointer]:
+                            - strong [ref=e2163]: ÷10
+                            - generic [ref=e2164]: 1 / 5 $
+                        - generic [ref=e2165]:
+                          - generic [ref=e2167]:
+                            - strong [ref=e2168]: grok
+                            - generic [ref=e2169]: quota indisponible
+                          - menuitemradio "Grok 4.6" [ref=e2191] [cursor=pointer]:
+                            - strong [ref=e2214]: ÷6
+                            - generic [ref=e2215]: 2 / 6 $
+                          - menuitemradio "Grok 4.5" [ref=e2216] [cursor=pointer]:
+                            - strong [ref=e2239]: ÷6
+                            - generic [ref=e2240]: 2 / 6 $
+                        - generic [ref=e2241]: "Jauge : coût relatif d’un échange type. Les prix API sont indicatifs et ne sont pas facturés sur abonnement."
+                    - button "Effort" [ref=e1479] [cursor=pointer]:
+                      - generic [ref=e1481]: high
+                    - button "Autonomie" [ref=e1491] [cursor=pointer]:
+                      - generic [ref=e1493]: YOLO
+                    - button "Sub-agents" [ref=e1497] [cursor=pointer]:
+                      - generic [ref=e1499]: Délégation auto
+                  - generic [ref=e1503]:
+                    - button "Renommer Sol low" [ref=e1505] [cursor=pointer]
+                    - button "Retirer le défaut du projet" [ref=e1506] [cursor=pointer]
+                    - button "Restaurer les valeurs d’origine" [ref=e1507] [cursor=pointer]
+                    - button "En savoir plus sur les presets" [ref=e1508] [cursor=pointer]
+              - generic [ref=e1424]:
+                - generic [ref=e1425]: Branche
+                - combobox "Branche" [ref=e1426]
+            - button "Choose File" [ref=e1427]
+            - button "Joindre" [ref=e1428] [cursor=pointer]
+            - button "Insérer un skill" [ref=e1431] [cursor=pointer]
+          - button "Envoyer" [disabled] [ref=e1437]:
+            - text: Envoyer
+            - generic [aria-hidden] [ref=e1438]: ⏎
