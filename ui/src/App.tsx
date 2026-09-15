@@ -647,6 +647,7 @@ function App() {
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
+    closeProjectSurface()
     setWorkspaceView('conversations')
   }
 
@@ -658,6 +659,7 @@ function App() {
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
+    closeProjectSurface()
     setWorkspaceView('conversations')
   }
 
