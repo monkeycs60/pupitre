@@ -11,6 +11,7 @@ import { suggestionsFromLabels, type DomainStore } from "../stores/domains";
 import type { SentryIssue, SentryStore } from "../stores/sentry";
 import { SentryAuthError, SentryHttpError, type SentryIssueSummary } from "./sentry";
 import { classifySentryIssue, compileDomainCatalog, type DomainDefinition } from "../sentry-domains";
+import { discoverRepositories } from "../git-repositories";
 
 export const INTEGRATIONS_POLL_MS = 5 * 60 * 1000;
 export const INTEGRATIONS_IDLE_POLL_MS = 30 * 60 * 1000;
@@ -110,6 +111,7 @@ export interface RefresherDeps {
   gitLabClient?: (integration: ProjectIntegration) => GitLabHandle | null;
   sentryClient?: (integration: ProjectIntegration) => SentryHandle | null;
   branchOfWorktree?: (path: string) => string | null;
+  ticketKeysOfCommits?: (projectPath: string, commits: string[], pattern: RegExp | null) => string[];
 }
 
 type Listener = (projectId: string) => void;
@@ -585,23 +587,35 @@ export class IntegrationsRefresher {
 
   private refreshGitSource(projectId: string, pattern: RegExp | null): void {
     const branchOfWorktree = this.deps.branchOfWorktree ?? defaultBranchOfWorktree;
+    const project = this.stores.projects.get(projectId);
+    const ticketKeysOfCommits = this.deps.ticketKeysOfCommits ?? defaultTicketKeysOfCommits;
     this.stores.tickets.transaction(() => {
       for (const conversation of this.stores.conversations.listByProject(projectId)) {
-        if (!conversation.worktree_path) continue;
-        const branch = branchOfWorktree(conversation.worktree_path);
-        if (!branch) continue;
-        const key = extractTicketKey(branch, pattern);
+        let branch: string | null = null;
+        let key: string | null = null;
+        if (conversation.worktree_path) {
+          branch = branchOfWorktree(conversation.worktree_path);
+          key = branch ? extractTicketKey(branch, pattern) : null;
+        }
+        if (key === null && conversation.ticket_id === null && project) {
+          const keys = ticketKeysOfCommits(
+            project.path,
+            this.stores.conversations.linkedCommitShas(conversation.id),
+            pattern,
+          );
+          if (keys.length === 1) key = keys[0]!;
+        }
         if (key === null) continue;
         const ticket = this.stores.tickets.upsert(projectId, {
           key,
           source: "git",
-          title: branch,
+          title: branch ?? key,
           status: "",
           externalUrl: null,
         });
         this.stores.tickets.upsertRef(ticket.id, {
           kind: "branch",
-          ref: branch,
+          ref: branch ?? key,
           payload: { local: true },
         });
         if (conversation.ticket_id === null) {
@@ -610,6 +624,24 @@ export class IntegrationsRefresher {
       }
     });
   }
+}
+
+function defaultTicketKeysOfCommits(projectPath: string, commits: string[], pattern: RegExp | null): string[] {
+  const keys = new Set<string>();
+  for (const repository of discoverRepositories(projectPath)) {
+    for (const commit of commits) {
+      const result = Bun.spawnSync(
+        ["git", "branch", "--all", "--contains", commit, "--format=%(refname:short)"],
+        { cwd: repository, stdout: "pipe", stderr: "pipe" },
+      );
+      if (result.exitCode !== 0) continue;
+      for (const branch of result.stdout.toString().split("\n")) {
+        const key = extractTicketKey(branch.trim(), pattern);
+        if (key) keys.add(key);
+      }
+    }
+  }
+  return [...keys];
 }
 
 function compiledPattern(items: ProjectIntegration[]): RegExp | null {

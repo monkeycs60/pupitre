@@ -216,6 +216,16 @@ export class ConversationStore {
     }));
   }
 
+  linkedCommitShas(id: string): string[] {
+    return (this.db.query(`
+      SELECT commit_sha
+      FROM commit_links
+      WHERE conversation_id = ?
+      ORDER BY created_at DESC
+      LIMIT 100
+    `).all(id) as Array<{ commit_sha: string }>).map((row) => row.commit_sha);
+  }
+
   unreadCountsByProject(): Record<string, number> {
     const rows = this.db.query(`
       SELECT project_id, COUNT(*) AS count

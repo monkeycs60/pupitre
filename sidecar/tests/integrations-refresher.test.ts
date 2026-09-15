@@ -443,6 +443,52 @@ test("les conversations sur worktree créent des tickets git et se relient", asy
   expect(conversations.get(conversation.id)?.ticket_id).toBe(row?.id);
 });
 
+test("requalifie une conversation née sur main depuis la branche de ses commits", async () => {
+  const conversation = conversations.create({
+    projectId,
+    provider: "claude",
+    model: "m",
+    firstMessage: "Corriger la pagination",
+  });
+  db.query(`
+    INSERT INTO commit_links (commit_sha, project_id, conversation_id, created_at)
+    VALUES ('abc123', ?, ?, ?)
+  `).run(projectId, conversation.id, new Date().toISOString());
+  const refresher = makeRefresher({
+    clickUpClient: () => null,
+    gitLabClient: () => null,
+    ticketKeysOfCommits: (_path, commits) => commits.includes("abc123") ? ["TECH-25130"] : [],
+  });
+
+  await refresher.refreshProject(projectId);
+
+  const ticket = tickets.findByKey(projectId, "TECH-25130");
+  expect(ticket).not.toBeNull();
+  expect(conversations.get(conversation.id)?.ticket_id).toBe(ticket?.id);
+});
+
+test("ne requalifie pas une conversation dont les commits appartiennent à plusieurs tickets", async () => {
+  const conversation = conversations.create({
+    projectId,
+    provider: "claude",
+    model: "m",
+    firstMessage: "Chantier ambigu",
+  });
+  db.query(`
+    INSERT INTO commit_links (commit_sha, project_id, conversation_id, created_at)
+    VALUES ('def456', ?, ?, ?)
+  `).run(projectId, conversation.id, new Date().toISOString());
+  const refresher = makeRefresher({
+    clickUpClient: () => null,
+    gitLabClient: () => null,
+    ticketKeysOfCommits: () => ["TECH-25130", "TECH-25131"],
+  });
+
+  await refresher.refreshProject(projectId);
+
+  expect(conversations.get(conversation.id)?.ticket_id).toBeNull();
+});
+
 test("start/stop relève immédiatement puis périodiquement sans double passage concurrent", async () => {
   let calls = 0;
   let running = 0;
