@@ -26,9 +26,8 @@ import {
   type ActivityReportTicketReady,
   type ActivityReportTodo,
   type ActivityReportTopic,
-  type ActivitySpan,
+  type ActivityCalendarDay,
   type ActivityState,
-  type ActivityTimeline,
 } from "./stores/activity";
 import {
   applyRetroOperations,
@@ -46,8 +45,8 @@ const TOPIC_TITLE_MAX = 90;
 const TOPIC_DETAIL_MAX = 280;
 const TOPICS_MAX = 10;
 const SUMMARY_MAX = 600;
-/** Deux tranches de présence séparées de moins que ça forment un seul intervalle. */
-const PRESENCE_GAP_MS = 120_000;
+/** Semaines complètes affichées par le calendrier, semaine en cours comprise. */
+export const CALENDAR_WEEKS = 16;
 
 /** Statuts ClickUp qui valent « prêt pour la production », comparés en minuscules. */
 export const READY_STATUS_PATTERN = /ready\s*(for|to)\s*prod/i;
@@ -239,44 +238,6 @@ export class ActivityJournal {
       .map((item) => ({ id: item.id, title: item.title, ticketId: item.ticket_id }));
   }
 
-  /** Intervalles de présence et d'agent du jour, tours horodatés : la matière de la frise. */
-  timelineOfDay(projectId: string, window: DayWindow): ActivityTimeline {
-    const entries = this.db.query(`
-      SELECT e.source, e.started_at, e.ended_at, t.key AS ticket_key
-      FROM time_entries e
-      LEFT JOIN conversations c ON c.id = e.conversation_id
-      LEFT JOIN tickets t ON t.id = c.ticket_id
-      WHERE e.project_id = ? AND e.source IN ('presence', 'agent') AND e.started_at < ? AND e.ended_at > ?
-      ORDER BY e.started_at
-    `).all(projectId, window.endIso, window.startIso) as Array<{ source: string; started_at: string; ended_at: string; ticket_key: string | null }>;
-    const clip = (entry: { started_at: string; ended_at: string }) => ({
-      from: Math.max(Date.parse(entry.started_at), window.startMs),
-      to: Math.min(Date.parse(entry.ended_at), window.endMs),
-    });
-    const byTicket = new Map<string | null, Array<{ from: number; to: number }>>();
-    for (const entry of entries) {
-      if (entry.source !== "presence") continue;
-      const list = byTicket.get(entry.ticket_key) ?? [];
-      list.push(clip(entry));
-      byTicket.set(entry.ticket_key, list);
-    }
-    const presence: ActivitySpan[] = [];
-    for (const [ticketKey, spans] of byTicket) {
-      for (const span of mergeSpans(spans, PRESENCE_GAP_MS)) presence.push(ticketKey ? { ...span, ticketKey } : span);
-    }
-    presence.sort((left, right) => left.from.localeCompare(right.from));
-    const agent = mergeSpans(entries.filter((entry) => entry.source === "agent").map(clip), 0);
-    const turns = this.db.query(`
-      SELECT e.created_at FROM events e
-      JOIN conversations c ON c.id = e.conversation_id
-      WHERE c.project_id = ? AND c.deleted_at IS NULL
-        AND e.created_at >= ? AND e.created_at < ?
-        AND json_valid(e.payload) AND json_extract(e.payload, '$.type') = 'user-message'
-      ORDER BY e.created_at
-    `).all(projectId, window.startIso, window.endIso) as Array<{ created_at: string }>;
-    return { presence, agent, turns: turns.map((row) => new Date(row.created_at).toISOString()) };
-  }
-
   /**
    * MR ouvertes ce jour par l'utilisateur GitLab de l'intégration. Une MR
    * n'est connue que si la relève l'a vue ouverte : celle créée et fusionnée
@@ -388,18 +349,6 @@ export class ActivityJournal {
     if (!row?.value) return null;
     try { return JSON.parse(row.value) as Record<string, unknown>; } catch { return null; }
   }
-}
-
-/** Fusionne les intervalles triés qui se touchent à `gapMs` près ; ignore les vides. */
-export function mergeSpans(spans: Array<{ from: number; to: number }>, gapMs: number): ActivitySpan[] {
-  const out: Array<{ from: number; to: number }> = [];
-  for (const span of spans) {
-    if (span.to <= span.from) continue;
-    const last = out[out.length - 1];
-    if (last && span.from <= last.to + gapMs) last.to = Math.max(last.to, span.to);
-    else out.push({ ...span });
-  }
-  return out.map((span) => ({ from: new Date(span.from).toISOString(), to: new Date(span.to).toISOString() }));
 }
 
 export function summaryPrompt(day: string, projects: ActivityReportProject[]): string {
@@ -631,13 +580,40 @@ export class ActivityReportService {
 
   report(day: string): ActivityReport | null {
     const stored = this.store.report(day);
-    if (!stored) return null;
-    const report = hydrateReport(stored, this.changelog);
-    const window = dayWindow(day);
-    return {
-      ...report,
-      projects: report.projects.map((project) => ({ ...project, timeline: this.journal.timelineOfDay(project.projectId, window) })),
-    };
+    return stored ? hydrateReport(stored, this.changelog) : null;
+  }
+
+  /**
+   * Calendrier de chaleur : un jour par case du lundi d'il y a
+   * CALENDAR_WEEKS − 1 semaines jusqu'à aujourd'hui, commits et lignes par
+   * projet depuis le changelog, présence depuis les entrées de temps.
+   */
+  calendar(): { from: string; to: string; days: ActivityCalendarDay[] } {
+    const today = new Date(this.now());
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7) - (CALENDAR_WEEKS - 1) * 7);
+    const from = localDay(start);
+    const to = localDay(today);
+    const names = new Map(this.projects.list().map((project) => [project.id, project.name]));
+    const commits = this.changelog.dailyTotals(from, to);
+    const presence = this.time.dailyPresence(from, to);
+    const reports = new Set(this.store.days().map((item) => item.day));
+    const days: ActivityCalendarDay[] = [];
+    for (const cursor = new Date(start); cursor <= today; cursor.setDate(cursor.getDate() + 1)) {
+      const day = localDay(cursor);
+      const rows = commits.filter((row) => row.day === day);
+      days.push({
+        day,
+        commits: rows.reduce((sum, row) => sum + row.commits, 0),
+        linesAdded: rows.reduce((sum, row) => sum + row.linesAdded, 0),
+        linesRemoved: rows.reduce((sum, row) => sum + row.linesRemoved, 0),
+        userMs: presence[day] ?? 0,
+        hasReport: reports.has(day),
+        projects: rows.map((row) => ({ projectId: row.projectId, projectName: names.get(row.projectId) ?? row.projectId, commits: row.commits, linesAdded: row.linesAdded, linesRemoved: row.linesRemoved })),
+      });
+    }
+    return { from, to, days };
   }
 
   /**

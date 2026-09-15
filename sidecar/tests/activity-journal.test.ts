@@ -9,7 +9,6 @@ import {
   dayWindow,
   fallbackTopics,
   hydrateReport,
-  mergeSpans,
   parseSummary,
   parseTopics,
   summaryPrompt,
@@ -29,9 +28,9 @@ import { TimeTrackingService } from "../src/time-tracking";
 const DAY = "2026-08-24";
 
 /** Horodatage local du jour testé, en ISO UTC comme les écrit le sidecar. */
-function at(day: string, hour: number, minute = 0, second = 0): string {
+function at(day: string, hour: number, minute = 0): string {
   const date = new Date(`${day}T00:00:00`);
-  date.setHours(hour, minute, second, 0);
+  date.setHours(hour, minute, 0, 0);
   return date.toISOString();
 }
 
@@ -254,35 +253,22 @@ test("un rapport sauvé sans +/− reprend les lignes du changelog à la lecture
   db.close();
 });
 
-test("la frise du jour recolle les tranches de présence, garde les segments agent et horodate les tours", () => {
-  const { db, project, conversations, tickets, time, journal, insertEvent } = setup();
-  const ticket = tickets.upsert(project.id, { key: "TECH-42", source: "clickup", title: "Frise", status: "in progress", externalUrl: null });
-  const conversation = conversations.create({ projectId: project.id, provider: "codex", model: "gpt-5.6-sol", firstMessage: "Frise", ticketId: ticket.id });
-  const loose = conversations.create({ projectId: project.id, provider: "codex", model: "gpt-5.6-sol", firstMessage: "Sans ticket" });
-  time.addPresence({ projectId: project.id, conversationId: loose.id, startedAt: at(DAY, 9, 2, 40), endedAt: at(DAY, 9, 2, 50) });
-  insertEvent(conversation.id, { type: "user-message", text: "Frise" }, at(DAY, 9, 3));
-  insertEvent(conversation.id, { type: "text-final", text: "Ok" }, at(DAY, 9, 4));
-  insertEvent(conversation.id, { type: "user-message", text: "Suite" }, at(DAY, 14, 30));
-  for (const [hour, minute] of [[9, 0], [9, 1], [9, 2], [9, 10]] as const) {
-    const start = new Date(at(DAY, hour, minute));
-    time.addPresence({ projectId: project.id, conversationId: conversation.id, startedAt: start.toISOString(), endedAt: new Date(start.getTime() + 30_000).toISOString() });
-  }
-  db.query(`
-    INSERT INTO time_entries (source_key, project_id, conversation_id, source, started_at, ended_at, day, backfilled)
-    VALUES ('agent:a', ?, ?, 'agent', ?, ?, ?, 0), ('agent:b', ?, ?, 'agent', ?, ?, ?, 0)
-  `).run(project.id, conversation.id, at(DAY, 9, 4), at(DAY, 9, 9), DAY, project.id, conversation.id, at(DAY, 23, 50), at("2026-08-25", 0, 20), DAY);
 
-  const timeline = journal.timelineOfDay(project.id, dayWindow(DAY));
-  expect(timeline.presence).toEqual([
-    { from: at(DAY, 9, 0), to: at(DAY, 9, 2, 30), ticketKey: "TECH-42" },
-    { from: at(DAY, 9, 2, 40), to: at(DAY, 9, 2, 50) },
-    { from: at(DAY, 9, 10), to: at(DAY, 9, 10, 30), ticketKey: "TECH-42" },
+test("les totaux quotidiens du changelog suivent le jour local du commit, et la présence quotidienne recolle les tranches", () => {
+  const { db, project, changelog, time } = setup();
+  changelog.import(project.id, [
+    { repositoryPath: ".", sha: "1".repeat(40), branch: "master", subject: "tard", committedAt: "2026-08-24T23:50:00+02:00" },
+    { repositoryPath: ".", sha: "2".repeat(40), branch: "master", subject: "tôt", committedAt: "2026-08-25T00:10:00+02:00" },
+    { repositoryPath: ".", sha: "3".repeat(40), branch: "master", subject: "hors", committedAt: "2026-08-20T12:00:00+02:00" },
+  ], at(DAY, 12));
+  changelog.setLineStats(project.id, [{ sha: "1".repeat(40), added: 5, removed: 1 }, { sha: "2".repeat(40), added: 7, removed: 0 }]);
+  expect(changelog.dailyTotals("2026-08-24", "2026-08-25")).toEqual([
+    { day: "2026-08-24", projectId: project.id, commits: 1, linesAdded: 5, linesRemoved: 1 },
+    { day: "2026-08-25", projectId: project.id, commits: 1, linesAdded: 7, linesRemoved: 0 },
   ]);
-  expect(timeline.agent).toEqual([
-    { from: at(DAY, 9, 4), to: at(DAY, 9, 9) },
-    { from: at(DAY, 23, 50), to: at("2026-08-25", 0, 0) },
-  ]);
-  expect(timeline.turns).toEqual([at(DAY, 9, 3), at(DAY, 14, 30)]);
-  expect(mergeSpans([{ from: 10, to: 5 }, { from: 0, to: 10 }, { from: 12, to: 20 }], 2)).toHaveLength(1);
+  for (const minute of [0, 1, 30]) {
+    time.addPresence({ projectId: project.id, startedAt: at(DAY, 9, minute), endedAt: at(DAY, 9, minute + 1) });
+  }
+  expect(time.dailyPresence(DAY, DAY)).toEqual({ [DAY]: 3 * 60_000 });
   db.close();
 });

@@ -1148,7 +1148,7 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "GET" && pathname === "/api/activity-reports") {
           if (!deps.activityReports) throw new HttpError(503, "Rapports d'activité indisponibles");
-          return json({ days: deps.activityReports.days(), retro: deps.activityReports.retro(), run: deps.activityReports.runState() });
+          return json({ days: deps.activityReports.days(), calendar: deps.activityReports.calendar(), retro: deps.activityReports.retro(), run: deps.activityReports.runState() });
         }
         const activityReportRoute = pathname.match(/^\/api\/activity-reports\/(\d{4}-\d{2}-\d{2})$/);
         if (activityReportRoute && request.method === "GET") {

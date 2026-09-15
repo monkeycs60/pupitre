@@ -417,6 +417,25 @@ export class TimeTrackingService {
     return { userMs: total(user), agentMs: total(agent), activeDays: days.size };
   }
 
+  /** Présence par jour local sur [fromDay, toDay], tranches recollées par projet. */
+  dailyPresence(fromDay: string, toDay: string): Record<string, number> {
+    const rows = this.db.query(`
+      SELECT project_id, conversation_id, source, started_at, ended_at, day, backfilled
+      FROM time_entries
+      WHERE source = 'presence' AND day BETWEEN ? AND ?
+      ORDER BY started_at
+    `).all(fromDay, toDay) as EntryRow[];
+    const byDay = new Map<string, EntryRow[]>();
+    for (const row of rows) {
+      const list = byDay.get(row.day) ?? [];
+      list.push(row);
+      byDay.set(row.day, list);
+    }
+    const out: Record<string, number> = {};
+    for (const [day, entries] of byDay) out[day] = total(merge(entries.map(toSpan)));
+    return out;
+  }
+
   /** Jours locaux ayant au moins une tranche de présence ou un tour. */
   activeDays(): string[] {
     this.syncAgentSegments();

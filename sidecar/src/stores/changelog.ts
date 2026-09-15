@@ -216,6 +216,23 @@ export class ChangelogStore {
     }), { commits: 0, linesAdded: 0, linesRemoved: 0 });
   }
 
+  /**
+   * Commits et lignes par jour local et par projet sur [fromDay, toDay]. Le
+   * jour vient des dix premiers caractères de `committed_at`, qui porte le
+   * décalage horaire du commit : pas de conversion UTC à faire.
+   */
+  dailyTotals(fromDay: string, toDay: string): Array<{ day: string; projectId: string; commits: number; linesAdded: number; linesRemoved: number }> {
+    return (this.db.query(`
+      SELECT substr(committed_at, 1, 10) AS day, project_id,
+             COUNT(*) AS commits, COALESCE(SUM(lines_added), 0) AS lines_added, COALESCE(SUM(lines_removed), 0) AS lines_removed
+      FROM project_changelog_entries
+      WHERE substr(committed_at, 1, 10) BETWEEN ? AND ?
+      GROUP BY day, project_id
+      ORDER BY day
+    `).all(fromDay, toDay) as Array<{ day: string; project_id: string; commits: number | bigint; lines_added: number | bigint; lines_removed: number | bigint }>)
+      .map((row) => ({ day: row.day, projectId: row.project_id, commits: Number(row.commits), linesAdded: Number(row.lines_added), linesRemoved: Number(row.lines_removed) }));
+  }
+
   state(projectId: string): ProjectChangelogState {
     return this.db.query(
       "SELECT * FROM project_changelog_state WHERE project_id = ?",

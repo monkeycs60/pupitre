@@ -181,8 +181,7 @@ export interface ActivityReportTicket { id: string; key: string; title: string; 
 export interface ActivityReportMergeRequest { ref: string; iid: number; project: string; title: string; url: string; state: string; ticketKey: string; createdAt: string }
 export interface ActivityReportTicketReady { ticketId: string; key: string; title: string; externalUrl: string | null; toStatus: string; changedAt: string }
 export interface ActivityReportCommit { sha: string; repositoryPath: string; branch: string; subject: string; productMessage: string | null; linesAdded: number | null; linesRemoved: number | null; committedAt: string; conversationId: string | null }
-export interface ActivitySpan { from: string; to: string; ticketKey?: string }
-export interface ActivityTimeline { presence: ActivitySpan[]; agent: ActivitySpan[]; turns: string[] }
+export interface ActivityCalendarDay { day: string; commits: number; linesAdded: number; linesRemoved: number; userMs: number; hasReport: boolean; projects: Array<{ projectId: string; projectName: string; commits: number; linesAdded: number; linesRemoved: number }> }
 export interface ActivityReportProject {
   projectId: string; projectName: string; userMs: number; agentMs: number; linesAdded: number; linesRemoved: number; unlinkedCommitCount: number
   topics: Array<{ title: string; detail: string; conversationIds: string[] }>
@@ -192,7 +191,6 @@ export interface ActivityReportProject {
   mergeRequests: ActivityReportMergeRequest[]
   ticketsReady: ActivityReportTicketReady[]
   todosDone: Array<{ id: string; title: string }>
-  timeline?: ActivityTimeline
 }
 export interface ActivityReport {
   day: string; generatedAt: string; summary: string | null
@@ -200,7 +198,7 @@ export interface ActivityReport {
   projects: ActivityReportProject[]
   retro: { created: string[]; updated: string[]; stabilized: string[]; returned: string[]; error: string | null }
 }
-export interface ActivityReportIndex { days: Array<{ day: string; generated_at: string; projectCount: number; commits: number; mergeRequests: number; ticketsReady: number; userMs: number }>; retro: { cumulative: { firstDay: string | null; activeDays: number; userMs: number; agentMs: number; commits: number; linesAdded: number; linesRemoved: number; projects: number }; trends: Array<{ days: number; userMs: number; agentMs: number; activeDays: number; commits: number; linesAdded: number; linesRemoved: number }>; motifs: ActivityMotif[] }; run: { running: boolean; runningDay: string | null } }
+export interface ActivityReportIndex { days: Array<{ day: string; generated_at: string; projectCount: number; commits: number; mergeRequests: number; ticketsReady: number; userMs: number }>; calendar: { from: string; to: string; days: ActivityCalendarDay[] }; retro: { cumulative: { firstDay: string | null; activeDays: number; userMs: number; agentMs: number; commits: number; linesAdded: number; linesRemoved: number; projects: number }; trends: Array<{ days: number; userMs: number; agentMs: number; activeDays: number; commits: number; linesAdded: number; linesRemoved: number }>; motifs: ActivityMotif[] }; run: { running: boolean; runningDay: string | null } }
 
 export const getActivityReportIndex = (): Promise<ActivityReportIndex> => fetchJson('/api/activity-reports')
 export const getActivityReport = (day: string): Promise<ActivityReport> => fetchJson(`/api/activity-reports/${routeId(day)}`)

@@ -94,13 +94,15 @@ export interface ActivityReportTicketReady {
   changedAt: string;
 }
 
-export interface ActivitySpan { from: string; to: string; ticketKey?: string }
-
-/** Frise du jour, calculée à la lecture depuis les entrées de temps et les tours. */
-export interface ActivityTimeline {
-  presence: ActivitySpan[];
-  agent: ActivitySpan[];
-  turns: string[];
+/** Une case du calendrier de chaleur : le jour, ce qu'il a produit, et s'il a un rapport. */
+export interface ActivityCalendarDay {
+  day: string;
+  commits: number;
+  linesAdded: number;
+  linesRemoved: number;
+  userMs: number;
+  hasReport: boolean;
+  projects: Array<{ projectId: string; projectName: string; commits: number; linesAdded: number; linesRemoved: number }>;
 }
 
 export interface ActivityReportTodo {
@@ -125,7 +127,6 @@ export interface ActivityReportProject {
   mergeRequests: ActivityReportMergeRequest[];
   ticketsReady: ActivityReportTicketReady[];
   todosDone: ActivityReportTodo[];
-  timeline?: ActivityTimeline;
 }
 
 export interface ActivityReportRetro {

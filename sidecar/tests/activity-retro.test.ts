@@ -330,3 +330,24 @@ test("le bilan cumulé et les tendances viennent du suivi de temps et du changel
   expect(retro.trends.map((trend) => [trend.days, trend.userMs, trend.commits, trend.linesAdded])).toEqual([[7, 3_600_000, 1, 10], [30, 3_600_000, 1, 10]]);
   db.close();
 });
+
+test("le calendrier couvre seize semaines jusqu'à aujourd'hui, du lundi, avec commits, présence et rapport par jour", () => {
+  const { db, project, changelog, service, seedDay, clock } = setup();
+  seedDay();
+  changelog.import(project.id, [
+    { repositoryPath: ".", sha: "9".repeat(40), branch: "master", subject: "cal", committedAt: `${DAY}T10:00:00+02:00` },
+  ], `${DAY}T12:00:00.000Z`);
+  changelog.setLineStats(project.id, [{ sha: "9".repeat(40), added: 12, removed: 3 }]);
+  clock.now = new Date(`${DAY}T18:00:00`);
+  const calendar = service.calendar();
+  expect(calendar.to).toBe(DAY);
+  expect(new Date(`${calendar.from}T12:00:00`).getDay()).toBe(1);
+  expect(calendar.days).toHaveLength(15 * 7 + ((new Date(`${DAY}T12:00:00`).getDay() + 6) % 7) + 1);
+  expect(calendar.days[calendar.days.length - 1]).toEqual(expect.objectContaining({
+    day: DAY, hasReport: false, linesAdded: 12, linesRemoved: 3,
+    projects: [expect.objectContaining({ projectName: "Pupitre", commits: 2 })],
+  }));
+  expect(calendar.days[calendar.days.length - 1]!.commits).toBe(2);
+  expect(calendar.days[0]!.commits).toBe(0);
+  db.close();
+});
