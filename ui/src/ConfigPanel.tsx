@@ -3,6 +3,7 @@ import { getProjectGit, listPresets } from './api'
 import { BranchAutocomplete } from './BranchAutocomplete'
 import { readLaunchConfig, writeLaunchConfig } from './configMemory'
 import { ModelConfigSelector } from './ModelConfigSelector'
+import { requiresLaunchConfirmation } from './modelOptions'
 import { branchSuggestions } from './worktrees'
 import type {
   ConversationSpeed,
@@ -141,7 +142,8 @@ export function ConfigPanel({
           onConfigChange(keepBranch(remembered, configRef.current))
           return
         }
-        const projectDefault = loaded.find((preset) => preset.id === (defaultPresetId ?? project.default_preset_id))
+        const preferred = loaded.find((preset) => preset.id === (defaultPresetId ?? project.default_preset_id))
+        const projectDefault = (memoryKey !== null && preferred !== undefined && requiresLaunchConfirmation(preferred.model) ? undefined : preferred)
           ?? loaded.find((preset) => preset.id === 'builtin-speed')
           ?? loaded[0]
         if (projectDefault) onConfigChange(keepBranch(configOf(projectDefault), configRef.current))

@@ -6,7 +6,7 @@ import type { ActivityReportProject } from './api'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, render } = await import('@testing-library/react')
-const { ActivityTimeline, commitRadius, timelineWindow } = await import('./ActivityTimeline')
+const { ActivityTimeline, commitRadius, ticketColors, timelineWindow } = await import('./ActivityTimeline')
 
 afterEach(cleanup)
 
@@ -21,7 +21,7 @@ function project(overrides: Partial<ActivityReportProject> = {}): ActivityReport
   return {
     projectId: 'p', projectName: 'Pupitre', userMs: 0, agentMs: 0, linesAdded: 0, linesRemoved: 0, unlinkedCommitCount: 0,
     topics: [], conversations: [], commits: [], tickets: [], mergeRequests: [], ticketsReady: [], todosDone: [],
-    timeline: { presence: [{ from: at(9), to: at(10, 30) }, { from: at(14), to: at(15) }], agent: [{ from: at(9, 5), to: at(9, 20) }], turns: [at(9, 3), at(14, 10)] },
+    timeline: { presence: [{ from: at(9), to: at(10, 30), ticketKey: 'TECH-1' }, { from: at(14), to: at(15) }], agent: [{ from: at(9, 5), to: at(9, 20) }], turns: [at(9, 3), at(14, 10)] },
     ...overrides,
   }
 }
@@ -65,5 +65,11 @@ test('rend une voie par projet avec présence, agent, tours, commits, MR et tick
   linked.click()
   expect(opened).toEqual(['c1'])
   expect(container.querySelector('.activity-lane-commit.is-unlinked')?.getAttribute('title')).toContain('poussé')
+  const tinted = container.querySelector<HTMLElement>('.activity-lane .activity-lane-presence.is-ticket')!
+  expect(tinted.style.background).toBe('var(--viz-1)')
+  expect(tinted.title).toContain('TECH-1, présence')
+  expect(container.querySelector('.activity-lane .activity-lane-presence:not(.is-ticket)')?.getAttribute('title')).toContain('Présence de')
+  expect(container.querySelectorAll('.activity-timeline-ticket')).toHaveLength(1)
+  expect([...ticketColors(projects).entries()]).toEqual([['TECH-1', 'var(--viz-1)']])
   expect([...container.querySelectorAll('.activity-timeline-hour')].map((hour) => hour.textContent).filter(Boolean)).toEqual(['8 h', '9 h', '10 h', '11 h', '12 h', '13 h', '14 h', '15 h', '16 h', '17 h', '18 h', '19 h', '20 h'])
 })

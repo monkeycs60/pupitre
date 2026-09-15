@@ -94,7 +94,7 @@ export interface ActivityReportTicketReady {
   changedAt: string;
 }
 
-export interface ActivitySpan { from: string; to: string }
+export interface ActivitySpan { from: string; to: string; ticketKey?: string }
 
 /** Frise du jour, calculée à la lecture depuis les entrées de temps et les tours. */
 export interface ActivityTimeline {

@@ -242,15 +242,29 @@ export class ActivityJournal {
   /** Intervalles de présence et d'agent du jour, tours horodatés : la matière de la frise. */
   timelineOfDay(projectId: string, window: DayWindow): ActivityTimeline {
     const entries = this.db.query(`
-      SELECT source, started_at, ended_at FROM time_entries
-      WHERE project_id = ? AND source IN ('presence', 'agent') AND started_at < ? AND ended_at > ?
-      ORDER BY started_at
-    `).all(projectId, window.endIso, window.startIso) as Array<{ source: string; started_at: string; ended_at: string }>;
+      SELECT e.source, e.started_at, e.ended_at, t.key AS ticket_key
+      FROM time_entries e
+      LEFT JOIN conversations c ON c.id = e.conversation_id
+      LEFT JOIN tickets t ON t.id = c.ticket_id
+      WHERE e.project_id = ? AND e.source IN ('presence', 'agent') AND e.started_at < ? AND e.ended_at > ?
+      ORDER BY e.started_at
+    `).all(projectId, window.endIso, window.startIso) as Array<{ source: string; started_at: string; ended_at: string; ticket_key: string | null }>;
     const clip = (entry: { started_at: string; ended_at: string }) => ({
       from: Math.max(Date.parse(entry.started_at), window.startMs),
       to: Math.min(Date.parse(entry.ended_at), window.endMs),
     });
-    const presence = mergeSpans(entries.filter((entry) => entry.source === "presence").map(clip), PRESENCE_GAP_MS);
+    const byTicket = new Map<string | null, Array<{ from: number; to: number }>>();
+    for (const entry of entries) {
+      if (entry.source !== "presence") continue;
+      const list = byTicket.get(entry.ticket_key) ?? [];
+      list.push(clip(entry));
+      byTicket.set(entry.ticket_key, list);
+    }
+    const presence: ActivitySpan[] = [];
+    for (const [ticketKey, spans] of byTicket) {
+      for (const span of mergeSpans(spans, PRESENCE_GAP_MS)) presence.push(ticketKey ? { ...span, ticketKey } : span);
+    }
+    presence.sort((left, right) => left.from.localeCompare(right.from));
     const agent = mergeSpans(entries.filter((entry) => entry.source === "agent").map(clip), 0);
     const turns = this.db.query(`
       SELECT e.created_at FROM events e

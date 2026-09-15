@@ -255,8 +255,11 @@ test("un rapport sauvé sans +/− reprend les lignes du changelog à la lecture
 });
 
 test("la frise du jour recolle les tranches de présence, garde les segments agent et horodate les tours", () => {
-  const { db, project, conversations, time, journal, insertEvent } = setup();
-  const conversation = conversations.create({ projectId: project.id, provider: "codex", model: "gpt-5.6-sol", firstMessage: "Frise" });
+  const { db, project, conversations, tickets, time, journal, insertEvent } = setup();
+  const ticket = tickets.upsert(project.id, { key: "TECH-42", source: "clickup", title: "Frise", status: "in progress", externalUrl: null });
+  const conversation = conversations.create({ projectId: project.id, provider: "codex", model: "gpt-5.6-sol", firstMessage: "Frise", ticketId: ticket.id });
+  const loose = conversations.create({ projectId: project.id, provider: "codex", model: "gpt-5.6-sol", firstMessage: "Sans ticket" });
+  time.addPresence({ projectId: project.id, conversationId: loose.id, startedAt: at(DAY, 9, 2, 40), endedAt: at(DAY, 9, 2, 50) });
   insertEvent(conversation.id, { type: "user-message", text: "Frise" }, at(DAY, 9, 3));
   insertEvent(conversation.id, { type: "text-final", text: "Ok" }, at(DAY, 9, 4));
   insertEvent(conversation.id, { type: "user-message", text: "Suite" }, at(DAY, 14, 30));
@@ -271,8 +274,9 @@ test("la frise du jour recolle les tranches de présence, garde les segments age
 
   const timeline = journal.timelineOfDay(project.id, dayWindow(DAY));
   expect(timeline.presence).toEqual([
-    { from: at(DAY, 9, 0), to: at(DAY, 9, 2, 30) },
-    { from: at(DAY, 9, 10), to: at(DAY, 9, 10, 30) },
+    { from: at(DAY, 9, 0), to: at(DAY, 9, 2, 30), ticketKey: "TECH-42" },
+    { from: at(DAY, 9, 2, 40), to: at(DAY, 9, 2, 50) },
+    { from: at(DAY, 9, 10), to: at(DAY, 9, 10, 30), ticketKey: "TECH-42" },
   ]);
   expect(timeline.agent).toEqual([
     { from: at(DAY, 9, 4), to: at(DAY, 9, 9) },

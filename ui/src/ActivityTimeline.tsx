@@ -37,6 +37,23 @@ export function timelineWindow(day: string, projects: ActivityReportProject[]): 
   return { startMs, endMs: Math.max(endMs, startMs + HOUR_MS) }
 }
 
+const TICKET_COLORS = 8
+
+/**
+ * Une couleur stable par ticket sur toute la frise : l'ordre d'apparition des
+ * plages de présence fixe l'attribution, les tickets au-delà de la palette
+ * retombent sur la première couleur.
+ */
+export function ticketColors(projects: ActivityReportProject[]): Map<string, string> {
+  const colors = new Map<string, string>()
+  for (const project of projects) {
+    for (const span of project.timeline?.presence ?? []) {
+      if (span.ticketKey && !colors.has(span.ticketKey)) colors.set(span.ticketKey, `var(--viz-${(colors.size % TICKET_COLORS) + 1})`)
+    }
+  }
+  return colors
+}
+
 /** Rayon d'un commit en pixels : le volume de lignes compte, sans écraser les petits. */
 export function commitRadius(lines: number): number {
   return Math.round(Math.min(7, 2.5 + Math.log10(Math.max(1, lines)) * 1.2))
@@ -58,6 +75,7 @@ export function ActivityTimeline({ day, projects, onOpenConversation }: {
     return out
   }, [day, startMs, endMs])
   const hourStep = hours.length > 15 ? 2 : 1
+  const colors = useMemo(() => ticketColors(projects), [projects])
 
   return (
     <div className="activity-timeline" role="figure" aria-label="Frise horaire du jour">
@@ -76,7 +94,13 @@ export function ActivityTimeline({ day, projects, onOpenConversation }: {
             <div className="activity-lane">
               {hours.map((hour) => <i key={hour.at} className="activity-lane-grid" style={{ left: `${((hour.at - startMs) / total * 100).toFixed(3)}%` }} aria-hidden="true" />)}
               {timeline.presence.map((span) => (
-                <span key={`p-${span.from}`} className="activity-lane-presence" style={{ left: x(span.from), width: width(span.from, span.to) }} title={`Présence de ${clock(span.from)} à ${clock(span.to)}, ${minutes(Date.parse(span.to) - Date.parse(span.from))}`} />
+                <span
+                  key={`p-${span.from}`}
+                  className={`activity-lane-presence${span.ticketKey ? ' is-ticket' : ''}`}
+                  data-ticket={span.ticketKey}
+                  style={{ left: x(span.from), width: width(span.from, span.to), background: span.ticketKey ? colors.get(span.ticketKey) : undefined }}
+                  title={`${span.ticketKey ? `${span.ticketKey}, présence` : 'Présence'} de ${clock(span.from)} à ${clock(span.to)}, ${minutes(Date.parse(span.to) - Date.parse(span.from))}`}
+                />
               ))}
               {timeline.agent.map((span) => (
                 <span key={`a-${span.from}`} className="activity-lane-agent" style={{ left: x(span.from), width: width(span.from, span.to) }} title={`Agent au travail de ${clock(span.from)} à ${clock(span.to)}`} />
@@ -106,7 +130,8 @@ export function ActivityTimeline({ day, projects, onOpenConversation }: {
         )
       })}
       <div className="activity-timeline-legend" aria-hidden="true">
-        <span><i className="activity-lane-presence" /> présence</span>
+        <span><i className="activity-lane-presence" /> présence hors ticket</span>
+        {[...colors].map(([key, color]) => <span key={key} className="activity-timeline-ticket"><i className="activity-lane-presence is-ticket" style={{ background: color }} /> {key}</span>)}
         <span><i className="activity-lane-agent" /> agent</span>
         <span><i className="activity-lane-turn" /> tour</span>
         <span><i className="activity-lane-commit" /> commit, taille selon les lignes</span>

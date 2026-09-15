@@ -128,6 +128,20 @@ export function windowTitle(window: QuotaWindow): string {
     : `${Math.round(window.windowDurationMins / 60)} h`
 }
 
+/**
+ * Fenêtres qui plafonnent un lancement avec `model` : les fenêtres communes du
+ * provider, plus celles scopées à la famille du modèle (`seven_day_fable` pour
+ * `fable-5.1`, `opus_weekly` pour `opus`).
+ */
+export function launchQuotaWindows(state: QuotaState | null, model: string): QuotaWindow[] {
+  if (state === null) return []
+  return state.windows.filter((window) => {
+    if (window.label.startsWith('seven_day_')) return model.startsWith(window.label.slice('seven_day_'.length))
+    if (window.label === 'opus_weekly') return model.startsWith('opus')
+    return true
+  })
+}
+
 /** Millisecondes avant reset (négatif si dépassé), null si date inconnue. */
 export function msUntilReset(
   window: QuotaWindow,

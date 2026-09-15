@@ -805,6 +805,7 @@ export function Composer({
         <LaunchConfirmModal
           provider={config.provider}
           model={config.model}
+          quota={quotas[config.provider] ?? null}
           isTodo={isTodoMode}
           onCancel={() => {
             setConfirmingLaunch(false)

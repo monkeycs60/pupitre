@@ -36,7 +36,9 @@
 .activity-lane { position: relative; height: var(--lane-h); border-top: 1px solid var(--border-subtle); }
 .activity-timeline-row:last-of-type .activity-lane { border-bottom: 1px solid var(--border-subtle); }
 .activity-lane-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border-subtle); }
-.activity-lane-presence { position: absolute; top: 9px; height: 13px; min-width: 2px; background: var(--accent); opacity: 0.38; border-radius: 2px; }
+.activity-lane-presence { position: absolute; top: 9px; height: 13px; min-width: 2px; background: var(--text-faint); opacity: 0.38; border-radius: 2px; }
+.activity-lane-presence.is-ticket { opacity: 0.6; }
+.activity-timeline-ticket { color: var(--text-muted); }
 .activity-lane-agent { position: absolute; top: 25px; height: 5px; min-width: 2px; background: var(--ok); opacity: 0.55; border-radius: 2px; }
 .activity-lane-turn { position: absolute; top: 5px; width: 1px; height: 21px; background: var(--text-faint); opacity: 0.8; }
 .activity-lane-commit { position: absolute; top: 50%; padding: 0; background: var(--accent); border: 2px solid var(--bg-workspace); border-radius: 50%; transform: translate(-50%, -50%); cursor: pointer; }

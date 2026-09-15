@@ -624,3 +624,63 @@ input.field-mono {
   color: var(--text-faint);
   font-size: var(--text-xs);
 }
+
+/* --- Quota dans la confirmation de lancement ------------------------------- */
+
+.launch-quota {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.launch-quota-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 44px 128px;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.launch-quota-title {
+  color: var(--text-muted);
+}
+
+.launch-quota-gauge {
+  height: 6px;
+  overflow: hidden;
+  background: var(--neutral-soft);
+  border-radius: 999px;
+}
+
+.launch-quota-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+
+.launch-quota-row.is-critical .launch-quota-fill {
+  background: var(--danger);
+}
+
+.launch-quota-value {
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.launch-quota-reset,
+.launch-quota-freshness,
+.launch-quota-empty {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.launch-quota-freshness,
+.launch-quota-empty {
+  margin: 0;
+}
+
+.launch-quota-freshness.is-stale {
+  color: var(--warn);
+}
