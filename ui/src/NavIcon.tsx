@@ -6,6 +6,7 @@ export type NavName =
   | 'conversations'
   | 'fleet'
   | 'attention'
+  | 'activity-report'
   | 'dashboard'
   | 'documents'
   | 'design'
@@ -26,6 +27,7 @@ const NAV_PATHS: Record<NavName, ReactNode> = {
   ),
   fleet: <path d="M2 8h3l1.5-4L9 12l1.5-4H14" />,
   attention: <path d="M4 6.5a4 4 0 0 1 8 0v2.3l1.2 2H2.8l1.2-2ZM6.5 12.5h3" />,
+  'activity-report': <path d="M3 13V8m5 5V3m5 10V6M2 13.5h12" />,
   dashboard: <path d="M2 3h5v5H2zM9 3h5v3H9zM9 8h5v5H9zM2 10h5v3H2z" />,
   documents: (
     <>
@@ -90,4 +92,3 @@ export function NavIcon({ name }: { name: NavName }) {
     </svg>
   )
 }
-

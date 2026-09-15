@@ -3,7 +3,7 @@ export type ConversationSpeed = 'standard' | 'fast'
 export type PresetPermissionMode =
   'plan' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions'
 export type FilesystemScope = 'project-and-ai-roots' | 'full-system'
-export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'attention' | 'costs' | 'memory' | 'help' | 'progress' | 'dashboard' | 'settings'
+export type WorkspaceView = 'conversations' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'attention' | 'activity-report' | 'costs' | 'memory' | 'help' | 'progress' | 'dashboard' | 'settings'
 
 /** Joignabilité de claude.ai, renvoyée par `GET /api/design/reachability`.
  *

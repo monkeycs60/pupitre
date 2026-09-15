@@ -32,7 +32,7 @@ import { RoutineScheduler, RoutineStore } from "./routines";
 import { SearchIndex } from "./search";
 import { CostStore } from "./costs";
 import { MemoryStore } from "./memory";
-import { TimeTrackingService, HEARTBEAT_MS } from "./time-tracking";
+import { TimeTrackingService, HEARTBEAT_MS, localDay } from "./time-tracking";
 import { HtmlDocumentService } from "./html-documents";
 import { ClickUpClient } from "./integrations/clickup";
 import { GitLabClient, readGlabToken } from "./integrations/gitlab";
@@ -57,6 +57,7 @@ import { PromotionRunner } from "./promotion";
 import { PromotionAgentService } from "./promotion-agent";
 import { VisualFeedbackService } from "./visual-feedback";
 import { TicketAuditService } from "./ticket-audits";
+import { ActivityJournal, ActivityReportService, ActivityStore } from "./activity-report";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -193,6 +194,29 @@ if (process.argv.includes("--pupitre-mcp")) {
     problemAxisRuns,
   );
   const todos = new TodoService(new TodoStore(db), projects, conversations, runner, git, tickets, quotas);
+  const activityReports = new ActivityReportService(
+    new ActivityStore(db),
+    new ActivityJournal(db, projects, new ChangelogStore(db), time, tickets, new TodoStore(db)),
+    projects, problemStore, todos, conversations, presets, time, new ChangelogStore(db),
+    async (prompt, cwd) => {
+      const raw = await generateWithAdapters({ cwd, provider: "claude", model: "claude-haiku-4-5-20251001", effort: "low", speed: "standard", prompt }, quotas);
+      const match = raw.match(/\{[\s\S]*\}/);
+      return match ? JSON.parse(match[0]) : null;
+    },
+    (input) => generateWithAdapters(input, quotas),
+  );
+  const runScheduledActivityReport = () => {
+    if (!backgroundJobsEnabled()) return;
+    const now = new Date();
+    const day = localDay(now);
+    const hour = settings.get<string>("activityReportHour") ?? "18:00";
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    const [hours, minute] = hour.split(":").map(Number);
+    if (minutes < hours! * 60 + minute! || activityReports.runState().state.last_day === day) return;
+    void activityReports.generate(day).catch((error) => console.error("[activité] passe planifiée impossible", error));
+  };
+  const activityReportTimer = setInterval(runScheduledActivityReport, 60_000);
+  activityReportTimer.unref?.();
   const ticketAudits = new TicketAuditService(
     db, tickets, conversations, projects, settings, integrationsRefresher, runner,
   );
@@ -259,6 +283,7 @@ if (process.argv.includes("--pupitre-mcp")) {
       integrationsRefresher.stop();
       changelog.stop();
       clearInterval(htmlDocumentSweepTimer);
+      clearInterval(activityReportTimer);
       runner.abortAll();
       claudeSessions.shutdown();
       codexAppServer.shutdown();
@@ -315,6 +340,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     integrationsRefresher,
     time,
     htmlDocuments,
+    activityReports,
     sharedFiles: new SharedFilesService(db, media, htmlDocuments),
     visualFeedback,
   }), port);
@@ -324,6 +350,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     changelog.start();
     quotaRefresher.start();
     integrationsRefresher.start();
+    runScheduledActivityReport();
   } else {
     console.log("instance dev : tâches de fond désactivées (PUPITRE_BACKGROUND_JOBS=on pour les activer)");
   }

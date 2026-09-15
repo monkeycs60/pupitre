@@ -1,6 +1,7 @@
 import type { SharedFilesService } from "./shared-files";
 import { TodoError, type TodoService } from "./todos";
 import type { TodoInput } from "./stores/todos";
+import { ActivityBusyError, ActivityNotFoundError, type ActivityReportService } from "./activity-report";
 import type { ServerWebSocket } from "bun";
 import { basename, extname, join, resolve as resolvePath } from "node:path";
 import { existsSync, statSync } from "node:fs";
@@ -168,6 +169,7 @@ export interface ServerDeps {
   integrationsRefresher: IntegrationsRefresher;
   time?: TimeTrackingService;
   htmlDocuments?: HtmlDocumentService;
+  activityReports?: ActivityReportService;
   sharedFiles?: SharedFilesService;
   visualFeedback?: VisualFeedbackService;
   /**
@@ -1146,6 +1148,41 @@ export function createServer(deps: ServerDeps) {
             counts[`${item.kind}s` as "turns" | "subtasks" | "routines"] += 1;
           }
           return json({ busy: Object.values(counts).some((count) => count > 0), ...counts });
+        }
+
+        if (request.method === "GET" && pathname === "/api/activity-reports") {
+          if (!deps.activityReports) throw new HttpError(503, "Rapports d'activité indisponibles");
+          return json({ days: deps.activityReports.days(), retro: deps.activityReports.retro(), run: deps.activityReports.runState() });
+        }
+        const activityReportRoute = pathname.match(/^\/api\/activity-reports\/(\d{4}-\d{2}-\d{2})$/);
+        if (activityReportRoute && request.method === "GET") {
+          if (!deps.activityReports) throw new HttpError(503, "Rapports d'activité indisponibles");
+          const report = deps.activityReports.report(activityReportRoute[1]!);
+          if (!report) throw new HttpError(404, "rapport inconnu");
+          return json(report);
+        }
+        if (request.method === "POST" && pathname === "/api/activity-reports/run") {
+          if (!deps.activityReports) throw new HttpError(503, "Rapports d'activité indisponibles");
+          const body = await readObject(request);
+          const day = typeof body.day === "string" ? body.day : new Date().toLocaleDateString("en-CA");
+          try { return json(await deps.activityReports.generate(day), 202); }
+          catch (error) {
+            if (error instanceof ActivityBusyError) throw new HttpError(409, error.message);
+            throw error;
+          }
+        }
+        const activityMotifRoute = pathname.match(/^\/api\/activity-motifs\/([^/]+)\/(dismiss|task)$/);
+        if (activityMotifRoute && request.method === "POST") {
+          if (!deps.activityReports) throw new HttpError(503, "Rapports d'activité indisponibles");
+          try {
+            const id = decodeURIComponent(activityMotifRoute[1]!);
+            return json(activityMotifRoute[2] === "dismiss"
+              ? deps.activityReports.dismiss(id)
+              : await deps.activityReports.createTask(id));
+          } catch (error) {
+            if (error instanceof ActivityNotFoundError) throw new HttpError(404, error.message);
+            throw error;
+          }
         }
 
         if (pathname === "/api/promotion" && !deps.promotion) {
@@ -2602,6 +2639,13 @@ export function createServer(deps: ServerDeps) {
               || threshold > 86_400
             ) throw new HttpError(400, "seuil de tâche longue invalide");
             deps.settings.set("longTaskThresholdSeconds", threshold);
+            updated = true;
+          }
+          if ("activityReportHour" in body) {
+            if (typeof body.activityReportHour !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.activityReportHour)) {
+              throw new HttpError(400, "heure du rapport invalide");
+            }
+            deps.settings.set("activityReportHour", body.activityReportHour);
             updated = true;
           }
           if ("designLastUrl" in body) {

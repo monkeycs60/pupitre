@@ -80,6 +80,7 @@ const ProgressView = lazy(() => import('./ProgressView').then((module) => ({ def
 const AppSettingsView = lazy(() => import('./AppSettingsView').then((module) => ({ default: module.AppSettingsView })))
 const DesignView = lazy(() => import('./DesignView').then((module) => ({ default: module.DesignView })))
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
+const ActivityReportView = lazy(() => import('./ActivityReportView').then((module) => ({ default: module.ActivityReportView })))
 const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })))
 
 const DEFAULT_SIDEBAR_WIDTH = 296
@@ -812,6 +813,12 @@ function App() {
     setShowSwitchModel(false)
   }
 
+  function handleActivityReportSelect() {
+    if (!confirmLeaveMemory()) return
+    setWorkspaceView('activity-report')
+    setShowSwitchModel(false)
+  }
+
   function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'library' | 'memory' | 'help' | 'dashboard') {
     if (view === 'dashboard') handleDashboardSelect()
     else if (view === 'fleet') handleFleetSelect()
@@ -898,6 +905,7 @@ function App() {
         routines: 'Automatisations',
         fleet: 'Exécutions',
         attention: 'À traiter',
+        'activity-report': 'Rapport d’activité',
         memory: 'Mémoire',
         help: 'Aide',
         progress: 'Progression',
@@ -926,6 +934,7 @@ function App() {
         }]
       : []),
     { name: 'attention', label: 'Activité', view: 'attention', onClick: handleAttentionSelect, badge: attention.items.length },
+    { name: 'activity-report', label: 'Rapport', view: 'activity-report', onClick: handleActivityReportSelect },
     { name: 'settings', label: 'Réglages', view: 'settings', onClick: handleSettingsSelect },
     { name: 'help', label: 'Aide', view: 'help', onClick: () => handleHelpSelect() },
   ]
@@ -1017,6 +1026,7 @@ function App() {
         {workspaceView === 'design' ? <DesignView />
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         : workspaceView === 'settings' ? <AppSettingsView instance={instance} />
+        : workspaceView === 'activity-report' ? <ActivityReportView onOpenConversation={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)} />
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
         : projectSurface?.layout === 'full' ? (
           <>

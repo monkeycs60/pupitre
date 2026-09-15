@@ -25,6 +25,14 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible de charger les paramètres.'
 }
 
+function nextActivityRun(hour: string): string {
+  const [hours, minutes] = hour.split(':').map(Number)
+  const next = new Date()
+  next.setHours(hours ?? 18, minutes ?? 0, 0, 0)
+  if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1)
+  return next.toLocaleString('fr-FR', { weekday: 'long', hour: '2-digit', minute: '2-digit' })
+}
+
 export function AppSettingsView({ instance = null }: { instance?: InstanceHealth | null }) {
   const [scope, setScope] = useState<FilesystemScope>(DEFAULT_SCOPE)
   const [loading, setLoading] = useState(true)
@@ -49,6 +57,7 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
   const [promotionMission, setPromotionMission] = useState<PromotionMission | null>(null)
   const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
   const [longTaskThreshold, setLongTaskThreshold] = useState(120)
+  const [activityReportHour, setActivityReportHour] = useState('18:00')
   const [visualFeedbackPaired, setVisualFeedbackPaired] = useState(false)
   const [ticketAuditConfig, setTicketAuditConfig] = useState<ConversationConfig>({
     provider: 'codex', model: 'gpt-5.6-sol', effort: 'medium', speed: 'standard', permissionMode: null,
@@ -61,6 +70,7 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
         if (ignore) return
         setScope(settings.filesystemScope ?? DEFAULT_SCOPE)
         setLongTaskThreshold(settings.longTaskThresholdSeconds ?? 120)
+        setActivityReportHour(settings.activityReportHour ?? '18:00')
         setVisualFeedbackPaired(settings.visualFeedbackPaired === true)
         if (settings.ticketAuditConfig) {
           setTicketAuditConfig({ ...settings.ticketAuditConfig, permissionMode: null })
@@ -212,6 +222,15 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
     }
   }
 
+  async function handleActivityReportHourSave() {
+    setSaving(true); setError(null); setSaved(false)
+    try {
+      const settings = await updateSettings({ activityReportHour })
+      setActivityReportHour(settings.activityReportHour ?? activityReportHour)
+      setSaved(true)
+    } catch (saveError: unknown) { setError(errorMessage(saveError)) } finally { setSaving(false) }
+  }
+
   async function handleTicketAuditConfig(next: ConversationConfig) {
     setTicketAuditConfig(next)
     setSaving(true)
@@ -292,6 +311,12 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
       </div>
 
       <VisualFeedbackSettings initialPaired={visualFeedbackPaired} />
+
+      <div className="settings-card">
+        <div><h2>Rapport d’activité quotidien</h2><p>La passe s’exécute une fois par jour après l’heure choisie. Une journée sans activité ne crée aucun rapport.</p><p className="settings-help">Prochaine passe : {nextActivityRun(activityReportHour)}.</p></div>
+        <label className="settings-select-label" htmlFor="activity-report-hour">Heure de la passe<input id="activity-report-hour" type="time" value={activityReportHour} disabled={loading || saving} onChange={(event) => setActivityReportHour(event.target.value)} /></label>
+        <button type="button" className="secondary-button" disabled={loading || saving} onClick={() => void handleActivityReportHourSave()}>Enregistrer l’heure</button>
+      </div>
 
       <div className="settings-card">
         <div>
