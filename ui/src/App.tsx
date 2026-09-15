@@ -1026,7 +1026,7 @@ function App() {
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
         {workspaceView === 'design' ? <DesignView />
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
-        : workspaceView === 'settings' ? <AppSettingsView instance={instance} />
+        : workspaceView === 'settings' ? <AppSettingsView instance={instance} quotas={quotas.snapshot} />
         : workspaceView === 'activity-report' ? <ActivityReportView onOpenConversation={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)} />
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
         : projectSurface?.layout === 'full' ? (

@@ -863,6 +863,12 @@ test("persiste les seuils de quota dans settings", async () => {
   expect(await visibleQuotas.json()).toMatchObject({ quotaVisibleProviders: ["claude", "codex"] });
   const unknownProvider = await putJson("/api/settings", { quotaVisibleProviders: ["gemini"] });
   expect(unknownProvider.status).toBe(400);
+  const quotaOrder = await putJson("/api/settings", {
+    quotaProviderOrder: ["grok", "claude", "grok"],
+  });
+  expect(await quotaOrder.json()).toMatchObject({ quotaProviderOrder: ["grok", "claude"] });
+  const invalidOrder = await putJson("/api/settings", { quotaProviderOrder: "grok" });
+  expect(invalidOrder.status).toBe(400);
 
   const globalFilesystem = await putJson("/api/settings", {
     filesystemScope: "full-system",

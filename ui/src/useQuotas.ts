@@ -10,7 +10,7 @@ import {
 } from './quotaSignals'
 import type { Provider, QuotaSnapshot, QuotaState } from './types'
 import { loadQuotaThresholds } from './quotaSettings'
-import { QUOTA_PROVIDERS, QUOTA_PROVIDERS_EVENT, visibleQuotaProviders } from './quotaProviders'
+import { QUOTA_PROVIDERS, QUOTA_PROVIDERS_EVENT, displayedQuotaProviders } from './quotaProviders'
 
 const EMPTY_SNAPSHOT: QuotaSnapshot = { claude: null, codex: null, grok: null, reasonix: null }
 
@@ -47,10 +47,11 @@ function useVisibleQuotaProviders(): Provider[] {
   useEffect(() => {
     const controller = new AbortController()
     void getSettings(controller.signal)
-      .then((settings) => setProviders(visibleQuotaProviders(settings.quotaVisibleProviders)))
+      .then((settings) => setProviders(displayedQuotaProviders(settings)))
       .catch(() => {})
     function handleChange(event: Event) {
-      setProviders(visibleQuotaProviders((event as CustomEvent<unknown>).detail))
+      const detail = (event as CustomEvent<unknown>).detail
+      setProviders(displayedQuotaProviders({ quotaVisibleProviders: detail, quotaProviderOrder: detail }))
     }
     window.addEventListener(QUOTA_PROVIDERS_EVENT, handleChange)
     return () => {

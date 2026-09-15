@@ -56,24 +56,23 @@
 
 .settings-quota-providers {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .settings-quota-provider {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 40px;
-  padding: 0 var(--space-3);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  gap: var(--space-4);
+  min-height: 44px;
+  padding: 0 var(--space-2) 0 var(--space-3);
   background: var(--bg-raised);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-md);
-  cursor: pointer;
-  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+  transition: border-color 120ms ease, background-color 120ms ease;
 }
 
 .settings-quota-provider:hover {
@@ -81,14 +80,97 @@
 }
 
 .settings-quota-provider:has(input:checked) {
-  color: var(--text-strong);
   background: var(--accent-soft);
   border-color: var(--accent-border);
 }
 
-.settings-quota-provider:has(input:focus-visible) {
+.settings-quota-provider label {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-quota-provider:has(input:checked) label {
+  color: var(--text-strong);
+}
+
+.settings-quota-provider label:has(input:focus-visible) {
+  border-radius: var(--r-sm);
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.settings-quota-provider-usage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.settings-quota-provider-gauge {
+  width: 72px;
+  height: 4px;
+  overflow: hidden;
+  background: var(--border);
+  border-radius: var(--r-full);
+}
+
+.settings-quota-provider-gauge i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.settings-quota-provider-gauge i.is-critical {
+  background: var(--danger);
+}
+
+.settings-quota-provider-moves {
+  display: flex;
+  gap: 2px;
+}
+
+.settings-quota-move {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.settings-quota-move:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+.settings-quota-move:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.settings-quota-move:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+@media (max-width: 560px) {
+  .settings-quota-provider-gauge {
+    display: none;
+  }
 }
 
 .settings-quota-provider input {
@@ -109,7 +191,7 @@
   opacity: 0.55;
 }
 
-.settings-quota-provider span {
+.settings-quota-provider-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

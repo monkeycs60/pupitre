@@ -2676,6 +2676,15 @@ export function createServer(deps: ServerDeps) {
             deps.settings.set("quotaVisibleProviders", [...new Set(providers)]);
             updated = true;
           }
+          if ("quotaProviderOrder" in body) {
+            const order = body.quotaProviderOrder;
+            if (
+              !Array.isArray(order)
+              || order.some((provider) => !["claude", "codex", "grok", "reasonix"].includes(provider as string))
+            ) throw new HttpError(400, "ordre des quotas invalide");
+            deps.settings.set("quotaProviderOrder", [...new Set(order)]);
+            updated = true;
+          }
           if ("ticketAuditConfig" in body) {
             const config = body.ticketAuditConfig as Record<string, unknown> | null;
             if (!config || (config.provider !== "codex" && config.provider !== "claude" && config.provider !== "grok") || typeof config.model !== "string"

@@ -153,6 +153,8 @@ export interface Settings {
   quotaThresholds?: QuotaThresholds
   /** Providers dont la barre latérale affiche le quota. Absent : tous. */
   quotaVisibleProviders?: Provider[]
+  /** Ordre des jauges de quota ; les providers absents suivent dans l'ordre par défaut. */
+  quotaProviderOrder?: Provider[]
   longTaskThresholdSeconds?: number
   filesystemScope?: FilesystemScope
   actionFormat?: ActionFormat

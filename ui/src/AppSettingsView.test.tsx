@@ -201,6 +201,52 @@ test('enregistre les quotas affichés et prévient la barre latérale', async ()
 
   fireEvent.click(codex)
   await waitFor(() => expect(received).toEqual([['claude']]))
-  expect(bodies).toEqual([{ quotaVisibleProviders: ['claude'] }])
+  expect(bodies).toEqual([{
+    quotaProviderOrder: ['claude', 'codex', 'grok', 'reasonix'],
+    quotaVisibleProviders: ['claude'],
+  }])
+  window.removeEventListener('pupitre:quota-providers', listener)
+})
+
+test('réordonne les jauges et affiche le pourcentage utilisé', async () => {
+  const bodies: unknown[] = []
+  globalThis.fetch = mock(async (_input: string | URL | Request, init?: RequestInit) => {
+    if (init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>
+      bodies.push(body)
+      return json(body)
+    }
+    return json({ quotaVisibleProviders: ['claude', 'codex'], quotaProviderOrder: ['codex', 'claude'] })
+  }) as typeof fetch
+  const received: unknown[] = []
+  const listener = (event: Event) => received.push((event as CustomEvent).detail)
+  window.addEventListener('pupitre:quota-providers', listener)
+
+  render(createElement(AppSettingsView, {
+    quotas: {
+      claude: {
+        provider: 'claude',
+        windows: [{ label: 'five_hour', usedPercent: 62, resetsAt: null, windowDurationMins: 300 }],
+        updatedAt: new Date().toISOString(),
+      },
+      codex: null,
+      grok: null,
+      reasonix: null,
+    },
+  }))
+  await screen.findByRole('button', { name: 'Monter Claude' })
+  await waitFor(() => {
+    const names = [...document.querySelectorAll('.settings-quota-provider-name')].map((node) => node.textContent)
+    expect(names.slice(0, 2)).toEqual(['Codex', 'Claude'])
+  })
+  expect(screen.getByText('62 % utilisé')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Monter Codex' }).hasAttribute('disabled')).toBe(true)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Monter Claude' }))
+  await waitFor(() => expect(received).toEqual([['claude', 'codex']]))
+  expect(bodies).toEqual([{
+    quotaProviderOrder: ['claude', 'codex', 'grok', 'reasonix'],
+    quotaVisibleProviders: ['claude', 'codex'],
+  }])
   window.removeEventListener('pupitre:quota-providers', listener)
 })

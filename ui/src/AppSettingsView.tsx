@@ -7,8 +7,15 @@ import {
   updateIntegrationTokens,
   updateSettings,
 } from './api'
-import type { FilesystemScope, InstanceHealth, PromotionMission, Provider } from './types'
-import { QUOTA_PROVIDERS, QUOTA_PROVIDERS_EVENT, visibleQuotaProviders } from './quotaProviders'
+import type { FilesystemScope, InstanceHealth, PromotionMission, Provider, QuotaSnapshot } from './types'
+import {
+  QUOTA_PROVIDERS,
+  QUOTA_PROVIDERS_EVENT,
+  displayedQuotaProviders,
+  quotaProviderOrder,
+  visibleQuotaProviders,
+} from './quotaProviders'
+import { quotaSummary } from './quotaSignals'
 import { PROVIDER_LABELS } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
 import { DEFAULT_ACTION_FORMAT } from './actionHeadings'
@@ -36,7 +43,12 @@ function nextActivityRun(hour: string): string {
   return next.toLocaleString('fr-FR', { weekday: 'long', hour: '2-digit', minute: '2-digit' })
 }
 
-export function AppSettingsView({ instance = null }: { instance?: InstanceHealth | null }) {
+const EMPTY_QUOTAS: QuotaSnapshot = { claude: null, codex: null, grok: null, reasonix: null }
+
+export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
+  instance?: InstanceHealth | null
+  quotas?: QuotaSnapshot
+}) {
   const [scope, setScope] = useState<FilesystemScope>(DEFAULT_SCOPE)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -63,6 +75,7 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
   const [activityReportHour, setActivityReportHour] = useState('18:00')
   const [visualFeedbackPaired, setVisualFeedbackPaired] = useState(false)
   const [quotaProviders, setQuotaProviders] = useState<Provider[]>(() => [...QUOTA_PROVIDERS])
+  const [quotaOrder, setQuotaOrder] = useState<Provider[]>(() => [...QUOTA_PROVIDERS])
   const [ticketAuditConfig, setTicketAuditConfig] = useState<ConversationConfig>({
     provider: 'codex', model: 'gpt-5.6-sol', effort: 'medium', speed: 'standard', permissionMode: null,
   })
@@ -77,6 +90,7 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
         setActivityReportHour(settings.activityReportHour ?? '18:00')
         setVisualFeedbackPaired(settings.visualFeedbackPaired === true)
         setQuotaProviders(visibleQuotaProviders(settings.quotaVisibleProviders))
+        setQuotaOrder(quotaProviderOrder(settings.quotaProviderOrder))
         if (settings.ticketAuditConfig) {
           setTicketAuditConfig({ ...settings.ticketAuditConfig, permissionMode: null })
         }
@@ -236,20 +250,39 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
     } catch (saveError: unknown) { setError(errorMessage(saveError)) } finally { setSaving(false) }
   }
 
-  async function handleQuotaProviderToggle(provider: Provider, visible: boolean) {
-    const next = QUOTA_PROVIDERS.filter((candidate) => candidate === provider ? visible : quotaProviders.includes(candidate))
-    const previous = quotaProviders
-    setQuotaProviders(next)
+  async function saveQuotaDisplay(order: Provider[], visible: Provider[]) {
+    const previousOrder = quotaOrder
+    const previousVisible = quotaProviders
+    setQuotaOrder(order)
+    setQuotaProviders(visible)
     setError(null)
     try {
-      const settings = await updateSettings({ quotaVisibleProviders: next })
-      const stored = visibleQuotaProviders(settings.quotaVisibleProviders ?? next)
-      setQuotaProviders(stored)
-      window.dispatchEvent(new CustomEvent(QUOTA_PROVIDERS_EVENT, { detail: stored }))
+      const settings = await updateSettings({ quotaProviderOrder: order, quotaVisibleProviders: visible })
+      const stored = {
+        quotaProviderOrder: settings.quotaProviderOrder ?? order,
+        quotaVisibleProviders: settings.quotaVisibleProviders ?? visible,
+      }
+      setQuotaOrder(quotaProviderOrder(stored.quotaProviderOrder))
+      setQuotaProviders(visibleQuotaProviders(stored.quotaVisibleProviders))
+      window.dispatchEvent(new CustomEvent(QUOTA_PROVIDERS_EVENT, { detail: displayedQuotaProviders(stored) }))
     } catch (saveError: unknown) {
-      setQuotaProviders(previous)
+      setQuotaOrder(previousOrder)
+      setQuotaProviders(previousVisible)
       setError(errorMessage(saveError))
     }
+  }
+
+  function handleQuotaProviderToggle(provider: Provider, visible: boolean) {
+    const next = QUOTA_PROVIDERS.filter((candidate) => candidate === provider ? visible : quotaProviders.includes(candidate))
+    void saveQuotaDisplay(quotaOrder, next)
+  }
+
+  function handleQuotaProviderMove(index: number, offset: -1 | 1) {
+    const order = [...quotaOrder]
+    const target = index + offset
+    if (target < 0 || target >= order.length) return
+    ;[order[index], order[target]] = [order[target]!, order[index]!]
+    void saveQuotaDisplay(order, quotaProviders)
   }
 
   async function handleTicketAuditConfig(next: ConversationConfig) {
@@ -334,22 +367,57 @@ export function AppSettingsView({ instance = null }: { instance?: InstanceHealth
       <div className="settings-card" id="settings-quota-providers" role="group" aria-labelledby="settings-quota-providers-title">
         <div>
           <h2 id="settings-quota-providers-title">Quotas affichés</h2>
-          <p>Choisissez les abonnements dont la jauge reste visible sous la liste des conversations.</p>
+          <p>Cochez les abonnements dont la jauge reste visible sous la liste des conversations, et rangez-les dans l’ordre d’affichage.</p>
         </div>
-        <div className="settings-quota-providers">
-          {QUOTA_PROVIDERS.map((provider) => (
-            <label className="settings-quota-provider" key={provider}>
-              <input
-                type="checkbox"
-                checked={quotaProviders.includes(provider)}
-                disabled={loading}
-                onChange={(event) => void handleQuotaProviderToggle(provider, event.target.checked)}
-              />
-              <span className="settings-quota-provider-mark" aria-hidden="true"><ProviderMark provider={provider} /></span>
-              <span>{PROVIDER_LABELS[provider]}</span>
-            </label>
-          ))}
-        </div>
+        <ol className="settings-quota-providers">
+          {quotaOrder.map((provider, index) => {
+            const label = PROVIDER_LABELS[provider]
+            const used = quotaSummary(provider, quotas[provider] ?? null).usedPercent
+            const usedPercent = used === null ? null : Math.round(Math.min(100, Math.max(0, used)))
+            return (
+              <li className="settings-quota-provider" key={provider}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={quotaProviders.includes(provider)}
+                    disabled={loading}
+                    onChange={(event) => handleQuotaProviderToggle(provider, event.target.checked)}
+                  />
+                  <span className="settings-quota-provider-mark" aria-hidden="true"><ProviderMark provider={provider} /></span>
+                  <span className="settings-quota-provider-name">{label}</span>
+                </label>
+                <span className="settings-quota-provider-usage">
+                  <span className="settings-quota-provider-gauge" aria-hidden="true">
+                    {usedPercent !== null ? (
+                      <i className={usedPercent >= 90 ? 'is-critical' : ''} style={{ width: `${usedPercent}%` }} />
+                    ) : null}
+                  </span>
+                  {usedPercent === null ? 'usage inconnu' : `${usedPercent} % utilisé`}
+                </span>
+                <span className="settings-quota-provider-moves">
+                  <button
+                    type="button"
+                    className="settings-quota-move"
+                    aria-label={`Monter ${label}`}
+                    disabled={loading || index === 0}
+                    onClick={() => handleQuotaProviderMove(index, -1)}
+                  >
+                    <svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true"><path d="m3 7.5 3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-quota-move"
+                    aria-label={`Descendre ${label}`}
+                    disabled={loading || index === quotaOrder.length - 1}
+                    onClick={() => handleQuotaProviderMove(index, 1)}
+                  >
+                    <svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                </span>
+              </li>
+            )
+          })}
+        </ol>
         {quotaProviders.length === 0 ? (
           <p className="settings-help">Aucune jauge ne s’affiche dans la barre latérale.</p>
         ) : null}
