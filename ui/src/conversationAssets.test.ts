@@ -36,6 +36,8 @@ test('collecte les pièces jointes et productions visuelles dans l’ordre des �
     ['image', 'Image produite'],
     ['document', 'Audit final'],
   ])
+  const document = collectConversationAssets(events).find((asset) => asset.kind === 'document')
+  expect(document?.createdAt).toBe('2026-08-31T10:00:00.000Z')
 })
 
 test('conserve les images markdown externes et déduplique une image jointe dans le même message', () => {

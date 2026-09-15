@@ -13,7 +13,7 @@ import { Lightbox } from './Lightbox'
 import { Composer } from './Composer'
 import type { ConversationConfig } from './ConfigPanel'
 import { modelLabel } from './modelOptions'
-import { createSessionSummary, createTestInventory } from './api'
+import { createSessionSummary, createTestInventory, listDocuments } from './api'
 import type { ComposerAction } from './ComposerPalette'
 import type {
   AppEvent,
@@ -208,6 +208,7 @@ export function Chat({
   const [message, setMessage] = useState(() => readDraft(draftStorageKey) ?? initialMessage)
   const [searchOpen, setSearchOpen] = useState(false)
   const [assetsOpen, setAssetsOpen] = useState(false)
+  const [conversationDocuments, setConversationDocuments] = useState<import('./types').HtmlDocument[]>([])
   const [atBottom, setAtBottom] = useState(true)
   const locatedEventRef = useRef<number | null>(null)
   useEffect(() => {
@@ -229,7 +230,37 @@ export function Chat({
   const [subtaskStatuses, setSubtaskStatuses] = useState<
     Record<string, SubtaskStatus>
   >({})
-  const conversationAssets = useMemo(() => collectConversationAssets(events), [events])
+  useEffect(() => {
+    const controller = new AbortController()
+    if (conversation === null) {
+      setConversationDocuments([])
+      return () => controller.abort()
+    }
+    void listDocuments({ conversationId: conversation.id }, controller.signal)
+      .then(setConversationDocuments)
+      .catch(() => {})
+    return () => controller.abort()
+  }, [conversation?.id, events.length])
+
+  const conversationAssets = useMemo(() => {
+    const collected = collectConversationAssets(events)
+    const knownDocuments = new Set(collected.flatMap((asset) => asset.kind === 'document' ? [asset.documentId] : []))
+    return [
+      ...collected,
+      ...conversationDocuments.filter((document) => !knownDocuments.has(document.id)).map((document) => ({
+        kind: 'document' as const,
+        id: `document-catalog-${document.id}`,
+        label: document.title,
+        documentId: document.id,
+        documentKind: document.kind,
+        mimeType: document.mimeType,
+        originalName: document.originalName,
+        size: document.sizeBytes,
+        createdAt: document.createdAt,
+        source: 'assistant' as const,
+      })),
+    ]
+  }, [conversationDocuments, events])
 
   useEffect(() => {
     try {

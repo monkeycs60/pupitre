@@ -245,7 +245,20 @@
 
 .thread-asset-meta span,
 .thread-asset-source { color: var(--text-faint); font-size: var(--text-xs); }
-.thread-asset-source { display: block; padding: 5px 2px 0; }
+.thread-asset-meta time { color: var(--text-faint); font: var(--text-xs)/1.4 var(--font-mono); }
+.thread-asset-download {
+  align-self: flex-start;
+  padding: 3px 7px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.thread-asset-download:hover { color: var(--text-strong); border-color: var(--border-strong); }
+.thread-asset-source { display: flex; flex-direction: column; gap: 2px; padding: 5px 2px 0; }
+.thread-asset-source time { font: var(--text-xs)/1.4 var(--font-mono); }
 
 .thread-asset .event-attachment { margin: 0; }
 

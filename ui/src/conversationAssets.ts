@@ -7,6 +7,7 @@ export type ConversationAsset =
       label: string
       reference: string
       source: 'user' | 'assistant'
+      createdAt?: string
     }
   | {
       kind: 'attachment'
@@ -14,6 +15,7 @@ export type ConversationAsset =
       label: string
       attachment: Attachment
       source: 'user'
+      createdAt?: string
     }
   | {
       kind: 'document'
@@ -24,6 +26,7 @@ export type ConversationAsset =
       mimeType: string
       originalName: string
       size: number
+      createdAt: string
       source: 'assistant'
     }
 
@@ -38,7 +41,7 @@ function markdownImages(text: string): Array<{ alt: string; reference: string }>
   return images
 }
 
-export function collectConversationAssets(events: ReadonlyArray<AppEvent>): ConversationAsset[] {
+export function collectConversationAssets(events: ReadonlyArray<AppEvent & { eventCreatedAt?: string }>): ConversationAsset[] {
   const assets: ConversationAsset[] = []
 
   events.forEach((event, eventIndex) => {
@@ -52,6 +55,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent>): Conv
           label: attachment?.originalName ?? `Image jointe ${imageIndex + 1}`,
           reference: name,
           source: 'user',
+          createdAt: event.eventCreatedAt,
         })
       })
       event.attachments?.forEach((attachment, attachmentIndex) => {
@@ -63,6 +67,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent>): Conv
             label: attachment.originalName,
             reference: attachment.name,
             source: 'user',
+            createdAt: event.eventCreatedAt,
           })
           return
         }
@@ -72,6 +77,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent>): Conv
           label: attachment.originalName,
           attachment,
           source: 'user',
+          createdAt: event.eventCreatedAt,
         })
       })
       return
@@ -85,6 +91,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent>): Conv
           label: image.alt,
           reference: image.reference,
           source: 'assistant',
+          createdAt: event.eventCreatedAt,
         })
       })
       return
@@ -98,6 +105,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent>): Conv
           label: 'Image produite',
           reference: name,
           source: 'assistant',
+          createdAt: event.eventCreatedAt,
         })
       })
       return
@@ -113,6 +121,7 @@ export function collectConversationAssets(events: ReadonlyArray<AppEvent>): Conv
         mimeType: event.mimeType ?? 'text/html',
         originalName: event.originalName ?? 'index.html',
         size: event.sizeBytes,
+        createdAt: event.createdAt,
         source: 'assistant',
       })
     }

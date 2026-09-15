@@ -3715,6 +3715,7 @@ export function createServer(deps: ServerDeps) {
           if (state !== null && !["active", "retained", "available"].includes(state)) throw new HttpError(400, "state invalide");
           return json(await deps.htmlDocuments.list({
             projectId: url.searchParams.get("projectId") ?? undefined,
+            conversationId: url.searchParams.get("conversationId") ?? undefined,
             query: url.searchParams.get("q") ?? undefined,
             kind: (kind ?? undefined) as import("./html-documents").DocumentKind | undefined,
             state: (state ?? undefined) as "active" | "retained" | "available" | undefined,
@@ -3814,7 +3815,7 @@ export function createServer(deps: ServerDeps) {
               headers: {
                 ...TAURI_CORS_HEADERS,
                 "content-type": content.kind === "html" ? "text/html; charset=utf-8" : content.mimeType,
-                "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(content.originalName)}`,
+                "content-disposition": `${url.searchParams.get("download") === "1" ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(content.originalName)}`,
                 "cache-control": "no-store",
                 ...(content.kind === "html" ? { "content-security-policy": [
                   "default-src 'none'",

@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { AttachmentPreview } from './AttachmentPreview'
 import type { ConversationAsset } from './conversationAssets'
 import { documentThumbnailUrl, mediaUrl } from './transport'
+import { documentDownloadUrl } from './transport'
+import { createHtmlDocumentViewToken } from './api'
 
 function imageSource(reference: string): string {
   if (reference.startsWith('/media/')) {
@@ -18,6 +20,20 @@ function imageSource(reference: string): string {
 
 function sourceLabel(source: ConversationAsset['source']): string {
   return source === 'user' ? 'Vous' : 'Assistant'
+}
+
+function formatCreatedAt(value: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(new Date(value))
+}
+
+async function downloadDocument(asset: Extract<ConversationAsset, { kind: 'document' }>) {
+  const grant = await createHtmlDocumentViewToken(asset.documentId)
+  const link = document.createElement('a')
+  link.href = documentDownloadUrl(asset.documentId, grant.token)
+  link.download = asset.originalName
+  link.click()
 }
 
 export function ConversationAssetsDrawer({
@@ -113,9 +129,20 @@ export function ConversationAssetsDrawer({
                   <div className="thread-asset-meta">
                     <strong title={asset.label}>{asset.label}</strong>
                     <span>{sourceLabel(asset.source)}{asset.kind === 'document' ? ` · ${asset.documentKind.toUpperCase()}` : ''}</span>
+                    {asset.kind === 'document' ? (
+                      <>
+                        <button type="button" className="thread-asset-download" onClick={() => void downloadDocument(asset)}>
+                          Télécharger
+                        </button>
+                      </>
+                    ) : null}
+                    {asset.createdAt ? <time dateTime={asset.createdAt}>{formatCreatedAt(asset.createdAt)}</time> : null}
                   </div>
                 ) : (
-                  <span className="thread-asset-source">{sourceLabel(asset.source)}</span>
+                  <div className="thread-asset-source">
+                    <span>{sourceLabel(asset.source)}</span>
+                    {asset.createdAt ? <time dateTime={asset.createdAt}>{formatCreatedAt(asset.createdAt)}</time> : null}
+                  </div>
                 )}
               </article>
             ))}

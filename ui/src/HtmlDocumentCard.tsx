@@ -12,7 +12,7 @@ import {
 } from './api'
 import type { HtmlDocumentBlock } from './groupEvents'
 import type { HtmlDocument, HtmlDocumentState } from './types'
-import { htmlDocumentContentUrl, htmlDocumentExternalUrl, hasTauriRuntime } from './transport'
+import { documentDownloadUrl, htmlDocumentContentUrl, htmlDocumentExternalUrl, hasTauriRuntime } from './transport'
 import { useNow } from './useNow'
 
 function formatBytes(value: number): string {
@@ -263,6 +263,23 @@ export function HtmlDocumentCard({
     }
   }
 
+  async function download() {
+    if (!canView) return
+    setBusyAction('open')
+    setError(null)
+    try {
+      const grant = await createHtmlDocumentViewToken(block.documentId)
+      const link = window.document.createElement('a')
+      link.href = documentDownloadUrl(block.documentId, grant.token)
+      link.download = document.originalName
+      link.click()
+    } catch (reason) {
+      setError(errorMessage(reason, 'Téléchargement impossible'))
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
   async function remove() {
     if (!window.confirm(`Supprimer « ${document.title} » ? Le contenu ne sera pas récupérable.`)) return
     setBusyAction('delete')
@@ -334,6 +351,9 @@ export function HtmlDocumentCard({
               ) : null}
               <button type="button" onClick={() => void openExternally()} disabled={busyAction !== null}>
                 {busyAction === 'open' ? 'Ouverture…' : documentKind === 'docx' || documentKind === 'xlsx' ? 'Modifier dans LibreOffice' : 'Ouvrir ↗'}
+              </button>
+              <button type="button" onClick={() => void download()} disabled={busyAction !== null}>
+                Télécharger
               </button>
               <button
                 type="button"

@@ -335,12 +335,14 @@ export function getHtmlDocument(id: string, signal?: AbortSignal): Promise<HtmlD
 
 export function listDocuments(filters: {
   projectId?: string
+  conversationId?: string
   query?: string
   kind?: import('./types').DocumentKind
   state?: 'active' | 'retained' | 'available'
 } = {}, signal?: AbortSignal): Promise<HtmlDocument[]> {
   const params = new URLSearchParams()
   if (filters.projectId) params.set('projectId', filters.projectId)
+  if (filters.conversationId) params.set('conversationId', filters.conversationId)
   if (filters.query) params.set('q', filters.query)
   if (filters.kind) params.set('kind', filters.kind)
   if (filters.state) params.set('state', filters.state)

@@ -45,6 +45,10 @@ export function htmlDocumentContentUrl(
   )
 }
 
+export function documentDownloadUrl(id: string, token: string): string {
+  return `${htmlDocumentContentUrl(id, token)}&download=1`
+}
+
 export const documentContentUrl = htmlDocumentContentUrl
 export const documentExternalUrl = htmlDocumentExternalUrl
 

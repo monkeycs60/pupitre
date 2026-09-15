@@ -92,6 +92,7 @@ export interface PublishHtmlDocumentInput {
 
 export interface ListDocumentsInput {
   projectId?: string;
+  conversationId?: string;
   query?: string;
   kind?: DocumentKind;
   state?: "active" | "retained" | "available";
@@ -355,6 +356,7 @@ export class HtmlDocumentService {
     const clauses = ["d.deleted_at IS NULL", "d.expired_at IS NULL"];
     const values: string[] = [];
     if (input.projectId) { clauses.push("d.project_id = ?"); values.push(input.projectId); }
+    if (input.conversationId) { clauses.push("d.conversation_id = ?"); values.push(input.conversationId); }
     if (input.kind) { clauses.push("d.kind = ?"); values.push(input.kind); }
     if (input.state === "retained") clauses.push("d.retained_at IS NOT NULL");
     if (input.state === "available") clauses.push("d.retained_at IS NULL AND d.expires_at > ?"), values.push(this.now().toISOString());

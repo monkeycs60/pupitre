@@ -57,6 +57,7 @@ test('ouvre le dernier document dans un iframe doublement sandboxé', async () =
   expect(screen.getByRole('button', { name: 'Modifier' })).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Conserver' })).toBeNull()
   expect(screen.getByRole('button', { name: 'Supprimer' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Télécharger' })).toBeTruthy()
 
   fireEvent.click(screen.getByRole('button', { name: 'Modifier' }))
   expect(await screen.findByRole('textbox', { name: 'Modifier Audit plateforme' })).toBeTruthy()
