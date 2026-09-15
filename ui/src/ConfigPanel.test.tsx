@@ -8,6 +8,7 @@ if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { ConfigPanel } = await import('./ConfigPanel')
+const { readLaunchConfig, writeLaunchConfig } = await import('./configMemory')
 const defaultFetch = globalThis.fetch
 
 beforeEach(() => {
@@ -137,6 +138,53 @@ test('un modèle disparu du catalogue ne ressuscite pas par la mémoire', async 
 
   await waitFor(() => expect(changes.length).toBeGreaterThan(0))
   expect(changes.at(-1)).toEqual(expect.objectContaining({ model: 'gpt-5.6-luna' }))
+})
+
+test('un modèle soumis à confirmation ne revient pas par la mémoire', async () => {
+  servePresets([speedPreset])
+  localStorage.setItem('pupitre:launch-config:project-1', JSON.stringify({
+    provider: 'claude',
+    model: 'fable-5.1',
+    effort: 'high',
+  }))
+  const changes: ConversationConfig[] = []
+
+  render(createElement(ConfigPanel, {
+    project,
+    quotas,
+    config: initialConfig,
+    memoryKey: project.id,
+    onConfigChange: (next: ConversationConfig) => changes.push(next),
+    onError: () => undefined,
+  }))
+
+  await waitFor(() => expect(changes.length).toBeGreaterThan(0))
+  expect(changes.at(-1)).toEqual(expect.objectContaining({ model: 'gpt-5.6-luna' }))
+})
+
+test('choisir Fable garde en mémoire le dernier modèle ordinaire', () => {
+  const base = { presetId: null, effort: 'low', speed: 'standard' as const, permissionMode: null }
+  writeLaunchConfig(project.id, { ...base, provider: 'codex', model: 'gpt-5.6-sol' })
+  writeLaunchConfig(project.id, { ...base, provider: 'claude', model: 'fable-5.1', effort: 'high' })
+  expect(readLaunchConfig(project.id)).toEqual(expect.objectContaining({ model: 'gpt-5.6-sol', effort: 'low' }))
+})
+
+test('un preset par défaut soumis à confirmation cède la place au preset Vitesse', async () => {
+  const builtinSpeed = { ...speedPreset, id: 'builtin-speed' }
+  servePresets([{ ...speedPreset, provider: 'claude', model: 'fable-5.1', effort: 'high' }, builtinSpeed])
+  const changes: ConversationConfig[] = []
+
+  render(createElement(ConfigPanel, {
+    project,
+    quotas,
+    config: initialConfig,
+    memoryKey: project.id,
+    onConfigChange: (next: ConversationConfig) => changes.push(next),
+    onError: () => undefined,
+  }))
+
+  await waitFor(() => expect(changes.length).toBeGreaterThan(0))
+  expect(changes.at(-1)).toEqual(expect.objectContaining({ model: 'gpt-5.6-luna', presetId: 'builtin-speed' }))
 })
 
 test('changer un réglage écrit la mémoire du projet', async () => {

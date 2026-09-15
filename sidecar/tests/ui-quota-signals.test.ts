@@ -299,3 +299,16 @@ test("seuils désactivés : aucune alerte", () => {
   expect(quotaAlerts(hot, { lastHour: false, usedPercent: null }, NOW)).toEqual([]);
   expect(quotaAlerts(null, DEFAULT_QUOTA_THRESHOLDS, NOW)).toEqual([]);
 });
+
+test("un lancement ne montre que les fenêtres communes et celles de la famille du modèle", async () => {
+  const { launchQuotaWindows } = await import("../../ui/src/quotaSignals");
+  const window = (label: string): QuotaWindow => ({ label, usedPercent: 10, resetsAt: null, windowDurationMins: 10080 });
+  const state: QuotaState = {
+    provider: "claude",
+    windows: [window("five_hour"), window("seven_day"), window("seven_day_fable"), window("opus_weekly")],
+    updatedAt: "2026-08-04T12:00:00.000Z",
+  };
+  expect(launchQuotaWindows(state, "fable-5.1").map((w) => w.label)).toEqual(["five_hour", "seven_day", "seven_day_fable"]);
+  expect(launchQuotaWindows(state, "opus").map((w) => w.label)).toEqual(["five_hour", "seven_day", "opus_weekly"]);
+  expect(launchQuotaWindows(null, "fable-5.1")).toEqual([]);
+});
