@@ -18,10 +18,12 @@ import {
   type ActivityReport,
   type ActivityReportCommit,
   type ActivityReportConversation,
+  type ActivityReportMergeRequest,
   type ActivityReportProject,
   type ActivityReportRetro,
   type ActivityReportSummary,
   type ActivityReportTicket,
+  type ActivityReportTicketReady,
   type ActivityReportTodo,
   type ActivityReportTopic,
   type ActivityState,
@@ -41,6 +43,10 @@ const TOPIC_AGENT_MESSAGE_MAX = 400;
 const TOPIC_TITLE_MAX = 90;
 const TOPIC_DETAIL_MAX = 280;
 const TOPICS_MAX = 10;
+const SUMMARY_MAX = 600;
+
+/** Statuts ClickUp qui valent « prêt pour la production », comparés en minuscules. */
+export const READY_STATUS_PATTERN = /ready\s*(for|to)\s*prod/i;
 
 export type CheapJsonGenerator = (prompt: string, cwd: string) => Promise<unknown>;
 
@@ -113,8 +119,11 @@ export class ActivityJournal {
       const conversations = conversationsByProject.get(project.id) ?? [];
       const commits = this.commitsOfDay(project.id, window);
       const todosDone = this.todosDoneOfDay(project.id, window);
-      if (hours.userMs === 0 && hours.agentMs === 0 && conversations.length === 0 && commits.length === 0 && todosDone.length === 0) continue;
-      const tickets = this.ticketsTouched(project.id, conversations, commits, todosDone);
+      const mergeRequests = this.mergeRequestsOfDay(project.id, window);
+      const ticketsReady = this.ticketsReadyOfDay(project.id, window);
+      if (hours.userMs === 0 && hours.agentMs === 0 && conversations.length === 0 && commits.length === 0 && todosDone.length === 0
+        && mergeRequests.length === 0 && ticketsReady.length === 0) continue;
+      const tickets = this.ticketsTouched(project.id, conversations, commits, todosDone, mergeRequests, ticketsReady);
       out.push({
         projectId: project.id,
         projectName: project.name,
@@ -127,6 +136,8 @@ export class ActivityJournal {
         linesAdded: commits.reduce((sum, commit) => sum + (commit.linesAdded ?? 0), 0),
         linesRemoved: commits.reduce((sum, commit) => sum + (commit.linesRemoved ?? 0), 0),
         tickets,
+        mergeRequests,
+        ticketsReady,
         todosDone,
       });
     }
@@ -224,28 +235,146 @@ export class ActivityJournal {
       .map((item) => ({ id: item.id, title: item.title, ticketId: item.ticket_id }));
   }
 
+  /**
+   * MR ouvertes ce jour par l'utilisateur GitLab de l'intégration. Une MR
+   * n'est connue que si la relève l'a vue ouverte : celle créée et fusionnée
+   * entre deux relèves manque, et les MR relevées avant l'ajout de la date de
+   * création n'ont pas de `createdAt`, donc restent absentes.
+   */
+  private mergeRequestsOfDay(projectId: string, window: DayWindow): ActivityReportMergeRequest[] {
+    const me = this.integrationSnapshot(projectId, "gitlab")?.username;
+    if (typeof me !== "string" || !me) return [];
+    const rows = this.db.query(`
+      SELECT r.ref, r.payload_json, t.key
+      FROM ticket_refs r JOIN tickets t ON t.id = r.ticket_id
+      WHERE t.project_id = ? AND r.kind = 'mr'
+    `).all(projectId) as Array<{ ref: string; payload_json: string; key: string }>;
+    const out: ActivityReportMergeRequest[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      if (seen.has(row.ref)) continue;
+      let payload: Record<string, unknown>;
+      try { payload = JSON.parse(row.payload_json) as Record<string, unknown>; } catch { continue; }
+      if (payload.author !== me || typeof payload.createdAt !== "string") continue;
+      const createdMs = Date.parse(payload.createdAt);
+      if (!(createdMs >= window.startMs && createdMs < window.endMs)) continue;
+      seen.add(row.ref);
+      out.push({
+        ref: row.ref,
+        iid: Number(payload.iid ?? 0),
+        project: String(payload.project ?? ""),
+        title: String(payload.title ?? ""),
+        url: String(payload.url ?? ""),
+        state: String(payload.state ?? ""),
+        ticketKey: row.key,
+        createdAt: new Date(createdMs).toISOString(),
+      });
+    }
+    return out.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+
+  /** Un ticket compte une fois même s'il est repassé plusieurs fois par le statut dans la journée. */
+  private ticketsReadyOfDay(projectId: string, window: DayWindow): ActivityReportTicketReady[] {
+    const out = new Map<string, ActivityReportTicketReady>();
+    for (const change of this.tickets.statusChangesBetween(projectId, window.startIso, window.endIso)) {
+      if (!READY_STATUS_PATTERN.test(change.to_status) || READY_STATUS_PATTERN.test(change.from_status)) continue;
+      if (out.has(change.ticket_id)) continue;
+      const ticket = this.tickets.get(change.ticket_id);
+      if (!ticket) continue;
+      out.set(change.ticket_id, {
+        ticketId: ticket.id,
+        key: ticket.key,
+        title: ticket.title,
+        externalUrl: this.ticketUrl(projectId, ticket.key, ticket.external_url),
+        toStatus: change.to_status,
+        changedAt: change.changed_at,
+      });
+    }
+    return [...out.values()];
+  }
+
   private ticketsTouched(
     projectId: string,
     conversations: JournalConversation[],
     commits: ActivityReportCommit[],
     todos: ActivityReportTodo[],
+    mergeRequests: ActivityReportMergeRequest[],
+    ready: ActivityReportTicketReady[],
   ): ActivityReportTicket[] {
     const ids = new Set<string>();
     for (const conversation of conversations) if (conversation.ticketId) ids.add(conversation.ticketId);
     for (const todo of todos) if (todo.ticketId) ids.add(todo.ticketId);
+    for (const item of ready) ids.add(item.ticketId);
     const known = this.tickets.listByProject(projectId);
     const branches = commits.map((commit) => commit.branch.toLowerCase());
+    const mrKeys = new Set(mergeRequests.map((item) => item.ticketKey.toLowerCase()));
     for (const ticket of known) {
       const key = ticket.key.toLowerCase();
-      if (key && branches.some((branch) => branch.includes(key))) ids.add(ticket.id);
+      if (key && (mrKeys.has(key) || branches.some((branch) => branch.includes(key)))) ids.add(ticket.id);
     }
     const out: ActivityReportTicket[] = [];
     for (const id of ids) {
       const ticket = known.find((item) => item.id === id) ?? this.tickets.get(id);
-      if (ticket) out.push({ id: ticket.id, key: ticket.key, title: ticket.title, externalUrl: ticket.external_url });
+      if (ticket) out.push({ id: ticket.id, key: ticket.key, title: ticket.title, externalUrl: this.ticketUrl(projectId, ticket.key, ticket.external_url) });
     }
     return out.sort((left, right) => left.key.localeCompare(right.key));
   }
+
+  /**
+   * Un ticket connu seulement par Git n'a pas d'URL ; ClickUp résout les
+   * identifiants personnalisés sous `/t/<équipe>/<clé>`, ce qui suffit quand
+   * le projet a une intégration ClickUp.
+   */
+  private ticketUrl(projectId: string, key: string, externalUrl: string | null): string | null {
+    if (externalUrl) return externalUrl;
+    const teamId = this.integrationConfig(projectId, "clickup")?.teamId;
+    if (typeof teamId !== "string" || !teamId || !/^[A-Z]+-\d+$/.test(key)) return null;
+    return `https://app.clickup.com/t/${teamId}/${key}`;
+  }
+
+  private integrationConfig(projectId: string, type: string): Record<string, unknown> | null {
+    return this.integrationColumn(projectId, type, "config_json");
+  }
+
+  private integrationSnapshot(projectId: string, type: string): Record<string, unknown> | null {
+    return this.integrationColumn(projectId, type, "snapshot_json");
+  }
+
+  private integrationColumn(projectId: string, type: string, column: "config_json" | "snapshot_json"): Record<string, unknown> | null {
+    const row = this.db.query(`SELECT ${column} AS value FROM project_integrations WHERE project_id = ? AND type = ?`)
+      .get(projectId, type) as { value: string | null } | null;
+    if (!row?.value) return null;
+    try { return JSON.parse(row.value) as Record<string, unknown>; } catch { return null; }
+  }
+}
+
+export function summaryPrompt(day: string, projects: ActivityReportProject[]): string {
+  const material = projects.map((project) => ({
+    project: project.projectName,
+    presenceMinutes: Math.round(project.userMs / 60_000),
+    commits: project.commits.length,
+    mergeRequests: project.mergeRequests.map((item) => item.title),
+    ticketsReady: project.ticketsReady.map((item) => `${item.key} ${item.title}`),
+    topics: project.topics.map((topic) => `${topic.title} — ${topic.detail}`),
+  }));
+  return [
+    `Tu résumes la journée du ${day} d'un développeur, tous projets confondus, pour qu'il la relise d'un coup d'œil.`,
+    "Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans bloc de code :",
+    '{"summary": "..."}',
+    "",
+    `- summary : deux ou trois phrases en français (${SUMMARY_MAX} caractères maximum), ton de constat, au passé composé.`,
+    "- Commence par ce qui a occupé le plus de temps, nomme les tickets par leur clé, termine par ce qui reste ouvert si c'est visible.",
+    "- Pas de chiffres d'heures ni de lignes : ils sont déjà affichés à côté.",
+    "",
+    `JOURNÉE : ${JSON.stringify(material)}`,
+  ].join("\n");
+}
+
+export function parseSummary(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const raw = (payload as { summary?: unknown }).summary;
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  return clamp(raw.trim().replace(/\s+/g, " "), SUMMARY_MAX);
 }
 
 export function topicsPrompt(project: JournalProject): string {
@@ -336,21 +465,51 @@ export function assembleReport(
   generatedAt: string,
   projects: ActivityReportProject[],
   retro: ActivityReportRetro,
+  summary: string | null = null,
 ): ActivityReport {
   return {
     day,
     generatedAt,
+    summary,
     projects,
     totals: {
       userMs: projects.reduce((sum, project) => sum + project.userMs, 0),
       agentMs: projects.reduce((sum, project) => sum + project.agentMs, 0),
       commits: projects.reduce((sum, project) => sum + project.commits.length, 0),
+      mergeRequests: projects.reduce((sum, project) => sum + project.mergeRequests.length, 0),
+      ticketsReady: projects.reduce((sum, project) => sum + project.ticketsReady.length, 0),
       linesAdded: projects.reduce((sum, project) => sum + project.linesAdded, 0),
       linesRemoved: projects.reduce((sum, project) => sum + project.linesRemoved, 0),
       conversations: projects.reduce((sum, project) => sum + project.conversations.length, 0),
     },
     retro,
   };
+}
+
+/**
+ * Un rapport sauvé avant que le changelog ait relevé les +/− de ses commits
+ * garde des lignes nulles : on les reprend du changelog à la lecture, ainsi que
+ * les champs ajoutés après coup, sans réécrire le rapport.
+ */
+export function hydrateReport(report: ActivityReport, changelog: ChangelogStore): ActivityReport {
+  const window = dayWindow(report.day);
+  const projects = report.projects.map((project) => {
+    const base: ActivityReportProject = { ...project, mergeRequests: project.mergeRequests ?? [], ticketsReady: project.ticketsReady ?? [] };
+    if (!base.commits.some((commit) => commit.linesAdded === null || commit.linesRemoved === null)) return base;
+    const stats = new Map(changelog.listBetween(base.projectId, window.startIso, window.endIso)
+      .map((entry) => [entry.commit_sha, entry]));
+    const commits = base.commits.map((commit) => {
+      const entry = stats.get(commit.sha);
+      return entry ? { ...commit, linesAdded: commit.linesAdded ?? entry.lines_added, linesRemoved: commit.linesRemoved ?? entry.lines_removed } : commit;
+    });
+    return {
+      ...base,
+      commits,
+      linesAdded: commits.reduce((sum, commit) => sum + (commit.linesAdded ?? 0), 0),
+      linesRemoved: commits.reduce((sum, commit) => sum + (commit.linesRemoved ?? 0), 0),
+    };
+  });
+  return assembleReport(report.day, report.generatedAt, projects, report.retro, report.summary ?? null);
 }
 
 export { ActivityStore };
@@ -417,7 +576,8 @@ export class ActivityReportService {
   }
 
   report(day: string): ActivityReport | null {
-    return this.store.report(day);
+    const report = this.store.report(day);
+    return report ? hydrateReport(report, this.changelog) : null;
   }
 
   /**
@@ -460,8 +620,14 @@ export class ActivityReportService {
         }
       }
       retro.error = errors.length > 0 ? errors.join(" · ") : null;
+      let summary: string | null = null;
+      try {
+        summary = parseSummary(await this.cheap(summaryPrompt(day, projects), journal[0]!.cwd));
+      } catch (error) {
+        console.error("[activité] résumé du jour impossible", error);
+      }
       const generatedAt = this.now().toISOString();
-      const report = assembleReport(day, generatedAt, projects, retro);
+      const report = assembleReport(day, generatedAt, projects, retro, summary);
       this.store.saveReport(report);
       this.store.markProcessed(day, generatedAt);
       if (retro.error) this.store.setState({ last_error: retro.error });

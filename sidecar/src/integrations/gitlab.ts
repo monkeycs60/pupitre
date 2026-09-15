@@ -34,6 +34,8 @@ export interface GitLabMergeRequest {
   state: string;
   url: string;
   updatedAt: string;
+  createdAt: string;
+  mergedAt: string | null;
   draft: boolean;
   hasConflicts: boolean;
   mergeStatus: string;
@@ -157,6 +159,8 @@ export function parseMergeRequest(payload: unknown): GitLabMergeRequest {
     state?: unknown;
     web_url?: unknown;
     updated_at?: unknown;
+    created_at?: unknown;
+    merged_at?: unknown;
     draft?: unknown;
     has_conflicts?: unknown;
     detailed_merge_status?: unknown;
@@ -173,6 +177,8 @@ export function parseMergeRequest(payload: unknown): GitLabMergeRequest {
     state: toStringValue(typed.state),
     url: toStringValue(typed.web_url),
     updatedAt: toStringValue(typed.updated_at),
+    createdAt: toStringValue(typed.created_at),
+    mergedAt: typed.merged_at === null || typed.merged_at === undefined ? null : toStringValue(typed.merged_at),
     draft: Boolean(typed.draft),
     hasConflicts: Boolean(typed.has_conflicts),
     mergeStatus: toStringValue(typed.detailed_merge_status),

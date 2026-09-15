@@ -212,3 +212,14 @@ test("listByProject rend les tickets actifs avec refs et compteurs", () => {
   expect(rows[0]?.refs).toHaveLength(1);
   expect(rows[0]?.conversations).toHaveLength(1);
 });
+
+test("un changement de statut laisse une trace datée, une simple relève identique non", () => {
+  const ticket = tickets.upsert(projectId, { key: "TECH-5", source: "clickup", title: "Cinq", status: "in progress", externalUrl: "https://x/5" });
+  tickets.upsert(projectId, { key: "TECH-5", source: "clickup", title: "Cinq", status: "in progress", externalUrl: "https://x/5" });
+  tickets.upsert(projectId, { key: "TECH-5", source: "clickup", title: "Cinq", status: "ready for production", externalUrl: "https://x/5" });
+  tickets.upsert(projectId, { key: "TECH-5", source: "git", title: "Cinq", status: "", externalUrl: null });
+  const changes = tickets.statusChangesBetween(projectId, "2000-01-01T00:00:00.000Z", "2100-01-01T00:00:00.000Z");
+  expect(changes.map((change) => [change.ticket_id, change.from_status, change.to_status])).toEqual([
+    [ticket.id, "in progress", "ready for production"],
+  ]);
+});

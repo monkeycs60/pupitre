@@ -657,6 +657,8 @@ function mergeRequestPayload(mr: GitLabMergeRequest, project: string): Record<st
     reviewers: mr.reviewers,
     targetBranch: mr.targetBranch,
     updatedAt: mr.updatedAt,
+    createdAt: mr.createdAt,
+    mergedAt: mr.mergedAt,
   };
 }
 

@@ -28,6 +28,15 @@ export interface TicketRef {
   seen_at: string;
 }
 
+export interface TicketStatusChange {
+  id: string;
+  ticket_id: string;
+  project_id: string;
+  from_status: string;
+  to_status: string;
+  changed_at: string;
+}
+
 export interface TicketNote {
   id: string;
   ticket_id: string;
@@ -136,6 +145,12 @@ export class TicketStore {
     }
 
     if (SOURCE_RANK[input.source] >= SOURCE_RANK[existing.source]) {
+      if (input.status && input.status !== existing.status) {
+        this.db.query(`
+          INSERT INTO ticket_status_changes (id, ticket_id, project_id, from_status, to_status, changed_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(crypto.randomUUID(), existing.id, projectId, existing.status, input.status, now);
+      }
       this.db.query(`
         UPDATE tickets
            SET source = ?,
@@ -211,6 +226,16 @@ export class TicketStore {
          AND archived_at IS NULL
          AND last_seen_at <= ?
     `).run(archivedAt, archivedAt, projectId, cutoff).changes;
+  }
+
+  /** Passages de statut relevés entre deux relèves, bornes ISO [from, to). */
+  statusChangesBetween(projectId: string, fromIso: string, toIso: string): TicketStatusChange[] {
+    return this.db.query(`
+      SELECT id, ticket_id, project_id, from_status, to_status, changed_at
+      FROM ticket_status_changes
+      WHERE project_id = ? AND changed_at >= ? AND changed_at < ?
+      ORDER BY changed_at
+    `).all(projectId, fromIso, toIso) as TicketStatusChange[];
   }
 
   upsertRef(ticketId: string, input: { kind: TicketRefKind; ref: string; payload: Record<string, unknown> }): TicketRef {

@@ -187,6 +187,15 @@ export function openDb(dir: string = dataDir()): Database {
       UNIQUE (ticket_id, kind, ref)
     );
     CREATE INDEX IF NOT EXISTS idx_ticket_refs_ticket ON ticket_refs(ticket_id, kind);
+    CREATE TABLE IF NOT EXISTS ticket_status_changes (
+      id TEXT PRIMARY KEY,
+      ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL,
+      from_status TEXT NOT NULL,
+      to_status TEXT NOT NULL,
+      changed_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticket_status_changes_project ON ticket_status_changes(project_id, changed_at);
     CREATE TABLE IF NOT EXISTS ticket_notes (
       id TEXT PRIMARY KEY,
       ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,

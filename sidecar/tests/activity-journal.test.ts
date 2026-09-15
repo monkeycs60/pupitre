@@ -8,10 +8,15 @@ import {
   assembleReport,
   dayWindow,
   fallbackTopics,
+  hydrateReport,
+  parseSummary,
   parseTopics,
+  summaryPrompt,
   toReportProject,
   topicsPrompt,
 } from "../src/activity-report";
+import type { ActivityReport } from "../src/stores/activity";
+import { IntegrationStore } from "../src/stores/integrations";
 import { ChangelogStore } from "../src/stores/changelog";
 import { ConversationStore } from "../src/stores/conversations";
 import { GitProjectService } from "../src/git";
@@ -178,5 +183,72 @@ test("les sujets du modèle sont filtrés sur les conversations réelles, le res
   expect("events" in reportProject.conversations[0]!).toBe(false);
   const report = assembleReport(DAY, at(DAY, 18), [reportProject], { created: [], updated: [], stabilized: [], returned: [], error: null });
   expect(report.totals.conversations).toBe(2);
+  db.close();
+});
+
+test("compte les MR ouvertes par moi ce jour, les tickets passés prêts pour la prod, et donne une URL ClickUp aux tickets Git", () => {
+  const { db, project, tickets, journal, changelog } = setup();
+  const integrations = new IntegrationStore(db);
+  const clickup = integrations.upsert(project.id, "clickup", { config: { teamId: "20556900", listIds: [] } });
+  const gitlab = integrations.upsert(project.id, "gitlab", { config: { host: "https://git", projects: [] } });
+  integrations.markOk(clickup.id, {});
+  integrations.markOk(gitlab.id, { username: "clement.serizay" });
+
+  const mine = tickets.upsert(project.id, { key: "TECH-90", source: "git", title: "Ma MR", status: "", externalUrl: null });
+  tickets.upsertRef(mine.id, { kind: "mr", ref: "reactor!1", payload: { iid: 1, project: "reactor", title: "TECH-90 / Ma MR", url: "https://git/1", state: "opened", author: "clement.serizay", createdAt: at(DAY, 10) } });
+  const theirs = tickets.upsert(project.id, { key: "TECH-91", source: "git", title: "Sa MR", status: "", externalUrl: null });
+  tickets.upsertRef(theirs.id, { kind: "mr", ref: "reactor!2", payload: { iid: 2, project: "reactor", title: "TECH-91", url: "https://git/2", state: "opened", author: "louis.quellier", createdAt: at(DAY, 11) } });
+  const old = tickets.upsert(project.id, { key: "TECH-92", source: "git", title: "Vieille MR", status: "", externalUrl: null });
+  tickets.upsertRef(old.id, { kind: "mr", ref: "reactor!3", payload: { iid: 3, project: "reactor", title: "TECH-92", url: "https://git/3", state: "merged", author: "clement.serizay", createdAt: at("2026-08-20", 11) } });
+
+  const shipped = tickets.upsert(project.id, { key: "TECH-93", source: "clickup", title: "Livré", status: "code review", externalUrl: "https://app.clickup.com/t/abc" });
+  tickets.upsert(project.id, { key: "TECH-93", source: "clickup", title: "Livré", status: "ready for production", externalUrl: "https://app.clickup.com/t/abc" });
+  db.query("UPDATE ticket_status_changes SET changed_at = ? WHERE ticket_id = ?").run(at(DAY, 15), shipped.id);
+  const bounced = tickets.upsert(project.id, { key: "TECH-94", source: "clickup", title: "Retour", status: "ready for production", externalUrl: "https://app.clickup.com/t/def" });
+  tickets.upsert(project.id, { key: "TECH-94", source: "clickup", title: "Retour", status: "in progress", externalUrl: "https://app.clickup.com/t/def" });
+  db.query("UPDATE ticket_status_changes SET changed_at = ? WHERE ticket_id = ?").run(at(DAY, 16), bounced.id);
+
+  const [entry] = journal.build(DAY);
+  expect(entry!.mergeRequests.map((item) => item.ref)).toEqual(["reactor!1"]);
+  expect(entry!.mergeRequests[0]).toEqual(expect.objectContaining({ ticketKey: "TECH-90", url: "https://git/1" }));
+  expect(entry!.ticketsReady.map((item) => item.key)).toEqual(["TECH-93"]);
+  expect(entry!.ticketsReady[0]!.toStatus).toBe("ready for production");
+  expect(entry!.tickets.map((item) => [item.key, item.externalUrl])).toEqual([
+    ["TECH-90", "https://app.clickup.com/t/20556900/TECH-90"],
+    ["TECH-93", "https://app.clickup.com/t/abc"],
+  ]);
+
+  const report = assembleReport(DAY, at(DAY, 18), [toReportProject(entry!, null)], { created: [], updated: [], stabilized: [], returned: [], error: null }, "Résumé.");
+  expect(report.totals).toEqual(expect.objectContaining({ mergeRequests: 1, ticketsReady: 1 }));
+  expect(report.summary).toBe("Résumé.");
+  expect(summaryPrompt(DAY, report.projects)).toContain("TECH-93");
+  expect(parseSummary({ summary: "  Deux\n phrases. " })).toBe("Deux phrases.");
+  expect(parseSummary({ summary: "" })).toBeNull();
+  expect(parseSummary("rien")).toBeNull();
+  void changelog;
+  db.close();
+});
+
+test("un rapport sauvé sans +/− reprend les lignes du changelog à la lecture", () => {
+  const { db, project, changelog } = setup();
+  const sha = "e".repeat(40);
+  changelog.import(project.id, [
+    { repositoryPath: ".", sha, branch: "master", subject: "feat: après coup", committedAt: `${DAY}T08:00:00+02:00` },
+  ], at(DAY, 9));
+  changelog.setLineStats(project.id, [{ sha, added: 21, removed: 4 }]);
+  const stale = {
+    day: DAY, generatedAt: at(DAY, 18), summary: null,
+    projects: [{
+      projectId: project.id, projectName: "Pupitre", userMs: 0, agentMs: 0, topics: [], topicsSource: "titles" as const,
+      conversations: [], unlinkedCommitCount: 1, linesAdded: 0, linesRemoved: 0, tickets: [], todosDone: [],
+      commits: [{ sha, repositoryPath: ".", branch: "master", subject: "feat: après coup", productMessage: null, linesAdded: null, linesRemoved: null, committedAt: `${DAY}T08:00:00+02:00`, conversationId: null }],
+    }],
+    totals: { userMs: 0, agentMs: 0, commits: 1, linesAdded: 0, linesRemoved: 0, conversations: 0 },
+    retro: { created: [], updated: [], stabilized: [], returned: [], error: null },
+  } as unknown as ActivityReport;
+  const fresh = hydrateReport(stale, changelog);
+  expect(fresh.projects[0]!.commits[0]).toEqual(expect.objectContaining({ linesAdded: 21, linesRemoved: 4 }));
+  expect(fresh.projects[0]!.mergeRequests).toEqual([]);
+  expect(fresh.totals).toEqual(expect.objectContaining({ linesAdded: 21, linesRemoved: 4, mergeRequests: 0, ticketsReady: 0 }));
   db.close();
 });

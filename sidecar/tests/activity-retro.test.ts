@@ -103,7 +103,7 @@ function setup() {
 function journalProject(overrides: Partial<JournalProject> = {}): JournalProject {
   return {
     projectId: "p", projectName: "Pupitre", cwd: "/tmp/p", userMs: 0, agentMs: 0,
-    conversations: [], commits: [], unlinkedCommitCount: 0, linesAdded: 0, linesRemoved: 0, tickets: [], todosDone: [],
+    conversations: [], commits: [], unlinkedCommitCount: 0, linesAdded: 0, linesRemoved: 0, tickets: [], mergeRequests: [], ticketsReady: [], todosDone: [],
     ...overrides,
   };
 }

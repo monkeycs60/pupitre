@@ -582,3 +582,27 @@ test('ignore les anciens domaines proposés sur la roue dentée', async () => {
   await waitFor(() => expect(screen.getByRole('button', { name: 'Paramètres de Pupitre' })).not.toBeNull())
   expect(document.querySelector('.conv-sidebar-gear-badge')).toBeNull()
 })
+
+test('ouvrir une conversation depuis ailleurs déplie son groupe et l’amène dans la vue', async () => {
+  const ticketConversation: Conversation = {
+    ...startedConversation,
+    id: 'conversation-in-ticket',
+    title: 'Depuis le rapport',
+    ticket_id: 'ticket-9',
+    ticket_key: 'TECH-9',
+  }
+  const scrolled: string[] = []
+  const original = Element.prototype.scrollIntoView
+  Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this.getAttribute('data-conversation-id') ?? '') }
+  try {
+    localStorage.setItem(`pupitre:sidebar-collapsed:${project.id}`, JSON.stringify(['ticket-TECH-9']))
+    installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [ticketConversation])
+    renderSidebar([], ticketConversation)
+    await waitFor(() => expect(document.querySelector('[data-conversation-id="conversation-in-ticket"]')).not.toBeNull())
+    await waitFor(() => expect(scrolled).toEqual(['conversation-in-ticket']))
+    expect(screen.getByRole('button', { name: 'Replier TECH-9' })).toBeTruthy()
+  } finally {
+    Element.prototype.scrollIntoView = original
+    localStorage.removeItem(`pupitre:sidebar-collapsed:${project.id}`)
+  }
+})

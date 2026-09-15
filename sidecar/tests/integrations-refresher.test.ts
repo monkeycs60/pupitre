@@ -55,6 +55,8 @@ const mine: GitLabMergeRequest = {
   state: "opened",
   url: "https://git/x/1862",
   updatedAt: "2026-08-19T10:00:00Z",
+  createdAt: "2026-08-19T09:00:00Z",
+  mergedAt: null,
   draft: false,
   hasConflicts: false,
   mergeStatus: "mergeable",
@@ -168,6 +170,9 @@ test("rapproche tâche ClickUp, MR, pipeline et déploiement sur la clé du tick
   expect(linked?.status).toBe("in progress");
   expect(linked?.refs.map((ref) => ref.kind).sort()).toEqual(["branch", "mr", "pipeline"]);
   expect(linked?.refs.find((ref) => ref.kind === "mr")?.ref).toBe("reactor!1862");
+  expect(linked?.refs.find((ref) => ref.kind === "mr")?.payload).toEqual(
+    expect.objectContaining({ createdAt: "2026-08-19T09:00:00Z", mergedAt: null }),
+  );
   expect(linked?.refs.find((ref) => ref.kind === "pipeline")?.payload).toEqual(
     expect.objectContaining({ status: "manual" }),
   );

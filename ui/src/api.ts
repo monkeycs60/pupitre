@@ -177,13 +177,27 @@ export interface Settings {
 
 export type ActivityEvidence = { motif_id: string; kind: 'conversation' | 'commit' | 'ticket' | 'problem'; ref: string; project_id: string; label: string; day: string }
 export type ActivityMotif = { id: string; project_id: string; kind: 'recurrence' | 'stabilize' | 'practice' | 'idea'; title: string; statement: string; status: 'open' | 'stabilized' | 'dismissed' | 'handled'; first_seen_day: string; last_seen_day: string; returned_at: string | null; todo_id: string | null; evidence: ActivityEvidence[] }
+export interface ActivityReportTicket { id: string; key: string; title: string; externalUrl: string | null }
+export interface ActivityReportMergeRequest { ref: string; iid: number; project: string; title: string; url: string; state: string; ticketKey: string; createdAt: string }
+export interface ActivityReportTicketReady { ticketId: string; key: string; title: string; externalUrl: string | null; toStatus: string; changedAt: string }
+export interface ActivityReportCommit { sha: string; repositoryPath: string; branch: string; subject: string; productMessage: string | null; linesAdded: number | null; linesRemoved: number | null; committedAt: string; conversationId: string | null }
+export interface ActivityReportProject {
+  projectId: string; projectName: string; userMs: number; agentMs: number; linesAdded: number; linesRemoved: number; unlinkedCommitCount: number
+  topics: Array<{ title: string; detail: string; conversationIds: string[] }>
+  conversations: Array<{ id: string; title: string; ticketId: string | null; ticketKey: string | null; startedDay: string; turns: number }>
+  commits: ActivityReportCommit[]
+  tickets: ActivityReportTicket[]
+  mergeRequests: ActivityReportMergeRequest[]
+  ticketsReady: ActivityReportTicketReady[]
+  todosDone: Array<{ id: string; title: string }>
+}
 export interface ActivityReport {
-  day: string; generatedAt: string
-  totals: { userMs: number; agentMs: number; commits: number; linesAdded: number; linesRemoved: number; conversations: number }
-  projects: Array<{ projectId: string; projectName: string; userMs: number; agentMs: number; linesAdded: number; linesRemoved: number; unlinkedCommitCount: number; topics: Array<{ title: string; detail: string; conversationIds: string[] }>; conversations: Array<{ id: string; title: string; ticketId: string | null; ticketKey: string | null }>; commits: Array<{ sha: string; repositoryPath: string; subject: string; productMessage: string | null; linesAdded: number | null; linesRemoved: number | null; conversationId: string | null }>; tickets: Array<{ id: string; key: string; title: string; externalUrl: string | null }>; todosDone: Array<{ id: string; title: string }> }>
+  day: string; generatedAt: string; summary: string | null
+  totals: { userMs: number; agentMs: number; commits: number; mergeRequests: number; ticketsReady: number; linesAdded: number; linesRemoved: number; conversations: number }
+  projects: ActivityReportProject[]
   retro: { created: string[]; updated: string[]; stabilized: string[]; returned: string[]; error: string | null }
 }
-export interface ActivityReportIndex { days: Array<{ day: string; generated_at: string; projectCount: number; commits: number; userMs: number }>; retro: { cumulative: { firstDay: string | null; activeDays: number; userMs: number; agentMs: number; commits: number; linesAdded: number; linesRemoved: number; projects: number }; trends: Array<{ days: number; userMs: number; agentMs: number; activeDays: number; commits: number; linesAdded: number; linesRemoved: number }>; motifs: ActivityMotif[] }; run: { running: boolean; runningDay: string | null } }
+export interface ActivityReportIndex { days: Array<{ day: string; generated_at: string; projectCount: number; commits: number; mergeRequests: number; ticketsReady: number; userMs: number }>; retro: { cumulative: { firstDay: string | null; activeDays: number; userMs: number; agentMs: number; commits: number; linesAdded: number; linesRemoved: number; projects: number }; trends: Array<{ days: number; userMs: number; agentMs: number; activeDays: number; commits: number; linesAdded: number; linesRemoved: number }>; motifs: ActivityMotif[] }; run: { running: boolean; runningDay: string | null } }
 
 export const getActivityReportIndex = (): Promise<ActivityReportIndex> => fetchJson('/api/activity-reports')
 export const getActivityReport = (day: string): Promise<ActivityReport> => fetchJson(`/api/activity-reports/${routeId(day)}`)

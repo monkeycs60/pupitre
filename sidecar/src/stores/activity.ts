@@ -72,6 +72,28 @@ export interface ActivityReportTicket {
   externalUrl: string | null;
 }
 
+export interface ActivityReportMergeRequest {
+  /** `label!iid`, la référence stable du dépôt GitLab. */
+  ref: string;
+  iid: number;
+  project: string;
+  title: string;
+  url: string;
+  state: string;
+  ticketKey: string;
+  createdAt: string;
+}
+
+/** Passage d'un ticket vers un statut « prêt pour la production », relevé par la relève ClickUp. */
+export interface ActivityReportTicketReady {
+  ticketId: string;
+  key: string;
+  title: string;
+  externalUrl: string | null;
+  toStatus: string;
+  changedAt: string;
+}
+
 export interface ActivityReportTodo {
   id: string;
   title: string;
@@ -91,6 +113,8 @@ export interface ActivityReportProject {
   linesAdded: number;
   linesRemoved: number;
   tickets: ActivityReportTicket[];
+  mergeRequests: ActivityReportMergeRequest[];
+  ticketsReady: ActivityReportTicketReady[];
   todosDone: ActivityReportTodo[];
 }
 
@@ -105,11 +129,15 @@ export interface ActivityReportRetro {
 export interface ActivityReport {
   day: string;
   generatedAt: string;
+  /** Deux ou trois phrases du modèle bon marché ; absent quand la synthèse a échoué. */
+  summary: string | null;
   projects: ActivityReportProject[];
   totals: {
     userMs: number;
     agentMs: number;
     commits: number;
+    mergeRequests: number;
+    ticketsReady: number;
     linesAdded: number;
     linesRemoved: number;
     conversations: number;
@@ -122,6 +150,8 @@ export interface ActivityReportSummary {
   generated_at: string;
   projectCount: number;
   commits: number;
+  mergeRequests: number;
+  ticketsReady: number;
   userMs: number;
 }
 
@@ -157,15 +187,20 @@ export class ActivityStore {
       SELECT day, generated_at,
              json_array_length(payload, '$.projects') AS project_count,
              json_extract(payload, '$.totals.commits') AS commits,
+             COALESCE(json_extract(payload, '$.totals.mergeRequests'), 0) AS merge_requests,
+             COALESCE(json_extract(payload, '$.totals.ticketsReady'), 0) AS tickets_ready,
              json_extract(payload, '$.totals.userMs') AS user_ms
       FROM activity_reports ORDER BY day DESC
     `).all() as Array<{
-      day: string; generated_at: string; project_count: number | bigint; commits: number | bigint; user_ms: number | bigint;
+      day: string; generated_at: string; project_count: number | bigint; commits: number | bigint;
+      merge_requests: number | bigint; tickets_ready: number | bigint; user_ms: number | bigint;
     }>).map((row) => ({
       day: row.day,
       generated_at: row.generated_at,
       projectCount: Number(row.project_count),
       commits: Number(row.commits),
+      mergeRequests: Number(row.merge_requests),
+      ticketsReady: Number(row.tickets_ready),
       userMs: Number(row.user_ms),
     }));
   }

@@ -16,11 +16,12 @@ function report(day: string, commits = 2): ActivityReport {
   return {
     day,
     generatedAt: `${day}T18:00:00.000Z`,
+    summary: null,
     projects: [{
       projectId: "p", projectName: "Pupitre", userMs: 3_600_000, agentMs: 60_000, topics: [], topicsSource: "titles",
-      conversations: [], commits: [], unlinkedCommitCount: 0, linesAdded: 0, linesRemoved: 0, tickets: [], todosDone: [],
+      conversations: [], commits: [], unlinkedCommitCount: 0, linesAdded: 0, linesRemoved: 0, tickets: [], mergeRequests: [], ticketsReady: [], todosDone: [],
     }],
-    totals: { userMs: 3_600_000, agentMs: 60_000, commits, linesAdded: 10, linesRemoved: 2, conversations: 0 },
+    totals: { userMs: 3_600_000, agentMs: 60_000, commits, mergeRequests: 1, ticketsReady: 0, linesAdded: 10, linesRemoved: 2, conversations: 0 },
     retro: { created: [], updated: [], stabilized: [], returned: [], error: null },
   };
 }
@@ -31,8 +32,8 @@ test("un rapport par jour, remplacé à la régénération, listé du plus réce
   store.saveReport(report("2026-09-15", 1));
   store.saveReport({ ...report("2026-09-15", 7), generatedAt: "2026-09-15T22:00:00.000Z" });
   expect(store.days()).toEqual([
-    { day: "2026-09-15", generated_at: "2026-09-15T22:00:00.000Z", projectCount: 1, commits: 7, userMs: 3_600_000 },
-    { day: "2026-09-14", generated_at: "2026-09-14T18:00:00.000Z", projectCount: 1, commits: 2, userMs: 3_600_000 },
+    { day: "2026-09-15", generated_at: "2026-09-15T22:00:00.000Z", projectCount: 1, commits: 7, mergeRequests: 1, ticketsReady: 0, userMs: 3_600_000 },
+    { day: "2026-09-14", generated_at: "2026-09-14T18:00:00.000Z", projectCount: 1, commits: 2, mergeRequests: 1, ticketsReady: 0, userMs: 3_600_000 },
   ]);
   expect(store.report("2026-09-15")?.totals.commits).toBe(7);
   expect(store.report("2026-09-13")).toBeNull();

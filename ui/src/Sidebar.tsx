@@ -563,6 +563,28 @@ export const Sidebar = memo(function Sidebar({
     return groupConversations(filtered)
   }, [conversations, filterText, selectedDomainId])
 
+  // Ouvrir une conversation depuis ailleurs (rapport, motif, ticket) doit la
+  // montrer dans la liste : on déplie son groupe puis on l'amène dans la vue,
+  // une seule fois par sélection pour ne pas voler le défilement ensuite.
+  const conversationListRef = useRef<HTMLElement>(null)
+  const revealedConversationIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    const id = selectedConversation?.id ?? null
+    if (id === null || (workspaceView !== 'conversations' && workspaceView !== 'git')) return
+    if (revealedConversationIdRef.current === id) return
+    const group = conversationGroups.find((item) => item.items.some((conversation) => conversation.id === id))
+    if (!group) return
+    if (collapsedGroups.has(group.key)) {
+      toggleGroupCollapsed(group.key)
+      return
+    }
+    const row = conversationListRef.current?.querySelector<HTMLElement>(`[data-conversation-id="${CSS.escape(id)}"]`)
+    if (!row) return
+    revealedConversationIdRef.current = id
+    row.scrollIntoView?.({ block: 'nearest' })
+  }, [selectedConversation?.id, conversationGroups, collapsedGroups, workspaceView])
+
+
   return (
     <aside className="sidebar">
       <div className="conv-sidebar-header">
@@ -605,7 +627,7 @@ export const Sidebar = memo(function Sidebar({
         </button>
       </div>
 
-      <section className="sidebar-section conversations" aria-label="Conversations du projet">
+      <section className="sidebar-section conversations" aria-label="Conversations du projet" ref={conversationListRef}>
           <div id="sidebar-conversations-panel" aria-labelledby="sidebar-conversations-title">
         <div className={`conversation-filter-input${conversationScope !== 'active' ? ' has-scope' : ''}`}>
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -753,6 +775,7 @@ export const Sidebar = memo(function Sidebar({
               <div
                 className={`navigation-row conv-row-state-${state}${conversation.origin_type === 'sentry' ? ' conv-row-sentry' : ''} ${isSelected ? 'is-selected' : ''}`}
                 key={conversation.id}
+                data-conversation-id={conversation.id}
               >
                 <span className={`conv-row-edge ${state === 'unread' ? 'is-visible' : ''}`} aria-hidden="true" />
                 <span className={`conv-row-land ${state === 'unread' ? 'is-visible' : ''}`} aria-hidden="true" />
