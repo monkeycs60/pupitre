@@ -5,7 +5,6 @@ import {
   listProjectDomains,
   mergeProjectDomain,
   renameProjectDomain,
-  validateProjectDomain,
 } from './api'
 import type { DomainKind, ProjectDomain } from './types'
 
@@ -58,7 +57,6 @@ export function DomainSettings({ projectId, disabled = false, onChanged }: Domai
     }
   }
 
-  const proposed = domains.filter((domain) => domain.status === 'proposé')
   const active = domains.filter((domain) => domain.status === 'actif')
   const locked = disabled || busy
 
@@ -66,38 +64,9 @@ export function DomainSettings({ projectId, disabled = false, onChanged }: Domai
     <section className="project-domains" aria-labelledby="project-domains-title">
       <div className="project-settings-section-heading">
         <strong id="project-domains-title">Domaines</strong>
-        <span>Les propositions du digest restent invisibles tant qu’elles ne sont pas validées.</span>
+        <span>Ajoutez ici les domaines utiles à ce projet.</span>
       </div>
       {error ? <p className="project-domains-error" role="alert">{error}</p> : null}
-      {proposed.length > 0 ? (
-        <div className="project-domain-group">
-          <h3>Proposés</h3>
-          {proposed.map((domain) => (
-            <DomainRow
-              key={domain.id}
-              domain={domain}
-              others={domains.filter((item) => item.id !== domain.id)}
-              locked={locked}
-              renamingId={renamingId}
-              renameValue={renameValue}
-              mergingId={mergingId}
-              mergeTargetId={mergeTargetId}
-              onRenameStart={() => { setRenamingId(domain.id); setRenameValue(domain.name) }}
-              onRenameValue={setRenameValue}
-              onMergeStart={() => {
-                setMergingId(domain.id)
-                setMergeTargetId(domains.find((item) => item.id !== domain.id)?.id ?? '')
-              }}
-              onMergeTarget={setMergeTargetId}
-              onValidate={() => void mutate(() => validateProjectDomain(projectId, domain.id))}
-              onRename={() => void mutate(() => renameProjectDomain(projectId, domain.id, { name: renameValue }))}
-              onMerge={() => void mutate(() => mergeProjectDomain(projectId, domain.id, mergeTargetId))}
-              onDelete={() => void mutate(() => deleteProjectDomain(projectId, domain.id))}
-              onCancel={() => { setRenamingId(null); setMergingId(null) }}
-            />
-          ))}
-        </div>
-      ) : null}
       {active.length > 0 ? (
         <div className="project-domain-group">
           <h3>Actifs</h3>
@@ -176,7 +145,6 @@ function DomainRow({
   onRenameValue,
   onMergeStart,
   onMergeTarget,
-  onValidate,
   onRename,
   onMerge,
   onDelete,
@@ -193,7 +161,6 @@ function DomainRow({
   onRenameValue: (value: string) => void
   onMergeStart: () => void
   onMergeTarget: (value: string) => void
-  onValidate?: () => void
   onRename: () => void
   onMerge: () => void
   onDelete: () => void
@@ -205,11 +172,6 @@ function DomainRow({
       <span className={`project-domain-chip project-domain-chip-${kindClass}`}>{domain.name}</span>
       <span className="project-domain-meta">{domain.kind} · {domain.status}</span>
       <span className="project-domain-actions">
-        {onValidate ? (
-          <button type="button" className="text-button" disabled={locked} onClick={onValidate}>
-            Valider
-          </button>
-        ) : null}
         {renamingId === domain.id ? (
           <>
             <input

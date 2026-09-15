@@ -1308,18 +1308,61 @@
   display: grid;
   padding: 54px var(--space-7) var(--space-7);
   background: var(--scrim);
+  overflow: hidden;
   cursor: zoom-out;
   place-items: center;
 }
 
-.lightbox img {
+.lightbox-viewport {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  place-items: center;
+}
+
+.lightbox-viewport img {
   display: block;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  cursor: default;
+  cursor: zoom-in;
+  touch-action: none;
+  user-select: none;
   box-shadow: var(--shadow-overlay);
+  transform-origin: center;
 }
+
+.lightbox-viewport img.is-zoomed { cursor: grab; }
+.lightbox-viewport img.is-zoomed:active { cursor: grabbing; }
+
+.lightbox-toolbar {
+  position: absolute;
+  top: var(--space-4);
+  left: 50%;
+  z-index: 1;
+  display: flex;
+  gap: 1px;
+  overflow: hidden;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transform: translateX(-50%);
+}
+
+.lightbox-toolbar button {
+  min-width: 34px;
+  height: 30px;
+  padding: 0 var(--space-2);
+  color: var(--text);
+  background: var(--bg-overlay);
+  border: 0;
+  cursor: pointer;
+}
+
+.lightbox-toolbar button:hover:not(:disabled) { background: var(--bg-raised); }
+.lightbox-toolbar button:disabled { color: var(--text-faint); cursor: default; }
+.lightbox-toolbar .lightbox-scale { min-width: 66px; font-variant-numeric: tabular-nums; }
 
 .lightbox-close {
   position: absolute;

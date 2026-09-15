@@ -402,26 +402,15 @@ export class ConversationRunner {
       if (!conv || conv.title_locked) return;
       const turn = this.convs.turnCount(conversationId);
       if (!shouldRefreshDigest(turn, conv.digest_turn)) return;
-      const source: DigestSource = {
-        ...this.convs.digestSource(conversationId),
-        domainCatalog: this.domains?.listByProject(conv.project_id),
-      };
+      const source: DigestSource = this.convs.digestSource(conversationId);
       const digest = await generateDigest(source, cwd);
       if (!digest) return;
       const updated = this.convs.updateDigest(conversationId, digest, turn);
       if (!updated) return;
-      if (this.domains) {
-        this.domains.applyDigestSuggestions(conversationId, conv.project_id, digest.domains);
-      }
-      const visible = this.domains?.forConversation(conversationId, { visibleOnly: true }) ?? [];
-      const proposedDomainCount = (this.domains?.forConversation(conversationId) ?? [])
-        .filter((domain) => domain.status === "proposé").length;
       persist({
         type: "conversation-digest",
         title: updated.title,
         summary: updated.summary,
-        domains: visible.map((domain) => ({ id: domain.id, name: domain.name, kind: domain.kind })),
-        proposedDomainCount,
       });
     } catch (error) {
       console.error("Rafraîchissement du digest impossible", error);

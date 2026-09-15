@@ -71,48 +71,29 @@ test("compte les tours et extrait la matière du digest", () => {
   expect(source.latest.at(-1)).toBe("Agent : Il manque remark-gfm.");
 });
 
-test("le digest accepte 0 à 2 domaines et ignore le reste", () => {
+test("le digest ne produit que le titre et le résumé", () => {
   expect(parseDigestPayload({
     title: "Fix des tableaux Markdown",
     summary: "Les tableaux GFM ne sont pas rendus.",
   })).toEqual({
     title: "Fix des tableaux Markdown",
     summary: "Les tableaux GFM ne sont pas rendus.",
-    domains: [],
   });
   expect(parseDigestPayload({
     title: "Matching",
     summary: "On vectorise les profils.",
     domains: [
       { name: "Match AI", kind: "métier" },
-      { name: "API", kind: "technique" },
-      { name: "Trop", kind: "technique" },
-      { name: "", kind: "métier" },
-      { kind: "technique" },
     ],
-  })?.domains).toEqual([
-    { name: "Match AI", kind: "métier" },
-    { name: "API", kind: "technique" },
-  ]);
-  expect(parseDigestPayload({
-    title: "Auth",
-    summary: "Login cassé.",
-    domains: [{ name: "Auth", kind: "inconnu" }],
-  })?.domains).toEqual([{ name: "Auth", kind: "technique" }]);
+  })).toEqual({ title: "Matching", summary: "On vectorise les profils." });
   expect(parseDigestPayload({ title: "", summary: "x" })).toBeNull();
 });
 
-test("le prompt du digest liste le catalogue existant sans tour supplémentaire", () => {
+test("le prompt du digest ne demande aucune détection de domaine", () => {
   const prompt = buildDigestPrompt({
     first: "Corrige le matching",
     latest: ["Agent : on vectorise."],
-    domainCatalog: [
-      { name: "Match AI", kind: "métier", status: "actif" },
-      { name: "Wishlists", kind: "métier", status: "proposé" },
-    ],
   });
-  expect(prompt).toContain('"domains"');
-  expect(prompt).toContain("Match AI (métier, actif)");
-  expect(prompt).toContain("Wishlists (métier, proposé)");
-  expect(prompt).toContain("1 ou 2 domaines");
+  expect(prompt).not.toContain('"domains"');
+  expect(prompt).not.toContain("domaine");
 });

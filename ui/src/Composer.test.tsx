@@ -101,3 +101,17 @@ test('conserve la mission de problématiques dans le contrat de création', () =
 
   expect(input).toMatchObject({ problemIds: ['problem-1', 'problem-2'], missionTitle: 'Prouver Match AI' })
 })
+
+test('ouvre l’aperçu d’une image jointe au clic sur sa vignette', () => {
+  const opened: Array<{ src: string; alt: string }> = []
+  render(createElement(Composer, {
+    ...composerProps(false),
+    initialAttachments: [{ name: 'capture.png', originalName: 'ma capture.png', mimeType: 'image/png', size: 42 }],
+    onImageOpen: (src: string, alt: string) => opened.push({ src, alt }),
+  }))
+
+  screen.getByRole('button', { name: 'Agrandir ma capture.png' }).click()
+  expect(opened).toHaveLength(1)
+  expect(opened[0]?.alt).toBe('ma capture.png')
+  expect(opened[0]?.src).toContain('/media/capture.png')
+})

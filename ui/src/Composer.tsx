@@ -64,6 +64,7 @@ interface ComposerProps {
   /** Actions `/` du popover (résumé, test, review) : exécutées par le parent,
    *  qui tient les callbacks de revue et d'ouverture du code. */
   onAction?: (action: ComposerAction) => void | Promise<void>
+  onImageOpen?: (src: string, alt: string) => void
 }
 
 interface UploadedAttachment {
@@ -229,6 +230,7 @@ export function Composer({
   problemPlanIndices,
   missionTitle,
   onAction,
+  onImageOpen,
 }: ComposerProps) {
   const isNewConversation = conversationId === null
   const [config, setConfig] = useState<ConversationConfig>({
@@ -633,9 +635,17 @@ export function Composer({
             {attachments.map(({ id, attachment }) => (
               isImageAttachment(attachment) ? (
                 <div className="composer-image" key={id}>
-                  <img src={mediaUrl(attachment.name)} alt={attachment.originalName} />
                   <button
                     type="button"
+                    className="composer-image-preview"
+                    onClick={() => onImageOpen?.(mediaUrl(attachment.name), attachment.originalName)}
+                    aria-label={`Agrandir ${attachment.originalName}`}
+                  >
+                    <img src={mediaUrl(attachment.name)} alt="" />
+                  </button>
+                  <button
+                    type="button"
+                    className="composer-image-remove"
                     onClick={() => setAttachments((current) => current.filter((item) => item.id !== id))}
                     aria-label={`Retirer ${attachment.originalName}`}
                     title="Retirer la pièce jointe"

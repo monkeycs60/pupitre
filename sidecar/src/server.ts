@@ -82,7 +82,6 @@ import {
   DomainProtectedError,
   type DomainStore,
   isDomainKind,
-  suggestionsFromLabels,
 } from "./stores/domains";
 import type { IntegrationSecretStore } from "./stores/integration-secrets";
 import type { SentryStore } from "./stores/sentry";
@@ -440,15 +439,6 @@ function domainHttpError(error: unknown): never {
   if (error instanceof DomainNotFoundError) throw new HttpError(404, error.message);
   if (error instanceof Error) throw new HttpError(400, error.message);
   throw error;
-}
-
-function seedProjectDomains(deps: ServerDeps, projectId: string): void {
-  const domains = requireDomains(deps);
-  const labels = deps.tickets.listByProject(projectId).flatMap((ticket) => (
-    Array.isArray(ticket.payload.labels) ? ticket.payload.labels : []
-  ));
-  const knownDomainNames = domains.listByProject(projectId).map((domain) => domain.name);
-  domains.proposeMany(projectId, suggestionsFromLabels(labels, knownDomainNames));
 }
 
 function htmlDocumentHttpError(error: unknown): never {
@@ -1886,7 +1876,6 @@ export function createServer(deps: ServerDeps) {
           if (!deps.projects.get(projectDomainsId)) throw new HttpError(404, "projet inconnu");
           const domains = requireDomains(deps);
           if (request.method === "GET") {
-            seedProjectDomains(deps, projectDomainsId);
             return json(domains.listByProject(projectDomainsId));
           }
           if (request.method === "POST") {

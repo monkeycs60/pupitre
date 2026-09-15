@@ -494,6 +494,7 @@ export function Chat({
             problemPlanIndices={problemPlanIndices}
             missionTitle={missionTitle}
             onAction={(action) => void handleComposerAction(action)}
+            onImageOpen={handleImageOpen}
           />
         </div>
       </div>

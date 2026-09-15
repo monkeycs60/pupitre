@@ -567,7 +567,7 @@ test('le menu d’une conversation n’attache que les domaines déjà validés'
   ]))
 })
 
-test('signale sur la roue dentée les domaines proposés du projet', async () => {
+test('ignore les anciens domaines proposés sur la roue dentée', async () => {
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [], [
     {
       id: 'd-proposed', project_id: project.id, name: 'Nouveau sujet', kind: 'métier', status: 'proposé',
@@ -579,6 +579,6 @@ test('signale sur la roue dentée les domaines proposés du projet', async () =>
     },
   ])
   renderSidebar()
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Paramètres de Pupitre, 1 domaine proposé' })).not.toBeNull())
-  expect(document.querySelector('.conv-sidebar-gear-badge')?.textContent).toBe('1')
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Paramètres de Pupitre' })).not.toBeNull())
+  expect(document.querySelector('.conv-sidebar-gear-badge')).toBeNull()
 })

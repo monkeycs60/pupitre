@@ -739,6 +739,9 @@ export function openDb(dir: string = dataDir()): Database {
       ON routines(project_id, name COLLATE NOCASE);
     CREATE INDEX IF NOT EXISTS idx_routines_due
       ON routines(enabled, next_run_at);
+    DELETE FROM conversation_domains
+      WHERE domain_id IN (SELECT id FROM domains WHERE status = 'proposé');
+    DELETE FROM domains WHERE status = 'proposé';
   `);
   db.exec("PRAGMA foreign_keys = ON");
   return db;
