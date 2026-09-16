@@ -24,7 +24,7 @@ import { ProviderMark } from './ProviderMark'
 import { ComposerPalette, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
 import type { ComposerAction, ComposerPaletteTrigger, ComposerToolItem } from './ComposerPalette'
 import type { Attachment, Conversation, Project, Provider, QuotaSnapshot, SkillSummary } from './types'
-import { PROVIDER_MODELS, requiresLaunchConfirmation } from './modelOptions'
+import { PROVIDER_DEFAULTS, requiresLaunchConfirmation } from './modelOptions'
 import { LaunchConfirmModal } from './LaunchConfirmModal'
 import { mediaUrl } from './transport'
 import { invoke } from '@tauri-apps/api/core'
@@ -237,8 +237,8 @@ export function Composer({
   const [config, setConfig] = useState<ConversationConfig>({
     presetId: null,
     provider: 'claude',
-    model: PROVIDER_MODELS.claude[0],
-    effort: 'high',
+    model: PROVIDER_DEFAULTS.claude.model,
+    effort: PROVIDER_DEFAULTS.claude.effort,
     speed: 'standard',
     permissionMode: null,
     ...initialConfig,

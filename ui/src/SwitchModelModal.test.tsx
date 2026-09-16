@@ -104,7 +104,7 @@ test('confirme une passation Claude après une sélection dans le même sélecte
   expect(handoffPayload).toEqual({
     provider: 'claude',
     model: 'fable-5',
-    effort: 'low',
+    effort: 'medium',
     speed: null,
   })
 })

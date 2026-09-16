@@ -128,3 +128,42 @@ test('le préremplissage initial ne réécrase pas la saisie après un nouveau c
 
   expect(nameInput.value).toBe('Saisie utilisateur')
 })
+
+test('changer de provider dans la grille manuelle applique le réglage par défaut du provider', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  installApi()
+  render(createElement(WorkflowDialog, {
+    project: project('project-1'),
+    workflows: [],
+    onClose: () => undefined,
+    onChanged: () => undefined,
+  }))
+
+  await waitFor(() => expect(skillLoads).toHaveLength(1))
+  await act(async () => {
+    skillLoads[0]!.resolve(jsonResponse([skill]))
+  })
+
+  // La grille manuelle ne s'affiche qu'en quittant le preset.
+  fireEvent.change(await screen.findByLabelText('Preset'), { target: { value: '' } })
+
+  // À l'ouverture, le profil économe — pas le défaut de bascule Codex
+  // (Sol/standard). On fige les valeurs : c'est le contrat de coût du workflow.
+  expect((screen.getByLabelText('Provider') as HTMLSelectElement).value).toBe('codex')
+  expect((screen.getByLabelText('Modèle') as HTMLSelectElement).value).toBe('gpt-5.6-luna')
+  expect((screen.getByLabelText('Effort') as HTMLSelectElement).value).toBe('low')
+  expect((screen.getByLabelText('Vitesse') as HTMLSelectElement).value).toBe('fast')
+
+  const cases: Array<{ provider: string; model: string; effort: string }> = [
+    { provider: 'claude', model: 'opus', effort: 'medium' },
+    { provider: 'grok', model: 'grok-4.6', effort: 'high' },
+    { provider: 'reasonix', model: 'go41', effort: 'high' },
+    { provider: 'codex', model: 'gpt-5.6-sol', effort: 'low' },
+  ]
+
+  for (const expected of cases) {
+    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: expected.provider } })
+    expect((screen.getByLabelText('Modèle') as HTMLSelectElement).value).toBe(expected.model)
+    expect((screen.getByLabelText('Effort') as HTMLSelectElement).value).toBe(expected.effort)
+  }
+})

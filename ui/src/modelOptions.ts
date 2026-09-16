@@ -1,4 +1,4 @@
-import type { PresetPermissionMode, Provider } from './types'
+import type { ConversationSpeed, PresetPermissionMode, Provider } from './types'
 
 /** Ordre des providers dans toutes les listes et sélecteurs. */
 export const PROVIDERS = ['codex', 'claude', 'grok', 'reasonix'] as const satisfies readonly Provider[]
@@ -39,6 +39,32 @@ export const PROVIDER_EFFORTS = {
   grok: ['low', 'medium', 'high', 'xhigh'],
   reasonix: ['disabled', 'low', 'high', 'max'],
 } as const satisfies Record<Provider, readonly string[]>
+
+/**
+ * Modèle et effort proposés à l'arrivée sur un provider. Le premier modèle du
+ * catalogue n'est pas retenu : il est le plus capable, donc le plus cher et
+ * souvent soumis à confirmation. On vise un réglage sûr à lancer, quitte à
+ * monter d'un cran à la main.
+ */
+export const PROVIDER_DEFAULTS = {
+  codex: { model: 'gpt-5.6-sol', effort: 'low' },
+  claude: { model: 'opus', effort: 'medium' },
+  grok: { model: 'grok-4.6', effort: 'high' },
+  reasonix: { model: 'go41', effort: 'high' },
+} as const satisfies Record<Provider, { model: string; effort: string }>
+
+/**
+ * Réglage d'ouverture de la grille manuelle d'un workflow : le profil économe de
+ * Codex — le modèle le moins cher, effort bas, en vitesse rapide. Un workflow
+ * est fait pour tourner souvent, d'où ce choix assumé plutôt que
+ * `PROVIDER_DEFAULTS.codex`, plus cher. C'est le profil du preset « Vitesse ».
+ */
+export const WORKFLOW_DEFAULTS = {
+  provider: 'codex',
+  model: 'gpt-5.6-luna',
+  effort: 'low',
+  speed: 'fast',
+} as const satisfies { provider: Provider; model: string; effort: string; speed: ConversationSpeed }
 
 /**
  * Nom lisible d'un modèle. Les identifiants passés aux CLI sont des alias

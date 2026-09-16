@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 import type { ConversationConfig } from './ConfigPanel'
-import type { QuotaSnapshot } from './types'
+import type { Provider, QuotaSnapshot } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
@@ -39,22 +39,55 @@ test('les quatre providers sont proposés, seul le provider courant est coché',
     .toEqual([screen.getByRole('radio', { name: 'Claude' })])
 })
 
-test('changer de provider emmène son modèle le plus capable et garde l’effort', () => {
+test('changer de provider applique le modèle et l’effort par défaut du provider', () => {
   let next: ConversationConfig | null = null
   render(selector({ onConfigChange: (config) => { next = config } }))
 
   fireEvent.click(screen.getByRole('radio', { name: 'Codex' }))
 
-  expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-6-astra', effort: 'high' })
+  expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-5.6-sol', effort: 'low' })
 })
 
-test('un effort absent chez le nouveau provider retombe sur high', () => {
-  let next: ConversationConfig | null = null
-  render(selector({ config: { ...config, effort: 'max' }, onConfigChange: (config) => { next = config } }))
+test('chaque provider arrive sur son réglage par défaut, pas son modèle le plus cher', () => {
+  const expected: Array<{ label: string; provider: Provider; model: string; effort: string }> = [
+    { label: 'Grok', provider: 'grok', model: 'grok-4.6', effort: 'high' },
+    { label: 'OpenCode Go (Reasonix)', provider: 'reasonix', model: 'go41', effort: 'high' },
+  ]
 
-  fireEvent.click(screen.getByRole('radio', { name: 'Grok' }))
+  for (const { label, provider, model, effort } of expected) {
+    let next: ConversationConfig | null = null
+    const { unmount } = render(selector({
+      config: { ...config, effort: 'max' },
+      onConfigChange: (config) => { next = config },
+    }))
 
-  expect(next).toEqual({ ...config, provider: 'grok', model: 'grok-4.6', effort: 'high' })
+    fireEvent.click(screen.getByRole('radio', { name: label }))
+
+    expect(next).toEqual({ ...config, provider, model, effort })
+    unmount()
+  }
+})
+
+test('la mémoire par provider prime sur le défaut au retour', () => {
+  function Harness() {
+    const [value, setValue] = useState<ConversationConfig>(config)
+    return createElement(ModelConfigSelector, {
+      config: value,
+      quotas: emptyQuotas,
+      onConfigChange: setValue,
+    })
+  }
+
+  render(createElement(Harness))
+
+  fireEvent.click(screen.getByRole('radio', { name: 'Codex' }))
+  expect(screen.getByRole('button', { name: 'Modèle' }).textContent).toContain('GPT-5.6 Sol')
+
+  // Claude n'a jamais été quitté avec un autre réglage : son dernier choix
+  // (fable-5/high) revient, pas son défaut opus/medium.
+  fireEvent.click(screen.getByRole('radio', { name: 'Claude' }))
+  expect(screen.getByRole('button', { name: 'Modèle' }).textContent).toContain('Fable 5')
+  expect(screen.getByRole('button', { name: 'Effort' }).textContent).toContain('high')
 })
 
 test('le menu des modèles ne liste que ceux du provider courant', () => {

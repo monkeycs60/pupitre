@@ -7,7 +7,7 @@ import {
   type DiscussionDocument,
   type HandoffDocument,
 } from './api'
-import { PROVIDER_EFFORTS, PROVIDER_LABELS, PROVIDER_MODELS } from './modelOptions'
+import { PROVIDER_DEFAULTS, PROVIDER_EFFORTS, PROVIDER_LABELS, PROVIDER_MODELS } from './modelOptions'
 import Markdown from './Markdown'
 import type { Conversation, ConversationSpeed, Provider } from './types'
 
@@ -121,8 +121,8 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
 
   function handleProviderChange(nextProvider: Provider) {
     setProvider(nextProvider)
-    setModel(PROVIDER_MODELS[nextProvider][0])
-    setEffort('high')
+    setModel(PROVIDER_DEFAULTS[nextProvider].model)
+    setEffort(PROVIDER_DEFAULTS[nextProvider].effort)
     setSpeed('standard')
   }
 

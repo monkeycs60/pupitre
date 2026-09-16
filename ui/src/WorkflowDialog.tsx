@@ -7,7 +7,7 @@ import {
   listSkills,
   updateWorkflow,
 } from './api'
-import { PROVIDER_EFFORTS, PROVIDER_LABELS, PROVIDER_MODELS } from './modelOptions'
+import { PROVIDER_DEFAULTS, PROVIDER_EFFORTS, PROVIDER_LABELS, PROVIDER_MODELS, WORKFLOW_DEFAULTS } from './modelOptions'
 import type {
   ConversationSpeed,
   Preset,
@@ -168,10 +168,12 @@ export function WorkflowDialog({
   const [skillQuery, setSkillQuery] = useState('')
   const [prompt, setPrompt] = useState('')
   const [presetId, setPresetId] = useState(project.default_preset_id ?? 'builtin-speed')
-  const [provider, setProvider] = useState<Provider>('codex')
-  const [model, setModel] = useState<string>('gpt-5.6-luna')
-  const [effort, setEffort] = useState('low')
-  const [speed, setSpeed] = useState<ConversationSpeed>('fast')
+  // La grille manuelle s'ouvre sur WORKFLOW_DEFAULTS (profil Codex économe) ;
+  // changer de provider applique PROVIDER_DEFAULTS, pas ce couple.
+  const [provider, setProvider] = useState<Provider>(WORKFLOW_DEFAULTS.provider)
+  const [model, setModel] = useState<string>(WORKFLOW_DEFAULTS.model)
+  const [effort, setEffort] = useState<string>(WORKFLOW_DEFAULTS.effort)
+  const [speed, setSpeed] = useState<ConversationSpeed>(WORKFLOW_DEFAULTS.speed)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const initializedWorkflowIdRef = useRef<string | null>(null)
@@ -198,10 +200,10 @@ export function WorkflowDialog({
     setSkillQuery('')
     setPrompt('')
     setPresetId(project.default_preset_id ?? 'builtin-speed')
-    setProvider('codex')
-    setModel('gpt-5.6-luna')
-    setEffort('low')
-    setSpeed('fast')
+    setProvider(WORKFLOW_DEFAULTS.provider)
+    setModel(WORKFLOW_DEFAULTS.model)
+    setEffort(WORKFLOW_DEFAULTS.effort)
+    setSpeed(WORKFLOW_DEFAULTS.speed)
   }
 
   const edit = useCallback((workflow: Workflow) => {
@@ -276,8 +278,8 @@ export function WorkflowDialog({
 
   function handleProvider(next: Provider) {
     setProvider(next)
-    setModel(PROVIDER_MODELS[next][0])
-    setEffort('high')
+    setModel(PROVIDER_DEFAULTS[next].model)
+    setEffort(PROVIDER_DEFAULTS[next].effort)
     setSpeed('standard')
   }
 

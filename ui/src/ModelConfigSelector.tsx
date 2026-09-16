@@ -10,6 +10,7 @@ import {
   modelLabel,
   MODEL_COST_TICKS,
   MODEL_HINTS,
+  PROVIDER_DEFAULTS,
   PROVIDER_EFFORTS,
   PROVIDER_LABELS,
   PROVIDER_MODELS,
@@ -160,12 +161,19 @@ export function ModelConfigSelector({
 }: ModelConfigSelectorProps) {
   const [panel, setPanel] = useState<Panel>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
-  // Revenir à un provider redonne le modèle qu'on y avait laissé.
+  // Revenir à un provider redonne le réglage qu'on y avait laissé ; à défaut,
+  // le réglage par défaut du provider, qui n'est pas son modèle le plus cher.
   const lastModelRef = useRef<Record<Provider, string>>({
-    codex: PROVIDER_MODELS.codex[0],
-    claude: PROVIDER_MODELS.claude[0],
-    grok: PROVIDER_MODELS.grok[0],
-    reasonix: PROVIDER_MODELS.reasonix[0],
+    codex: PROVIDER_DEFAULTS.codex.model,
+    claude: PROVIDER_DEFAULTS.claude.model,
+    grok: PROVIDER_DEFAULTS.grok.model,
+    reasonix: PROVIDER_DEFAULTS.reasonix.model,
+  })
+  const lastEffortRef = useRef<Record<Provider, string>>({
+    codex: PROVIDER_DEFAULTS.codex.effort,
+    claude: PROVIDER_DEFAULTS.claude.effort,
+    grok: PROVIDER_DEFAULTS.grok.effort,
+    reasonix: PROVIDER_DEFAULTS.reasonix.effort,
   })
   const disabled = isLoading || isBusy
   const efforts = PROVIDER_EFFORTS[config.provider] as readonly string[]
@@ -176,7 +184,8 @@ export function ModelConfigSelector({
 
   useEffect(() => {
     lastModelRef.current[config.provider] = config.model
-  }, [config.provider, config.model])
+    lastEffortRef.current[config.provider] = config.effort
+  }, [config.provider, config.model, config.effort])
 
   // Le panneau est ancré à sa cellule, mais la liste des modèles est plus large
   // que la réglette et le composer touche le bas de la fenêtre.
@@ -224,11 +233,12 @@ export function ModelConfigSelector({
   function chooseProvider(provider: Provider) {
     if (provider === config.provider) return
     const nextEfforts = PROVIDER_EFFORTS[provider] as readonly string[]
+    const effort = lastEffortRef.current[provider]
     onConfigChange({
       ...config,
       provider,
       model: lastModelRef.current[provider],
-      effort: nextEfforts.includes(config.effort) ? config.effort : 'high',
+      effort: nextEfforts.includes(effort) ? effort : PROVIDER_DEFAULTS[provider].effort,
       speed: provider === 'codex' ? config.speed : 'standard',
     })
     setPanel(null)
