@@ -51,6 +51,17 @@ export function claudeMcpConfigArg(
   });
 }
 
+/** Entrée `mcpServers` de `session/new` et `session/resume` en ACP : l'environnement y est une liste. */
+export function acpPupitreMcpServer(target: PupitreTarget): Record<string, unknown> {
+  const server = pupitreServerConfig(target);
+  return {
+    name: "pupitre",
+    command: server.command,
+    args: server.args,
+    env: Object.entries(server.env).map(([name, value]) => ({ name, value })),
+  };
+}
+
 export function codexPupitreMcpServer(target: PupitreTarget): Record<string, unknown> {
   return { ...pupitreServerConfig(target), enabled: true };
 }

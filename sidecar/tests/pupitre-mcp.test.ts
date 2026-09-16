@@ -1,7 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { pupitreMcpPath, pupitreServerConfig } from "../src/pupitre";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { acpPupitreMcpServer, pupitreMcpPath, pupitreServerConfig } from "../src/pupitre";
+import { commitPaths } from "../src/pupitre-mcp";
 
 const clients: Client[] = [];
 const servers: Array<ReturnType<typeof Bun.serve>> = [];
@@ -62,6 +67,7 @@ test("publish_html_document transmet un document au sidecar local", async () => 
     "publish_html_document",
     "read_sibling_conversation",
     "report_sentry_triage",
+    "git_commit",
   ]);
   expect(tools[0]?.description).toContain("jusqu’à suppression explicite");
 
@@ -128,4 +134,40 @@ test("read_sibling_conversation relaie le brief en texte", async () => {
   expect(result.content[0]?.text).toContain("# Reprise TECH-7");
   expect(result.content[0]?.text).toContain("Résumé utile");
   expect(result.content[0]?.text).toContain("Salut, voici le plan.");
+});
+
+test("le bridge ACP passe l'environnement sous forme de liste", () => {
+  expect(acpPupitreMcpServer({ port: 4821, conversationId: "conversation-1" })).toMatchObject({
+    name: "pupitre",
+    env: [
+      { name: "PUPITRE_PORT", value: "4821" },
+      { name: "PUPITRE_CONVERSATION_ID", value: "conversation-1" },
+    ],
+  });
+});
+
+test("git_commit committe les fichiers listés et laisse les autres changements", async () => {
+  const repository = mkdtempSync(join(tmpdir(), "pupitre-git-commit-"));
+  const git = (...args: string[]) => execFileSync("git", ["-C", repository, ...args], { encoding: "utf8" }).trim();
+  try {
+    git("init", "-q");
+    git("config", "user.email", "test@example.com");
+    git("config", "user.name", "Test");
+    writeFileSync(join(repository, "a.txt"), "a\n");
+    writeFileSync(join(repository, "b.txt"), "b\n");
+    git("add", ".");
+    git("commit", "-qm", "initial");
+    writeFileSync(join(repository, "a.txt"), "a2\n");
+    writeFileSync(join(repository, "b.txt"), "b2\n");
+    writeFileSync(join(repository, "c.txt"), "c\n");
+    git("add", "b.txt");
+
+    const result = await commitPaths({ repository, paths: ["a.txt", join(repository, "c.txt")], message: "feat: a et c" });
+
+    expect(result).toContain("feat: a et c");
+    expect(git("show", "--name-only", "--format=", "HEAD").split("\n")).toEqual(["a.txt", "c.txt"]);
+    expect(git("status", "--porcelain")).toBe("M  b.txt");
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
 });

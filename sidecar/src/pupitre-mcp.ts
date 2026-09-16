@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { z } from "zod";
 import { defaultPort, readInstance } from "./instance";
 
@@ -48,6 +50,29 @@ function renderConversationBrief(brief: ConversationBrief): string {
     lines.push(`**${exchange.role}** : ${exchange.text}`, "");
   }
   return lines.join("\n").trim();
+}
+
+const run = promisify(execFile);
+
+async function git(repository: string, args: string[]): Promise<string> {
+  try {
+    const { stdout } = await run("git", ["-C", repository, ...args], { maxBuffer: 10 * 1024 * 1024 });
+    return stdout.trim();
+  } catch (error) {
+    const failure = error as { stderr?: string; message?: string };
+    throw new Error((failure.stderr || failure.message || String(error)).trim());
+  }
+}
+
+export async function commitPaths(args: {
+  repository: string; paths: string[]; message: string; push?: boolean;
+}): Promise<string> {
+  await git(args.repository, ["add", "--", ...args.paths]);
+  await git(args.repository, ["commit", "-m", args.message, "--", ...args.paths]);
+  const summary = await git(args.repository, ["log", "-1", "--format=%h %s"]);
+  if (!args.push) return `Commit créé : ${summary}.`;
+  await git(args.repository, ["push"]);
+  return `Commit créé et poussé : ${summary}.`;
 }
 
 const DESCRIPTION =
@@ -149,6 +174,24 @@ export function createPupitreServer(): McpServer {
       return text("Verdict Scout enregistré dans l'inbox Sentry.");
     } catch (error) {
       return text(`Verdict impossible à enregistrer : ${error instanceof Error ? error.message : String(error)}`, true);
+    }
+  });
+  server.registerTool("git_commit", {
+    title: "Committer des fichiers précis",
+    description: "Ajoute et committe exactement les fichiers listés, sans toucher aux autres changements du dépôt, "
+      + "puis pousse la branche courante si push=true. Les chemins sont relatifs au dépôt ou absolus. "
+      + "Utilise cet outil quand ta commande shell `git add` ou `git commit` est refusée.",
+    inputSchema: {
+      repository: z.string().describe("Chemin absolu du dépôt Git."),
+      paths: z.array(z.string().min(1)).min(1).describe("Fichiers à committer, suppressions comprises."),
+      message: z.string().min(1).describe("Message de commit complet."),
+      push: z.boolean().optional().default(false).describe("Pousse la branche courante après le commit."),
+    },
+  }, async (args: { repository: string; paths: string[]; message: string; push?: boolean }) => {
+    try {
+      return text(await commitPaths(args));
+    } catch (error) {
+      return text(`Commit impossible : ${error instanceof Error ? error.message : String(error)}`, true);
     }
   });
   return server;

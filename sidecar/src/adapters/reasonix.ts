@@ -2,6 +2,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { AppEvent } from "../events";
 import { killGroup, spawnGroup } from "../process-group";
+import { acpPupitreMcpServer } from "../pupitre";
 import { parseReasonixAcpMessage } from "./reasonix-acp-parser";
 import type { EmitFn, TurnOptions } from "./types";
 
@@ -59,6 +60,9 @@ export function reasonixPermissionOption(
   return options.find((option) => option?.kind === "allow_always" && option.optionId !== "reasonix_write_project")
     ?? options.find((option) => option?.kind === "allow_once");
 }
+
+const GIT_COMMIT_HINT = "[Pupitre] Pour committer ou pousser, utilise la capacité MCP `mcp-tool:pupitre/git_commit` : "
+  + "les commandes shell `git add` et `git commit` peuvent être bloquées par la garde read-evidence.\n\n";
 
 /** Annonce au modèle le périmètre que reasonixPermissionAllowed fera respecter. */
 export function reasonixPromptWithPerimeter(
@@ -215,13 +219,14 @@ export function runReasonixTurn(opts: TurnOptions, emit: EmitFn): Promise<void> 
       const init = await request("initialize", { protocolVersion: 1, clientCapabilities: {} });
       if (init.error) throw new Error(init.error.message ?? "initialisation OpenCode Go impossible");
 
+      const mcpServers = opts.pupitre ? [acpPupitreMcpServer(opts.pupitre)] : [];
       const resumed = opts.cliSessionId
-        ? await request("session/resume", { sessionId: opts.cliSessionId, cwd: opts.cwd, mcpServers: [] })
+        ? await request("session/resume", { sessionId: opts.cliSessionId, cwd: opts.cwd, mcpServers })
         : null;
       if (opts.cliSessionId && resumed && !resumed.error) {
         sessionId = opts.cliSessionId;
       } else {
-        const created = await request("session/new", { cwd: opts.cwd, mcpServers: [] });
+        const created = await request("session/new", { cwd: opts.cwd, mcpServers });
         if (typeof created.result?.sessionId !== "string") {
           throw new Error(created.error?.message ?? "session OpenCode Go impossible à ouvrir");
         }
@@ -246,7 +251,10 @@ export function runReasonixTurn(opts: TurnOptions, emit: EmitFn): Promise<void> 
       prompting = true;
       const response = request("session/prompt", {
         sessionId: activeSession,
-        prompt: textPrompt(reasonixPromptWithPerimeter(withImages(opts.prompt, opts.images), opts)),
+        prompt: textPrompt(reasonixPromptWithPerimeter(
+          withImages(opts.pupitre ? `${GIT_COMMIT_HINT}${opts.prompt}` : opts.prompt, opts.images),
+          opts,
+        )),
       });
       const queuedTexts = new Map<string, string>();
       opts.registerSteer?.(async (input) => {
