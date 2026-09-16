@@ -61,8 +61,17 @@ export function reasonixPermissionOption(
     ?? options.find((option) => option?.kind === "allow_once");
 }
 
-const GIT_COMMIT_HINT = "[Pupitre] Pour committer ou pousser, utilise la capacité MCP `mcp-tool:pupitre/git_commit` : "
-  + "les commandes shell `git add` et `git commit` peuvent être bloquées par la garde read-evidence.\n\n";
+const GIT_COMMIT_HINT = "[Pupitre] Ta commande git vient d'être bloquée par la garde read-evidence de ReasonX. "
+  + "Committe avec la capacité MCP `mcp-tool:pupitre/git_commit` (paths, message, push) au lieu du shell.";
+
+/** Vrai quand la garde read-evidence de ReasonX refuse une commande shell qui appelle git. */
+export function isEvidenceBlockedGit(input: unknown, output: unknown): boolean {
+  const command = (input as { command?: unknown } | null)?.command;
+  return typeof command === "string"
+    && /\bgit\b/.test(command)
+    && typeof output === "string"
+    && output.includes("[evidence required]");
+}
 
 /** Annonce au modèle le périmètre que reasonixPermissionAllowed fera respecter. */
 export function reasonixPromptWithPerimeter(
@@ -116,6 +125,8 @@ export function runReasonixTurn(opts: TurnOptions, emit: EmitFn): Promise<void> 
     let prompting = false;
     let sessionId: string | null = null;
     let lastPhase = "";
+    const toolInputs = new Map<string, unknown>();
+    let commitHintSent = false;
     let usage: AppEvent | null = null;
     let stderr = "";
     let killTimer: ReturnType<typeof setTimeout> | undefined;
@@ -200,6 +211,14 @@ export function runReasonixTurn(opts: TurnOptions, emit: EmitFn): Promise<void> 
           lastPhase = event.phase;
           emit(event);
         } else {
+          if (event.type === "tool-start") toolInputs.set(event.toolId, event.input);
+          if (
+            event.type === "tool-end" && opts.pupitre && sessionId && !commitHintSent
+            && isEvidenceBlockedGit(toolInputs.get(event.toolId), event.output)
+          ) {
+            commitHintSent = true;
+            void request("_reasonix.io/session/steer", { sessionId, prompt: textPrompt(GIT_COMMIT_HINT) });
+          }
           emit(event);
         }
       }
@@ -251,10 +270,7 @@ export function runReasonixTurn(opts: TurnOptions, emit: EmitFn): Promise<void> 
       prompting = true;
       const response = request("session/prompt", {
         sessionId: activeSession,
-        prompt: textPrompt(reasonixPromptWithPerimeter(
-          withImages(opts.pupitre ? `${GIT_COMMIT_HINT}${opts.prompt}` : opts.prompt, opts.images),
-          opts,
-        )),
+        prompt: textPrompt(reasonixPromptWithPerimeter(withImages(opts.prompt, opts.images), opts)),
       });
       const queuedTexts = new Map<string, string>();
       opts.registerSteer?.(async (input) => {

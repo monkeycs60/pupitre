@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  isEvidenceBlockedGit,
   reasonixPermissionAllowed,
   reasonixPermissionOption,
   reasonixPromptWithPerimeter,
@@ -49,4 +50,12 @@ test("Éditions acceptées refuse les commandes, Plan refuse tout", () => {
   expect(reasonixPermissionAllowed({ ...base, permissionMode: "acceptEdits" }, inside)).toBe(true);
   expect(reasonixPermissionAllowed({ ...base, permissionMode: "acceptEdits" }, { kind: "execute", rawInput: { command: "ls" } })).toBe(false);
   expect(reasonixPermissionAllowed({ ...base, permissionMode: "plan" }, inside)).toBe(false);
+});
+
+test("seul un git refusé par la garde read-evidence déclenche le rappel de git_commit", () => {
+  const blocked = "blocked: [evidence required] bash cannot declare which files it changes while a read-evidence requirement is outstanding (/repo/a.ts)";
+  expect(isEvidenceBlockedGit({ command: "git add a.ts && git commit -m x" }, blocked)).toBe(true);
+  expect(isEvidenceBlockedGit({ command: "sed -i s/a/b/ a.ts" }, blocked)).toBe(false);
+  expect(isEvidenceBlockedGit({ command: "git add a.ts" }, "")).toBe(false);
+  expect(isEvidenceBlockedGit({ path: "/repo/a.ts" }, blocked)).toBe(false);
 });
