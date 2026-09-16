@@ -54,12 +54,25 @@ export function parseClaudeLine(line: string, provider: Provider = "claude"): Ap
       for (const block of content) {
         if (!block || typeof block !== "object") continue;
         if (block.type === "tool_result") {
+          const blocks = Array.isArray(block.content) ? block.content : [];
+          const inlineImages = blocks.flatMap((item: any) => {
+            const source = item?.type === "image" ? item.source : null;
+            const mediaType = source?.media_type;
+            const data = source?.type === "base64" ? source.data : null;
+            return typeof mediaType === "string" && typeof data === "string"
+              ? [{ mediaType, data }]
+              : [];
+          });
+          const printableContent = blocks.map((item: any) =>
+            item?.type === "image" ? { type: "image", source: "[image importée]" } : item
+          );
           out.push({
             type: "tool-end", toolId: block.tool_use_id,
             output: boundedToolOutput(
-              typeof block.content === "string" ? block.content : JSON.stringify(block.content),
+              typeof block.content === "string" ? block.content : JSON.stringify(printableContent),
             ),
             images: [],
+            ...(inlineImages.length > 0 ? { inlineImages } : {}),
           });
         }
       }

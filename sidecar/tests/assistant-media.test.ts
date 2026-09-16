@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { importLocalMarkdownImages } from "../src/assistant-media";
+import { importInlineImages, importLocalMarkdownImages, resolveAttachmentImages } from "../src/assistant-media";
 import { assistantImageRoots } from "../src/assistant-media";
 import { MediaStore } from "../src/media";
 
@@ -82,4 +82,18 @@ test("borne les captures aux espaces de travail et racines IA par défaut", () =
     "/home/test/.claude",
     "/home/test/.codex",
   ]);
+});
+
+test("importe un bloc image du provider et résout le placeholder attachment", () => {
+  const data = mkdtempSync(join(tmpdir(), "pupitre-media-"));
+  directories.push(data);
+  const names = importInlineImages([
+    { mediaType: "image/png", data: Buffer.from([137, 80, 78, 71]).toString("base64") },
+  ], new MediaStore(data));
+
+  expect(names).toHaveLength(1);
+  expect(resolveAttachmentImages("![Rendu](attachment)", names)).toMatch(
+    /^!\[Rendu\]\(\/media\/[\w-]+\.png\)$/u,
+  );
+  expect(names).toEqual([]);
 });

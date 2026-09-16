@@ -19,7 +19,14 @@ export type AppEvent =
   /** Phase brute annoncée par le provider (ReasonX : starting, implementing…). */
   | { type: "turn-phase"; phase: string }
   | { type: "tool-start"; toolId: string; toolName: string; input: unknown }
-  | { type: "tool-end"; toolId: string; output: string; images: string[] }
+  | {
+      type: "tool-end";
+      toolId: string;
+      output: string;
+      images: string[];
+      /** Blocs image transitoires du provider, importés avant persistance. */
+      inlineImages?: Array<{ mediaType: string; data: string }>;
+    }
   | {
       type: "turn-timing";
       phase: "started" | "first-response" | "completed";

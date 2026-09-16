@@ -71,3 +71,13 @@ test('traite comme visuel une pièce jointe image absente du champ images', () =
 
   expect(collectConversationAssets(events).map((asset) => asset.kind)).toEqual(['image'])
 })
+
+test('ignore les anciens placeholders attachment et déduplique une capture publiée puis citée', () => {
+  const assets = collectConversationAssets([
+    { type: 'tool-end', toolId: 'capture', output: '', images: ['capture.png'] },
+    { type: 'text-final', text: '![Cassée](attachment)\n![Rendu](/media/capture.png)' },
+  ])
+
+  expect(assets).toHaveLength(1)
+  expect(assets[0]).toMatchObject({ kind: 'image', reference: 'capture.png' })
+})

@@ -75,3 +75,28 @@ test("utilise le résultat comme message d'erreur Claude", () => {
     { type: "status", state: "error", error: "échec détaillé" },
   ]);
 });
+
+test("extrait les images base64 des résultats d'outil sans persister leurs données dans la sortie", () => {
+  const line = JSON.stringify({
+    type: "user",
+    message: { content: [{
+      type: "tool_result",
+      tool_use_id: "capture-1",
+      content: [
+        { type: "text", text: "Capture effectuée" },
+        { type: "image", source: { type: "base64", media_type: "image/png", data: "iVBORw==" } },
+      ],
+    }] },
+  });
+
+  expect(parseClaudeLine(line)).toEqual([{
+    type: "tool-end",
+    toolId: "capture-1",
+    output: JSON.stringify([
+      { type: "text", text: "Capture effectuée" },
+      { type: "image", source: "[image importée]" },
+    ]),
+    images: [],
+    inlineImages: [{ mediaType: "image/png", data: "iVBORw==" }],
+  }]);
+});

@@ -16,7 +16,12 @@ import type { ActionFormat } from "./response-format";
 import { conversationCwd, conversationWorktrees } from "./workspace";
 import type { SteerFn } from "./adapters/types";
 import { withToolMentions } from "./tool-mentions";
-import { assistantImageRoots, importLocalMarkdownImages } from "./assistant-media";
+import {
+  assistantImageRoots,
+  importInlineImages,
+  importLocalMarkdownImages,
+  resolveAttachmentImages,
+} from "./assistant-media";
 import type { ProblemAxisRunStore } from "./stores/problem-axis-runs";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
@@ -223,6 +228,7 @@ export class ConversationRunner {
     const startedAtMs = Date.now();
     let firstResponseAt: string | undefined;
     const importedAssistantImages = new Map<string, string>();
+    const pendingAssistantImages: string[] = [];
 
     const persist = (event: AppEvent) => {
       // Les events de quota restent des events de conversation (replay intact)
@@ -242,11 +248,18 @@ export class ConversationRunner {
     });
 
     const emit = (incoming: AppEvent) => {
-      const event = incoming.type === "text-final"
+      const event = incoming.type === "tool-end" && incoming.inlineImages?.length
+        ? (() => {
+            const imported = importInlineImages(incoming.inlineImages, this.media);
+            pendingAssistantImages.push(...imported);
+            const { inlineImages: _inlineImages, ...persisted } = incoming;
+            return { ...persisted, images: [...incoming.images, ...imported] };
+          })()
+        : incoming.type === "text-final"
         ? {
             ...incoming,
             text: importLocalMarkdownImages(
-              incoming.text,
+              resolveAttachmentImages(incoming.text, pendingAssistantImages),
               this.media,
               assistantImageRoots({
                 filesystemScope: project.filesystem_scope,

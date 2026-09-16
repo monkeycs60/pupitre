@@ -5,6 +5,13 @@ import { aiRoots, type FilesystemScope } from "./access";
 
 const IMAGE_EXTENSIONS = new Set([".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"]);
 const MARKDOWN_IMAGE = /(!\[[^\]]*\]\()(?:<(\/[^>\n]+)>|(\/(?:\\.|[^()\n]|\([^()\n]*\))+))(\))/gu;
+const ATTACHMENT_IMAGE = /(!\[[^\]]*\]\()attachment(\))/gu;
+const INLINE_IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/gif": "gif",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
 
 function isInside(path: string, root: string): boolean {
   const relation = relative(root, path);
@@ -63,5 +70,26 @@ export function importLocalMarkdownImages(
       imported.set(realPath, name);
     }
     return `${prefix}/media/${name}${suffix}`;
+  });
+}
+
+export function importInlineImages(
+  images: Array<{ mediaType: string; data: string }>,
+  media: MediaStore,
+  maxBytes = configuredByteLimit("PUPITRE_MEDIA_MAX_BYTES", DEFAULT_MEDIA_MAX_BYTES),
+): string[] {
+  return images.flatMap(({ mediaType, data }) => {
+    const extension = INLINE_IMAGE_EXTENSIONS[mediaType.toLowerCase()];
+    if (!extension || !/^[A-Za-z0-9+/]*={0,2}$/u.test(data)) return [];
+    const bytes = Buffer.from(data, "base64");
+    if (bytes.length === 0 || bytes.length > maxBytes) return [];
+    return [media.importBytes(bytes, extension)];
+  });
+}
+
+export function resolveAttachmentImages(markdown: string, pendingImages: string[]): string {
+  return markdown.replace(ATTACHMENT_IMAGE, (match, prefix: string, suffix: string) => {
+    const name = pendingImages.shift();
+    return name ? `${prefix}/media/${name}${suffix}` : match;
   });
 }

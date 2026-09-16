@@ -49,13 +49,23 @@ function eventCreatedAt(event: AssetEvent): string | undefined {
 
 export function collectConversationAssets(events: ReadonlyArray<AssetEvent>): ConversationAsset[] {
   const assets: ConversationAsset[] = []
+  const imageReferences = new Set<string>()
+
+  const addImage = (asset: Extract<ConversationAsset, { kind: 'image' }>) => {
+    const key = asset.reference.startsWith('/media/')
+      ? decodeURIComponent(asset.reference.slice('/media/'.length))
+      : asset.reference
+    if (key === 'attachment' || imageReferences.has(key)) return
+    imageReferences.add(key)
+    assets.push(asset)
+  }
 
   events.forEach((event, eventIndex) => {
     if (event.type === 'user-message') {
       const imageNames = new Set(event.images)
       event.images.forEach((name, imageIndex) => {
         const attachment = event.attachments?.find((candidate) => candidate.name === name)
-        assets.push({
+        addImage({
           kind: 'image',
           id: `user-image-${eventIndex}-${imageIndex}`,
           label: attachment?.originalName ?? `Image jointe ${imageIndex + 1}`,
@@ -67,7 +77,7 @@ export function collectConversationAssets(events: ReadonlyArray<AssetEvent>): Co
       event.attachments?.forEach((attachment, attachmentIndex) => {
         if (imageNames.has(attachment.name)) return
         if (attachment.mimeType.startsWith('image/')) {
-          assets.push({
+          addImage({
             kind: 'image',
             id: `attachment-image-${eventIndex}-${attachmentIndex}`,
             label: attachment.originalName,
@@ -91,7 +101,7 @@ export function collectConversationAssets(events: ReadonlyArray<AssetEvent>): Co
 
     if (event.type === 'text-final') {
       markdownImages(event.text).forEach((image, imageIndex) => {
-        assets.push({
+        addImage({
           kind: 'image',
           id: `assistant-image-${eventIndex}-${imageIndex}`,
           label: image.alt,
@@ -105,7 +115,7 @@ export function collectConversationAssets(events: ReadonlyArray<AssetEvent>): Co
 
     if (event.type === 'tool-end') {
       event.images.forEach((name, imageIndex) => {
-        assets.push({
+        addImage({
           kind: 'image',
           id: `tool-image-${eventIndex}-${imageIndex}`,
           label: 'Image produite',
