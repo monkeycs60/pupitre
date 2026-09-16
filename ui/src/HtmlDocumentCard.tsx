@@ -268,6 +268,10 @@ export function HtmlDocumentCard({
     setBusyAction('open')
     setError(null)
     try {
+      if (hasTauriRuntime()) {
+        await openDocumentInSystem(block.documentId)
+        return
+      }
       const grant = await createHtmlDocumentViewToken(block.documentId)
       const link = window.document.createElement('a')
       link.href = documentDownloadUrl(block.documentId, grant.token)

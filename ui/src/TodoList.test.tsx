@@ -1,12 +1,26 @@
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import type { TodoItem } from './todos'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
+
+const opened: string[] = []
+mock.module('@tauri-apps/plugin-opener', () => ({
+  openUrl: async (url: string) => { opened.push(url) },
+  openPath: async () => {},
+  revealItemInDir: async () => {},
+}))
+
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { TodoList } = await import('./TodoList')
 const originalFetch = globalThis.fetch
-afterEach(() => { cleanup(); globalThis.fetch = originalFetch })
+const TAURI = '__TAURI_INTERNALS__'
+afterEach(() => {
+  cleanup()
+  globalThis.fetch = originalFetch
+  opened.length = 0
+  delete (window as unknown as Record<string, unknown>)[TAURI]
+})
 const item = (id: string, status: TodoItem['status'], extra: Partial<TodoItem> = {}): TodoItem => ({
   id, title: id, status, message: id, project_id: 'project', ticket_id: null, target_branch: null,
   finish: 'none', conversation_id: null, branch: null,
@@ -95,6 +109,30 @@ test('drag and drop reorders the whole open pile, keyboard moves one step', asyn
 test('a pushed task shows its commit and links to the branch and merge request', () => {
   render(<TodoList {...defaults} items={[item('Pushed', 'awaiting_validation', { conversation_id: 'c', finish: 'commit_push', commit_sha: 'abcdef1234567', commit_message: 'feat: pousse', branch_url: 'https://gitlab.com/acme/mono/-/tree/codex', merge_request_url: 'https://gitlab.com/acme/mono/-/merge_requests/new' })]} />)
   expect(screen.getByText('Commit & push · abcdef1').getAttribute('title')).toBe('feat: pousse')
-  expect((screen.getByRole('link', { name: 'Branche ↗' }) as HTMLAnchorElement).href).toContain('/-/tree/codex')
-  expect((screen.getByRole('link', { name: 'Créer la MR ↗' }) as HTMLAnchorElement).href).toContain('merge_requests/new')
+  const branch = screen.getByRole('link', { name: 'Branche ↗' }) as HTMLAnchorElement
+  const mergeRequest = screen.getByRole('link', { name: 'Créer la MR ↗' }) as HTMLAnchorElement
+  expect(branch.href).toContain('/-/tree/codex')
+  expect(branch.getAttribute('target')).toBe('_blank')
+  expect(branch.closest('button')).toBeNull()
+  expect(mergeRequest.href).toContain('merge_requests/new')
+  expect(mergeRequest.getAttribute('target')).toBe('_blank')
+  expect(mergeRequest.closest('button')).toBeNull()
+})
+
+test('branch and MR links open in the system browser without opening the row', () => {
+  ;(window as unknown as Record<string, unknown>)[TAURI] = {}
+  const openedConversations: string[] = []
+  render(<TodoList {...defaults} onOpenConversation={(todo) => openedConversations.push(todo.id)} items={[item('Pushed', 'awaiting_validation', { conversation_id: 'c', finish: 'commit_push', branch_url: 'https://gitlab.com/acme/mono/-/tree/codex', merge_request_url: 'https://gitlab.com/acme/mono/-/merge_requests/new' })]} />)
+  const branch = screen.getByRole('link', { name: 'Branche ↗' })
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+  fireEvent(branch, event)
+  expect(event.defaultPrevented).toBe(true)
+  expect(opened).toEqual(['https://gitlab.com/acme/mono/-/tree/codex'])
+  expect(openedConversations).toEqual([])
+  fireEvent.click(screen.getByRole('link', { name: 'Créer la MR ↗' }))
+  expect(opened).toEqual([
+    'https://gitlab.com/acme/mono/-/tree/codex',
+    'https://gitlab.com/acme/mono/-/merge_requests/new',
+  ])
+  expect(openedConversations).toEqual([])
 })

@@ -1708,6 +1708,15 @@ test("upload media binaire puis GET redonne exactement les bytes", async () => {
   const download = await fetch(`${current.baseUrl}/media/${name}`);
   expect(download.status).toBe(200);
   expect(new Uint8Array(await download.arrayBuffer())).toEqual(bytes);
+
+  const pathResponse = await fetch(`${current.baseUrl}/api/media/${name}/path`);
+  expect(pathResponse.status).toBe(200);
+  const { path } = await pathResponse.json() as { path: string };
+  expect(existsSync(path)).toBe(true);
+  expect(new Uint8Array(readFileSync(path))).toEqual(bytes);
+
+  const missing = await fetch(`${current.baseUrl}/api/media/inconnu.bin/path`);
+  expect(missing.status).toBe(404);
 });
 
 test("publie, isole, conserve puis supprime un document HTML via l'API", async () => {

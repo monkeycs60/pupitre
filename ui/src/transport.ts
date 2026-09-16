@@ -34,6 +34,12 @@ export function mediaUrl(name: string, protocol = location.protocol): string {
   return httpUrl(`/media/${encodeURIComponent(name)}`, protocol)
 }
 
+export function absoluteSidecarUrl(path: string): string {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return path
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  return `${httpOrigin()}${normalized}`
+}
+
 export function htmlDocumentContentUrl(
   id: string,
   token: string,

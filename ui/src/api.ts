@@ -1397,6 +1397,10 @@ export function importMediaPath(path: string): Promise<Attachment> {
   return fetchJson('/api/media/import', jsonPost({ path }))
 }
 
+export function getMediaPath(name: string): Promise<{ path: string }> {
+  return fetchJson(`/api/media/${routeId(name)}/path`)
+}
+
 export async function fetchMedia(name: string): Promise<Blob> {
   const response = await ensureOk(await fetch(httpUrl(`/media/${routeId(name)}`)))
   return response.blob()

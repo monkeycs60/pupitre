@@ -14,31 +14,13 @@
       "identifier": "opener:allow-open-url",
       "allow": [
         {
-          "url": "http://127.0.0.1:4820/api/html-documents/**"
-        },
-        {
-          "url": "http://127.0.0.1:4820/api/documents/**"
-        },
-        {
-          "url": "http://127.0.0.1:4820/media/**"
-        },
-        {
-          "url": "http://127.0.0.1:4821/api/html-documents/**"
-        },
-        {
-          "url": "http://127.0.0.1:4821/api/documents/**"
-        },
-        {
-          "url": "http://127.0.0.1:4821/media/**"
-        },
-        {
-          "url": "https://claude.ai/design/**"
-        },
-        {
-          "url": "https://claude.ai/design"
+          "url": "http://**"
         },
         {
           "url": "https://**"
+        },
+        {
+          "url": "vscode://**"
         }
       ]
     },

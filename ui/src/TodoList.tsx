@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { completeTodo, deleteTodo, drainTodos, isStartable, reopenTodo, reorderTodos, setTodoQueue, startTodo, TODO_FINISH_LABELS, TODO_LABELS, type TodoItem, type TodoSnapshot } from './todos'
 import type { TicketLinks } from './ticketLinks'
+import { ExternalLink } from './externalLink'
 import './styles/project-todos.css'
 
 interface Props extends TodoSnapshot {
@@ -136,17 +137,23 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
             : <button type="button" className={`project-task-check is-${item.status}`} disabled={busy} aria-label={`${isDone ? 'Rouvrir' : 'Terminer'} ${item.title}`} title={isDone ? 'Rouvrir' : 'Marquer terminée'} onClick={() => isDone ? void act(() => reopenTodo(item.id)) : complete(item)}>
                 <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m2.5 6.3 2.3 2.3 4.7-5" /></svg>
               </button>}
-          <button type="button" className="todo-row-main" title={item.conversation_id ? 'Ouvrir la conversation liée' : 'Ouvrir dans une conversation préremplie'} onClick={() => onOpenConversation(item)} onKeyDown={(event) => handleRowKeyDown(event, item)} aria-current={item.id === selectedId ? 'true' : undefined}>
-            <span className="todo-row-title">{item.title}</span>
-            <span className="project-task-meta">
-              {item.status !== 'backlog' && !isDone ? <span className={`project-task-state is-${item.status}`} title={item.error ?? undefined}>{TODO_LABELS[item.status]}</span> : null}
-              {ticket?.ticketKey ? <span className="project-task-ticket">{ticket.ticketKey}</span> : null}
-              {item.finish !== 'none' ? <span title={item.commit_message ?? undefined}>{item.commit_sha ? `${TODO_FINISH_LABELS[item.finish]} · ${item.commit_sha.slice(0, 7)}` : TODO_FINISH_LABELS[item.finish]}</span> : null}
-              {item.branch_url ? <a className="project-task-link" href={item.branch_url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Branche ↗</a> : null}
-              {item.merge_request_url ? <a className="project-task-link" href={item.merge_request_url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Créer la MR ↗</a> : null}
-              {item.error && item.status === 'blocked' ? <span className="project-task-error" title={item.error}>{item.error}</span> : null}
-            </span>
-          </button>
+          <div className="todo-row-main">
+            <button type="button" className="todo-row-open" title={item.conversation_id ? 'Ouvrir la conversation liée' : 'Ouvrir dans une conversation préremplie'} onClick={() => onOpenConversation(item)} onKeyDown={(event) => handleRowKeyDown(event, item)} aria-current={item.id === selectedId ? 'true' : undefined}>
+              <span className="todo-row-title">{item.title}</span>
+              <span className="project-task-meta">
+                {item.status !== 'backlog' && !isDone ? <span className={`project-task-state is-${item.status}`} title={item.error ?? undefined}>{TODO_LABELS[item.status]}</span> : null}
+                {ticket?.ticketKey ? <span className="project-task-ticket">{ticket.ticketKey}</span> : null}
+                {item.finish !== 'none' ? <span title={item.commit_message ?? undefined}>{item.commit_sha ? `${TODO_FINISH_LABELS[item.finish]} · ${item.commit_sha.slice(0, 7)}` : TODO_FINISH_LABELS[item.finish]}</span> : null}
+                {item.error && item.status === 'blocked' ? <span className="project-task-error" title={item.error}>{item.error}</span> : null}
+              </span>
+            </button>
+            {item.branch_url || item.merge_request_url ? (
+              <span className="project-task-meta">
+                {item.branch_url ? <ExternalLink className="project-task-link" href={item.branch_url}>Branche ↗</ExternalLink> : null}
+                {item.merge_request_url ? <ExternalLink className="project-task-link" href={item.merge_request_url}>Créer la MR ↗</ExternalLink> : null}
+              </span>
+            ) : null}
+          </div>
           <span className="project-task-actions">
             {startableItem && !isDone ? <button type="button" disabled={busy} aria-label={`Modifier ${item.title}`} title="Modifier dans le composer" onClick={() => onEdit(item)}>
               <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m11.2 2.8 2 2L5.5 12.5l-2.7.7.7-2.7z" /></svg>

@@ -594,6 +594,36 @@ fn build_main_popup<R: tauri::Runtime>(
     }
 }
 
+/// Navigations qui restent dans Pupitre : coquille Vite, protocole custom, et
+/// iframes de documents publiés. `/media/` est exclu : WebKit affiche le fichier
+/// à la place de l'interface. `localhost` sans le port Vite aussi : un lien
+/// `http://localhost:3000` collé dans une conversation n'est pas l'application.
+fn is_app_navigation(url: &tauri::Url, sidecar_port: u16) -> bool {
+    match url.scheme() {
+        "tauri" | "about" | "blob" | "data" => true,
+        "http" | "https" => {
+            let host = url.host_str().unwrap_or("");
+            let port = url.port();
+            let path = url.path();
+            if path.starts_with("/media/") {
+                return false;
+            }
+            if host == "tauri.localhost" || host.ends_with(".tauri.localhost") {
+                return true;
+            }
+            if host == "localhost" && port == Some(5173) {
+                return true;
+            }
+            if (host == "127.0.0.1" || host == "localhost") && port == Some(sidecar_port) {
+                return path.starts_with("/api/documents/")
+                    || path.starts_with("/api/html-documents/");
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
 /// Construit la fenêtre principale.
 ///
 /// Elle vivait dans `tauri.conf.json`, ce qui interdisait de lui attacher le
@@ -603,7 +633,9 @@ fn build_main_popup<R: tauri::Runtime>(
 /// ci-dessous reprennent une à une celles que portait la configuration.
 fn build_main_window(app: &tauri::AppHandle) -> Result<(), tauri::Error> {
     let popup_app = app.clone();
+    let nav_app = app.clone();
     let instance = read_instance_env();
+    let sidecar_port = instance.port;
     let title = if instance.name == "dev" { "Pupitre · dev" } else { "Pupitre" };
     let initialization_script = format!(
         "window.__PUPITRE__ = {{ instance: {:?}, port: {} }};",
@@ -619,6 +651,16 @@ fn build_main_window(app: &tauri::AppHandle) -> Result<(), tauri::Error> {
         .initialization_script(initialization_script)
         .on_download(handle_main_download)
         .on_new_window(move |url, features| build_main_popup(&popup_app, url, features))
+        .on_navigation(move |url| {
+            if is_app_navigation(&url, sidecar_port) {
+                return true;
+            }
+            log::info!("Navigation hors application interceptée : {url}");
+            if let Err(error) = nav_app.opener().open_url(url.as_str(), None::<&str>) {
+                log::warn!("Impossible d'ouvrir {url} dans l'application système : {error}");
+            }
+            false
+        })
         .build()?;
     Ok(())
 }
@@ -814,4 +856,63 @@ pub fn run() {
             stop_sidecar(app_handle);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_app_navigation;
+
+    fn url(value: &str) -> tauri::Url {
+        value.parse().expect("url de test")
+    }
+
+    #[test]
+    fn vite_dev_stays_internal() {
+        assert!(is_app_navigation(&url("http://localhost:5173/"), 4821));
+        assert!(is_app_navigation(
+            &url("http://localhost:5173/conversations"),
+            4821
+        ));
+        assert!(!is_app_navigation(
+            &url("http://localhost:5173/media/foo.pdf"),
+            4821
+        ));
+    }
+
+    #[test]
+    fn conversation_localhost_is_external() {
+        assert!(!is_app_navigation(&url("http://localhost:3000/"), 4821));
+        assert!(!is_app_navigation(&url("http://127.0.0.1:3000/"), 4821));
+        assert!(!is_app_navigation(&url("https://example.com/docs"), 4821));
+    }
+
+    #[test]
+    fn sidecar_document_iframe_stays_internal() {
+        assert!(is_app_navigation(
+            &url("http://127.0.0.1:4821/api/documents/abc/content"),
+            4821
+        ));
+        assert!(is_app_navigation(
+            &url("http://127.0.0.1:4821/api/html-documents/abc/content"),
+            4821
+        ));
+        assert!(!is_app_navigation(
+            &url("http://127.0.0.1:4821/media/abc.pdf"),
+            4821
+        ));
+        assert!(!is_app_navigation(
+            &url("http://127.0.0.1:4820/api/documents/abc/content"),
+            4821
+        ));
+    }
+
+    #[test]
+    fn tauri_custom_protocol_stays_internal() {
+        assert!(is_app_navigation(&url("http://tauri.localhost/"), 4820));
+        assert!(is_app_navigation(&url("tauri://localhost/"), 4820));
+        assert!(!is_app_navigation(
+            &url("http://tauri.localhost/media/abc.pdf"),
+            4820
+        ));
+    }
 }

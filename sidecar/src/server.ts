@@ -4003,6 +4003,18 @@ export function createServer(deps: ServerDeps) {
           }, 201);
         }
 
+        const mediaPathName = routeId(pathname, /^\/api\/media\/([^/]+)\/path$/);
+        if (request.method === "GET" && mediaPathName !== null) {
+          let path: string;
+          try {
+            path = deps.media.absolutePath(mediaPathName);
+          } catch {
+            throw new HttpError(400, "nom media invalide");
+          }
+          if (!(await Bun.file(path).exists())) throw new HttpError(404, "media inconnu");
+          return json({ path });
+        }
+
         const mediaName = routeId(pathname, /^\/media\/([^/]+)$/);
         if (request.method === "GET" && mediaName !== null) {
           let file: ReturnType<typeof Bun.file>;

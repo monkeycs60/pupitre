@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  absoluteSidecarUrl,
   htmlDocumentExternalUrl,
   httpUrl,
   mediaUrl,
@@ -52,4 +53,9 @@ test("l'ouverture système reçoit une URL HTML absolue dans Tauri", () => {
   expect(htmlDocumentExternalUrl("doc-1", "secret", "http:", false)).toBe(
     "/api/documents/doc-1/content?token=secret",
   );
+});
+
+test("une route relative devient une URL sidecar absolue", () => {
+  expect(absoluteSidecarUrl("/media/abc.pdf")).toBe("http://127.0.0.1:4820/media/abc.pdf");
+  expect(absoluteSidecarUrl("http://localhost:3000/")).toBe("http://localhost:3000/");
 });

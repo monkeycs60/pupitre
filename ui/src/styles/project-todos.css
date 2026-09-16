@@ -31,6 +31,7 @@
 .project-task-row { position: relative; margin: 0 -8px; padding: 0 6px 0 4px; border-radius: var(--r-sm); min-height: 44px; gap: 8px; align-items: center; transition: background-color var(--dur-fast) var(--ease), opacity 320ms var(--ease), transform 320ms var(--ease); }
 .project-task-row + .project-task-row::before { content: ''; position: absolute; top: 0; left: 30px; right: 8px; border-top: 1px solid var(--border-subtle); }
 .project-task-row .todo-row-main { flex: 1; min-width: 0; padding: 9px 0; gap: 3px; }
+.todo-row-open { display: flex; flex-direction: column; gap: inherit; width: 100%; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .project-task-row .todo-row-title { font-size: 13px; line-height: 1.45; }
 .project-task-row.is-done .todo-row-title { color: var(--text-muted); text-decoration: line-through; text-decoration-color: var(--border-strong); }
 .project-task-row.is-leaving { opacity: 0.35; transform: translateX(6px); }

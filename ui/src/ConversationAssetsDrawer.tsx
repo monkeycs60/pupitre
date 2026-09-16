@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import { AttachmentPreview } from './AttachmentPreview'
 import type { ConversationAsset } from './conversationAssets'
-import { documentThumbnailUrl, mediaUrl } from './transport'
-import { documentDownloadUrl } from './transport'
-import { createHtmlDocumentViewToken } from './api'
+import { documentDownloadUrl, documentThumbnailUrl, hasTauriRuntime, mediaUrl } from './transport'
+import { createHtmlDocumentViewToken, openDocumentInSystem } from './api'
+import { DownloadLink, openExternal, openStoredMedia } from './externalLink'
 
 function imageSource(reference: string): string {
   if (reference.startsWith('/media/')) {
@@ -42,6 +42,31 @@ async function downloadDocument(asset: Extract<ConversationAsset, { kind: 'docum
   document.body.append(link)
   link.click()
   link.remove()
+}
+
+function storedMediaName(reference: string): string | null {
+  if (reference.startsWith('/media/')) {
+    return decodeURIComponent(reference.slice('/media/'.length))
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(reference) || reference.startsWith('/')) return null
+  return reference
+}
+
+async function openAssetDocument(asset: Extract<ConversationAsset, { kind: 'document' }>) {
+  if (hasTauriRuntime()) {
+    await openDocumentInSystem(asset.documentId)
+    return
+  }
+  await downloadDocument(asset)
+}
+
+async function openAssetMedia(reference: string, href: string) {
+  const name = storedMediaName(reference)
+  if (name) {
+    await openStoredMedia(name)
+    return
+  }
+  await openExternal(href)
 }
 
 function DownloadIcon() {
@@ -129,15 +154,16 @@ export function ConversationAssetsDrawer({
                     >
                       <img src={imageSource(asset.reference)} alt={asset.label} />
                     </button>
-                    <a
+                    <DownloadLink
                       className="thread-asset-download-icon"
                       href={imageSource(asset.reference)}
-                      download={asset.label}
-                      aria-label={`Télécharger ${asset.label}`}
+                      filename={asset.label}
+                      ariaLabel={`Télécharger ${asset.label}`}
                       title="Télécharger"
+                      open={() => openAssetMedia(asset.reference, imageSource(asset.reference))}
                     >
                       <DownloadIcon />
-                    </a>
+                    </DownloadLink>
                   </div>
                 ) : asset.kind === 'document' ? (
                   <div className="thread-asset-media">
@@ -153,7 +179,7 @@ export function ConversationAssetsDrawer({
                     <button
                       type="button"
                       className="thread-asset-download-icon"
-                      onClick={() => void downloadDocument(asset)}
+                      onClick={() => void openAssetDocument(asset)}
                       aria-label={`Télécharger ${asset.originalName}`}
                       title="Télécharger"
                     >
@@ -163,15 +189,16 @@ export function ConversationAssetsDrawer({
                 ) : (
                   <div className="thread-asset-file">
                     <AttachmentPreview attachment={asset.attachment} />
-                    <a
+                    <DownloadLink
                       className="thread-asset-download-icon"
                       href={mediaUrl(asset.attachment.name)}
-                      download={asset.attachment.originalName}
-                      aria-label={`Télécharger ${asset.attachment.originalName}`}
+                      filename={asset.attachment.originalName}
+                      ariaLabel={`Télécharger ${asset.attachment.originalName}`}
                       title="Télécharger"
+                      open={() => openStoredMedia(asset.attachment.name)}
                     >
                       <DownloadIcon />
-                    </a>
+                    </DownloadLink>
                   </div>
                 )}
                 {asset.kind !== 'attachment' ? (
@@ -180,7 +207,7 @@ export function ConversationAssetsDrawer({
                     <span>{sourceLabel(asset.source)}{asset.kind === 'document' ? ` · ${asset.documentKind.toUpperCase()}` : ''}</span>
                     {asset.kind === 'document' ? (
                       <>
-                        <button type="button" className="thread-asset-download" onClick={() => void downloadDocument(asset)}>
+                        <button type="button" className="thread-asset-download" onClick={() => void openAssetDocument(asset)}>
                           Télécharger
                         </button>
                       </>

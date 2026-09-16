@@ -1,6 +1,7 @@
 import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener'
 import type { MouseEvent, ReactNode } from 'react'
-import { hasTauriRuntime } from './transport'
+import { getMediaPath } from './api'
+import { absoluteSidecarUrl, hasTauriRuntime } from './transport'
 
 /**
  * Ouvre une adresse hors de l'application.
@@ -13,8 +14,21 @@ import { hasTauriRuntime } from './transport'
  * blanche vit dans `src-tauri/capabilities/default.json`.
  */
 export async function openExternal(url: string): Promise<void> {
-  if (hasTauriRuntime()) await openUrl(url)
+  if (hasTauriRuntime()) await openUrl(absoluteSidecarUrl(url))
   else window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+export async function openStoredMedia(name: string): Promise<void> {
+  try {
+    const { path } = await getMediaPath(name)
+    if (hasTauriRuntime()) {
+      await openPath(path)
+      return
+    }
+    window.open(fileUrl(path), '_blank', 'noopener,noreferrer')
+  } catch {
+    await openExternal(`/media/${encodeURIComponent(name)}`)
+  }
 }
 
 function decodePath(value: string): string {
@@ -73,15 +87,19 @@ export function ExternalLink({
   className,
   title,
   ariaLabel,
+  onClick,
   children,
 }: {
   href: string
   className?: string
   title?: string
   ariaLabel?: string
+  onClick?: (event: MouseEvent<HTMLAnchorElement>) => void
   children: ReactNode
 }) {
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+    onClick?.(event)
+    if (event.defaultPrevented) return
     if (!hasTauriRuntime()) return
     event.preventDefault()
     // Un refus du plugin — adresse hors liste blanche — redonnerait le « il ne
@@ -97,6 +115,45 @@ export function ExternalLink({
       href={href}
       target="_blank"
       rel="noreferrer"
+      title={title}
+      aria-label={ariaLabel}
+      onClick={handleClick}
+    >
+      {children}
+    </a>
+  )
+}
+
+export function DownloadLink({
+  href,
+  filename,
+  className,
+  title,
+  ariaLabel,
+  children,
+  open,
+}: {
+  href: string
+  filename: string
+  className?: string
+  title?: string
+  ariaLabel?: string
+  children: ReactNode
+  open: () => Promise<void>
+}) {
+  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (!hasTauriRuntime()) return
+    event.preventDefault()
+    open().catch((reason: unknown) => {
+      console.error(`[lien] ouverture refusée pour ${filename}`, reason)
+    })
+  }
+
+  return (
+    <a
+      className={className}
+      href={href}
+      download={filename}
       title={title}
       aria-label={ariaLabel}
       onClick={handleClick}
