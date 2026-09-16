@@ -63,6 +63,7 @@ export interface ActivityReportCommit {
   linesRemoved: number | null;
   committedAt: string;
   conversationId: string | null;
+  isMerge: boolean;
 }
 
 export interface ActivityReportTicket {

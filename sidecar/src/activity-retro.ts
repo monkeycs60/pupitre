@@ -133,6 +133,7 @@ export function retroPrompt(
     branch: commit.branch,
     lines: commit.linesAdded === null ? null : `+${commit.linesAdded} −${commit.linesRemoved ?? 0}`,
     conversationId: commit.conversationId,
+    ...(commit.isMerge ? { fusion: true } : {}),
   }));
   return [
     `Tu entretiens l'état de recul d'un développeur sur le projet « ${project.projectName} ». Lecteur : lui seul. Ton de constat, jamais de reproche, aucune objection inventée.`,

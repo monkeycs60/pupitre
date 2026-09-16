@@ -68,6 +68,8 @@
 .activity-lines i, .activity-lines em { font-style: normal; font-weight: 600; }
 .activity-lines i { color: var(--ok); }
 .activity-lines em { color: var(--danger); }
+.activity-lines.is-muted i, .activity-lines.is-muted em { color: var(--text-faint); font-weight: 500; }
+.activity-merge { flex: 0 0 auto; font-size: 11px; font-weight: 500; color: var(--text-muted); }
 
 .activity-project { margin-bottom: 26px; background: var(--bg-panel); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r-md); overflow: hidden; }
 .activity-project-header { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; flex-wrap: wrap; padding: 16px 22px 12px; }
@@ -120,6 +122,7 @@ a.activity-outcome:focus-visible { outline: 2px solid var(--accent); outline-off
 .activity-commit p small { flex: 0 0 auto; font-size: 10px; color: var(--text-faint); }
 .activity-commit .activity-lines { justify-content: flex-end; }
 .activity-commit.is-unlinked p { color: var(--text-muted); }
+.activity-commit.is-merge p { color: var(--text-muted); }
 .activity-unlinked { font-size: 11px; color: var(--text-faint); text-align: right; }
 .activity-commit .activity-read { justify-self: end; }
 .activity-done { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 12px 22px; border-top: 1px solid var(--border-subtle); font-size: 12px; color: var(--text-faint); }

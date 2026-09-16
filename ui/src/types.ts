@@ -590,6 +590,7 @@ export interface ProjectChangelogEntry {
   enriched_at: string | null
   lines_added: number | null
   lines_removed: number | null
+  is_merge?: number
 }
 
 export interface ProjectChangelogState {

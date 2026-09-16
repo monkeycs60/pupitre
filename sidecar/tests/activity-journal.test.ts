@@ -241,7 +241,7 @@ test("un rapport sauvé sans +/− reprend les lignes du changelog à la lecture
     projects: [{
       projectId: project.id, projectName: "Pupitre", userMs: 0, agentMs: 0, topics: [], topicsSource: "titles" as const,
       conversations: [], unlinkedCommitCount: 1, linesAdded: 0, linesRemoved: 0, tickets: [], todosDone: [],
-      commits: [{ sha, repositoryPath: ".", branch: "master", subject: "feat: après coup", productMessage: null, linesAdded: null, linesRemoved: null, committedAt: `${DAY}T08:00:00+02:00`, conversationId: null }],
+      commits: [{ sha, repositoryPath: ".", branch: "master", subject: "feat: après coup", productMessage: null, linesAdded: null, linesRemoved: null, committedAt: `${DAY}T08:00:00+02:00`, conversationId: null, isMerge: false }],
     }],
     totals: { userMs: 0, agentMs: 0, commits: 1, linesAdded: 0, linesRemoved: 0, conversations: 0 },
     retro: { created: [], updated: [], stabilized: [], returned: [], error: null },
@@ -250,6 +250,46 @@ test("un rapport sauvé sans +/− reprend les lignes du changelog à la lecture
   expect(fresh.projects[0]!.commits[0]).toEqual(expect.objectContaining({ linesAdded: 21, linesRemoved: 4 }));
   expect(fresh.projects[0]!.mergeRequests).toEqual([]);
   expect(fresh.totals).toEqual(expect.objectContaining({ linesAdded: 21, linesRemoved: 4, mergeRequests: 0, ticketsReady: 0 }));
+  expect(fresh.projects[0]!.commits[0]!.isMerge).toBe(false);
+  db.close();
+});
+
+test("une fusion reste dans la liste avec ses +/− et sort des totaux du jour", () => {
+  const { db, project, changelog, journal } = setup();
+  const authored = "a".repeat(40);
+  const merge = "b".repeat(40);
+  changelog.import(project.id, [
+    { repositoryPath: ".", sha: authored, branch: "feature/TECH-1", subject: "feat: jauge", committedAt: `${DAY}T10:00:00+02:00` },
+    { repositoryPath: ".", sha: merge, branch: "feature/TECH-1", subject: "Merge origin/develop", committedAt: `${DAY}T15:00:00+02:00`, isMerge: true },
+  ], at(DAY, 16));
+  changelog.setLineStats(project.id, [
+    { sha: authored, added: 128, removed: 75 },
+    { sha: merge, added: 33_586, removed: 69_336 },
+  ]);
+  const [entry] = journal.build(DAY);
+  expect(entry!.commits).toHaveLength(2);
+  expect(entry!.commits.find((commit) => commit.sha === merge)).toEqual(expect.objectContaining({
+    isMerge: true, linesAdded: 33_586, linesRemoved: 69_336,
+  }));
+  expect(entry!.linesAdded).toBe(128);
+  expect(entry!.linesRemoved).toBe(75);
+  const stale = {
+    day: DAY, generatedAt: at(DAY, 18), summary: null,
+    projects: [{
+      projectId: project.id, projectName: "Pupitre", userMs: 0, agentMs: 0, topics: [], topicsSource: "titles" as const,
+      conversations: [], unlinkedCommitCount: 2, linesAdded: 33_714, linesRemoved: 69_411, tickets: [], todosDone: [],
+      commits: [
+        { sha: authored, repositoryPath: ".", branch: "feature/TECH-1", subject: "feat: jauge", productMessage: null, linesAdded: 128, linesRemoved: 75, committedAt: `${DAY}T10:00:00+02:00`, conversationId: null },
+        { sha: merge, repositoryPath: ".", branch: "feature/TECH-1", subject: "Merge origin/develop", productMessage: null, linesAdded: 33_586, linesRemoved: 69_336, committedAt: `${DAY}T15:00:00+02:00`, conversationId: null },
+      ],
+    }],
+    totals: { userMs: 0, agentMs: 0, commits: 2, linesAdded: 33_714, linesRemoved: 69_411, conversations: 0 },
+    retro: { created: [], updated: [], stabilized: [], returned: [], error: null },
+  } as unknown as ActivityReport;
+  const fresh = hydrateReport(stale, changelog);
+  expect(fresh.projects[0]!.commits[1]).toEqual(expect.objectContaining({ isMerge: true, linesAdded: 33_586 }));
+  expect(fresh.projects[0]!.linesAdded).toBe(128);
+  expect(fresh.totals).toEqual(expect.objectContaining({ commits: 2, linesAdded: 128, linesRemoved: 75 }));
   db.close();
 });
 
@@ -265,6 +305,13 @@ test("les totaux quotidiens du changelog suivent le jour local du commit, et la 
   expect(changelog.dailyTotals("2026-08-24", "2026-08-25")).toEqual([
     { day: "2026-08-24", projectId: project.id, commits: 1, linesAdded: 5, linesRemoved: 1 },
     { day: "2026-08-25", projectId: project.id, commits: 1, linesAdded: 7, linesRemoved: 0 },
+  ]);
+  changelog.import(project.id, [
+    { repositoryPath: ".", sha: "4".repeat(40), branch: "feature/x", subject: "Merge origin/develop", committedAt: "2026-08-24T23:55:00+02:00", isMerge: true },
+  ], at(DAY, 12));
+  changelog.setLineStats(project.id, [{ sha: "4".repeat(40), added: 33_586, removed: 69_336 }]);
+  expect(changelog.dailyTotals("2026-08-24", "2026-08-24")).toEqual([
+    { day: "2026-08-24", projectId: project.id, commits: 2, linesAdded: 5, linesRemoved: 1 },
   ]);
   for (const minute of [0, 1, 30]) {
     time.addPresence({ projectId: project.id, startedAt: at(DAY, 9, minute), endedAt: at(DAY, 9, minute + 1) });

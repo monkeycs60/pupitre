@@ -128,7 +128,7 @@ test("le prompt de recul ne porte que l'état et la matière du jour, bornée pa
       startedDay: DAY, userMs: (8 - index) * 60_000, agentMs: 0, turns: 1,
       events: Array.from({ length: 12 }, (_, turn) => ({ id: index * 100 + turn, type: "user-message" as const, text: "y".repeat(4_000), images: [] })),
     })),
-    commits: [{ sha: SHA, repositoryPath: ".", branch: "master", subject: "fix", productMessage: null, linesAdded: 3, linesRemoved: 1, committedAt: `${DAY}T12:00:00Z`, conversationId: null }],
+    commits: [{ sha: SHA, repositoryPath: ".", branch: "master", subject: "fix", productMessage: null, linesAdded: 3, linesRemoved: 1, committedAt: `${DAY}T12:00:00Z`, conversationId: null, isMerge: false }],
   });
   const prompt = retroPrompt(project, DAY, [], []);
   expect(prompt.length).toBeLessThan(200_000);
@@ -141,7 +141,7 @@ test("le prompt de recul ne porte que l'état et la matière du jour, bornée pa
 test("les opérations sont filtrées : identifiants inconnus, preuves insuffisantes, motif inconnu", () => {
   const project = journalProject({
     conversations: [{ id: "c1", projectId: "p", title: "Un", summary: "", ticketId: null, ticketKey: null, startedDay: DAY, userMs: 0, agentMs: 0, turns: 1, events: [] }],
-    commits: [{ sha: SHA, repositoryPath: ".", branch: "master", subject: "fix", productMessage: "Garde-fou", linesAdded: 1, linesRemoved: 0, committedAt: `${DAY}T12:00:00Z`, conversationId: null }],
+    commits: [{ sha: SHA, repositoryPath: ".", branch: "master", subject: "fix", productMessage: "Garde-fou", linesAdded: 1, linesRemoved: 0, committedAt: `${DAY}T12:00:00Z`, conversationId: null, isMerge: false }],
   });
   const known = knownRefsFor(project, []);
   const raw = JSON.stringify({ operations: [

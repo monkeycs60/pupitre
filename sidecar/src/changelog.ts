@@ -37,6 +37,7 @@ type GitHistoryReader = (cwd: string, options: GitHistoryOptions) => Promise<Git
 type GitRepositoryFinder = (cwd: string) => Promise<GitRepository[]>;
 type GitEmailReader = (cwd: string) => Promise<string | null>;
 type GitLineStatsReader = (cwd: string, shas: string[]) => Promise<CommitLineStats[]>;
+type GitMergeShasReader = (cwd: string, since?: string) => Promise<string[]>;
 
 export class ChangelogService {
   private active = new Set<string>();
@@ -55,6 +56,7 @@ export class ChangelogService {
     private repositories: GitRepositoryFinder = discoverGitRepositories,
     private email: GitEmailReader = readGitEmail,
     private lineStats: GitLineStatsReader = readCommitLineStats,
+    private mergeShas: GitMergeShasReader = readMergeShas,
   ) {}
 
   subscribeCommits(listener: (projectId: string, commits: GitChangelogCommit[]) => void): () => void {
@@ -141,6 +143,7 @@ export class ChangelogService {
       if (backfill) this.store.reconcile(projectId, commits);
       this.store.import(projectId, commits, this.now().toISOString());
       for (const listener of this.commitListeners) listener(projectId, commits);
+      await this.markMerges(projectId, repositories);
       await this.fillLineStats(projectId, repositories);
       await this.enrichPending(projectId, path, backfill);
       const refreshedAt = this.now();
@@ -158,6 +161,18 @@ export class ChangelogService {
         new Date(failedAt.getTime() + CHANGELOG_REFRESH_INTERVAL_MS).toISOString(),
       );
     }
+  }
+
+  private async markMerges(projectId: string, repositories: GitRepository[]): Promise<void> {
+    const shas: string[] = [];
+    for (const repository of repositories) {
+      try {
+        shas.push(...await this.mergeShas(repository.path, CHANGELOG_SINCE));
+      } catch {
+        continue;
+      }
+    }
+    this.store.markMerges(projectId, shas);
   }
 
   private async fillLineStats(projectId: string, repositories: GitRepository[]): Promise<void> {
@@ -378,6 +393,13 @@ export async function readCommitLineStats(cwd: string, shas: string[]): Promise<
   if (shas.length === 0) return [];
   const raw = await runGit(cwd, ["show", "--numstat", "--format=%x01%H", "--no-color", ...shas]);
   return parseCommitLineStats(raw);
+}
+
+export async function readMergeShas(cwd: string, since?: string): Promise<string[]> {
+  const args = ["rev-list", "--merges", "--branches", "--remotes"];
+  if (since) args.push(`--since=${since}`);
+  const raw = await runGit(cwd, args);
+  return raw.split("\n").map((sha) => sha.trim()).filter((sha) => /^[0-9a-f]{40}$/.test(sha));
 }
 
 function enrichmentPrompt(

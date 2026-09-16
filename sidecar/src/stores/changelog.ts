@@ -10,6 +10,7 @@ export interface GitChangelogCommit {
   subject: string;
   message?: string;
   committedAt: string;
+  isMerge?: boolean;
 }
 
 export interface ProjectChangelogEntry {
@@ -28,6 +29,7 @@ export interface ProjectChangelogEntry {
   /** null tant que `git show --numstat` n'a pas été lu pour ce commit. */
   lines_added: number | null;
   lines_removed: number | null;
+  is_merge: number;
 }
 
 export interface CommitLineStats {
@@ -51,6 +53,14 @@ export interface ProjectChangelogPayload {
   state: ProjectChangelogState;
 }
 
+function authoredLines(entry: Pick<ProjectChangelogEntry, "is_merge" | "lines_added" | "lines_removed">): {
+  linesAdded: number;
+  linesRemoved: number;
+} {
+  if (entry.is_merge) return { linesAdded: 0, linesRemoved: 0 };
+  return { linesAdded: entry.lines_added ?? 0, linesRemoved: entry.lines_removed ?? 0 };
+}
+
 const emptyState = (projectId: string): ProjectChangelogState => ({
   project_id: projectId,
   status: "idle",
@@ -67,8 +77,8 @@ export class ChangelogStore {
   import(projectId: string, commits: GitChangelogCommit[], importedAt: string): number {
     const insert = this.db.query(`
       INSERT OR IGNORE INTO project_changelog_entries
-        (project_id, repository_path, commit_sha, branch, subject, committed_at, imported_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+        (project_id, repository_path, commit_sha, branch, subject, committed_at, imported_at, is_merge)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     let imported = 0;
     this.db.transaction(() => {
@@ -81,11 +91,26 @@ export class ChangelogStore {
           commit.subject,
           commit.committedAt,
           importedAt,
+          commit.isMerge ? 1 : 0,
         );
         imported += Number(result.changes > 0);
       }
     })();
     return imported;
+  }
+
+  markMerges(projectId: string, shas: string[]): number {
+    if (shas.length === 0) return 0;
+    const update = this.db.query(`
+      UPDATE project_changelog_entries
+      SET is_merge = 1
+      WHERE project_id = ? AND commit_sha = ? AND is_merge = 0
+    `);
+    let marked = 0;
+    this.db.transaction(() => {
+      for (const sha of shas) marked += Number(update.run(projectId, sha).changes > 0);
+    })();
+    return marked;
   }
 
   reconcile(projectId: string, commits: GitChangelogCommit[]): number {
@@ -202,18 +227,21 @@ export class ChangelogStore {
     const entries = projectId && from && to
       ? this.listBetween(projectId, from, to)
       : (this.db.query(`
-          SELECT commit_sha, committed_at, lines_added, lines_removed
+          SELECT commit_sha, committed_at, lines_added, lines_removed, is_merge
           FROM project_changelog_entries ${projectId ? "WHERE project_id = ?" : ""}
         `).all(...(projectId ? [projectId] : [])) as ProjectChangelogEntry[]).filter((entry) => {
           if (!from || !to) return true;
           const at = Date.parse(entry.committed_at);
           return at >= Date.parse(from) && at < Date.parse(to);
         });
-    return entries.reduce((sum, entry) => ({
-      commits: sum.commits + 1,
-      linesAdded: sum.linesAdded + (entry.lines_added ?? 0),
-      linesRemoved: sum.linesRemoved + (entry.lines_removed ?? 0),
-    }), { commits: 0, linesAdded: 0, linesRemoved: 0 });
+    return entries.reduce((sum, entry) => {
+      const lines = authoredLines(entry);
+      return {
+        commits: sum.commits + 1,
+        linesAdded: sum.linesAdded + lines.linesAdded,
+        linesRemoved: sum.linesRemoved + lines.linesRemoved,
+      };
+    }, { commits: 0, linesAdded: 0, linesRemoved: 0 });
   }
 
   /**
@@ -224,7 +252,9 @@ export class ChangelogStore {
   dailyTotals(fromDay: string, toDay: string): Array<{ day: string; projectId: string; commits: number; linesAdded: number; linesRemoved: number }> {
     return (this.db.query(`
       SELECT substr(committed_at, 1, 10) AS day, project_id,
-             COUNT(*) AS commits, COALESCE(SUM(lines_added), 0) AS lines_added, COALESCE(SUM(lines_removed), 0) AS lines_removed
+             COUNT(*) AS commits,
+             COALESCE(SUM(CASE WHEN is_merge = 1 THEN 0 ELSE lines_added END), 0) AS lines_added,
+             COALESCE(SUM(CASE WHEN is_merge = 1 THEN 0 ELSE lines_removed END), 0) AS lines_removed
       FROM project_changelog_entries
       WHERE substr(committed_at, 1, 10) BETWEEN ? AND ?
       GROUP BY day, project_id

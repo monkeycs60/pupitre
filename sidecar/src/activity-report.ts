@@ -93,6 +93,20 @@ function clamp(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}…`;
 }
 
+export function authoredLineTotals(commits: Array<{
+  linesAdded: number | null;
+  linesRemoved: number | null;
+  isMerge?: boolean;
+}>): { linesAdded: number; linesRemoved: number } {
+  return commits.reduce<{ linesAdded: number; linesRemoved: number }>((sum, commit) => {
+    if (commit.isMerge) return sum;
+    return {
+      linesAdded: sum.linesAdded + (commit.linesAdded ?? 0),
+      linesRemoved: sum.linesRemoved + (commit.linesRemoved ?? 0),
+    };
+  }, { linesAdded: 0, linesRemoved: 0 });
+}
+
 export class ActivityJournal {
   constructor(
     private db: Database,
@@ -136,8 +150,7 @@ export class ActivityJournal {
         conversations,
         commits,
         unlinkedCommitCount: commits.filter((commit) => commit.conversationId === null).length,
-        linesAdded: commits.reduce((sum, commit) => sum + (commit.linesAdded ?? 0), 0),
-        linesRemoved: commits.reduce((sum, commit) => sum + (commit.linesRemoved ?? 0), 0),
+        ...authoredLineTotals(commits),
         tickets,
         mergeRequests,
         ticketsReady,
@@ -225,6 +238,7 @@ export class ActivityJournal {
       linesRemoved: entry.lines_removed,
       committedAt: entry.committed_at,
       conversationId: linked.get(entry.commit_sha) ?? null,
+      isMerge: Boolean(entry.is_merge),
     }));
   }
 
@@ -497,25 +511,25 @@ export function assembleReport(
 /**
  * Un rapport sauvé avant que le changelog ait relevé les +/− de ses commits
  * garde des lignes nulles : on les reprend du changelog à la lecture, ainsi que
- * les champs ajoutés après coup, sans réécrire le rapport.
+ * les champs ajoutés après coup, sans réécrire le rapport. Les fusions restent
+ * visibles ligne à ligne mais sortent des totaux.
  */
 export function hydrateReport(report: ActivityReport, changelog: ChangelogStore): ActivityReport {
   const window = dayWindow(report.day);
   const projects = report.projects.map((project) => {
     const base: ActivityReportProject = { ...project, mergeRequests: project.mergeRequests ?? [], ticketsReady: project.ticketsReady ?? [] };
-    if (!base.commits.some((commit) => commit.linesAdded === null || commit.linesRemoved === null)) return base;
     const stats = new Map(changelog.listBetween(base.projectId, window.startIso, window.endIso)
       .map((entry) => [entry.commit_sha, entry]));
     const commits = base.commits.map((commit) => {
       const entry = stats.get(commit.sha);
-      return entry ? { ...commit, linesAdded: commit.linesAdded ?? entry.lines_added, linesRemoved: commit.linesRemoved ?? entry.lines_removed } : commit;
+      return {
+        ...commit,
+        linesAdded: commit.linesAdded ?? entry?.lines_added ?? null,
+        linesRemoved: commit.linesRemoved ?? entry?.lines_removed ?? null,
+        isMerge: commit.isMerge || Boolean(entry?.is_merge),
+      };
     });
-    return {
-      ...base,
-      commits,
-      linesAdded: commits.reduce((sum, commit) => sum + (commit.linesAdded ?? 0), 0),
-      linesRemoved: commits.reduce((sum, commit) => sum + (commit.linesRemoved ?? 0), 0),
-    };
+    return { ...base, commits, ...authoredLineTotals(commits) };
   });
   return assembleReport(report.day, report.generatedAt, projects, report.retro, report.summary ?? null);
 }

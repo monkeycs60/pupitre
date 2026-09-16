@@ -52,8 +52,8 @@ function TicketChip({ ticket, compact = false }: { ticket: ActivityReportTicket;
   )
 }
 
-function Lines({ added, removed }: { added: number; removed: number }) {
-  return <span className="activity-lines"><i>+{number(added)}</i><em>−{number(removed)}</em></span>
+function Lines({ added, removed, muted = false }: { added: number; removed: number; muted?: boolean }) {
+  return <span className={`activity-lines${muted ? ' is-muted' : ''}`}><i>+{number(added)}</i><em>−{number(removed)}</em></span>
 }
 
 function ProjectCard({ project, onOpenConversation }: { project: ActivityReportProject; onOpenConversation: (projectId: string, conversationId: string) => void }) {
@@ -137,14 +137,15 @@ function ProjectCard({ project, onOpenConversation }: { project: ActivityReportP
             <span>{project.unlinkedCommitCount > 0 ? `${project.unlinkedCommitCount} hors conversation` : 'tous reliés à une conversation'}</span>
           </div>
           {project.commits.map((commit) => (
-            <div className={`activity-commit${commit.conversationId === null ? ' is-unlinked' : ''}`} key={commit.sha}>
+            <div className={`activity-commit${commit.conversationId === null ? ' is-unlinked' : ''}${commit.isMerge ? ' is-merge' : ''}`} key={commit.sha}>
               <span className="activity-commit-time">{clock(commit.committedAt)}</span>
               <code>{commit.sha.slice(0, 7)}</code>
               <p>
                 {commit.productMessage || commit.subject}
+                {commit.isMerge ? <span className="activity-merge">fusion</span> : null}
                 {commit.repositoryPath !== '.' ? <small>{commit.repositoryPath}</small> : null}
               </p>
-              <Lines added={commit.linesAdded ?? 0} removed={commit.linesRemoved ?? 0} />
+              <Lines added={commit.linesAdded ?? 0} removed={commit.linesRemoved ?? 0} muted={commit.isMerge} />
               {commit.conversationId
                 ? <button type="button" className="activity-read is-small" onClick={() => onOpenConversation(project.projectId, commit.conversationId!)}>Conversation</button>
                 : <span className="activity-unlinked">hors conversation</span>}

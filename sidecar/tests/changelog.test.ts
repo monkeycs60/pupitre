@@ -15,6 +15,7 @@ import {
   discoverGitRepositories,
   readCommitLineStats,
   readGitHistory,
+  readMergeShas,
 } from "../src/changelog";
 import { openDb } from "../src/db";
 import { ChangelogStore, type GitChangelogCommit } from "../src/stores/changelog";
@@ -28,6 +29,7 @@ function setup(options: {
   repositories?: ConstructorParameters<typeof ChangelogService>[6];
   email?: ConstructorParameters<typeof ChangelogService>[7];
   lineStats?: ConstructorParameters<typeof ChangelogService>[8];
+  mergeShas?: ConstructorParameters<typeof ChangelogService>[9];
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-project-"));
   const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-changelog-db-")));
@@ -60,6 +62,7 @@ function setup(options: {
     options.repositories ?? (async () => [{ path: root, relativePath: "." }]),
     options.email ?? (async () => "test@example.com"),
     options.lineStats ?? (async (_cwd, shas) => shas.map((sha) => ({ sha, added: 3, removed: 1 }))),
+    options.mergeShas ?? (async () => []),
   );
   return { db, root, project, projects, domain, store, service, now };
 }
@@ -444,4 +447,53 @@ test("lit les lignes +/− réelles d'un dépôt Git", async () => {
   const bySubject = new Map(history.map((entry) => [entry.subject, entry.sha]));
   expect(stats).toContainEqual({ sha: bySubject.get("feat: a")!, added: 3, removed: 0 });
   expect(stats).toContainEqual({ sha: bySubject.get("feat: b")!, added: 2, removed: 1 });
+});
+
+test("une fusion garde ses +/− mais sort des totaux de lignes", async () => {
+  const merge = "c".repeat(40);
+  const regular = "d".repeat(40);
+  const context = setup({
+    commits: [
+      { repositoryPath: ".", sha: regular, branch: "main", subject: "feat: réel", committedAt: "2026-08-24T10:00:00+02:00" },
+      { repositoryPath: ".", sha: merge, branch: "feature/x", subject: "Merge origin/develop", committedAt: "2026-08-24T15:00:00+02:00" },
+    ],
+    mergeShas: async () => [merge],
+  });
+  await context.service.refreshNow(context.project.id);
+  const entries = context.store.list(context.project.id);
+  expect(entries.find((entry) => entry.commit_sha === merge)).toEqual(expect.objectContaining({
+    is_merge: 1, lines_added: 3, lines_removed: 1,
+  }));
+  expect(entries.find((entry) => entry.commit_sha === regular)).toEqual(expect.objectContaining({
+    is_merge: 0, lines_added: 3, lines_removed: 1,
+  }));
+  expect(context.store.totals(context.project.id)).toEqual({ commits: 2, linesAdded: 3, linesRemoved: 1 });
+  expect(context.store.dailyTotals("2026-08-24", "2026-08-24")).toEqual([
+    { day: "2026-08-24", projectId: context.project.id, commits: 2, linesAdded: 3, linesRemoved: 1 },
+  ]);
+  context.db.close();
+});
+
+test("repère les commits de fusion d'un dépôt Git", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-merge-"));
+  const git = (...args: string[]) => Bun.spawnSync([
+    "git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args,
+  ]);
+  git("init", "-q", "-b", "main");
+  writeFileSync(join(root, "a.txt"), "base\n");
+  git("add", ".");
+  git("commit", "-qm", "feat: base");
+  git("checkout", "-qb", "feature");
+  writeFileSync(join(root, "b.txt"), "feature\n");
+  git("add", ".");
+  git("commit", "-qm", "feat: feature");
+  git("checkout", "-q", "main");
+  writeFileSync(join(root, "c.txt"), "main\n");
+  git("add", ".");
+  git("commit", "-qm", "feat: main");
+  git("merge", "--no-ff", "-m", "Merge branch 'feature'", "feature");
+  const merges = await readMergeShas(root);
+  expect(merges).toHaveLength(1);
+  const history = await readGitHistory(root, { repositoryPath: "." });
+  expect(history.some((entry) => entry.sha === merges[0] && entry.subject.startsWith("Merge "))).toBe(true);
 });
