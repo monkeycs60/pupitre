@@ -115,6 +115,19 @@
   --space-7: 32px;
   --space-8: 40px;
 
+  /* Dimensions des surfaces Applications */
+  --view-header-height: 68px;
+  --control-height: 32px;
+  --icon-sm: 14px;
+  --applications-table-min-width: 820px;
+  --applications-name-min-width: 190px;
+  --applications-context-min-width: 160px;
+  --applications-port-width: 64px;
+  --applications-process-min-width: 110px;
+  --applications-link-min-width: 132px;
+  --applications-row-height: 54px;
+  --applications-head-height: 34px;
+
   /* Ombres — réservées aux éléments réellement flottants */
   --shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.45);

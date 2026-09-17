@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
  *  les surfaces qui listent les mêmes vues. */
 export type NavName =
   | 'conversations'
+  | 'applications'
   | 'fleet'
   | 'attention'
   | 'activity-report'
@@ -23,6 +24,12 @@ const NAV_PATHS: Record<NavName, ReactNode> = {
     <>
       <path d="M3 3h10v7H7l-3.5 2v-2H3Z" />
       <path d="M5.5 6h5M5.5 8h3" />
+    </>
+  ),
+  applications: (
+    <>
+      <rect x="2.5" y="3" width="11" height="9.5" rx="1" />
+      <path d="M2.5 5.5h11M4.5 4.2h.1M6 4.2h.1" />
     </>
   ),
   fleet: <path d="M2 8h3l1.5-4L9 12l1.5-4H14" />,

@@ -107,6 +107,11 @@ import {
   type VisualFeedbackService,
   type VisualFeedbackSubmission,
 } from "./visual-feedback";
+import {
+  listRunningApplications,
+  type ApplicationContext,
+  type RunningApplication,
+} from "./running-applications";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -175,6 +180,7 @@ export interface ServerDeps {
   activityReports?: ActivityReportService;
   sharedFiles?: SharedFilesService;
   visualFeedback?: VisualFeedbackService;
+  runningApplications?: (contexts: ApplicationContext[]) => RunningApplication[];
   /**
    * Arrêt propre du sidecar, déclenché par `POST /api/shutdown` : c'est ce qui
    * permet à un sidecar plus récent de reprendre le port (cf. claimServer).
@@ -1275,6 +1281,28 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "GET" && pathname === "/api/fleet") {
           return json(currentFleet());
+        }
+
+        if (request.method === "GET" && pathname === "/api/applications") {
+          const contexts: ApplicationContext[] = deps.projects.list().flatMap((project) => {
+            const worktrees = (["active", "archived"] as const)
+              .flatMap((scope) => deps.conversations.listByProject(project.id, scope))
+              .flatMap((conversation) => conversation.worktree_paths ?? [])
+              .filter((root, index, roots) => roots.indexOf(root) === index)
+              .map((root): ApplicationContext => ({
+                projectId: project.id,
+                projectName: project.name,
+                root,
+                kind: "worktree",
+              }));
+            return [{
+              projectId: project.id,
+              projectName: project.name,
+              root: project.path,
+              kind: "project" as const,
+            }, ...worktrees];
+          });
+          return json((deps.runningApplications ?? listRunningApplications)(contexts));
         }
 
         if (request.method === "GET" && pathname === "/api/search") {

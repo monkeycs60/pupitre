@@ -1,0 +1,164 @@
+.applications-view {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--bg-workspace);
+}
+
+.applications-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  min-height: var(--view-header-height);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.applications-header h1 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.applications-header p,
+.applications-header-actions,
+.applications-name span,
+.applications-context span,
+.applications-process code {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.applications-header p {
+  margin: var(--space-1) 0 0;
+}
+
+.applications-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  white-space: nowrap;
+}
+
+.applications-error {
+  margin: var(--space-4) var(--space-6) 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: var(--r-sm);
+}
+
+.applications-table {
+  min-width: var(--applications-table-min-width);
+  margin: var(--space-5) var(--space-6);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.applications-row {
+  display: grid;
+  grid-template-columns: minmax(var(--applications-name-min-width), 1.4fr) minmax(var(--applications-context-min-width), 1fr) var(--applications-port-width) minmax(var(--applications-process-min-width), .7fr) minmax(var(--applications-link-min-width), auto);
+  align-items: center;
+  gap: var(--space-4);
+  min-height: var(--applications-row-height);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.applications-row:last-child {
+  border-bottom: 0;
+}
+
+.applications-row:not(.applications-table-head):hover {
+  background: var(--bg-hover);
+}
+
+.applications-table-head {
+  min-height: var(--applications-head-height);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  background: var(--bg-panel);
+}
+
+.applications-name,
+.applications-context,
+.applications-process {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.applications-name strong,
+.applications-context strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.applications-name span,
+.applications-context span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.applications-row > code,
+.applications-process code {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.applications-row > code {
+  color: var(--text-strong);
+  font-size: var(--text-base);
+}
+
+.applications-process span {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.applications-open {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  color: var(--accent-bright);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.applications-open:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.applications-open svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.3;
+}

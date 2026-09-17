@@ -82,6 +82,7 @@ const DesignView = lazy(() => import('./DesignView').then((module) => ({ default
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
 const ActivityReportView = lazy(() => import('./ActivityReportView').then((module) => ({ default: module.ActivityReportView })))
 const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })))
+const ApplicationsView = lazy(() => import('./ApplicationsView').then((module) => ({ default: module.ApplicationsView })))
 
 const DEFAULT_SIDEBAR_WIDTH = 296
 const MIN_SIDEBAR_WIDTH = 200
@@ -746,6 +747,12 @@ function App() {
     setShowSwitchModel(false)
   }
 
+  function handleApplicationsSelect() {
+    if (!confirmLeaveMemory()) return
+    setWorkspaceView('applications')
+    setShowSwitchModel(false)
+  }
+
   function handleLibrarySelect() {
     if (!confirmLeaveMemory()) return
     openInspector('library')
@@ -902,6 +909,7 @@ function App() {
     : {
         git: 'Git',
         documents: 'Fichiers',
+        applications: 'Applications',
         design: 'Claude Design',
         dashboard: 'Projet',
         costs: 'Utilisation',
@@ -927,6 +935,12 @@ function App() {
       view: 'conversations',
       onClick: handleConversationsSelect,
       shortcut: navigationShortcutLabel('conversations'),
+    },
+    {
+      name: 'applications',
+      label: 'Applications',
+      view: 'applications',
+      onClick: handleApplicationsSelect,
     },
     ...(window.__TAURI__
       ? [{
@@ -1029,6 +1043,7 @@ function App() {
         >
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
         {workspaceView === 'design' ? <DesignView />
+        : workspaceView === 'applications' ? <ApplicationsView />
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         : workspaceView === 'settings' ? <AppSettingsView instance={instance} quotas={quotas.snapshot} />
         : workspaceView === 'activity-report' ? <ActivityReportView onOpenConversation={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)} />

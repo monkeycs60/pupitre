@@ -175,6 +175,22 @@ export interface Settings {
   activityReportHour?: string
 }
 
+export interface RunningApplication {
+  id: string
+  name: string
+  projectId: string
+  projectName: string
+  workspace: string
+  branch: string | null
+  cwd: string
+  process: string
+  pid: number
+  port: number
+  url: string
+}
+
+export const getRunningApplications = (): Promise<RunningApplication[]> => fetchJson('/api/applications')
+
 export type ActivityEvidence = { motif_id: string; kind: 'conversation' | 'commit' | 'ticket' | 'problem'; ref: string; project_id: string; label: string; day: string }
 export type ActivityMotif = { id: string; project_id: string; kind: 'recurrence' | 'stabilize' | 'practice' | 'idea'; title: string; statement: string; status: 'open' | 'stabilized' | 'dismissed' | 'handled'; first_seen_day: string; last_seen_day: string; returned_at: string | null; todo_id: string | null; evidence: ActivityEvidence[] }
 export interface ActivityReportTicket { id: string; key: string; title: string; externalUrl: string | null }
