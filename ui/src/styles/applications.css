@@ -29,7 +29,6 @@
 .applications-header p,
 .applications-header-actions,
 .applications-name span,
-.applications-context span,
 .applications-process code {
   color: var(--text-muted);
   font-size: var(--text-sm);
@@ -76,6 +75,37 @@
   border-bottom: 0;
 }
 
+.applications-group + .applications-group {
+  border-top: 1px solid var(--border);
+}
+
+.applications-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: var(--applications-group-height);
+  padding: 0 var(--space-3);
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.applications-group-header strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.applications-group-header span {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
 .applications-row:not(.applications-table-head):hover {
   background: var(--bg-hover);
 }
@@ -91,7 +121,6 @@
 }
 
 .applications-name,
-.applications-context,
 .applications-process {
   display: flex;
   min-width: 0;
@@ -99,8 +128,7 @@
   gap: 2px;
 }
 
-.applications-name strong,
-.applications-context strong {
+.applications-name strong {
   overflow: hidden;
   color: var(--text);
   font-size: var(--text-base);
@@ -110,7 +138,7 @@
 }
 
 .applications-name span,
-.applications-context span {
+.applications-worktree {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -125,6 +153,11 @@
 .applications-row > code {
   color: var(--text-strong);
   font-size: var(--text-base);
+}
+
+.applications-row > .applications-worktree {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 
 .applications-process span {

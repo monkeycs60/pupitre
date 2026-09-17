@@ -51,6 +51,10 @@ export function inspectorPort(command: string): number | null {
   return Number.isInteger(port) ? port : null;
 }
 
+export function isExcludedApplicationProcess(process: string): boolean {
+  return /^(?:brave|chrome|chromium|code|firefox)(?:-|$)/iu.test(process);
+}
+
 function isInside(path: string, root: string): boolean {
   const relative = path.slice(root.length);
   return path === root || (path.startsWith(root) && relative.startsWith("/"));
@@ -102,7 +106,7 @@ export function listRunningApplications(contexts: ApplicationContext[]): Running
 
   return parseListeningSockets(result.stdout.toString())
     .flatMap((socket): RunningApplication[] => {
-      if (socket.process === "code") return [];
+      if (isExcludedApplicationProcess(socket.process)) return [];
       let cwd = cwdCache.get(socket.pid);
       if (cwd === undefined) {
         try { cwd = readlinkSync(`/proc/${socket.pid}/cwd`); } catch { cwd = null; }

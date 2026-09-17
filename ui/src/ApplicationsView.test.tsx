@@ -9,7 +9,7 @@ mock.module('@tauri-apps/plugin-opener', () => ({
   revealItemInDir: async () => {},
 }))
 
-const { cleanup, render, screen } = await import('@testing-library/react')
+const { cleanup, render, screen, within } = await import('@testing-library/react')
 const { ApplicationsView } = await import('./ApplicationsView')
 const defaultFetch = globalThis.fetch
 
@@ -18,8 +18,8 @@ afterEach(() => {
   globalThis.fetch = defaultFetch
 })
 
-test('affiche le nom, le worktree, le port et un lien localhost par application', async () => {
-  globalThis.fetch = mock(async () => Response.json([{
+test('regroupe le back et le front par projet et branche', async () => {
+  const reactor = {
     id: '42:8098',
     name: 'reactor',
     projectId: 'affilae',
@@ -31,13 +31,40 @@ test('affiche le nom, le worktree, le port et un lien localhost par application'
     pid: 42,
     port: 8098,
     url: 'http://localhost:8098',
-  }])) as typeof fetch
+  }
+  globalThis.fetch = mock(async () => Response.json([
+    reactor,
+    {
+      ...reactor,
+      id: '43:4218',
+      name: 'affilae-api',
+      workspace: 'hapigator-tech25169',
+      cwd: '/code/affilae/apps/hapigator-tech25169',
+      process: 'MainThread',
+      pid: 43,
+      port: 4218,
+      url: 'http://localhost:4218',
+    },
+    {
+      ...reactor,
+      id: '44:4200',
+      name: 'affilae-api',
+      workspace: 'hapigator',
+      branch: 'develop',
+      cwd: '/code/affilae/apps/hapigator',
+      process: 'MainThread',
+      pid: 44,
+      port: 4200,
+      url: 'http://localhost:4200',
+    },
+  ])) as typeof fetch
 
   render(<ApplicationsView />)
 
-  expect(await screen.findByText('reactor')).toBeTruthy()
-  expect(screen.getByText('Affilae')).toBeTruthy()
-  expect(screen.getByText('tech/25169')).toBeTruthy()
-  expect(screen.getByText('8098')).toBeTruthy()
+  const pairedGroup = await screen.findByRole('rowgroup', { name: 'Affilae — tech/25169' })
+  expect(within(pairedGroup).getByText('reactor')).toBeTruthy()
+  expect(within(pairedGroup).getByText('affilae-api')).toBeTruthy()
+  expect(within(pairedGroup).getByText('Affilae · 2 applications')).toBeTruthy()
+  expect(screen.getAllByRole('rowgroup')).toHaveLength(2)
   expect(screen.getByRole('link', { name: 'Ouvrir reactor sur le port 8098' }).getAttribute('href')).toBe('http://localhost:8098')
 })

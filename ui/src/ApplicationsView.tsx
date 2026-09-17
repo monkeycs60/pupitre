@@ -1,4 +1,5 @@
 import { ExternalLink } from './externalLink'
+import { groupRunningApplications } from './applicationGroups'
 import { refreshRunningApplications, useRunningApplications } from './runningApplicationsStore'
 
 function OpenIcon() {
@@ -11,6 +12,7 @@ function OpenIcon() {
 
 export function ApplicationsView() {
   const { items, loading, error, updatedAt } = useRunningApplications()
+  const groups = groupRunningApplications(items)
 
   return (
     <div className="applications-view">
@@ -34,35 +36,40 @@ export function ApplicationsView() {
         <div className="applications-table" role="table" aria-label="Applications en cours d’exécution">
           <div className="applications-row applications-table-head" role="row">
             <span role="columnheader">Application</span>
-            <span role="columnheader">Projet / worktree</span>
+            <span role="columnheader">Worktree</span>
             <span role="columnheader">Port</span>
             <span role="columnheader">Processus</span>
             <span role="columnheader" aria-label="Ouvrir" />
           </div>
-          {items.map((application) => (
-            <div className="applications-row" role="row" key={application.id}>
-              <div className="applications-name" role="cell">
-                <strong>{application.name}</strong>
-                <span>{application.cwd}</span>
+          {groups.map((group) => (
+            <div className="applications-group" role="rowgroup" aria-label={`${group.projectName} — ${group.label}`} key={group.id}>
+              <div className="applications-group-header">
+                <strong>{group.label}</strong>
+                <span>{group.projectName} · {group.applications.length} application{group.applications.length > 1 ? 's' : ''}</span>
               </div>
-              <div className="applications-context" role="cell">
-                <strong>{application.projectName}</strong>
-                <span>{application.branch ?? application.workspace}</span>
-              </div>
-              <code role="cell">{application.port}</code>
-              <div className="applications-process" role="cell">
-                <span>{application.process}</span>
-                <code>PID {application.pid}</code>
-              </div>
-              <ExternalLink
-                className="applications-open"
-                href={application.url}
-                title={`Ouvrir ${application.url}`}
-                ariaLabel={`Ouvrir ${application.name} sur le port ${application.port}`}
-              >
-                <span>localhost:{application.port}</span>
-                <OpenIcon />
-              </ExternalLink>
+              {group.applications.map((application) => (
+                <div className="applications-row" role="row" key={application.id}>
+                  <div className="applications-name" role="cell">
+                    <strong>{application.name}</strong>
+                    <span>{application.cwd}</span>
+                  </div>
+                  <code className="applications-worktree" role="cell">{application.workspace}</code>
+                  <code role="cell">{application.port}</code>
+                  <div className="applications-process" role="cell">
+                    <span>{application.process}</span>
+                    <code>PID {application.pid}</code>
+                  </div>
+                  <ExternalLink
+                    className="applications-open"
+                    href={application.url}
+                    title={`Ouvrir ${application.url}`}
+                    ariaLabel={`Ouvrir ${application.name} sur le port ${application.port}`}
+                  >
+                    <span>localhost:{application.port}</span>
+                    <OpenIcon />
+                  </ExternalLink>
+                </div>
+              ))}
             </div>
           ))}
         </div>

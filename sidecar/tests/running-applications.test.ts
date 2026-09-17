@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { contextForCwd, inspectorPort, parseListeningSockets } from "../src/running-applications";
+import {
+  contextForCwd,
+  inspectorPort,
+  isExcludedApplicationProcess,
+  parseListeningSockets,
+} from "../src/running-applications";
 
 test("parse les ports IPv4 et IPv6 qui exposent un PID", () => {
   const output = [
@@ -20,6 +25,13 @@ test("reconnaît le port d'inspection Node implicite ou explicite", () => {
   expect(inspectorPort("node --inspect=9230 server.js")).toBe(9230);
   expect(inspectorPort("node --inspect-brk=127.0.0.1:9231 server.js")).toBe(9231);
   expect(inspectorPort("node server.js")).toBeNull();
+});
+
+test("écarte les navigateurs et éditeurs lancés depuis un worktree", () => {
+  expect(isExcludedApplicationProcess("chrome")).toBeTrue();
+  expect(isExcludedApplicationProcess("chromium-browser")).toBeTrue();
+  expect(isExcludedApplicationProcess("code")).toBeTrue();
+  expect(isExcludedApplicationProcess("node")).toBeFalse();
 });
 
 test("préfère le worktree le plus précis au dossier du projet", () => {

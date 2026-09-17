@@ -127,6 +127,7 @@
   --applications-link-min-width: 132px;
   --applications-row-height: 54px;
   --applications-head-height: 34px;
+  --applications-group-height: 38px;
 
   /* Ombres — réservées aux éléments réellement flottants */
   --shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
