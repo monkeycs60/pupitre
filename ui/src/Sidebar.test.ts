@@ -357,16 +357,20 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   const onCreate = mock(() => undefined)
   renderSidebar([], null, undefined, onCreate, new Map([['TECH-1', {
     ticketKey: 'TECH-1',
+    title: 'TECH-1 — Corriger les pipelines de déploiement',
     externalUrl: null,
     mergeRequestUrl: null,
     branch: 'feature/TECH-1',
   }]]))
 
   await waitFor(() => expect(document.querySelectorAll('.conv-group-header').length).toBe(3))
-  const headers = [...document.querySelectorAll('.conv-group-toggle > span')].map((element) => element.textContent)
+  const headers = [...document.querySelectorAll('.conv-group-key')].map((element) => element.textContent)
   expect(headers[0]).toBe('Sentry · REACTOR-B4S')
   expect(headers[1]).toBe("Aujourd'hui")
   expect(headers[2]).toBe('TECH-1')
+  const ticketTitle = document.querySelector('.conv-group-ticket-title')
+  expect(ticketTitle?.textContent).toBe('Corriger les pipelines de déploiement')
+  expect(ticketTitle?.getAttribute('title')).toBe('Corriger les pipelines de déploiement')
   expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(2)
   expect(document.querySelector('.conv-row-sentry .provider-mark.is-sentry')).not.toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /Nouvelle conversation dans Sentry/ }))

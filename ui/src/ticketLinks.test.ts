@@ -5,6 +5,8 @@ import type { DashboardPayload, TicketRow } from './types'
 const ticket = {
   id: 't1',
   key: 'TECH-24128',
+  source: 'clickup',
+  title: 'TECH-24128 — Corriger le tableau de bord',
   external_url: 'https://app.clickup.com/t/x',
   refs: [
     { id: 'r1', ticket_id: 't1', kind: 'branch', ref: 'feature/TECH-24128', payload: {}, seen_at: '' },
@@ -20,6 +22,7 @@ const payload = {
 
 test('vise la recherche du tableau GitLab, pas la MR d’un seul dépôt', () => {
   const links = ticketLinksOf(ticket, gitlabContextOf(payload))
+  expect(links.title).toBe(ticket.title)
   expect(links.mergeRequestUrl).toBe(
     'https://git.kaizen-hosting.com/dashboard/merge_requests/search?scope=all&state=opened&assignee_username=clement.serizay&search=24128',
   )

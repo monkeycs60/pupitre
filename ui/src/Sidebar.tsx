@@ -140,6 +140,12 @@ function relativeConversationTime(value: string): string {
   return days < 7 ? `il y a ${days} j` : new Date(value).toLocaleDateString('fr-FR')
 }
 
+export function ticketTitleWithoutKey(title: string, ticketKey: string): string {
+  return title
+    .replace(new RegExp(`^${ticketKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(?:[-–—:·]\\s*)?`, 'i'), '')
+    .trim()
+}
+
 /** Horodatage compact aligné à droite de chaque conversation (now / 4 min /
  *  2 h / lun / 08/06), comme dans la maquette. */
 function shortConversationTime(value: string): string {
@@ -723,6 +729,9 @@ export const Sidebar = memo(function Sidebar({
                 conversationRowState(conversation, displayedActiveConversationIds) === 'unread'
               )).length
               const groupLinks = group.ticketKey ? ticketLinks?.get(group.ticketKey) : undefined
+              const ticketTitle = group.ticketKey && groupLinks?.title
+                ? ticketTitleWithoutKey(groupLinks.title, group.ticketKey)
+                : null
               const groupSentryUrl = group.sentryKey ? sentryLinks?.get(group.sentryKey) : undefined
               return (
               <div className="conv-group" key={group.key}>
@@ -737,7 +746,12 @@ export const Sidebar = memo(function Sidebar({
                     <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={isCollapsed ? { transform: 'rotate(-90deg)' } : undefined}>
                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span>{group.label}</span>
+                    <span className="conv-group-label">
+                      <span className="conv-group-key">{group.label}</span>
+                      {ticketTitle ? (
+                        <span className="conv-group-ticket-title" title={ticketTitle}>{ticketTitle}</span>
+                      ) : null}
+                    </span>
                   </button>
                   {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
                   {groupSentryUrl !== undefined ? <SentryLinkIcon url={groupSentryUrl} issueKey={group.sentryKey!} /> : null}

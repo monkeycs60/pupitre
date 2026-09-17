@@ -9,6 +9,7 @@ import type { DashboardPayload, SentryInboxPayload, TicketRow } from './types'
  */
 export interface TicketLinks {
   ticketKey: string
+  title: string | null
   externalUrl: string | null
   mergeRequestUrl: string | null
   branch: string | null
@@ -56,6 +57,7 @@ export function ticketLinksOf(ticket: TicketRow, gitlab?: GitLabContext): Ticket
   const mergeRequestUrl = mergeRequest ? textValue(mergeRequest.payload.url) : null
   return {
     ticketKey: ticket.key,
+    title: ticket.source === 'clickup' ? ticket.title : null,
     externalUrl: ticket.external_url,
     mergeRequestUrl: mergeRequestUrl === null || gitlab === undefined
       ? mergeRequestUrl
