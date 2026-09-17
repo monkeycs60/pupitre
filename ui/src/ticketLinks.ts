@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getProjectDashboard, getSentryInbox } from './api'
+import { reconnectDelayMs } from './backoff'
+import { webSocketUrl } from './transport'
 import type { DashboardPayload, SentryInboxPayload, TicketRow } from './types'
 
 /**
@@ -126,15 +128,50 @@ export function useTicketLinks(projectId: string | undefined): Map<string, Ticke
     setIndex(EMPTY_INDEX)
     if (projectId === undefined) return
     let ignore = false
+    let socket: WebSocket | null = null
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let failedAttempts = 0
     const controller = new AbortController()
+    const apply = (payload: DashboardPayload) => {
+      if (!ignore) setIndex(ticketLinksIndex(payload))
+    }
+    const connect = () => {
+      if (ignore) return
+      let current: WebSocket
+      try {
+        current = new WebSocket(
+          webSocketUrl(`/ws?channel=tickets&project=${encodeURIComponent(projectId)}`),
+        )
+      } catch {
+        retryTimer = setTimeout(connect, reconnectDelayMs(++failedAttempts))
+        return
+      }
+      socket = current
+      current.addEventListener('open', () => { failedAttempts = 0 })
+      current.addEventListener('message', (message) => {
+        if (ignore || socket !== current) return
+        try { apply(JSON.parse(String(message.data)) as DashboardPayload) } catch {}
+      })
+      const retry = () => {
+        if (ignore || socket !== current) return
+        socket = null
+        current.close()
+        retryTimer = setTimeout(connect, reconnectDelayMs(++failedAttempts))
+      }
+      current.addEventListener('close', retry)
+      current.addEventListener('error', retry)
+    }
     void getProjectDashboard(projectId, controller.signal)
-      .then((payload) => { if (!ignore) setIndex(ticketLinksIndex(payload)) })
+      .then(apply)
       .catch(() => {
         // Sans tableau de bord (intégrations non configurées), pas de liens.
       })
+    connect()
     return () => {
       ignore = true
       controller.abort()
+      if (retryTimer !== undefined) clearTimeout(retryTimer)
+      socket?.close()
     }
   }, [projectId])
 

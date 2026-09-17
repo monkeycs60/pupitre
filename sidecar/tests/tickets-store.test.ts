@@ -60,6 +60,23 @@ test("un ticket git ne réécrit pas le titre d'un ticket clickup existant", () 
   expect(again.title).toBe("Vrai titre");
 });
 
+test("retrouve l'unique ticket cité explicitement dans un texte", () => {
+  for (const key of ["TECH-24", "TECH-24024"]) {
+    tickets.upsert(projectId, {
+      key,
+      source: "clickup",
+      title: key,
+      status: "open",
+      externalUrl: null,
+    });
+  }
+
+  expect(tickets.findUniqueMention(projectId, "Traite https://clickup.test/t/TECH-24024")?.key)
+    .toBe("TECH-24024");
+  expect(tickets.findUniqueMention(projectId, "Compare TECH-24 avec TECH-24024")).toBeNull();
+  expect(tickets.findUniqueMention(projectId, "TECH-240240")).toBeNull();
+});
+
 test("références : upsert par (kind, ref), payload remplacé, lecture groupée", () => {
   const ticket = tickets.upsert(projectId, {
     key: "TECH-3",

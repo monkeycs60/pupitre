@@ -212,6 +212,10 @@ function App() {
   const sentryLinks = useSentryLinks(selectedProject?.id)
   useAppNotifications()
 
+  useEffect(() => {
+    setConversationListVersion((current) => current + 1)
+  }, [ticketLinks])
+
   useEffect(() => subscribeVisualFeedbackNavigation((target) => {
     window.dispatchEvent(new CustomEvent('pupitre:open-conversation', { detail: target }))
   }), [])

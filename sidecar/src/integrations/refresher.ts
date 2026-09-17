@@ -586,6 +586,7 @@ export class IntegrationsRefresher {
       for (const conversation of this.stores.conversations.listByProject(projectId)) {
         let branch: string | null = null;
         let key: string | null = null;
+        let mentionedTicketId: string | null = null;
         if (conversation.worktree_path) {
           branch = branchOfWorktree(conversation.worktree_path);
           key = branch ? extractTicketKey(branch, pattern) : null;
@@ -598,7 +599,19 @@ export class IntegrationsRefresher {
           );
           if (keys.length === 1) key = keys[0]!;
         }
+        if (key === null && conversation.ticket_id === null) {
+          const firstMessage = this.stores.conversations.firstUserMessage(conversation.id);
+          const mentioned = this.stores.tickets.findUniqueMention(projectId, firstMessage);
+          if (mentioned !== null) {
+            key = mentioned.key;
+            mentionedTicketId = mentioned.id;
+          }
+        }
         if (key === null) continue;
+        if (mentionedTicketId !== null) {
+          this.stores.tickets.linkConversation(conversation.id, mentionedTicketId);
+          continue;
+        }
         const ticket = this.stores.tickets.upsert(projectId, {
           key,
           source: "git",

@@ -96,6 +96,14 @@ export class TicketStore {
     return row ? hydrateTicket(row) : null;
   }
 
+  findUniqueMention(projectId: string, text: string): Ticket | null {
+    const mentioned = this.listActive(projectId).filter((ticket) => {
+      const escaped = ticket.key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`(^|[^A-Z0-9])${escaped}(?=$|[^A-Z0-9])`, "i").test(text);
+    });
+    return mentioned.length === 1 ? mentioned[0]! : null;
+  }
+
   listActive(projectId: string): Ticket[] {
     return (this.db.query("SELECT * FROM tickets WHERE project_id=? AND archived_at IS NULL ORDER BY updated_at DESC").all(projectId) as Record<string, unknown>[]).map(hydrateTicket);
   }

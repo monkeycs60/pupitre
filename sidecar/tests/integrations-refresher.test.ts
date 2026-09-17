@@ -472,6 +472,47 @@ test("requalifie une conversation née sur main depuis la branche de ses commits
   expect(conversations.get(conversation.id)?.ticket_id).toBe(ticket?.id);
 });
 
+test("requalifie une conversation depuis l'unique ticket cité dans son premier message", async () => {
+  const conversation = conversations.create({
+    projectId,
+    provider: "claude",
+    model: "m",
+    firstMessage: "Traite https://app.clickup.com/t/20556900/TECH-24657 depuis main",
+  });
+  conversations.appendStoredEvent(conversation.id, {
+    type: "user-message",
+    text: "Traite https://app.clickup.com/t/20556900/TECH-24657 depuis main",
+    images: [],
+  });
+
+  await makeRefresher({ gitLabClient: () => null }).refreshProject(projectId);
+
+  expect(conversations.get(conversation.id)?.ticket_id).toBe(
+    tickets.findByKey(projectId, "TECH-24657")?.id,
+  );
+});
+
+test("ne requalifie pas une conversation dont le premier message cite plusieurs tickets", async () => {
+  const conversation = conversations.create({
+    projectId,
+    provider: "claude",
+    model: "m",
+    firstMessage: "Compare TECH-24657 et TECH-24868",
+  });
+  conversations.appendStoredEvent(conversation.id, {
+    type: "user-message",
+    text: "Compare TECH-24657 et TECH-24868",
+    images: [],
+  });
+
+  await makeRefresher({
+    clickUpClient: () => fakeClickUp([task, reviewTask]) as any,
+    gitLabClient: () => null,
+  }).refreshProject(projectId);
+
+  expect(conversations.get(conversation.id)?.ticket_id).toBeNull();
+});
+
 test("ne requalifie pas une conversation dont les commits appartiennent à plusieurs tickets", async () => {
   const conversation = conversations.create({
     projectId,

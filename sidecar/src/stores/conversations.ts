@@ -286,6 +286,16 @@ export class ConversationStore {
     return row?.n ?? 0;
   }
 
+  firstUserMessage(id: string): string {
+    const row = this.db.query(
+      `SELECT json_extract(payload, '$.text') AS text
+       FROM events
+       WHERE conversation_id = ? AND json_extract(payload, '$.type') = 'user-message'
+       ORDER BY id LIMIT 1`
+    ).get(id) as { text: string | null } | null;
+    return row?.text ?? "";
+  }
+
   /**
    * Matière du digest : le premier message (l'intention initiale) et les
    * derniers échanges (où la conversation en est vraiment).

@@ -2871,6 +2871,9 @@ export function createServer(deps: ServerDeps) {
           if (ticketId && (!ticket || ticket.project_id !== projectId)) {
             throw new HttpError(404, "ticket inconnu");
           }
+          if (!ticket && ticketId === null) {
+            ticket = deps.tickets.findUniqueMention(projectId, message);
+          }
           let problemPreamble: string | null = null;
           if (missionProblems !== null) {
             const commonTicketId = missionProblems[0]?.ticket_id ?? null;
