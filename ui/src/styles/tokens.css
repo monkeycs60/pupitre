@@ -119,6 +119,7 @@
   --view-header-height: 68px;
   --control-height: 32px;
   --icon-sm: 14px;
+  --icon-md: 18px;
   --applications-table-min-width: 820px;
   --applications-name-min-width: 190px;
   --applications-context-min-width: 160px;
@@ -128,6 +129,8 @@
   --applications-row-height: 54px;
   --applications-head-height: 34px;
   --applications-group-height: 38px;
+  --applications-project-height: 58px;
+  --applications-project-glyph-size: 34px;
 
   /* Ombres — réservées aux éléments réellement flottants */
   --shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);

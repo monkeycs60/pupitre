@@ -22,7 +22,7 @@ test('regroupe le back et le front par projet et branche', async () => {
   const reactor = {
     id: '42:8098',
     name: 'reactor',
-    projectId: 'affilae',
+    projectId: 'affilae-mono',
     projectName: 'Affilae',
     workspace: 'reactor-tech25169',
     branch: 'tech/25169',
@@ -57,6 +57,20 @@ test('regroupe le back et le front par projet et branche', async () => {
       port: 4200,
       url: 'http://localhost:4200',
     },
+    {
+      ...reactor,
+      id: '45:5173',
+      name: 'ui',
+      projectId: 'pupitre',
+      projectName: 'Pupitre',
+      workspace: 'ui',
+      branch: 'master',
+      cwd: '/code/pupitre/ui',
+      process: 'node',
+      pid: 45,
+      port: 5173,
+      url: 'http://localhost:5173',
+    },
   ])) as typeof fetch
 
   render(<ApplicationsView />)
@@ -64,7 +78,13 @@ test('regroupe le back et le front par projet et branche', async () => {
   const pairedGroup = await screen.findByRole('rowgroup', { name: 'Affilae — tech/25169' })
   expect(within(pairedGroup).getByText('reactor')).toBeTruthy()
   expect(within(pairedGroup).getByText('affilae-api')).toBeTruthy()
-  expect(within(pairedGroup).getByText('Affilae · 2 applications')).toBeTruthy()
-  expect(screen.getAllByRole('rowgroup')).toHaveLength(2)
+  const affilae = screen.getByRole('region', { name: 'Affilae' })
+  const pupitre = screen.getByRole('region', { name: 'Pupitre' })
+  expect(within(affilae).getByText('2 branches')).toBeTruthy()
+  expect(within(affilae).getByText('3 applications')).toBeTruthy()
+  expect(within(pupitre).getByText('1 branche')).toBeTruthy()
+  expect(screen.getAllByRole('rowgroup')).toHaveLength(3)
+  expect(affilae.querySelector('[data-project-glyph]')?.getAttribute('data-project-glyph'))
+    .not.toBe(pupitre.querySelector('[data-project-glyph]')?.getAttribute('data-project-glyph'))
   expect(screen.getByRole('link', { name: 'Ouvrir reactor sur le port 8098' }).getAttribute('href')).toBe('http://localhost:8098')
 })

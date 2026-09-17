@@ -58,7 +58,6 @@
   min-width: var(--applications-table-min-width);
   margin: var(--space-5) var(--space-6);
   border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
 }
 
 .applications-row {
@@ -71,12 +70,80 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.applications-row:last-child {
-  border-bottom: 0;
+.applications-project {
+  border-bottom: 1px solid var(--border);
+}
+
+.applications-project + .applications-project {
+  margin-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.applications-project-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--applications-project-height);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--accent-border);
+  box-shadow: inset var(--space-1) 0 0 var(--accent);
+}
+
+.applications-project-glyph {
+  display: inline-flex;
+  flex: none;
+  width: var(--applications-project-glyph-size);
+  height: var(--applications-project-glyph-size);
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-bright);
+  background: var(--bg-overlay);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-md);
+}
+
+.applications-project-glyph svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
+}
+
+.applications-project-header > div {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.applications-project-header h2 {
+  overflow: hidden;
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.applications-project-header span,
+.applications-project-header > strong {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.applications-project-header > strong {
+  flex: none;
+  color: var(--accent-bright);
 }
 
 .applications-group + .applications-group {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-strong);
 }
 
 .applications-group-header {
@@ -86,11 +153,25 @@
   gap: var(--space-4);
   min-height: var(--applications-group-height);
   padding: 0 var(--space-3);
-  background: var(--bg-raised);
+  background: var(--bg-sidebar);
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.applications-group-header strong {
+.applications-branch-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.applications-branch-title svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--accent-bright);
+}
+
+.applications-branch-title strong {
   overflow: hidden;
   color: var(--text-strong);
   font-family: var(--font-mono);
@@ -104,6 +185,10 @@
   flex: none;
   color: var(--text-muted);
   font-size: var(--text-sm);
+}
+
+.applications-group > .applications-row {
+  background: var(--bg-workspace);
 }
 
 .applications-row:not(.applications-table-head):hover {
