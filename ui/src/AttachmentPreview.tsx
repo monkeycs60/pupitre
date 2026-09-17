@@ -8,6 +8,7 @@ import {
   getAvailableAttachmentContent,
   type AttachmentPreviewKind,
 } from './attachmentPreviewMeta'
+import { DelimitedTable } from './DelimitedTable'
 
 const MAX_INLINE_PREVIEW_CHARS = 20_000
 
@@ -51,6 +52,8 @@ function InlineContent({ kind, content }: { kind: AttachmentPreviewKind; content
       </div>
     )
   }
+
+  if (kind === 'csv') return <DelimitedTable content={content} />
 
   return (
     <pre className="event-attachment-code"><code>{preview.value}</code></pre>

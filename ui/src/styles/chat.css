@@ -898,8 +898,11 @@
 
 .event-attachment-preview {
   min-width: 0;
+  max-height: 260px;
   border-top: 1px solid var(--border-subtle);
 }
+
+.event-attachment-preview .delimited-table-shell { height: 260px; }
 
 .event-attachment-code {
   max-height: 260px;

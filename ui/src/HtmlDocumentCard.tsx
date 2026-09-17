@@ -14,6 +14,7 @@ import type { HtmlDocumentBlock } from './groupEvents'
 import type { HtmlDocument, HtmlDocumentState } from './types'
 import { documentDownloadUrl, htmlDocumentContentUrl, htmlDocumentExternalUrl, hasTauriRuntime } from './transport'
 import { useNow } from './useNow'
+import { DelimitedTable } from './DelimitedTable'
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} o`
@@ -104,6 +105,7 @@ export function HtmlDocumentCard({
   const [savedSource, setSavedSource] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [isEditing, setIsEditing] = useState(false)
+  const [delimitedSource, setDelimitedSource] = useState<string | null>(null)
   const now = useNow()
 
   useEffect(() => {
@@ -162,6 +164,23 @@ export function HtmlDocumentCard({
   const canView = effectiveState === 'available' || effectiveState === 'retained'
   const documentKind = document.kind ?? 'html'
   const editable = ['html', 'csv', 'tsv', 'markdown', 'text', 'json'].includes(documentKind)
+  const isDelimited = documentKind === 'csv' || documentKind === 'tsv'
+
+  useEffect(() => {
+    if (!isDelimited || !isOpen || !previewUrl) return
+    const controller = new AbortController()
+    setDelimitedSource(null)
+    void fetch(previewUrl, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error('Chargement impossible')
+        return response.text()
+      })
+      .then(setDelimitedSource)
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) setError(errorMessage(reason, 'Aperçu tabulaire indisponible'))
+      })
+    return () => controller.abort()
+  }, [isDelimited, isOpen, previewUrl])
 
   useEffect(() => {
     if (!editable || !isEditing || !previewUrl || source !== null) return
@@ -396,7 +415,9 @@ export function HtmlDocumentCard({
               <span>{saveState === 'saving' ? 'Enregistrement…' : saveState === 'saved' ? 'Enregistré' : source !== savedSource ? 'Modifications…' : ''}</span>
             </div>
           ) : null}
-          {previewUrl ? (
+          {isDelimited && delimitedSource !== null ? (
+            <DelimitedTable content={delimitedSource} kind={documentKind} />
+          ) : previewUrl && !isDelimited ? (
             <iframe
               src={previewUrl}
               title={`Aperçu de ${document.title}`}
