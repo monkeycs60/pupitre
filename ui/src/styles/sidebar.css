@@ -1801,13 +1801,15 @@
   display: flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
   padding: 12px 6px 4px;
 }
 
 /* Replier un groupe = replier un ticket : chevron + libellé, un seul bouton. */
 .conv-group-toggle {
   display: inline-flex;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   align-items: center;
   gap: 6px;
   padding: 1px 3px;
@@ -1834,7 +1836,7 @@
 }
 
 .conv-group-key {
-  flex: none;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1886,26 +1888,48 @@
 
 .conv-group-rule {
   flex: 1;
+  min-width: 8px;
   height: 1px;
   background: var(--border-subtle);
 }
 
 .conv-group-count {
+  flex: none;
   color: var(--text-faint);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
 
 .conv-group-create {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
   border: 0;
-  padding: 0 3px;
+  padding: 0;
   background: transparent;
   color: var(--text-muted);
+  border-radius: var(--r-xs);
   cursor: pointer;
   font-size: 15px;
+  opacity: 0;
+  transform: translateX(3px);
+  transition: color var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
 
-.conv-group-create:hover { color: var(--accent); }
+.conv-group-header:hover .conv-group-create,
+.conv-group-header:focus-within .conv-group-create {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.conv-group-create:hover,
+.conv-group-create:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
 
 .conv-row-mark.is-sentry {
   color: #6c5ce7;
