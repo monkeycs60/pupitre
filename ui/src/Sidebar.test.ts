@@ -389,6 +389,45 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   }))
 })
 
+test('affiche toutes les conversations dans un flux strictement récent', async () => {
+  const oldest: Conversation = {
+    ...startedConversation,
+    id: 'conversation-oldest',
+    title: 'Ancienne sans ticket',
+    updated_at: '2026-08-17T09:00:00.000Z',
+  }
+  const newestTicket: Conversation = {
+    ...startedConversation,
+    id: 'conversation-newest',
+    title: 'Dernière sur ticket',
+    ticket_id: 'ticket-9',
+    ticket_key: 'TECH-9',
+    updated_at: '2026-08-19T11:00:00.000Z',
+  }
+  const middleSentry: Conversation = {
+    ...startedConversation,
+    id: 'conversation-middle',
+    title: 'Sentry intermédiaire',
+    origin_type: 'sentry',
+    origin_key: 'APP-42',
+    updated_at: '2026-08-18T10:00:00.000Z',
+  }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [oldest, newestTicket, middleSentry])
+  renderSidebar()
+
+  const toggle = await screen.findByRole('button', { name: 'Récentes' })
+  fireEvent.click(toggle)
+
+  expect(toggle.getAttribute('aria-pressed')).toBe('true')
+  expect([...document.querySelectorAll('.conv-group-key')].map((element) => element.textContent)).toEqual(['Récentes'])
+  expect([...document.querySelectorAll('.conv-row-title')].map((element) => element.textContent)).toEqual([
+    'Dernière sur ticket',
+    'Sentry intermédiaire',
+    'Ancienne sans ticket',
+  ])
+  expect(localStorage.getItem('pupitre:conversation-sort')).toBe('recent')
+})
+
 test('un tour qui quitte le flottant fait apparaître la conversation à lire', async () => {
   const conversation: Conversation = {
     ...startedConversation,

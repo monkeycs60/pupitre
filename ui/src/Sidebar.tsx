@@ -86,6 +86,7 @@ function conversationRelation(
 }
 
 type ConversationScope = 'active' | 'archived' | 'trash'
+type ConversationSortMode = 'context' | 'recent'
 
 const CONVERSATION_SCOPES: Array<[ConversationScope, string]> = [
   ['active', 'Actives'],
@@ -100,6 +101,15 @@ const SCOPE_PLACEHOLDERS: Record<ConversationScope, string> = {
 }
 const conversationListCache = new Map<string, Conversation[]>()
 const LAST_CONVERSATION_KEY = 'pupitre:last-conversation:'
+const CONVERSATION_SORT_KEY = 'pupitre:conversation-sort'
+
+function readConversationSortMode(): ConversationSortMode {
+  try {
+    return localStorage.getItem(CONVERSATION_SORT_KEY) === 'recent' ? 'recent' : 'context'
+  } catch {
+    return 'context'
+  }
+}
 
 function readLastConversationId(projectId: string): string | null {
   try {
@@ -238,6 +248,15 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
     .sort((left, right) => left.key === 'pinned' ? -1 : right.key === 'pinned' ? 1 : (right.latestUpdatedAt ?? 0) - (left.latestUpdatedAt ?? 0))
 }
 
+function groupConversationsByLatest(items: Conversation[]): ConversationGroup[] {
+  if (items.length === 0) return []
+  return [{
+    key: 'recent',
+    label: 'Récentes',
+    items: [...items].sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at)),
+  }]
+}
+
 export const Sidebar = memo(function Sidebar({
   selectedProject,
   quotas,
@@ -265,6 +284,7 @@ export const Sidebar = memo(function Sidebar({
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [error, setError] = useState<string | null>(null)
   const [conversationScope, setConversationScope] = useState<ConversationScope>('active')
+  const [conversationSortMode, setConversationSortMode] = useState<ConversationSortMode>(readConversationSortMode)
   const [scopeMenuOpen, setScopeMenuOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [filterText, setFilterText] = useState('')
@@ -411,6 +431,14 @@ export const Sidebar = memo(function Sidebar({
       }
       return next
     })
+  }
+
+  function toggleConversationSortMode() {
+    const nextMode = conversationSortMode === 'recent' ? 'context' : 'recent'
+    setConversationSortMode(nextMode)
+    try {
+      localStorage.setItem(CONVERSATION_SORT_KEY, nextMode)
+    } catch {}
   }
 
   function handleProjectSettings(project: Project) {
@@ -566,8 +594,10 @@ export const Sidebar = memo(function Sidebar({
       (!query || item.title.toLowerCase().includes(query))
       && (selectedDomainId === null || (item.domains ?? []).some((domain) => domain.id === selectedDomainId))
     ))
-    return groupConversations(filtered)
-  }, [conversations, filterText, selectedDomainId])
+    return conversationSortMode === 'recent'
+      ? groupConversationsByLatest(filtered)
+      : groupConversations(filtered)
+  }, [conversations, filterText, selectedDomainId, conversationSortMode])
 
   // Ouvrir une conversation depuis ailleurs (rapport, motif, ticket) doit la
   // montrer dans la liste : on déplie son groupe puis on l'amène dans la vue,
@@ -661,6 +691,21 @@ export const Sidebar = memo(function Sidebar({
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M2.5 4h11M4.5 8h7M6.5 12h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
+          </button>
+        </div>
+
+        <div className="conversation-list-controls">
+          <button
+            type="button"
+            className={`conversation-sort-toggle${conversationSortMode === 'recent' ? ' is-selected' : ''}`}
+            aria-pressed={conversationSortMode === 'recent'}
+            title={conversationSortMode === 'recent' ? 'Revenir aux groupes par contexte' : 'Afficher toutes les conversations par activité récente'}
+            onClick={toggleConversationSortMode}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 4h7M3 8h5M3 12h3M12 3v9m0 0-2-2m2 2 2-2" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Récentes
           </button>
         </div>
 
