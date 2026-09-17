@@ -1776,10 +1776,9 @@
 /* Replier un groupe = replier un ticket : chevron + libellé, un seul bouton. */
 .conv-group-toggle {
   display: inline-flex;
-  flex: 0 1 auto;
+  flex: none;
   align-items: center;
   gap: 6px;
-  max-width: 70%;
   padding: 1px 3px;
   margin: -1px -3px;
   color: var(--text-faint);
@@ -1803,18 +1802,17 @@
   transition: transform var(--dur-fast) var(--ease);
 }
 
-.conv-group-label {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 6px;
-}
-
 .conv-group-key {
   flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conv-group-ticket-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 52%;
   overflow: hidden;
   color: var(--text-muted);
   font-weight: 500;

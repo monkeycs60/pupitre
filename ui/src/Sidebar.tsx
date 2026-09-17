@@ -746,15 +746,13 @@ export const Sidebar = memo(function Sidebar({
                     <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={isCollapsed ? { transform: 'rotate(-90deg)' } : undefined}>
                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="conv-group-label">
-                      <span className="conv-group-key">{group.label}</span>
-                      {ticketTitle ? (
-                        <span className="conv-group-ticket-title" title={ticketTitle}>{ticketTitle}</span>
-                      ) : null}
-                    </span>
+                    <span className="conv-group-key">{group.label}</span>
                   </button>
                   {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
                   {groupSentryUrl !== undefined ? <SentryLinkIcon url={groupSentryUrl} issueKey={group.sentryKey!} /> : null}
+                  {ticketTitle ? (
+                    <span className="conv-group-ticket-title" title={ticketTitle}>{ticketTitle}</span>
+                  ) : null}
                   <span className="conv-group-rule" aria-hidden="true" />
                   {(group.key.startsWith('ticket-') || group.key.startsWith('sentry-')) && onConversationCreateFromContext ? (
                     <button

@@ -371,6 +371,8 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   const ticketTitle = document.querySelector('.conv-group-ticket-title')
   expect(ticketTitle?.textContent).toBe('Corriger les pipelines de déploiement')
   expect(ticketTitle?.getAttribute('title')).toBe('Corriger les pipelines de déploiement')
+  const ticketIcons = document.querySelector('.ticket-link-icons')
+  expect(ticketIcons?.compareDocumentPosition(ticketTitle!) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
   expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(2)
   expect(document.querySelector('.conv-row-sentry .provider-mark.is-sentry')).not.toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /Nouvelle conversation dans Sentry/ }))
