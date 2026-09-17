@@ -1,45 +1,39 @@
-import type { AttentionItem, AttentionTarget } from './types'
+import type { UnreadConversation } from './types'
 
 interface AttentionInboxProps {
-  items: AttentionItem[]
+  items: UnreadConversation[]
   loading: boolean
   error: string | null
-  projectName?: string | null
-  onOpen: (target: AttentionTarget) => void
-  onAcknowledge: (id: string) => Promise<void>
+  onOpen: (item: UnreadConversation) => void
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  'problem-axis': 'PROBLÉMATIQUE',
-  'turn-error': 'TOUR',
-  routine: 'ROUTINE',
-  sentry: 'SENTRY',
-  pipeline: 'PIPELINE',
+function updatedAt(value: string): string {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return ''
+  return date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-export function AttentionInbox({ items, loading, error, projectName, onOpen, onAcknowledge }: AttentionInboxProps) {
+export function AttentionInbox({ items, loading, error, onOpen }: AttentionInboxProps) {
   return (
     <section className="attention-view" aria-labelledby="attention-title">
       <header className="attention-header">
-        <div><h1 id="attention-title">À traiter</h1><p>{projectName ? `Ce qui réclame une action dans ${projectName}.` : 'Ce qui réclame une action, tous projets confondus.'}</p></div>
+        <div><h1 id="attention-title">Conversations à lire</h1><p>Les réponses terminées que vous n’avez pas encore ouvertes, tous projets confondus.</p></div>
         <span className="attention-count">{items.length}</span>
       </header>
       {error ? <div className="attention-error" role="alert">{error}</div> : null}
       {loading && items.length === 0 ? <div className="attention-empty">Chargement…</div> : null}
-      {!loading && items.length === 0 ? <div className="attention-empty"><strong>Rien à traiter</strong><p>Les validations, interruptions et échecs apparaîtront ici.</p></div> : null}
+      {!loading && items.length === 0 ? <div className="attention-empty"><strong>Tout est lu</strong><p>Les nouvelles réponses apparaîtront ici.</p></div> : null}
       <div className="attention-list">
         {items.map((item) => (
-          <article className={`attention-card is-${item.severity}`} key={item.id}>
+          <button className="attention-card" type="button" key={item.id} onClick={() => onOpen(item)}>
+            <span className="attention-unread-dot" aria-hidden="true" />
             <div className="attention-card-copy">
-              <span>{TYPE_LABEL[item.type] ?? item.type.toUpperCase()}</span>
               <h2>{item.title}</h2>
-              <p>{item.body}</p>
+              <p>{item.summary}</p>
+              <span className="attention-card-meta">{item.project_name} · {item.provider} · {updatedAt(item.updated_at)}</span>
             </div>
-            <div className="attention-card-actions">
-              <button type="button" className="secondary-button" onClick={() => onOpen(item.target)}>Ouvrir</button>
-              <button type="button" className="text-button" onClick={() => void onAcknowledge(item.id)}>Traité</button>
-            </div>
-          </article>
+            <span className="attention-open" aria-hidden="true">Ouvrir →</span>
+          </button>
         ))}
       </div>
     </section>

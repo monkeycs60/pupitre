@@ -3,7 +3,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 export type InspectorView = 'dashboard' | 'attention' | 'fleet' | 'library' | 'memory' | 'routines' | 'workflows' | 'costs' | 'quotas' | 'progress'
 export const INSPECTOR_GROUPS = [
   { title: 'Projet', needsProject: true, tabs: [['dashboard', 'Suivi du projet']] },
-  { title: 'Activité', needsProject: false, tabs: [['attention', 'À traiter'], ['fleet', 'Exécutions']] },
+  { title: 'Activité', needsProject: false, tabs: [['attention', 'À lire'], ['fleet', 'Exécutions']] },
   { title: 'Contexte', needsProject: false, tabs: [['library', 'Skills'], ['memory', 'Mémoire']] },
   { title: 'Automatisations', needsProject: true, tabs: [['workflows', 'À la demande'], ['routines', 'Planifiées']] },
   { title: 'Utilisation', needsProject: false, tabs: [['quotas', 'Quotas du compte'], ['costs', 'Coûts du projet'], ['progress', 'Progression']] },

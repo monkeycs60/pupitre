@@ -37,6 +37,19 @@ export interface Conversation {
   created_at: string; updated_at: string;
 }
 
+export interface UnreadConversation {
+  id: string;
+  project_id: string;
+  project_name: string;
+  title: string;
+  summary: string;
+  provider: Provider;
+  model: string;
+  answered_turn: number;
+  last_read_turn: number;
+  updated_at: string;
+}
+
 const TITLE_MAX = 120;
 
 function parseWorktreePaths(raw: unknown, fallback: string | null): string[] {
@@ -236,6 +249,20 @@ export class ConversationStore {
       GROUP BY project_id
     `).all() as Array<{ project_id: string; count: number | bigint }>;
     return Object.fromEntries(rows.map((row) => [row.project_id, Number(row.count)]));
+  }
+
+  listUnread(): UnreadConversation[] {
+    const rows = this.db.query(`
+      SELECT c.id, c.project_id, p.name AS project_name, c.title, c.summary,
+             c.provider, c.model, c.answered_turn, c.last_read_turn, c.updated_at
+      FROM conversations c
+      JOIN projects p ON p.id = c.project_id
+      WHERE c.deleted_at IS NULL
+        AND c.archived = 0
+        AND c.answered_turn > c.last_read_turn
+      ORDER BY c.updated_at DESC
+    `).all() as UnreadConversation[];
+    return rows.map((row) => ({ ...row, summary: row.summary || row.title }));
   }
 
   /** Renommage manuel : fige le titre, la régénération automatique s'arrête là. */

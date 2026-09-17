@@ -73,21 +73,22 @@ export function FleetView({ onConversationSelect, projectId }: FleetViewProps) {
   const { items, history, connected } = useFleet(projectId)
   const [tab, setTab] = useState<FleetTab>('active')
   const now = useNow(1_000)
+  const executions = useMemo(() => items.filter((item) => item.kind !== 'subtask'), [items])
+  const executionHistory = useMemo(() => history.filter((item) => item.kind !== 'subtask'), [history])
   const visibleItems: FleetItem[] | FleetHistoryItem[] = tab === 'active'
-    ? items
-    : history.filter((item) => !projectId || item.projectId === projectId)
+    ? executions
+    : executionHistory.filter((item) => !projectId || item.projectId === projectId)
   const historical = tab !== 'active'
   const groups = useMemo(() => groupByProject(visibleItems), [visibleItems])
 
   const counters = useMemo(() => {
-    const projectIds = new Set(items.map((item) => item.projectId))
+    const projectIds = new Set(executions.map((item) => item.projectId))
     return [
-      { key: 'turn', label: 'Tours actifs', value: items.filter((item) => item.kind === 'turn').length, color: 'accent' as const },
-      { key: 'subtask', label: 'Sub-agents', value: items.filter((item) => item.kind === 'subtask').length, color: 'warn' as const },
-      { key: 'routine', label: 'Routines', value: items.filter((item) => item.kind === 'routine').length, color: 'ok' as const },
+      { key: 'turn', label: 'Tours actifs', value: executions.filter((item) => item.kind === 'turn').length, color: 'accent' as const },
+      { key: 'routine', label: 'Routines', value: executions.filter((item) => item.kind === 'routine').length, color: 'ok' as const },
       { key: 'projects', label: 'Projets', value: projectIds.size, color: 'muted' as const },
     ]
-  }, [items])
+  }, [executions])
 
   function openConversation(item: FleetItem | FleetHistoryItem) {
     onConversationSelect(item.projectId, item.conversationId)
@@ -96,7 +97,7 @@ export function FleetView({ onConversationSelect, projectId }: FleetViewProps) {
   const emptyCopy: Record<FleetTab, { title: string; body: string }> = {
     active: {
       title: 'Aucun run actif',
-      body: 'Les tours, sous-tâches et routines apparaîtront ici dès leur lancement.',
+      body: 'Les tours et routines apparaîtront ici dès leur lancement.',
     },
     recent: {
       title: 'Aucun run récent',
@@ -133,7 +134,7 @@ export function FleetView({ onConversationSelect, projectId }: FleetViewProps) {
 
         <nav className="fleet-tabs" aria-label="Filtrer les runs Fleet" role="tablist">
           {(Object.keys(TAB_LABEL) as FleetTab[]).map((tabId) => {
-            const count = tabId === 'active' ? items.length : history.length
+            const count = tabId === 'active' ? executions.length : executionHistory.length
             return (
               <button
                 type="button"

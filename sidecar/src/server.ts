@@ -2286,6 +2286,10 @@ export function createServer(deps: ServerDeps) {
           return json(deps.conversations.unreadCountsByProject());
         }
 
+        if (request.method === "GET" && pathname === "/api/conversations/unread") {
+          return json(deps.conversations.listUnread());
+        }
+
         const projectCostsId = routeId(pathname, /^\/api\/projects\/([^/]+)\/costs$/);
         if (request.method === "GET" && projectCostsId !== null) {
           if (!deps.projects.get(projectCostsId)) throw new HttpError(404, "projet inconnu");

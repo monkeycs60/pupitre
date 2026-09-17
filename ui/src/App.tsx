@@ -19,7 +19,7 @@ import { Titlebar, type TitlebarDestination } from './Titlebar'
 import { navigationShortcutLabel } from './navigationShortcuts'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
-import type { Attachment, Conversation, Project } from './types'
+import type { Attachment, Conversation, Project, UnreadConversation } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import {
@@ -56,9 +56,8 @@ import {
 } from './restoreLocation'
 import { navigationViewForShortcut, type NavigationShortcutView } from './navigationShortcuts'
 import { useInstance } from './useInstance'
-import { useAttention } from './useAttention'
+import { useUnreadConversations } from './useUnreadConversations'
 import { AttentionInbox } from './AttentionInbox'
-import type { AttentionTarget } from './types'
 import { retryUntilAvailable } from './startupRetry'
 import { subscribeVisualFeedbackNavigation } from './visualFeedbackNavigation'
 import { ProjectSectionSwitch } from './ProjectSectionSwitch'
@@ -207,7 +206,7 @@ function App() {
     inspector === 'progress' ? null : selectedConversation?.id ?? null,
   )
   const fleet = useFleet(selectedProject?.id)
-  const attention = useAttention(selectedProject?.id)
+  const attention = useUnreadConversations(railReadVersion)
   const instance = useInstance(fleet.connected)
   const ticketLinks = useTicketLinks(selectedProject?.id)
   const sentryLinks = useSentryLinks(selectedProject?.id)
@@ -777,18 +776,11 @@ function App() {
     setShowSwitchModel(false)
   }
 
-  function handleAttentionOpen(target: AttentionTarget) {
-    if (target.kind === 'conversation') {
-      void handleRoutineConversationSelect(target.projectId, target.conversationId)
-      return
-    }
-    const project = selectedProject?.id === target.projectId
-      ? selectedProject
-      : null
-    if (project) {
-      window.localStorage.setItem(`pupitre:dashboard-tab:${project.id}`, 'problems')
-      openInspector('dashboard')
-    }
+  async function handleAttentionOpen(item: UnreadConversation) {
+    const opened = await handleRoutineConversationSelect(item.project_id, item.id)
+    if (!opened) return
+    await attention.read(item)
+    setRailReadVersion((current) => current + 1)
   }
 
   function handleDesignSelect() {
@@ -864,13 +856,14 @@ function App() {
       ? selectedProject
       : listProjects().then((items) => items.find((item) => item.id === projectId) ?? null)
     const resolvedProject = await project
-    if (!resolvedProject) return
+    if (!resolvedProject) return false
     const conversations = await listProjectConversations(projectId)
     const conversation = conversations.find((item) => item.id === conversationId)
-    if (!conversation) return
+    if (!conversation) return false
     setSelectedProject(resolvedProject)
     handleConversationSelect(conversation)
     setFocusEventId(eventId ?? null)
+    return true
   }
 
   async function handleGitConversationSelect(conversationId: string) {
@@ -1257,9 +1250,7 @@ function App() {
             items={attention.items}
             loading={attention.loading}
             error={attention.error}
-            projectName={selectedProject?.name}
             onOpen={handleAttentionOpen}
-            onAcknowledge={attention.acknowledge}
           />
         ) : inspector === 'memory' ? (
           <MemoryView onDirtyChange={setMemoryDirty} />
@@ -1291,7 +1282,7 @@ function App() {
         currentProject={selectedProject}
         currentConversation={selectedConversation}
         onProjectSelect={handleProjectSelect}
-        onConversationSelect={(projectId, conversationId) => handleRoutineConversationSelect(projectId, conversationId)}
+        onConversationSelect={async (projectId, conversationId) => { await handleRoutineConversationSelect(projectId, conversationId) }}
         onSkillLaunch={handlePaletteSkillLaunch}
         onViewSelect={handlePaletteViewSelect}
         onAction={handlePaletteAction}

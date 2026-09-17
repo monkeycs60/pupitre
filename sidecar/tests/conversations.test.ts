@@ -324,6 +324,25 @@ test("agrège les compteurs non lus de tous les projets", () => {
   });
 });
 
+test("liste les conversations non lues de tous les projets avec leur projet", () => {
+  const otherProjectId = new ProjectStore(db).create({ name: "Autre projet", path: "/tmp/autre" }).id;
+  const read = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "déjà lue" });
+  const unread = convs.create({ projectId: otherProjectId, provider: "codex", model: "gpt-5", firstMessage: "à ouvrir" });
+  db.query("UPDATE conversations SET answered_turn = 1, last_read_turn = 1 WHERE id = ?").run(read.id);
+  db.query("UPDATE conversations SET answered_turn = 2, last_read_turn = 1 WHERE id = ?").run(unread.id);
+
+  expect(convs.listUnread()).toEqual([
+    expect.objectContaining({
+      id: unread.id,
+      project_id: otherProjectId,
+      project_name: "Autre projet",
+      title: "à ouvrir",
+      answered_turn: 2,
+      last_read_turn: 1,
+    }),
+  ]);
+});
+
 test("un tour répondu rend la conversation à lire, sans attendre le digest", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
   convs.appendEvent(c.id, { type: "user-message", text: "x", images: [] });

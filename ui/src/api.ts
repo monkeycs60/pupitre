@@ -42,6 +42,7 @@ import type {
   ProjectChangelogState,
   AppNotification,
   AttentionItem,
+  UnreadConversation,
   SkillDetail,
   SkillSummary,
   StoredEvent,
@@ -960,6 +961,10 @@ export function listProjectConversations(
 
 export function getUnreadConversationCounts(): Promise<Record<string, number>> {
   return fetchJson('/api/conversations/unread-counts')
+}
+
+export function listUnreadConversations(signal?: AbortSignal): Promise<UnreadConversation[]> {
+  return fetchJson('/api/conversations/unread', { signal })
 }
 
 export function getProjectCosts(

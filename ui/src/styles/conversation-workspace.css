@@ -102,7 +102,9 @@
 .workspace-inspector .memory-editor { flex:1; min-height:200px; }
 .workspace-inspector .library-body { grid-template-columns:1fr; }
 .workspace-inspector .routines-body { grid-template-columns:1fr; }
-.workspace-inspector .fleet-counters { display:flex; flex-wrap:wrap; }
+.workspace-inspector .fleet-counters { display:flex; flex-wrap:wrap; width:100%; }
+.workspace-inspector .fleet-counter { flex:1 1 92px; min-width:0; }
+.workspace-inspector .fleet-cards { grid-template-columns:minmax(0, 1fr); }
 .conversation-workspace .composer-actions { flex-wrap:wrap; gap:12px; }
 .conversation-workspace .composer-tools { min-width:0; flex-wrap:wrap; }
 .conversation-workspace .composer-send-group { margin-left:auto; }

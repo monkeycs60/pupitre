@@ -201,6 +201,7 @@ export function Chat({
   const unsummarized = useMemo(() => hasUnsummarizedWork(events), [events])
   const viewportRef = useRef<HTMLDivElement>(null)
   const followsBottomRef = useRef(true)
+  const manualScrollIntentRef = useRef(false)
   const scrollFrameRef = useRef<number | null>(null)
   const onConversationReadRef = useRef(onConversationRead)
   onConversationReadRef.current = onConversationRead
@@ -324,6 +325,14 @@ export function Chat({
 
   useLayoutEffect(scrollToBottomIfFollowing, [blocks, scrollToBottomIfFollowing])
 
+  useEffect(() => {
+    const content = viewportRef.current?.firstElementChild
+    if (!(content instanceof HTMLElement) || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(scrollToBottomIfFollowing)
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [scrollToBottomIfFollowing])
+
   const handleImageOpen = useCallback((src: string, alt: string) => {
     setLightboxImage({ src, alt })
   }, [])
@@ -348,10 +357,17 @@ export function Chat({
       const viewport = viewportRef.current
       if (viewport === null) return
       const followsBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 64
-      followsBottomRef.current = followsBottom
-      setAtBottom((current) => current === followsBottom ? current : followsBottom)
+      if (followsBottom || manualScrollIntentRef.current) {
+        followsBottomRef.current = followsBottom
+        setAtBottom((current) => current === followsBottom ? current : followsBottom)
+      }
+      manualScrollIntentRef.current = false
       if (followsBottom) onConversationReadRef.current?.()
     })
+  }
+
+  function handleManualScrollIntent(delta: number) {
+    if (delta < 0) manualScrollIntentRef.current = true
   }
 
   useEffect(() => () => {
@@ -465,7 +481,17 @@ export function Chat({
                 Dernier message
               </button>
             ) : null}
-          <div className="events-view" ref={viewportRef} onScroll={handleScroll}>
+          <div
+            className="events-view"
+            ref={viewportRef}
+            onScroll={handleScroll}
+            onWheel={(event) => handleManualScrollIntent(event.deltaY)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowUp' || event.key === 'PageUp' || event.key === 'Home') {
+                manualScrollIntentRef.current = true
+              }
+            }}
+          >
             <div className="events-list" aria-live="polite">
               {blocks.length === 0 ? (
                 <p className="events-empty">

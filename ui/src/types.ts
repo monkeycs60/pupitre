@@ -214,6 +214,19 @@ export interface AttentionItem {
   updated_at: string
 }
 
+export interface UnreadConversation {
+  id: string
+  project_id: string
+  project_name: string
+  title: string
+  summary: string
+  provider: Provider
+  model: string
+  answered_turn: number
+  last_read_turn: number
+  updated_at: string
+}
+
 export interface Project {
   id: string
   name: string
