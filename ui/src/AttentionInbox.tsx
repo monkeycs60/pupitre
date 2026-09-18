@@ -17,8 +17,13 @@ export function AttentionInbox({ items, loading, error, onOpen }: AttentionInbox
   return (
     <section className="attention-view" aria-labelledby="attention-title">
       <header className="attention-header">
-        <div><h1 id="attention-title">Conversations à lire</h1><p>Les réponses terminées que vous n’avez pas encore ouvertes, tous projets confondus.</p></div>
-        <span className="attention-count">{items.length}</span>
+        <div className="attention-heading">
+          <div className="attention-title-row">
+            <h1 id="attention-title">Conversations à lire</h1>
+            <span className="attention-count">{items.length} à lire</span>
+          </div>
+          <p>Les réponses terminées que vous n’avez pas encore ouvertes, tous projets confondus.</p>
+        </div>
       </header>
       {error ? <div className="attention-error" role="alert">{error}</div> : null}
       {loading && items.length === 0 ? <div className="attention-empty">Chargement…</div> : null}
@@ -32,7 +37,7 @@ export function AttentionInbox({ items, loading, error, onOpen }: AttentionInbox
               <p>{item.summary}</p>
               <span className="attention-card-meta">{item.project_name} · {item.provider} · {updatedAt(item.updated_at)}</span>
             </div>
-            <span className="attention-open" aria-hidden="true">Ouvrir →</span>
+            <span className="attention-open" aria-hidden="true">→</span>
           </button>
         ))}
       </div>

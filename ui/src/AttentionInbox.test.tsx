@@ -33,6 +33,7 @@ test('affiche les conversations non lues et ouvre toute la ligne', () => {
 
   const button = screen.getByRole('button', { name: /Réparer le panneau Activité/ })
   expect(button.textContent).toContain('Pupitre')
+  expect(screen.getByText('1 à lire')).toBeTruthy()
   fireEvent.click(button)
   expect(opened).toBe(unread.id)
 })
