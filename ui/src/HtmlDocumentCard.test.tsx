@@ -5,7 +5,7 @@ import type { HtmlDocumentBlock } from './groupEvents'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
-const { cleanup, fireEvent, render, screen } = await import('@testing-library/react')
+const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { HtmlDocumentCard } = await import('./HtmlDocumentCard')
 const defaultFetch = globalThis.fetch
 
@@ -27,10 +27,12 @@ const block: HtmlDocumentBlock = {
 }
 
 test('ouvre le dernier document dans un iframe doublement sandboxé', async () => {
+  let tokenCount = 0
   globalThis.fetch = mock((input: string | URL | Request) => {
     const url = String(input)
     if (url.includes('/view-token')) {
-      return Promise.resolve(Response.json({ token: 'token-1', expiresAt: '2099-08-11T10:01:00.000Z' }, { status: 201 }))
+      tokenCount += 1
+      return Promise.resolve(Response.json({ token: `token-${tokenCount}`, expiresAt: '2099-08-11T10:01:00.000Z' }, { status: 201 }))
     }
     return Promise.resolve(Response.json({
       id: 'document-1',
@@ -63,12 +65,17 @@ test('ouvre le dernier document dans un iframe doublement sandboxé', async () =
   expect(await screen.findByRole('textbox', { name: 'Modifier Audit plateforme' })).toBeTruthy()
 
   fireEvent.click(screen.getByRole('button', { name: 'Plein écran' }))
-  expect(screen.getByRole('dialog', { name: 'Document HTML Audit plateforme' })).toBeTruthy()
+  expect(await screen.findByRole('dialog', { name: 'Document HTML Audit plateforme' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Réduire' })).toBeTruthy()
+  expect(screen.getByTitle('Aperçu de Audit plateforme').getAttribute('src')).toContain('token=token-2')
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
-  expect(screen.queryByRole('dialog')).toBeNull()
-  expect(screen.getByTitle('Aperçu de Audit plateforme')).toBeTruthy()
-});
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(screen.getByTitle('Aperçu de Audit plateforme').getAttribute('src')).toContain('token=token-3')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Plein écran' }))
+  expect(await screen.findByRole('dialog', { name: 'Document HTML Audit plateforme' })).toBeTruthy()
+  expect(screen.getByTitle('Aperçu de Audit plateforme').getAttribute('src')).toContain('token=token-4')
+}, 15_000);
 
 test('rend une tombstone sans action lorsque le contenu a expiré', async () => {
   globalThis.fetch = mock(() => Promise.resolve(Response.json({

@@ -1,5 +1,5 @@
 import { eventIdOfBlock } from './eventBlocks'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import {
@@ -145,6 +145,36 @@ export function HtmlDocumentCard({
     }
   }, [block.documentId, shouldAutoOpen])
 
+  const timedOut = document.state === 'available'
+    && document.expiresAt !== null
+    && Date.parse(document.expiresAt) <= now
+  const effectiveState: HtmlDocumentState = timedOut ? 'expired' : document.state
+  const canView = effectiveState === 'available' || effectiveState === 'retained'
+  const documentKind = document.kind ?? 'html'
+  const editable = ['html', 'csv', 'tsv', 'markdown', 'text', 'json'].includes(documentKind)
+  const isDelimited = documentKind === 'csv' || documentKind === 'tsv'
+
+  const createViewUrl = useCallback(async (): Promise<string> => {
+    const grant = await createHtmlDocumentViewToken(block.documentId)
+    return htmlDocumentContentUrl(block.documentId, grant.token)
+  }, [block.documentId])
+
+  const changeExpandedState = useCallback(async (nextExpanded: boolean) => {
+    if (!canView) return
+    setBusyAction('preview')
+    setError(null)
+    try {
+      setPreviewUrl(await createViewUrl())
+      setIsOpen(true)
+      setIsExpanded(nextExpanded)
+    } catch (reason) {
+      setError(errorMessage(reason, 'Aperçu indisponible'))
+      if (!nextExpanded) setIsExpanded(false)
+    } finally {
+      setBusyAction(null)
+    }
+  }, [canView, createViewUrl])
+
   useEffect(() => {
     if (!isOpen || (document.kind !== 'docx' && document.kind !== 'xlsx')) return
     const timer = window.setInterval(() => {
@@ -155,16 +185,7 @@ export function HtmlDocumentCard({
       }).catch(() => {})
     }, 2000)
     return () => window.clearInterval(timer)
-  }, [block.documentId, document.kind, document.sha256, isOpen])
-
-  const timedOut = document.state === 'available'
-    && document.expiresAt !== null
-    && Date.parse(document.expiresAt) <= now
-  const effectiveState: HtmlDocumentState = timedOut ? 'expired' : document.state
-  const canView = effectiveState === 'available' || effectiveState === 'retained'
-  const documentKind = document.kind ?? 'html'
-  const editable = ['html', 'csv', 'tsv', 'markdown', 'text', 'json'].includes(documentKind)
-  const isDelimited = documentKind === 'csv' || documentKind === 'tsv'
+  }, [block.documentId, createViewUrl, document.kind, document.sha256, isOpen])
 
   useEffect(() => {
     if (!isDelimited || !isOpen || !previewUrl) return
@@ -198,11 +219,11 @@ export function HtmlDocumentCard({
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return
       event.preventDefault()
-      setIsExpanded(false)
+      void changeExpandedState(false)
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [isExpanded])
+  }, [changeExpandedState, isExpanded])
 
   useEffect(() => {
     if (!editable || source === null || savedSource === null || source === savedSource) return
@@ -216,12 +237,7 @@ export function HtmlDocumentCard({
       }).catch((reason: unknown) => setError(errorMessage(reason, 'Enregistrement impossible')))
     }, 600)
     return () => window.clearTimeout(timer)
-  }, [block.documentId, document.sha256, editable, savedSource, source])
-
-  async function createViewUrl(): Promise<string> {
-    const grant = await createHtmlDocumentViewToken(block.documentId)
-    return htmlDocumentContentUrl(block.documentId, grant.token)
-  }
+  }, [block.documentId, createViewUrl, document.sha256, editable, savedSource, source])
 
   async function togglePreview() {
     if (!canView) return
@@ -258,25 +274,6 @@ export function HtmlDocumentCard({
       }
     } catch (reason) {
       setError(errorMessage(reason, 'Ouverture impossible'))
-    } finally {
-      setBusyAction(null)
-    }
-  }
-
-  async function expandPreview() {
-    if (!canView) return
-    if (isExpanded) {
-      setIsExpanded(false)
-      return
-    }
-    setBusyAction('preview')
-    setError(null)
-    try {
-      if (!previewUrl) setPreviewUrl(await createViewUrl())
-      setIsOpen(true)
-      setIsExpanded(true)
-    } catch (reason) {
-      setError(errorMessage(reason, 'Aperçu indisponible'))
     } finally {
       setBusyAction(null)
     }
@@ -340,7 +337,7 @@ export function HtmlDocumentCard({
         onKeyDown={(event) => {
           if (event.key === 'Escape' && isExpanded) {
             event.preventDefault()
-            setIsExpanded(false)
+            void changeExpandedState(false)
           }
         }}
       >
@@ -380,7 +377,7 @@ export function HtmlDocumentCard({
               </button>
               <button
                 type="button"
-                onClick={() => void expandPreview()}
+                onClick={() => void changeExpandedState(!isExpanded)}
                 disabled={busyAction !== null}
                 autoFocus={isExpanded}
               >
@@ -437,7 +434,7 @@ export function HtmlDocumentCard({
         type="button"
         className="html-document-backdrop"
         aria-label="Fermer la vue plein écran"
-        onClick={() => setIsExpanded(false)}
+        onClick={() => void changeExpandedState(false)}
       />
       {card}
     </>,
