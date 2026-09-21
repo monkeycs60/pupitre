@@ -1,9 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AttachmentPreview } from './AttachmentPreview'
 import type { ConversationAsset } from './conversationAssets'
-import { documentDownloadUrl, documentThumbnailUrl, mediaUrl } from './transport'
+import { documentDownloadUrl, documentThumbnailUrl, htmlDocumentContentUrl, mediaUrl } from './transport'
 import { createHtmlDocumentViewToken } from './api'
 import { DownloadLink } from './externalLink'
+import { DelimitedTable } from './DelimitedTable'
 
 function imageSource(reference: string): string {
   if (reference.startsWith('/media/')) {
@@ -72,14 +74,48 @@ export function ConversationAssetsDrawer({
   /** Faux quand le head porte le déclencheur à sa place. */
   showTrigger?: boolean
 }) {
+  const [previewedDocument, setPreviewedDocument] = useState<Extract<ConversationAsset, { kind: 'document' }> | null>(null)
+  const [documentPreviewUrl, setDocumentPreviewUrl] = useState<string | null>(null)
+  const [delimitedSource, setDelimitedSource] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (previewedDocument === null) return
+    let ignore = false
+    const controller = new AbortController()
+    setDocumentPreviewUrl(null)
+    setDelimitedSource(null)
+    setPreviewError(null)
+    void createHtmlDocumentViewToken(previewedDocument.documentId).then(async (grant) => {
+      const url = htmlDocumentContentUrl(previewedDocument.documentId, grant.token)
+      if (ignore) return
+      setDocumentPreviewUrl(url)
+      if (previewedDocument.documentKind !== 'csv' && previewedDocument.documentKind !== 'tsv') return
+      const response = await fetch(url, { signal: controller.signal })
+      if (!response.ok) throw new Error('Chargement impossible')
+      const source = await response.text()
+      if (!ignore) setDelimitedSource(source)
+    }).catch((reason: unknown) => {
+      if (!controller.signal.aborted && !ignore) {
+        setPreviewError(reason instanceof Error ? reason.message : 'Aperçu indisponible')
+      }
+    })
+    return () => {
+      ignore = true
+      controller.abort()
+    }
+  }, [previewedDocument])
+
   useEffect(() => {
     if (!open) return
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Escape') return
+      if (previewedDocument !== null) setPreviewedDocument(null)
+      else onClose()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose])
+  }, [open, onClose, previewedDocument])
 
   if (!open) {
     if (!showTrigger || assets.length === 0) return null
@@ -148,8 +184,8 @@ export function ConversationAssetsDrawer({
                     <button
                       type="button"
                       className="thread-asset-image is-document"
-                      aria-label={`Agrandir ${asset.label.toLocaleLowerCase('fr-FR')}`}
-                      onClick={() => onImageOpen(documentThumbnailUrl(asset.documentId), asset.label)}
+                      aria-label={`Prévisualiser ${asset.label.toLocaleLowerCase('fr-FR')}`}
+                      onClick={() => setPreviewedDocument(asset)}
                     >
                       <img src={documentThumbnailUrl(asset.documentId)} alt={`Aperçu de ${asset.label}`} />
                       <span>{asset.documentKind.toUpperCase()}</span>
@@ -202,6 +238,42 @@ export function ConversationAssetsDrawer({
           </div>
         )}
       </aside>
+      {previewedDocument !== null ? createPortal(
+        <>
+          <button
+            type="button"
+            className="html-document-backdrop"
+            aria-label="Fermer l’aperçu du document"
+            onClick={() => setPreviewedDocument(null)}
+          />
+          <section className="asset-document-preview" role="dialog" aria-modal="true" aria-label={`Aperçu de ${previewedDocument.label}`}>
+            <header>
+              <div>
+                <span>{previewedDocument.documentKind.toUpperCase()}</span>
+                <strong>{previewedDocument.label}</strong>
+              </div>
+              <div className="html-document-actions">
+                <button type="button" onClick={() => void downloadDocument(previewedDocument)}>Télécharger</button>
+                <button type="button" onClick={() => setPreviewedDocument(null)} autoFocus>Fermer</button>
+              </div>
+            </header>
+            <div className="html-document-preview">
+              {previewError ? <p role="alert">{previewError}</p> : null}
+              {delimitedSource !== null ? (
+                <DelimitedTable content={delimitedSource} kind={previewedDocument.documentKind === 'tsv' ? 'tsv' : 'csv'} />
+              ) : documentPreviewUrl !== null && previewedDocument.documentKind !== 'csv' && previewedDocument.documentKind !== 'tsv' ? (
+                <iframe
+                  src={documentPreviewUrl}
+                  title={`Contenu de ${previewedDocument.label}`}
+                  sandbox={previewedDocument.documentKind === 'html' ? 'allow-scripts allow-modals' : undefined}
+                  referrerPolicy="no-referrer"
+                />
+              ) : previewError === null ? <p>Préparation de l’aperçu…</p> : null}
+            </div>
+          </section>
+        </>,
+        window.document.body,
+      ) : null}
     </>
   )
 }

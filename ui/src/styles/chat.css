@@ -303,6 +303,42 @@
 .thread-asset-source { display: flex; flex-direction: column; gap: 2px; padding: 5px 2px 0; }
 .thread-asset-source time { font: var(--text-xs)/1.4 var(--font-mono); }
 
+.asset-document-preview {
+  position: fixed;
+  inset: var(--space-5);
+  z-index: 71;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-popover);
+}
+
+.asset-document-preview > header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.asset-document-preview > header > div:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.asset-document-preview > header span { color: var(--accent); font: 700 var(--text-xs)/1 var(--font-mono); }
+.asset-document-preview > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-document-preview .html-document-preview { flex: 1; height: auto; min-height: 0; border-top: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   .thread-assets-backdrop,
   .thread-assets-drawer { animation: none; }

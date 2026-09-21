@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
 import type { ConversationAsset } from './conversationAssets'
@@ -7,8 +7,12 @@ import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen } = await import('@testing-library/react')
+const defaultFetch = globalThis.fetch
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  globalThis.fetch = defaultFetch
+})
 
 const assets: ConversationAsset[] = [
   {
@@ -74,4 +78,27 @@ test('ouvre le catalogue, annonce son compte et prévisualise une image', () => 
   expect(screen.getByRole('link', { name: 'Télécharger Capture envoyée' }).getAttribute('download')).toBe('Capture envoyée')
   fireEvent.click(screen.getByRole('button', { name: 'Agrandir capture envoyée' }))
   expect(opened).toEqual(['/media/capture.png', 'Capture envoyée'])
+})
+
+test('ouvre le document complet au lieu d’agrandir sa vignette', async () => {
+  let imageOpened = false
+  globalThis.fetch = mock(() => Promise.resolve(Response.json({
+    token: 'preview-token',
+    expiresAt: '2099-09-15T12:35:00.000Z',
+  }, { status: 201 }))) as typeof fetch
+
+  render(createElement(ConversationAssetsDrawer, {
+    assets,
+    open: true,
+    onOpen: () => undefined,
+    onClose: () => undefined,
+    onImageOpen: () => { imageOpened = true },
+  }))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Prévisualiser audit final' }))
+  expect(await screen.findByRole('dialog', { name: 'Aperçu de Audit final' })).toBeTruthy()
+  const iframe = await screen.findByTitle('Contenu de Audit final')
+  expect(iframe.getAttribute('src')).toContain('/api/documents/document-1/content?token=preview-token')
+  expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-modals')
+  expect(imageOpened).toBe(false)
 })
