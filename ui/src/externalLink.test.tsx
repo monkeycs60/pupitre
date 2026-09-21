@@ -158,13 +158,12 @@ test('la pièce jointe passe par le même chemin que les liens du tableau de bor
   expect(opened).toEqual(['http://127.0.0.1:4820/media/abc.pdf'])
 })
 
-test('le bouton Télécharger intercepte le clic Tauri pour ouvrir le fichier', async () => {
+test('le bouton Télécharger laisse WebKit déclencher le téléchargement dans Tauri', () => {
   inTauri(true)
   render(
     <DownloadLink
       href="/media/abc.pdf"
       filename="rapport.pdf"
-      open={async () => { openedPaths.push('/tmp/abc.pdf') }}
     >
       Télécharger
     </DownloadLink>,
@@ -172,10 +171,9 @@ test('le bouton Télécharger intercepte le clic Tauri pour ouvrir le fichier', 
   const link = document.querySelector('a') as HTMLAnchorElement
   const event = new MouseEvent('click', { bubbles: true, cancelable: true })
   fireEvent(link, event)
-  expect(event.defaultPrevented).toBe(true)
+  expect(event.defaultPrevented).toBe(false)
   expect(link.getAttribute('download')).toBe('rapport.pdf')
-  await Promise.resolve()
-  expect(openedPaths).toEqual(['/tmp/abc.pdf'])
+  expect(openedPaths).toEqual([])
 })
 
 test('openStoredMedia demande le chemin au sidecar puis l’ouvre', async () => {
@@ -204,7 +202,7 @@ test('openStoredMedia se rabat sur le navigateur si le chemin est indisponible',
 test('dans le navigateur, Télécharger garde l’ancre native', () => {
   inTauri(false)
   render(
-    <DownloadLink href="/media/abc.pdf" filename="rapport.pdf" open={async () => { openedPaths.push('nope') }}>
+    <DownloadLink href="/media/abc.pdf" filename="rapport.pdf">
       Télécharger
     </DownloadLink>,
   )

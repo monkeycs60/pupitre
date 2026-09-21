@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import { AttachmentPreview } from './AttachmentPreview'
 import type { ConversationAsset } from './conversationAssets'
-import { documentDownloadUrl, documentThumbnailUrl, hasTauriRuntime, mediaUrl } from './transport'
-import { createHtmlDocumentViewToken, openDocumentInSystem } from './api'
-import { DownloadLink, openExternal, openStoredMedia } from './externalLink'
+import { documentDownloadUrl, documentThumbnailUrl, mediaUrl } from './transport'
+import { createHtmlDocumentViewToken } from './api'
+import { DownloadLink } from './externalLink'
 
 function imageSource(reference: string): string {
   if (reference.startsWith('/media/')) {
@@ -44,29 +44,8 @@ async function downloadDocument(asset: Extract<ConversationAsset, { kind: 'docum
   link.remove()
 }
 
-function storedMediaName(reference: string): string | null {
-  if (reference.startsWith('/media/')) {
-    return decodeURIComponent(reference.slice('/media/'.length))
-  }
-  if (/^[a-z][a-z0-9+.-]*:/i.test(reference) || reference.startsWith('/')) return null
-  return reference
-}
-
 async function openAssetDocument(asset: Extract<ConversationAsset, { kind: 'document' }>) {
-  if (hasTauriRuntime()) {
-    await openDocumentInSystem(asset.documentId)
-    return
-  }
   await downloadDocument(asset)
-}
-
-async function openAssetMedia(reference: string, href: string) {
-  const name = storedMediaName(reference)
-  if (name) {
-    await openStoredMedia(name)
-    return
-  }
-  await openExternal(href)
 }
 
 function DownloadIcon() {
@@ -160,7 +139,6 @@ export function ConversationAssetsDrawer({
                       filename={asset.label}
                       ariaLabel={`Télécharger ${asset.label}`}
                       title="Télécharger"
-                      open={() => openAssetMedia(asset.reference, imageSource(asset.reference))}
                     >
                       <DownloadIcon />
                     </DownloadLink>
@@ -195,7 +173,6 @@ export function ConversationAssetsDrawer({
                       filename={asset.attachment.originalName}
                       ariaLabel={`Télécharger ${asset.attachment.originalName}`}
                       title="Télécharger"
-                      open={() => openStoredMedia(asset.attachment.name)}
                     >
                       <DownloadIcon />
                     </DownloadLink>

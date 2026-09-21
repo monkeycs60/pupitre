@@ -131,7 +131,6 @@ export function DownloadLink({
   title,
   ariaLabel,
   children,
-  open,
 }: {
   href: string
   filename: string
@@ -139,16 +138,7 @@ export function DownloadLink({
   title?: string
   ariaLabel?: string
   children: ReactNode
-  open: () => Promise<void>
 }) {
-  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (!hasTauriRuntime()) return
-    event.preventDefault()
-    open().catch((reason: unknown) => {
-      console.error(`[lien] ouverture refusée pour ${filename}`, reason)
-    })
-  }
-
   return (
     <a
       className={className}
@@ -156,7 +146,6 @@ export function DownloadLink({
       download={filename}
       title={title}
       aria-label={ariaLabel}
-      onClick={handleClick}
     >
       {children}
     </a>

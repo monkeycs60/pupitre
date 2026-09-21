@@ -1,7 +1,7 @@
 import Markdown from './Markdown'
 import type { Attachment } from './types'
 import { mediaUrl } from './transport'
-import { DownloadLink, ExternalLink, openStoredMedia } from './externalLink'
+import { DownloadLink, ExternalLink } from './externalLink'
 import {
   formatAttachmentSize,
   getAttachmentPreviewKind,
@@ -90,7 +90,6 @@ export function AttachmentPreview({ attachment }: { attachment: Attachment }) {
             href={mediaHref}
             filename={attachment.originalName}
             ariaLabel={`Télécharger ${attachment.originalName}`}
-            open={() => openStoredMedia(attachment.name)}
           >
             Télécharger
           </DownloadLink>
