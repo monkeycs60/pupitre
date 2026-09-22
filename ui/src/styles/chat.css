@@ -1250,6 +1250,14 @@
   font-family: var(--font-mono);
 }
 
+.turn-origin {
+  padding: 1px var(--space-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+
 /* Résumé de session : accentué lorsque de nouvelles réponses restent à résumer. */
 .turn-summary-actions {
   display: inline-flex;

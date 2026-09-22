@@ -192,6 +192,11 @@ function TurnFooter({ block, action }: {
         </div>
       ) : null}
       <div className={`turn-meta${isDone ? ' turn-meta-done' : ''}`}>
+        {block.origin ? (
+          <span className="turn-origin" title="Tour ouvert par l’agent, sans message de ta part">
+            {block.origin === 'background-task' ? 'Réaction à une tâche de fond' : 'Lancé par l’agent'}
+          </span>
+        ) : null}
         {isRunning ? (
           <span className="running-indicator" role="status">
             <span className="running-dots" aria-hidden="true"><i /><i /><i /></span>

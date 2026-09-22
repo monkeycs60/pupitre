@@ -262,6 +262,7 @@ export function groupEvents(
         break
       case 'background-task': {
         assistant = null
+        if (turnFooter?.origin === 'agent') turnFooter.origin = 'background-task'
         const task = { status: event.status, summary: event.summary }
         const previous = blocks.at(-1)
         if (previous?.kind === 'background-task') previous.tasks.push(task)
@@ -444,6 +445,7 @@ export function groupEvents(
           assistant = null
           turnFooterId = `turn-footer-${turnNumber}-${eventKey}`
           turnFiles = new Map()
+          ensureTurnFooter().origin = 'agent'
         }
         const footer = ensureTurnFooter()
         footer.timing = {

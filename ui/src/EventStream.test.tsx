@@ -82,3 +82,12 @@ test('annonce des statuts différents sans en choisir un', () => {
   expect(screen.getByText('2 tâches de fond signalées')).toBeTruthy()
   cleanup()
 })
+
+test('étiquette le pied d’un tour ouvert par l’agent', () => {
+  render(<EventStream {...callbacks} blocks={[
+    { kind: 'turn-footer', id: 'turn-footer-1-5', status: { type: 'status', state: 'done' }, origin: 'background-task' },
+  ]} />)
+
+  expect(screen.getByText('Réaction à une tâche de fond')).toBeTruthy()
+  cleanup()
+})

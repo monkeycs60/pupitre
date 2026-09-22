@@ -69,3 +69,27 @@ test('un tour ouvert par l’agent garde son propre pied de tour', () => {
     '2026-09-23T10:00:00.000Z', '2026-09-23T10:05:00.000Z',
   ])
 })
+
+test('le pied d’un tour ouvert par l’agent en indique l’origine', () => {
+  const footers = (events: StoredEvent[]) => groupEvents(events)
+    .filter((block) => block.kind === 'turn-footer')
+    .map((block) => block.kind === 'turn-footer' ? block.origin : null)
+  const base = [
+    { id: 1, type: 'user-message', text: 'lance', images: [] },
+    { id: 2, type: 'turn-timing', phase: 'started', startedAt: '2026-09-23T10:00:00.000Z' },
+    { id: 3, type: 'status', state: 'done' },
+    { id: 4, type: 'turn-timing', phase: 'started', startedAt: '2026-09-23T10:05:00.000Z' },
+    { id: 5, type: 'status', state: 'running' },
+  ] as StoredEvent[]
+
+  expect(footers([...base, { id: 6, type: 'text-final', text: 'Rappel.' }, { id: 7, type: 'status', state: 'done' }] as StoredEvent[]))
+    .toEqual([undefined, 'agent'])
+  expect(footers([...base, { id: 6, type: 'background-task', status: 'completed', summary: 'a' }, { id: 7, type: 'status', state: 'done' }] as StoredEvent[]))
+    .toEqual([undefined, 'background-task'])
+  expect(footers([
+    { id: 1, type: 'user-message', text: 'continue', images: [] },
+    { id: 2, type: 'turn-timing', phase: 'started', startedAt: '2026-09-23T10:00:00.000Z' },
+    { id: 3, type: 'background-task', status: 'stopped', summary: 'orpheline' },
+    { id: 4, type: 'status', state: 'done' },
+  ] as StoredEvent[])).toEqual([undefined])
+})

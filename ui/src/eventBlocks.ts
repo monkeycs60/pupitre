@@ -56,6 +56,8 @@ interface TurnFooterBlock {
    * fait : ce compte vient des événements, pas de sa réponse.
    */
   subtaskCount?: number
+  /** Présent quand l'agent a ouvert le tour sans message de l'utilisateur. */
+  origin?: 'agent' | 'background-task'
 }
 
 export type EventBlock =
