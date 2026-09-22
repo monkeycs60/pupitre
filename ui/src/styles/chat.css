@@ -306,7 +306,7 @@
 .asset-document-preview {
   position: fixed;
   inset: var(--space-5);
-  z-index: 71;
+  z-index: 1200;
   display: flex;
   min-width: 0;
   min-height: 0;
