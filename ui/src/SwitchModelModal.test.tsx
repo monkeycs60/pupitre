@@ -69,7 +69,7 @@ const quotas: QuotaSnapshot = { claude: null, codex: null, grok: null }
 
 test('confirme une passation Claude après une sélection dans le même sélecteur', async () => {
   let handoffPayload: unknown = null
-  const nextConversation = { ...conversation, id: 'conversation-2', provider: 'claude' as const, model: 'fable-5' }
+  const nextConversation = { ...conversation, id: 'conversation-2', provider: 'claude' as const, model: 'fable-5.1' }
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     if (String(input) === '/api/presets') {
       return new Response(JSON.stringify([fablePreset]), { status: 200 })
@@ -97,13 +97,13 @@ test('confirme une passation Claude après une sélection dans le même sélecte
   // appartiennent à la conversation et ont leurs propres routes.
   expect(screen.queryByRole('button', { name: 'Réglages du tour' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
-  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Fable 5' }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Fable 5.1' }))
   fireEvent.click(screen.getByRole('button', { name: 'Passer à claude' }))
 
   await waitFor(() => expect(handoffs).toEqual([nextConversation]))
   expect(handoffPayload).toEqual({
     provider: 'claude',
-    model: 'fable-5',
+    model: 'fable-5.1',
     effort: 'medium',
     speed: null,
   })
