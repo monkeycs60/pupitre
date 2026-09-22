@@ -6,12 +6,15 @@ const MODEL_CONTEXT_WINDOWS: Partial<Record<Provider, Record<string, number>>> =
   claude: {
     'fable-5.1': 1_000_000,
     'fable-5': 200_000,
+    'opus-5.5': 1_000_000,
     opus: 200_000,
     sonnet: 200_000,
     haiku: 200_000,
   },
   codex: {
     'gpt-6-astra': 1_050_000,
+    'gpt-6-sol': 1_050_000,
+    'gpt-6-luna': 1_050_000,
     'gpt-5.6-sol': 400_000,
     'gpt-5.6-luna': 400_000,
     'gpt-5.6-terra': 400_000,

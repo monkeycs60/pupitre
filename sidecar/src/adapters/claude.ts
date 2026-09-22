@@ -8,6 +8,7 @@ import { aiRoots } from "../access";
 const CLAUDE_MODEL_IDS: Record<string, string> = {
   "fable-5.1": "claude-fable-5-1",
   "fable-5": "claude-fable-5",
+  "opus-5.5": "claude-opus-5-5",
 };
 
 export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
