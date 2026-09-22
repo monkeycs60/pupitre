@@ -266,7 +266,7 @@ test("une issue Sentry supprimée (404 sur le détail) est résolue au lieu de b
   const summary = {
     id: "42", shortId: "HAPI-42", project: "hapigator", title: "Timeout", culprit: null,
     transaction: null, level: "error", status: "unresolved", count: 1, userCount: 1,
-    firstSeen: "2026-08-20T10:00:00Z", lastSeen: "2026-08-21T10:00:00Z",
+    firstSeen: new Date(Date.now() - 86_400_000).toISOString(), lastSeen: new Date().toISOString(),
     permalink: "https://sentry/42", release: null, tags: {},
   };
   let present = true;
