@@ -3,7 +3,7 @@ import { createInterface } from "node:readline";
 import type { AppEvent } from "../events";
 import { killGroup, spawnGroup } from "../process-group";
 import { createClaudeLineParser } from "./claude-parser";
-import type { EmitFn, SteerFn } from "./types";
+import type { EmitFn, OpenAutonomousTurn, SteerFn } from "./types";
 
 /**
  * Un process `claude` par CONVERSATION, au lieu d'un par tour.
@@ -16,10 +16,20 @@ import type { EmitFn, SteerFn } from "./types";
  */
 
 const DEFAULT_IDLE_MS = 5 * 60_000;
+const DEFAULT_BACKGROUND_MAX_MS = 4 * 60 * 60_000;
 
 function idleMs(): number {
   const raw = Number(process.env.PUPITRE_CLAUDE_IDLE_MS);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_IDLE_MS;
+}
+
+/**
+ * Durée maximale d'inactivité tolérée tant que des tâches de fond tournent.
+ * Tuer le process tue aussi ces tâches, lancées dans son groupe.
+ */
+function backgroundMaxMs(): number {
+  const raw = Number(process.env.PUPITRE_CLAUDE_BACKGROUND_MAX_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_BACKGROUND_MAX_MS;
 }
 
 /** Échappatoire : `0` rétablit un process par tour. */
@@ -40,6 +50,7 @@ export interface ClaudeTurnRequest {
   emit: EmitFn;
   signal?: AbortSignal;
   registerSteer?: (steer: SteerFn) => void;
+  openAutonomousTurn?: OpenAutonomousTurn;
 }
 
 interface ActiveTurn {
@@ -58,10 +69,21 @@ class ClaudeSession {
   /** Connu dès l'événement `system/init` du premier tour. */
   cliSessionId: string | null = null;
   private turn: ActiveTurn | null = null;
+  /** Tour ouvert par le CLI lui-même, sans message de l'utilisateur. */
+  private autonomous: EmitFn | null = null;
+  /** Dernier tour reçu : il fournit de quoi ouvrir un tour autonome. */
+  private lastRequest: ClaudeTurnRequest | null = null;
+  private backgroundTasks = 0;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private idleSince: number | null = null;
   private stderr = "";
   private closed = false;
-  private readonly parseLine = createClaudeLineParser();
+  private readonly parseLine = createClaudeLineParser("claude", {
+    onBackgroundTasks: (count) => {
+      this.backgroundTasks = count;
+      if (count === 0 && this.idle) this.armIdle();
+    },
+  });
 
   constructor(
     readonly shape: string,
@@ -86,6 +108,10 @@ class ClaudeSession {
     return !this.closed;
   }
 
+  private get idle(): boolean {
+    return this.turn === null && this.autonomous === null && !this.closed;
+  }
+
   private handleLine(line: string): void {
     let events: AppEvent[];
     try {
@@ -96,9 +122,39 @@ class ClaudeSession {
     }
     for (const event of events) {
       if (event.type === "session") this.cliSessionId = event.cliSessionId;
-      this.turn?.emit(event);
-      if (event.type === "status") this.settle();
+      const emit = this.turn?.emit ?? this.autonomous ?? this.openAutonomous(event);
+      emit?.(event);
+      if (event.type !== "status") continue;
+      if (this.turn) this.settle();
+      else this.closeAutonomous();
     }
+  }
+
+  private openAutonomous(event: AppEvent): EmitFn | null {
+    if (event.type === "session" || event.type === "rate-limit") return null;
+    const request = this.lastRequest;
+    if (!request?.openAutonomousTurn || this.closed) return null;
+    this.clearIdle();
+    this.autonomous = request.openAutonomousTurn({
+      steer: async (input) => {
+        if (this.autonomous === null || this.closed) return false;
+        return this.write(request.steerLine(input.prompt, input.images));
+      },
+      cancel: () => {
+        const emit = this.autonomous;
+        if (emit === null) return;
+        this.autonomous = null;
+        emit({ type: "status", state: "error", error: "annulé" });
+        this.destroy();
+      },
+    });
+    return this.autonomous;
+  }
+
+  private closeAutonomous(): void {
+    if (this.autonomous === null) return;
+    this.autonomous = null;
+    if (!this.closed) this.armIdle();
   }
 
   private handleGone(detail: string): void {
@@ -108,6 +164,9 @@ class ClaudeSession {
     if (turn && !turn.settled) {
       turn.emit({ type: "status", state: "error", error: detail });
     }
+    const autonomous = this.autonomous;
+    this.autonomous = null;
+    autonomous?.({ type: "status", state: "error", error: detail });
     this.settle();
     this.clearIdle();
     this.onGone(this);
@@ -126,12 +185,26 @@ class ClaudeSession {
 
   private armIdle(): void {
     this.clearIdle();
-    const timer = setTimeout(() => this.destroy(), idleMs());
+    this.idleSince = Date.now();
+    this.scheduleIdleCheck();
+  }
+
+  private scheduleIdleCheck(): void {
+    const timer = setTimeout(() => {
+      this.idleTimer = null;
+      const since = this.idleSince ?? Date.now();
+      if (this.backgroundTasks > 0 && Date.now() - since < backgroundMaxMs()) {
+        this.scheduleIdleCheck();
+        return;
+      }
+      this.destroy();
+    }, idleMs());
     timer.unref?.();
     this.idleTimer = timer;
   }
 
   private clearIdle(): void {
+    this.idleSince = null;
     if (this.idleTimer === null) return;
     clearTimeout(this.idleTimer);
     this.idleTimer = null;
@@ -141,6 +214,9 @@ class ClaudeSession {
     if (this.closed) return;
     this.closed = true;
     this.clearIdle();
+    const autonomous = this.autonomous;
+    this.autonomous = null;
+    autonomous?.({ type: "status", state: "error", error: "process Claude arrêté" });
     killGroup(this.child, "SIGTERM");
     const forceKill = setTimeout(() => killGroup(this.child, "SIGKILL"), 3_000);
     forceKill.unref?.();
@@ -150,6 +226,10 @@ class ClaudeSession {
   run(request: ClaudeTurnRequest): Promise<void> {
     return new Promise((resolve) => {
       this.clearIdle();
+      this.lastRequest = request;
+      const autonomous = this.autonomous;
+      this.autonomous = null;
+      autonomous?.({ type: "status", state: "done" });
       request.emit({ type: "status", state: "running" });
 
       if (request.signal?.aborted || this.closed) {

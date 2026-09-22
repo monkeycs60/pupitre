@@ -222,13 +222,14 @@ function TurnFooter({ block, action }: {
   )
 }
 
-function backgroundTaskStatusLabel(status: string): string {
+function backgroundTaskStatusLabel(status: string, plural: boolean): string {
+  const s = plural ? 's' : ''
   switch (status) {
-    case 'completed': return 'terminée'
+    case 'completed': return `terminée${s}`
     case 'failed': return 'en échec'
     case 'killed':
-    case 'stopped': return 'arrêtée'
-    default: return status ? `· ${status}` : 'signalée'
+    case 'stopped': return `arrêtée${s}`
+    default: return `signalée${s}`
   }
 }
 
@@ -288,15 +289,23 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: Ev
     }
 
     case 'background-task': {
-      const described = /"([^"]+)"/.exec(block.summary)?.[1]
+      const statuses = new Set(block.tasks.map((task) => task.status))
+      const status = statuses.size === 1 ? block.tasks[0].status : 'mixed'
+      const count = block.tasks.length
+      const label = count === 1
+        ? `Tâche de fond ${backgroundTaskStatusLabel(status, false)}`
+        : `${count} tâches de fond ${backgroundTaskStatusLabel(status, true)}`
+      const detail = block.tasks
+        .map((task) => /"([^"]+)"/.exec(task.summary)?.[1] ?? task.summary)
+        .join(' · ')
       return (
-        <div className="tool-activity background-task-notice" data-status={block.status}>
+        <div className="tool-activity background-task-notice" data-status={status}>
           <svg className="tool-activity-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <circle cx="8" cy="8" r="5.25" stroke="currentColor" strokeWidth="1.15" />
             <path d="M8 5.25V8l1.75 1.25" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span>Tâche de fond {backgroundTaskStatusLabel(block.status)}</span>
-          <span className="tool-activity-detail" title={block.summary}>{described ?? block.summary}</span>
+          <span>{label}</span>
+          <span className="tool-activity-detail" title={block.tasks.map((task) => task.summary).join('\n')}>{detail}</span>
         </div>
       )
     }

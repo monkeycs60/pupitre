@@ -13,6 +13,7 @@ import type { AppEvent } from "../src/events";
 import { GitProjectService } from "../src/git";
 import type { Database } from "bun:sqlite";
 import { SkillInventory } from "../src/skills";
+import { claudeSessions } from "../src/adapters/claude-session";
 
 let runner: ConversationRunner;
 let convs: ConversationStore;
@@ -547,4 +548,37 @@ test("abortAll annule tous les tours en vol et rend la main sans attendre", asyn
 
   expect(runner.isRunning(first.id)).toBe(false);
   expect(runner.isRunning(second.id)).toBe(false);
+});
+
+test("une réaction de Claude entre deux tours devient un tour autonome persisté", async () => {
+  process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude-background");
+  process.env.FAKE_BACKGROUND_REACT = "1";
+  const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "x" });
+  try {
+    await runner.runTurn(c.id, "lance la recette en fond", []);
+    const limite = performance.now() + 3_000;
+    while (!convs.listEvents(c.id).some((event) => event.type === "text-final" && event.text === "recette finie")
+      && performance.now() < limite) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const types = convs.listEvents(c.id).map((event) => event.type === "status" ? `status:${event.state}` : event.type);
+    const autonome = types.slice(types.lastIndexOf("status:done", types.length - 2) + 1);
+    expect(autonome).toEqual([
+      "turn-timing",
+      "status:running",
+      "background-task",
+      "turn-timing",
+      "text-final",
+      "turn-timing",
+      "status:done",
+    ]);
+    expect(types.filter((type) => type === "user-message")).toHaveLength(1);
+    expect(runner.isRunning(c.id)).toBe(false);
+    expect(runner.activity.isBusy(c.id)).toBe(false);
+  } finally {
+    delete process.env.FAKE_BACKGROUND_REACT;
+    claudeSessions.shutdown();
+  }
 });

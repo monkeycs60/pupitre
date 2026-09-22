@@ -14,7 +14,7 @@ import { DEFAULT_ACTION_FORMAT, withActionFormat } from "./response-format";
 import { claudeServerDefinitions } from "./mcp-inventory";
 import type { ActionFormat } from "./response-format";
 import { conversationCwd, conversationWorktrees } from "./workspace";
-import type { SteerFn } from "./adapters/types";
+import type { AutonomousTurnControls, EmitFn, SteerFn } from "./adapters/types";
 import { withToolMentions } from "./tool-mentions";
 import {
   assistantImageRoots,
@@ -354,6 +354,8 @@ export class ConversationRunner {
         ...(pupitre ? { pupitre } : {}),
         ...(selectedMcpServers(project) ?? {}),
         ...(supportsSteer && acceptSteer ? { registerSteer: acceptSteer } : {}),
+        openAutonomousTurn: (controls: AutonomousTurnControls) =>
+          this.openAutonomousTurn(conversationId, controls),
       };
       await runProviderTurn(conv.provider, opts, emit);
     } finally {
@@ -404,6 +406,80 @@ export class ConversationRunner {
       if (outcome.state === "done") void this.refreshDigest(conversationId, project.path, persist);
     }
     return outcome;
+  }
+
+  /**
+   * Tour ouvert par le provider sans message de l'utilisateur. Il occupe la
+   * conversation comme un tour ordinaire : un message envoyé pendant ce temps
+   * devient une précision, et l'annulation tue le process.
+   */
+  private openAutonomousTurn(conversationId: string, controls: AutonomousTurnControls): EmitFn {
+    let releaseActivity = () => {};
+    try {
+      releaseActivity = this.activity.acquire(conversationId, "turn");
+    } catch {
+      // Une autre opération tient déjà la conversation : le tour est tout de
+      // même enregistré, sans prendre son verrou.
+    }
+    const startedAt = new Date().toISOString();
+    const controller = new AbortController();
+    controller.signal.addEventListener("abort", controls.cancel, { once: true });
+    let finish!: () => void;
+    const done = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const persist = (event: AppEvent) => {
+      this.quotas.ingest(event);
+      this.broadcast(conversationId, this.convs.appendStoredEvent(conversationId, event));
+    };
+    const entry: ActiveTurn = {
+      controller,
+      done,
+      finish,
+      startedAt,
+      steerReady: Promise.resolve(controls.steer),
+      persistSteer: persist,
+      cancelledByUser: false,
+    };
+    this.active.set(conversationId, entry);
+    persist({ type: "turn-timing", phase: "started", startedAt });
+    persist({ type: "status", state: "running" });
+
+    let firstResponseAt: string | undefined;
+    let settled = false;
+    return (event) => {
+      if (settled) return;
+      if (
+        firstResponseAt === undefined
+        && (event.type === "text-delta" || event.type === "text-final" || event.type === "tool-start")
+      ) {
+        firstResponseAt = new Date().toISOString();
+        persist({ type: "turn-timing", phase: "first-response", startedAt, firstResponseAt });
+      }
+      if (event.type === "session") this.convs.setCliSessionId(conversationId, event.cliSessionId);
+      if (event.type !== "status" || event.state === "running") {
+        persist(event);
+        return;
+      }
+      settled = true;
+      persist({
+        type: "turn-timing",
+        phase: "completed",
+        startedAt,
+        ...(firstResponseAt ? { firstResponseAt } : {}),
+        completedAt: new Date().toISOString(),
+      });
+      persist(event);
+      try {
+        this.convs.compactTextDeltas(conversationId);
+        this.convs.markAnswered(conversationId);
+      } catch (error) {
+        console.error("Clôture du tour autonome incomplète", error);
+      }
+      if (this.active.get(conversationId) === entry) this.active.delete(conversationId);
+      finish();
+      releaseActivity();
+    };
   }
 
   /** Régénère titre + résumé si le palier est atteint et le titre non figé. */

@@ -33,3 +33,39 @@ test('une notification de tâche de fond coupe le message en cours', () => {
 
   expect(blocks.map((block) => block.kind)).toEqual(['user', 'background-task', 'assistant'])
 })
+
+test('fusionne les notifications de tâches de fond consécutives', () => {
+  const blocks = groupEvents([
+    { id: 1, type: 'user-message', text: 'continue', images: [] },
+    { id: 2, type: 'background-task', status: 'stopped', summary: 'a' },
+    { id: 3, type: 'background-task', status: 'stopped', summary: 'b' },
+    { id: 4, type: 'text-final', text: 'Je reprends.' },
+    { id: 5, type: 'background-task', status: 'completed', summary: 'c' },
+  ] as StoredEvent[])
+
+  expect(blocks.filter((block) => block.kind === 'background-task').map((block) =>
+    block.kind === 'background-task' ? block.tasks.map((task) => task.summary) : [])).toEqual([['a', 'b'], ['c']])
+})
+
+test('un tour ouvert par l’agent garde son propre pied de tour', () => {
+  const blocks = groupEvents([
+    { id: 1, type: 'user-message', text: 'lance la recette', images: [] },
+    { id: 2, type: 'turn-timing', phase: 'started', startedAt: '2026-09-23T10:00:00.000Z' },
+    { id: 3, type: 'text-final', text: 'Lancée.' },
+    { id: 4, type: 'status', state: 'done' },
+    { id: 5, type: 'turn-timing', phase: 'started', startedAt: '2026-09-23T10:05:00.000Z' },
+    { id: 6, type: 'status', state: 'running' },
+    { id: 7, type: 'background-task', status: 'completed', summary: 'recette' },
+    { id: 8, type: 'text-final', text: 'Recette finie.' },
+    { id: 9, type: 'status', state: 'done' },
+  ] as StoredEvent[])
+
+  expect(blocks.map((block) => block.kind)).toEqual([
+    'user', 'assistant', 'turn-footer', 'background-task', 'assistant', 'turn-footer',
+  ])
+  const footers = blocks.filter((block) => block.kind === 'turn-footer')
+  expect(new Set(footers.map((footer) => footer.id)).size).toBe(2)
+  expect(footers.map((footer) => footer.kind === 'turn-footer' ? footer.timing?.startedAt : null)).toEqual([
+    '2026-09-23T10:00:00.000Z', '2026-09-23T10:05:00.000Z',
+  ])
+})

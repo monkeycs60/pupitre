@@ -146,10 +146,17 @@ export function parseClaudeLine(line: string, provider: Provider = "claude"): Ap
  * Les commandes n'apparaissent dans `command_lifecycle` que si leur ligne
  * porte un `uuid`.
  */
-export function createClaudeLineParser(provider: Provider = "claude"): (line: string) => AppEvent[] {
+export function createClaudeLineParser(
+  provider: Provider = "claude",
+  hooks: { onBackgroundTasks?: (count: number) => void } = {},
+): (line: string) => AppEvent[] {
   const queued = new Set<string>();
   return (line) => {
     const obj = parseJsonlLine(line);
+    if (obj?.type === "system" && obj.subtype === "background_tasks_changed" && Array.isArray(obj.tasks)) {
+      hooks.onBackgroundTasks?.(obj.tasks.length);
+      return [];
+    }
     if (obj?.type === "command_lifecycle" && typeof obj.command_uuid === "string") {
       if (obj.state === "queued") queued.add(obj.command_uuid);
       else queued.delete(obj.command_uuid);

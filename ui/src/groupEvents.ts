@@ -213,10 +213,11 @@ export function groupEvents(
   let assistant: Extract<EventBlock, { kind: 'assistant' }> | null = null
   let turnNumber = initialTurnNumber
   let turnFooter: Extract<EventBlock, { kind: 'turn-footer' }> | null = null
+  let turnFooterId: string | null = null
   let turnFiles = new Map<string, { added: number; removed: number }>()
 
   function ensureTurnFooter() {
-    turnFooter ??= { kind: 'turn-footer', id: `turn-footer-${turnNumber}` }
+    turnFooter ??= { kind: 'turn-footer', id: turnFooterId ?? `turn-footer-${turnNumber}` }
     return turnFooter
   }
 
@@ -234,6 +235,7 @@ export function groupEvents(
         if (!event.steering) {
           flushTurnFooter()
           turnNumber += 1
+          turnFooterId = null
           turnFiles = new Map()
         }
         assistant = null
@@ -258,15 +260,14 @@ export function groupEvents(
       case 'turn-phase':
         ensureTurnFooter().phase = event.phase
         break
-      case 'background-task':
+      case 'background-task': {
         assistant = null
-        blocks.push({
-          kind: 'background-task',
-          id: `background-task-${eventKey}`,
-          status: event.status,
-          summary: event.summary,
-        })
+        const task = { status: event.status, summary: event.summary }
+        const previous = blocks.at(-1)
+        if (previous?.kind === 'background-task') previous.tasks.push(task)
+        else blocks.push({ kind: 'background-task', id: `background-task-${eventKey}`, tasks: [task] })
         break
+      }
       case 'text-delta':
         ensureTurnFooter().activity = 'writing'
         if (assistant === null) {
@@ -436,6 +437,14 @@ export function groupEvents(
         break
       }
       case 'turn-timing': {
+        // Un tour ouvert par l'agent lui-même n'a pas de message utilisateur
+        // pour clore le tour précédent.
+        if (event.phase === 'started' && turnFooter?.status && turnFooter.status.state !== 'running') {
+          flushTurnFooter()
+          assistant = null
+          turnFooterId = `turn-footer-${turnNumber}-${eventKey}`
+          turnFiles = new Map()
+        }
         const footer = ensureTurnFooter()
         footer.timing = {
           startedAt: event.startedAt,

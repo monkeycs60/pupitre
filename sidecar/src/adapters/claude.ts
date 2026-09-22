@@ -95,6 +95,7 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
       emit,
       signal: opts.signal,
       registerSteer: opts.registerSteer,
+      openAutonomousTurn: opts.openAutonomousTurn,
     });
   }
 

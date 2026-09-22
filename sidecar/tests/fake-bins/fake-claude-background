@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Répond au message, déclare une tâche de fond, puis, si FAKE_BACKGROUND_REACT
+# est posé, réagit seul à sa fin comme le CLI entre deux tours.
+printf '%s\n' "$$" >> "${FAKE_PERSISTENT_PIDS:-/dev/null}"
+printf '{"type":"system","subtype":"init","session_id":"S-fond","model":"faux"}\n'
+while IFS= read -r ligne; do
+  printf '{"type":"assistant","message":{"content":[{"type":"text","text":"lance"}]}}\n'
+  printf '{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"t1"}]}\n'
+  printf '{"type":"result","subtype":"success","result":"lance"}\n'
+  if [ -n "$FAKE_BACKGROUND_REACT" ]; then
+    sleep 0.2
+    printf '{"type":"system","subtype":"background_tasks_changed","tasks":[]}\n'
+    printf '{"type":"system","subtype":"task_notification","task_id":"t1","status":"completed","summary":"Background command \\"recette\\" completed (exit code 0)"}\n'
+    printf '{"type":"assistant","message":{"content":[{"type":"text","text":"recette finie"}]}}\n'
+    printf '{"type":"result","subtype":"success","result":"recette finie","origin":{"kind":"task-notification"}}\n'
+  fi
+done

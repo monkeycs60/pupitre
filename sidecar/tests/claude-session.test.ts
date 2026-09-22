@@ -159,3 +159,101 @@ test("PUPITRE_CLAUDE_PERSISTENT=0 attend aussi le `result` du message envoyé", 
     { type: "status", state: "done" },
   ]);
 });
+
+async function attendre(condition: () => boolean, limiteMs = 3_000): Promise<void> {
+  const limite = performance.now() + limiteMs;
+  while (!condition() && performance.now() < limite) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+function vivant(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+test("une réaction du CLI entre deux tours ouvre un tour autonome", async () => {
+  process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude-background");
+  process.env.FAKE_BACKGROUND_REACT = "1";
+  const autonome: AppEvent[] = [];
+  let ouvertures = 0;
+  try {
+    const premier = await tour({
+      openAutonomousTurn: () => {
+        ouvertures += 1;
+        return (event) => autonome.push(event);
+      },
+    });
+    expect(etat(premier)).toEqual({ type: "status", state: "done" });
+
+    await attendre(() => autonome.some((event) => event.type === "status"));
+    expect(ouvertures).toBe(1);
+    expect(autonome).toEqual([
+      {
+        type: "background-task",
+        status: "completed",
+        summary: "Background command \"recette\" completed (exit code 0)",
+      },
+      { type: "text-final", text: "recette finie" },
+      { type: "status", state: "done" },
+    ]);
+  } finally {
+    delete process.env.FAKE_BACKGROUND_REACT;
+  }
+});
+
+test("annuler un tour autonome tue le process et clôt le tour", async () => {
+  process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude-background");
+  process.env.FAKE_BACKGROUND_REACT = "1";
+  const autonome: AppEvent[] = [];
+  try {
+    await tour({
+      openAutonomousTurn: ({ cancel }) => (event) => {
+        autonome.push(event);
+        if (event.type === "background-task") cancel();
+      },
+    });
+    await attendre(() => autonome.some((event) => event.type === "status"));
+
+    expect(autonome.at(-1)).toEqual({ type: "status", state: "error", error: "annulé" });
+    expect(claudeSessions.size()).toBe(0);
+  } finally {
+    delete process.env.FAKE_BACKGROUND_REACT;
+  }
+});
+
+test("une tâche de fond en cours garde le process au-delà du délai d'inactivité", async () => {
+  process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude-background");
+  process.env.PUPITRE_CLAUDE_IDLE_MS = "100";
+  process.env.PUPITRE_CLAUDE_BACKGROUND_MAX_MS = "600";
+  try {
+    await tour();
+    const pid = Number(lignes(pidsFile)[0]);
+
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(vivant(pid)).toBe(true);
+
+    await attendre(() => !vivant(pid), 3_000);
+    expect(vivant(pid)).toBe(false);
+  } finally {
+    delete process.env.PUPITRE_CLAUDE_IDLE_MS;
+    delete process.env.PUPITRE_CLAUDE_BACKGROUND_MAX_MS;
+  }
+}, 10_000);
+
+test("sans tâche de fond, le process part après le délai d'inactivité", async () => {
+  process.env.PUPITRE_CLAUDE_IDLE_MS = "100";
+  try {
+    await tour();
+    const pid = Number(lignes(pidsFile)[0]);
+
+    await attendre(() => !vivant(pid), 3_000);
+    expect(vivant(pid)).toBe(false);
+  } finally {
+    delete process.env.PUPITRE_CLAUDE_IDLE_MS;
+  }
+}, 10_000);

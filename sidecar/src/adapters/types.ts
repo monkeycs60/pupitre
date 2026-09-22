@@ -44,7 +44,19 @@ export interface TurnOptions {
    * le protocole propres au provider.
    */
   registerSteer?: (steer: SteerFn) => void;
+  /**
+   * Appelé quand le provider ouvre seul un tour entre deux tours de
+   * l'utilisateur, par exemple pour réagir à la fin d'une tâche de fond.
+   */
+  openAutonomousTurn?: OpenAutonomousTurn;
 }
+
+export interface AutonomousTurnControls {
+  steer: SteerFn;
+  cancel: () => void;
+}
+
+export type OpenAutonomousTurn = (controls: AutonomousTurnControls) => EmitFn;
 
 export type EmitFn = (event: AppEvent) => void;
 

@@ -30,8 +30,7 @@ interface ToolBlock {
 interface BackgroundTaskBlock {
   kind: 'background-task'
   id: string
-  status: string
-  summary: string
+  tasks: Array<{ status: string; summary: string }>
 }
 
 interface TurnFooterBlock {
