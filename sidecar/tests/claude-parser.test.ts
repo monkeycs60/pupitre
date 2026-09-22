@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseClaudeLine } from "../src/adapters/claude-parser";
+import { createClaudeLineParser, parseClaudeLine } from "../src/adapters/claude-parser";
 import type { AppEvent } from "../src/events";
 
 function eventsFromFixture(): AppEvent[] {
@@ -99,4 +99,23 @@ test("extrait les images base64 des résultats d'outil sans persister leurs donn
     images: [],
     inlineImages: [{ mediaType: "image/png", data: "iVBORw==" }],
   }]);
+});
+
+test("ignore un `result` tant qu'une commande envoyée attend en file", () => {
+  const parse = createClaudeLineParser();
+  const lifecycle = (state: string) =>
+    JSON.stringify({ type: "command_lifecycle", command_uuid: "c1", state });
+  const result = JSON.stringify({ type: "result", subtype: "success", result: "" });
+
+  expect(parse(lifecycle("queued"))).toEqual([]);
+  expect(parse(result)).toEqual([]);
+  expect(parse(lifecycle("started"))).toEqual([]);
+  expect(parse(result)).toEqual([{ type: "status", state: "done" }]);
+});
+
+test("sans `command_lifecycle`, le `result` clôt le tour comme avant", () => {
+  const parse = createClaudeLineParser();
+
+  expect(parse(JSON.stringify({ type: "result", subtype: "success", result: "ok" })))
+    .toEqual([{ type: "status", state: "done" }]);
 });

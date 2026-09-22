@@ -132,6 +132,28 @@ export function parseClaudeLine(line: string, provider: Provider = "claude"): Ap
   return out;
 }
 
+/**
+ * Au démarrage, `claude -r` traite d'abord les notifications de tâches de fond
+ * restées orphelines, et un `result` vide les clôt pendant que le message
+ * envoyé attend encore dans la file. Ce `result` n'appartient pas au tour :
+ * seuls ceux qui arrivent quand plus aucune commande n'attend le terminent.
+ * Les commandes n'apparaissent dans `command_lifecycle` que si leur ligne
+ * porte un `uuid`.
+ */
+export function createClaudeLineParser(provider: Provider = "claude"): (line: string) => AppEvent[] {
+  const queued = new Set<string>();
+  return (line) => {
+    const obj = parseJsonlLine(line);
+    if (obj?.type === "command_lifecycle" && typeof obj.command_uuid === "string") {
+      if (obj.state === "queued") queued.add(obj.command_uuid);
+      else queued.delete(obj.command_uuid);
+      return [];
+    }
+    if (obj?.type === "result" && queued.size > 0) return [];
+    return parseClaudeLine(line, provider);
+  };
+}
+
 function numberOrZero(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }

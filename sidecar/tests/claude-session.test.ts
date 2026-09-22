@@ -134,3 +134,28 @@ test("PUPITRE_CLAUDE_PERSISTENT=0 rétablit un process par tour", async () => {
   expect(lancements()).toBe(2);
   expect(claudeSessions.size()).toBe(0);
 });
+
+test("un `result` émis pendant que le message attend en file ne clôt pas le tour", async () => {
+  process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude-orphan-result");
+
+  const events = await tour({ cliSessionId: "S-orphelin" });
+
+  expect(events).toContainEqual({ type: "text-final", text: "vraie reponse" });
+  expect(events.filter((event) => event.type === "status")).toEqual([
+    { type: "status", state: "running" },
+    { type: "status", state: "done" },
+  ]);
+});
+
+test("PUPITRE_CLAUDE_PERSISTENT=0 attend aussi le `result` du message envoyé", async () => {
+  process.env.PUPITRE_CLAUDE_PERSISTENT = "0";
+  process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude-orphan-result");
+
+  const events = await tour({ cliSessionId: "S-orphelin" });
+
+  expect(events).toContainEqual({ type: "text-final", text: "vraie reponse" });
+  expect(events.filter((event) => event.type === "status")).toEqual([
+    { type: "status", state: "running" },
+    { type: "status", state: "done" },
+  ]);
+});

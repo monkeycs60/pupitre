@@ -1,4 +1,5 @@
-import { parseClaudeLine } from "./claude-parser";
+import { randomUUID } from "node:crypto";
+import { createClaudeLineParser } from "./claude-parser";
 import { claudeSessions, persistenceEnabled } from "./claude-session";
 import { spawnJsonl } from "./spawn-jsonl";
 import type { TurnOptions, EmitFn } from "./types";
@@ -15,6 +16,7 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   const bin = process.env.PUPITRE_CLAUDE_BIN ?? "claude";
   const userMessage = (prompt: string, images: string[]) => ({
     type: "user",
+    uuid: randomUUID(),
     message: {
       role: "user",
       // Le protocole stream-json de Claude Code est textuel. Les images sont
@@ -102,7 +104,7 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
     bin,
     args,
     cwd: opts.cwd,
-    parseLine: parseClaudeLine,
+    parseLine: createClaudeLineParser(),
     emit,
     signal: opts.signal,
     streamingInput: {

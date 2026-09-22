@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Reproduit `claude -r` avec des tâches de fond orphelines : un `result` vide
+# arrive pendant que le message reçu attend encore dans la file.
+printf '{"type":"system","subtype":"init","session_id":"S-orphelin","model":"faux"}\n'
+while IFS= read -r ligne; do
+  uuid=$(printf '%s' "$ligne" | sed -n 's/.*"uuid":"\([^"]*\)".*/\1/p')
+  printf '{"type":"command_lifecycle","command_uuid":"%s","state":"queued"}\n' "$uuid"
+  printf '{"type":"result","subtype":"success","result":"","usage":{"input_tokens":0,"output_tokens":0}}\n'
+  printf '{"type":"command_lifecycle","command_uuid":"%s","state":"started"}\n' "$uuid"
+  printf '{"type":"assistant","message":{"content":[{"type":"text","text":"vraie reponse"}]}}\n'
+  printf '{"type":"result","subtype":"success","result":"vraie reponse"}\n'
+  printf '{"type":"command_lifecycle","command_uuid":"%s","state":"completed"}\n' "$uuid"
+done

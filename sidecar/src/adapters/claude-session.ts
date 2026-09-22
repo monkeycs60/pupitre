@@ -2,7 +2,7 @@ import type { ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import type { AppEvent } from "../events";
 import { killGroup, spawnGroup } from "../process-group";
-import { parseClaudeLine } from "./claude-parser";
+import { createClaudeLineParser } from "./claude-parser";
 import type { EmitFn, SteerFn } from "./types";
 
 /**
@@ -61,6 +61,7 @@ class ClaudeSession {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private stderr = "";
   private closed = false;
+  private readonly parseLine = createClaudeLineParser();
 
   constructor(
     readonly shape: string,
@@ -88,7 +89,7 @@ class ClaudeSession {
   private handleLine(line: string): void {
     let events: AppEvent[];
     try {
-      events = parseClaudeLine(line);
+      events = this.parseLine(line);
     } catch (error) {
       console.error("Impossible de parser une ligne JSONL, ligne ignorée", error);
       return;
