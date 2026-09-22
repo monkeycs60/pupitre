@@ -269,15 +269,17 @@ export class VisualFeedbackService {
     }
     const prompt = visualFeedbackPrompt(input);
     if (!conversation) {
-      const preset = this.presets.get(project.default_preset_id ?? "builtin-eco") ?? this.presets.get("builtin-eco")!;
+      const eco = this.presets.get("builtin-eco")!;
+      const configured = project.default_launch_config;
+      const launch = configured ?? eco;
       conversation = this.conversations.create({
         projectId: project.id,
-        provider: preset.provider,
-        model: preset.model,
-        presetId: preset.id,
-        effort: preset.effort,
-        speed: preset.speed,
-        permissionMode: preset.permission_mode,
+        provider: launch.provider,
+        model: launch.model,
+        presetId: configured ? null : eco.id,
+        effort: launch.effort,
+        speed: launch.speed,
+        permissionMode: configured ? null : eco.permission_mode,
         worktreePath,
         createdOnBranch: input.branch,
         firstMessage: prompt,

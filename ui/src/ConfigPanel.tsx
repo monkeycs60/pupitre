@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getProjectGit, listPresets } from './api'
+import { getProjectGit } from './api'
 import { BranchAutocomplete } from './BranchAutocomplete'
 import { readLaunchConfig, writeLaunchConfig } from './configMemory'
 import { ModelConfigSelector } from './ModelConfigSelector'
@@ -7,7 +7,6 @@ import { requiresLaunchConfirmation } from './modelOptions'
 import { branchSuggestions } from './worktrees'
 import type {
   ConversationSpeed,
-  Preset,
   PresetPermissionMode,
   Project,
   Provider,
@@ -36,15 +35,9 @@ interface ConfigPanelProps {
   quotas: QuotaSnapshot
   config: ConversationConfig
   onConfigChange: (config: ConversationConfig) => void
-  onError: (message: string) => void
   onReady?: (ready: boolean) => void
   /** La modale de bascule conserve sa configuration au lieu du défaut projet. */
   applyProjectDefault?: boolean
-  /**
-   * Preset appliqué à l'ouverture à la place de `project.default_preset_id` :
-   * l'éditeur de TODO peut ainsi viser son propre défaut.
-   */
-  defaultPresetId?: string | null
   /** Les réglages de conversation exigent des routes dédiées après création. */
   showConversationSettings?: boolean
   /**
@@ -56,21 +49,6 @@ interface ConfigPanelProps {
   placement?: 'top' | 'bottom'
   /** Les tâches restent ancrées au dépôt racine ; les conversations savent choisir un dépôt applicatif. */
   includeNestedRepositories?: boolean
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Une erreur est survenue.'
-}
-
-export function configOf(preset: Preset): ConversationConfig {
-  return {
-    presetId: preset.id,
-    provider: preset.provider,
-    model: preset.model,
-    effort: preset.effort ?? 'high',
-    speed: preset.speed ?? 'standard',
-    permissionMode: preset.permission_mode ?? null,
-  }
 }
 
 function keepBranch(next: ConversationConfig, current: ConversationConfig): ConversationConfig {
@@ -93,10 +71,8 @@ export function ConfigPanel({
   quotas,
   config,
   onConfigChange,
-  onError,
   onReady,
   applyProjectDefault = true,
-  defaultPresetId,
   showConversationSettings = true,
   memoryKey = null,
   placement = 'top',
@@ -130,44 +106,18 @@ export function ConfigPanel({
   }, [includeNestedRepositories, project.id, project.name, project.path])
 
   useEffect(() => {
-    const abortController = new AbortController()
-    setIsLoading(true)
-    onReady?.(false)
-    void listPresets(abortController.signal)
-      .then((loaded) => {
-        if (abortController.signal.aborted) return
-        if (!applyProjectDefault) return
-        const remembered = memoryKey === null ? null : readLaunchConfig(memoryKey)
-        if (remembered !== null) {
-          onConfigChange(keepBranch(remembered, configRef.current))
-          return
-        }
-        const preferred = loaded.find((preset) => preset.id === (defaultPresetId ?? project.default_preset_id))
-        const projectDefault = memoryKey !== null && preferred !== undefined && requiresLaunchConfirmation(preferred.model)
-          ? undefined
-          : preferred
-        if (projectDefault) onConfigChange(keepBranch(configOf(projectDefault), configRef.current))
-      })
-      .catch((error: unknown) => {
-        if (!abortController.signal.aborted) onError(errorMessage(error))
-      })
-      .finally(() => {
-        if (!abortController.signal.aborted) {
-          setIsLoading(false)
-          onReady?.(true)
-        }
-      })
-    return () => abortController.abort()
-  }, [
-    applyProjectDefault,
-    defaultPresetId,
-    memoryKey,
-    onConfigChange,
-    onError,
-    onReady,
-    project.default_preset_id,
-    project.id,
-  ])
+    if (applyProjectDefault) {
+      const remembered = memoryKey === null ? null : readLaunchConfig(memoryKey)
+      const projectDefault = project.default_launch_config ?? null
+      if (remembered !== null) {
+        onConfigChange(keepBranch(remembered, configRef.current))
+      } else if (projectDefault !== null && !(memoryKey !== null && requiresLaunchConfirmation(projectDefault.model))) {
+        onConfigChange(keepBranch({ presetId: null, ...projectDefault, permissionMode: null }, configRef.current))
+      }
+    }
+    setIsLoading(false)
+    onReady?.(true)
+  }, [applyProjectDefault, memoryKey, onConfigChange, onReady, project.default_launch_config, project.id])
 
   function changeConfig(next: ConversationConfig) {
     if (memoryKey !== null) writeLaunchConfig(memoryKey, next)

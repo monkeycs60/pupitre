@@ -27,6 +27,8 @@ import type {
   ProjectDomain,
   DomainKind,
   Project,
+  ProjectLaunchConfig,
+  ProjectLaunchSlot,
   ProjectIntegration,
   ProjectCostReport,
   MemoryDocument,
@@ -659,22 +661,12 @@ export function setProjectPinned(id: string, pinned: boolean): Promise<void> {
   return fetchVoid(`/api/projects/${routeId(id)}/pin`, jsonPost({ pinned }))
 }
 
-export function setProjectDefaultPreset(
+export function setProjectLaunchConfig(
   id: string,
-  presetId: string | null,
+  slot: ProjectLaunchSlot,
+  config: ProjectLaunchConfig | null,
 ): Promise<Project> {
-  return fetchJson(
-    `/api/projects/${routeId(id)}/default-preset`,
-    jsonPut({ presetId }),
-  )
-}
-
-export function setProjectDefaultScoutPreset(id: string, presetId: string | null): Promise<Project> {
-  return fetchJson(`/api/projects/${routeId(id)}/default-scout-preset`, jsonPut({ presetId }))
-}
-
-export function setProjectDefaultTodoPreset(id: string, presetId: string | null): Promise<Project> {
-  return fetchJson(`/api/projects/${routeId(id)}/default-todo-preset`, jsonPut({ presetId }))
+  return fetchJson(`/api/projects/${routeId(id)}/launch-config`, jsonPut({ slot, config }))
 }
 
 export function setProjectFilesystemScope(

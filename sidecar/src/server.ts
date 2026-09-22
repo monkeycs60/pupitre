@@ -11,7 +11,13 @@ import { isProvider } from "./events";
 import { configuredByteLimit, DEFAULT_MEDIA_MAX_BYTES, type MediaStore } from "./media";
 import type { ConversationRunner } from "./runner";
 import type { Conversation, ConversationStore } from "./stores/conversations";
-import type { ProjectStore } from "./stores/projects";
+import {
+  PROJECT_LAUNCH_SLOTS,
+  projectLaunchConfig,
+  type ProjectLaunchConfig,
+  type ProjectLaunchSlot,
+  type ProjectStore,
+} from "./stores/projects";
 import type {
   PresetInput,
   PresetPermissionMode,
@@ -608,6 +614,26 @@ function optionalSpeed(
     throw new HttpError(400, `vitesse fast indisponible pour ${provider}`);
   }
   return value as "standard" | "fast";
+}
+
+function launchConfigOf(value: unknown): ProjectLaunchConfig | null {
+  if (value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) throw new HttpError(400, "champ config invalide");
+  const config = value as Record<string, unknown>;
+  const provider = config.provider;
+  if (typeof provider !== "string" || !(provider in MODELS_BY_PROVIDER)) throw new HttpError(400, "provider invalide");
+  const models = MODELS_BY_PROVIDER[provider as Provider] as readonly string[];
+  if (typeof config.model !== "string" || !models.includes(config.model)) {
+    throw new HttpError(400, `modèle invalide pour ${provider}`);
+  }
+  const effort = optionalEffort(config, provider as Provider);
+  if (effort === null) throw new HttpError(400, `effort invalide pour ${provider}`);
+  return {
+    provider: provider as Provider,
+    model: config.model,
+    effort,
+    speed: optionalSpeed(config, provider as Provider) ?? "standard",
+  };
 }
 
 function optionalLabel(body: Record<string, unknown>): string | null {
@@ -2039,10 +2065,7 @@ export function createServer(deps: ServerDeps) {
             const conversation = deps.conversations.get(existing.conversation_id);
             if (conversation?.created_on_branch === startPoint) return json(conversation);
           }
-          const preset = (project.default_scout_preset_id ? deps.presets.get(project.default_scout_preset_id) : null)
-            ?? (project.default_preset_id ? deps.presets.get(project.default_preset_id) : null)
-            ?? deps.presets.list()[0];
-          if (!preset) throw new HttpError(409, "aucun preset disponible pour Scout");
+          const launch = projectLaunchConfig(project, "scout");
           let remoteContext: { detail: unknown; events: unknown } | null = null;
           try { remoteContext = await deps.integrationsRefresher.sentryIssueContext(issue); } catch {}
           const payload = redactSentryValue({ ...issue.payload, ...remoteContext });
@@ -2051,12 +2074,12 @@ export function createServer(deps: ServerDeps) {
           const worktreePath = deps.git.createDetachedWorktree(project.id, { name: scoutName, startPoint, repositoryPath }).path;
           const conversation = deps.conversations.create({
             projectId: project.id,
-            provider: preset.provider,
-            model: preset.model,
-            presetId: preset.id,
-            effort: preset.effort,
-            speed: preset.speed,
-            permissionMode: preset.permission_mode,
+            provider: launch.provider,
+            model: launch.model,
+            presetId: null,
+            effort: launch.effort,
+            speed: launch.speed,
+            permissionMode: null,
             worktreePath,
             createdOnBranch: startPoint,
             originType: "sentry",
@@ -2117,9 +2140,7 @@ export function createServer(deps: ServerDeps) {
           if (!ticket) throw new HttpError(500, "ticket ClickUp créé mais introuvable");
           const project = deps.projects.get(issue.project_id);
           if (!project) throw new HttpError(404, "projet inconnu");
-          const preset = (project.default_preset_id ? deps.presets.get(project.default_preset_id) : null)
-            ?? deps.presets.list()[0];
-          if (!preset) throw new HttpError(409, "aucun preset de correction disponible");
+          const launch = projectLaunchConfig(project, "scout");
           const branch = `issue/${task.key}`;
           const repositoryPath = sentryRepositoryPath(project.path, issue.payload.project);
           const startPoint = deps.git.preferredStartPoint(project.id, "origin/develop", repositoryPath);
@@ -2127,12 +2148,12 @@ export function createServer(deps: ServerDeps) {
           const message = `Corriger ${task.key} — ${title}`;
           const conversation = deps.conversations.create({
             projectId: project.id,
-            provider: preset.provider,
-            model: preset.model,
-            presetId: preset.id,
-            effort: preset.effort,
-            speed: preset.speed,
-            permissionMode: preset.permission_mode,
+            provider: launch.provider,
+            model: launch.model,
+            presetId: null,
+            effort: launch.effort,
+            speed: launch.speed,
+            permissionMode: null,
             worktreePath,
             createdOnBranch: startPoint,
             ticketId: ticket.id,
@@ -2152,55 +2173,16 @@ export function createServer(deps: ServerDeps) {
           return json(conversation, 201);
         }
 
-        const projectDefaultPresetId = routeId(
-          pathname,
-          /^\/api\/projects\/([^/]+)\/default-preset$/,
-        );
-        if (request.method === "PUT" && projectDefaultPresetId !== null) {
-          if (!deps.projects.get(projectDefaultPresetId)) {
-            throw new HttpError(404, "projet inconnu");
-          }
+        const projectLaunchConfigId = routeId(pathname, /^\/api\/projects\/([^/]+)\/launch-config$/);
+        if (request.method === "PUT" && projectLaunchConfigId !== null) {
+          if (!deps.projects.get(projectLaunchConfigId)) throw new HttpError(404, "projet inconnu");
           const body = await readObject(request);
-          const presetId = body.presetId;
-          if (presetId !== null && typeof presetId !== "string") {
-            throw new HttpError(400, "champ presetId invalide");
+          const slot = body.slot;
+          if (typeof slot !== "string" || !(PROJECT_LAUNCH_SLOTS as readonly string[]).includes(slot)) {
+            throw new HttpError(400, "champ slot invalide");
           }
-          if (typeof presetId === "string" && !deps.presets.get(presetId)) {
-            throw new HttpError(404, "preset inconnu");
-          }
-          deps.projects.setDefaultPreset(projectDefaultPresetId, presetId as string | null);
-          const preset = typeof presetId === "string" ? deps.presets.get(presetId) : null;
-          // Une permission absente signifie « hériter du projet » : ne pas
-          // réinitialiser le choix existant quand un preset sans override devient
-          // le défaut. Une permission explicite devient le mode du projet, ce
-          // qui conserve le chemin d'exécution actuel sans toucher au contrat
-          // des conversations.
-          if (preset?.permission_mode) {
-            deps.projects.setPermissionMode(projectDefaultPresetId, preset.permission_mode);
-          }
-          return json(deps.projects.get(projectDefaultPresetId));
-        }
-
-        const projectDefaultScoutPresetId = routeId(pathname, /^\/api\/projects\/([^/]+)\/default-scout-preset$/);
-        if (request.method === "PUT" && projectDefaultScoutPresetId !== null) {
-          if (!deps.projects.get(projectDefaultScoutPresetId)) throw new HttpError(404, "projet inconnu");
-          const body = await readObject(request);
-          const presetId = body.presetId;
-          if (presetId !== null && typeof presetId !== "string") throw new HttpError(400, "champ presetId invalide");
-          if (typeof presetId === "string" && !deps.presets.get(presetId)) throw new HttpError(404, "preset inconnu");
-          deps.projects.setDefaultScoutPreset(projectDefaultScoutPresetId, presetId as string | null);
-          return json(deps.projects.get(projectDefaultScoutPresetId));
-        }
-
-        const projectDefaultTodoPresetId = routeId(pathname, /^\/api\/projects\/([^/]+)\/default-todo-preset$/);
-        if (request.method === "PUT" && projectDefaultTodoPresetId !== null) {
-          if (!deps.projects.get(projectDefaultTodoPresetId)) throw new HttpError(404, "projet inconnu");
-          const body = await readObject(request);
-          const presetId = body.presetId;
-          if (presetId !== null && typeof presetId !== "string") throw new HttpError(400, "champ presetId invalide");
-          if (typeof presetId === "string" && !deps.presets.get(presetId)) throw new HttpError(404, "preset inconnu");
-          deps.projects.setDefaultTodoPreset(projectDefaultTodoPresetId, presetId as string | null);
-          return json(deps.projects.get(projectDefaultTodoPresetId));
+          deps.projects.setLaunchConfig(projectLaunchConfigId, slot as ProjectLaunchSlot, launchConfigOf(body.config));
+          return json(deps.projects.get(projectLaunchConfigId));
         }
 
         const projectFilesystemScopeId = routeId(

@@ -239,7 +239,19 @@ export interface Project {
   default_scout_preset_id?: string | null
   /** Preset des nouvelles TODO ; `null` = suivre `default_preset_id`. */
   default_todo_preset_id?: string | null
+  default_launch_config?: ProjectLaunchConfig | null
+  scout_launch_config?: ProjectLaunchConfig | null
+  todo_launch_config?: ProjectLaunchConfig | null
   auto_rescan: boolean
+}
+
+export type ProjectLaunchSlot = 'default' | 'scout' | 'todo'
+
+export interface ProjectLaunchConfig {
+  provider: Provider
+  model: string
+  effort: string
+  speed: ConversationSpeed
 }
 
 export interface Preset {

@@ -108,7 +108,6 @@ export function SwitchModelModal({
             quotas={quotas}
             config={config}
             onConfigChange={setConfig}
-            onError={setError}
             applyProjectDefault={false}
             showConversationSettings={false}
             placement="bottom"

@@ -53,6 +53,14 @@ export const PROVIDER_DEFAULTS = {
   reasonix: { model: 'go41', effort: 'high' },
 } as const satisfies Record<Provider, { model: string; effort: string }>
 
+/** Réglage des lancements de projet sans réglage propre ; miroir du sidecar. */
+export const PROJECT_FALLBACK_LAUNCH_CONFIG = {
+  provider: 'codex',
+  model: 'gpt-6-sol',
+  effort: 'high',
+  speed: 'standard',
+} as const satisfies { provider: Provider; model: string; effort: string; speed: ConversationSpeed }
+
 /**
  * Réglage d'ouverture de la grille manuelle d'un workflow : le profil économe de
  * Codex — le modèle le moins cher, effort maximal, en vitesse rapide. Un workflow

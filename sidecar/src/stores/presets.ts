@@ -35,7 +35,7 @@ export interface Preset extends PresetInput {
 }
 
 type BuiltInPreset = PresetInput & { id: string };
-const BUILT_INS: ReadonlyArray<BuiltInPreset> = [
+export const BUILT_INS: ReadonlyArray<BuiltInPreset> = [
   { id: "builtin-eco", name: "Éco", provider: "codex", model: "gpt-6-luna", effort: "xhigh", speed: "standard", permission_mode: null },
   { id: "builtin-quality", name: "Qualité max", provider: "claude", model: "fable-5.1", effort: "max", speed: null, permission_mode: null },
   { id: "builtin-speed", name: "Vitesse", provider: "codex", model: "gpt-6-luna", effort: "xhigh", speed: "fast", permission_mode: null },

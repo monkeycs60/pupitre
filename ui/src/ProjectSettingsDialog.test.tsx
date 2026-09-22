@@ -6,7 +6,7 @@ import type { Project } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
-const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
+const { cleanup, fireEvent, render, screen, waitFor, within } = await import('@testing-library/react')
 const { ProjectSettingsDialog } = await import('./ProjectSettingsDialog')
 const dialogsCss = readFileSync(new URL('./styles/dialogs.css', import.meta.url), 'utf8')
 const defaultFetch = globalThis.fetch
@@ -49,8 +49,6 @@ test('enregistre une intégration GitLab avec son motif de branche', async () =>
     if (url.endsWith('/api/projects/p1/domains') && method === 'GET') return json([])
     if (url.endsWith('/api/projects/p1/filesystem-scope')) return json(project)
     if (url.endsWith('/api/projects/p1/permission-mode')) return json(project)
-    if (url.endsWith('/api/projects/p1/default-scout-preset')) return json(project)
-    if (url.endsWith('/api/projects/p1/default-todo-preset')) return json(project)
     if (url.endsWith('/api/projects/p1/integrations/gitlab') && method === 'PUT') {
       calls.push({ url, body: JSON.parse(String(init?.body)) })
       return json({
@@ -89,30 +87,13 @@ test('enregistre une intégration GitLab avec son motif de branche', async () =>
   expect(saved.branchPattern).toBe('^(issue|feature)/(TECH-\\d+)')
 })
 
-test('enregistre le preset par défaut des TODO', async () => {
+test('règle les modèles par défaut du projet avec le sélecteur de conversation', async () => {
   const calls: Array<{ url: string; body: unknown }> = []
-  const preset = {
-    id: 'todo-2',
-    name: 'TODO rapide',
-    provider: 'claude',
-    model: 'fable-5',
-    effort: 'medium',
-    speed: null,
-    permission_mode: null,
-    built_in: false,
-    created_at: '2026-08-19T08:00:00.000Z',
-    updated_at: '2026-08-19T08:00:00.000Z',
-  }
-
-  const presets = [
-    { ...preset, id: 'todo-1', name: 'TODO maison' },
-    preset,
-  ]
+  const sol = { provider: 'codex', model: 'gpt-6-sol', effort: 'high', speed: 'standard' } as const
 
   globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input)
     const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
-    if (url.endsWith('/api/presets')) return json(presets)
     if (url.endsWith('/api/projects/p1/mcp-servers')) return json({ servers: [], enabled: [], weights: {}, used: [] })
     if (url.endsWith('/api/projects/p1/integrations') && method === 'GET') return json([])
     if (url.endsWith('/api/projects/p1/domains') && method === 'GET') return json([])
@@ -124,21 +105,27 @@ test('enregistre le preset par défaut des TODO', async () => {
   }) as typeof fetch
 
   render(createElement(ProjectSettingsDialog, {
-    project: { ...project, default_todo_preset_id: 'todo-1' },
+    project: { ...project, default_launch_config: sol, scout_launch_config: sol },
     onClose: () => {},
     onUpdated: () => {},
   }))
 
-  // Les presets arrivent après le montage : le `<select>` doit alors afficher le
-  // preset enregistré, et non retomber sur « Automatique ».
-  await waitFor(() => expect((screen.getByLabelText('Preset des TODO') as HTMLSelectElement).options.length).toBe(3))
-  const selector = screen.getByLabelText('Preset des TODO') as HTMLSelectElement
-  expect(selector.value).toBe('todo-1')
-  fireEvent.change(selector, { target: { value: 'todo-2' } })
+  const todo = within(screen.getByRole('group', { name: 'TODO lancées depuis le rapport d’activité' }))
+  expect(todo.getByRole('button', { name: 'Modèle' }).textContent).toContain('GPT-6 Sol')
+  expect(todo.getByText(/^Automatique/)).toBeTruthy()
+  fireEvent.click(todo.getByRole('button', { name: 'Modèle' }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'GPT-6 Luna' }))
+  expect(todo.getByText(/^Personnalisé/)).toBeTruthy()
+
+  const scout = within(screen.getByRole('group', { name: 'Scout et corrections Sentry' }))
+  fireEvent.click(scout.getByRole('button', { name: 'Revenir à l’automatique' }))
   fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
-  await waitFor(() => expect(calls.some((call) => call.url.endsWith('/default-todo-preset'))).toBe(true))
-  expect(calls.find((call) => call.url.endsWith('/default-todo-preset'))?.body).toEqual({ presetId: 'todo-2' })
+  await waitFor(() => expect(calls.filter((call) => call.url.endsWith('/launch-config'))).toHaveLength(2))
+  expect(calls.filter((call) => call.url.endsWith('/launch-config')).map((call) => call.body)).toEqual([
+    { slot: 'scout', config: null },
+    { slot: 'todo', config: { provider: 'codex', model: 'gpt-6-luna', effort: 'high', speed: 'standard' } },
+  ])
 })
 
 test('le corps des paramètres projet défile sans masquer les actions', () => {

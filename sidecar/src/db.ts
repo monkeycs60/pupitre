@@ -5,11 +5,13 @@ import { countConversationMessages } from "./message-count";
 import {
   MESSAGE_COUNT_MIGRATION_KEY,
   OBSOLETE_MODELS_MIGRATION_KEY,
+  PROJECT_LAUNCH_CONFIG_MIGRATION_KEY,
   QUALITY_FABLE_51_MIGRATION_KEY,
   SettingsStore,
   SPEED_REVIEW_MIGRATION_KEY,
 } from "./stores/settings";
 import { defaultDataDir, readInstance } from "./instance";
+import { BUILT_INS } from "./stores/presets";
 
 export function dataDir(): string {
   return process.env.PUPITRE_DATA_DIR ?? defaultDataDir(readInstance().name);
@@ -675,6 +677,9 @@ export function openDb(dir: string = dataDir()): Database {
   const addedDefaultScoutPreset = addColumn(db, "projects", "default_scout_preset_id TEXT NULL");
   if (addedDefaultScoutPreset) db.exec("UPDATE projects SET default_scout_preset_id = default_preset_id WHERE default_scout_preset_id IS NULL");
   addColumn(db, "projects", "default_todo_preset_id TEXT NULL");
+  addColumn(db, "projects", "default_launch_config TEXT NULL");
+  addColumn(db, "projects", "scout_launch_config TEXT NULL");
+  addColumn(db, "projects", "todo_launch_config TEXT NULL");
   addColumn(db, "projects", "filesystem_scope TEXT NOT NULL DEFAULT 'project-and-ai-roots'");
   addColumn(db, "projects", "auto_rescan INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "project_changelog_state", "backfill_version INTEGER NOT NULL DEFAULT 0");
@@ -749,6 +754,10 @@ export function openDb(dir: string = dataDir()): Database {
       `);
     }
     new SettingsStore(db).set(OBSOLETE_MODELS_MIGRATION_KEY, true);
+  }
+  if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(PROJECT_LAUNCH_CONFIG_MIGRATION_KEY)) {
+    migrateProjectLaunchConfigs(db);
+    new SettingsStore(db).set(PROJECT_LAUNCH_CONFIG_MIGRATION_KEY, true);
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
   widenProviderCheck(db, "skills");
@@ -962,4 +971,35 @@ function dropEventsForeignKey(db: Database): void {
     ALTER TABLE events_new RENAME TO events;
     CREATE INDEX IF NOT EXISTS idx_events_conv ON events(conversation_id, id);
   `);
+}
+
+/**
+ * Les réglages de projet pointaient vers des presets partagés. Chaque usage
+ * reçoit une copie de son preset, puis les presets intégrés reprennent les
+ * valeurs du code.
+ */
+function migrateProjectLaunchConfigs(db: Database): void {
+  const presetOf = db.query("SELECT provider, model, effort, speed FROM presets WHERE id = ?");
+  const projects = db.query(
+    "SELECT id, default_preset_id, default_scout_preset_id, default_todo_preset_id FROM projects",
+  ).all() as Array<Record<string, string | null>>;
+  const slots = [
+    ["default_preset_id", "default_launch_config"],
+    ["default_scout_preset_id", "scout_launch_config"],
+    ["default_todo_preset_id", "todo_launch_config"],
+  ] as const;
+  db.transaction(() => {
+    for (const project of projects) {
+      for (const [presetColumn, configColumn] of slots) {
+        const presetId = project[presetColumn];
+        const preset = presetId ? presetOf.get(presetId) as Record<string, string | null> | null : null;
+        if (!preset || !preset.effort) continue;
+        const config = { provider: preset.provider, model: preset.model, effort: preset.effort, speed: preset.speed === "fast" ? "fast" : "standard" };
+        db.query(`UPDATE projects SET ${configColumn} = ? WHERE id = ?`).run(JSON.stringify(config), project.id!);
+      }
+    }
+    db.exec("UPDATE projects SET default_preset_id = NULL, default_scout_preset_id = NULL, default_todo_preset_id = NULL");
+    const reset = db.query("UPDATE presets SET name = ?, provider = ?, model = ?, effort = ?, speed = ? WHERE id = ?");
+    for (const preset of BUILT_INS) reset.run(preset.name, preset.provider, preset.model, preset.effort, preset.speed, preset.id);
+  })();
 }

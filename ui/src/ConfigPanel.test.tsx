@@ -28,7 +28,8 @@ const project: Project = {
   filesystem_scope: 'project-and-ai-roots',
   pinned: false,
   created_at: '2026-08-09T00:00:00.000Z',
-  default_preset_id: 'speed',
+  default_preset_id: null,
+  default_launch_config: { provider: 'codex', model: 'gpt-6-luna', effort: 'xhigh', speed: 'fast' },
   auto_counter_red: false,
   auto_rescan: false,
 }
@@ -68,7 +69,7 @@ function servePresets(presets: Preset[]) {
   }) as unknown as typeof fetch
 }
 
-test('ouvre sur le preset par défaut du projet quand aucune mémoire n’existe', async () => {
+test('ouvre sur le réglage par défaut du projet quand aucune mémoire n’existe', async () => {
   servePresets([speedPreset])
   const changes: ConversationConfig[] = []
 
@@ -78,14 +79,14 @@ test('ouvre sur le preset par défaut du projet quand aucune mémoire n’existe
     config: initialConfig,
     memoryKey: project.id,
     onConfigChange: (next: ConversationConfig) => changes.push(next),
-    onError: () => undefined,
   }))
 
   await waitFor(() => expect(changes.length).toBeGreaterThan(0))
   expect(changes.at(-1)).toEqual(expect.objectContaining({
     provider: 'codex',
-    model: 'gpt-5.6-luna',
-    effort: 'low',
+    model: 'gpt-6-luna',
+    effort: 'xhigh',
+    speed: 'fast',
   }))
 })
 
@@ -106,7 +107,6 @@ test('la dernière configuration lancée revient avant le défaut du projet', as
     config: initialConfig,
     memoryKey: project.id,
     onConfigChange: (next: ConversationConfig) => changes.push(next),
-    onError: () => undefined,
   }))
 
   await waitFor(() => expect(changes.length).toBeGreaterThan(0))
@@ -133,11 +133,10 @@ test('un modèle disparu du catalogue ne ressuscite pas par la mémoire', async 
     config: initialConfig,
     memoryKey: project.id,
     onConfigChange: (next: ConversationConfig) => changes.push(next),
-    onError: () => undefined,
   }))
 
   await waitFor(() => expect(changes.length).toBeGreaterThan(0))
-  expect(changes.at(-1)).toEqual(expect.objectContaining({ model: 'gpt-5.6-luna' }))
+  expect(changes.at(-1)).toEqual(expect.objectContaining({ model: 'gpt-6-luna' }))
 })
 
 test('un modèle soumis à confirmation ne revient pas par la mémoire', async () => {
@@ -155,11 +154,10 @@ test('un modèle soumis à confirmation ne revient pas par la mémoire', async (
     config: initialConfig,
     memoryKey: project.id,
     onConfigChange: (next: ConversationConfig) => changes.push(next),
-    onError: () => undefined,
   }))
 
   await waitFor(() => expect(changes.length).toBeGreaterThan(0))
-  expect(changes.at(-1)).toEqual(expect.objectContaining({ model: 'gpt-5.6-luna' }))
+  expect(changes.at(-1)).toEqual(expect.objectContaining({ model: 'gpt-6-luna' }))
 })
 
 test('choisir Fable garde en mémoire le dernier modèle ordinaire', () => {
@@ -169,19 +167,17 @@ test('choisir Fable garde en mémoire le dernier modèle ordinaire', () => {
   expect(readLaunchConfig(project.id)).toEqual(expect.objectContaining({ model: 'gpt-6-sol', effort: 'low' }))
 })
 
-test('un preset par défaut soumis à confirmation cède la place au réglage du provider', async () => {
-  const builtinSpeed = { ...speedPreset, id: 'builtin-speed' }
-  servePresets([{ ...speedPreset, provider: 'claude', model: 'fable-5.1', effort: 'high' }, builtinSpeed])
+test('un réglage de projet soumis à confirmation cède la place au réglage du provider', async () => {
+  servePresets([])
   const changes: ConversationConfig[] = []
   let ready = false
 
   render(createElement(ConfigPanel, {
-    project,
+    project: { ...project, default_launch_config: { provider: 'claude', model: 'fable-5.1', effort: 'high', speed: 'standard' } },
     quotas,
     config: initialConfig,
     memoryKey: project.id,
     onConfigChange: (next: ConversationConfig) => changes.push(next),
-    onError: () => undefined,
     onReady: (value: boolean) => { ready = value },
   }))
 
@@ -199,8 +195,7 @@ test('changer un réglage écrit la mémoire du projet', async () => {
       config,
       memoryKey: project.id,
       onConfigChange: setConfig,
-      onError: () => undefined,
-    })
+      })
   }
 
   render(createElement(Harness))
@@ -224,8 +219,7 @@ test('sans clé de mémoire, rien n’est écrit : une bascule de modèle ne dic
       config,
       applyProjectDefault: false,
       onConfigChange: setConfig,
-      onError: () => undefined,
-    })
+      })
   }
 
   render(createElement(Harness))
@@ -245,38 +239,12 @@ test("appliquer le défaut ne perd ni la branche ni le ticket", async () => {
     config: { ...initialConfig, branch: 'feature/TECH-1', ticketKey: 'TECH-1' },
     memoryKey: project.id,
     onConfigChange: (next: ConversationConfig) => changes.push(next),
-    onError: () => undefined,
   }))
 
   await waitFor(() => expect(changes.length).toBeGreaterThan(0))
   expect(changes.at(-1)).toEqual(expect.objectContaining({
     branch: 'feature/TECH-1',
     ticketKey: 'TECH-1',
-  }))
-})
-
-test('un défaut de TODO remplace le défaut du projet', async () => {
-  servePresets([
-    speedPreset,
-    { ...speedPreset, id: 'todo', name: 'TODO', provider: 'claude', model: 'haiku', effort: 'medium' },
-  ])
-  const changes: ConversationConfig[] = []
-
-  render(createElement(ConfigPanel, {
-    project: { ...project, default_todo_preset_id: 'todo' },
-    quotas,
-    config: initialConfig,
-    defaultPresetId: 'todo',
-    onConfigChange: (next: ConversationConfig) => changes.push(next),
-    onError: () => undefined,
-  }))
-
-  await waitFor(() => expect(changes.length).toBeGreaterThan(0))
-  expect(changes.at(-1)).toEqual(expect.objectContaining({
-    presetId: 'todo',
-    provider: 'claude',
-    model: 'haiku',
-    effort: 'medium',
   }))
 })
 
@@ -288,7 +256,6 @@ test('la branche courante du dépôt sert de repère dans le champ', async () =>
     quotas,
     config: initialConfig,
     onConfigChange: () => undefined,
-    onError: () => undefined,
     applyProjectDefault: false,
   }))
 
@@ -312,7 +279,7 @@ test('cumule la même branche dans plusieurs dépôts', async () => {
     const [config, setConfig] = useState(initialConfig)
     latest = config
     return createElement(ConfigPanel, {
-      project, quotas, config, onConfigChange: setConfig, onError: () => undefined, applyProjectDefault: false,
+      project, quotas, config, onConfigChange: setConfig, applyProjectDefault: false,
     })
   }
   render(createElement(Controlled))

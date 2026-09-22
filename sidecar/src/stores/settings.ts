@@ -9,6 +9,7 @@ export const MESSAGE_COUNT_MIGRATION_KEY = "conversation-message-count-v2";
 export const SPEED_REVIEW_MIGRATION_KEY = "speed-review-follows-preset-v1";
 export const QUALITY_FABLE_51_MIGRATION_KEY = "quality-preset-fable-5-1-v1";
 export const OBSOLETE_MODELS_MIGRATION_KEY = "obsolete-models-gpt-6-opus-5-5-v1";
+export const PROJECT_LAUNCH_CONFIG_MIGRATION_KEY = "project-launch-config-v1";
 export const INTEGRATION_TOKENS_KEY = "integrationTokens";
 
 /** Comptabilité du suivi du temps : filigrane de synchronisation, battement du
@@ -22,6 +23,7 @@ const INTERNAL_KEYS = new Set([
   SPEED_REVIEW_MIGRATION_KEY,
   QUALITY_FABLE_51_MIGRATION_KEY,
   OBSOLETE_MODELS_MIGRATION_KEY,
+  PROJECT_LAUNCH_CONFIG_MIGRATION_KEY,
   TIME_SYNC_WATERMARK_KEY,
   TIME_HEARTBEAT_KEY,
   TIME_BACKFILL_KEY,

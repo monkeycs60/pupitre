@@ -3,7 +3,9 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
-import { ProjectStore } from "../src/stores/projects";
+import { FALLBACK_PROJECT_LAUNCH_CONFIG, ProjectStore, projectLaunchConfig } from "../src/stores/projects";
+import { PresetStore } from "../src/stores/presets";
+import { PROJECT_LAUNCH_CONFIG_MIGRATION_KEY } from "../src/stores/settings";
 
 let store: ProjectStore;
 beforeEach(() => {
@@ -43,13 +45,36 @@ test("les racines IA sont la portée filesystem par défaut", () => {
   expect(store.get(p.id)?.filesystem_scope).toBe("full-system");
 });
 
-test("le preset des TODO est nul par défaut, puis réglable", () => {
-  const p = store.create({ name: "a", path: "/tmp/todo-preset" });
-  // `null` = suivre le défaut conversationnel : les projets existants ne
-  // changent pas de modèle pour leurs TODO.
-  expect(p.default_todo_preset_id).toBeNull();
-  store.setDefaultTodoPreset(p.id, "todo-preset");
-  expect(store.get(p.id)?.default_todo_preset_id).toBe("todo-preset");
-  store.setDefaultTodoPreset(p.id, null);
-  expect(store.get(p.id)?.default_todo_preset_id).toBeNull();
+test("les réglages de lancement du projet se replient sur le défaut du projet puis sur Pupitre", () => {
+  const p = store.create({ name: "a", path: "/tmp/launch-config" });
+  expect(p.default_launch_config).toBeNull();
+  expect(projectLaunchConfig(p, "todo")).toEqual(FALLBACK_PROJECT_LAUNCH_CONFIG);
+  const opus = { provider: "claude", model: "opus-5.5", effort: "medium", speed: "standard" } as const;
+  store.setLaunchConfig(p.id, "default", opus);
+  expect(projectLaunchConfig(store.get(p.id)!, "scout")).toEqual(opus);
+  const luna = { provider: "codex", model: "gpt-6-luna", effort: "xhigh", speed: "fast" } as const;
+  store.setLaunchConfig(p.id, "todo", luna);
+  expect(projectLaunchConfig(store.get(p.id)!, "todo")).toEqual(luna);
+  store.setLaunchConfig(p.id, "todo", null);
+  expect(store.get(p.id)?.todo_launch_config).toBeNull();
+});
+
+test("la migration copie les presets de projet dans ses réglages et rétablit les presets intégrés", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pupitre-test-"));
+  const db = openDb(dir);
+  const projects = new ProjectStore(db);
+  new PresetStore(db);
+  const p = projects.create({ name: "a", path: "/tmp/launch-migration" });
+  db.query("UPDATE presets SET name = 'Sol low', model = 'gpt-6-sol', effort = 'high', speed = 'standard' WHERE id = 'builtin-speed'").run();
+  db.query("UPDATE projects SET default_preset_id = 'builtin-speed', default_scout_preset_id = 'builtin-eco' WHERE id = ?").run(p.id);
+  db.query("DELETE FROM settings WHERE key = ?").run(PROJECT_LAUNCH_CONFIG_MIGRATION_KEY);
+  db.close();
+
+  const reopened = openDb(dir);
+  const migrated = new ProjectStore(reopened).get(p.id)!;
+  expect(migrated.default_launch_config).toEqual({ provider: "codex", model: "gpt-6-sol", effort: "high", speed: "standard" });
+  expect(migrated.scout_launch_config).toEqual({ provider: "codex", model: "gpt-6-luna", effort: "xhigh", speed: "standard" });
+  expect(migrated.todo_launch_config).toBeNull();
+  expect(migrated.default_preset_id).toBeNull();
+  expect(new PresetStore(reopened).get("builtin-speed")).toEqual(expect.objectContaining({ name: "Vitesse", model: "gpt-6-luna", effort: "xhigh", speed: "fast" }));
 });

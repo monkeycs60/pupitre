@@ -817,11 +817,8 @@ export class ActivityReportService {
       };
     }
     const project = this.projects.get(projectId);
-    const presetId = project?.default_todo_preset_id ?? project?.default_preset_id ?? null;
-    const preset = presetId ? this.presets.get(presetId) : null;
-    if (preset) {
-      return { provider: preset.provider, model: preset.model, effort: preset.effort ?? "medium", speed: preset.speed ?? "standard" };
-    }
+    const configured = project ? project.todo_launch_config ?? project.default_launch_config : null;
+    if (configured) return configured;
     const latest = this.conversations.listByProject(projectId)[0];
     if (latest) {
       return { provider: latest.provider, model: latest.model, effort: latest.effort ?? "medium", speed: latest.speed ?? "standard" };

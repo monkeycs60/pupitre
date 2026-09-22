@@ -301,9 +301,8 @@ test("créer une tâche depuis un motif produit un backlog avec le constat et le
   expect(again.todo.id).toBe(todo.id);
   expect(todoStore.list(project.id)).toHaveLength(1);
 
-  const preset = presets.create({ name: "Rapide", provider: "grok", model: "grok-4.6", effort: "low", speed: "fast" });
   const projects = new ProjectStore(db);
-  projects.setDefaultTodoPreset(project.id, preset.id);
+  projects.setLaunchConfig(project.id, "todo", { provider: "grok", model: "grok-4.6", effort: "low", speed: "fast" });
   const other = store.createMotif({
     projectId: project.id, kind: "idea", title: "Idée", statement: "Piste.", day: DAY,
     evidence: [{ kind: "conversation", ref: "c1", label: "Un" }, { kind: "conversation", ref: "c2", label: "Deux" }],

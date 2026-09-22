@@ -746,7 +746,6 @@ export function Composer({
                 applyProjectDefault={initialConfig?.provider === undefined}
                 includeNestedRepositories={!isTodoMode}
                 onConfigChange={setConfig}
-                onError={setToast}
                 onReady={setConfigReady}
               />
             ) : null}

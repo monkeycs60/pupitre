@@ -353,6 +353,26 @@ input.field-mono {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.project-launch-slot {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.project-launch-slot > strong {
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+}
+
+.project-launch-slot > span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
 .project-settings-section-heading {
   display: grid;
   gap: 2px;

@@ -750,32 +750,26 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     `/api/projects/${project.id}/permission-mode`,
     { permission_mode: null },
   )).status).toBe(400);
-  const selected = await putJson(`/api/projects/${project.id}/default-preset`, {
-    presetId: preset.id,
+  const configured = await putJson(`/api/projects/${project.id}/launch-config`, {
+    slot: "todo",
+    config: { provider: "codex", model: "gpt-6-luna", effort: "xhigh", speed: "fast" },
   });
-  expect(selected.status).toBe(200);
-  const selectedProject = await selected.json();
-  expect(selectedProject).toEqual(expect.objectContaining({ default_preset_id: preset.id }));
-  expect(selectedProject).toEqual(expect.objectContaining({
-    permission_mode: "bypassPermissions",
+  expect(configured.status).toBe(200);
+  expect(await configured.json()).toEqual(expect.objectContaining({
+    todo_launch_config: { provider: "codex", model: "gpt-6-luna", effort: "xhigh", speed: "fast" },
+    default_launch_config: null,
   }));
-
-  const selectedTodo = await putJson(`/api/projects/${project.id}/default-todo-preset`, {
-    presetId: preset.id,
-  });
-  expect(selectedTodo.status).toBe(200);
-  expect(await selectedTodo.json()).toEqual(expect.objectContaining({
-    default_todo_preset_id: preset.id,
-  }));
-  expect((await putJson(
-    `/api/projects/${project.id}/default-todo-preset`,
-    { presetId: "preset-inconnu" },
-  )).status).toBe(404);
-  const clearedTodo = await putJson(`/api/projects/${project.id}/default-todo-preset`, { presetId: null });
-  expect(clearedTodo.status).toBe(200);
-  expect(await clearedTodo.json()).toEqual(expect.objectContaining({
-    default_todo_preset_id: null,
-  }));
+  expect((await putJson(`/api/projects/${project.id}/launch-config`, {
+    slot: "todo",
+    config: { provider: "codex", model: "gpt-5.6-sol", effort: "high", speed: "standard" },
+  })).status).toBe(400);
+  expect((await putJson(`/api/projects/${project.id}/launch-config`, {
+    slot: "scout",
+    config: { provider: "claude", model: "opus-5.5", effort: "medium", speed: "fast" },
+  })).status).toBe(400);
+  expect((await putJson(`/api/projects/${project.id}/launch-config`, { slot: "general", config: null })).status).toBe(400);
+  const cleared = await putJson(`/api/projects/${project.id}/launch-config`, { slot: "todo", config: null });
+  expect(await cleared.json()).toEqual(expect.objectContaining({ todo_launch_config: null }));
 
   const editedBuiltIn = await putJson(`/api/presets/${builtIns[0]!.id}`, {
     name: "Éco maison",
@@ -810,10 +804,6 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     method: "DELETE",
   });
   expect(deleted.status).toBe(204);
-  const projects = await fetch(`${current.baseUrl}/api/projects`);
-  expect(await projects.json()).toEqual([
-    expect.objectContaining({ id: project.id, default_preset_id: null }),
-  ]);
 });
 
 test("la création d'un preset invalide conserve son erreur de validation", async () => {

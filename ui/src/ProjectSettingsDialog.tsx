@@ -3,23 +3,22 @@ import {
   deleteProjectIntegration,
   listProjectMcpServers,
   listProjectIntegrations,
-  listPresets,
   measureProjectMcpServers,
   saveProjectIntegration,
-  setProjectDefaultScoutPreset,
-  setProjectDefaultTodoPreset,
+  setProjectLaunchConfig,
   setProjectFilesystemScope,
   setProjectPermissionMode,
   updateProjectMcpServers,
   verifyProjectMcpCost,
 } from './api'
 import type { McpContextProbe, ProjectMcpConfig } from './api'
-import { AUTONOMY_LEVELS } from './modelOptions'
+import { AUTONOMY_LEVELS, modelLabel, PROJECT_FALLBACK_LAUNCH_CONFIG, PROVIDER_DEFAULTS } from './modelOptions'
+import { ModelConfigSelector } from './ModelConfigSelector'
 import { formatCompact } from './formatCompact'
 import { ProviderMark } from './ProviderMark'
 import { DomainSettings } from './DomainSettings'
 import type { DashboardIntegration } from './types'
-import type { FilesystemScope, Preset, PresetPermissionMode, Project } from './types'
+import type { FilesystemScope, PresetPermissionMode, Project, ProjectLaunchConfig, ProjectLaunchSlot } from './types'
 
 interface ProjectSettingsDialogProps {
   project: Project
@@ -70,12 +69,26 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible d’enregistrer le projet.'
 }
 
-function projectPresetId(value: string | null | undefined, legacy: string | null): string {
-  return value === undefined ? legacy ?? '' : value ?? ''
+type LaunchConfigs = Record<ProjectLaunchSlot, ProjectLaunchConfig | null>
+
+const NO_QUOTAS = { codex: null, claude: null, grok: null }
+
+const CLAUDE_DEFAULT_LAUNCH: ProjectLaunchConfig = { provider: 'claude', ...PROVIDER_DEFAULTS.claude, speed: 'standard' }
+
+function launchConfigsOf(project: Project): LaunchConfigs {
+  return {
+    default: project.default_launch_config ?? null,
+    scout: project.scout_launch_config ?? null,
+    todo: project.todo_launch_config ?? null,
+  }
 }
 
-function presetLabel(preset: Preset): string {
-  return `${preset.name} · ${preset.model} · ${preset.effort ?? '—'}`
+function launchSummary(config: ProjectLaunchConfig): string {
+  return `${modelLabel(config.model)} ${config.effort}`
+}
+
+function sameLaunch(a: ProjectLaunchConfig | null, b: ProjectLaunchConfig | null): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
 }
 
 function emptyGitLabProject(): GitLabProjectForm {
@@ -176,11 +189,7 @@ function integrationForm(items: DashboardIntegration[]): IntegrationsForm {
 export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsChanged }: ProjectSettingsDialogProps) {
   const [scope, setScope] = useState<FilesystemScope>(project.filesystem_scope)
   const [permissionMode, setPermissionMode] = useState<PresetPermissionMode>(project.permission_mode)
-  const [presets, setPresets] = useState<Preset[]>([])
-  const [scoutPresetId, setScoutPresetId] = useState(() => projectPresetId(project.default_scout_preset_id, project.default_preset_id))
-  // Pas de reprise de `default_preset_id` à l'affichage : `null` veut dire
-  // « suivre le défaut du projet », et l'éditeur de TODO applique ce repli.
-  const [todoPresetId, setTodoPresetId] = useState(() => project.default_todo_preset_id ?? '')
+  const [launchConfigs, setLaunchConfigs] = useState<LaunchConfigs>(() => launchConfigsOf(project))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mcp, setMcp] = useState<ProjectMcpConfig | null>(null)
@@ -188,12 +197,6 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
   const [verifying, setVerifying] = useState(false)
   const [probe, setProbe] = useState<McpContextProbe | null>(null)
   const [integrations, setIntegrations] = useState<IntegrationsForm>(() => defaultIntegrations())
-
-  useEffect(() => {
-    const controller = new AbortController()
-    void listPresets(controller.signal).then(setPresets).catch(() => {})
-    return () => controller.abort()
-  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -307,8 +310,12 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
     try {
       let updated = await setProjectFilesystemScope(project.id, scope)
       updated = await setProjectPermissionMode(project.id, permissionMode)
-      updated = await setProjectDefaultScoutPreset(project.id, scoutPresetId || null)
-      updated = await setProjectDefaultTodoPreset(project.id, todoPresetId || null)
+      const savedLaunchConfigs = launchConfigsOf(project)
+      for (const slot of ['default', 'scout', 'todo'] as const) {
+        if (!sameLaunch(launchConfigs[slot], savedLaunchConfigs[slot])) {
+          updated = await setProjectLaunchConfig(project.id, slot, launchConfigs[slot])
+        }
+      }
       for (const type of ['clickup', 'gitlab', 'sentry'] as const) {
         const form = integrations[type]
         if (form.enabled) {
@@ -377,27 +384,57 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
         <div className="project-settings-body">
           <section className="project-settings-defaults" aria-labelledby="project-defaults-title">
             <div className="project-settings-section-heading">
-              <strong id="project-defaults-title">Presets par défaut</strong>
-              <span>Scout et nouvelles TODO. Appliqués au prochain lancement, y compris dans les conversations en cours.</span>
+              <strong id="project-defaults-title">Modèles par défaut</strong>
+              <span>Appliqués au prochain lancement. Chaque conversation et chaque TODO garde ensuite ses propres réglages.</span>
             </div>
-            <label htmlFor="project-scout-preset">
-              <strong>Preset Scout Sentry</strong>
-              <select id="project-scout-preset" value={scoutPresetId} disabled={saving} onChange={(event) => setScoutPresetId(event.target.value)}>
-                <option value="">Automatique · preset général</option>
-                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset)}</option>)}
-              </select>
-            </label>
-            <label htmlFor="project-todo-preset">
-              <strong>Preset des TODO</strong>
-              <select id="project-todo-preset" value={todoPresetId} disabled={saving} onChange={(event) => setTodoPresetId(event.target.value)}>
-                <option value="">Automatique · preset du projet</option>
-                {presets.map((preset) => <option key={preset.id} value={preset.id}>{presetLabel(preset)}</option>)}
-              </select>
-            </label>
-            <p>
-              Modèle, effort et autonomie proposés par défaut dans l’éditeur de TODO.
-              Chaque TODO garde ensuite ses propres réglages.
-            </p>
+            {([
+              {
+                slot: 'default',
+                title: 'Nouvelles conversations',
+                automatic: CLAUDE_DEFAULT_LAUNCH,
+                hint: `Dernier réglage lancé dans le projet, sinon ${launchSummary(CLAUDE_DEFAULT_LAUNCH)}.`,
+              },
+              {
+                slot: 'scout',
+                title: 'Scout et corrections Sentry',
+                automatic: launchConfigs.default ?? PROJECT_FALLBACK_LAUNCH_CONFIG,
+                hint: `Réglage des nouvelles conversations du projet, sinon ${launchSummary(PROJECT_FALLBACK_LAUNCH_CONFIG)}.`,
+              },
+              {
+                slot: 'todo',
+                title: 'TODO lancées depuis le rapport d’activité',
+                automatic: launchConfigs.default ?? PROJECT_FALLBACK_LAUNCH_CONFIG,
+                hint: `Réglage des nouvelles conversations du projet, sinon ${launchSummary(PROJECT_FALLBACK_LAUNCH_CONFIG)}.`,
+              },
+            ] satisfies Array<{ slot: ProjectLaunchSlot; title: string; automatic: ProjectLaunchConfig; hint: string }>).map(({ slot, title, automatic, hint }) => {
+              const own = launchConfigs[slot]
+              return (
+                <div key={slot} className="project-launch-slot" role="group" aria-label={title}>
+                  <strong>{title}</strong>
+                  <ModelConfigSelector
+                    config={{ presetId: null, ...(own ?? automatic), permissionMode: null }}
+                    quotas={NO_QUOTAS}
+                    isBusy={saving}
+                    showConversationSettings={false}
+                    placement="bottom"
+                    onConfigChange={(next) => setLaunchConfigs((current) => ({
+                      ...current,
+                      [slot]: { provider: next.provider, model: next.model, effort: next.effort, speed: next.speed },
+                    }))}
+                  />
+                  {own === null ? (
+                    <span>Automatique · {hint}</span>
+                  ) : (
+                    <span>
+                      Personnalisé ·{' '}
+                      <button type="button" className="text-button" disabled={saving} onClick={() => setLaunchConfigs((current) => ({ ...current, [slot]: null }))}>
+                        Revenir à l’automatique
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </section>
           <label htmlFor="project-filesystem-scope">
             <strong>Accès filesystem</strong>
