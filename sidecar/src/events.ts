@@ -18,6 +18,8 @@ export type AppEvent =
   | { type: "reasoning-delta"; text: string }
   /** Phase brute annoncée par le provider (ReasonX : starting, implementing…). */
   | { type: "turn-phase"; phase: string }
+  /** Notification d'une tâche lancée en arrière-plan par l'agent (Claude : `system/task_notification`). */
+  | { type: "background-task"; status: string; summary: string }
   | { type: "tool-start"; toolId: string; toolName: string; input: unknown }
   | {
       type: "tool-end";

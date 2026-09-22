@@ -30,3 +30,21 @@ test('garde le groupe ouvert tant qu’une action est en cours', () => {
   expect(container.querySelector('details')?.open).toBe(true)
   cleanup()
 })
+
+test('signale une tâche de fond entre deux groupes d’actions sans les fusionner', () => {
+  const { container } = render(<EventStream {...callbacks} blocks={[
+    { kind: 'tool', id: 'a', toolId: 'a', toolName: 'Read', input: { file_path: '/tmp/a.ts' }, output: 'ok', images: [] },
+    {
+      kind: 'background-task',
+      id: 'background-task-2',
+      status: 'completed',
+      summary: 'Background command "Wait for recette results" completed (exit code 0)',
+    },
+    { kind: 'tool', id: 'b', toolId: 'b', toolName: 'Grep', input: { pattern: 'route' }, output: 'ok', images: [] },
+  ]} />)
+
+  expect(screen.getByText('Tâche de fond terminée')).toBeTruthy()
+  expect(screen.getByText('Wait for recette results')).toBeTruthy()
+  expect(container.querySelectorAll('details')).toHaveLength(2)
+  cleanup()
+})

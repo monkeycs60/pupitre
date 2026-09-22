@@ -119,3 +119,16 @@ test("sans `command_lifecycle`, le `result` clôt le tour comme avant", () => {
   expect(parse(JSON.stringify({ type: "result", subtype: "success", result: "ok" })))
     .toEqual([{ type: "status", state: "done" }]);
 });
+
+test("traduit `system/task_notification` en notification de tâche de fond", () => {
+  const line = JSON.stringify({
+    type: "system", subtype: "task_notification", task_id: "b1", status: "completed",
+    summary: "Background command \"Sleep\" completed (exit code 0)",
+  });
+
+  expect(parseClaudeLine(line)).toEqual([{
+    type: "background-task",
+    status: "completed",
+    summary: "Background command \"Sleep\" completed (exit code 0)",
+  }]);
+});

@@ -23,3 +23,13 @@ test('fige les anciens tours sans changer les blocs produits', () => {
   rerender({ events: next })
   expect(result.current).toEqual(groupEvents(next))
 })
+
+test('une notification de tâche de fond coupe le message en cours', () => {
+  const blocks = groupEvents([
+    { id: 1, type: 'user-message', text: 'continue', images: [] },
+    { id: 2, type: 'background-task', status: 'stopped', summary: 'Background shell command didn\'t finish' },
+    { id: 3, type: 'text-final', text: 'Je reprends.' },
+  ] as StoredEvent[])
+
+  expect(blocks.map((block) => block.kind)).toEqual(['user', 'background-task', 'assistant'])
+})

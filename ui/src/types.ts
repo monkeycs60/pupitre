@@ -991,6 +991,7 @@ export type AppEvent =
   | { type: 'text-final'; text: string }
   | { type: 'reasoning-delta'; text: string }
   | { type: 'turn-phase'; phase: string }
+  | { type: 'background-task'; status: string; summary: string }
   | { type: 'tool-start'; toolId: string; toolName: string; input: unknown }
   | { type: 'tool-end'; toolId: string; output: string; images: string[] }
   | {

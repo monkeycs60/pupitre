@@ -14,6 +14,12 @@ export function parseClaudeLine(line: string, provider: Provider = "claude"): Ap
           type: "session", provider,
           cliSessionId: obj.session_id, model: String(obj.model ?? ""),
         });
+      } else if (obj.subtype === "task_notification") {
+        out.push({
+          type: "background-task",
+          status: String(obj.status ?? ""),
+          summary: String(obj.summary ?? ""),
+        });
       }
       break;
     }

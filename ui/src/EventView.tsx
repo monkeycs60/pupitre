@@ -222,6 +222,16 @@ function TurnFooter({ block, action }: {
   )
 }
 
+function backgroundTaskStatusLabel(status: string): string {
+  switch (status) {
+    case 'completed': return 'terminée'
+    case 'failed': return 'en échec'
+    case 'killed':
+    case 'stopped': return 'arrêtée'
+    default: return status ? `· ${status}` : 'signalée'
+  }
+}
+
 /**
  * Mémoïsé : la frappe dans le composeur re-rend `Chat`, et sans ce garde-fou
  * chaque touche re-parsait le Markdown de TOUS les messages du fil.
@@ -273,6 +283,20 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: Ev
           </svg>
           <span>{presentation.label}{running ? ' en cours' : ' terminée'}</span>
           {presentation.detail ? <span className="tool-activity-detail" title={presentation.detail}>{presentation.detail}</span> : null}
+        </div>
+      )
+    }
+
+    case 'background-task': {
+      const described = /"([^"]+)"/.exec(block.summary)?.[1]
+      return (
+        <div className="tool-activity background-task-notice" data-status={block.status}>
+          <svg className="tool-activity-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="5.25" stroke="currentColor" strokeWidth="1.15" />
+            <path d="M8 5.25V8l1.75 1.25" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>Tâche de fond {backgroundTaskStatusLabel(block.status)}</span>
+          <span className="tool-activity-detail" title={block.summary}>{described ?? block.summary}</span>
         </div>
       )
     }

@@ -258,6 +258,15 @@ export function groupEvents(
       case 'turn-phase':
         ensureTurnFooter().phase = event.phase
         break
+      case 'background-task':
+        assistant = null
+        blocks.push({
+          kind: 'background-task',
+          id: `background-task-${eventKey}`,
+          status: event.status,
+          summary: event.summary,
+        })
+        break
       case 'text-delta':
         ensureTurnFooter().activity = 'writing'
         if (assistant === null) {

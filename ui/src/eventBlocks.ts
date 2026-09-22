@@ -27,6 +27,13 @@ interface ToolBlock {
   images: string[]
 }
 
+interface BackgroundTaskBlock {
+  kind: 'background-task'
+  id: string
+  status: string
+  summary: string
+}
+
 interface TurnFooterBlock {
   kind: 'turn-footer'
   id: string
@@ -56,6 +63,7 @@ export type EventBlock =
   | UserBlock
   | AssistantBlock
   | ToolBlock
+  | BackgroundTaskBlock
   | TurnFooterBlock
 
 export function eventIdOfBlock(id: string): number | undefined {
