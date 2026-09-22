@@ -763,6 +763,7 @@ export function openDb(dir: string = dataDir()): Database {
   widenProviderCheck(db, "skills");
   widenProviderCheck(db, "workflows");
   widenProviderCheck(db, "routines");
+  repairStagingForeignKeys(db);
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_skills_provider_project
       ON skills(provider, project_id, name COLLATE NOCASE);
@@ -850,12 +851,43 @@ function widenProviderCheck(db: Database, table: string): void {
     ? "CHECK (provider IN ('claude', 'codex', 'grok'))"
     : "CHECK (provider IN ('claude', 'codex', 'grok', 'reasonix'))";
   if (legacy === target) return;
-  const rebuilt = row.sql.replace(legacy, target);
-  const staging = `${table}__provider_migration`;
-  db.exec(`ALTER TABLE ${table} RENAME TO ${staging}`);
-  db.exec(rebuilt);
-  db.exec(`INSERT INTO ${table} SELECT * FROM ${staging}`);
-  db.exec(`DROP TABLE ${staging}`);
+  rebuildTable(db, table, row.sql.replace(legacy, target));
+}
+
+const STAGING_REFERENCE = /"?(\w+?)__(?:grok_provider|provider_migration)"?(?=\s*\()/g;
+
+/**
+ * Des reconstructions passées renommaient la table d'origine avant de la
+ * recréer : SQLite a réécrit les clés étrangères des autres tables vers ce
+ * nom temporaire, supprimé ensuite. Toute écriture qui vérifie ces clés
+ * échoue alors avec « no such table ».
+ */
+function repairStagingForeignKeys(db: Database): void {
+  const tables = db.query(
+    "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND sql LIKE '%REFERENCES%'",
+  ).all() as Array<{ name: string; sql: string }>;
+  for (const table of tables) {
+    const repaired = table.sql.replace(STAGING_REFERENCE, '"$1"');
+    if (repaired !== table.sql) rebuildTable(db, table.name, repaired);
+  }
+}
+
+/**
+ * Remplace le schéma d'une table en gardant ses lignes, index et triggers.
+ * La table d'origine n'est jamais renommée : SQLite réécrirait vers le nouveau
+ * nom les clés étrangères qui la désignent dans les autres tables.
+ */
+function rebuildTable(db: Database, table: string, createSql: string): void {
+  const staging = `${table}__rebuild`;
+  const dependents = db.query(
+    "SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type IN ('index', 'trigger') AND sql IS NOT NULL",
+  ).all(table) as Array<{ sql: string }>;
+  db.exec(`DROP TABLE IF EXISTS "${staging}"`);
+  db.exec(createSql.replace(/^CREATE TABLE\s+(?:IF NOT EXISTS\s+)?(?:"[^"]+"|\w+)/i, `CREATE TABLE "${staging}"`));
+  db.exec(`INSERT INTO "${staging}" SELECT * FROM "${table}"`);
+  db.exec(`DROP TABLE "${table}"`);
+  db.exec(`ALTER TABLE "${staging}" RENAME TO "${table}"`);
+  for (const dependent of dependents) db.exec(dependent.sql);
 }
 
 function hasColumn(db: Database, table: string, column: string): boolean {
