@@ -3,8 +3,8 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { countConversationMessages } from "./message-count";
 import {
-  LUNA_GPT6_MIGRATION_KEY,
   MESSAGE_COUNT_MIGRATION_KEY,
+  OBSOLETE_MODELS_MIGRATION_KEY,
   QUALITY_FABLE_51_MIGRATION_KEY,
   SettingsStore,
   SPEED_REVIEW_MIGRATION_KEY,
@@ -737,17 +737,18 @@ export function openDb(dir: string = dataDir()): Database {
     `);
     new SettingsStore(db).set(QUALITY_FABLE_51_MIGRATION_KEY, true);
   }
-  const lunaGpt6Migrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
-    .get(LUNA_GPT6_MIGRATION_KEY);
-  if (!lunaGpt6Migrated) {
-    db.exec(`
-      UPDATE presets
-      SET model = 'gpt-6-luna'
-      WHERE id IN ('builtin-eco', 'builtin-speed')
-        AND provider = 'codex'
-        AND model = 'gpt-5.6-luna'
-    `);
-    new SettingsStore(db).set(LUNA_GPT6_MIGRATION_KEY, true);
+  const obsoleteModelsMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
+    .get(OBSOLETE_MODELS_MIGRATION_KEY);
+  if (!obsoleteModelsMigrated) {
+    for (const table of ["presets", "workflows", "routines"]) {
+      db.exec(`
+        UPDATE ${table} SET model = 'gpt-6-luna', effort = 'xhigh' WHERE model = 'gpt-5.6-luna';
+        UPDATE ${table} SET model = 'gpt-6-sol', effort = 'xhigh' WHERE model = 'gpt-5.6-sol' AND effort = 'medium';
+        UPDATE ${table} SET model = 'gpt-6-sol', effort = 'high' WHERE model IN ('gpt-5.6-sol', 'gpt-5.6-terra');
+        UPDATE ${table} SET model = 'opus-5.5' WHERE model = 'opus';
+      `);
+    }
+    new SettingsStore(db).set(OBSOLETE_MODELS_MIGRATION_KEY, true);
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
   widenProviderCheck(db, "skills");

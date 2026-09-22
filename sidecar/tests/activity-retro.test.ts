@@ -218,7 +218,7 @@ test("la passe complète sauve le journal, crée les motifs prouvés et préserv
   expect(report!.retro.created).toHaveLength(1);
   expect(report!.retro.error).toBeNull();
   expect(strongCalls).toHaveLength(1);
-  expect(strongCalls[0]).toEqual(expect.objectContaining({ cwd: project.path, provider: "codex", model: "gpt-6-luna", effort: "high" }));
+  expect(strongCalls[0]).toEqual(expect.objectContaining({ cwd: project.path, provider: "codex", model: "gpt-6-luna", effort: "xhigh" }));
   expect(strongCalls[0]!.prompt).toContain("Le sidecar ne répond plus");
   expect(store.days().map((item) => item.day)).toEqual([DAY]);
   expect(store.state()).toEqual(expect.objectContaining({ first_day: DAY, last_day: DAY, last_error: null }));

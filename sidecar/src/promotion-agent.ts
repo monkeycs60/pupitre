@@ -137,7 +137,7 @@ export class PromotionAgentService {
       projectId: project.id,
       provider: "codex",
       model: "gpt-6-luna",
-      effort: "high",
+      effort: "xhigh",
       speed: "standard",
       permissionMode: "bypassPermissions",
       worktreePath: null,

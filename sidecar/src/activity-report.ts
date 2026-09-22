@@ -544,7 +544,7 @@ export interface StrongModelConfig {
 }
 
 export const DEFAULT_ACTIVITY_MODEL: StrongModelConfig = {
-  provider: "codex", model: "gpt-6-luna", effort: "high", speed: "standard",
+  provider: "codex", model: "gpt-6-luna", effort: "xhigh", speed: "standard",
 };
 
 export interface ActivityRetroPayload {

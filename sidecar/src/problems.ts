@@ -83,7 +83,7 @@ export class ProblemService {
         cwd: projectCwd(project),
         provider: "codex",
         model: "gpt-6-luna",
-        effort: "medium",
+        effort: "xhigh",
         speed: "fast",
         prompt: problemPrompt(project.name, capture.raw_text, tickets),
       });

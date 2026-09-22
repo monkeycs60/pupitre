@@ -103,7 +103,7 @@ test("importe et enrichit tout le backfill par lots de dix avec Luna medium stan
     cwd: context.root,
     provider: "codex",
     model: "gpt-6-luna",
-    effort: "medium",
+    effort: "xhigh",
     speed: "standard",
   }));
   expect(payload.state.backfill_version).toBe(CHANGELOG_BACKFILL_VERSION);

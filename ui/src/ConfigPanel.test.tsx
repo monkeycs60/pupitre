@@ -93,7 +93,7 @@ test('la dernière configuration lancée revient avant le défaut du projet', as
   servePresets([speedPreset])
   localStorage.setItem('pupitre:launch-config:v2:project-1', JSON.stringify({
     provider: 'claude',
-    model: 'opus',
+    model: 'opus-5.5',
     effort: 'xhigh',
     speed: 'standard',
     permissionMode: 'bypassPermissions',
@@ -112,7 +112,7 @@ test('la dernière configuration lancée revient avant le défaut du projet', as
   await waitFor(() => expect(changes.length).toBeGreaterThan(0))
   expect(changes.at(-1)).toEqual(expect.objectContaining({
     provider: 'claude',
-    model: 'opus',
+    model: 'opus-5.5',
     effort: 'xhigh',
     permissionMode: 'bypassPermissions',
   }))
@@ -164,9 +164,9 @@ test('un modèle soumis à confirmation ne revient pas par la mémoire', async (
 
 test('choisir Fable garde en mémoire le dernier modèle ordinaire', () => {
   const base = { presetId: null, effort: 'low', speed: 'standard' as const, permissionMode: null }
-  writeLaunchConfig(project.id, { ...base, provider: 'codex', model: 'gpt-5.6-sol' })
+  writeLaunchConfig(project.id, { ...base, provider: 'codex', model: 'gpt-6-sol' })
   writeLaunchConfig(project.id, { ...base, provider: 'claude', model: 'fable-5.1', effort: 'high' })
-  expect(readLaunchConfig(project.id)).toEqual(expect.objectContaining({ model: 'gpt-5.6-sol', effort: 'low' }))
+  expect(readLaunchConfig(project.id)).toEqual(expect.objectContaining({ model: 'gpt-6-sol', effort: 'low' }))
 })
 
 test('un preset par défaut soumis à confirmation cède la place au réglage du provider', async () => {

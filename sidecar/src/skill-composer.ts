@@ -99,7 +99,7 @@ async function generateWithCodex(
   const options = {
     cwd: input.cwd,
     model: "gpt-6-sol",
-    effort: "xhigh",
+    effort: "high",
     prompt: input.prompt,
     cliSessionId: null,
     permissionMode: "plan",

@@ -206,7 +206,7 @@ export class DebriefRunner {
       cwd: conversationCwd(project, conversation),
       provider: "codex" as const,
       model: "gpt-6-luna",
-      effort: "high",
+      effort: "xhigh",
       speed: "fast" as const,
     };
     const partials: string[] = [];

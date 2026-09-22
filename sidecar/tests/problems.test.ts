@@ -66,7 +66,7 @@ test("sauvegarde puis traite une capture avec Luna medium fast", async () => {
     cwd: projects.get(projectId)!.path,
     provider: "codex",
     model: "gpt-6-luna",
-    effort: "medium",
+    effort: "xhigh",
     speed: "fast",
   }));
   expect(calls[0]?.prompt).toContain("TECH-42");

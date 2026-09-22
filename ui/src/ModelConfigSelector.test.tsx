@@ -45,7 +45,7 @@ test('changer de provider applique le modèle et l’effort par défaut du provi
 
   fireEvent.click(screen.getByRole('radio', { name: 'Codex' }))
 
-  expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-6-sol', effort: 'xhigh' })
+  expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-6-sol', effort: 'high' })
 })
 
 test('chaque provider arrive sur son réglage par défaut, pas son modèle le plus cher', () => {

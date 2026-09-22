@@ -151,14 +151,14 @@ test('changer de provider dans la grille manuelle applique le réglage par défa
   // (Sol/standard). On fige les valeurs : c'est le contrat de coût du workflow.
   expect((screen.getByLabelText('Provider') as HTMLSelectElement).value).toBe('codex')
   expect((screen.getByLabelText('Modèle') as HTMLSelectElement).value).toBe('gpt-6-luna')
-  expect((screen.getByLabelText('Effort') as HTMLSelectElement).value).toBe('low')
+  expect((screen.getByLabelText('Effort') as HTMLSelectElement).value).toBe('xhigh')
   expect((screen.getByLabelText('Vitesse') as HTMLSelectElement).value).toBe('fast')
 
   const cases: Array<{ provider: string; model: string; effort: string }> = [
     { provider: 'claude', model: 'opus-5.5', effort: 'medium' },
     { provider: 'grok', model: 'grok-4.6', effort: 'high' },
     { provider: 'reasonix', model: 'go41', effort: 'high' },
-    { provider: 'codex', model: 'gpt-6-sol', effort: 'xhigh' },
+    { provider: 'codex', model: 'gpt-6-sol', effort: 'high' },
   ]
 
   for (const expected of cases) {

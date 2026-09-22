@@ -27,8 +27,8 @@ export const PROVIDER_SHORT_LABELS: Record<Provider, string> = {
 }
 
 export const PROVIDER_MODELS = {
-  claude: ['fable-5.1', 'opus-5.5', 'opus', 'sonnet', 'haiku'],
-  codex: ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra'],
+  claude: ['fable-5.1', 'opus-5.5', 'sonnet', 'haiku'],
+  codex: ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna'],
   grok: ['grok-4.6', 'grok-4.5'],
   reasonix: ['go41'],
 } as const satisfies Record<Provider, readonly string[]>
@@ -47,7 +47,7 @@ export const PROVIDER_EFFORTS = {
  * monter d'un cran à la main.
  */
 export const PROVIDER_DEFAULTS = {
-  codex: { model: 'gpt-6-sol', effort: 'xhigh' },
+  codex: { model: 'gpt-6-sol', effort: 'high' },
   claude: { model: 'opus-5.5', effort: 'medium' },
   grok: { model: 'grok-4.6', effort: 'high' },
   reasonix: { model: 'go41', effort: 'high' },
@@ -55,14 +55,14 @@ export const PROVIDER_DEFAULTS = {
 
 /**
  * Réglage d'ouverture de la grille manuelle d'un workflow : le profil économe de
- * Codex — le modèle le moins cher, effort bas, en vitesse rapide. Un workflow
+ * Codex — le modèle le moins cher, effort maximal, en vitesse rapide. Un workflow
  * est fait pour tourner souvent, d'où ce choix assumé plutôt que
  * `PROVIDER_DEFAULTS.codex`, plus cher. C'est le profil du preset « Vitesse ».
  */
 export const WORKFLOW_DEFAULTS = {
   provider: 'codex',
   model: 'gpt-6-luna',
-  effort: 'low',
+  effort: 'xhigh',
   speed: 'fast',
 } as const satisfies { provider: Provider; model: string; effort: string; speed: ConversationSpeed }
 

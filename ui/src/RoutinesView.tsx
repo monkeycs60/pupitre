@@ -220,7 +220,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
       presetId: workflowId ? null : presetId || null,
       provider: config?.provider ?? 'codex',
       model: config?.model ?? 'gpt-6-luna',
-      effort: config?.effort ?? 'low',
+      effort: config?.effort ?? 'xhigh',
       speed: config?.speed ?? 'fast',
       enabled,
     }

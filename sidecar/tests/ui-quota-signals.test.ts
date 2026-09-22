@@ -154,8 +154,8 @@ test("la fraîcheur d'un provider distingue un relevé actuel d'un relevé péri
 test("pulse : quota peu entamé et reset dans moins d'une heure, modèles chers", () => {
   const codex = state("codex", [window({ usedPercent: 20, resetsAt: isoIn(30) })]);
 
-  expect(shouldPulse(codex, "gpt-5.6-sol", NOW)).toBe(true);
-  expect(shouldPulse(codex, "gpt-5.6-luna", NOW)).toBe(false);
+  expect(shouldPulse(codex, "gpt-6-sol", NOW)).toBe(true);
+  expect(shouldPulse(codex, "gpt-6-luna", NOW)).toBe(false);
 });
 
 test("pulse : pas de pulse si le quota est déjà bien consommé ou le reset lointain", () => {
@@ -163,9 +163,9 @@ test("pulse : pas de pulse si le quota est déjà bien consommé ou le reset loi
   const far = state("codex", [window({ usedPercent: 20, resetsAt: isoIn(180) })]);
   const passed = state("codex", [window({ usedPercent: 20, resetsAt: isoIn(-5) })]);
 
-  expect(shouldPulse(consumed, "gpt-5.6-sol", NOW)).toBe(false);
-  expect(shouldPulse(far, "gpt-5.6-sol", NOW)).toBe(false);
-  expect(shouldPulse(passed, "gpt-5.6-sol", NOW)).toBe(false);
+  expect(shouldPulse(consumed, "gpt-6-sol", NOW)).toBe(false);
+  expect(shouldPulse(far, "gpt-6-sol", NOW)).toBe(false);
+  expect(shouldPulse(passed, "gpt-6-sol", NOW)).toBe(false);
 });
 
 test("pulse : sans pourcentage publié (claude), on ne devine pas le quota restant", () => {
@@ -173,8 +173,8 @@ test("pulse : sans pourcentage publié (claude), on ne devine pas le quota resta
     window({ label: "five_hour", usedPercent: null, resetsAt: isoIn(30) }),
   ]);
 
-  expect(shouldPulse(claude, "opus", NOW)).toBe(false);
-  expect(shouldPulse(null, "opus", NOW)).toBe(false);
+  expect(shouldPulse(claude, "opus-5.5", NOW)).toBe(false);
+  expect(shouldPulse(null, "opus-5.5", NOW)).toBe(false);
 });
 
 test("pulse : une fenêtre parmi plusieurs suffit", () => {
@@ -183,7 +183,7 @@ test("pulse : une fenêtre parmi plusieurs suffit", () => {
     window({ label: "primary", usedPercent: 5, resetsAt: isoIn(20) }),
   ]);
 
-  expect(shouldPulse(codex, "gpt-5.6-sol", NOW)).toBe(true);
+  expect(shouldPulse(codex, "gpt-6-sol", NOW)).toBe(true);
 });
 
 test("alerte dernière heure : déclenchée dans l'heure, pas avant, pas après le reset", () => {

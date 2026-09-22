@@ -221,7 +221,7 @@ export class ChangelogService {
               cwd: path,
               provider: "codex",
               model: "gpt-6-luna",
-              effort: "medium",
+              effort: "xhigh",
               speed: "standard",
               prompt: enrichmentPrompt(batch, activeDomains),
             });

@@ -98,7 +98,7 @@ test('changer de provider applique le réglage par défaut du provider', async (
     { provider: 'claude', model: 'opus-5.5', effort: 'medium' },
     { provider: 'grok', model: 'grok-4.6', effort: 'high' },
     { provider: 'reasonix', model: 'go41', effort: 'high' },
-    { provider: 'codex', model: 'gpt-6-sol', effort: 'xhigh' },
+    { provider: 'codex', model: 'gpt-6-sol', effort: 'high' },
   ]
 
   for (const expected of cases) {
