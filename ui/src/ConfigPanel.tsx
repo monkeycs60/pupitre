@@ -143,9 +143,9 @@ export function ConfigPanel({
           return
         }
         const preferred = loaded.find((preset) => preset.id === (defaultPresetId ?? project.default_preset_id))
-        const projectDefault = (memoryKey !== null && preferred !== undefined && requiresLaunchConfirmation(preferred.model) ? undefined : preferred)
-          ?? loaded.find((preset) => preset.id === 'builtin-speed')
-          ?? loaded[0]
+        const projectDefault = memoryKey !== null && preferred !== undefined && requiresLaunchConfirmation(preferred.model)
+          ? undefined
+          : preferred
         if (projectDefault) onConfigChange(keepBranch(configOf(projectDefault), configRef.current))
       })
       .catch((error: unknown) => {

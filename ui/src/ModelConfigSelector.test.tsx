@@ -45,7 +45,7 @@ test('changer de provider applique le modèle et l’effort par défaut du provi
 
   fireEvent.click(screen.getByRole('radio', { name: 'Codex' }))
 
-  expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-5.6-sol', effort: 'low' })
+  expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-6-sol', effort: 'xhigh' })
 })
 
 test('chaque provider arrive sur son réglage par défaut, pas son modèle le plus cher', () => {
@@ -81,7 +81,7 @@ test('la mémoire par provider prime sur le défaut au retour', () => {
   render(createElement(Harness))
 
   fireEvent.click(screen.getByRole('radio', { name: 'Codex' }))
-  expect(screen.getByRole('button', { name: 'Modèle' }).textContent).toContain('GPT-5.6 Sol')
+  expect(screen.getByRole('button', { name: 'Modèle' }).textContent).toContain('GPT-6 Sol')
 
   // Claude n'a jamais été quitté avec un autre réglage : son dernier choix
   // (fable-5/high) revient, pas son défaut opus/medium.

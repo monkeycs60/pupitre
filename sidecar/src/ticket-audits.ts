@@ -15,8 +15,8 @@ export interface TicketAuditConfig {
 
 export const DEFAULT_TICKET_AUDIT_CONFIG: TicketAuditConfig = {
   provider: "codex",
-  model: "gpt-5.6-sol",
-  effort: "medium",
+  model: "gpt-6-sol",
+  effort: "xhigh",
   speed: "standard",
 };
 

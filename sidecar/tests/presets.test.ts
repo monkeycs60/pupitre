@@ -21,7 +21,7 @@ test("restaure un preset intégré et refuse sa suppression", () => {
   const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-presets-")));
   const store = new PresetStore(db);
   store.update("builtin-speed", { name: "Modifié", provider: "claude", model: "haiku", effort: "medium", speed: null, permission_mode: null });
-  expect(store.restore("builtin-speed")).toMatchObject({ name: "Vitesse", provider: "codex", model: "gpt-5.6-luna", speed: "fast" });
+  expect(store.restore("builtin-speed")).toMatchObject({ name: "Vitesse", provider: "codex", model: "gpt-6-luna", speed: "fast" });
   expect(() => store.delete("builtin-speed")).toThrow("non supprimable");
   db.close();
 });

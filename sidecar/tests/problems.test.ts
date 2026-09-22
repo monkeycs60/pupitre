@@ -65,7 +65,7 @@ test("sauvegarde puis traite une capture avec Luna medium fast", async () => {
   expect(calls[0]).toEqual(expect.objectContaining({
     cwd: projects.get(projectId)!.path,
     provider: "codex",
-    model: "gpt-5.6-luna",
+    model: "gpt-6-luna",
     effort: "medium",
     speed: "fast",
   }));

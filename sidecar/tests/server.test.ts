@@ -798,7 +798,7 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
   expect(restored.status).toBe(200);
   expect(await restored.json()).toEqual(expect.objectContaining({
     name: "Éco",
-    model: "gpt-5.6-luna",
+    model: "gpt-6-luna",
   }));
 
   const undeletable = await fetch(`${current.baseUrl}/api/presets/${builtIns[0]!.id}`, {

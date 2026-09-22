@@ -82,7 +82,7 @@ export class ProblemService {
       const raw = await this.generator({
         cwd: projectCwd(project),
         provider: "codex",
-        model: "gpt-5.6-luna",
+        model: "gpt-6-luna",
         effort: "medium",
         speed: "fast",
         prompt: problemPrompt(project.name, capture.raw_text, tickets),

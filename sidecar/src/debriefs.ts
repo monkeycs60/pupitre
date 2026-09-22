@@ -205,7 +205,7 @@ export class DebriefRunner {
     const generation = {
       cwd: conversationCwd(project, conversation),
       provider: "codex" as const,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       effort: "high",
       speed: "fast" as const,
     };

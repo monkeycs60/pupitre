@@ -47,8 +47,8 @@ export const PROVIDER_EFFORTS = {
  * monter d'un cran à la main.
  */
 export const PROVIDER_DEFAULTS = {
-  codex: { model: 'gpt-5.6-sol', effort: 'low' },
-  claude: { model: 'opus', effort: 'medium' },
+  codex: { model: 'gpt-6-sol', effort: 'xhigh' },
+  claude: { model: 'opus-5.5', effort: 'medium' },
   grok: { model: 'grok-4.6', effort: 'high' },
   reasonix: { model: 'go41', effort: 'high' },
 } as const satisfies Record<Provider, { model: string; effort: string }>
@@ -61,7 +61,7 @@ export const PROVIDER_DEFAULTS = {
  */
 export const WORKFLOW_DEFAULTS = {
   provider: 'codex',
-  model: 'gpt-5.6-luna',
+  model: 'gpt-6-luna',
   effort: 'low',
   speed: 'fast',
 } as const satisfies { provider: Provider; model: string; effort: string; speed: ConversationSpeed }

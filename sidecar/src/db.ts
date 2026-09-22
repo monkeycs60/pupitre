@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { countConversationMessages } from "./message-count";
 import {
+  LUNA_GPT6_MIGRATION_KEY,
   MESSAGE_COUNT_MIGRATION_KEY,
   QUALITY_FABLE_51_MIGRATION_KEY,
   SettingsStore,
@@ -735,6 +736,18 @@ export function openDb(dir: string = dataDir()): Database {
         AND model = 'fable-5'
     `);
     new SettingsStore(db).set(QUALITY_FABLE_51_MIGRATION_KEY, true);
+  }
+  const lunaGpt6Migrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
+    .get(LUNA_GPT6_MIGRATION_KEY);
+  if (!lunaGpt6Migrated) {
+    db.exec(`
+      UPDATE presets
+      SET model = 'gpt-6-luna'
+      WHERE id IN ('builtin-eco', 'builtin-speed')
+        AND provider = 'codex'
+        AND model = 'gpt-5.6-luna'
+    `);
+    new SettingsStore(db).set(LUNA_GPT6_MIGRATION_KEY, true);
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
   widenProviderCheck(db, "skills");

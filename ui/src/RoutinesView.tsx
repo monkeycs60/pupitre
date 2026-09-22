@@ -219,7 +219,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
       prompt: workflowId ? null : prompt.trim(),
       presetId: workflowId ? null : presetId || null,
       provider: config?.provider ?? 'codex',
-      model: config?.model ?? 'gpt-5.6-luna',
+      model: config?.model ?? 'gpt-6-luna',
       effort: config?.effort ?? 'low',
       speed: config?.speed ?? 'fast',
       enabled,

@@ -99,7 +99,7 @@ test("un résumé de session ne conserve que les changements concrets", async ()
   expect(capturedPrompt).toContain("résumé de session");
   expect(capturedPrompt).toContain("Ajoute le résumé court");
   expect(capturedModel).toEqual(expect.objectContaining({
-    provider: "codex", model: "gpt-5.6-luna", effort: "high", speed: "fast",
+    provider: "codex", model: "gpt-6-luna", effort: "high", speed: "fast",
   }));
   expect(conversations.listEvents(conversation.id).at(-1)).toEqual(
     expect.objectContaining({ type: "session-summary-ref", summaryId: summary.id }),

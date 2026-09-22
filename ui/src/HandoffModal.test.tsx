@@ -95,10 +95,10 @@ test('changer de provider applique le réglage par défaut du provider', async (
   // du provider s'applique (modèle et effort ensemble), jamais son premier
   // modèle de catalogue ni un « high » générique.
   const cases: Array<{ provider: string; model: string; effort: string }> = [
-    { provider: 'claude', model: 'opus', effort: 'medium' },
+    { provider: 'claude', model: 'opus-5.5', effort: 'medium' },
     { provider: 'grok', model: 'grok-4.6', effort: 'high' },
     { provider: 'reasonix', model: 'go41', effort: 'high' },
-    { provider: 'codex', model: 'gpt-5.6-sol', effort: 'low' },
+    { provider: 'codex', model: 'gpt-6-sol', effort: 'xhigh' },
   ]
 
   for (const expected of cases) {

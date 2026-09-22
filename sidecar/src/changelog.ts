@@ -220,7 +220,7 @@ export class ChangelogService {
             const raw = await this.generateWithSlot({
               cwd: path,
               provider: "codex",
-              model: "gpt-5.6-luna",
+              model: "gpt-6-luna",
               effort: "medium",
               speed: "standard",
               prompt: enrichmentPrompt(batch, activeDomains),

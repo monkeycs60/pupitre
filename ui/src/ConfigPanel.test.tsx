@@ -91,7 +91,7 @@ test('ouvre sur le preset par défaut du projet quand aucune mémoire n’existe
 
 test('la dernière configuration lancée revient avant le défaut du projet', async () => {
   servePresets([speedPreset])
-  localStorage.setItem('pupitre:launch-config:project-1', JSON.stringify({
+  localStorage.setItem('pupitre:launch-config:v2:project-1', JSON.stringify({
     provider: 'claude',
     model: 'opus',
     effort: 'xhigh',
@@ -120,7 +120,7 @@ test('la dernière configuration lancée revient avant le défaut du projet', as
 
 test('un modèle disparu du catalogue ne ressuscite pas par la mémoire', async () => {
   servePresets([speedPreset])
-  localStorage.setItem('pupitre:launch-config:project-1', JSON.stringify({
+  localStorage.setItem('pupitre:launch-config:v2:project-1', JSON.stringify({
     provider: 'claude',
     model: 'fable-3-retire',
     effort: 'high',
@@ -142,7 +142,7 @@ test('un modèle disparu du catalogue ne ressuscite pas par la mémoire', async 
 
 test('un modèle soumis à confirmation ne revient pas par la mémoire', async () => {
   servePresets([speedPreset])
-  localStorage.setItem('pupitre:launch-config:project-1', JSON.stringify({
+  localStorage.setItem('pupitre:launch-config:v2:project-1', JSON.stringify({
     provider: 'claude',
     model: 'fable-5.1',
     effort: 'high',
@@ -169,10 +169,11 @@ test('choisir Fable garde en mémoire le dernier modèle ordinaire', () => {
   expect(readLaunchConfig(project.id)).toEqual(expect.objectContaining({ model: 'gpt-5.6-sol', effort: 'low' }))
 })
 
-test('un preset par défaut soumis à confirmation cède la place au preset Vitesse', async () => {
+test('un preset par défaut soumis à confirmation cède la place au réglage du provider', async () => {
   const builtinSpeed = { ...speedPreset, id: 'builtin-speed' }
   servePresets([{ ...speedPreset, provider: 'claude', model: 'fable-5.1', effort: 'high' }, builtinSpeed])
   const changes: ConversationConfig[] = []
+  let ready = false
 
   render(createElement(ConfigPanel, {
     project,
@@ -181,10 +182,11 @@ test('un preset par défaut soumis à confirmation cède la place au preset Vite
     memoryKey: project.id,
     onConfigChange: (next: ConversationConfig) => changes.push(next),
     onError: () => undefined,
+    onReady: (value: boolean) => { ready = value },
   }))
 
-  await waitFor(() => expect(changes.length).toBeGreaterThan(0))
-  expect(changes.at(-1)).toEqual(expect.objectContaining({ model: 'gpt-5.6-luna', presetId: 'builtin-speed' }))
+  await waitFor(() => expect(ready).toBe(true))
+  expect(changes).toEqual([])
 })
 
 test('changer un réglage écrit la mémoire du projet', async () => {
@@ -207,7 +209,7 @@ test('changer un réglage écrit la mémoire du projet', async () => {
   fireEvent.click(screen.getByRole('radio', { name: 'Grok' }))
 
   await waitFor(() => {
-    const raw = localStorage.getItem('pupitre:launch-config:project-1')
+    const raw = localStorage.getItem('pupitre:launch-config:v2:project-1')
     expect(raw === null ? null : (JSON.parse(raw) as { model: string }).model).toBe('grok-4.6')
   })
 })
@@ -230,7 +232,7 @@ test('sans clé de mémoire, rien n’est écrit : une bascule de modèle ne dic
 
   fireEvent.click(await screen.findByRole('radio', { name: 'Grok' }))
 
-  expect(localStorage.getItem('pupitre:launch-config:project-1')).toBeNull()
+  expect(localStorage.getItem('pupitre:launch-config:v2:project-1')).toBeNull()
 })
 
 test("appliquer le défaut ne perd ni la branche ni le ticket", async () => {

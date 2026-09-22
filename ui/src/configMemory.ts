@@ -8,7 +8,7 @@ import type { Provider } from './types'
  * sur deux dépôts. Un modèle soumis à confirmation n'est jamais mémorisé : la
  * mémoire garde le dernier choix ordinaire.
  */
-const KEY_PREFIX = 'pupitre:launch-config:'
+const KEY_PREFIX = 'pupitre:launch-config:v2:'
 
 /** Un modèle retiré du catalogue ne doit pas ressusciter par la mémoire. */
 function isKnown(provider: Provider, model: string, effort: string): boolean {

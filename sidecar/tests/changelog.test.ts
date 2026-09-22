@@ -102,7 +102,7 @@ test("importe et enrichit tout le backfill par lots de dix avec Luna medium stan
   expect(generations[0]).toEqual(expect.objectContaining({
     cwd: context.root,
     provider: "codex",
-    model: "gpt-5.6-luna",
+    model: "gpt-6-luna",
     effort: "medium",
     speed: "standard",
   }));

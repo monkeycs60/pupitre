@@ -77,7 +77,7 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
   const [quotaProviders, setQuotaProviders] = useState<Provider[]>(() => [...QUOTA_PROVIDERS])
   const [quotaOrder, setQuotaOrder] = useState<Provider[]>(() => [...QUOTA_PROVIDERS])
   const [ticketAuditConfig, setTicketAuditConfig] = useState<ConversationConfig>({
-    provider: 'codex', model: 'gpt-5.6-sol', effort: 'medium', speed: 'standard', permissionMode: null,
+    provider: 'codex', model: 'gpt-6-sol', effort: 'xhigh', speed: 'standard', permissionMode: null,
   })
 
   useEffect(() => {
