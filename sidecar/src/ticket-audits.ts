@@ -66,7 +66,7 @@ export class TicketAuditService {
     const conversation = this.conversations.create({
       projectId: ticket.project_id,
       ...config,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       worktreePath,
       ticketId: ticket.id,
       ticketInstruction: ticket.instruction,

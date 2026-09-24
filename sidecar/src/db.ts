@@ -9,6 +9,7 @@ import {
   QUALITY_FABLE_51_MIGRATION_KEY,
   SettingsStore,
   SPEED_REVIEW_MIGRATION_KEY,
+  TICKET_AUDIT_YOLO_MIGRATION_KEY,
 } from "./stores/settings";
 import { defaultDataDir, readInstance } from "./instance";
 import { BUILT_INS } from "./stores/presets";
@@ -758,6 +759,15 @@ export function openDb(dir: string = dataDir()): Database {
   if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(PROJECT_LAUNCH_CONFIG_MIGRATION_KEY)) {
     migrateProjectLaunchConfigs(db);
     new SettingsStore(db).set(PROJECT_LAUNCH_CONFIG_MIGRATION_KEY, true);
+  }
+  if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(TICKET_AUDIT_YOLO_MIGRATION_KEY)) {
+    db.exec(`
+      UPDATE conversations
+      SET permission_mode = 'bypassPermissions'
+      WHERE permission_mode = 'acceptEdits'
+        AND id IN (SELECT conversation_id FROM ticket_audits WHERE conversation_id IS NOT NULL)
+    `);
+    new SettingsStore(db).set(TICKET_AUDIT_YOLO_MIGRATION_KEY, true);
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
   widenProviderCheck(db, "skills");
