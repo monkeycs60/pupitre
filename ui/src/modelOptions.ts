@@ -27,7 +27,7 @@ export const PROVIDER_SHORT_LABELS: Record<Provider, string> = {
 }
 
 export const PROVIDER_MODELS = {
-  claude: ['fable-5.1', 'opus-5.5', 'sonnet-5.5', 'sonnet', 'haiku'],
+  claude: ['fable-5.1', 'opus-5.5', 'sonnet-5.5', 'haiku'],
   codex: ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna'],
   grok: ['grok-4.6', 'grok-4.5'],
   reasonix: ['go41'],

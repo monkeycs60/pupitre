@@ -59,6 +59,15 @@ test("les réglages de lancement du projet se replient sur le défaut du projet 
   expect(store.get(p.id)?.todo_launch_config).toBeNull();
 });
 
+test("les anciens réglages de projet Claude utilisent les modèles 5.5", () => {
+  const project = store.create({ name: "a", path: "/tmp/legacy-claude" });
+  store.setLaunchConfig(project.id, "default", { provider: "claude", model: "opus", effort: "medium", speed: "standard" });
+  store.setLaunchConfig(project.id, "scout", { provider: "claude", model: "sonnet", effort: "high", speed: "standard" });
+
+  expect(projectLaunchConfig(store.get(project.id)!, "default").model).toBe("opus-5.5");
+  expect(projectLaunchConfig(store.get(project.id)!, "scout").model).toBe("sonnet-5.5");
+});
+
 test("la migration copie les presets de projet dans ses réglages et rétablit les presets intégrés", () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-test-"));
   const db = openDb(dir);

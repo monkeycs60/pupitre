@@ -63,7 +63,10 @@ function parseLaunchConfig(value: unknown): ProjectLaunchConfig | null {
   try {
     const parsed = JSON.parse(value);
     if (typeof parsed?.provider !== "string" || typeof parsed.model !== "string" || typeof parsed.effort !== "string") return null;
-    return { provider: parsed.provider, model: parsed.model, effort: parsed.effort, speed: parsed.speed === "fast" ? "fast" : "standard" };
+    const model = parsed.provider === "claude" && (parsed.model === "opus" || parsed.model === "sonnet")
+      ? `${parsed.model}-5.5`
+      : parsed.model;
+    return { provider: parsed.provider, model, effort: parsed.effort, speed: parsed.speed === "fast" ? "fast" : "standard" };
   } catch {
     return null;
   }

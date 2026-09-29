@@ -99,6 +99,15 @@ test('le menu des modèles ne liste que ceux du provider courant', () => {
     .toEqual(['Grok 4.6', 'Grok 4.5'])
 })
 
+test('Claude ne propose plus Opus 5 ni Sonnet 5', () => {
+  render(selector({ config: { ...config, model: 'sonnet-5.5' } }))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
+
+  expect(screen.getAllByRole('menuitemradio').map((item) => item.getAttribute('aria-label')))
+    .toEqual(['Fable 5.1', 'Opus 5.5', 'Sonnet 5.5', 'Haiku 4.5'])
+})
+
 test('choisir un modèle ne touche qu’au modèle', () => {
   let next: ConversationConfig | null = null
   render(selector({ onConfigChange: (config) => { next = config } }))
