@@ -57,7 +57,7 @@ test("ajoute --effort quand un effort est fourni", async () => {
   expect(readFileSync(argsFile, "utf8")).toContain("--effort xhigh");
 });
 
-test("pinne Fable 5, Fable 5.1 et Opus 5.5 sur les identifiants Claude Code", async () => {
+test("pinne Fable 5, Fable 5.1, Opus 5.5 et Sonnet 5.5 sur les identifiants Claude Code", async () => {
   const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
   process.env.PUPITRE_CLAUDE_BIN = FAKE;
   process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
@@ -97,6 +97,17 @@ test("pinne Fable 5, Fable 5.1 et Opus 5.5 sur les identifiants Claude Code", as
   });
 
   expect(readFileSync(argsFile, "utf8")).toContain("--model claude-opus-5-5");
+
+  await collect({
+    cwd: "/tmp",
+    model: "sonnet-5.5",
+    prompt: "analyse",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+  });
+
+  expect(readFileSync(argsFile, "utf8")).toContain("--model claude-sonnet-5-5");
 });
 
 test("YOLO transmet le bypass dangereux à Claude", async () => {

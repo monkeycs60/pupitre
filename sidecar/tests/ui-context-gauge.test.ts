@@ -6,6 +6,7 @@ import {
 
 test("utilise le dernier snapshot de contexte sans sommer les coûts", () => {
   expect(contextWindowTokens("claude", "sonnet")).toBe(200_000);
+  expect(contextWindowTokens("claude", "sonnet-5.5")).toBe(1_000_000);
   expect(contextWindowTokens("claude", "fable-5.1")).toBe(1_000_000);
   expect(contextWindowTokens("codex", "gpt-5.6-sol")).toBe(400_000);
   expect(contextWindowTokens("codex", "gpt-6-astra")).toBe(1_050_000);

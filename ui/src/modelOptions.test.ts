@@ -1,6 +1,12 @@
 import { expect, test } from 'bun:test'
 import * as options from './modelOptions'
 
+test('propose Sonnet 5.5 avec son libellé et son tarif', () => {
+  expect(options.PROVIDER_MODELS.claude).toContain('sonnet-5.5')
+  expect(options.modelLabel('sonnet-5.5')).toBe('Sonnet 5.5')
+  expect(options.formatModelPrice('sonnet-5.5')).toBe('2 / 10 $')
+})
+
 test('exprime le coût absolu et relatif des modèles à partir des tarifs API', () => {
   expect(options.modelCostTicks('gpt-5.6-luna')).toBe(1)
   expect(options.modelCostTicks('fable-5')).toBe(20)

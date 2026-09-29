@@ -27,7 +27,7 @@ export const PROVIDER_SHORT_LABELS: Record<Provider, string> = {
 }
 
 export const PROVIDER_MODELS = {
-  claude: ['fable-5.1', 'opus-5.5', 'sonnet', 'haiku'],
+  claude: ['fable-5.1', 'opus-5.5', 'sonnet-5.5', 'sonnet', 'haiku'],
   codex: ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna'],
   grok: ['grok-4.6', 'grok-4.5'],
   reasonix: ['go41'],
@@ -84,6 +84,7 @@ export const MODEL_LABELS: Record<string, string> = {
   'fable-5': 'Fable 5',
   'opus-5.5': 'Opus 5.5',
   opus: 'Opus 5',
+  'sonnet-5.5': 'Sonnet 5.5',
   sonnet: 'Sonnet 5',
   haiku: 'Haiku 4.5',
   'gpt-6-astra': 'GPT-6 Astra',
@@ -131,6 +132,7 @@ export const MODEL_HINTS: Record<string, string> = {
   'fable-5': 'génération précédente',
   'opus-5.5': 'raisonnement profond',
   opus: 'génération précédente',
+  'sonnet-5.5': 'équilibré',
   sonnet: 'équilibré',
   haiku: 'rapide et économe',
   'gpt-6-astra': 'le plus capable',
@@ -163,7 +165,7 @@ export interface ModelPricing {
 }
 
 /**
- * Tarifs indicatifs en dollars par million de tokens, relevés le 6 septembre 2026 (Opus 5.5 et GPT-6 Sol/Luna : 22 septembre).
+ * Tarifs indicatifs en dollars par million de tokens, relevés le 6 septembre 2026 (Opus 5.5 et GPT-6 Sol/Luna : 22 septembre ; Sonnet 5.5 : 29 septembre).
  * Ils ne représentent jamais une facture d'abonnement : le sélecteur les
  * emploie seulement pour rendre le compromis coût/capacité lisible.
  */
@@ -178,6 +180,7 @@ export const MODEL_PRICING: readonly ModelPricing[] = [
   { provider: 'claude', model: 'fable-5', input: 10, output: 50 },
   { provider: 'claude', model: 'opus-5.5', input: 4, output: 20 },
   { provider: 'claude', model: 'opus', input: 5, output: 25 },
+  { provider: 'claude', model: 'sonnet-5.5', input: 2, output: 10 },
   { provider: 'claude', model: 'sonnet', input: 2, output: 10 },
   { provider: 'claude', model: 'haiku', input: 1, output: 5 },
   { provider: 'grok', model: 'grok-4.6', input: 2, output: 6 },
