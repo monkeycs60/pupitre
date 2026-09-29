@@ -2,18 +2,23 @@ import { describe, expect, test } from "bun:test";
 import { withToolMentions } from "../src/tool-mentions";
 
 describe("withToolMentions", () => {
-  test("oriente @chrome vers le plugin Chrome de Codex", () => {
-    expect(withToolMentions("Ouvre la page avec @chrome", "codex"))
-      .toContain("plugin Chrome de Codex");
+  test("oriente @browser vers le skill agent-browser pour Codex", () => {
+    expect(withToolMentions("Ouvre la page avec @browser", "codex"))
+      .toContain("skill agent-browser");
   });
 
-  test("oriente @chrome vers Claude in Chrome", () => {
-    expect(withToolMentions("@chrome ouvre la page", "claude"))
-      .toContain("Claude in Chrome");
+  test("oriente @browser vers le skill agent-browser pour Claude", () => {
+    expect(withToolMentions("@browser ouvre la page", "claude"))
+      .toContain("skill agent-browser");
   });
 
-  test("ne modifie pas une adresse ou un mot contenant chrome", () => {
-    expect(withToolMentions("contacte chrome@example.com", "codex"))
-      .toBe("contacte chrome@example.com");
+  test("ne modifie pas une adresse ou un mot contenant browser", () => {
+    expect(withToolMentions("contacte browser@example.com", "codex"))
+      .toBe("contacte browser@example.com");
+  });
+
+  test("ne réagit plus à @chrome", () => {
+    expect(withToolMentions("Ouvre la page avec @chrome", "claude"))
+      .toBe("Ouvre la page avec @chrome");
   });
 });

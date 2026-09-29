@@ -36,7 +36,7 @@ export interface ComposerToolItem {
 }
 
 export const COMPOSER_TOOLS: ComposerToolItem[] = [
-  { id: 'chrome', label: 'chrome', detail: 'Piloter Chrome avec l’intégration du fournisseur' },
+  { id: 'browser', label: 'browser', detail: 'Piloter ton Chrome avec le skill agent-browser' },
   ...COMPOSER_DIRECTIVES,
 ]
 
