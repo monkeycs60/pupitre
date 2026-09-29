@@ -189,7 +189,7 @@ export interface RoutineRun {
 
 export interface AppNotification {
   id: number
-  kind: 'routine' | 'long-task'
+  kind: 'routine' | 'long-task' | 'external'
   title: string
   body: string
   conversation_id: string | null

@@ -1405,6 +1405,24 @@ export function createServer(deps: ServerDeps) {
           return json(deps.notifications.listAfter(after));
         }
 
+        if (request.method === "POST" && pathname === "/api/notifications") {
+          const body = await readObject(request, 4_096);
+          const title = requiredString(body, "title");
+          const text = optionalTrimmed(body, "body") ?? "";
+          const conversationId = optionalTrimmed(body, "conversationId");
+          const cliSessionId = optionalTrimmed(body, "cliSessionId");
+          const conversation = conversationId
+            ? deps.conversations.get(conversationId)
+            : cliSessionId ? deps.conversations.findByCliSessionId(cliSessionId) : null;
+          if (conversationId && !conversation) throw new HttpError(404, "conversation inconnue");
+          return json(deps.notifications.create({
+            kind: "external",
+            title,
+            body: text,
+            conversation_id: conversation?.id ?? null,
+          }), 201);
+        }
+
         if (request.method === "GET" && pathname === "/api/notifications/cursor") {
           return json({ cursor: deps.notifications.latestId() });
         }

@@ -892,3 +892,32 @@ test("apparie l'extension puis protège la résolution visuelle par jeton", asyn
   }, token, "PUT");
   expect(rebound.status).toBe(200);
 });
+
+test("POST /api/notifications rattache l'alerte à la conversation de la session CLI", async () => {
+  const project = await createProject("/tmp/notify-1");
+  const conversation = current!.deps.conversations.create({
+    projectId: project.id,
+    provider: "claude",
+    model: "m",
+    firstMessage: "Bonjour",
+  });
+  current!.deps.conversations.setCliSessionId(conversation.id, "cli-session-42");
+
+  const linked = await postJson("/api/notifications", {
+    title: "Chrome attend ton autorisation",
+    body: "Clique sur « Autoriser ».",
+    cliSessionId: "cli-session-42",
+  });
+  expect(linked.status).toBe(201);
+  expect(await linked.json()).toMatchObject({ kind: "external", conversation_id: conversation.id });
+
+  const orphan = await postJson("/api/notifications", { title: "Sans conversation", cliSessionId: "inconnue" });
+  expect(orphan.status).toBe(201);
+  expect(await orphan.json()).toMatchObject({ conversation_id: null, body: "" });
+
+  expect((await postJson("/api/notifications", { body: "sans titre" })).status).toBe(400);
+  expect((await postJson("/api/notifications", { title: "x", conversationId: "absente" })).status).toBe(404);
+
+  const listed = await fetch(`${current!.baseUrl}/api/notifications?after=0`).then((response) => response.json());
+  expect(listed).toHaveLength(2);
+});

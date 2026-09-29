@@ -448,6 +448,12 @@ export class ConversationStore {
     return removed;
   }
 
+  findByCliSessionId(cliSessionId: string): Conversation | null {
+    const row = this.db.query("SELECT id FROM conversations WHERE cli_session_id = ? ORDER BY updated_at DESC LIMIT 1")
+      .get(cliSessionId) as { id: string } | null;
+    return row ? this.get(row.id) : null;
+  }
+
   setCliSessionId(id: string, cliSessionId: string): void {
     this.db.query("UPDATE conversations SET cli_session_id = ?, updated_at = ? WHERE id = ?")
       .run(cliSessionId, new Date().toISOString(), id);
