@@ -28,7 +28,7 @@ export const PROVIDER_SHORT_LABELS: Record<Provider, string> = {
 
 export const PROVIDER_MODELS = {
   claude: ['fable-5.1', 'opus-5.5', 'sonnet-5.5', 'haiku'],
-  codex: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-luna'],
+  codex: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'],
   grok: ['grok-4.6', 'grok-4.5'],
   reasonix: ['go41'],
 } as const satisfies Record<Provider, readonly string[]>
@@ -47,7 +47,7 @@ export const PROVIDER_EFFORTS = {
  * monter d'un cran à la main.
  */
 export const PROVIDER_DEFAULTS = {
-  codex: { model: 'gpt-6-sol', effort: 'high' },
+  codex: { model: 'gpt-6.1-sol', effort: 'high' },
   claude: { model: 'opus-5.5', effort: 'medium' },
   grok: { model: 'grok-4.6', effort: 'high' },
   reasonix: { model: 'go41', effort: 'high' },
@@ -56,7 +56,7 @@ export const PROVIDER_DEFAULTS = {
 /** Réglage des lancements de projet sans réglage propre ; miroir du sidecar. */
 export const PROJECT_FALLBACK_LAUNCH_CONFIG = {
   provider: 'codex',
-  model: 'gpt-6-sol',
+  model: 'gpt-6.1-sol',
   effort: 'high',
   speed: 'standard',
 } as const satisfies { provider: Provider; model: string; effort: string; speed: ConversationSpeed }
@@ -89,7 +89,6 @@ export const MODEL_LABELS: Record<string, string> = {
   haiku: 'Haiku 4.5',
   'gpt-6-astra': 'GPT-6 Astra',
   'gpt-6.1-sol': 'GPT-6.1 Sol',
-  'gpt-6-sol': 'GPT-6 Sol',
   'gpt-6-luna': 'GPT-6 Luna',
   'gpt-5.6-sol': 'GPT-5.6 Sol',
   'gpt-5.6-luna': 'GPT-5.6 Luna',
@@ -138,7 +137,6 @@ export const MODEL_HINTS: Record<string, string> = {
   haiku: 'rapide et économe',
   'gpt-6-astra': 'le plus capable',
   'gpt-6.1-sol': 'proche d’Astra',
-  'gpt-6-sol': 'raisonnement profond',
   'gpt-6-luna': 'rapide et économe',
   'gpt-5.6-sol': 'génération précédente',
   'gpt-5.6-luna': 'génération précédente',
@@ -167,14 +165,13 @@ export interface ModelPricing {
 }
 
 /**
- * Tarifs indicatifs en dollars par million de tokens, relevés le 6 septembre 2026 (Opus 5.5 et GPT-6 Sol/Luna : 22 septembre ; Sonnet 5.5 : 29 septembre ; GPT-6.1 Sol : 30 septembre).
+ * Tarifs indicatifs en dollars par million de tokens, relevés le 6 septembre 2026 (Opus 5.5 et GPT-6 Luna : 22 septembre ; Sonnet 5.5 : 29 septembre ; GPT-6.1 Sol : 30 septembre).
  * Ils ne représentent jamais une facture d'abonnement : le sélecteur les
  * emploie seulement pour rendre le compromis coût/capacité lisible.
  */
 export const MODEL_PRICING: readonly ModelPricing[] = [
   { provider: 'codex', model: 'gpt-6-astra', input: 10, output: 50 },
   { provider: 'codex', model: 'gpt-6.1-sol', input: 2, output: 10 },
-  { provider: 'codex', model: 'gpt-6-sol', input: 2, output: 10 },
   { provider: 'codex', model: 'gpt-6-luna', input: 0.1, output: 0.5 },
   { provider: 'codex', model: 'gpt-5.6-sol', input: 5, output: 30 },
   { provider: 'codex', model: 'gpt-5.6-luna', input: 0.2, output: 1.2 },

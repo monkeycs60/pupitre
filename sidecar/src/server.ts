@@ -289,7 +289,7 @@ const EFFORTS_BY_PROVIDER = {
 } as const satisfies Record<Provider, readonly string[]>;
 const MODELS_BY_PROVIDER = {
   claude: ["fable-5.1", "opus-5.5", "sonnet-5.5", "haiku"],
-  codex: ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"],
+  codex: ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"],
   grok: ["grok-4.6", "grok-4.5"],
   reasonix: ["go41"],
 } as const satisfies Record<Provider, readonly string[]>;
@@ -2719,11 +2719,10 @@ export function createServer(deps: ServerDeps) {
           }
           if ("ticketAuditConfig" in body) {
             const config = body.ticketAuditConfig as Record<string, unknown> | null;
-            if (!config || (config.provider !== "codex" && config.provider !== "claude" && config.provider !== "grok") || typeof config.model !== "string"
-              || typeof config.effort !== "string" || (config.speed !== "standard" && config.speed !== "fast")) {
+            if (!config || (config.provider !== "codex" && config.provider !== "claude" && config.provider !== "grok")) {
               throw new HttpError(400, "configuration de relecture de ticket invalide");
             }
-            deps.settings.set("ticketAuditConfig", config);
+            deps.settings.set("ticketAuditConfig", launchConfigOf(config));
             updated = true;
           }
           if (INTEGRATION_TOKENS_KEY in body) {

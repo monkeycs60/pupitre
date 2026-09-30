@@ -27,6 +27,7 @@ test("la relecture démarre en YOLO et conserve l'interdiction d'écrire au prem
   const runner = {
     runTurn: async (conversationId: string, prompt: string) => {
       expect(conversations.get(conversationId)?.permission_mode).toBe("bypassPermissions");
+      expect(conversations.get(conversationId)).toMatchObject({ model: "gpt-6.1-sol", effort: "high" });
       expect(prompt).toContain("Ne modifie aucun fichier et ne publie rien");
       resolveTurn();
       return { state: "done", cancelled: false };
@@ -59,11 +60,11 @@ test("la migration corrige les anciennes relectures une seule fois", () => {
   });
   const conversations = new ConversationStore(db);
   const audit = conversations.create({
-    projectId: project.id, provider: "codex", model: "gpt-6-sol",
+    projectId: project.id, provider: "codex", model: "gpt-6.1-sol",
     permissionMode: "acceptEdits", firstMessage: "Audit", ticketId: ticket.id,
   });
   const unrelated = conversations.create({
-    projectId: project.id, provider: "codex", model: "gpt-6-sol",
+    projectId: project.id, provider: "codex", model: "gpt-6.1-sol",
     permissionMode: "acceptEdits", firstMessage: "Autre conversation",
   });
   db.query("INSERT INTO ticket_audits (ticket_id, conversation_id, state, created_at, updated_at) VALUES (?, ?, 'done', ?, ?)")

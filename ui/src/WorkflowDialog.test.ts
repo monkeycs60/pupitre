@@ -158,7 +158,7 @@ test('changer de provider dans la grille manuelle applique le réglage par défa
     { provider: 'claude', model: 'opus-5.5', effort: 'medium' },
     { provider: 'grok', model: 'grok-4.6', effort: 'high' },
     { provider: 'reasonix', model: 'go41', effort: 'high' },
-    { provider: 'codex', model: 'gpt-6-sol', effort: 'high' },
+    { provider: 'codex', model: 'gpt-6.1-sol', effort: 'high' },
   ]
 
   for (const expected of cases) {

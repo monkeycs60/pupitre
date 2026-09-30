@@ -772,6 +772,10 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     config: { provider: "codex", model: "gpt-5.6-sol", effort: "high", speed: "standard" },
   })).status).toBe(400);
   expect((await putJson(`/api/projects/${project.id}/launch-config`, {
+    slot: "todo",
+    config: { provider: "codex", model: "gpt-6-sol", effort: "high", speed: "standard" },
+  })).status).toBe(400);
+  expect((await putJson(`/api/projects/${project.id}/launch-config`, {
     slot: "scout",
     config: { provider: "claude", model: "opus-5.5", effort: "medium", speed: "fast" },
   })).status).toBe(400);
@@ -883,6 +887,18 @@ test("persiste les seuils de quota dans settings", async () => {
   }));
 
   await putJson("/api/settings", { filesystemScope: "project-and-ai-roots" });
+});
+
+test("la relecture accepte GPT-6.1 Sol high et refuse l'ancien Sol", async () => {
+  const config = { provider: "codex", model: "gpt-6.1-sol", effort: "high", speed: "standard" };
+  const saved = await putJson("/api/settings", { ticketAuditConfig: config });
+  expect(saved.status).toBe(200);
+  expect(await saved.json()).toMatchObject({ ticketAuditConfig: config });
+
+  const retired = await putJson("/api/settings", {
+    ticketAuditConfig: { ...config, model: "gpt-6-sol" },
+  });
+  expect(retired.status).toBe(400);
 });
 
 test("sauvegarder un token relance immédiatement le refresh des intégrations", async () => {

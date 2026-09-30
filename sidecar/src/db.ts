@@ -5,6 +5,7 @@ import { countConversationMessages } from "./message-count";
 import {
   MESSAGE_COUNT_MIGRATION_KEY,
   OBSOLETE_MODELS_MIGRATION_KEY,
+  SOL_61_MIGRATION_KEY,
   PROJECT_LAUNCH_CONFIG_MIGRATION_KEY,
   QUALITY_FABLE_51_MIGRATION_KEY,
   SettingsStore,
@@ -749,8 +750,7 @@ export function openDb(dir: string = dataDir()): Database {
     for (const table of ["presets", "workflows", "routines"]) {
       db.exec(`
         UPDATE ${table} SET model = 'gpt-6-luna', effort = 'xhigh' WHERE model = 'gpt-5.6-luna';
-        UPDATE ${table} SET model = 'gpt-6-sol', effort = 'xhigh' WHERE model = 'gpt-5.6-sol' AND effort = 'medium';
-        UPDATE ${table} SET model = 'gpt-6-sol', effort = 'high' WHERE model IN ('gpt-5.6-sol', 'gpt-5.6-terra');
+        UPDATE ${table} SET model = 'gpt-6.1-sol', effort = 'high' WHERE model IN ('gpt-5.6-sol', 'gpt-5.6-terra');
         UPDATE ${table} SET model = 'opus-5.5' WHERE model = 'opus';
       `);
     }
@@ -759,6 +759,9 @@ export function openDb(dir: string = dataDir()): Database {
   if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(PROJECT_LAUNCH_CONFIG_MIGRATION_KEY)) {
     migrateProjectLaunchConfigs(db);
     new SettingsStore(db).set(PROJECT_LAUNCH_CONFIG_MIGRATION_KEY, true);
+  }
+  if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(SOL_61_MIGRATION_KEY)) {
+    migrateSol61(db);
   }
   if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(TICKET_AUDIT_YOLO_MIGRATION_KEY)) {
     db.exec(`
@@ -1043,5 +1046,41 @@ function migrateProjectLaunchConfigs(db: Database): void {
     db.exec("UPDATE projects SET default_preset_id = NULL, default_scout_preset_id = NULL, default_todo_preset_id = NULL");
     const reset = db.query("UPDATE presets SET name = ?, provider = ?, model = ?, effort = ?, speed = ? WHERE id = ?");
     for (const preset of BUILT_INS) reset.run(preset.name, preset.provider, preset.model, preset.effort, preset.speed, preset.id);
+  })();
+}
+
+function migrateSol61(db: Database): void {
+  const settings = new SettingsStore(db);
+  const replaceConfig = (value: string | null): string | null => {
+    if (value === null) return null;
+    try {
+      const config = JSON.parse(value) as Record<string, unknown>;
+      if (config?.provider === "codex" && config.model === "gpt-6-sol") {
+        return JSON.stringify({ ...config, model: "gpt-6.1-sol", effort: "high" });
+      }
+    } catch {
+      return value;
+    }
+    return value;
+  };
+  db.transaction(() => {
+    for (const table of ["presets", "workflows", "routines", "conversations", "subtasks"]) {
+      db.query(`UPDATE ${table} SET model = 'gpt-6.1-sol', effort = 'high' WHERE provider = 'codex' AND model = 'gpt-6-sol'`).run();
+    }
+    const projects = db.query("SELECT id, default_launch_config, scout_launch_config, todo_launch_config FROM projects")
+      .all() as Array<Record<string, string | null>>;
+    const update = db.query("UPDATE projects SET default_launch_config = ?, scout_launch_config = ?, todo_launch_config = ? WHERE id = ?");
+    for (const project of projects) {
+      const columns = ["default_launch_config", "scout_launch_config", "todo_launch_config"] as const;
+      const configs = columns.map((column) => replaceConfig(project[column]));
+      if (columns.some((column, index) => configs[index] !== project[column])) {
+        update.run(...configs, project.id);
+      }
+    }
+    const audit = settings.get<Record<string, unknown>>("ticketAuditConfig");
+    if (audit?.provider === "codex" && audit.model === "gpt-6-sol") {
+      settings.set("ticketAuditConfig", { ...audit, model: "gpt-6.1-sol", effort: "high" });
+    }
+    settings.set(SOL_61_MIGRATION_KEY, true);
   })();
 }

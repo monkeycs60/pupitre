@@ -74,14 +74,14 @@ test("la migration copie les presets de projet dans ses réglages et rétablit l
   const projects = new ProjectStore(db);
   new PresetStore(db);
   const p = projects.create({ name: "a", path: "/tmp/launch-migration" });
-  db.query("UPDATE presets SET name = 'Sol low', model = 'gpt-6-sol', effort = 'high', speed = 'standard' WHERE id = 'builtin-speed'").run();
+  db.query("UPDATE presets SET name = 'Sol high', model = 'gpt-6.1-sol', effort = 'high', speed = 'standard' WHERE id = 'builtin-speed'").run();
   db.query("UPDATE projects SET default_preset_id = 'builtin-speed', default_scout_preset_id = 'builtin-eco' WHERE id = ?").run(p.id);
   db.query("DELETE FROM settings WHERE key = ?").run(PROJECT_LAUNCH_CONFIG_MIGRATION_KEY);
   db.close();
 
   const reopened = openDb(dir);
   const migrated = new ProjectStore(reopened).get(p.id)!;
-  expect(migrated.default_launch_config).toEqual({ provider: "codex", model: "gpt-6-sol", effort: "high", speed: "standard" });
+  expect(migrated.default_launch_config).toEqual({ provider: "codex", model: "gpt-6.1-sol", effort: "high", speed: "standard" });
   expect(migrated.scout_launch_config).toEqual({ provider: "codex", model: "gpt-6-luna", effort: "xhigh", speed: "standard" });
   expect(migrated.todo_launch_config).toBeNull();
   expect(migrated.default_preset_id).toBeNull();

@@ -16,7 +16,7 @@ export const PROJECT_LAUNCH_SLOTS: readonly ProjectLaunchSlot[] = ["default", "s
 
 export const FALLBACK_PROJECT_LAUNCH_CONFIG: ProjectLaunchConfig = {
   provider: "codex",
-  model: "gpt-6-sol",
+  model: "gpt-6.1-sol",
   effort: "high",
   speed: "standard",
 };

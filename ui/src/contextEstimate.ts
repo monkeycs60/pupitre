@@ -15,7 +15,6 @@ const MODEL_CONTEXT_WINDOWS: Partial<Record<Provider, Record<string, number>>> =
   codex: {
     'gpt-6-astra': 1_050_000,
     'gpt-6.1-sol': 1_050_000,
-    'gpt-6-sol': 1_050_000,
     'gpt-6-luna': 1_050_000,
     'gpt-5.6-sol': 400_000,
     'gpt-5.6-luna': 400_000,

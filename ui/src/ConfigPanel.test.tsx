@@ -162,9 +162,22 @@ test('un modèle soumis à confirmation ne revient pas par la mémoire', async (
 
 test('choisir Fable garde en mémoire le dernier modèle ordinaire', () => {
   const base = { presetId: null, effort: 'low', speed: 'standard' as const, permissionMode: null }
-  writeLaunchConfig(project.id, { ...base, provider: 'codex', model: 'gpt-6-sol' })
+  writeLaunchConfig(project.id, { ...base, provider: 'codex', model: 'gpt-6.1-sol' })
   writeLaunchConfig(project.id, { ...base, provider: 'claude', model: 'fable-5.1', effort: 'high' })
-  expect(readLaunchConfig(project.id)).toEqual(expect.objectContaining({ model: 'gpt-6-sol', effort: 'low' }))
+  expect(readLaunchConfig(project.id)).toEqual(expect.objectContaining({ model: 'gpt-6.1-sol', effort: 'low' }))
+})
+
+test('la mémoire du précédent Sol revient sur GPT-6.1 Sol high', () => {
+  localStorage.setItem('pupitre:launch-config:v2:project-1', JSON.stringify({
+    provider: 'codex', model: 'gpt-6-sol', effort: 'xhigh', speed: 'fast', permissionMode: 'plan',
+  }))
+  expect(readLaunchConfig(project.id)).toEqual(expect.objectContaining({
+    model: 'gpt-6.1-sol', effort: 'high', speed: 'fast', permissionMode: 'plan',
+  }))
+  writeLaunchConfig(project.id, { provider: 'codex', model: 'gpt-6-sol', effort: 'xhigh', speed: 'fast', permissionMode: 'plan' })
+  expect(JSON.parse(localStorage.getItem('pupitre:launch-config:v2:project-1')!)).toMatchObject({
+    model: 'gpt-6.1-sol', effort: 'high',
+  })
 })
 
 test('un réglage de projet soumis à confirmation cède la place au réglage du provider', async () => {

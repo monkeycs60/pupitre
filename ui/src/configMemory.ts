@@ -43,12 +43,15 @@ export function readLaunchConfig(projectId: string): ConversationConfig | null {
   const model = memory.model
   const effort = memory.effort
   if (typeof provider !== 'string' || typeof model !== 'string' || typeof effort !== 'string') return null
-  if (!isKnown(provider as Provider, model, effort) || requiresLaunchConfirmation(model)) return null
+  const retiredSol = provider === 'codex' && model === 'gpt-6-sol'
+  const currentModel = retiredSol ? 'gpt-6.1-sol' : model
+  const currentEffort = retiredSol ? 'high' : effort
+  if (!isKnown(provider as Provider, currentModel, currentEffort) || requiresLaunchConfirmation(currentModel)) return null
   return {
     presetId: null,
     provider: provider as Provider,
-    model,
-    effort,
+    model: currentModel,
+    effort: currentEffort,
     speed: memory.speed === 'fast' ? 'fast' : 'standard',
     permissionMode: typeof memory.permissionMode === 'string'
       ? memory.permissionMode as ConversationConfig['permissionMode']
@@ -60,11 +63,12 @@ export function readLaunchConfig(projectId: string): ConversationConfig | null {
 export function writeLaunchConfig(projectId: string, config: ConversationConfig): void {
   const store = storage()
   if (store === null || requiresLaunchConfirmation(config.model)) return
+  const retiredSol = config.provider === 'codex' && config.model === 'gpt-6-sol'
   try {
     store.setItem(`${KEY_PREFIX}${projectId}`, JSON.stringify({
       provider: config.provider,
-      model: config.model,
-      effort: config.effort,
+      model: retiredSol ? 'gpt-6.1-sol' : config.model,
+      effort: retiredSol ? 'high' : config.effort,
       speed: config.speed,
       permissionMode: config.permissionMode,
     }))

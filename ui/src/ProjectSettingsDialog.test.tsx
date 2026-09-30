@@ -89,7 +89,7 @@ test('enregistre une intégration GitLab avec son motif de branche', async () =>
 
 test('règle les modèles par défaut du projet avec le sélecteur de conversation', async () => {
   const calls: Array<{ url: string; body: unknown }> = []
-  const sol = { provider: 'codex', model: 'gpt-6-sol', effort: 'high', speed: 'standard' } as const
+  const sol = { provider: 'codex', model: 'gpt-6.1-sol', effort: 'high', speed: 'standard' } as const
 
   globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input)
@@ -111,7 +111,7 @@ test('règle les modèles par défaut du projet avec le sélecteur de conversati
   }))
 
   const todo = within(screen.getByRole('group', { name: 'TODO lancées depuis le rapport d’activité' }))
-  expect(todo.getByRole('button', { name: 'Modèle' }).textContent).toContain('GPT-6 Sol')
+  expect(todo.getByRole('button', { name: 'Modèle' }).textContent).toContain('GPT-6.1 Sol')
   expect(todo.getByText(/^Automatique/)).toBeTruthy()
   fireEvent.click(todo.getByRole('button', { name: 'Modèle' }))
   fireEvent.click(screen.getByRole('menuitemradio', { name: 'GPT-6 Luna' }))

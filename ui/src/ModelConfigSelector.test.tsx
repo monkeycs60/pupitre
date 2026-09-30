@@ -45,7 +45,7 @@ test('changer de provider applique le modèle et l’effort par défaut du provi
 
   fireEvent.click(screen.getByRole('radio', { name: 'Codex' }))
 
-  expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-6-sol', effort: 'high' })
+  expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-6.1-sol', effort: 'high' })
 })
 
 test('chaque provider arrive sur son réglage par défaut, pas son modèle le plus cher', () => {
@@ -81,7 +81,7 @@ test('la mémoire par provider prime sur le défaut au retour', () => {
   render(createElement(Harness))
 
   fireEvent.click(screen.getByRole('radio', { name: 'Codex' }))
-  expect(screen.getByRole('button', { name: 'Modèle' }).textContent).toContain('GPT-6 Sol')
+  expect(screen.getByRole('button', { name: 'Modèle' }).textContent).toContain('GPT-6.1 Sol')
 
   // Claude n'a jamais été quitté avec un autre réglage : son dernier choix
   // (fable-5/high) revient, pas son défaut opus/medium.
@@ -102,13 +102,13 @@ test('le menu des modèles ne liste que ceux du provider courant', () => {
 test('GPT-6.1 Sol peut être choisi dans le menu Codex', () => {
   let next: ConversationConfig | null = null
   render(selector({
-    config: { ...config, provider: 'codex', model: 'gpt-6-sol' },
+    config: { ...config, provider: 'codex', model: 'gpt-6-luna' },
     onConfigChange: (value) => { next = value },
   }))
 
   fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
   expect(screen.getAllByRole('menuitemradio').map((item) => item.getAttribute('aria-label')))
-    .toEqual(['GPT-6 Astra', 'GPT-6.1 Sol', 'GPT-6 Sol', 'GPT-6 Luna'])
+    .toEqual(['GPT-6 Astra', 'GPT-6.1 Sol', 'GPT-6 Luna'])
   fireEvent.click(screen.getByRole('menuitemradio', { name: 'GPT-6.1 Sol' }))
   expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-6.1-sol' })
 })

@@ -9,6 +9,7 @@ test('propose Sonnet 5.5 avec son libellé et son tarif', () => {
 
 test('propose GPT-6.1 Sol avec son libellé et son tarif', () => {
   expect(options.PROVIDER_MODELS.codex).toContain('gpt-6.1-sol')
+  expect(options.PROVIDER_MODELS.codex).not.toContain('gpt-6-sol')
   expect(options.modelLabel('gpt-6.1-sol')).toBe('GPT-6.1 Sol')
   expect(options.formatModelPrice('gpt-6.1-sol')).toBe('2 / 10 $')
 })
