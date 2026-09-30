@@ -759,6 +759,14 @@ test("CRUD des presets, intégrés éditables et restaurables, défaut par proje
     todo_launch_config: { provider: "codex", model: "gpt-6-luna", effort: "xhigh", speed: "fast" },
     default_launch_config: null,
   }));
+  const sol61 = await putJson(`/api/projects/${project.id}/launch-config`, {
+    slot: "default",
+    config: { provider: "codex", model: "gpt-6.1-sol", effort: "high", speed: "standard" },
+  });
+  expect(sol61.status).toBe(200);
+  expect(await sol61.json()).toEqual(expect.objectContaining({
+    default_launch_config: { provider: "codex", model: "gpt-6.1-sol", effort: "high", speed: "standard" },
+  }));
   expect((await putJson(`/api/projects/${project.id}/launch-config`, {
     slot: "todo",
     config: { provider: "codex", model: "gpt-5.6-sol", effort: "high", speed: "standard" },

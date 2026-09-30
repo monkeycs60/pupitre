@@ -99,6 +99,20 @@ test('le menu des modèles ne liste que ceux du provider courant', () => {
     .toEqual(['Grok 4.6', 'Grok 4.5'])
 })
 
+test('GPT-6.1 Sol peut être choisi dans le menu Codex', () => {
+  let next: ConversationConfig | null = null
+  render(selector({
+    config: { ...config, provider: 'codex', model: 'gpt-6-sol' },
+    onConfigChange: (value) => { next = value },
+  }))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
+  expect(screen.getAllByRole('menuitemradio').map((item) => item.getAttribute('aria-label')))
+    .toEqual(['GPT-6 Astra', 'GPT-6.1 Sol', 'GPT-6 Sol', 'GPT-6 Luna'])
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'GPT-6.1 Sol' }))
+  expect(next).toEqual({ ...config, provider: 'codex', model: 'gpt-6.1-sol' })
+})
+
 test('Claude ne propose plus Opus 5 ni Sonnet 5', () => {
   render(selector({ config: { ...config, model: 'sonnet-5.5' } }))
 

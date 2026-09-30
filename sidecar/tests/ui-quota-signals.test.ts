@@ -155,6 +155,7 @@ test("pulse : quota peu entamé et reset dans moins d'une heure, modèles chers"
   const codex = state("codex", [window({ usedPercent: 20, resetsAt: isoIn(30) })]);
 
   expect(shouldPulse(codex, "gpt-6-sol", NOW)).toBe(true);
+  expect(shouldPulse(codex, "gpt-6.1-sol", NOW)).toBe(true);
   expect(shouldPulse(codex, "gpt-6-luna", NOW)).toBe(false);
 });
 

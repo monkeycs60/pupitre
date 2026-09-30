@@ -7,6 +7,12 @@ test('propose Sonnet 5.5 avec son libellé et son tarif', () => {
   expect(options.formatModelPrice('sonnet-5.5')).toBe('2 / 10 $')
 })
 
+test('propose GPT-6.1 Sol avec son libellé et son tarif', () => {
+  expect(options.PROVIDER_MODELS.codex).toContain('gpt-6.1-sol')
+  expect(options.modelLabel('gpt-6.1-sol')).toBe('GPT-6.1 Sol')
+  expect(options.formatModelPrice('gpt-6.1-sol')).toBe('2 / 10 $')
+})
+
 test('exprime le coût absolu et relatif des modèles à partir des tarifs API', () => {
   expect(options.modelCostTicks('gpt-5.6-luna')).toBe(1)
   expect(options.modelCostTicks('fable-5')).toBe(20)
