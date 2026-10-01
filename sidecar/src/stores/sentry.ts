@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 
 export type SentryLifecycle = "new" | "active" | "quiet" | "resolved_remote";
 export type SentryVerdict = "real_fixable" | "real_investigate" | "noise" | "uncertain";
-export interface RelevanceReason { domain: string; signal: string }
+export interface RelevanceReason { ticket: string; signal: string }
 export interface SentryRelevance { matched: boolean; reasons: RelevanceReason[] }
 export interface SentryIssue { id:string; integration_id:string; project_id:string; sentry_issue_id:string; payload:Record<string,unknown>; relevance:SentryRelevance; lifecycle:SentryLifecycle; first_seen_at:string; last_seen_at:string; last_scanned_at:string }
 export interface SentryTriage { issue_id:string; conversation_id:string|null; correction_conversation_id:string|null; ticket_id:string|null; status:"idle"|"running"|"done"|"error"; verdict:SentryVerdict|null; report:Record<string,unknown>; created_at:string; updated_at:string }

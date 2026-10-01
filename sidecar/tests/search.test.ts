@@ -6,7 +6,7 @@ import { DebriefStore } from "../src/stores/debriefs";
 import { openDb } from "../src/db";
 import { SearchIndex } from "../src/search";
 import { ConversationStore } from "../src/stores/conversations";
-import { DomainStore } from "../src/stores/domains";
+import { TicketStore } from "../src/stores/tickets";
 import { ProjectStore } from "../src/stores/projects";
 
 test("backfill puis indexation continue des conversations, events et débriefs", () => {
@@ -48,34 +48,21 @@ test("backfill puis indexation continue des conversations, events et débriefs",
   expect(search.search("migration", "projet-inconnu")).toEqual([]);
 });
 
-test("un filtre de domaine ne garde que les conversations associées et actives", () => {
-  const dir = mkdtempSync(join(tmpdir(), "pupitre-search-domains-"));
-  const db = openDb(dir);
+test("recherche les tickets et les branches, suit les rattachements et masque les projets retirés", () => {
+  const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-search-tickets-")));
   const projects = new ProjectStore(db);
   const conversations = new ConversationStore(db);
-  const domains = new DomainStore(db);
-  const project = projects.create({ name: "Recherche", path: dir });
-  const matching = conversations.create({
-    projectId: project.id,
-    provider: "codex",
-    model: "gpt-5.6-luna",
-    firstMessage: "Vectoriser les profils Match AI",
-  });
-  const other = conversations.create({
-    projectId: project.id,
-    provider: "codex",
-    model: "gpt-5.6-luna",
-    firstMessage: "Vectoriser le cache Redis",
-  });
-  conversations.appendEvent(matching.id, { type: "text-final", text: "Embedding quartz" });
-  conversations.appendEvent(other.id, { type: "text-final", text: "Embedding quartz" });
-  const active = domains.create(project.id, { name: "Match AI", kind: "métier", status: "actif" });
-  const proposed = domains.create(project.id, { name: "Cache", kind: "technique", status: "proposé" });
-  domains.associate(matching.id, active.id, "manuel");
-  domains.associate(other.id, proposed.id, "auto");
+  const tickets = new TicketStore(db);
+  const project = projects.create({ name: "Mono", path: "/tmp/mono" });
+  const conversation = conversations.create({ projectId: project.id, provider: "codex", model: "test", firstMessage: "Travail", createdOnBranch: "feature/cartographie" });
+  const ticket = tickets.upsert(project.id, { key: "TECH-25267", title: "Ciblage géographique", source: "clickup", status: "open", externalUrl: null });
   const search = new SearchIndex(db);
-
-  expect(search.search("quartz", project.id, 50, domains.conversationIdsFor(active.id)).map((row) => row.conversationId))
-    .toEqual([matching.id]);
-  expect(search.search("quartz", project.id, 50, [])).toEqual([]);
+  tickets.linkConversation(conversation.id, ticket.id);
+  expect(search.search("tech 25267 geographique")[0]?.conversationId).toBe(conversation.id);
+  expect(search.search("cartographie")[0]?.conversationId).toBe(conversation.id);
+  tickets.upsert(project.id, { key: ticket.key, title: "Audience régionale", source: "clickup", status: "open", externalUrl: null });
+  expect(search.search("audience regionale")[0]?.conversationId).toBe(conversation.id);
+  projects.remove(project.id);
+  expect(search.search("audience")).toEqual([]);
+  db.close();
 });

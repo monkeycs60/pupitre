@@ -19,24 +19,21 @@ import {
 } from "../src/changelog";
 import { openDb } from "../src/db";
 import { ChangelogStore, type GitChangelogCommit } from "../src/stores/changelog";
-import { DomainStore } from "../src/stores/domains";
 import { ProjectStore } from "../src/stores/projects";
 
 function setup(options: {
   commits?: GitChangelogCommit[];
   generator?: import("../src/debriefs").DebriefGenerator;
-  history?: ConstructorParameters<typeof ChangelogService>[4];
-  repositories?: ConstructorParameters<typeof ChangelogService>[6];
-  email?: ConstructorParameters<typeof ChangelogService>[7];
-  lineStats?: ConstructorParameters<typeof ChangelogService>[8];
-  mergeShas?: ConstructorParameters<typeof ChangelogService>[9];
+  history?: ConstructorParameters<typeof ChangelogService>[3];
+  repositories?: ConstructorParameters<typeof ChangelogService>[5];
+  email?: ConstructorParameters<typeof ChangelogService>[6];
+  lineStats?: ConstructorParameters<typeof ChangelogService>[7];
+  mergeShas?: ConstructorParameters<typeof ChangelogService>[8];
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-project-"));
   const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-changelog-db-")));
   const projects = new ProjectStore(db);
-  const domains = new DomainStore(db);
   const project = projects.create({ name: "Test", path: root });
-  const domain = domains.create(project.id, { name: "Contacts", kind: "métier", status: "actif" });
   const commits = options.commits ?? [];
   const generator = options.generator ?? (async (input) => {
     const batch = JSON.parse(input.prompt.split("COMMITS: ")[1]!) as Array<{
@@ -46,7 +43,6 @@ function setup(options: {
     return JSON.stringify(batch.map(({ repositoryPath, sha }) => ({
       repositoryPath,
       sha,
-      domainId: domain.id,
       productMessage: `Résultat produit pour ${sha}.`,
     })));
   });
@@ -55,7 +51,6 @@ function setup(options: {
   const service = new ChangelogService(
     store,
     projects,
-    domains,
     generator,
     options.history ?? (async () => commits),
     () => new Date(now),
@@ -64,7 +59,7 @@ function setup(options: {
     options.lineStats ?? (async (_cwd, shas) => shas.map((sha) => ({ sha, added: 3, removed: 1 }))),
     options.mergeShas ?? (async () => []),
   );
-  return { db, root, project, projects, domain, store, service, now };
+  return { db, root, project, projects, store, service, now };
 }
 
 function commits(count: number): GitChangelogCommit[] {
@@ -88,7 +83,6 @@ test("importe et enrichit tout le backfill par lots de dix avec Luna medium stan
       return JSON.stringify(batch.map(({ sha }) => ({
         repositoryPath: ".",
         sha,
-        domainId: context.domain.id,
         productMessage: `Les contacts bénéficient du changement ${sha.slice(-2)}.`,
       })));
     },
@@ -182,7 +176,6 @@ test("les backfills simultanés utilisent au plus huit générations Luna au tot
       return JSON.stringify(batch.map(({ repositoryPath, sha }) => ({
         repositoryPath,
         sha,
-        domainId: null,
         productMessage: `Résultat ${sha}.`,
       })));
     },
@@ -227,12 +220,10 @@ test("associe les réponses par position sans dépendre des identifiants répét
   expect(parseEnrichments(
     '[{"repositoryPath":"mauvais","sha":"court","domainId":"inconnu","productMessage":"Une amélioration visible."}]',
     [{ repositoryPath: ".", sha: "abc" }],
-    [],
-  )).toEqual([{ repositoryPath: ".", sha: "abc", domainId: null, productMessage: "Une amélioration visible." }]);
+  )).toEqual([{ repositoryPath: ".", sha: "abc", productMessage: "Une amélioration visible." }]);
   expect(() => parseEnrichments(
     '[{"domainId":null,"productMessage":""}]',
     [{ repositoryPath: ".", sha: "abc" }],
-    [],
   )).toThrow("incohérente");
 });
 
@@ -353,7 +344,7 @@ test("migre le catalogue historique vers une clé projet plus SHA", () => {
       PRIMARY KEY (project_id, commit_sha)
     );
     INSERT INTO project_changelog_entries
-      SELECT project_id, commit_sha, branch, subject, committed_at, domain_id,
+      SELECT project_id, commit_sha, branch, subject, committed_at, NULL,
              product_message, enrichment_status, imported_at, enriched_at
       FROM project_changelog_entries_new;
     DROP TABLE project_changelog_entries_new;

@@ -24,8 +24,6 @@ import type {
   FleetItem,
   IntegrationType,
   SearchResult,
-  ProjectDomain,
-  DomainKind,
   Project,
   ProjectLaunchConfig,
   ProjectLaunchSlot,
@@ -351,14 +349,6 @@ function jsonPut(body: unknown): RequestInit {
   }
 }
 
-function jsonPatch(body: unknown): RequestInit {
-  return {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  }
-}
-
 function routeId(id: string): string {
   return encodeURIComponent(id)
 }
@@ -447,65 +437,12 @@ export function searchGlobal(
   query: string,
   projectId?: string,
   signal?: AbortSignal,
-  domainId?: string,
 ): Promise<SearchResult[]> {
   const params = new URLSearchParams({ q: query })
   if (projectId) params.set('projectId', projectId)
-  if (domainId) params.set('domainId', domainId)
   return fetchJson(`/api/search?${params.toString()}`, { signal })
 }
 
-export function listProjectDomains(projectId: string, signal?: AbortSignal): Promise<ProjectDomain[]> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/domains`, { signal })
-}
-
-export function createProjectDomain(
-  projectId: string,
-  input: { name: string; kind: DomainKind },
-): Promise<ProjectDomain> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/domains`, jsonPost(input))
-}
-
-export function validateProjectDomain(projectId: string, domainId: string): Promise<ProjectDomain> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/domains/${routeId(domainId)}/validate`, jsonPost({}))
-}
-
-export function renameProjectDomain(
-  projectId: string,
-  domainId: string,
-  input: { name?: string; kind?: DomainKind },
-): Promise<ProjectDomain> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/domains/${routeId(domainId)}`, jsonPatch(input))
-}
-
-export function mergeProjectDomain(
-  projectId: string,
-  domainId: string,
-  targetId: string,
-): Promise<ProjectDomain> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/domains/${routeId(domainId)}/merge`, jsonPost({ targetId }))
-}
-
-export function deleteProjectDomain(projectId: string, domainId: string): Promise<void> {
-  return fetchVoid(`/api/projects/${routeId(projectId)}/domains/${routeId(domainId)}`, { method: 'DELETE' })
-}
-
-export function associateConversationDomain(
-  conversationId: string,
-  domainId: string,
-): Promise<Conversation> {
-  return fetchJson(`/api/conversations/${routeId(conversationId)}/domains`, jsonPost({ domainId }))
-}
-
-export function dissociateConversationDomain(
-  conversationId: string,
-  domainId: string,
-): Promise<Conversation> {
-  return fetchJson(
-    `/api/conversations/${routeId(conversationId)}/domains/${routeId(domainId)}`,
-    { method: 'DELETE' },
-  )
-}
 
 export function listMemory(): Promise<MemoryFile[]> {
   return fetchJson('/api/memory')
@@ -1034,9 +971,8 @@ export function createSessionSummary(conversationId: string): Promise<SessionSum
   )
 }
 
-export function listProjectChangelog(projectId: string, domainId?: string): Promise<ProjectChangelogPayload> {
-  const query = domainId ? `?domainId=${encodeURIComponent(domainId)}` : ''
-  return fetchJson(`/api/projects/${routeId(projectId)}/changelog${query}`)
+export function listProjectChangelog(projectId: string): Promise<ProjectChangelogPayload> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/changelog`)
 }
 
 export function refreshProjectChangelog(projectId: string): Promise<ProjectChangelogState> {
@@ -1417,4 +1353,12 @@ export function getMediaPath(name: string): Promise<{ path: string }> {
 export async function fetchMedia(name: string): Promise<Blob> {
   const response = await ensureOk(await fetch(httpUrl(`/media/${routeId(name)}`)))
   return response.blob()
+}
+
+export function reorderProjects(ids: string[]): Promise<Project[]> {
+  return fetchJson('/api/projects/order', jsonPut({ ids }))
+}
+
+export function removeProject(projectId: string): Promise<void> {
+  return fetchVoid(`/api/projects/${routeId(projectId)}`, { method: 'DELETE' })
 }

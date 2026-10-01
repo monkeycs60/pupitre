@@ -290,8 +290,8 @@
 .sentry-level.is-error, .sentry-level.is-fatal { background: var(--danger); }
 .sentry-main { display: grid; gap: 3px; min-width: 0; }
 .sentry-main strong, .sentry-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sentry-main small, .sentry-domains, .sentry-count, .sentry-row > span:last-child { color: var(--text-faint); font-size: var(--text-xs); }
-.sentry-domains { color: var(--accent); }
+.sentry-main small, .sentry-ticket-relevance, .sentry-count, .sentry-row > span:last-child { color: var(--text-faint); font-size: var(--text-xs); }
+.sentry-ticket-relevance { color: var(--accent); }
 .sentry-lifecycle { width: fit-content; padding: 2px 7px; font-size: var(--text-xs); border-radius: var(--r-full); background: var(--bg-overlay); }
 .sentry-lifecycle.is-new { color: var(--danger); background: var(--danger-soft); }
 .sentry-lifecycle.is-active { color: var(--warn); background: var(--warn-soft); }

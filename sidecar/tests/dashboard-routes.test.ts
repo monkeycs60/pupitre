@@ -30,7 +30,6 @@ import { MemoryStore } from "../src/memory";
 import { HtmlDocumentService } from "../src/html-documents";
 import { IntegrationStore } from "../src/stores/integrations";
 import { TicketStore } from "../src/stores/tickets";
-import { DomainStore } from "../src/stores/domains";
 import { IntegrationsRefresher } from "../src/integrations/refresher";
 import { ProblemStore } from "../src/stores/problems";
 import { ProblemService } from "../src/problems";
@@ -220,7 +219,6 @@ beforeEach(() => {
   );
   const integrations = new IntegrationStore(db);
   const tickets = new TicketStore(db);
-  const domains = new DomainStore(db);
   const integrationsRefresher = new IntegrationsRefresher(
     { integrations, tickets, conversations, projects },
     { clickUpClient: () => null, gitLabClient: () => null },
@@ -270,7 +268,6 @@ beforeEach(() => {
     htmlDocuments,
     integrations,
     tickets,
-    domains,
     integrationsRefresher,
     problemStore,
     problemMissions,
@@ -744,93 +741,6 @@ test("POST /api/conversations avec ticketId relie la conversation, prend la bran
   expect(sent).toContain("Préserver la rétrocompatibilité.");
 });
 
-test("domaines : CRUD, suggestion invisible, fusion et filtre de recherche", async () => {
-  const project = await createProject("/tmp/dash-domains");
-  current!.deps.tickets.upsert(project.id, {
-    key: "TECH-9",
-    source: "clickup",
-    title: "Matching",
-    status: "open",
-    externalUrl: null,
-    payload: { labels: ["Match AI", "API"] },
-  });
-  const conversation = current!.deps.conversations.create({
-    projectId: project.id,
-    provider: "claude",
-    model: "m",
-    firstMessage: "Vectoriser quartz",
-  });
-  current!.deps.conversations.appendEvent(conversation.id, {
-    type: "text-final",
-    text: "Embedding quartz",
-  });
-  current!.deps.search.rebuild();
-  current!.deps.domains!.proposeMany(project.id, [{ name: "Match AI", kind: "métier" }]);
-
-  const seeded = await fetch(`${current!.baseUrl}/api/projects/${project.id}/domains`)
-    .then((response) => response.json()) as Array<{ id: string; name: string; status: string }>;
-  expect(seeded.map((domain) => domain.name)).toEqual(["Match AI"]);
-  expect(seeded.every((domain) => domain.status === "proposé")).toBe(true);
-
-  const created = await postJson(`/api/projects/${project.id}/domains`, {
-    name: "Billing",
-    kind: "technique",
-  });
-  expect(created.status).toBe(201);
-  const billing = await created.json() as { id: string; status: string };
-  expect(billing.status).toBe("actif");
-
-  const match = seeded.find((domain) => domain.name === "Match AI")!;
-  current!.deps.domains!.applyDigestSuggestions(conversation.id, project.id, [
-    { name: "Match AI", kind: "métier" },
-  ]);
-  const listed = await fetch(`${current!.baseUrl}/api/projects/${project.id}/conversations`)
-    .then((response) => response.json()) as Array<{ id: string; domains: Array<{ name: string }> }>;
-  expect(listed.find((item) => item.id === conversation.id)?.domains).toEqual([]);
-
-  const validated = await postJson(`/api/projects/${project.id}/domains/${match.id}/validate`, {});
-  expect(validated.status).toBe(200);
-  const visible = await fetch(`${current!.baseUrl}/api/projects/${project.id}/conversations`)
-    .then((response) => response.json()) as Array<{ id: string; domains: Array<{ name: string }> }>;
-  expect(visible.find((item) => item.id === conversation.id)?.domains.map((domain) => domain.name))
-    .toEqual(["Match AI"]);
-
-  const removable = current!.deps.domains!.proposeMany(project.id, [
-    { name: "Maintenance", kind: "technique" },
-  ])[0]!;
-  current!.deps.domains!.associate(conversation.id, removable.id, "auto");
-  const removed = await fetch(`${current!.baseUrl}/api/projects/${project.id}/domains/${removable.id}`, {
-    method: "DELETE",
-  });
-  expect(removed.status).toBe(204);
-  expect(current!.deps.domains!.get(removable.id)).toBeNull();
-  expect(current!.deps.domains!.forConversation(conversation.id).map((domain) => domain.name))
-    .toEqual(["Match AI"]);
-
-  const alias = await postJson(`/api/projects/${project.id}/domains`, {
-    name: "Matching",
-    kind: "métier",
-  }).then((response) => response.json()) as { id: string };
-  const merged = await postJson(`/api/projects/${project.id}/domains/${alias.id}/merge`, {
-    targetId: match.id,
-  });
-  expect(merged.status).toBe(200);
-
-  const associated = await postJson(`/api/conversations/${conversation.id}/domains`, {
-    domainId: billing.id,
-  });
-  expect(associated.status).toBe(200);
-  const filtered = await fetch(
-    `${current!.baseUrl}/api/search?q=quartz&projectId=${project.id}&domainId=${billing.id}`,
-  ).then((response) => response.json()) as Array<{ conversationId: string }>;
-  expect(filtered.length).toBeGreaterThan(0);
-  expect(new Set(filtered.map((row) => row.conversationId))).toEqual(new Set([conversation.id]));
-
-  const blocked = await fetch(`${current!.baseUrl}/api/projects/${project.id}/domains/${match.id}`, {
-    method: "DELETE",
-  });
-  expect(blocked.status).toBe(409);
-});
 test("apparie l'extension puis protège la résolution visuelle par jeton", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const rotate = await postJson("/api/visual-feedback/pairing/rotate", {});

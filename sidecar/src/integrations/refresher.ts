@@ -7,10 +7,9 @@ import type { ConversationStore } from "../stores/conversations";
 import type { IntegrationStore, ProjectIntegration } from "../stores/integrations";
 import type { ProjectStore } from "../stores/projects";
 import type { TicketStore } from "../stores/tickets";
-import type { DomainStore } from "../stores/domains";
 import type { SentryIssue, SentryStore } from "../stores/sentry";
 import { SentryAuthError, SentryHttpError, type SentryIssueSummary } from "./sentry";
-import { classifySentryIssue, compileDomainCatalog, type DomainDefinition } from "../sentry-domains";
+import { classifySentryIssue } from "../sentry-ticket-relevance";
 import { discoverRepositories } from "../git-repositories";
 
 export const INTEGRATIONS_POLL_MS = 5 * 60 * 1000;
@@ -53,7 +52,6 @@ export interface RefresherStores {
   conversations: ConversationStore;
   projects: ProjectStore;
   sentry?: SentryStore;
-  domains?: DomainStore;
 }
 export interface SentryHandle {
   listIssues(input: {
@@ -76,6 +74,7 @@ export type ClickUpContext = {
 export interface ClickUpHandle {
   me(): Promise<number>;
   assignedTasks(input: { teamId: string; listIds: string[]; userId: number }): Promise<ClickUpTask[]>;
+  task?(taskId: string, teamId: string): Promise<ClickUpTask>;
   taskContext(taskId: string): Promise<ClickUpContext>;
   createTask?(input: { listId: string; name: string; description: string }): Promise<ClickUpTask>;
 }
@@ -222,6 +221,22 @@ export class IntegrationsRefresher {
     }
   }
 
+  async resolveClickUpTicket(projectId: string, ref: string): Promise<import("../stores/tickets").Ticket | null> {
+    const integration = this.stores.integrations.find(projectId, "clickup");
+    if (!integration) return null;
+    const client = this.clickUp(integration);
+    const config = integration.config as unknown as ClickUpConfig;
+    if (!client?.task || !config.teamId) return null;
+    try {
+      const task = await client.task(ref, config.teamId);
+      this.upsertClickUpTask(projectId, task, false);
+      return this.stores.tickets.findByKey(projectId, task.key);
+    } catch (error) {
+      console.error("Lecture du ticket cité impossible", ref, error instanceof Error ? error.message : error);
+      return null;
+    }
+  }
+
   async createClickUpTask(
     projectId: string,
     input: { name: string; description: string },
@@ -310,16 +325,11 @@ export class IntegrationsRefresher {
     const config = item.config as {
       org?: string;
       projects?: string[];
-      domains?: DomainDefinition[];
     };
     if (!config.org || !Array.isArray(config.projects) || config.projects.length === 0) {
       this.stores.integrations.markUnconfigured(item.id);
       return;
     }
-    const catalog = compileDomainCatalog(
-      config.domains ?? [],
-      this.stores.tickets.listActive(item.project_id),
-    );
     const scannedAt = new Date().toISOString();
     const seen = new Set<string>();
     let count = 0;
@@ -346,7 +356,7 @@ export class IntegrationsRefresher {
           projectId: item.project_id,
           sentryIssueId: issue.id,
           payload: { ...issue },
-          relevance: classifySentryIssue(issue, [], catalog),
+          relevance: classifySentryIssue(issue, this.stores.tickets.listActive(item.project_id)),
           scannedAt,
         });
       }
@@ -399,7 +409,7 @@ export class IntegrationsRefresher {
     this.stores.integrations.markOk(item.id, { userId, tasks: tasks.length });
   }
 
-  private upsertClickUpTask(projectId: string, task: ClickUpTask): void {
+  private upsertClickUpTask(projectId: string, task: ClickUpTask, assignedToMe = true): void {
     const previous = this.stores.tickets.findByKey(projectId, task.key);
     this.stores.tickets.upsert(projectId, {
       key: task.key,
@@ -414,7 +424,7 @@ export class IntegrationsRefresher {
         priority: task.priority,
         labels: task.labels,
         updatedAt: task.updatedAt,
-        assignedToMe: true,
+        assignedToMe: assignedToMe || previous?.payload.assignedToMe === true,
         previousClickUpStatus: previous?.status ?? null,
       },
     });

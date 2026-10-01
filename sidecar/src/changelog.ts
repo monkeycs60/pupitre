@@ -1,7 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import type { DebriefGenerator } from "./debriefs";
-import type { DomainStore } from "./stores/domains";
 import type { ProjectStore } from "./stores/projects";
 import {
   ChangelogStore,
@@ -49,7 +48,6 @@ export class ChangelogService {
   constructor(
     private store: ChangelogStore,
     private projects: ProjectStore,
-    private domains: DomainStore,
     private generator: DebriefGenerator,
     private history: GitHistoryReader = readGitHistory,
     private now: () => Date = () => new Date(),
@@ -77,9 +75,9 @@ export class ChangelogService {
     this.timer = null;
   }
 
-  list(projectId: string, domainId?: string): ProjectChangelogPayload {
+  list(projectId: string): ProjectChangelogPayload {
     this.requireProject(projectId);
-    return { entries: this.store.list(projectId, domainId), state: this.store.state(projectId) };
+    return { entries: this.store.list(projectId), state: this.store.state(projectId) };
   }
 
   status(projectId: string): ProjectChangelogState {
@@ -204,8 +202,6 @@ export class ChangelogService {
       backfill ? Number.MAX_SAFE_INTEGER : CHANGELOG_BATCH_SIZE,
     );
     if (pending.length === 0) return;
-    const activeDomains = this.domains.listByProject(projectId)
-      .filter((domain) => domain.status === "actif");
     const batches = Array.from(
       { length: Math.ceil(pending.length / CHANGELOG_BATCH_SIZE) },
       (_, index) => pending.slice(index * CHANGELOG_BATCH_SIZE, (index + 1) * CHANGELOG_BATCH_SIZE),
@@ -223,7 +219,7 @@ export class ChangelogService {
               model: "gpt-6-luna",
               effort: "xhigh",
               speed: "standard",
-              prompt: enrichmentPrompt(batch, activeDomains),
+              prompt: enrichmentPrompt(batch),
             });
             const enriched = parseEnrichments(
               raw,
@@ -231,7 +227,6 @@ export class ChangelogService {
                 repositoryPath: entry.repository_path,
                 sha: entry.commit_sha,
               })),
-              activeDomains.map((domain) => domain.id),
             );
             this.store.enrich(projectId, enriched, this.now().toISOString());
             break;
@@ -410,15 +405,12 @@ function enrichmentPrompt(
     subject: string;
     committed_at: string;
   }>,
-  domains: Array<{ id: string; name: string; kind: string }>,
 ): string {
   return [
     "Tu enrichis un changelog produit à partir de commits Git déjà réalisés.",
     "Pour chaque commit fourni, écris une seule phrase concise en français qui décrit le résultat produit ou technique durable.",
-    "Choisis au plus un domaine existant. Utilise null si aucun domaine ne convient. N'invente pas de domaine.",
     "Retourne uniquement un tableau JSON avec exactement un objet par commit, dans le même ordre.",
-    '{"domainId":"..."|null,"productMessage":"..."}',
-    `DOMAINES: ${JSON.stringify(domains)}`,
+    '{"productMessage":"..."}',
     `COMMITS: ${JSON.stringify(entries.map((entry) => ({
       sha: entry.commit_sha,
       repositoryPath: entry.repository_path,
@@ -432,11 +424,9 @@ function enrichmentPrompt(
 export function parseEnrichments(
   raw: string,
   expected: Array<{ repositoryPath: string; sha: string }>,
-  allowedDomainIds: string[],
 ): Array<{
   repositoryPath: string;
   sha: string;
-  domainId: string | null;
   productMessage: string;
 }> {
   const match = raw.trim().match(/\[[\s\S]*\]/);
@@ -445,13 +435,11 @@ export function parseEnrichments(
   if (!Array.isArray(parsed) || parsed.length !== expected.length) {
     throw new Error("lot de changelog incomplet");
   }
-  const domains = new Set(allowedDomainIds);
   return parsed.map((value, index) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       throw new Error("entrée de changelog invalide");
     }
     const item = value as Record<string, unknown>;
-    const domainId = item.domainId === null ? null : String(item.domainId ?? "").trim();
     const productMessage = String(item.productMessage ?? "").trim();
     if (!productMessage) {
       throw new Error("entrée de changelog incohérente");
@@ -459,7 +447,6 @@ export function parseEnrichments(
     return {
       repositoryPath: expected[index]!.repositoryPath,
       sha: expected[index]!.sha,
-      domainId: domainId !== null && domains.has(domainId) ? domainId : null,
       productMessage: productMessage.slice(0, 280),
     };
   });

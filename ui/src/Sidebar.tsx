@@ -1,9 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  associateConversationDomain,
-  dissociateConversationDomain,
   listProjectConversations,
-  listProjectDomains,
   markConversationRead,
   renameConversation,
   setConversationArchived,
@@ -12,7 +9,7 @@ import {
   setConversationPinned,
   setConversationPermissionMode,
 } from './api'
-import type { Conversation, FleetItem, Project, ProjectDomain, Provider, QuotaSnapshot, TimeMode, TimeSnapshot, WorkspaceView } from './types'
+import type { Conversation, FleetItem, Project, Provider, QuotaSnapshot, TimeMode, TimeSnapshot, WorkspaceView } from './types'
 import { QuotaStatus } from './QuotaBar'
 import { LevelCard } from './LevelCard'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
@@ -292,10 +289,6 @@ export const Sidebar = memo(function Sidebar({
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null)
-  const [domainRevision, setDomainRevision] = useState(0)
-  const [projectDomains, setProjectDomains] = useState<ProjectDomain[]>([])
-  const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null)
-  const [domainMenuOpen, setDomainMenuOpen] = useState(false)
   const selectedConversationRef = useRef(selectedConversation)
   selectedConversationRef.current = selectedConversation
   const workspaceViewRef = useRef(workspaceView)
@@ -325,7 +318,6 @@ export const Sidebar = memo(function Sidebar({
     () => activeFleet.map((item) => item.id).sort().join(','),
     [activeFleet],
   )
-  const activeDomains = useMemo(() => projectDomains.filter((domain) => domain.status === 'actif'), [projectDomains])
   const displayedActiveConversationIds = useMemo(() => {
     const ids = new Set(activeConversationIds)
     if (workspaceView === 'conversations' && selectedConversation !== null && runningSubtasks > 0) ids.add(selectedConversation.id)
@@ -344,7 +336,7 @@ export const Sidebar = memo(function Sidebar({
     const listKey = `${selectedProject.id}:${conversationScope}`
     const cached = conversationListCache.get(listKey)
     if (cached) setConversations(cached)
-    void listProjectConversations(selectedProject.id, conversationScope)
+    const load = () => listProjectConversations(selectedProject.id, conversationScope)
       .then((items) => {
         if (!ignore) {
           const scopedItems = items
@@ -386,19 +378,17 @@ export const Sidebar = memo(function Sidebar({
       .catch((loadError: unknown) => {
         if (!ignore) setError(errorMessage(loadError))
       })
-    void listProjectDomains(selectedProject.id)
-      .then((items) => { if (!ignore) setProjectDomains(items) })
-      .catch(() => { if (!ignore) setProjectDomains([]) })
-
+    void load()
+    const timer = setInterval(() => { void load() }, 60_000)
     return () => {
       ignore = true
+      clearInterval(timer)
     }
-  }, [selectedProject, conversationListVersion, conversationScope, domainRevision, fleetMembership])
+  }, [selectedProject, conversationListVersion, conversationScope, fleetMembership])
 
   useEffect(() => {
     restoreProjectIdRef.current = selectedProject?.id ?? null
     setFilterText('')
-    setSelectedDomainId(null)
     setScopeMenuOpen(false)
     try {
       const stored = localStorage.getItem(`pupitre:sidebar-collapsed:${selectedProject?.id ?? ''}`)
@@ -497,28 +487,8 @@ export const Sidebar = memo(function Sidebar({
 
   function closeConversationMenu() {
     setOpenConversationMenu(null)
-    setDomainMenuOpen(false)
     setRenameConversationId(null)
     setRenameDraft('')
-  }
-
-  function applyConversationDomains(conversation: Conversation, domains: Conversation['domains']) {
-    const updated = { ...conversation, domains: domains ?? [] }
-    setConversations((current) => current.map((item) => item.id === conversation.id ? updated : item))
-    if (selectedConversation?.id === conversation.id) onConversationSelect(updated)
-  }
-
-  async function handleDomainToggle(conversation: Conversation, domain: ProjectDomain) {
-    const attached = (conversation.domains ?? []).some((item) => item.id === domain.id)
-    setError(null)
-    try {
-      const updated = attached
-        ? await dissociateConversationDomain(conversation.id, domain.id)
-        : await associateConversationDomain(conversation.id, domain.id)
-      applyConversationDomains(conversation, updated.domains)
-    } catch (domainError: unknown) {
-      setError(errorMessage(domainError))
-    }
   }
 
   function startRename(conversation: Conversation) {
@@ -589,15 +559,15 @@ export const Sidebar = memo(function Sidebar({
   }
 
   const conversationGroups = useMemo(() => {
-    const query = filterText.trim().toLowerCase()
+    const normalize = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    const terms = normalize(filterText).trim().split(/\s+/).filter(Boolean)
     const filtered = conversations.filter((item) => (
-      (!query || item.title.toLowerCase().includes(query))
-      && (selectedDomainId === null || (item.domains ?? []).some((domain) => domain.id === selectedDomainId))
+      terms.every((term) => normalize([item.title, item.summary, item.ticket_key, item.ticket_title, item.created_on_branch, ...(item.worktree_paths ?? [])].filter(Boolean).join(' ')).includes(term))
     ))
     return conversationSortMode === 'recent'
       ? groupConversationsByLatest(filtered)
       : groupConversations(filtered)
-  }, [conversations, filterText, selectedDomainId, conversationSortMode])
+  }, [conversations, filterText, conversationSortMode])
 
   // Ouvrir une conversation depuis ailleurs (rapport, motif, ticket) doit la
   // montrer dans la liste : on déplie son groupe puis on l'amène dans la vue,
@@ -708,22 +678,6 @@ export const Sidebar = memo(function Sidebar({
             Récentes
           </button>
         </div>
-
-        {activeDomains.length > 0 ? (
-          <div className="conversation-domain-filters" role="group" aria-label="Filtrer par domaine">
-            {activeDomains.map((domain) => (
-              <button
-                key={domain.id}
-                type="button"
-                className={`conversation-domain-filter is-${domain.kind === 'métier' ? 'metier' : 'technique'}${selectedDomainId === domain.id ? ' is-selected' : ''}`}
-                aria-pressed={selectedDomainId === domain.id}
-                onClick={() => setSelectedDomainId((current) => current === domain.id ? null : domain.id)}
-              >
-                {domain.name}
-              </button>
-            ))}
-          </div>
-        ) : null}
 
         {scopeMenuOpen ? (
           <div className="conversation-scope-anchor">
@@ -851,6 +805,7 @@ export const Sidebar = memo(function Sidebar({
                         : shortConversationTime(conversation.updated_at)}
                     </span>
                   </span>
+                  {conversation.ticket_key && conversation.ticket_title && ticketTitleWithoutKey(conversation.ticket_title, conversation.ticket_key) ? <span className="conv-row-ticket-title" title={`${conversation.ticket_key} · ${conversation.ticket_title}`}>{ticketTitleWithoutKey(conversation.ticket_title, conversation.ticket_key)}</span> : null}
                   {state === 'live' ? (
                     <span className="conv-row-activity">
                       <span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span>
@@ -863,16 +818,8 @@ export const Sidebar = memo(function Sidebar({
                         <ProviderMark provider="sentry" className="conv-row-mark" />
                       ) : <ProviderMark provider={conversation.provider} className="conv-row-mark" />}
                       {conversation.ticket_key ? (
-                        <span className="conv-row-ticket">{conversation.ticket_key}</span>
+                        <span className="conv-row-ticket" title={`${conversation.ticket_key} · ${conversation.ticket_title ?? ''}`}>{conversation.ticket_key}</span>
                       ) : null}
-                      {(conversation.domains ?? []).slice(0, 2).map((domain) => (
-                        <span
-                          key={domain.id}
-                          className={`conv-row-domain is-${domain.kind === 'métier' ? 'metier' : 'technique'}`}
-                        >
-                          {domain.name}
-                        </span>
-                      ))}
                       {branch !== null ? (
                         <span className="conv-row-branch" title={`Worktrees : ${(conversation.worktree_paths?.length ? conversation.worktree_paths : [conversation.worktree_path]).join(', ')}`}>
                           <BranchIcon />{branch}{(conversation.worktree_paths?.length ?? 0) > 1 ? ` +${conversation.worktree_paths!.length - 1}` : ''}
@@ -884,6 +831,7 @@ export const Sidebar = memo(function Sidebar({
                       ) : null}
                     </span>
                   )}
+                  {state === 'live' && conversation.ticket_key ? <span className="conv-row-line2"><span className="conv-row-ticket" title={`${conversation.ticket_key} · ${conversation.ticket_title ?? ''}`}>{conversation.ticket_key}</span></span> : null}
                   {conversationRelation(conversation, conversations) ? (
                     <span className="conversation-link">
                       {conversationRelation(conversation, conversations)}
@@ -907,7 +855,6 @@ export const Sidebar = memo(function Sidebar({
                     aria-label={`Actions pour ${conversation.title}`}
                     aria-expanded={openConversationMenu === conversation.id}
                     onClick={() => {
-                      setDomainMenuOpen(false)
                       setOpenConversationMenu((current) => current === conversation.id ? null : conversation.id)
                     }}
                   >
@@ -916,39 +863,6 @@ export const Sidebar = memo(function Sidebar({
                   {openConversationMenu === conversation.id ? (
                     <div className="conversation-actions-menu" role="menu">
                       <button type="button" role="menuitem" onClick={() => startRename(conversation)}>Renommer</button>
-                      {projectDomains.length > 0 ? (
-                        <div className="conversation-domain-item">
-                          <button
-                            type="button"
-                            role="menuitem"
-                            aria-haspopup="true"
-                            aria-expanded={domainMenuOpen}
-                            onClick={() => setDomainMenuOpen((open) => !open)}
-                          >
-                            Domaines
-                          </button>
-                          {domainMenuOpen ? (
-                            <div className="conversation-domains-submenu" role="group" aria-label="Domaines de la conversation">
-                              {activeDomains.length === 0 ? (
-                                <p className="conversation-domains-empty">Aucun domaine validé</p>
-                              ) : activeDomains.map((domain) => {
-                                const attached = (conversation.domains ?? []).some((item) => item.id === domain.id)
-                                return (
-                                  <button
-                                    key={domain.id}
-                                    type="button"
-                                    role="menuitemcheckbox"
-                                    aria-checked={attached}
-                                    onClick={() => void handleDomainToggle(conversation, domain)}
-                                  >
-                                    {domain.name}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
                       <button type="button" role="menuitem" onClick={() => void handleConversationYolo(conversation)}>
                         {conversation.permission_mode === 'bypassPermissions'
                           ? 'Désactiver YOLO'
@@ -1013,7 +927,6 @@ export const Sidebar = memo(function Sidebar({
           project={projectSettingsProject}
           onClose={() => setProjectSettingsProject(null)}
           onUpdated={handleProjectSettingsUpdated}
-          onDomainsChanged={() => setDomainRevision((current) => current + 1)}
         />
       ) : null}
 

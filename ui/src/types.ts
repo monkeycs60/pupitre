@@ -70,26 +70,6 @@ export interface FleetItem {
   lastEvent: string
 }
 
-export type DomainKind = 'métier' | 'technique'
-export type DomainStatus = 'actif' | 'proposé'
-export type DomainOrigin = 'auto' | 'manuel'
-
-export interface ProjectDomain {
-  id: string
-  project_id: string
-  name: string
-  kind: DomainKind
-  status: DomainStatus
-  created_at: string
-  updated_at: string
-}
-
-export interface ConversationDomain {
-  id: string
-  name: string
-  kind: DomainKind
-  origin?: DomainOrigin
-}
 
 export interface SearchResult {
   kind: 'conversation' | 'event' | 'debrief'
@@ -286,9 +266,8 @@ export interface Conversation {
   created_on_branch: string | null
   ticket_id: string | null
   ticket_key?: string | null
+  ticket_title?: string | null
   ticket_instruction: string | null
-  domains?: ConversationDomain[]
-  proposed_domain_count?: number
   origin_type?: 'sentry' | 'problem' | 'promotion' | null
   origin_key?: string | null
   cli_session_id: string | null
@@ -491,7 +470,7 @@ export type SentryVerdict = 'real_fixable' | 'real_investigate' | 'noise' | 'unc
 
 export interface SentryRelevance {
   matched: boolean
-  reasons: Array<{ domain: string; signal: string }>
+  reasons: Array<{ ticket: string; signal: string }>
 }
 
 export interface SentryTriage {
@@ -607,8 +586,6 @@ export interface ProjectChangelogEntry {
   branch: string
   subject: string
   committed_at: string
-  domain_id: string | null
-  domain_name: string | null
   product_message: string | null
   enrichment_status: 'pending' | 'enriched'
   imported_at: string
@@ -985,7 +962,7 @@ export type AppEvent =
   | { type: 'session'; provider: Provider; cliSessionId: string; model: string }
   // Titre et résumé régénérés après un tour : met la sidebar à jour, ne s'affiche
   // pas dans le fil.
-  | { type: 'conversation-digest'; title: string; summary: string; domains?: ConversationDomain[]; proposedDomainCount?: number }
+  | { type: 'conversation-digest'; title: string; summary: string }
   | { type: 'user-message'; text: string; images: string[]; attachments?: Attachment[]; steering?: boolean; queued?: boolean }
   | { type: 'text-delta'; text: string }
   | { type: 'text-final'; text: string }

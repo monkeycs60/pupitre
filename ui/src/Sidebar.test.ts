@@ -1,7 +1,7 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
-import type { Conversation, FleetItem, Project, ProjectDomain, Workflow } from './types'
+import type { Conversation, FleetItem, Project, Workflow } from './types'
 import { formatActiveDuration } from './formatActiveDuration'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
@@ -95,11 +95,9 @@ function installApi(
   workflows: Workflow[],
   runRequest: (workflowId: string) => Promise<Response>,
   conversations: Conversation[] = [],
-  projectDomains: ProjectDomain[] = [],
 ) {
   let runRequestCount = 0
   let readRequestCount = 0
-  const domainCalls: Array<{ method: string; path: string }> = []
   const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const path = String(input)
     const method = init?.method ?? 'GET'
@@ -108,9 +106,6 @@ function installApi(
     }
     if (path === `/api/projects/${project.id}/workflows`) {
       return Promise.resolve(jsonResponse(workflows))
-    }
-    if (path === `/api/projects/${project.id}/domains`) {
-      return Promise.resolve(jsonResponse(projectDomains))
     }
     const readMatch = path.match(/^\/api\/conversations\/([^/]+)\/read$/)
     if (readMatch && init?.method === 'POST') {
@@ -122,29 +117,12 @@ function installApi(
       runRequestCount += 1
       return runRequest(decodeURIComponent(match[1]!))
     }
-    const associateMatch = path.match(/^\/api\/conversations\/([^/]+)\/domains$/)
-    if (associateMatch && method === 'POST') {
-      domainCalls.push({ method, path })
-      const conversation = conversations.find((item) => item.id === decodeURIComponent(associateMatch[1]!))
-      const domain = projectDomains.find((item) => item.status === 'actif')
-      return Promise.resolve(jsonResponse({
-        ...conversation,
-        domains: domain ? [{ id: domain.id, name: domain.name, kind: domain.kind }] : [],
-      }))
-    }
-    const detachMatch = path.match(/^\/api\/conversations\/([^/]+)\/domains\/([^/]+)$/)
-    if (detachMatch && method === 'DELETE') {
-      domainCalls.push({ method, path })
-      const conversation = conversations.find((item) => item.id === decodeURIComponent(detachMatch[1]!))
-      return Promise.resolve(jsonResponse({ ...conversation, domains: [] }))
-    }
     return Promise.reject(new Error(`Requête inattendue : ${method} ${path}`))
   })
   globalThis.fetch = fetchMock as typeof fetch
   return {
     getRunRequestCount: () => runRequestCount,
     getReadRequestCount: () => readRequestCount,
-    getDomainCalls: () => domainCalls,
   }
 }
 
@@ -537,97 +515,6 @@ test('le menu du filtre bascule vers les archives', async () => {
   expect(screen.getByRole('menuitemradio', { name: 'Corbeille' })).toBeTruthy()
 })
 
-test('affiche les domaines sur les lignes de conversation', async () => {
-  const labelled: Conversation = {
-    ...startedConversation,
-    id: 'conversation-domains',
-    title: 'Conversation labellisée',
-    domains: [
-      { id: 'd-api', name: 'API', kind: 'technique' },
-      { id: 'd-match', name: 'Match AI', kind: 'métier' },
-    ],
-  }
-  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [labelled])
-  renderSidebar()
-  await waitFor(() => expect(document.querySelector('.navigation-row')).not.toBeNull())
-  expect(document.querySelector('.conv-row-mark')).not.toBeNull()
-  expect(screen.getByText('API')).not.toBeNull()
-  expect(screen.getByText('Match AI')).not.toBeNull()
-})
-
-test('filtre les conversations par domaine depuis la sidebar', async () => {
-  const domains: ProjectDomain[] = [{
-    id: 'd-match', project_id: project.id, name: 'Match AI', kind: 'métier', status: 'actif',
-    created_at: '2026-08-23T08:00:00.000Z', updated_at: '2026-08-23T08:00:00.000Z',
-  }]
-  const labelled: Conversation = {
-    ...startedConversation,
-    id: 'labelled',
-    title: 'Travail Match',
-    domains: [{ id: 'd-match', name: 'Match AI', kind: 'métier' }],
-  }
-  const other: Conversation = { ...startedConversation, id: 'other', title: 'Travail général', domains: [] }
-  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [labelled, other], domains)
-  renderSidebar()
-  await waitFor(() => expect(document.querySelector('.conv-row-title')?.textContent).toBe('Travail Match'))
-  fireEvent.click(screen.getByRole('button', { name: 'Match AI' }))
-  expect([...document.querySelectorAll('.conv-row-title')].map((item) => item.textContent)).toEqual(['Travail Match'])
-})
-
-test('le menu d’une conversation n’attache que les domaines déjà validés', async () => {
-  const conversation: Conversation = {
-    ...startedConversation,
-    id: 'conversation-attach-domain',
-    title: 'Sans pastille',
-    domains: [],
-  }
-  const api = installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation], [
-    {
-      id: 'd-proposed',
-      project_id: project.id,
-      name: 'Match AI',
-      kind: 'métier',
-      status: 'proposé',
-      created_at: '2026-08-23T08:00:00.000Z',
-      updated_at: '2026-08-23T08:00:00.000Z',
-    },
-    {
-      id: 'd-api',
-      project_id: project.id,
-      name: 'API',
-      kind: 'technique',
-      status: 'actif',
-      created_at: '2026-08-23T08:00:00.000Z',
-      updated_at: '2026-08-23T08:00:00.000Z',
-    },
-  ])
-  renderSidebar()
-  await waitFor(() => expect(document.querySelector('.navigation-main')).not.toBeNull())
-  fireEvent.click(screen.getByRole('button', { name: 'Actions pour Sans pastille' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Domaines' }))
-  expect(screen.queryByRole('menuitemcheckbox', { name: 'Match AI' })).toBeNull()
-  fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'API' }))
-  await waitFor(() => expect(api.getDomainCalls()).toEqual([
-    { method: 'POST', path: '/api/conversations/conversation-attach-domain/domains' },
-  ]))
-})
-
-test('ignore les anciens domaines proposés sur la roue dentée', async () => {
-  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [], [
-    {
-      id: 'd-proposed', project_id: project.id, name: 'Nouveau sujet', kind: 'métier', status: 'proposé',
-      created_at: '2026-08-23T08:00:00.000Z', updated_at: '2026-08-23T08:00:00.000Z',
-    },
-    {
-      id: 'd-active', project_id: project.id, name: 'Match AI', kind: 'métier', status: 'actif',
-      created_at: '2026-08-23T08:00:00.000Z', updated_at: '2026-08-23T08:00:00.000Z',
-    },
-  ])
-  renderSidebar()
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Paramètres de Pupitre' })).not.toBeNull())
-  expect(document.querySelector('.conv-sidebar-gear-badge')).toBeNull()
-})
-
 test('ouvrir une conversation depuis ailleurs déplie son groupe et l’amène dans la vue', async () => {
   const ticketConversation: Conversation = {
     ...startedConversation,
@@ -650,4 +537,16 @@ test('ouvrir une conversation depuis ailleurs déplie son groupe et l’amène d
     Element.prototype.scrollIntoView = original
     localStorage.removeItem(`pupitre:sidebar-collapsed:${project.id}`)
   }
+})
+
+test('les conversations récentes gardent le nom du ticket et la recherche accepte sa clé et son titre', async () => {
+  const linked: Conversation = { ...startedConversation, id: 'ticket-search', title: 'Travail en cours', ticket_key: 'TECH-25267', ticket_title: 'Ciblage géographique', created_on_branch: 'feature/TECH-25267' }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [linked, { ...startedConversation, id: 'general', title: 'Autre travail' }])
+  renderSidebar()
+  await waitFor(() => expect(document.querySelectorAll('.navigation-row').length).toBe(2))
+  fireEvent.click(screen.getByRole('button', { name: 'Récentes' }))
+  expect(document.querySelector('.conv-row-ticket-title')?.textContent).toBe('Ciblage géographique')
+  expect(document.querySelector('.conv-row-branch')?.textContent).toContain('feature/TECH-25267')
+  fireEvent.change(screen.getByRole('textbox', { name: 'Filtrer les conversations' }), { target: { value: 'tech 25267 geographique' } })
+  expect([...document.querySelectorAll('.conv-row-title')].map((item) => item.textContent)).toEqual(['Travail en cours'])
 })

@@ -32,7 +32,6 @@ import { HtmlDocumentService } from "../src/html-documents";
 import { IntegrationStore } from "../src/stores/integrations";
 import { IntegrationsRefresher } from "../src/integrations/refresher";
 import { TicketStore } from "../src/stores/tickets";
-import { DomainStore } from "../src/stores/domains";
 import { ChangelogStore } from "../src/stores/changelog";
 import { ChangelogService } from "../src/changelog";
 import type { InstanceInfo } from "../src/instance";
@@ -290,11 +289,9 @@ cat "${fixture}"
   );
   const integrations = new IntegrationStore(db);
   const tickets = new TicketStore(db);
-  const domains = new DomainStore(db);
   const changelog = new ChangelogService(
     new ChangelogStore(db),
     projects,
-    domains,
     async () => "[]",
     async () => [],
     undefined,
@@ -345,7 +342,6 @@ cat "${fixture}"
     htmlDocuments,
     integrations,
     tickets,
-    domains,
     changelog,
     integrationsRefresher,
     shutdown: () => {

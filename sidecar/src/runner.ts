@@ -9,7 +9,6 @@ import type { GitProjectService, GitTurnTracking } from "./git";
 import type { SkillInventory } from "./skills";
 import type { AppNotification } from "./stores/notifications";
 import { generateDigest, shouldRefreshDigest, type DigestSource } from "./conversation-digest";
-import type { DomainStore } from "./stores/domains";
 import { DEFAULT_ACTION_FORMAT, withActionFormat } from "./response-format";
 import { claudeServerDefinitions } from "./mcp-inventory";
 import type { ActionFormat } from "./response-format";
@@ -110,7 +109,6 @@ export class ConversationRunner {
     readonly activity = new ConversationActivity(),
     /** Lu à chaque tour : le réglage peut changer sans redémarrer le sidecar. */
     private actionFormat: () => ActionFormat = () => DEFAULT_ACTION_FORMAT,
-    private domains?: DomainStore,
     private problemAxisRuns?: ProblemAxisRunStore,
   ) {
     sweepOrphanedRuns(convs);

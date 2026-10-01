@@ -17,7 +17,7 @@ beforeEach(() => {
 });
 
 test("isole, met à jour et conserve le triage", () => {
-  const first = store.upsertIssue({integrationId,projectId,sentryIssueId:"42",payload:{title:"A",lastSeen:"2026-08-20"},relevance:{matched:true,reasons:[{domain:"matching",signal:"/matching/search"}]},scannedAt:"2026-08-20T10:00:00Z"});
+  const first = store.upsertIssue({integrationId,projectId,sentryIssueId:"42",payload:{title:"A",lastSeen:"2026-08-20"},relevance:{matched:true,reasons:[{ticket:"matching",signal:"/matching/search"}]},scannedAt:"2026-08-20T10:00:00Z"});
   store.upsertTriage(first.id,{status:"done",verdict:"noise",report:{summary:"attendu"}});
   const again = store.upsertIssue({integrationId,projectId,sentryIssueId:"42",payload:{title:"A",lastSeen:"2026-08-21"},relevance:{matched:true,reasons:[]},scannedAt:"2026-08-21T10:00:00Z"});
   expect(again.id).toBe(first.id); expect(again.lifecycle).toBe("active");

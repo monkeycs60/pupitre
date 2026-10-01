@@ -20,8 +20,6 @@ export interface ProjectChangelogEntry {
   branch: string;
   subject: string;
   committed_at: string;
-  domain_id: string | null;
-  domain_name: string | null;
   product_message: string | null;
   enrichment_status: ChangelogEnrichmentStatus;
   imported_at: string;
@@ -134,19 +132,18 @@ export class ChangelogStore {
     return removed;
   }
 
-  list(projectId: string, domainId?: string): ProjectChangelogEntry[] {
+  list(projectId: string): ProjectChangelogEntry[] {
     return this.db.query(`
-      SELECT pce.*, d.name AS domain_name
+      SELECT pce.*
       FROM project_changelog_entries pce
-      LEFT JOIN domains d ON d.id = pce.domain_id
-      WHERE pce.project_id = ? AND (? IS NULL OR pce.domain_id = ?)
+      WHERE pce.project_id = ?
       ORDER BY pce.committed_at DESC, pce.commit_sha DESC
-    `).all(projectId, domainId ?? null, domainId ?? null) as ProjectChangelogEntry[];
+    `).all(projectId) as ProjectChangelogEntry[];
   }
 
   pending(projectId: string, limit: number): ProjectChangelogEntry[] {
     return this.db.query(`
-      SELECT pce.*, NULL AS domain_name
+      SELECT pce.*
       FROM project_changelog_entries pce
       WHERE pce.project_id = ? AND pce.enrichment_status = 'pending'
       ORDER BY pce.committed_at DESC, pce.commit_sha DESC
@@ -157,19 +154,17 @@ export class ChangelogStore {
   enrich(projectId: string, values: Array<{
     repositoryPath: string;
     sha: string;
-    domainId: string | null;
     productMessage: string;
   }>, enrichedAt: string): void {
     const update = this.db.query(`
       UPDATE project_changelog_entries
-      SET domain_id = ?, product_message = ?, enrichment_status = 'enriched', enriched_at = ?
+      SET product_message = ?, enrichment_status = 'enriched', enriched_at = ?
       WHERE project_id = ? AND commit_sha = ?
         AND enrichment_status = 'pending'
     `);
     this.db.transaction(() => {
       for (const value of values) {
         update.run(
-          value.domainId,
           value.productMessage,
           enrichedAt,
           projectId,
@@ -211,9 +206,8 @@ export class ChangelogStore {
     const low = new Date(start - 86_400_000).toISOString().slice(0, 10);
     const high = new Date(end + 86_400_000).toISOString().slice(0, 10);
     return (this.db.query(`
-      SELECT pce.*, d.name AS domain_name
+      SELECT pce.*
       FROM project_changelog_entries pce
-      LEFT JOIN domains d ON d.id = pce.domain_id
       WHERE pce.project_id = ? AND substr(pce.committed_at, 1, 10) BETWEEN ? AND ?
       ORDER BY pce.committed_at ASC, pce.commit_sha ASC
     `).all(projectId, low, high) as ProjectChangelogEntry[]).filter((entry) => {

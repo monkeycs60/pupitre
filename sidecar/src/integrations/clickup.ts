@@ -136,6 +136,18 @@ export class ClickUpClient {
     return tasks;
   }
 
+  async task(taskId: string, teamId: string): Promise<ClickUpTask> {
+    const params = new URLSearchParams();
+    if (/^[A-Z][A-Z0-9]*-\d+$/i.test(taskId)) {
+      params.set("custom_task_ids", "true");
+      params.set("team_id", teamId);
+    }
+    const payload = await this.request<unknown>(`/task/${encodeURIComponent(taskId)}?${params}`, { signal: AbortSignal.timeout(15_000) });
+    const task = parseClickUpTasks({ tasks: [payload] })[0];
+    if (!task?.id || !task.key) throw new ClickUpHttpError(500, "Unexpected task response");
+    return task;
+  }
+
   async taskContext(taskId: string): Promise<ClickUpTaskContext> {
     const [task, comments] = await Promise.all([
       this.request<{ description?: unknown; attachments?: unknown }>(`/task/${encodeURIComponent(taskId)}`),

@@ -95,6 +95,11 @@ export class ProjectStore {
   constructor(private db: Database) {}
 
   create(input: { name: string; path: string }): Project {
+    const existing = this.db.query("SELECT id FROM projects WHERE path = ? AND removed_at IS NOT NULL").get(input.path) as { id: string } | null;
+    if (existing) {
+      this.db.query("UPDATE projects SET removed_at = NULL, name = ? WHERE id = ?").run(input.name, existing.id);
+      return this.get(existing.id)!;
+    }
     const id = crypto.randomUUID();
     this.db.query(
       "INSERT INTO projects (id, name, path, created_at) VALUES (?, ?, ?, ?)"
@@ -103,15 +108,27 @@ export class ProjectStore {
   }
 
   get(id: string): Project | null {
-    const row = this.db.query("SELECT * FROM projects WHERE id = ?").get(id) as any;
+    const row = this.db.query("SELECT * FROM projects WHERE id = ? AND removed_at IS NULL").get(id) as any;
     return row ? hydrate(row) : null;
   }
 
   list(): Project[] {
     const rows = this.db.query(
-      "SELECT * FROM projects ORDER BY pinned DESC, created_at DESC"
+      "SELECT * FROM projects WHERE removed_at IS NULL ORDER BY sort_order IS NULL, sort_order ASC, pinned DESC, created_at DESC"
     ).all() as any[];
     return rows.map(hydrate);
+  }
+
+  remove(id: string): void {
+    this.db.query("UPDATE projects SET removed_at = ? WHERE id = ?").run(new Date().toISOString(), id);
+  }
+
+  reorder(ids: string[]): void {
+    const projects = this.list();
+    if (new Set(ids).size !== ids.length || ids.length !== projects.length || projects.some((project) => !ids.includes(project.id))) throw new Error("ordre invalide");
+    this.db.transaction(() => {
+      ids.forEach((id, index) => this.db.query("UPDATE projects SET sort_order = ? WHERE id = ?").run(index, id));
+    })();
   }
 
   setPinned(id: string, pinned: boolean): void {

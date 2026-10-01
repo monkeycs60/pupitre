@@ -10,7 +10,6 @@ import { ConversationStore } from "../src/stores/conversations";
 import { IntegrationStore } from "../src/stores/integrations";
 import { ProjectStore } from "../src/stores/projects";
 import { TicketStore } from "../src/stores/tickets";
-import { DomainStore } from "../src/stores/domains";
 import { SentryStore } from "../src/stores/sentry";
 import { SentryHttpError } from "../src/integrations/sentry";
 
@@ -18,7 +17,6 @@ let projectId: string;
 let integrations: IntegrationStore;
 let tickets: TicketStore;
 let conversations: ConversationStore;
-let domains: DomainStore;
 let db: ReturnType<typeof openDb>;
 
 const task: ClickUpTask = {
@@ -120,7 +118,7 @@ function makeRefresher(
   overrides: Partial<ConstructorParameters<typeof IntegrationsRefresher>[1]> = {},
 ) {
   return new IntegrationsRefresher(
-    { integrations, tickets, conversations, projects: new ProjectStore(db), domains },
+    { integrations, tickets, conversations, projects: new ProjectStore(db) },
     {
       clickUpClient: () => fakeClickUp() as any,
       gitLabClient: () => fakeGitLab() as any,
@@ -135,7 +133,6 @@ beforeEach(() => {
   integrations = new IntegrationStore(db);
   tickets = new TicketStore(db);
   conversations = new ConversationStore(db);
-  domains = new DomainStore(db);
   integrations.upsert(projectId, "clickup", {
     config: { teamId: "1", listIds: ["a"] },
     branchPattern: "^(issue|maintenance|feature)/(TECH-\\d+)",
@@ -210,17 +207,15 @@ test("rapproche tâche ClickUp, MR, pipeline et déploiement sur la clé du tick
     expect.objectContaining({ project: "reactor", name: "absente", missing: true }),
   ]);
   expect(notified).toEqual([projectId]);
-  const proposed = domains.listByProject(projectId);
-  expect(proposed).toEqual([]);
 });
 
-test("relève Sentry en production, classe Match AI et respecte la cadence", async () => {
+test("relève Sentry en production, classe les tickets et respecte la cadence", async () => {
   const sentry = new SentryStore(db);
+  tickets.upsert(projectId, { key: "TECH-12", source: "clickup", title: "Matching signup", status: "open", externalUrl: null });
   integrations.upsert(projectId, "sentry", {
     config: {
       org: "affilae",
       projects: ["hapigator", "reactor", "reactivator"],
-      domains: [{ name: "Match AI", aliases: ["matching", "signup"] }],
     },
     branchPattern: null,
   });
@@ -260,7 +255,7 @@ test("relève Sentry en production, classe Match AI et respecte la cadence", asy
 test("une issue Sentry supprimée (404 sur le détail) est résolue au lieu de bloquer la relève", async () => {
   const sentry = new SentryStore(db);
   integrations.upsert(projectId, "sentry", {
-    config: { org: "affilae", projects: ["hapigator"], domains: [] },
+    config: { org: "affilae", projects: ["hapigator"] },
     branchPattern: null,
   });
   const summary = {
@@ -293,7 +288,7 @@ test("une issue Sentry supprimée (404 sur le détail) est résolue au lieu de b
 test("un slug de projet Sentry inconnu nomme le projet fautif", async () => {
   const sentry = new SentryStore(db);
   integrations.upsert(projectId, "sentry", {
-    config: { org: "affilae", projects: ["inconnu"], domains: [] },
+    config: { org: "affilae", projects: ["inconnu"] },
     branchPattern: null,
   });
   const refresher = new IntegrationsRefresher(

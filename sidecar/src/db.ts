@@ -306,25 +306,6 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_conversation_links_source
       ON conversation_links(source_conversation_id, created_at DESC);
-    CREATE TABLE IF NOT EXISTS domains (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      name TEXT NOT NULL COLLATE NOCASE,
-      kind TEXT NOT NULL CHECK (kind IN ('métier', 'technique')),
-      status TEXT NOT NULL CHECK (status IN ('actif', 'proposé')),
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE (project_id, name)
-    );
-    CREATE INDEX IF NOT EXISTS idx_domains_project ON domains(project_id, status, name);
-    CREATE TABLE IF NOT EXISTS conversation_domains (
-      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-      domain_id TEXT NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
-      origin TEXT NOT NULL CHECK (origin IN ('auto', 'manuel')),
-      created_at TEXT NOT NULL,
-      PRIMARY KEY (conversation_id, domain_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_conversation_domains_domain ON conversation_domains(domain_id);
     CREATE TABLE IF NOT EXISTS changelog_reviews (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -338,27 +319,6 @@ export function openDb(dir: string = dataDir()): Database {
     );
     CREATE INDEX IF NOT EXISTS idx_changelog_reviews_conversation
       ON changelog_reviews(conversation_id, created_at DESC);
-    CREATE TABLE IF NOT EXISTS domain_changes (
-      id TEXT PRIMARY KEY,
-      group_id TEXT NOT NULL,
-      review_id TEXT NOT NULL REFERENCES changelog_reviews(id) ON DELETE CASCADE,
-      domain_id TEXT NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
-      nature TEXT NOT NULL CHECK (nature IN ('ajout', 'modification', 'correction', 'retrait')),
-      title TEXT NOT NULL,
-      description TEXT NOT NULL,
-      impact TEXT NOT NULL,
-      evidence_json TEXT NOT NULL DEFAULT '[]',
-      created_at TEXT NOT NULL,
-      UNIQUE (group_id, domain_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_domain_changes_domain
-      ON domain_changes(domain_id, created_at DESC);
-    CREATE TABLE IF NOT EXISTS domain_publications (
-      domain_id TEXT PRIMARY KEY REFERENCES domains(id) ON DELETE CASCADE,
-      skill_root TEXT NOT NULL,
-      skill_sha256 TEXT NULL,
-      updated_at TEXT NOT NULL
-    );
     CREATE TABLE IF NOT EXISTS project_changelog_entries (
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       repository_path TEXT NOT NULL DEFAULT '.',
@@ -366,7 +326,6 @@ export function openDb(dir: string = dataDir()): Database {
       branch TEXT NOT NULL,
       subject TEXT NOT NULL,
       committed_at TEXT NOT NULL,
-      domain_id TEXT NULL REFERENCES domains(id) ON DELETE SET NULL,
       product_message TEXT NULL,
       enrichment_status TEXT NOT NULL DEFAULT 'pending'
         CHECK (enrichment_status IN ('pending', 'enriched')),
@@ -644,6 +603,8 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "worktree_path TEXT NULL");
   addColumn(db, "conversations", "worktree_paths TEXT NOT NULL DEFAULT '[]'");
   // Un renommage manuel fige le titre : la régénération automatique le respecte.
+  addColumn(db, "projects", "sort_order INTEGER NULL");
+  addColumn(db, "projects", "removed_at TEXT NULL");
   addColumn(db, "projects", "mcp_servers TEXT NULL");
   addColumn(db, "conversations", "title_locked INTEGER NOT NULL DEFAULT 0");
   // Nombre de tours au moment du dernier digest (0 = jamais généré).
@@ -786,10 +747,16 @@ export function openDb(dir: string = dataDir()): Database {
       ON routines(project_id, name COLLATE NOCASE);
     CREATE INDEX IF NOT EXISTS idx_routines_due
       ON routines(enabled, next_run_at);
-    DELETE FROM conversation_domains
-      WHERE domain_id IN (SELECT id FROM domains WHERE status = 'proposé');
-    DELETE FROM domains WHERE status = 'proposé';
   `);
+  const legacyRelevance = db.query("SELECT id, relevance_json FROM sentry_issues WHERE relevance_json LIKE '%\"domain\"%'").all() as Array<{ id: string; relevance_json: string }>;
+  for (const issue of legacyRelevance) {
+    const previous = JSON.parse(issue.relevance_json) as { reasons?: Array<{ domain?: string; signal?: string }> };
+    const reasons = (previous.reasons ?? []).flatMap((reason) => reason.domain?.startsWith("Ticket ") ? [{ ticket: reason.domain.slice(7), signal: reason.signal ?? "" }] : []);
+    db.query("UPDATE sentry_issues SET relevance_json = ? WHERE id = ?").run(JSON.stringify({ matched: reasons.length > 0, reasons }), issue.id);
+  }
+  const changelogColumns = db.query("PRAGMA table_info(project_changelog_entries)").all() as Array<{ name: string }>;
+  if (changelogColumns.some((column) => column.name === "domain_id")) db.exec("ALTER TABLE project_changelog_entries DROP COLUMN domain_id");
+  db.exec("DROP TABLE IF EXISTS conversation_domains; DROP TABLE IF EXISTS domain_changes; DROP TABLE IF EXISTS domain_publications; DROP TABLE IF EXISTS domains;");
   db.exec("PRAGMA foreign_keys = ON");
   return db;
 }
@@ -825,7 +792,6 @@ function migrateProjectChangelogEntries(db: Database): void {
       branch TEXT NOT NULL,
       subject TEXT NOT NULL,
       committed_at TEXT NOT NULL,
-      domain_id TEXT NULL REFERENCES domains(id) ON DELETE SET NULL,
       product_message TEXT NULL,
       enrichment_status TEXT NOT NULL DEFAULT 'pending'
         CHECK (enrichment_status IN ('pending', 'enriched')),
@@ -835,9 +801,9 @@ function migrateProjectChangelogEntries(db: Database): void {
     );
     INSERT OR IGNORE INTO project_changelog_entries_v2
       (project_id, repository_path, commit_sha, branch, subject, committed_at,
-       domain_id, product_message, enrichment_status, imported_at, enriched_at)
+       product_message, enrichment_status, imported_at, enriched_at)
     SELECT project_id, '.', commit_sha, branch, subject, committed_at,
-           domain_id, product_message, enrichment_status, imported_at, enriched_at
+           product_message, enrichment_status, imported_at, enriched_at
     FROM project_changelog_entries
     ORDER BY CASE enrichment_status WHEN 'enriched' THEN 0 ELSE 1 END, imported_at;
     DROP TABLE project_changelog_entries;

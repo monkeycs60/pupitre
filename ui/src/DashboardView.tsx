@@ -222,7 +222,6 @@ export function DashboardView({
   const [sort, setSort] = useState<{ key: TicketSortKey; direction: 'asc' | 'desc' }>({ key: 'ticket', direction: 'asc' })
   const [changelog, setChangelog] = useState<ProjectChangelogEntry[]>([])
   const [changelogState, setChangelogState] = useState<ProjectChangelogState | null>(null)
-  const [changelogDomain, setChangelogDomain] = useState('')
   const [changelogMenuOpen, setChangelogMenuOpen] = useState(false)
   /* Le compteur du rail : l'inbox Sentry n'est pas dans le payload du
      tableau de bord, et la section ne se monte qu'une fois ouverte. */
@@ -250,10 +249,6 @@ export function DashboardView({
     () => `dashboard-table${hasGitlab ? ' dashboard-table--with-gitlab' : ''}`,
     [hasGitlab],
   )
-  const changelogDomains = useMemo(() => [...new Map(changelog
-    .filter((item): item is ProjectChangelogEntry & { domain_id: string; domain_name: string } => Boolean(item.domain_id && item.domain_name))
-    .map((item) => [item.domain_id, item.domain_name])).entries()], [changelog])
-  const visibleChangelog = changelogDomain ? changelog.filter((item) => item.domain_id === changelogDomain) : changelog
   const changelogHasMultipleRepositories = new Set(changelog.map((item) => item.repository_path)).size > 1
   const sortedTickets = useMemo(() => {
     const byKey = (left: TicketRow, right: TicketRow) => left.key.localeCompare(right.key, 'fr', { numeric: true })
@@ -768,9 +763,8 @@ export function DashboardView({
         <section id="dashboard-panel-changelog" role="tabpanel" aria-label={sectionOnly ? 'Changelog' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-changelog' : 'dashboard-tab-changelog'} className="dashboard-section dashboard-changelog">
           <div className="dashboard-section-head">
             <div><h2 className="dashboard-section-title">Changelog</h2><p>{changelogTiming(changelogState, now)}</p></div>
-            {changelogDomains.length > 1 ? <select aria-label="Filtrer le changelog par domaine" value={changelogDomain} onChange={(event) => setChangelogDomain(event.target.value)}><option value="">Tous les domaines</option>{changelogDomains.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select> : null}
           </div>
-          {visibleChangelog.length === 0 ? <div className="dashboard-empty"><strong>Aucun commit importé</strong><p>Le premier passage reprendra automatiquement l’historique depuis le 1er janvier 2026.</p></div> : <ol className="dashboard-changelog-list">{visibleChangelog.slice(0, 100).map((item) => <li key={`${item.repository_path}:${item.commit_sha}`}><div><span className="dashboard-pill">{item.domain_name ?? 'À enrichir'}</span>{changelogHasMultipleRepositories ? <span className="dashboard-repository-label">{item.repository_path === '.' ? project.name : item.repository_path.split('/').at(-1)}</span> : null}<span className="dashboard-branch-label"><BranchIcon />{item.branch}</span><code>{item.commit_sha.slice(0, 7)}</code>{item.is_merge ? <span className="dashboard-merge-label">fusion</span> : null}{item.lines_added !== null ? <span className={`dashboard-line-stats${item.is_merge ? ' is-muted' : ''}`} aria-label={`${item.lines_added} lignes ajoutées, ${item.lines_removed ?? 0} supprimées`}><ins>+{item.lines_added}</ins><del>−{item.lines_removed ?? 0}</del></span> : null}<time>{new Date(item.committed_at).toLocaleDateString('fr-FR')}</time></div><strong>{item.product_message ?? item.subject}</strong>{item.product_message ? <small>{item.subject}</small> : <small>Enrichissement en attente</small>}</li>)}</ol>}
+          {changelog.length === 0 ? <div className="dashboard-empty"><strong>Aucun commit importé</strong><p>Le premier passage reprendra automatiquement l’historique depuis le 1er janvier 2026.</p></div> : <ol className="dashboard-changelog-list">{changelog.slice(0, 100).map((item) => <li key={`${item.repository_path}:${item.commit_sha}`}><div>{changelogHasMultipleRepositories ? <span className="dashboard-repository-label">{item.repository_path === '.' ? project.name : item.repository_path.split('/').at(-1)}</span> : null}<span className="dashboard-branch-label"><BranchIcon />{item.branch}</span><code>{item.commit_sha.slice(0, 7)}</code>{item.is_merge ? <span className="dashboard-merge-label">fusion</span> : null}{item.lines_added !== null ? <span className={`dashboard-line-stats${item.is_merge ? ' is-muted' : ''}`} aria-label={`${item.lines_added} lignes ajoutées, ${item.lines_removed ?? 0} supprimées`}><ins>+{item.lines_added}</ins><del>−{item.lines_removed ?? 0}</del></span> : null}<time>{new Date(item.committed_at).toLocaleDateString('fr-FR')}</time></div><strong>{item.product_message ?? item.subject}</strong>{item.product_message ? <small>{item.subject}</small> : <small>Enrichissement en attente</small>}</li>)}</ol>}
         </section>
         ) : null}
 

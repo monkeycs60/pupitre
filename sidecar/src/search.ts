@@ -12,6 +12,10 @@ export interface SearchResult {
   rank: number;
 }
 
+function conversationSearchBody(alias: 'c' | 'NEW'): string {
+  return `${alias}.title || ' ' || ${alias}.summary || ' ' || COALESCE(${alias}.created_on_branch, '') || ' ' || COALESCE(${alias}.worktree_path, '') || ' ' || COALESCE((SELECT key || ' ' || title FROM tickets WHERE id = ${alias}.ticket_id), '')`;
+}
+
 function matchQuery(input: string): string | null {
   const tokens = input.normalize("NFKC").match(/[\p{L}\p{N}_]+/gu) ?? [];
   if (tokens.length === 0) return null;
@@ -24,31 +28,27 @@ export class SearchIndex {
     this.rebuild();
   }
 
-  search(query: string, projectId?: string, limit = 50, conversationIds?: string[]): SearchResult[] {
+  search(query: string, projectId?: string, limit = 50): SearchResult[] {
     const match = matchQuery(query);
     if (!match) return [];
-    if (conversationIds && conversationIds.length === 0) return [];
-    const boundedLimit = Math.max(1, Math.min(100, Math.floor(limit)));
-    const domainClause = conversationIds
-      ? `AND conversation_id IN (${conversationIds.map(() => "?").join(", ")})`
-      : "";
+    const boundedLimit = Math.max(1, Math.min(limit, 200));
     const rows = projectId
       ? this.db.query(`
           SELECT kind, source_id, conversation_id, project_id, title,
             snippet(search_index, 5, '', '', '…', 28) AS excerpt,
             bm25(search_index, 0.0, 0.0, 0.0, 0.0, 8.0, 1.0) AS rank
           FROM search_index
-          WHERE search_index MATCH ? AND project_id = ? ${domainClause}
-          ORDER BY rank LIMIT ?
-        `).all(match, projectId, ...(conversationIds ?? []), boundedLimit)
+          WHERE search_index MATCH ? AND project_id = ? AND project_id IN (SELECT id FROM projects WHERE removed_at IS NULL)
+          ORDER BY CASE kind WHEN 'conversation' THEN 0 ELSE 1 END, rank LIMIT ?
+        `).all(match, projectId, boundedLimit)
       : this.db.query(`
           SELECT kind, source_id, conversation_id, project_id, title,
             snippet(search_index, 5, '', '', '…', 28) AS excerpt,
             bm25(search_index, 0.0, 0.0, 0.0, 0.0, 8.0, 1.0) AS rank
           FROM search_index
-          WHERE search_index MATCH ? ${domainClause}
-          ORDER BY rank LIMIT ?
-        `).all(match, ...(conversationIds ?? []), boundedLimit);
+          WHERE search_index MATCH ? AND project_id IN (SELECT id FROM projects WHERE removed_at IS NULL)
+          ORDER BY CASE kind WHEN 'conversation' THEN 0 ELSE 1 END, rank LIMIT ?
+        `).all(match, boundedLimit);
     return (rows as Array<Record<string, unknown>>).map((row) => ({
       kind: row.kind as SearchKind,
       sourceId: String(row.source_id),
@@ -65,7 +65,7 @@ export class SearchIndex {
       this.db.exec("DELETE FROM search_index");
       this.db.exec(`
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
-          SELECT 'conversation', id, id, project_id, title, title FROM conversations;
+          SELECT 'conversation', c.id, c.id, c.project_id, c.title, ${conversationSearchBody('c')} FROM conversations c;
 
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
         SELECT 'event', CAST(events.id AS TEXT),
@@ -105,17 +105,20 @@ export class SearchIndex {
         tokenize = 'unicode61 remove_diacritics 2'
       );
 
+      DROP TRIGGER IF EXISTS search_conversations_insert;
+      DROP TRIGGER IF EXISTS search_conversations_title;
+      DROP TRIGGER IF EXISTS search_tickets_title;
       CREATE TRIGGER IF NOT EXISTS search_conversations_insert AFTER INSERT ON conversations BEGIN
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
-        VALUES ('conversation', NEW.id, NEW.id, NEW.project_id, NEW.title, NEW.title);
+        VALUES ('conversation', NEW.id, NEW.id, NEW.project_id, NEW.title, ${conversationSearchBody('NEW')});
       END;
       CREATE TRIGGER IF NOT EXISTS search_conversations_delete AFTER DELETE ON conversations BEGIN
         DELETE FROM search_index WHERE conversation_id = OLD.id;
       END;
-      CREATE TRIGGER IF NOT EXISTS search_conversations_title AFTER UPDATE OF title ON conversations BEGIN
+      CREATE TRIGGER IF NOT EXISTS search_conversations_title AFTER UPDATE OF title, summary, ticket_id, created_on_branch, worktree_path ON conversations BEGIN
         DELETE FROM search_index WHERE conversation_id = NEW.id;
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
-        VALUES ('conversation', NEW.id, NEW.id, NEW.project_id, NEW.title, NEW.title);
+        VALUES ('conversation', NEW.id, NEW.id, NEW.project_id, NEW.title, ${conversationSearchBody('NEW')});
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
         SELECT 'event', CAST(events.id AS TEXT), NEW.id, NEW.project_id,
           CASE WHEN subtasks.id IS NULL THEN NEW.title
@@ -129,6 +132,12 @@ export class SearchIndex {
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
         SELECT 'debrief', id, NEW.id, NEW.project_id, 'Débrief · ' || NEW.title, content_md
         FROM debriefs WHERE conversation_id = NEW.id;
+      END;
+
+      CREATE TRIGGER search_tickets_title AFTER UPDATE OF key, title ON tickets BEGIN
+        DELETE FROM search_index WHERE kind = 'conversation' AND conversation_id IN (SELECT id FROM conversations WHERE ticket_id = NEW.id);
+        INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
+        SELECT 'conversation', c.id, c.id, c.project_id, c.title, ${conversationSearchBody('c')} FROM conversations c WHERE c.ticket_id = NEW.id;
       END;
 
       CREATE TRIGGER IF NOT EXISTS search_events_insert AFTER INSERT ON events

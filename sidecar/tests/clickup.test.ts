@@ -98,3 +98,13 @@ test("contexte d'une tâche : description et commentaires récents", async () =>
   expect(context.description).toBe("Faire la chose.");
   expect(context.comments[0]).toEqual({ author: "Alex", text: "Dernier", at: new Date(1785923853742).toISOString() });
 });
+
+test("charge un ticket par identifiant personnalisé dans le workspace configuré", async () => {
+  let requested = '';
+  const client = new ClickUpClient('test', async (input) => {
+    requested = String(input);
+    return Response.json(fixture.tasks[0]);
+  });
+  expect((await client.task('TECH-24657', '20556900')).key).toBe('TECH-24657');
+  expect(requested).toContain('/task/TECH-24657?custom_task_ids=true&team_id=20556900');
+});

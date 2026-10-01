@@ -39,8 +39,8 @@ import { GitLabClient, readGlabToken } from "./integrations/gitlab";
 import { IntegrationsRefresher } from "./integrations/refresher";
 import { IntegrationStore } from "./stores/integrations";
 import { INTEGRATION_TOKENS_KEY } from "./stores/settings";
+import { ConversationTicketLinker } from "./conversation-ticket-linker";
 import { TicketStore } from "./stores/tickets";
-import { DomainStore } from "./stores/domains";
 import { ChangelogStore } from "./stores/changelog";
 import { ChangelogService } from "./changelog";
 import { IntegrationSecretStore } from "./stores/integration-secrets";
@@ -97,7 +97,6 @@ if (process.argv.includes("--pupitre-mcp")) {
   const memory = new MemoryStore();
   const integrations = new IntegrationStore(db);
   const tickets = new TicketStore(db);
-  const domains = new DomainStore(db);
   const integrationSecrets = new IntegrationSecretStore(db);
   const sentry = new SentryStore(db);
   const problemStore = new ProblemStore(db);
@@ -114,7 +113,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const git = new GitProjectService(db, projects);
   const codeExplorer = new CodeExplorerService(db, projects);
   const changelog = new ChangelogService(
-    new ChangelogStore(db), projects, domains,
+    new ChangelogStore(db), projects,
     (input) => generateWithAdapters(input, quotas),
   );
   const closeProblemsFromCommits = (
@@ -150,7 +149,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     }
   }, HEARTBEAT_MS).unref?.();
   const integrationsRefresher = new IntegrationsRefresher(
-    { integrations, tickets, conversations, projects, sentry, domains },
+    { integrations, tickets, conversations, projects, sentry },
     {
       clickUpClient: () => {
         const token = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY)?.clickup ?? null;
@@ -173,6 +172,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const promotion = instance.name === "dev" ? new PromotionRunner() : undefined;
 
   let server: ReturnType<typeof createServer>;
+  const conversationTicketLinker = new ConversationTicketLinker(db, projects, conversations, tickets, undefined, (projectId, ref) => integrationsRefresher.resolveClickUpTicket(projectId, ref));
   const runner = new ConversationRunner(
     conversations,
     projects,
@@ -190,7 +190,6 @@ if (process.argv.includes("--pupitre-mcp")) {
     },
     undefined,
     () => actionFormat(settings.get("actionFormat")),
-    domains,
     problemAxisRuns,
   );
   const todos = new TodoService(new TodoStore(db), projects, conversations, runner, git, tickets, quotas);
@@ -284,6 +283,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     try {
       quotaRefresher.stop();
       integrationsRefresher.stop();
+      conversationTicketLinker.stop();
       changelog.stop();
       clearInterval(htmlDocumentSweepTimer);
       clearInterval(activityReportTimer);
@@ -330,7 +330,6 @@ if (process.argv.includes("--pupitre-mcp")) {
     memory,
     integrations,
     tickets,
-    domains,
     changelog,
     problemStore,
     problemMissions,
@@ -349,6 +348,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   }), port);
   void problems.resume();
   if (backgroundJobsEnabled()) {
+    conversationTicketLinker.start();
     routines.start();
     changelog.start();
     quotaRefresher.start();

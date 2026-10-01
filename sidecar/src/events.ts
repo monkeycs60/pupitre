@@ -121,8 +121,6 @@ export type AppEvent =
       type: "conversation-digest";
       title: string;
       summary: string;
-      domains?: Array<{ id: string; name: string; kind: "métier" | "technique" }>;
-      proposedDomainCount?: number;
     }
   | { type: "status"; state: "running" | "done" | "error"; error?: string };
 

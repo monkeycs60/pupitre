@@ -16,7 +16,6 @@ import { AUTONOMY_LEVELS, modelLabel, PROJECT_FALLBACK_LAUNCH_CONFIG, PROVIDER_D
 import { ModelConfigSelector } from './ModelConfigSelector'
 import { formatCompact } from './formatCompact'
 import { ProviderMark } from './ProviderMark'
-import { DomainSettings } from './DomainSettings'
 import type { DashboardIntegration } from './types'
 import type { FilesystemScope, PresetPermissionMode, Project, ProjectLaunchConfig, ProjectLaunchSlot } from './types'
 
@@ -24,7 +23,6 @@ interface ProjectSettingsDialogProps {
   project: Project
   onClose: () => void
   onUpdated: (project: Project) => void
-  onDomainsChanged?: () => void
 }
 
 const DEFAULT_BRANCH_PATTERN = '^(issue|maintenance|feature)/(TECH-\\d+)'
@@ -186,7 +184,7 @@ function integrationForm(items: DashboardIntegration[]): IntegrationsForm {
   return next
 }
 
-export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsChanged }: ProjectSettingsDialogProps) {
+export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSettingsDialogProps) {
   const [scope, setScope] = useState<FilesystemScope>(project.filesystem_scope)
   const [permissionMode, setPermissionMode] = useState<PresetPermissionMode>(project.permission_mode)
   const [launchConfigs, setLaunchConfigs] = useState<LaunchConfigs>(() => launchConfigsOf(project))
@@ -338,11 +336,6 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
                   org: integrations.sentry.org.trim(),
                   projects: integrations.sentry.projects.split(',').map((item) => item.trim()).filter(Boolean),
                   environment: 'production',
-                  domains: [
-                    { name: 'Match AI', aliases: ['matching', 'match ai', 'affiliate profile', 'vectorize', 'vectorization', 'signup', 'onboarding'] },
-                    { name: 'Wishlists', aliases: ['wishlist', 'wishlists'] },
-                    { name: 'Instagram', aliases: ['instagram', 'insta'] },
-                  ],
                 }
           await saveProjectIntegration(project.id, type, {
             config,
@@ -582,7 +575,6 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated, onDomainsCh
               ) : null}
             </div>
           ) : null}
-          <DomainSettings projectId={project.id} disabled={saving} onChanged={onDomainsChanged} />
           <section className="project-integrations" aria-labelledby="project-integrations-title">
             <div className="project-settings-section-heading">
               <strong id="project-integrations-title">Intégrations</strong>

@@ -126,7 +126,7 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
           <p className="sentry-subtitle">Production · dernier scan {dateLabel(data?.integration?.lastOkAt ?? '')}</p>
         </div>
         <div className="sentry-actions">
-          <label><input type="checkbox" checked={mineOnly} onChange={(event) => setMineOnly(event.target.checked)} /> Mes domaines</label>
+          <label><input type="checkbox" checked={mineOnly} onChange={(event) => setMineOnly(event.target.checked)} /> Mes tickets</label>
           <button className="secondary-button" type="button" disabled={loading} onClick={() => void refresh()}>{loading ? 'Scan en cours…' : 'Scanner maintenant'}</button>
         </div>
       </div>
@@ -139,14 +139,14 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
         </p>
       ) : null}
       {issues.length === 0 ? (
-        <div className="dashboard-empty"><strong>Aucune issue dans ce filtre</strong><p>Les erreurs hors de tes domaines restent accessibles en décochant « Mes domaines ».</p></div>
+        <div className="dashboard-empty"><strong>Aucune issue dans ce filtre</strong><p>Les erreurs sans correspondance avec tes tickets restent accessibles en décochant « Mes tickets ».</p></div>
       ) : (
         <div className="sentry-list">
           {issues.map((issue) => (
             <button key={issue.id} type="button" className="sentry-row" onClick={() => void open(issue)}>
               <span className={`sentry-level is-${text(issue.payload, 'level')}`} />
               <span className="sentry-main"><strong>{text(issue.payload, 'title') || 'Erreur sans titre'}</strong><small>{text(issue.payload, 'transaction') || text(issue.payload, 'culprit') || text(issue.payload, 'project')}</small></span>
-              <span className="sentry-domains">{issue.relevance.reasons.map((reason) => reason.domain).filter((value, index, all) => all.indexOf(value) === index).join(', ') || 'Hors domaines'}</span>
+              <span className="sentry-ticket-relevance">{issue.relevance.reasons.map((reason) => reason.ticket).filter((value, index, all) => all.indexOf(value) === index).join(', ') || 'Aucun ticket reconnu'}</span>
               <span className={`sentry-lifecycle is-${issue.lifecycle}`}>{issue.lifecycle === 'resolved_remote' ? 'résolue' : issue.lifecycle}</span>
               <span className="sentry-count">{number(issue.payload, 'count')} évts</span>
               <span>{dateLabel(issue.last_seen_at)}</span>
@@ -162,7 +162,7 @@ export function SentryInbox({ projectId, onConfigure, onConversationSelect }: { 
               <p><strong>Projet :</strong> {text(selected.payload, 'project')} · production</p>
               <p><strong>Emplacement :</strong> {text(selected.payload, 'transaction') || text(selected.payload, 'culprit') || '—'}</p>
               <p><strong>Impact :</strong> {number(selected.payload, 'count')} événements · {number(selected.payload, 'userCount')} utilisateurs</p>
-              <p><strong>Domaines :</strong> {selected.relevance.reasons.map((reason) => `${reason.domain} (${reason.signal})`).join(', ') || 'aucun'}</p>
+              <p><strong>Tickets :</strong> {selected.relevance.reasons.map((reason) => `${reason.ticket} (${reason.signal})`).join(', ') || 'aucun'}</p>
               {text(selected.payload, 'permalink') ? <ExternalLink href={text(selected.payload, 'permalink')!}>Ouvrir dans Sentry ↗</ExternalLink> : null}
               {selected.triage?.verdict ? (
                 <div className="sentry-verdict">

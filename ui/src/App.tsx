@@ -43,7 +43,6 @@ import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
 import { ConversationInstruction } from './ConversationInstruction'
-import { ConversationDomains } from './ConversationDomains'
 import { SentryLinkIcon, TicketLinkIcons } from './TicketLinkIcons'
 import { useSentryLinks, useTicketLinks } from './ticketLinks'
 import { isAppRestartShortcut, restartApp } from './appRestart'
@@ -294,8 +293,6 @@ function App() {
   )
   const digestTitle = digest?.title
   const digestSummary = digest?.summary
-  const digestDomains = digest?.domains
-  const digestProposedDomainCount = digest?.proposedDomainCount
   const selectedConversationId = selectedConversation?.id
   const selectedConversationAnsweredTurn = selectedConversation?.answered_turn ?? 0
   const selectedConversationLastReadTurn = selectedConversation?.last_read_turn ?? 0
@@ -308,12 +305,10 @@ function App() {
             ...current,
             title: digestTitle,
             summary: digestSummary,
-            domains: digestDomains ?? current.domains,
-            proposed_domain_count: digestProposedDomainCount ?? current.proposed_domain_count,
           },
     )
     setConversationListVersion((current) => current + 1)
-  }, [digestTitle, digestSummary, digestDomains, digestProposedDomainCount])
+  }, [digestTitle, digestSummary])
 
   useEffect(() => {
     if (workspaceView !== 'conversations' || selectedConversationId === undefined) return
@@ -980,6 +975,16 @@ function App() {
         conversationListVersion={conversationListVersion + railReadVersion}
         onProjectSelect={handleProjectSelect}
         onProjectCreated={handleProjectSelect}
+        onProjectRemoved={(project, remaining) => {
+          setProjectListVersion((version) => version + 1)
+          if (selectedProject?.id !== project.id) return
+          setSelectedConversation(null)
+          setIsCreatingConversation(false)
+          setConversationSeed(null)
+          setInspector(null)
+          setSelectedProject(remaining[0] ?? null)
+          setWorkspaceView('conversations')
+        }}
         workspaceView={railView}
         activeProjectIds={[...new Set(fleet.items.map((item) => item.projectId))]}
       />
@@ -1076,15 +1081,6 @@ function App() {
             <header className="conversation-header">
               <div className="conversation-title-block">
                 <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
-                {selectedConversation ? (
-                  <ConversationDomains
-                    conversation={selectedConversation}
-                    onChange={(updated) => {
-                      setSelectedConversation(updated)
-                      setConversationListVersion((current) => current + 1)
-                    }}
-                  />
-                ) : null}
                 {selectedConversation?.ticket_instruction ? (
                   <ConversationInstruction instruction={selectedConversation.ticket_instruction} />
                 ) : null}

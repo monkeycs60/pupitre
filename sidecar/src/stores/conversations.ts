@@ -31,6 +31,7 @@ export interface Conversation {
   created_on_branch: string | null;
   ticket_id: string | null;
   ticket_key?: string | null;
+  ticket_title?: string | null;
   ticket_instruction: string | null;
   origin_type?: "sentry" | "problem" | "promotion" | null;
   origin_key?: string | null;
@@ -203,7 +204,7 @@ export class ConversationStore {
         ? "c.deleted_at IS NULL AND c.archived = 1"
         : "c.deleted_at IS NULL AND c.archived = 0";
     const rows = this.db.query(
-      `SELECT c.*, t.key AS ticket_key,
+      `SELECT c.*, t.key AS ticket_key, t.title AS ticket_title,
               COALESCE(c.origin_type, CASE WHEN st.issue_id IS NOT NULL THEN 'sentry' ELSE NULL END) AS origin_type,
               COALESCE(c.origin_key, json_extract(si.payload_json, '$.shortId')) AS origin_key
        FROM conversations c
