@@ -26,15 +26,20 @@ log = "0.4"
 # webview enfant sous Linux, et c'est `design_panel.rs` qui reprend la géométrie
 # à la main. Lire l'en-tête de ce module avant d'y toucher.
 tauri = { version = "2.11.3", features = ["unstable"] }
-# Dépendances directes de `design_panel.rs`, qui réarrange la hiérarchie GTK que
-# Tauri expose publiquement. Les lignes mineures doivent rester celles que Tauri
-# résout déjà — `gtk 0.18.2` et `webkit2gtk 2.0.2` au lock — sinon les types ne
-# s'unifient pas et rien ne compile. C'est le point à revérifier à chaque montée
-# de version de Tauri.
-gtk = "0.18"
-webkit2gtk = "2.0"
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-window-state = "2.4.1"
 tauri-plugin-opener = "2"
+
+# Dépendances directes de `design_panel.rs`, qui réarrange la hiérarchie GTK que
+# Tauri expose publiquement. Les lignes mineures doivent rester celles que Tauri
+# résout déjà — `gtk 0.18.2` et `webkit2gtk 2.0.2` au lock — sinon les types ne
+# s'unifient pas et rien ne compile. C'est le point à revérifier à chaque montée
+# de version de Tauri.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+webkit2gtk = "2.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tokio = { version = "1", features = ["signal"] }

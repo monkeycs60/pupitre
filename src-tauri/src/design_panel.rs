@@ -55,6 +55,7 @@
 //! pas propre à ce module, il vaudrait aussi pour un correctif amont : c'est la
 //! nature du multiwebview.
 
+#[cfg(target_os = "linux")]
 use gtk::prelude::*;
 use tauri::Manager;
 
@@ -116,7 +117,9 @@ pub fn open(app: &tauri::AppHandle, target: tauri::Url) -> Result<(), String> {
         )
         .map_err(|error| error.to_string())?;
 
-    install_in_overlay(app)
+    #[cfg(target_os = "linux")]
+    install_in_overlay(app)?;
+    Ok(())
 }
 
 /// Réarrange la hiérarchie GTK pour que le panneau flotte au-dessus de
@@ -127,6 +130,7 @@ pub fn open(app: &tauri::AppHandle, target: tauri::Url) -> Result<(), String> {
 /// du panneau et on remonte à son parent plutôt que d'appeler `default_vbox` :
 /// c'est le même widget, et cela garantit qu'on manipule bien le conteneur où
 /// Tauri vient de la ranger.
+#[cfg(target_os = "linux")]
 fn install_in_overlay(app: &tauri::AppHandle) -> Result<(), String> {
     let webview = app
         .get_webview(DESIGN_PANEL_LABEL)
@@ -203,6 +207,7 @@ fn install_in_overlay(app: &tauri::AppHandle) -> Result<(), String> {
 /// La position passe par les marges et non par `Webview::set_position`, qui est
 /// inerte sous Linux ; la taille par `set_size_request` et non par
 /// `Webview::set_size`, inerte pour la même raison.
+#[cfg(target_os = "linux")]
 pub fn set_bounds(
     app: &tauri::AppHandle,
     x: i32,
@@ -235,6 +240,7 @@ pub fn set_bounds(
 /// Indispensable, et pas seulement pour quitter la vue : une webview est une
 /// surface de l'OS, elle se dessine au-dessus du DOM. Sans ce masquage, la
 /// palette et les modales de Pupitre s'ouvriraient derrière le panneau.
+#[cfg(target_os = "linux")]
 pub fn set_visible(app: &tauri::AppHandle, visible: bool) -> Result<(), String> {
     let webview = app
         .get_webview(DESIGN_PANEL_LABEL)
@@ -273,4 +279,21 @@ pub fn url(app: &tauri::AppHandle) -> Option<String> {
     app.get_webview(DESIGN_PANEL_LABEL)
         .and_then(|webview| webview.url().ok())
         .map(|url| url.to_string())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn set_bounds(app: &tauri::AppHandle, x: i32, y: i32, width: i32, height: i32) -> Result<(), String> {
+    let webview = app.get_webview(DESIGN_PANEL_LABEL)
+        .ok_or_else(|| "Panneau Claude Design fermé".to_string())?;
+    webview.set_bounds(tauri::Rect {
+        position: tauri::LogicalPosition::new(x.max(0), y.max(0)).into(),
+        size: tauri::LogicalSize::new(width.max(1), height.max(1)).into(),
+    }).map_err(|error| error.to_string())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn set_visible(app: &tauri::AppHandle, visible: bool) -> Result<(), String> {
+    let webview = app.get_webview(DESIGN_PANEL_LABEL)
+        .ok_or_else(|| "Panneau Claude Design fermé".to_string())?;
+    if visible { webview.show() } else { webview.hide() }.map_err(|error| error.to_string())
 }

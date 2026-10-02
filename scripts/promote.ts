@@ -14,6 +14,7 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
+import { installMacLauncher, stageMacBundle } from './mac-install'
 
 export interface ReleaseVersion { sha: string; dirty: boolean; builtAt: string }
 interface PromotionOptions {
@@ -141,9 +142,19 @@ function currentReleaseName(): string | null {
   }
 }
 
+export function releaseExecutable(release: string, platform = process.platform): string {
+  return platform === 'darwin' ? join(release, 'Pupitre.app', 'Contents', 'MacOS', 'app') : join(release, 'app')
+}
+
 function stageRelease(version: ReleaseVersion): string {
   const release = join(releasesDir, releaseDirectoryName(version.sha))
   mkdirSync(release, { recursive: false })
+  if (process.platform === 'darwin') {
+    const bundle = join(root, 'src-tauri/target/release/bundle/macos/Pupitre.app')
+    stageMacBundle(bundle, release)
+    writeFileSync(join(release, 'VERSION.json'), `${JSON.stringify(version, null, 2)}\n`)
+    return release
+  }
   const appSource = join(root, 'src-tauri', 'target', 'release', 'app')
   const sidecarSource = readdirSync(join(root, 'src-tauri', 'binaries'))
     .find((name) => name.startsWith('pupitre-sidecar-'))
@@ -269,6 +280,10 @@ function activateRelease(release: string): void {
 }
 
 function writeDesktopFile(): void {
+  if (process.platform === 'darwin') {
+    installMacLauncher(join(homedir(), 'Applications'), currentLink)
+    return
+  }
   const applications = join(process.env.XDG_DATA_HOME ?? join(homedir(), '.local/share'), 'applications')
   mkdirSync(applications, { recursive: true })
   copyFileSync(join(root, 'src-tauri', 'icons', 'icon.png'), join(installRoot, 'icon.png'))
@@ -287,7 +302,7 @@ X-GNOME-WMClass=fr.clementserizay.pupitre
 
 function launchStable(): number {
   const log = Bun.file(join(installRoot, 'stable.log'))
-  const child = Bun.spawn([join(currentLink, 'app')], {
+  const child = Bun.spawn([releaseExecutable(currentLink)], {
     cwd: installRoot,
     env: cleanEnv(process.env),
     detached: true,
@@ -379,7 +394,7 @@ async function promote(options: PromotionOptions): Promise<void> {
 
   if (!options.skipBuild) {
     report('build', 'running', 'construction des binaires release')
-    await runCommand(['bunx', 'tauri', 'build', '--no-bundle'], 'build')
+    await runCommand(['bunx', 'tauri', 'build', ...(process.platform === 'darwin' ? ['--bundles', 'app'] : ['--no-bundle'])], 'build')
     report('build', 'done', 'binaires construits')
   } else {
     report('build', 'done', 'artefacts existants réutilisés')
