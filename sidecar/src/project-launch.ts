@@ -304,7 +304,7 @@ export class ProjectLaunchService {
       env: {
         ...process.env,
         ...JSON.parse(command.env_json),
-        ...(port ? { PORT: String(port) } : {}),
+        ...(options.port ? { PORT: String(options.port) } : {}),
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

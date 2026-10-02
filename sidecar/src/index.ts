@@ -1,3 +1,4 @@
+import { applyPersonalProjectPresets } from "./personal-project-presets";
 import { AutomaticCalls } from "./automatic-calls";
 import { TelegramCapture } from "./telegram-capture";
 import { PersonalEnvironments } from "./personal-environments";
@@ -221,6 +222,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     setInterval(() => { void chantiers.scan().catch(console.error); }, 3600000).unref();
   }
   const launches = new ProjectLaunchService(db, projects, instance.dataDir);
+  applyPersonalProjectPresets(db, projects, launches, personalEnvironments);
   const todos = new TodoService(new TodoStore(db), projects, conversations, runner, git, tickets, quotas);
   const activityReports = new ActivityReportService(
     new ActivityStore(db),

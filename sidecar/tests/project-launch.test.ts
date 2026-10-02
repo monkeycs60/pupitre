@@ -118,3 +118,11 @@ test("le lancement par nom utilise le projet de la conversation et interdit la l
       ?.status,
   ).toBe(400);
 });
+
+test("le port déclaré n’écrase pas le port du backend d’une commande multi-serveurs", async () => {
+  const {project,service}=fixture();
+  const command=service.save(project.id,{name:"Ports",command:'printf "PORT:%s" "$PORT"',env_json:JSON.stringify({PORT:"18787"}),port:18573});
+  expect((await service.launch(command.id)).logs).toContain("PORT:18787");
+  await service.stop(command.id);
+  expect((await service.launch(command.id,{port:18574})).logs).toContain("PORT:18574");
+});

@@ -1,0 +1,224 @@
+[
+  {
+    "project": "helion",
+    "commands": [
+      {
+        "name": "Jeu — Rust, WebAssembly et client",
+        "command": "npm run dev",
+        "cwd_relative": ".",
+        "port": 5173,
+        "url": "http://localhost:5173",
+        "env_json": "{}",
+        "kind": "run"
+      },
+      {
+        "name": "Vérifier le projet",
+        "command": "cargo test --manifest-path engine/Cargo.toml && npm run typecheck && npm test",
+        "cwd_relative": ".",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": [
+      {
+        "name": "Production — Helion",
+        "type": "http",
+        "url": "https://helion.clementserizay.com"
+      }
+    ]
+  },
+  {
+    "project": "veille-immo",
+    "commands": [
+      {
+        "name": "Serveur local — collectes et Telegram coupés",
+        "command": "doppler run --project veille-immo --config dev -- env SCHEDULER=off node --disable-warning=ExperimentalWarning --watch src/index.ts",
+        "cwd_relative": ".",
+        "port": 3000,
+        "url": "http://localhost:3000/health",
+        "env_json": "{\"PORT\": \"3000\", \"SCHEDULER\": \"off\"}",
+        "kind": "run"
+      },
+      {
+        "name": "Vérifier le projet",
+        "command": "npm test && npm run typecheck",
+        "cwd_relative": ".",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": []
+  },
+  {
+    "project": "todo-app",
+    "commands": [
+      {
+        "name": "Vrac — API locale",
+        "command": "npm run dev",
+        "cwd_relative": "server",
+        "port": 8790,
+        "url": "http://localhost:8790/health",
+        "env_json": "{}",
+        "kind": "run"
+      },
+      {
+        "name": "Vrac — interface web locale",
+        "command": "npm run web -- --port 8081",
+        "cwd_relative": "app",
+        "port": 8081,
+        "url": "http://localhost:8081",
+        "env_json": "{\"EXPO_NO_DOTENV\": \"1\", \"EXPO_PUBLIC_API_URL\": \"http://localhost:8790\", \"EXPO_PUBLIC_API_TOKEN\": \"\"}",
+        "kind": "run"
+      },
+      {
+        "name": "Vérifier le projet",
+        "command": "npm test && npm run typecheck",
+        "cwd_relative": "server",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      },
+      {
+        "name": "Vérifier l’interface Vrac",
+        "command": "npm run typecheck && npm run lint",
+        "cwd_relative": "app",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": [
+      {
+        "name": "Production — Vrac",
+        "type": "http",
+        "url": "https://vrac.clementserizay.com/health"
+      }
+    ]
+  },
+  {
+    "project": "politics-cards",
+    "commands": [
+      {
+        "name": "Jeu — API et application",
+        "command": "pnpm dev",
+        "cwd_relative": ".",
+        "port": 8081,
+        "url": "http://localhost:8081",
+        "env_json": "{}",
+        "kind": "run"
+      },
+      {
+        "name": "Vérifier le projet",
+        "command": "pnpm test && pnpm typecheck && pnpm lint",
+        "cwd_relative": ".",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": []
+  },
+  {
+    "project": "coworker-malin",
+    "commands": [
+      {
+        "name": "Développement — base locale et applications",
+        "command": "bun run dev",
+        "cwd_relative": ".",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      },
+      {
+        "name": "Vérifier le projet",
+        "command": "bun run test",
+        "cwd_relative": ".",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": []
+  },
+  {
+    "project": "coworking",
+    "commands": [
+      {
+        "name": "Site local",
+        "command": "npm run dev -- --port 3002",
+        "cwd_relative": ".",
+        "port": 3002,
+        "url": "http://localhost:3002",
+        "env_json": "{}",
+        "kind": "run"
+      },
+      {
+        "name": "Vérifier le projet",
+        "command": "npm test",
+        "cwd_relative": ".",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": []
+  },
+  {
+    "project": "recall-people-2026",
+    "commands": [
+      {
+        "name": "API — base PostgreSQL locale",
+        "command": "npm run dev",
+        "cwd_relative": "backend",
+        "port": 3000,
+        "url": "http://localhost:3000",
+        "env_json": "{}",
+        "kind": "run"
+      },
+      {
+        "name": "Application Expo",
+        "command": "npm start",
+        "cwd_relative": "frontend",
+        "port": 8081,
+        "url": "http://localhost:8081",
+        "env_json": "{}",
+        "kind": "run"
+      },
+      {
+        "name": "Vérifier le projet",
+        "command": "npm test && npm run typecheck",
+        "cwd_relative": "backend",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": []
+  },
+  {
+    "project": "vinted-arbitrage",
+    "commands": [
+      {
+        "name": "Vérifier l’extension et le worker",
+        "command": "npm test",
+        "cwd_relative": ".",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": []
+  }
+]
