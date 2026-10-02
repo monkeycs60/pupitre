@@ -121,3 +121,15 @@ test("un redémarrage clôt les passages restés en cours", () => {
     completed_at: expect.any(String),
   });
 });
+
+test('routine commande réussie sans conversation ni quota, notification si échec',async()=>{
+ const conversations=new ConversationStore(db),notifications=new NotificationStore(db);
+ const runner={runTurn:()=>{throw new Error('aucun modèle attendu')}} as unknown as ConversationRunner;
+ const scheduler=new RoutineScheduler(routines,new WorkflowStore(db),new PresetStore(db),projects,conversations,runner,notifications);
+ let failed=0;scheduler.onCommandFailure=async()=>{failed++};
+ const input={projectId,name:'Santé',schedule:'* * * * *',kind:'command' as const,command:'printf ok',workflowId:null,prompt:null,presetId:null,provider:'claude' as const,model:'haiku',effort:'low',speed:null,enabled:true};
+ const routine=routines.save(input);db.query("UPDATE routines SET next_run_at='2020-01-01' WHERE id=?").run(routine.id);
+ await scheduler.tick();expect(routines.runs(routine.id)[0]).toMatchObject({status:'done',tokens:0,conversation_id:null});expect(conversations.listByProject(projectId)).toHaveLength(0);
+ routines.save({...input,command:'echo failed; exit 2'},routine.id);db.query("UPDATE routines SET next_run_at='2020-01-01' WHERE id=?").run(routine.id);
+ await scheduler.tick();expect(routines.runs(routine.id)[0]?.status).toBe('error');expect(failed).toBe(1);expect(notifications.listAfter(0)).toHaveLength(1);
+});

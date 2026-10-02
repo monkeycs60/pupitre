@@ -908,7 +908,8 @@ function routineInput(
   }
   const promptValue = body.prompt;
   const prompt = typeof promptValue === "string" && promptValue.trim() ? promptValue.trim() : null;
-  if (!workflow && !prompt) throw new HttpError(400, "workflow ou prompt requis");
+  if (body.kind === "command" && (typeof body.command !== "string" || !body.command.trim())) throw new HttpError(400, "commande requise");
+  if (!workflow && !prompt && body.kind !== "command") throw new HttpError(400, "workflow ou prompt requis");
   const presetIdValue = body.presetId;
   if (presetIdValue !== null && presetIdValue !== undefined && typeof presetIdValue !== "string") {
     throw new HttpError(400, "presetId invalide");
@@ -934,6 +935,8 @@ function routineInput(
   }
   return {
     projectId,
+    kind: body.kind === "command" ? "command" : workflow ? "workflow" : "prompt",
+    command: body.kind === "command" ? String(body.command).trim() : null,
     name: requiredString(body, "name"),
     schedule: requiredString(body, "schedule"),
     workflowId: workflow?.id ?? null,

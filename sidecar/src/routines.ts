@@ -1,3 +1,5 @@
+import { executeCommand, type CommandResult } from "./command-runner";
+import { projectCwd } from "./workspace";
 import type { Database } from "bun:sqlite";
 import type { Provider } from "./events";
 import type { ConversationRunner } from "./runner";
@@ -8,6 +10,8 @@ import type { ProjectStore } from "./stores/projects";
 import type { WorkflowStore } from "./stores/workflows";
 
 export interface RoutineInput {
+  kind?: "prompt" | "workflow" | "command";
+  command?: string | null;
   projectId: string;
   name: string;
   schedule: string;
@@ -22,6 +26,8 @@ export interface RoutineInput {
 }
 
 export interface Routine {
+  kind?: "prompt" | "workflow" | "command";
+  command?: string | null;
   id: string;
   project_id: string;
   name: string;
@@ -183,7 +189,12 @@ export class RoutineStore {
       input.enabled ? 1 : 0, nextRun,
       now.toISOString(), now.toISOString(),
     );
+    this.db.query("UPDATE routines SET kind=?,command=? WHERE id=?").run(input.kind ?? (input.workflowId ? "workflow" : "prompt"), input.command ?? null, id);
     return this.get(id)!;
+  }
+
+  saveCommandResult(id: string, result: CommandResult) {
+    this.db.query("UPDATE routine_runs SET output=?,exit_code=?,duration_ms=? WHERE id=?").run(result.output,result.exitCode,result.durationMs,id);
   }
 
   delete(id: string): boolean {
@@ -241,6 +252,8 @@ export class RoutineStore {
 }
 
 export class RoutineScheduler {
+  commandExecutor = executeCommand;
+  onCommandFailure?: (routine: Routine, result: CommandResult) => Promise<void>;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -286,6 +299,17 @@ export class RoutineScheduler {
     try {
       const project = this.projects.get(routine.project_id);
       if (!project) throw new Error("projet de routine introuvable");
+      if (routine.kind === "command") {
+        if (!routine.command?.trim()) throw new Error("commande manquante");
+        const result = await this.commandExecutor(routine.command, projectCwd(project));
+        this.routines.saveCommandResult(run.id, result);
+        this.routines.complete(run.id, result.exitCode === 0 ? "done" : "error", result.exitCode === 0 ? undefined : `Code de sortie ${result.exitCode}`);
+        if (result.exitCode !== 0) {
+          this.notifications.create({kind:"routine",title:`Routine en échec · ${routine.name}`,body:result.output.slice(-2000),conversation_id:null});
+          await this.onCommandFailure?.(routine,result);
+        }
+        return;
+      }
       const workflow = routine.workflow_id ? this.workflows.get(routine.workflow_id) : null;
       const presetId = workflow?.preset_id ?? routine.preset_id;
       const preset = presetId ? this.presets.get(presetId) : null;

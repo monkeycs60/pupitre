@@ -137,6 +137,8 @@ export interface WorkflowInput {
 }
 
 export interface RoutineInput {
+  kind?: 'prompt' | 'workflow' | 'command'
+  command?: string | null
   projectId: string
   name: string
   schedule: string

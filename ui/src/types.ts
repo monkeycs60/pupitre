@@ -139,6 +139,8 @@ export interface Workflow {
 }
 
 export interface Routine {
+  kind?: 'prompt' | 'workflow' | 'command'
+  command?: string | null
   id: string
   project_id: string
   name: string
@@ -157,6 +159,9 @@ export interface Routine {
 }
 
 export interface RoutineRun {
+  output?: string | null
+  exit_code?: number | null
+  duration_ms?: number | null
   id: string
   routine_id: string
   conversation_id: string | null

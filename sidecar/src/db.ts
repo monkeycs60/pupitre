@@ -608,6 +608,11 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "projects", "chantiers_enabled INTEGER NOT NULL DEFAULT 1");
   addColumn(db, "conversations", "ticket_locked INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "ticket_confidence REAL NULL");
+  addColumn(db, "routines", "kind TEXT NOT NULL DEFAULT 'prompt'");
+  addColumn(db, "routines", "command TEXT NULL");
+  addColumn(db, "routine_runs", "output TEXT NULL");
+  addColumn(db, "routine_runs", "exit_code INTEGER NULL");
+  addColumn(db, "routine_runs", "duration_ms INTEGER NULL");
   addColumn(db, "projects", "trunk_branch TEXT NULL");
   addColumn(db, "projects", "sort_order INTEGER NULL");
   addColumn(db, "projects", "removed_at TEXT NULL");
