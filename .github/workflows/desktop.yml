@@ -33,10 +33,10 @@ jobs:
       - run: bun test
         working-directory: ui
       - name: Construire Linux
-        if: runner.os == 'Linux'
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: bunx tauri build --bundles deb
       - name: Construire macOS
-        if: runner.os == 'macOS'
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
         run: bunx tauri build --bundles app
       - name: Compiler et tester Rust
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml
