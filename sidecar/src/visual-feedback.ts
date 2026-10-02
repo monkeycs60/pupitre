@@ -1,6 +1,7 @@
+import { listeningSockets, processCwd } from './host-processes';
 import type { Database } from "bun:sqlite";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { readlinkSync, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { isAbsolute, relative } from "node:path";
 import type { GitProjectService } from "./git";
 import type { MediaStore } from "./media";
@@ -65,11 +66,8 @@ function publicProject(project: Project): Pick<Project, "id" | "name"> {
 
 export function listeningProcessCwd(port: number): string | null {
   if (!Number.isInteger(port) || port < 1 || port > 65_535) return null;
-  const result = Bun.spawnSync(["ss", "-ltnp", `sport = :${port}`]);
-  if (result.exitCode !== 0) return null;
-  const pid = /pid=(\d+)/u.exec(result.stdout.toString())?.[1];
-  if (!pid) return null;
-  try { return readlinkSync(`/proc/${pid}/cwd`); } catch { return null; }
+  const socket = listeningSockets().find((socket) => socket.port === port);
+  return socket ? processCwd(socket.pid) : null;
 }
 
 /** Toute la plage 127.0.0.0/8, pas seulement 127.0.0.1 : un serveur de dev peut

@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, readlinkSync } from "node:fs";
+import { listeningSockets, processCwd, processCommand } from './host-processes';
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 
 export interface ApplicationContext {
@@ -22,27 +23,7 @@ export interface RunningApplication {
   url: string;
 }
 
-interface ListeningSocket {
-  pid: number;
-  port: number;
-  process: string;
-}
-
-export function parseListeningSockets(output: string): ListeningSocket[] {
-  const sockets: ListeningSocket[] = [];
-  const seen = new Set<string>();
-  for (const line of output.split("\n")) {
-    const localAddress = line.trim().split(/\s+/u)[3];
-    const port = Number(localAddress?.match(/:(\d+)$/u)?.[1]);
-    const pid = Number(line.match(/pid=(\d+)/u)?.[1]);
-    const process = line.match(/users:\(\("([^"]+)/u)?.[1];
-    const id = `${pid}:${port}`;
-    if (!Number.isInteger(port) || !Number.isInteger(pid) || !process || seen.has(id)) continue;
-    seen.add(id);
-    sockets.push({ pid, port, process });
-  }
-  return sockets;
-}
+export { parseLinuxSockets as parseListeningSockets } from './host-processes';
 
 export function inspectorPort(command: string): number | null {
   const value = command.match(/(?:^|\s)--inspect(?:-brk)?(?:=([^\s]+))?(?:\s|$)/u)?.[1];
@@ -93,8 +74,6 @@ function currentBranch(cwd: string): string | null {
 }
 
 export function listRunningApplications(contexts: ApplicationContext[]): RunningApplication[] {
-  const result = Bun.spawnSync(["ss", "-ltnpH"]);
-  if (result.exitCode !== 0) return [];
 
   const normalizedContexts = contexts.map((context) => ({
     ...context,
@@ -104,12 +83,12 @@ export function listRunningApplications(contexts: ApplicationContext[]): Running
   const commandCache = new Map<number, string>();
   const branchCache = new Map<string, string | null>();
 
-  return parseListeningSockets(result.stdout.toString())
+  return listeningSockets()
     .flatMap((socket): RunningApplication[] => {
       if (isExcludedApplicationProcess(socket.process)) return [];
       let cwd = cwdCache.get(socket.pid);
       if (cwd === undefined) {
-        try { cwd = readlinkSync(`/proc/${socket.pid}/cwd`); } catch { cwd = null; }
+        cwd = processCwd(socket.pid);
         cwdCache.set(socket.pid, cwd);
       }
       if (!cwd) return [];
@@ -117,7 +96,7 @@ export function listRunningApplications(contexts: ApplicationContext[]): Running
       if (!context) return [];
       let command = commandCache.get(socket.pid);
       if (command === undefined) {
-        try { command = readFileSync(`/proc/${socket.pid}/cmdline`, "utf8").replaceAll("\0", " "); } catch { command = ""; }
+        command = processCommand(socket.pid);
         commandCache.set(socket.pid, command);
       }
       if (inspectorPort(command) === socket.port) return [];
