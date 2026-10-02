@@ -1,3 +1,4 @@
+import { ProjectResume } from './ProjectResume'
 import { ChantierAssignment } from './ChantiersView'
 import { ProjectLaunch } from './ProjectLaunch'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
@@ -662,6 +663,7 @@ export const Sidebar = memo(function Sidebar({
         ) : null}
       </div>
 
+      {selectedProject && <ProjectResume key={selectedProject.id} projectId={selectedProject.id} inactive={conversations.length > 0 && conversations.every(c => Date.parse(c.updated_at) < Date.now() - 3 * 86400000)} onResume={(ticketId, ticketKey) => onConversationCreateFromContext?.({ ticketId, ticketKey, branch: null })} />}
       <div className="sidebar-tabs conversation-list-heading">
         <span id="sidebar-conversations-title" title={`${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} à lire sur ${conversations.length}`}>
           Conversations <span>{unreadConversationCount}</span>

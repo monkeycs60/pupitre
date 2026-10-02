@@ -6,6 +6,9 @@ const MAX_DESCRIPTION_CHARS = 2_000;
 const MAX_COMMENT_CHARS = 400;
 
 export interface TicketBriefInput {
+  description?: string;
+  notes?: string[];
+  backlog?: string[];
   ticket: Pick<Ticket, "key" | "title" | "status" | "source" | "external_url">;
   branches: string[];
   refs: Array<Pick<TicketRef, "kind" | "ref" | "payload">>;
@@ -49,6 +52,9 @@ export function composeTicketBrief(input: TicketBriefInput): string {
     `- Titre : ${input.ticket.title}`,
     `- Statut : ${input.ticket.status || "inconnu"}`,
   );
+  if (input.description) parts.push("", input.description);
+  if (input.notes?.length) parts.push("", "## Notes", ...input.notes);
+  if (input.backlog?.length) parts.push("", "## Backlog ouvert", ...input.backlog.map(item => `- ${item}`));
   if (input.ticket.external_url) {
     parts.push(`- Lien : ${input.ticket.external_url}`);
   }

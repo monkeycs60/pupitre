@@ -1,3 +1,4 @@
+import type { ProjectResumeService } from "./project-resume";
 import type { ChantierService } from "./chantiers";
 import type { ProjectLaunchService } from "./project-launch";
 import { projectCwd } from "./workspace";
@@ -137,6 +138,7 @@ export class ConversationEventBus {
 export interface ServerDeps {
   launches?: ProjectLaunchService;
   chantiers?: ChantierService;
+  resume?: ProjectResumeService;
   todos?: TodoService;
   port: number;
   instance?: InstanceInfo;
@@ -219,6 +221,7 @@ async function ticketBriefFor(
     instruction: ticket.instruction,
     clickup: await deps.integrationsRefresher.clickUpContext(ticket.project_id, ticket.key),
     siblings,
+    ...(ticket.source === "chantier" ? { description: String(ticket.payload.description ?? ""), notes: deps.tickets.notesByTicket(ticket.id).map(note => note.body), backlog: deps.todos?.snapshot(ticket.project_id).items.filter(item => item.ticket_id === ticket.id && item.status !== "done").map(item => item.title) ?? [] } : {}),
   });
 }
 
@@ -1292,6 +1295,8 @@ export function createServer(deps: ServerDeps) {
           return json(currentFleet());
         }
 
+        const resumeResponse = await deps.resume?.handle(request, pathname);
+        if (resumeResponse) return resumeResponse;
         const chantierResponse = await deps.chantiers?.handle(request, pathname);
         if (chantierResponse) return chantierResponse;
         const launchResponse = await deps.launches?.handle(request, pathname);
