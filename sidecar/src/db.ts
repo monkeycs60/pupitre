@@ -605,6 +605,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "worktree_path TEXT NULL");
   addColumn(db, "conversations", "worktree_paths TEXT NOT NULL DEFAULT '[]'");
   // Un renommage manuel fige le titre : la régénération automatique le respecte.
+  addColumn(db, "projects", "trunk_branch TEXT NULL");
   addColumn(db, "projects", "sort_order INTEGER NULL");
   addColumn(db, "projects", "removed_at TEXT NULL");
   addColumn(db, "projects", "mcp_servers TEXT NULL");

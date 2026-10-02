@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   deleteProjectIntegration,
+  setProjectTrunk,
   listProjectMcpServers,
   listProjectIntegrations,
   measureProjectMcpServers,
@@ -185,6 +186,7 @@ function integrationForm(items: DashboardIntegration[]): IntegrationsForm {
 }
 
 export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSettingsDialogProps) {
+  const [trunk, setTrunk] = useState(project.trunk_branch ?? '')
   const [scope, setScope] = useState<FilesystemScope>(project.filesystem_scope)
   const [permissionMode, setPermissionMode] = useState<PresetPermissionMode>(project.permission_mode)
   const [launchConfigs, setLaunchConfigs] = useState<LaunchConfigs>(() => launchConfigsOf(project))
@@ -349,6 +351,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
         }
       }
       if (mcp !== null) await updateProjectMcpServers(project.id, mcp.enabled)
+      if (trunk.trim() !== (project.trunk_branch ?? '')) updated = await setProjectTrunk(project.id, trunk.trim() || null)
       onUpdated(updated)
       onClose()
     } catch (saveError: unknown) {
@@ -375,6 +378,10 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
           <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">×</button>
         </header>
         <div className="project-settings-body">
+          <label>
+            Branche principale
+            <input value={trunk} onChange={(event) => setTrunk(event.target.value)} placeholder={`Détectée automatiquement — ${project.detected_trunk ?? 'inconnue'}`} />
+          </label>
           <section className="project-settings-defaults" aria-labelledby="project-defaults-title">
             <div className="project-settings-section-heading">
               <strong id="project-defaults-title">Modèles par défaut</strong>

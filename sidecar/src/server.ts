@@ -1,3 +1,4 @@
+import { projectCwd } from "./workspace";
 import type { SharedFilesService } from "./shared-files";
 import { TodoError, type TodoService } from "./todos";
 import type { TodoInput } from "./stores/todos";
@@ -2136,6 +2137,20 @@ export function createServer(deps: ServerDeps) {
           }
           deps.projects.setPermissionMode(projectPermissionModeId, permissionMode);
           return json(deps.projects.get(projectPermissionModeId));
+        }
+
+        const projectTrunkId = routeId(pathname, /^\/api\/projects\/([^/]+)\/trunk$/);
+        if (request.method === "PUT" && projectTrunkId !== null) {
+          const project = deps.projects.get(projectTrunkId);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const body = await readObject(request);
+          const branch = body.branch;
+          if (branch !== null && (typeof branch !== "string" || !branch.trim()
+            || Bun.spawnSync(["git", "check-ref-format", "--branch", branch], { cwd: projectCwd(project), stdout: "pipe", stderr: "pipe" }).exitCode !== 0)) {
+            throw new HttpError(400, "branche principale invalide");
+          }
+          deps.projects.setTrunkBranch(projectTrunkId, branch as string | null);
+          return json(deps.projects.get(projectTrunkId));
         }
 
         const projectAutoRescanId = routeId(

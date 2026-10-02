@@ -1,3 +1,4 @@
+import { trunkOf } from "./trunk";
 import type { ConversationRunner } from "./runner";
 import type { ConversationStore } from "./stores/conversations";
 import type { ProjectStore } from "./stores/projects";
@@ -185,9 +186,10 @@ export class TodoService {
     return this.store.create(projectId, { ...input, targetBranch: branch });
   }
   private async targetBranch(projectId: string, target?: string | null) {
-    const cwd = this.project(projectId).path;
+    const project = this.project(projectId);
+    const cwd = project.path;
     const branch =
-      target?.trim() ||
+      target?.trim() || trunkOf(cwd, project.trunk_branch) ||
       (await todoGit(cwd, ["symbolic-ref", "--short", "HEAD"]));
     await todoGit(cwd, ["check-ref-format", "--branch", branch]);
     await todoGit(cwd, ["rev-parse", "--verify", `refs/heads/${branch}`]);

@@ -1362,3 +1362,7 @@ export function reorderProjects(ids: string[]): Promise<Project[]> {
 export function removeProject(projectId: string): Promise<void> {
   return fetchVoid(`/api/projects/${routeId(projectId)}`, { method: 'DELETE' })
 }
+
+export function setProjectTrunk(projectId: string, branch: string | null): Promise<Project> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/trunk`, { method: 'PUT', body: JSON.stringify({ branch }) })
+}

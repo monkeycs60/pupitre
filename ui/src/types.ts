@@ -208,6 +208,8 @@ export interface UnreadConversation {
 }
 
 export interface Project {
+  trunk_branch?: string | null
+  detected_trunk?: string | null
   id: string
   name: string
   path: string

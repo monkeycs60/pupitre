@@ -861,11 +861,11 @@ export const Sidebar = memo(function Sidebar({
                       {conversation.ticket_key ? (
                         <span className="conv-row-ticket" title={`${conversation.ticket_key} · ${conversation.ticket_title ?? ''}`}>{conversation.ticket_key}</span>
                       ) : null}
-                      {branch !== null ? (
+                      {branch !== null && !['main', 'master', 'develop', 'dev', 'staging', 'preprod', 'production', selectedProject?.detected_trunk].includes(branch.replace(/^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/, '')) ? (
                         <span className="conv-row-branch" title={`Worktrees : ${(conversation.worktree_paths?.length ? conversation.worktree_paths : [conversation.worktree_path]).join(', ')}`}>
                           <BranchIcon />{branch}{(conversation.worktree_paths?.length ?? 0) > 1 ? ` +${conversation.worktree_paths!.length - 1}` : ''}
                         </span>
-                      ) : conversation.created_on_branch !== null ? (
+                      ) : conversation.created_on_branch !== null && !['main', 'master', 'develop', 'dev', 'staging', 'preprod', 'production', selectedProject?.detected_trunk].includes(conversation.created_on_branch.replace(/^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/, '')) ? (
                         <span className="conv-row-branch" title={`Branche à la création`}>
                           <BranchIcon />{conversation.created_on_branch}
                         </span>

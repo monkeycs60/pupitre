@@ -1,3 +1,4 @@
+import { trunkOf } from "../trunk";
 import type { Database } from "bun:sqlite";
 import { normalizeFilesystemScope, type FilesystemScope } from "../access";
 import type { PresetPermissionMode } from "./presets";
@@ -23,6 +24,8 @@ export const FALLBACK_PROJECT_LAUNCH_CONFIG: ProjectLaunchConfig = {
 
 export interface Project {
   id: string; name: string; path: string;
+  trunk_branch?: string | null;
+  detected_trunk?: string | null;
   permission_mode: PresetPermissionMode; pinned: boolean; created_at: string;
   default_preset_id: string | null;
   default_scout_preset_id: string | null;
@@ -75,6 +78,7 @@ function parseLaunchConfig(value: unknown): ProjectLaunchConfig | null {
 function hydrate(row: any): Project {
   return {
     ...row,
+    detected_trunk: trunkOf(row.path, row.trunk_branch),
     pinned: !!row.pinned,
     auto_rescan: !!row.auto_rescan,
     filesystem_scope: normalizeFilesystemScope(row.filesystem_scope),
@@ -129,6 +133,10 @@ export class ProjectStore {
     this.db.transaction(() => {
       ids.forEach((id, index) => this.db.query("UPDATE projects SET sort_order = ? WHERE id = ?").run(index, id));
     })();
+  }
+
+  setTrunkBranch(id: string, branch: string | null): void {
+    this.db.query("UPDATE projects SET trunk_branch = ? WHERE id = ?").run(branch, id);
   }
 
   setPinned(id: string, pinned: boolean): void {

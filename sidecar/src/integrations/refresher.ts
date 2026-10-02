@@ -1,3 +1,4 @@
+import { trunkOf } from "../trunk";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { branchOfRef, compileBranchPattern, extractTicketKey, isBaseBranch } from "../ticket-key";
@@ -589,6 +590,7 @@ export class IntegrationsRefresher {
   }
 
   private refreshGitSource(projectId: string, pattern: RegExp | null): void {
+    if (pattern === null) return;
     const branchOfWorktree = this.deps.branchOfWorktree ?? defaultBranchOfWorktree;
     const project = this.stores.projects.get(projectId);
     const ticketKeysOfCommits = this.deps.ticketKeysOfCommits ?? defaultTicketKeysOfCommits;
@@ -665,15 +667,6 @@ export function defaultTicketKeysOfCommits(projectPath: string, commits: string[
     }
   }
   return [...keys];
-}
-
-function trunkOf(repository: string): string | null {
-  const result = Bun.spawnSync(
-    ["git", "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
-    { cwd: repository, stdout: "pipe", stderr: "pipe" },
-  );
-  if (result.exitCode !== 0) return null;
-  return branchOfRef(result.stdout.toString());
 }
 
 function compiledPattern(items: ProjectIntegration[]): RegExp | null {

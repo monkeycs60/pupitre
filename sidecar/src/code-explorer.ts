@@ -1,3 +1,4 @@
+import { trunkOf } from "./trunk";
 import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
@@ -16,7 +17,6 @@ const SOURCE_CACHE_MS = 5_000;
 const GIT_TIMEOUT_MS = 20_000;
 const SOURCE_CONVERSATION_LIMIT = 25;
 const BACKFILL_GRACE_MS = 2 * 60_000;
-const BASE_BRANCHES = ["origin/develop", "origin/main", "origin/master", "develop", "main", "master"];
 const FULL_SHA = /^[0-9a-f]{40,64}$/i;
 const SHORT_SHA = /^[0-9a-f]{7,64}$/i;
 const UNCOMMITTED = /^0+$/;
@@ -581,7 +581,7 @@ export class CodeExplorerService {
     let base: string | null = null;
     let focusCommits: CodeCommitSummary[] = [];
     if (offset === 0 && head) {
-      base = await this.findBase(cwd, currentBranch);
+      base = await this.findBase(cwd, currentBranch, projectId);
       const from = base ? await this.branchStart(cwd, head, base, resolved.main) : null;
       const own = from ? await optionalGit(cwd, ["log", "-z", "--topo-order", "--max-count=500", LOG_FORMAT, `${from}..${head}`]) : null;
       focusCommits = own ? this.withLinks(projectId, parseCommitRecords(own)) : [];
@@ -636,7 +636,7 @@ export class CodeExplorerService {
   /** Fichiers modifiés par la branche de cet état du code, tous commits confondus. */
   async changes(projectId: string, source: string | null): Promise<CodeBranchChanges> {
     const resolved = await this.resolveSource(projectId, source);
-    const { base, from, head } = await this.branchRange(resolved);
+    const { base, from, head } = await this.branchRange(resolved, projectId);
     if (!from || !head) return { base, from: null, head, files: [], filesTruncated: false };
     const range = `${from}...${head}`;
     const [numstat, nameStatus] = await Promise.all([
@@ -654,7 +654,7 @@ export class CodeExplorerService {
     const resolved = await this.resolveSource(projectId, source);
     const { cwd, sha } = resolved;
     const branch = sha ? resolved.source.branch : ((await optionalGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"]))?.trim() || null);
-    const base = await this.findBase(cwd, branch);
+    const base = await this.findBase(cwd, branch, projectId);
     const fetched = options.fetch && base?.startsWith("origin/")
       ? await this.fetchBase(resolved.source.repositoryPath, base)
       : null;
@@ -788,7 +788,7 @@ export class CodeExplorerService {
     const { cwd, sha: refSha } = resolved;
     const safe = this.safePath(cwd, path);
     if (range === "branch") {
-      const { from, head } = await this.branchRange(resolved);
+      const { from, head } = await this.branchRange(resolved, projectId);
       if (!from || !head) return { diff: "" };
       const { stdout } = await runGit(cwd, ["diff", "--no-ext-diff", "-M", `${from}...${head}`, "--", safe]);
       return { diff: stdout };
@@ -921,8 +921,10 @@ export class CodeExplorerService {
     return count;
   }
 
-  private async findBase(cwd: string, currentBranch: string | null): Promise<string | null> {
-    for (const candidate of BASE_BRANCHES) {
+  private async findBase(cwd: string, currentBranch: string | null, projectId: string): Promise<string | null> {
+    const project = this.projects.get(projectId);
+    const trunk = trunkOf(cwd, project?.trunk_branch);
+    for (const candidate of trunk ? [`origin/${trunk}`, trunk] : []) {
       if (candidate === currentBranch) continue;
       if (await optionalGit(cwd, ["rev-parse", "--verify", "-q", `${candidate}^{commit}`])) return candidate;
     }
@@ -945,11 +947,11 @@ export class CodeExplorerService {
     return merge ? `${merge}^1` : null;
   }
 
-  private async branchRange({ cwd, sha, source }: ResolvedSource): Promise<{ base: string | null; from: string | null; head: string | null }> {
+  private async branchRange({ cwd, sha, source }: ResolvedSource, projectId: string): Promise<{ base: string | null; from: string | null; head: string | null }> {
     const head = sha ?? ((await optionalGit(cwd, ["rev-parse", "--verify", "-q", "HEAD"]))?.trim() || null);
     const branch = sha ? source.branch : ((await optionalGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"]))?.trim() || null);
     if (!head) return { base: null, from: null, head: null };
-    const base = await this.findBase(cwd, branch);
+    const base = await this.findBase(cwd, branch, projectId);
     return { base, from: base ? await this.branchStart(cwd, head, base, source.main) : null, head };
   }
 
@@ -1071,7 +1073,7 @@ export class CodeExplorerService {
     const counts = await Promise.all([...chosen.values()].map(async (source) => {
       const resolved = await this.resolveMatch(source).catch(() => null);
       if (!resolved) return 0;
-      const { from, head } = await this.branchRange(resolved);
+      const { from, head } = await this.branchRange(resolved, projectId);
       if (!from || !head) return 0;
       return Number((await optionalGit(resolved.cwd, ["rev-list", "--count", `${from}..${head}`]))?.trim()) || 0;
     }));

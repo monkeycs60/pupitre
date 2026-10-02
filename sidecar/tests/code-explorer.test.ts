@@ -374,6 +374,7 @@ test("mesure l'écart avec la base, prévoit les conflits et ne fusionne que san
   git(repo, "remote", "add", "origin", origin);
   git(repo, "fetch", "-q", "origin");
   git(repo, "branch", "develop", "main");
+  new ProjectStore(db).setTrunkBranch(projectId, "develop");
   git(repo, "push", "-q", "origin", "develop");
   const worktree = join(root, "feature");
   git(repo, "worktree", "add", "-q", "-b", "feature", worktree, "origin/develop");
