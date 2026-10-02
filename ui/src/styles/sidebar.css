@@ -2123,3 +2123,22 @@
 .conv-row-line2:has(.conv-row-ticket) .conv-row-branch {
   opacity: .65;
 }
+
+.conv-group-more {
+  justify-self: start;
+  margin: 0 0 6px 20px;
+  border: 0;
+  padding: 3px 8px;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.conv-group-more:hover,
+.conv-group-more:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
+}

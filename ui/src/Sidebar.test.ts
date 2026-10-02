@@ -7,7 +7,7 @@ import { formatActiveDuration } from './formatActiveDuration'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
-const { Sidebar } = await import('./Sidebar')
+const { Sidebar, compactGroupItems } = await import('./Sidebar')
 const { WorkflowsView } = await import('./WorkflowsView')
 
 const project: Project = {
@@ -351,6 +351,8 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   expect(ticketTitle?.getAttribute('title')).toBe('Corriger les pipelines de déploiement')
   const ticketIcons = document.querySelector('.ticket-link-icons')
   expect(ticketIcons?.compareDocumentPosition(ticketTitle!) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+  expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Afficher 1 de plus' }))
   expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(2)
   expect(document.querySelector('.conv-row-sentry .provider-mark.is-sentry')).not.toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /Nouvelle conversation dans Sentry/ }))
@@ -549,4 +551,19 @@ test('les conversations récentes gardent le nom du ticket et la recherche accep
   expect(document.querySelector('.conv-row-branch')?.textContent).toContain('feature/TECH-25267')
   fireEvent.change(screen.getByRole('textbox', { name: 'Filtrer les conversations' }), { target: { value: 'tech 25267 geographique' } })
   expect([...document.querySelectorAll('.conv-row-title')].map((item) => item.textContent)).toEqual(['Travail en cours'])
+})
+
+test('un groupe de ticket replié montre au plus trois conversations de moins de 24 h', () => {
+  const now = Date.parse('2026-10-02T12:00:00.000Z')
+  const at = (id: string, hoursAgo: number): Conversation => ({
+    ...startedConversation,
+    id,
+    updated_at: new Date(now - hoursAgo * 3_600_000).toISOString(),
+  })
+  const ids = (items: Conversation[]) => items.map((item) => item.id)
+  const busy = [at('a', 1), at('b', 2), at('c', 3), at('d', 4), at('e', 30)]
+  expect(ids(compactGroupItems(busy, new Set(), now))).toEqual(['a', 'b', 'c'])
+  expect(ids(compactGroupItems([at('a', 1), at('b', 30), at('c', 50)], new Set(), now))).toEqual(['a'])
+  expect(ids(compactGroupItems([at('a', 30), at('b', 50)], new Set(), now))).toEqual(['a'])
+  expect(ids(compactGroupItems(busy, new Set(['e']), now))).toEqual(['a', 'b', 'c', 'e'])
 })

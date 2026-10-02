@@ -245,6 +245,21 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
     .sort((left, right) => left.key === 'pinned' ? -1 : right.key === 'pinned' ? 1 : (right.latestUpdatedAt ?? 0) - (left.latestUpdatedAt ?? 0))
 }
 
+const COMPACT_GROUP_LIMIT = 3
+const COMPACT_GROUP_WINDOW_MS = 24 * 3_600_000
+
+/** Conversations montrées par un groupe de ticket replié : les trois plus
+ *  récentes de moins de 24 h, au moins la plus récente, plus celles qu'on ne
+ *  doit jamais masquer (sélectionnée, en cours). L'ordre du groupe est gardé. */
+export function compactGroupItems(items: Conversation[], alwaysVisible: Set<string>, now = Date.now()): Conversation[] {
+  const byRecency = [...items].sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))
+  const recent = byRecency
+    .filter((conversation) => now - Date.parse(conversation.updated_at) < COMPACT_GROUP_WINDOW_MS)
+    .slice(0, COMPACT_GROUP_LIMIT)
+  const visible = new Set((recent.length > 0 ? recent : byRecency.slice(0, 1)).map((conversation) => conversation.id))
+  return items.filter((conversation) => visible.has(conversation.id) || alwaysVisible.has(conversation.id))
+}
+
 function groupConversationsByLatest(items: Conversation[]): ConversationGroup[] {
   if (items.length === 0) return []
   return [{
@@ -284,6 +299,7 @@ export const Sidebar = memo(function Sidebar({
   const [conversationSortMode, setConversationSortMode] = useState<ConversationSortMode>(readConversationSortMode)
   const [scopeMenuOpen, setScopeMenuOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [filterText, setFilterText] = useState('')
   const [openConversationMenu, setOpenConversationMenu] = useState<string | null>(null)
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
@@ -323,6 +339,11 @@ export const Sidebar = memo(function Sidebar({
     if (workspaceView === 'conversations' && selectedConversation !== null && runningSubtasks > 0) ids.add(selectedConversation.id)
     return ids
   }, [activeConversationIds, workspaceView, selectedConversation, runningSubtasks])
+  const alwaysVisibleConversationIds = useMemo(() => {
+    const ids = new Set(displayedActiveConversationIds)
+    if (selectedConversation !== null) ids.add(selectedConversation.id)
+    return ids
+  }, [displayedActiveConversationIds, selectedConversation])
   const unreadConversationCount = useMemo(
     () => conversations.filter(
       (conversation) => conversationRowState(conversation, displayedActiveConversationIds) === 'unread',
@@ -408,6 +429,15 @@ export const Sidebar = memo(function Sidebar({
       // Le choix reste en mémoire si le stockage local est bloqué.
     }
   }, [selectedProject?.id, selectedConversation?.id])
+
+  function toggleGroupExpanded(groupKey: string) {
+    setExpandedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(groupKey)) next.delete(groupKey)
+      else next.add(groupKey)
+      return next
+    })
+  }
 
   function toggleGroupCollapsed(groupKey: string) {
     setCollapsedGroups((current) => {
@@ -732,6 +762,13 @@ export const Sidebar = memo(function Sidebar({
                 ? ticketTitleWithoutKey(groupLinks.title, group.ticketKey)
                 : null
               const groupSentryUrl = group.sentryKey ? sentryLinks?.get(group.sentryKey) : undefined
+              const isContextual = group.key.startsWith('ticket-') || group.key.startsWith('sentry-')
+              const isExpanded = expandedGroups.has(group.key)
+              const compactItems = isContextual && filterText.trim() === ''
+                ? compactGroupItems(group.items, alwaysVisibleConversationIds)
+                : group.items
+              const hiddenCount = group.items.length - compactItems.length
+              const shownItems = isExpanded ? group.items : compactItems
               return (
               <div className="conv-group" key={group.key}>
                 <div className="conv-group-header">
@@ -775,7 +812,7 @@ export const Sidebar = memo(function Sidebar({
                   ) : null}
                   <span className="conv-group-count">{group.items.length}</span>
                 </div>
-                {isCollapsed ? null : group.items.map((conversation) => {
+                {isCollapsed ? null : shownItems.map((conversation) => {
                 const isSelected = (workspaceView === 'conversations' || workspaceView === 'git')
                   && selectedConversation?.id === conversation.id
                 const activeItem = activeByConversation.get(conversation.id)
@@ -907,6 +944,16 @@ export const Sidebar = memo(function Sidebar({
               </div>
                 )
                 })}
+                {!isCollapsed && hiddenCount > 0 ? (
+                  <button
+                    type="button"
+                    className="conv-group-more"
+                    aria-expanded={isExpanded}
+                    onClick={() => toggleGroupExpanded(group.key)}
+                  >
+                    {isExpanded ? 'Réduire' : `Afficher ${hiddenCount} de plus`}
+                  </button>
+                ) : null}
               </div>
               )
             })
