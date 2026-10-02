@@ -396,7 +396,7 @@ async function promote(options: PromotionOptions): Promise<void> {
 
   if (!options.skipBuild) {
     report('build', 'running', 'construction des binaires release')
-    await runCommand(['bunx', 'tauri', 'build', ...(process.platform === 'darwin' ? ['--bundles', 'app'] : ['--no-bundle'])], 'build')
+    await runCommand(['bunx', '--bun', 'tauri', 'build', ...(process.platform === 'darwin' ? ['--bundles', 'app'] : ['--no-bundle'])], 'build')
     report('build', 'done', 'binaires construits')
   } else {
     report('build', 'done', 'artefacts existants réutilisés')

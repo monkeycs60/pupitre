@@ -1,7 +1,7 @@
 import { test, expect, afterEach } from "bun:test";
 import { dirname, join } from "node:path";
 import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { CodexAppServerClient, requestTimeoutMs } from "../src/adapters/codex-app-server";
 import type { AppEvent } from "../src/events";
 import type { TurnOptions } from "../src/adapters/types";
@@ -268,9 +268,9 @@ test("premier tour : session avec le threadId, deltas dans l'ordre, tool + usage
     serviceTier: "fast",
   });
   expect(start.params.runtimeWorkspaceRoots).toContain("/tmp");
-  expect(start.params.runtimeWorkspaceRoots).toContain("/home/clement/.claude");
-  expect(start.params.runtimeWorkspaceRoots).toContain("/home/clement/.codex");
-  expect(start.params.runtimeWorkspaceRoots).toContain("/home/clement/.grok");
+  expect(start.params.runtimeWorkspaceRoots).toContain(join(homedir(), ".claude"));
+  expect(start.params.runtimeWorkspaceRoots).toContain(join(homedir(), ".codex"));
+  expect(start.params.runtimeWorkspaceRoots).toContain(join(homedir(), ".grok"));
   // Aucune racine supplémentaire n'est demandée hors worktree.
   expect(start.params.runtimeWorkspaceRoots).toHaveLength(4);
   const turnStart = requests.find((r) => r.method === "turn/start")!;

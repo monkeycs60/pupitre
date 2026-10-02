@@ -24,6 +24,7 @@ function danglingReferences(db: Db): string[] {
 function renameRebuild(db: Db, table: string, staging: string): void {
   const sql = tableSql(db, table);
   db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("PRAGMA legacy_alter_table = OFF");
   db.exec(`ALTER TABLE ${table} RENAME TO ${staging}`);
   db.exec(sql);
   db.exec(`INSERT INTO ${table} SELECT * FROM ${staging}`);
