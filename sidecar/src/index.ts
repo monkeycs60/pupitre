@@ -1,3 +1,4 @@
+import { PersonalEnvironments } from "./personal-environments";
 import { ProjectDevlogService } from "./project-devlog";
 import { ProjectResumeService } from "./project-resume";
 import { BacklogHarvest } from "./backlog-harvest";
@@ -202,6 +203,8 @@ if (process.argv.includes("--pupitre-mcp")) {
     const match = raw.match(/\{[\s\S]*\}/); return match ? JSON.parse(match[0]) : null;
   };
   const chantiers = new ChantierService(db, projects, conversations, tickets, cheapJson);
+  const personalEnvironments = new PersonalEnvironments(db, projects, conversations);
+  if (backgroundJobsEnabled()) setInterval(() => { void personalEnvironments.scan().catch(console.error); }, 300000).unref();
   const devlog = new ProjectDevlogService(db, projects, conversations, htmlDocuments, (prompt, cwd) => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas));
   const resume = new ProjectResumeService(db, projects, tickets, (prompt, cwd) => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas));
   const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), cheapJson);
@@ -356,6 +359,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     chantiers,
     resume,
     devlog,
+    personalEnvironments,
     notifications,
     search,
     costs,

@@ -1,3 +1,4 @@
+import type { PersonalEnvironments } from "./personal-environments";
 import type { ProjectDevlogService } from "./project-devlog";
 import type { ProjectResumeService } from "./project-resume";
 import type { ChantierService } from "./chantiers";
@@ -141,6 +142,7 @@ export interface ServerDeps {
   chantiers?: ChantierService;
   resume?: ProjectResumeService;
   devlog?: ProjectDevlogService;
+  personalEnvironments?: PersonalEnvironments;
   todos?: TodoService;
   port: number;
   instance?: InstanceInfo;
@@ -1300,6 +1302,8 @@ export function createServer(deps: ServerDeps) {
           return json(currentFleet());
         }
 
+        const environmentResponse = await deps.personalEnvironments?.handle(request, pathname);
+        if (environmentResponse) return environmentResponse;
         const devlogResponse = await deps.devlog?.handle(request, pathname);
         if (devlogResponse) return devlogResponse;
         const resumeResponse = await deps.resume?.handle(request, pathname);

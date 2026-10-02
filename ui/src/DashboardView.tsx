@@ -1,3 +1,4 @@
+import { PersonalEnvironments } from './PersonalEnvironments'
 import { ChantiersView } from './ChantiersView'
 import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { BranchIcon } from './BranchIcon'
@@ -776,6 +777,7 @@ export function DashboardView({
           <section id="dashboard-panel-environments" role="tabpanel" aria-label={sectionOnly ? 'Environnements' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-environments' : 'dashboard-tab-environments'} className="dashboard-section">
             <div className="dashboard-section-head">
               <h2 className="dashboard-section-title">Environnements</h2>
+              <PersonalEnvironments projectId={project.id} onConversation={onConversationSelect} />
             </div>
             {data === null ? null : data.environments.length === 0 ? (
               <div className="dashboard-empty"><strong>Aucun environnement détecté</strong><p>Les derniers déploiements apparaîtront ici.</p></div>
