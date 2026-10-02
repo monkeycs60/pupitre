@@ -2149,3 +2149,6 @@
 .project-resume h2, .project-resume h3 { font-size: 14px; }
 .project-resume p, .project-resume li { font-size: 12px; line-height: 1.55; }
 .project-resume ul { padding-left: 16px; }
+.project-resume-refresh { display: block; margin-top: 8px; padding: 0; color: var(--text-muted); font-size: var(--text-xs); background: none; border: 0; cursor: pointer; }
+.project-resume-refresh:hover { color: var(--text); text-decoration: underline; }
+.project-resume-status { color: var(--text-muted); font-size: var(--text-xs); }

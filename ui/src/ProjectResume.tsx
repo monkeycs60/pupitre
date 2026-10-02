@@ -6,7 +6,7 @@ type Resume = {
   content: string
   chantiers: Array<{ id: string; key: string; title: string }>
 }
-type Snapshot = { data?: Resume; error?: string }
+type Snapshot = { data?: Resume; error?: string; loading?: boolean }
 const stores = new Map<
   string,
   { snapshot: Snapshot; listeners: Set<() => void>; started: boolean }
@@ -19,22 +19,28 @@ function store(id: string) {
   }
   return entry
 }
+function load(id: string, refresh: boolean) {
+  const entry = store(id)
+  entry.started = true
+  entry.snapshot = { data: entry.snapshot.data, loading: true }
+  entry.listeners.forEach((fn) => fn())
+  void launchRequest<Resume>(
+    `/api/projects/${id}/resume${refresh ? '?refresh=1' : ''}`,
+  )
+    .then(
+      (data) => {
+        entry.snapshot = { data }
+      },
+      (error) => {
+        entry.snapshot = { data: entry.snapshot.data, error: String(error) }
+      },
+    )
+    .finally(() => entry.listeners.forEach((fn) => fn()))
+}
 function subscribe(id: string, listener: () => void) {
   const entry = store(id)
   entry.listeners.add(listener)
-  if (!entry.started) {
-    entry.started = true
-    void launchRequest<Resume>(`/api/projects/${id}/resume`)
-      .then(
-        (data) => {
-          entry.snapshot = { data }
-        },
-        (error) => {
-          entry.snapshot = { error: String(error) }
-        },
-      )
-      .finally(() => entry.listeners.forEach((fn) => fn()))
-  }
+  if (!entry.started) load(id, false)
   return () => {
     entry.listeners.delete(listener)
   }
@@ -66,8 +72,19 @@ function ResumeContent({
             </button>
           ))}
         </>
+      ) : null}
+      {snapshot.loading ? (
+        <p className="project-resume-status">
+          {snapshot.data ? 'Régénération…' : 'Préparation de la reprise…'}
+        </p>
       ) : (
-        <p>Préparation de la reprise…</p>
+        <button
+          type="button"
+          className="project-resume-refresh"
+          onClick={() => load(projectId, true)}
+        >
+          Régénérer
+        </button>
       )}
     </>
   )

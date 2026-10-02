@@ -148,9 +148,34 @@ export class ProjectDevlogService {
       rmSync(root, { recursive: true, force: true });
     }
   }
+  overview(projectId: string) {
+    const project = this.projects.get(projectId);
+    if (!project) throw new Error("projet inconnu");
+    const documents = this.db
+      .query(
+        "SELECT id,title,created_at AS createdAt FROM documents WHERE project_id=? AND deleted_at IS NULL AND expired_at IS NULL AND (title LIKE 'Devlog · %' OR title LIKE 'Notes de version · %') ORDER BY created_at DESC LIMIT 5",
+      )
+      .all(projectId);
+    const result = Bun.spawnSync(
+      ["git", "tag", "--sort=-creatordate"],
+      { cwd: projectCwd(project), stdout: "pipe", stderr: "pipe" },
+    );
+    const tags =
+      result.exitCode === 0
+        ? result.stdout.toString().split("\n").filter(Boolean).slice(0, 30)
+        : [];
+    return { documents, tags };
+  }
   async handle(request: Request, pathname: string) {
     const match = pathname.match(/^\/api\/projects\/([^/]+)\/devlog$/);
-    if (!match || request.method !== "POST") return null;
+    if (!match) return null;
+    if (request.method === "GET")
+      try {
+        return Response.json(this.overview(match[1]!));
+      } catch (error) {
+        return Response.json({ error: String(error) }, { status: 400 });
+      }
+    if (request.method !== "POST") return null;
     try {
       return Response.json(
         await this.create(match[1]!, (await request.json()) as object),

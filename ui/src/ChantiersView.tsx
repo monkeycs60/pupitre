@@ -3,6 +3,7 @@ import { ProjectResume } from './ProjectResume'
 import { useEffect, useRef, useState } from 'react'
 import { launchRequest } from './api'
 import type { Project } from './types'
+import { absoluteCodeDate, relativeCodeDate } from './codeFormat'
 
 type Chantier = {
   id: string
@@ -10,6 +11,20 @@ type Chantier = {
   title: string
   archived_at: string | null
   payload: { description?: string }
+  conversation_count?: number
+  last_activity_at?: string
+  closes_at?: string | null
+}
+export function chantierMeta(item: Chantier, now = Date.now()) {
+  const count = item.conversation_count ?? 0
+  const parts = [`${count} conversation${count > 1 ? 's' : ''}`]
+  if (item.archived_at) parts.push(`fermé ${relativeCodeDate(item.archived_at, now)}`)
+  else if (item.last_activity_at) parts.push(`actif ${relativeCodeDate(item.last_activity_at, now)}`)
+  const left = item.closes_at ? Math.ceil((Date.parse(item.closes_at) - now) / 86400000) : null
+  const closing = left !== null && left <= 2
+    ? left <= 0 ? 'se ferme à la prochaine passe' : `se ferme dans ${left} j`
+    : null
+  return { text: parts.join(' · '), closing }
 }
 function ChantierForm({
   initial,
@@ -201,6 +216,15 @@ export function ChantiersView({
             <span className="chantier-card-key">{item.key}</span>
           </div>
           {item.payload.description ? <p>{item.payload.description}</p> : null}
+          {(() => {
+            const meta = chantierMeta(item)
+            return (
+              <div className="chantier-card-meta" title={item.closes_at ? `Fermeture automatique le ${absoluteCodeDate(item.closes_at)}` : undefined}>
+                {meta.text}
+                {meta.closing ? <span className="chantier-card-closing"> · {meta.closing}</span> : null}
+              </div>
+            )
+          })()}
         </div>
         <button
           type="button"

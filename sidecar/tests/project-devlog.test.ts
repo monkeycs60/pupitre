@@ -46,6 +46,17 @@ test("le devlog publie un document du projet et les notes imposent un style util
     await expect(service.create(p.id, { from: "bad" })).rejects.toThrow(
       "période",
     );
+    const insert = db.query(
+      "INSERT INTO documents (id,project_id,title,relative_path,size_bytes,sha256,created_at,expired_at) VALUES (?,?,?,'x',1,'x',?,?)",
+    );
+    insert.run("d1", p.id, "Devlog · Vrac · a — b", "2026-09-02", null);
+    insert.run("d2", p.id, "Notes de version · Vrac · a — b", "2026-09-03", null);
+    insert.run("d3", p.id, "Capture de la landing", "2026-09-04", null);
+    insert.run("d4", p.id, "Devlog · Vrac · ancien", "2026-08-01", "2026-08-30");
+    expect(service.overview(p.id).documents.map((d: any) => d.id)).toEqual([
+      "d2",
+      "d1",
+    ]);
   } finally {
     db.close();
     rmSync(root, { recursive: true, force: true });

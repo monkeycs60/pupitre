@@ -144,3 +144,29 @@ test("un message rouvre un chantier verrouillé et une fusion ne recycle pas ses
   service.merge(second.id, first.id);
   expect(service.create(project.id, "Troisième chantier").key).toBe("CH-3");
 });
+test("la vue d’ensemble compte les conversations et annonce la fermeture", () => {
+  const { db, project, service, conv } = fixture();
+  const a = service.create(project.id, "Moteur Rust");
+  const c1 = conv(),
+    c2 = conv();
+  service.assign(c1.id, a.id, true);
+  service.assign(c2.id, a.id, true);
+  db.query("UPDATE conversations SET updated_at=? WHERE id=?").run(
+    "2030-01-01T00:00:00.000Z",
+    c1.id,
+  );
+  db.query("UPDATE conversations SET updated_at=? WHERE id=?").run(
+    "2030-01-03T00:00:00.000Z",
+    c2.id,
+  );
+  db.query("INSERT OR REPLACE INTO settings VALUES ('chantierIdleDays','7')").run();
+  const [item] = service.overview(
+    project.id,
+    Date.parse("2030-01-04T00:00:00.000Z"),
+  );
+  expect(item!.conversation_count).toBe(2);
+  expect(item!.last_activity_at).toBe("2030-01-03T00:00:00.000Z");
+  expect(item!.closes_at).toBe("2030-01-10T00:00:00.000Z");
+  service.edit(a.id, { closed: true });
+  expect(service.overview(project.id)[0]!.closes_at).toBeNull();
+});

@@ -308,3 +308,18 @@
 .chantier-empty { color: var(--text-muted); font-size: var(--text-sm); }
 .chantiers-closed summary { color: var(--text-muted); font-size: var(--text-sm); cursor: pointer; }
 .chantiers-closed .chantier-list { margin-top: 6px; }
+.chantier-card-meta { margin-top: 3px; color: var(--text-muted); font-size: var(--text-xs); }
+.chantier-card-closing { color: var(--warn); }
+.devlog-panel { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
+.devlog-panel h2 { margin: 0; font-size: var(--text-sm); font-weight: 600; }
+.devlog-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.devlog-controls select, .devlog-controls input { min-height: 28px; padding: 3px 8px; font-size: var(--text-sm); border-radius: var(--r-sm); }
+.devlog-kind { display: inline-flex; padding: 2px; border: 1px solid var(--border-subtle); border-radius: var(--r-sm); }
+.devlog-kind button { padding: 3px 10px; color: var(--text-muted); font-size: var(--text-sm); background: transparent; border: 0; border-radius: var(--r-xs); cursor: pointer; }
+.devlog-kind button.is-active { color: var(--text); background: var(--bg-hover); }
+.devlog-documents { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.devlog-documents li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: var(--text-sm); }
+.devlog-documents button { overflow: hidden; padding: 0; color: var(--text); text-align: left; white-space: nowrap; text-overflow: ellipsis; background: none; border: 0; cursor: pointer; }
+.devlog-documents button:hover { color: var(--accent); text-decoration: underline; }
+.devlog-documents span, .devlog-empty { flex: none; color: var(--text-muted); font-size: var(--text-xs); }
+.devlog-message { margin: 0; color: var(--warn); font-size: var(--text-sm); }

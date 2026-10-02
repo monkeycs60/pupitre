@@ -67,6 +67,33 @@ export class ChantierService {
       .all(projectId) as { id: string }[];
     return rows.map(({ id }) => this.tickets.get(id)!);
   }
+  overview(projectId: string, now = Date.now()) {
+    const days = this.idleDays();
+    return this.list(projectId).map((ticket) => {
+      const stats = this.db
+        .query(
+          "SELECT COUNT(*) AS n, MAX(updated_at) AS at FROM conversations WHERE ticket_id=? AND deleted_at IS NULL",
+        )
+        .get(ticket.id) as { n: number; at: string | null };
+      const last = stats.at ?? ticket.updated_at;
+      return {
+        ...ticket,
+        conversation_count: stats.n,
+        last_activity_at: last,
+        closes_at: ticket.archived_at
+          ? null
+          : new Date(
+              Math.max(now, Date.parse(last) + days * 86400000),
+            ).toISOString(),
+      };
+    });
+  }
+  private idleDays() {
+    const setting = this.db
+      .query("SELECT value FROM settings WHERE key='chantierIdleDays'")
+      .get() as { value: string } | null;
+    return setting ? Number(JSON.parse(setting.value)) || 5 : 5;
+  }
   create(
     projectId: string,
     title: string,
@@ -511,10 +538,7 @@ export class ChantierService {
           if (conversation.ticket_id) continue;
           await this.classify(conversation.id);
         }
-      const setting = this.db
-        .query("SELECT value FROM settings WHERE key='chantierIdleDays'")
-        .get() as { value: string } | null;
-      this.closeIdle(setting ? Number(JSON.parse(setting.value)) || 5 : 5);
+      this.closeIdle(this.idleDays());
     } finally {
       this.scanning = false;
     }
@@ -528,7 +552,8 @@ export class ChantierService {
     try {
       if (id && this.chantier(id).project_id !== projectId)
         throw new Error("chantier d’un autre projet");
-      if (request.method === "GET") return Response.json(this.list(projectId!));
+      if (request.method === "GET")
+        return Response.json(this.overview(projectId!));
       const body = (await request.json()) as Record<string, any>;
       if (request.method === "POST" && !id) {
         const ticket = this.create(projectId!, body.title, body.description);

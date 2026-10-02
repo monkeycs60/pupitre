@@ -55,6 +55,8 @@ test("la reprise suit l’inactivité et ne régénère que si les entrées chan
     tickets.setInstruction(t.id, "Vérifier tests");
     await service.get(p.id);
     expect(calls).toBe(2);
+    await service.get(p.id, true);
+    expect(calls).toBe(3);
   } finally {
     db.close();
     rmSync(root, { recursive: true, force: true });

@@ -121,10 +121,10 @@ export class ProjectResumeService {
       git,
     };
   }
-  async get(projectId: string) {
+  async get(projectId: string, refresh = false) {
     const existing = this.pending.get(projectId);
     if (existing) return existing;
-    const task = this.build(projectId);
+    const task = this.build(projectId, refresh);
     this.pending.set(projectId, task);
     try {
       return await task;
@@ -132,7 +132,7 @@ export class ProjectResumeService {
       this.pending.delete(projectId);
     }
   }
-  private async build(projectId: string) {
+  private async build(projectId: string, refresh = false) {
     const input = this.inputs(projectId),
       project = this.projects.get(projectId)!;
     const fingerprint = new Bun.CryptoHasher("sha256")
@@ -144,7 +144,7 @@ export class ProjectResumeService {
       )
       .get(projectId) as { fingerprint: string; content: string } | null;
     const content =
-      cached?.fingerprint === fingerprint
+      !refresh && cached?.fingerprint === fingerprint
         ? cached.content
         : input.chantiers.length
           ? await this.generate(
@@ -183,7 +183,12 @@ export class ProjectResumeService {
     if (!match || request.method !== "GET") return null;
     try {
       if (match[2]) return Response.json(this.status(match[1]!));
-      return Response.json(await this.get(match[1]!));
+      return Response.json(
+        await this.get(
+          match[1]!,
+          new URL(request.url).searchParams.get("refresh") === "1",
+        ),
+      );
     } catch (error) {
       return Response.json({ error: String(error) }, { status: 400 });
     }
