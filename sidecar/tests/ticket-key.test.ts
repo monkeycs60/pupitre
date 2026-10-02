@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { extractTicketKey, DEFAULT_BRANCH_PATTERN, compileBranchPattern } from "../src/ticket-key";
+import { branchOfRef, extractTicketKey, DEFAULT_BRANCH_PATTERN, compileBranchPattern } from "../src/ticket-key";
 
 test("extrait TECH-XXXXX d'une branche affilae-mono", () => {
   const pattern = compileBranchPattern("^(issue|maintenance|feature)/(TECH-\\d+)");
@@ -28,4 +28,11 @@ test("le motif par défaut reconnaît les clés JIRA/ClickUp usuelles", () => {
   const pattern = compileBranchPattern(DEFAULT_BRANCH_PATTERN);
   expect(extractTicketKey("feature/TECH-1", pattern)).toBe("TECH-1");
   expect(extractTicketKey("hotfix/OPS-42-x", pattern)).toBe("OPS-42");
+});
+
+test("une référence distante se ramène au nom de la branche, origin/HEAD à rien", () => {
+  expect(branchOfRef("refs/heads/feature/foo")).toBe("feature/foo");
+  expect(branchOfRef("refs/remotes/origin/master")).toBe("master");
+  expect(branchOfRef("refs/remotes/origin/HEAD")).toBeNull();
+  expect(branchOfRef("refs/tags/v1")).toBeNull();
 });

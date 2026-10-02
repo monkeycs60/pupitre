@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { countConversationMessages } from "./message-count";
+import { isBaseBranch } from "./ticket-key";
 import {
   MESSAGE_COUNT_MIGRATION_KEY,
   OBSOLETE_MODELS_MIGRATION_KEY,
@@ -11,6 +12,7 @@ import {
   SettingsStore,
   SPEED_REVIEW_MIGRATION_KEY,
   TICKET_AUDIT_YOLO_MIGRATION_KEY,
+  TRUNK_TICKETS_MIGRATION_KEY,
 } from "./stores/settings";
 import { defaultDataDir, readInstance } from "./instance";
 import { BUILT_INS } from "./stores/presets";
@@ -733,6 +735,9 @@ export function openDb(dir: string = dataDir()): Database {
     `);
     new SettingsStore(db).set(TICKET_AUDIT_YOLO_MIGRATION_KEY, true);
   }
+  if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(TRUNK_TICKETS_MIGRATION_KEY)) {
+    migrateTrunkTickets(db);
+  }
   db.exec("DROP TABLE IF EXISTS review_decisions");
   widenProviderCheck(db, "skills");
   widenProviderCheck(db, "workflows");
@@ -1012,6 +1017,29 @@ function migrateProjectLaunchConfigs(db: Database): void {
     db.exec("UPDATE projects SET default_preset_id = NULL, default_scout_preset_id = NULL, default_todo_preset_id = NULL");
     const reset = db.query("UPDATE presets SET name = ?, provider = ?, model = ?, effort = ?, speed = ? WHERE id = ?");
     for (const preset of BUILT_INS) reset.run(preset.name, preset.provider, preset.model, preset.effort, preset.speed, preset.id);
+  })();
+}
+
+function migrateTrunkTickets(db: Database): void {
+  const trunkIds = (db.query("SELECT id, key FROM tickets WHERE source = 'git'").all() as Array<{ id: string; key: string }>)
+    .filter((ticket) => ticket.key === "origin" || isBaseBranch(ticket.key.replace(/^(origin|upstream)\//u, "")))
+    .map((ticket) => ticket.id);
+  const references = db.query(`
+    SELECT m.name AS tableName, f."from" AS columnName, f.on_delete AS onDelete
+    FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
+    WHERE m.type = 'table' AND f."table" = 'tickets'
+  `).all() as Array<{ tableName: string; columnName: string; onDelete: string }>;
+  db.transaction(() => {
+    for (const id of trunkIds) {
+      for (const reference of references) {
+        const statement = reference.onDelete === "SET NULL"
+          ? `UPDATE ${reference.tableName} SET ${reference.columnName} = NULL WHERE ${reference.columnName} = ?`
+          : `DELETE FROM ${reference.tableName} WHERE ${reference.columnName} = ?`;
+        db.query(statement).run(id);
+      }
+      db.query("DELETE FROM tickets WHERE id = ?").run(id);
+    }
+    new SettingsStore(db).set(TRUNK_TICKETS_MIGRATION_KEY, true);
   })();
 }
 

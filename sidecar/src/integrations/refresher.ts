@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { compileBranchPattern, extractTicketKey } from "../ticket-key";
+import { branchOfRef, compileBranchPattern, extractTicketKey, isBaseBranch } from "../ticket-key";
 import { ClickUpAuthError, type ClickUpTask } from "./clickup";
 import { GitLabAuthError, type GitLabMergeRequest } from "./gitlab";
 import type { ConversationStore } from "../stores/conversations";
@@ -642,22 +642,38 @@ export class IntegrationsRefresher {
   }
 }
 
-function defaultTicketKeysOfCommits(projectPath: string, commits: string[], pattern: RegExp | null): string[] {
+export function defaultTicketKeysOfCommits(projectPath: string, commits: string[], pattern: RegExp | null): string[] {
   const keys = new Set<string>();
   for (const repository of discoverRepositories(projectPath)) {
+    const trunk = trunkOf(repository);
     for (const commit of commits) {
       const result = Bun.spawnSync(
-        ["git", "branch", "--all", "--contains", commit, "--format=%(refname:short)"],
+        ["git", "branch", "--all", "--contains", commit, "--format=%(refname)"],
         { cwd: repository, stdout: "pipe", stderr: "pipe" },
       );
       if (result.exitCode !== 0) continue;
-      for (const branch of result.stdout.toString().split("\n")) {
-        const key = extractTicketKey(branch.trim(), pattern);
+      const branches = result.stdout.toString().split("\n")
+        .map(branchOfRef)
+        .filter((branch): branch is string => branch !== null);
+      // Sans motif, toute branche tirée du tronc après ce commit le contient aussi.
+      if (pattern === null && branches.some((branch) => branch === trunk || isBaseBranch(branch))) continue;
+      for (const branch of branches) {
+        if (branch === trunk) continue;
+        const key = extractTicketKey(branch, pattern);
         if (key) keys.add(key);
       }
     }
   }
   return [...keys];
+}
+
+function trunkOf(repository: string): string | null {
+  const result = Bun.spawnSync(
+    ["git", "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
+    { cwd: repository, stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode !== 0) return null;
+  return branchOfRef(result.stdout.toString());
 }
 
 function compiledPattern(items: ProjectIntegration[]): RegExp | null {

@@ -12,6 +12,7 @@ export const OBSOLETE_MODELS_MIGRATION_KEY = "obsolete-models-gpt-6-opus-5-5-v1"
 export const SOL_61_MIGRATION_KEY = "gpt-6-sol-to-6-1-v1";
 export const PROJECT_LAUNCH_CONFIG_MIGRATION_KEY = "project-launch-config-v1";
 export const TICKET_AUDIT_YOLO_MIGRATION_KEY = "ticket-audit-yolo-v1";
+export const TRUNK_TICKETS_MIGRATION_KEY = "trunk-branch-tickets-v1";
 export const INTEGRATION_TOKENS_KEY = "integrationTokens";
 
 /** Comptabilité du suivi du temps : filigrane de synchronisation, battement du
@@ -28,6 +29,7 @@ const INTERNAL_KEYS = new Set([
   SOL_61_MIGRATION_KEY,
   PROJECT_LAUNCH_CONFIG_MIGRATION_KEY,
   TICKET_AUDIT_YOLO_MIGRATION_KEY,
+  TRUNK_TICKETS_MIGRATION_KEY,
   TIME_SYNC_WATERMARK_KEY,
   TIME_HEARTBEAT_KEY,
   TIME_BACKFILL_KEY,
