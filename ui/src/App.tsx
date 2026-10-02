@@ -941,6 +941,7 @@ function App() {
       : []),
     { name: 'attention', label: 'Activité', view: 'attention', onClick: handleAttentionSelect, badge: attention.items.length },
     { name: 'activity-report', label: 'Rapport', view: 'activity-report', onClick: handleActivityReportSelect },
+    { name: 'costs', label: 'Utilisation', view: 'costs', onClick: () => openInspector('costs') },
     { name: 'settings', label: 'Réglages', view: 'settings', onClick: handleSettingsSelect },
     { name: 'help', label: 'Aide', view: 'help', onClick: () => handleHelpSelect() },
   ]

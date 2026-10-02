@@ -139,6 +139,7 @@ export interface Workflow {
 }
 
 export interface Routine {
+  operation?: 'devlog' | 'health' | 'production' | null
   kind?: 'prompt' | 'workflow' | 'command'
   command?: string | null
   id: string
@@ -273,6 +274,7 @@ export interface Conversation {
   created_on_branch: string | null
   ticket_id: string | null
   ticket_key?: string | null
+  ticket_backlog_count?: number
   ticket_title?: string | null
   ticket_instruction: string | null
   origin_type?: 'sentry' | 'problem' | 'promotion' | null
@@ -439,6 +441,7 @@ export interface Problem {
   project_id: string
   ticket_id: string | null
   ticket_key?: string | null
+  ticket_backlog_count?: number
   ticket_title?: string | null
   ticket_branch?: string | null
   title: string

@@ -596,6 +596,7 @@ export class IntegrationsRefresher {
     const ticketKeysOfCommits = this.deps.ticketKeysOfCommits ?? defaultTicketKeysOfCommits;
     this.stores.tickets.transaction(() => {
       for (const conversation of this.stores.conversations.listByProject(projectId)) {
+        if (conversation.ticket_locked) continue;
         let branch: string | null = null;
         let key: string | null = null;
         let mentionedTicketId: string | null = null;

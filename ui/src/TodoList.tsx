@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
+import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { enqueueTodo, completeTodo, deleteTodo, drainTodos, isStartable, reopenTodo, reorderTodos, setTodoQueue, startTodo, TODO_FINISH_LABELS, TODO_LABELS, type TodoItem, type TodoSnapshot } from './todos'
 import type { TicketLinks } from './ticketLinks'
 import { ExternalLink } from './externalLink'
@@ -36,7 +36,7 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
   const needle = query.trim().toLocaleLowerCase()
   const matches = (item: TodoItem) => needle === ''
     || `${item.title} ${item.message} ${ticketLinks?.get(item.ticket_id ?? '')?.ticketKey ?? ''}`.toLocaleLowerCase().includes(needle)
-  const visible = (tab === 'open' ? items.filter((item) => item.status !== 'done' || leaving.includes(item.id)) : done).filter(matches)
+  const visible = (tab === 'open' ? items.filter((item) => item.status !== 'done' || leaving.includes(item.id)) : done).filter(matches).sort((a, b) => (a.ticket_id ?? '').localeCompare(b.ticket_id ?? ''))
   const startable = open.filter((item) => isStartable(item) && item.status !== 'blocked')
   const canDrag = tab === 'open' && needle === ''
 
@@ -114,7 +114,7 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
       : !visible.length ? <p className="list-empty">{needle ? 'Aucune tâche ne correspond.' : tab === 'done' ? 'Aucune tâche terminée.' : 'Tout est dépilé.'}</p>
       : null}
     <ol className="project-task-rows" aria-label={tab === 'open' ? 'Tâches ouvertes' : 'Tâches terminées'}>
-      {visible.map((item) => {
+      {visible.map((item, index) => {
         const running = item.status === 'running' || queue.activeTodoId === item.id
         const isDone = item.status === 'done'
         const startableItem = isStartable(item)
@@ -124,7 +124,9 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
         if (leaving.includes(item.id)) classes.push('is-leaving')
         if (dragId === item.id) classes.push('is-dragging')
         if (overId === item.id && dragId && dragId !== item.id) classes.push('is-drop-target')
-        return <li className={classes.join(' ')} key={item.id} data-status={item.status}
+        return <Fragment key={item.id}>
+          {(index === 0 || visible[index - 1]?.ticket_id !== item.ticket_id) && <li className="project-task-group"><strong>{ticket?.title ?? ticket?.ticketKey ?? 'Hors chantier'}</strong></li>}
+          <li className={classes.join(' ')} data-status={item.status}
           draggable={canDrag && !running}
           onDragStart={(event) => handleDragStart(event, item)}
           onDragOver={(event) => { if (dragId && canDrag) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; if (overId !== item.id) setOverId(item.id) } }}
@@ -172,7 +174,7 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
               <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
             </button>
           </span>
-        </li>
+        </li></Fragment>
       })}
     </ol>
   </div>

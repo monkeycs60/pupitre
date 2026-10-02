@@ -115,7 +115,7 @@ export class ConversationTicketLinker {
           }
           // Le tour peut avoir rattaché la conversation pendant l'appel au modèle.
           if (ticket && this.projects.get(project.id)) {
-            linked += this.db.query('UPDATE conversations SET ticket_id = ? WHERE id = ? AND ticket_id IS NULL AND deleted_at IS NULL AND archived = 0').run(ticket.id, conversation.id).changes;
+            linked += this.db.query('UPDATE conversations SET ticket_id = ? WHERE id = ? AND ticket_id IS NULL AND ticket_locked = 0 AND deleted_at IS NULL AND archived = 0').run(ticket.id, conversation.id).changes;
           }
         }
       }

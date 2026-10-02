@@ -234,7 +234,7 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
   ]
     .map((context) => ({
       key: `${context.type}-${context.key}`,
-      label: context.type === 'sentry' ? `Sentry · ${context.key}` : context.key,
+      label: context.type === 'sentry' ? `Sentry · ${context.key}` : context.key.startsWith('CH-') ? context.grouped[0]?.ticket_title || context.key : context.key,
       ticketKey: context.type === 'ticket' ? context.key : null,
       sentryKey: context.type === 'sentry' ? context.key : null,
       items: context.grouped,
@@ -242,6 +242,7 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
     }))
   const recencyGroups = groupConversationsByRecency(withoutTicket).map((group) => ({
     ...group,
+    label: conversationsByTicket.size && [...conversationsByTicket.keys()].some(key => key.startsWith('CH-')) ? `Hors chantier · ${group.label}` : group.label,
     latestUpdatedAt: Math.max(...group.items.map((conversation) => Date.parse(conversation.updated_at))),
   }))
   return [...contextualGroups, ...recencyGroups]
@@ -643,7 +644,6 @@ export const Sidebar = memo(function Sidebar({
           </div>
         </div>
 
-        {selectedProject && selectedConversation && <ChantierAssignment key={selectedConversation.id} projectId={selectedProject.id} conversationId={selectedConversation.id} />}
         {selectedProject && <ProjectLaunch key={selectedProject.id} project={selectedProject} conversationId={selectedConversation?.id} />}
         {selectedProject ? (
           <button
@@ -663,6 +663,9 @@ export const Sidebar = memo(function Sidebar({
         ) : null}
       </div>
 
+      <div className="project-context-actions">
+        {selectedProject && <ChantierAssignment key={`chantier-${selectedConversation?.id ?? selectedProject.id}`} projectId={selectedProject.id} conversationId={selectedConversation?.id} onSelect={(ticketId,ticketKey)=>onConversationCreateFromContext?.({ticketId,ticketKey,branch:null})} />}
+      </div>
       {selectedProject && <ProjectResume key={selectedProject.id} projectId={selectedProject.id} inactive={conversations.length > 0 && conversations.every(c => c.project_id === selectedProject.id && Date.parse(c.updated_at) < Date.now() - 3 * 86400000)} onResume={(ticketId, ticketKey) => onConversationCreateFromContext?.({ ticketId, ticketKey, branch: null })} />}
       <div className="sidebar-tabs conversation-list-heading">
         <span id="sidebar-conversations-title" title={`${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} à lire sur ${conversations.length}`}>
@@ -792,7 +795,7 @@ export const Sidebar = memo(function Sidebar({
                     <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={isCollapsed ? { transform: 'rotate(-90deg)' } : undefined}>
                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="conv-group-key">{group.ticketKey?.startsWith('CH-') ? `◇ ${group.label}` : group.label}</span>
+                    <span className="conv-group-key">{group.ticketKey?.startsWith('CH-') ? `◇ ${group.label}` : group.label}{group.items[0]?.ticket_backlog_count ? ` · ${group.items[0].ticket_backlog_count} à faire` : ''}</span>
                   </button>
                   {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
                   {groupSentryUrl !== undefined ? <SentryLinkIcon url={groupSentryUrl} issueKey={group.sentryKey!} /> : null}

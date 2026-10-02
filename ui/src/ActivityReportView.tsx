@@ -77,7 +77,12 @@ function ProjectCard({ project, onOpenConversation }: { project: ActivityReportP
         </div>
       ) : null}
 
-      {(project.mergeRequests.length > 0 || project.ticketsReady.length > 0) ? (
+      {project.personal && <div className="activity-outcomes">
+        {(project.chantiersOpened ?? []).map(item => <span className="activity-outcome" key={item.id}>Chantier ouvert · {item.title}</span>)}
+        {(project.chantiersClosed ?? []).map(item => <span className="activity-outcome" key={item.id}>Chantier fermé · {item.title}</span>)}
+        {project.todosDone.length > 0 && <span className="activity-outcome">{project.todosDone.length} éléments de backlog terminés</span>}
+      </div>}
+      {!project.personal && (project.mergeRequests.length > 0 || project.ticketsReady.length > 0) ? (
         <div className="activity-outcomes">
           {project.mergeRequests.map((mr) => (
             <ExternalLink key={mr.ref} className="activity-outcome is-mr" href={mr.url} title={`Ouvrir ${mr.ref} dans GitLab`} ariaLabel={`Ouvrir ${mr.ref} dans GitLab`}>

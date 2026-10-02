@@ -67,6 +67,7 @@ test("publish_html_document transmet un document au sidecar local", async () => 
     "publish_html_document",
     "launch_project_command",
     "read_sibling_conversation",
+    "report_incident_triage",
     "report_sentry_triage",
     "git_commit",
   ]);

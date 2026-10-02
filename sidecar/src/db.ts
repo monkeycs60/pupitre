@@ -35,6 +35,7 @@ export function openDb(dir: string = dataDir()): Database {
     -- de quelques transactions sur coupure de courant, jamais une corruption.
     PRAGMA synchronous = NORMAL;
     PRAGMA busy_timeout = 5000;
+    CREATE TABLE IF NOT EXISTS project_todos (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, payload TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL UNIQUE,
       permission_mode TEXT NOT NULL DEFAULT 'acceptEdits',
@@ -608,6 +609,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "projects", "chantiers_enabled INTEGER NOT NULL DEFAULT 1");
   addColumn(db, "conversations", "ticket_locked INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "ticket_confidence REAL NULL");
+  addColumn(db, "routines", "operation TEXT NULL");
   addColumn(db, "routines", "kind TEXT NOT NULL DEFAULT 'prompt'");
   addColumn(db, "routines", "command TEXT NULL");
   addColumn(db, "routine_runs", "output TEXT NULL");

@@ -139,14 +139,7 @@ export function createPupitreServer(): McpServer {
     inputSchema: { name: z.string() },
   }, async ({ name }: { name: string }) => {
     try {
-      const response = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(conversationId())}`);
-      if (!response.ok) throw new Error(await errorMessage(response));
-      const conversation = await response.json() as { project_id: string };
-      const base = `${baseUrl()}/api/projects/${conversation.project_id}/launch`;
-      const commands = await fetch(base).then((response) => response.json()) as Array<{ id: string; name: string }>;
-      const command = commands.find((item) => item.name === name);
-      if (!command) throw new Error("commande inconnue");
-      const launched = await fetch(`${base}/${command.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ conversationId: conversationId() }) });
+      const launched = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(conversationId())}/launch-command`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
       if (!launched.ok) throw new Error(await errorMessage(launched));
       return text(JSON.stringify(await launched.json()));
     } catch (error) { return text(String(error), true); }
@@ -169,6 +162,17 @@ export function createPupitreServer(): McpServer {
     } catch (error) {
       return text(`Lecture impossible : ${error instanceof Error ? error.message : String(error)}`, true);
     }
+  });
+  server.registerTool("report_incident_triage", {
+    title: "Rendre le triage d’un incident personnel",
+    description: "Enregistre le verdict pour l’incident d’environnement lié à cette conversation.",
+    inputSchema: {verdict:z.enum(["real_fixable","real_investigate","noise","uncertain"]),summary:z.string().min(1),evidence:z.array(z.string()).default([]),proposed_fix:z.string().optional()},
+  }, async (report: {verdict:string;summary:string;evidence:string[];proposed_fix?:string}) => {
+    try {
+      const response=await fetch(`${baseUrl()}/api/personal-incidents/triage-report`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({conversationId:conversationId(),report})});
+      if(!response.ok)throw new Error(await errorMessage(response));
+      return text("Triage enregistré dans l’inbox d’incidents du projet.");
+    }catch(error){return text(String(error),true);}
   });
   server.registerTool("report_sentry_triage", {
     title: "Rendre le verdict Scout Sentry",

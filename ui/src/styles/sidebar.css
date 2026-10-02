@@ -2142,3 +2142,11 @@
   color: var(--accent);
   background: var(--accent-soft);
 }
+
+.project-context-actions { flex: none; padding: 6px 12px; }
+.project-context-actions:empty { display: none; }
+.project-resume { flex: none; padding: 6px 12px; max-height: 260px; overflow: auto; border-bottom: 1px solid var(--border-subtle); }
+.project-resume h1 { font-size: 16px; }
+.project-resume h2, .project-resume h3 { font-size: 14px; }
+.project-resume p, .project-resume li { font-size: 12px; line-height: 1.55; }
+.project-resume ul { padding-left: 16px; }

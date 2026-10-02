@@ -30,7 +30,9 @@ export interface Conversation {
   /** Branche courante du projet au moment de la création ; null = non capturé (avant la migration). */
   created_on_branch: string | null;
   ticket_id: string | null;
+  ticket_locked?: number;
   ticket_key?: string | null;
+  ticket_backlog_count?: number;
   ticket_title?: string | null;
   ticket_instruction: string | null;
   origin_type?: "sentry" | "problem" | "promotion" | null;
@@ -205,6 +207,7 @@ export class ConversationStore {
         : "c.deleted_at IS NULL AND c.archived = 0";
     const rows = this.db.query(
       `SELECT c.*, t.key AS ticket_key, t.title AS ticket_title,
+              (SELECT COUNT(*) FROM project_todos pt WHERE pt.project_id=c.project_id AND json_extract(pt.payload,'$.ticket_id')=t.id AND json_extract(pt.payload,'$.status')='backlog') AS ticket_backlog_count,
               COALESCE(c.origin_type, CASE WHEN st.issue_id IS NOT NULL THEN 'sentry' ELSE NULL END) AS origin_type,
               COALESCE(c.origin_key, json_extract(si.payload_json, '$.shortId')) AS origin_key
        FROM conversations c
@@ -496,6 +499,7 @@ export class ConversationStore {
         ).get(conversationId) as { type?: string } | null;
         assistantResponseCounted = lastMessageEvent?.type === "text-final";
       }
+      if (event.type === "user-message") this.db.query("UPDATE tickets SET archived_at=NULL,updated_at=? WHERE source='chantier' AND id=(SELECT ticket_id FROM conversations WHERE id=?)").run(createdAt, conversationId);
       const result = this.db
         .query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
         .run(conversationId, JSON.stringify(event), createdAt);
