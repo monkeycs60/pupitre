@@ -1,3 +1,4 @@
+import type { ProjectLaunchService } from "./project-launch";
 import { projectCwd } from "./workspace";
 import type { SharedFilesService } from "./shared-files";
 import { TodoError, type TodoService } from "./todos";
@@ -133,6 +134,7 @@ export class ConversationEventBus {
 }
 
 export interface ServerDeps {
+  launches?: ProjectLaunchService;
   todos?: TodoService;
   port: number;
   instance?: InstanceInfo;
@@ -1288,6 +1290,8 @@ export function createServer(deps: ServerDeps) {
           return json(currentFleet());
         }
 
+        const launchResponse = await deps.launches?.handle(request, pathname);
+        if (launchResponse) return launchResponse;
         if (request.method === "GET" && pathname === "/api/applications") {
           const contexts: ApplicationContext[] = deps.projects.list().flatMap((project) => {
             const worktrees = (["active", "archived"] as const)

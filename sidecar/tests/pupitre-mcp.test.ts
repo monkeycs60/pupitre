@@ -65,6 +65,7 @@ test("publish_html_document transmet un document au sidecar local", async () => 
   expect(tools.map((tool) => tool.name)).toEqual([
     "publish_document",
     "publish_html_document",
+    "launch_project_command",
     "read_sibling_conversation",
     "report_sentry_triage",
     "git_commit",

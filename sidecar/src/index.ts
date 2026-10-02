@@ -1,3 +1,4 @@
+import { ProjectLaunchService } from "./project-launch";
 import { SharedFilesService } from "./shared-files";
 import { TodoService } from "./todos";
 import { TodoStore } from "./stores/todos";
@@ -192,6 +193,8 @@ if (process.argv.includes("--pupitre-mcp")) {
     () => actionFormat(settings.get("actionFormat")),
     problemAxisRuns,
   );
+  const launches = new ProjectLaunchService(db, projects, instance.dataDir);
+  process.once("SIGTERM", () => { void launches.close().finally(() => process.exit(0)); });
   const todos = new TodoService(new TodoStore(db), projects, conversations, runner, git, tickets, quotas);
   const activityReports = new ActivityReportService(
     new ActivityStore(db),
@@ -324,6 +327,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     routineStore,
     routines,
     todos,
+    launches,
     notifications,
     search,
     costs,

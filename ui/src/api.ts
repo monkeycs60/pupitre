@@ -1366,3 +1366,7 @@ export function removeProject(projectId: string): Promise<void> {
 export function setProjectTrunk(projectId: string, branch: string | null): Promise<Project> {
   return fetchJson(`/api/projects/${routeId(projectId)}/trunk`, { method: 'PUT', body: JSON.stringify({ branch }) })
 }
+
+export function launchRequest<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  return fetchJson(path, { method, ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) })
+}

@@ -1,3 +1,4 @@
+import { ProjectLaunch } from './ProjectLaunch'
 import { useEffect, useState } from 'react'
 import {
   deleteProjectIntegration,
@@ -378,6 +379,7 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
           <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">×</button>
         </header>
         <div className="project-settings-body">
+          <ProjectLaunch project={project} settings />
           <label>
             Branche principale
             <input value={trunk} onChange={(event) => setTrunk(event.target.value)} placeholder={`Détectée automatiquement — ${project.detected_trunk ?? 'inconnue'}`} />

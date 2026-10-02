@@ -1,3 +1,4 @@
+import { ProjectLaunch } from './ProjectLaunch'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
   listProjectConversations,
@@ -640,6 +641,7 @@ export const Sidebar = memo(function Sidebar({
           </div>
         </div>
 
+        {selectedProject && <ProjectLaunch key={selectedProject.id} project={selectedProject} conversationId={selectedConversation?.id} />}
         {selectedProject ? (
           <button
             type="button"

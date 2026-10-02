@@ -1,3 +1,4 @@
+import { ManagedLaunches } from './ProjectLaunch'
 import { ExternalLink } from './externalLink'
 import { groupRunningApplications } from './applicationGroups'
 import { BranchIcon } from './BranchIcon'
@@ -31,6 +32,7 @@ export function ApplicationsView() {
         </div>
       </header>
 
+      <ManagedLaunches />
       {error ? <div className="applications-error" role="alert">{error}</div> : null}
       {loading && items.length === 0 ? <div className="empty-state"><p>Détection des applications…</p></div>
       : items.length === 0 ? <div className="empty-state"><p>Aucune application détectée dans les projets connus.</p></div>

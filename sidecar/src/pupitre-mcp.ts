@@ -134,6 +134,23 @@ export function createPupitreServer(): McpServer {
     description: DESCRIPTION,
     inputSchema,
   }, publish);
+  server.registerTool("launch_project_command", {
+    description: "Lance une commande nommée du projet courant dans le répertoire de la conversation et renvoie son URL et ses logs.",
+    inputSchema: { name: z.string() },
+  }, async ({ name }: { name: string }) => {
+    try {
+      const response = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(conversationId())}`);
+      if (!response.ok) throw new Error(await errorMessage(response));
+      const conversation = await response.json() as { project_id: string };
+      const base = `${baseUrl()}/api/projects/${conversation.project_id}/launch`;
+      const commands = await fetch(base).then((response) => response.json()) as Array<{ id: string; name: string }>;
+      const command = commands.find((item) => item.name === name);
+      if (!command) throw new Error("commande inconnue");
+      const launched = await fetch(`${base}/${command.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ conversationId: conversationId() }) });
+      if (!launched.ok) throw new Error(await errorMessage(launched));
+      return text(JSON.stringify(await launched.json()));
+    } catch (error) { return text(String(error), true); }
+  });
   server.registerTool("read_sibling_conversation", {
     title: "Lire une conversation Pupitre liée",
     description: "Rend le titre, le résumé, le dernier débrief et les derniers échanges d’une autre conversation Pupitre liée au ticket courant.",
