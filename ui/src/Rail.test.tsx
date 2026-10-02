@@ -4,7 +4,7 @@ import { createElement } from 'react'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
-const { cleanup, render, screen } = await import('@testing-library/react')
+const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { Rail } = await import('./Rail')
 const defaultFetch = globalThis.fetch
 
@@ -29,4 +29,38 @@ test('ne porte que les projets : les destinations vivent dans la barre de titre'
   for (const label of ['Conversations', 'Projet', 'Activité', 'Contexte', 'Automatisations', 'Utilisation', 'Réglages', 'Aide']) {
     expect(screen.queryByRole('button', { name: label })).toBeNull()
   }
+})
+
+test('retire un projet seulement après confirmation dans la modale', async () => {
+  const calls: string[] = []
+  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    calls.push(`${init?.method ?? 'GET'} ${url}`)
+    if (init?.method === 'DELETE') return new Response(null, { status: 204 })
+    if (url.includes('unread')) return Response.json({})
+    return Response.json([
+      { id: 'p1', name: 'affilae mono', path: '/tmp/a', pinned: false },
+      { id: 'p2', name: 'pupitre', path: '/tmp/b', pinned: false },
+    ])
+  }) as typeof fetch
+  const removed: string[] = []
+  render(createElement(Rail, {
+    selectedProject: null,
+    projectListVersion: 0,
+    workspaceView: 'conversations',
+    onProjectSelect: () => {},
+    onProjectCreated: () => {},
+    onProjectRemoved: (project: { id: string }) => removed.push(project.id),
+  }))
+
+  expect(screen.queryByRole('button', { name: /Actions pour le projet/ })).toBeNull()
+  fireEvent.click(await screen.findByRole('button', { name: 'Retirer le projet pupitre' }))
+  expect(screen.getByRole('alertdialog').textContent).toContain('/tmp/b')
+  expect(calls.some((call) => call.startsWith('DELETE'))).toBe(false)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Retirer le projet' }))
+  await waitFor(() => expect(removed).toEqual(['p2']))
+  expect(calls).toContain('DELETE /api/projects/p2')
+  expect(screen.queryByRole('alertdialog')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'pupitre' })).toBeNull()
 })

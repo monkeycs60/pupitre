@@ -394,6 +394,7 @@ button.titlebar-instance {
   place-items: center;
   width: 56px;
   flex: none;
+  transition: transform 160ms var(--ease);
 }
 
 .rail-project-bar {
@@ -1028,63 +1029,96 @@ button.titlebar-instance {
   }
 }
 
-.rail-project.is-dragging {
-  opacity: .4;
+.rail-project.is-dragging .rail-avatar {
+  color: transparent;
+  background: var(--accent-soft);
+  border: 1px dashed var(--accent-border);
 }
 
-.rail-project-more {
-  display: none;
-  border: 0;
-  background: none;
-  color: var(--text-faint);
-  cursor: pointer;
+.rail-project.is-dragging > :not(.rail-avatar) {
+  visibility: hidden;
 }
 
-.rail.is-label-expanded .rail-project-more {
-  display: block;
+.rail.is-reordering .rail-avatar:hover {
+  border-color: var(--border);
+}
+
+.rail-project-remove {
   position: absolute;
-  right: 4px;
-  top: 12px;
-}
-
-.rail.is-label-expanded .rail-avatar {
-  padding-right: 24px;
-}
-
-.rail-project-menu {
-  position: fixed;
-  left: 196px;
-  max-height: calc(100vh - 16px);
-  overflow-y: auto;
-  z-index: 100;
-  background: var(--bg-panel, #202020);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px;
-  box-shadow: 0 4px 16px #0005;
-}
-
-.rail-project-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 6px 10px;
-  background: none;
+  top: 50%;
+  right: 14px;
+  z-index: 2;
+  display: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
   border: 0;
-  color: var(--text);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.rail.is-label-expanded:not(.is-reordering) .rail-project:is(:hover, :focus-within) .rail-project-remove {
+  display: grid;
+}
+
+.rail.is-label-expanded:not(.is-reordering) .rail-project:is(:hover, :focus-within) .rail-project-count {
+  opacity: 0;
+}
+
+.rail.is-label-expanded .rail-project:is(:hover, :focus-within) .rail-project-label {
+  max-width: 98px;
+}
+
+.rail-project-remove:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.rail-project-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.project-remove-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.project-remove-note code {
+  font-size: var(--text-code);
+  word-break: break-all;
+}
+
+.danger-button {
+  min-height: 28px;
+  padding: 3px 10px;
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: var(--danger);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
   cursor: pointer;
 }
 
-.rail-project-menu button:hover {
-  background: var(--bg-hover, #333);
+.danger-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 85%, #000);
 }
 
-.rail-project-menu button:disabled {
-  opacity: .4;
+.danger-button:disabled {
+  opacity: 0.55;
   cursor: default;
 }
 
 .rail-error {
-  font-size: 12px;
+  margin: 0 8px;
+  font-size: var(--text-xs);
   color: var(--danger);
 }
