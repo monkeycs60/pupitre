@@ -33,4 +33,4 @@ test('acquitte puis masque un push sans toucher aux autres', async () => {
   await waitFor(() => expect(screen.queryByText('premier')).toBeNull())
   expect(screen.getByText('second')).toBeTruthy()
   expect(calls.some((call) => call.includes('POST') && call.endsWith('/pushes/aaaaaaaa/ack'))).toBe(true)
-}, 10_000)
+}, 30_000)

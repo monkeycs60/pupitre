@@ -1,6 +1,20 @@
 # Pupitre
 
-Mission control bureau pour Linux : une app qui pilote **Claude Code**, **Codex CLI** et **Grok Build** sur tes abonnements (jamais d'API payante), avec discussions par projet, contrôle des changements, tests guidés et historique Git. Le pupitre du chef d'orchestre : l'app dirige les CLIs sans jouer une note elle-même.
+Mission control bureau pour Linux et macOS : une app qui pilote **Claude Code**, **Codex CLI** et **Grok Build** sur tes abonnements (jamais d'API payante), avec discussions par projet, contrôle des changements, tests guidés et historique Git. Le pupitre du chef d'orchestre : l'app dirige les CLIs sans jouer une note elle-même.
+
+## Installation sur un nouvel ordinateur
+
+Après le clonage, donnez **[SETUP.md](SETUP.md)** à votre agent ou lancez :
+
+```bash
+bash scripts/setup.sh
+```
+
+Le setup installe les outils manquants, accompagne les connexions Claude/Codex,
+construit Pupitre et crée son lanceur. Sur Mac : `~/Applications/Pupitre.app` ;
+sous Linux : menu des applications. Aucun accès Doppler ni projet Affilae requis.
+La compilation et le démarrage natif sont vérifiés en CI sur macOS 15 ARM et Intel.
+Le guide précise les essais de première utilisation et les limites de distribution.
 
 ## Architecture (M4)
 
@@ -258,13 +272,14 @@ le SHA du sidecar et, en dev, si les sources ont changé depuis son démarrage.
 ```bash
 bun install
 bun run dev           # instance dev : Tauri, Vite et sidecar sur 4821
+# bun run dev:secrets  # optionnel : même parcours avec Doppler
 ```
 
 Ou sans fenêtre native :
 
 ```bash
 bun run dev:sidecar          # sidecar dev sur :4821
-bun run --cwd ui dev         # UI sur :5173, proxy vers le sidecar
+PUPITRE_PORT=4821 bun run --cwd ui dev  # UI sur :5173, proxy vers la dev
 ```
 
 ### Données et redémarrage du sidecar dev

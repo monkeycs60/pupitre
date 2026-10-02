@@ -1,16 +1,19 @@
 {
   "name": "pupitre",
   "scripts": {
-    "dev": "doppler run -- bun run scripts/dev.ts",
+    "dev": "bun run scripts/dev.ts",
     "dev:sidecar": "bun run scripts/dev.ts --sidecar",
     "dev:sidecar:watch": "bun run scripts/dev.ts --sidecar --watch",
     "dev:data:refresh": "bun run scripts/refresh-dev-data.ts",
     "promote": "bun run scripts/promote.ts",
-    "typecheck:sidecar": "bun run --cwd sidecar typecheck",
+    "typecheck:sidecar": "bun run --bun --cwd sidecar typecheck",
     "build:sidecar": "bun run scripts/build-sidecar.ts",
     "build:chrome-extension": "bun run --cwd chrome-extension build",
     "prepare:tauri-dev": "bun run scripts/prepare-tauri-dev.ts",
-    "tauri:before-build": "bun run typecheck:sidecar && bun run build:sidecar && bun run --cwd ui build"
+    "tauri:before-build": "bun run typecheck:sidecar && bun run build:sidecar && bun run --bun --cwd ui build",
+    "dev:secrets": "doppler run -- bun run scripts/dev.ts",
+    "setup": "bash scripts/setup.sh",
+    "doctor": "bun run scripts/setup.ts --check"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4"
@@ -20,5 +23,9 @@
     "sidecar",
     "ui",
     "chrome-extension"
-  ]
+  ],
+  "overrides": {
+    "@types/node": "26.1.2",
+    "bun-types": "1.3.14"
+  }
 }

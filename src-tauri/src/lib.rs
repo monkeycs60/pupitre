@@ -1,4 +1,5 @@
 mod design_panel;
+mod runtime_path;
 
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -17,6 +18,7 @@ use tauri_plugin_shell::{
 /// sidecar. Sans cette distinction, fermer la fenêtre Claude Design couperait
 /// le backend de toute l'application.
 const MAIN_WINDOW_LABEL: &str = "main";
+#[cfg(target_os = "linux")]
 const SIGTERM: i32 = 15;
 
 #[derive(Clone)]
@@ -780,6 +782,7 @@ fn design_webview_url(app: tauri::AppHandle) -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    runtime_path::configure();
     let app = tauri::Builder::default()
         // Taille, position et état maximisé sont restaurés au démarrage et
         // sauvegardés à la fermeture : repartir de 1280x800 à chaque lancement
@@ -817,6 +820,17 @@ pub fn run() {
             )?;
 
             app.manage(SidecarProcess::default());
+            #[cfg(target_os = "macos")]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(mut signal) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                        signal.recv().await;
+                        handle.exit(0);
+                    }
+                });
+            }
+            #[cfg(target_os = "linux")]
             {
                 let handle = app.handle().clone();
                 gtk::glib::unix_signal_add_local(SIGTERM, move || {

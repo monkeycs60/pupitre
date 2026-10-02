@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Rejoue la fixture ; enregistre les args reçus pour les assertions.
-echo "$@" > "${FAKE_CLAUDE_ARGS_FILE:-/dev/null}"
+# Le résumé automatique tourne en arrière-plan avec --output-format json :
+# il ne doit pas écraser la capture du tour stream-json testé.
+if [[ " $* " == *" --input-format stream-json "* ]]; then
+  echo "$@" > "${FAKE_CLAUDE_ARGS_FILE:-/dev/null}"
+fi
 IFS= read -r initial
 if [[ -n "${FAKE_CLAUDE_STDIN_FILE:-}" ]]; then
   printf '%s\n' "$initial" > "$FAKE_CLAUDE_STDIN_FILE"

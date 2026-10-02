@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -125,6 +125,17 @@ test("ne supprime jamais un fichier source appartenant au projet", async () => {
     deleteSource: true,
   });
 
+  expect(existsSync(source)).toBe(true);
+});
+
+test("protège aussi la source quand le projet est enregistré sous un alias de dossier", async () => {
+  const env = harness();
+  const alias = join(env.directory, "project-alias");
+  symlinkSync(env.projectPath, alias);
+  env.db.query("UPDATE projects SET path = ?").run(alias);
+  const source = join(env.projectPath, "keep.html");
+  writeFileSync(source, "<html><body>À conserver</body></html>");
+  await env.service.publish(env.conversation.id, { path: source, title: "Alias", deleteSource: true });
   expect(existsSync(source)).toBe(true);
 });
 

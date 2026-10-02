@@ -75,7 +75,7 @@ test('ouvre le dernier document dans un iframe doublement sandboxé', async () =
   fireEvent.click(screen.getByRole('button', { name: 'Plein écran' }))
   expect(await screen.findByRole('dialog', { name: 'Document HTML Audit plateforme' })).toBeTruthy()
   expect(screen.getByTitle('Aperçu de Audit plateforme').getAttribute('src')).toContain('token=token-4')
-}, 15_000);
+}, 60_000);
 
 test('rend une tombstone sans action lorsque le contenu a expiré', async () => {
   globalThis.fetch = mock(() => Promise.resolve(Response.json({

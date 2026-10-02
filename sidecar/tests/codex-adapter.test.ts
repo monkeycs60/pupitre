@@ -1,7 +1,7 @@
 import { test, expect, afterAll } from "bun:test";
 import { join } from "node:path";
 import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { runCodexTurn } from "../src/adapters/codex";
 import type { AppEvent } from "../src/events";
 
@@ -33,8 +33,8 @@ test("premier tour : exec --json avec cwd et modèle, sans resume", async () => 
   });
   const args = readFileSync(argsFile, "utf8");
   expect(args).toContain("exec --json --skip-git-repo-check -m gpt-5.6-luna -s workspace-write --add-dir");
-  expect(args).toContain("/home/clement/.claude");
-  expect(args).toContain("/home/clement/.codex");
+  expect(args).toContain(join(homedir(), ".claude"));
+  expect(args).toContain(join(homedir(), ".codex"));
   expect(args).not.toContain("-C"); // le cwd passe par le spawn, pas par -C
   expect(args).not.toContain("model_reasoning_effort");
   expect(args).not.toContain("fast_mode");

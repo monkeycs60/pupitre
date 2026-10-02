@@ -1,3 +1,4 @@
+import { canonicalPath } from "./filesystem-path";
 import type { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
 import {
@@ -119,7 +120,7 @@ function numberFromEnv(name: string, fallback: number): number {
 }
 
 function isInside(root: string, target: string): boolean {
-  const path = relative(resolve(root), resolve(target));
+  const path = relative(canonicalPath(root), canonicalPath(target));
   return path === "" || (!path.startsWith("..") && !isAbsolute(path));
 }
 
@@ -474,7 +475,7 @@ export class HtmlDocumentService {
       const directory = join(this.directory, id);
       const previewPath = join(directory, "document.pdf");
       if (!existsSync(previewPath)) {
-        const office = [process.env.PUPITRE_LIBREOFFICE_BIN, "/usr/bin/libreoffice", "/usr/bin/soffice"]
+        const office = [process.env.PUPITRE_LIBREOFFICE_BIN, "/usr/bin/libreoffice", "/usr/bin/soffice", "/Applications/LibreOffice.app/Contents/MacOS/soffice"]
           .find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)));
         if (office) spawnSync(office, ["--headless", "--convert-to", "pdf", "--outdir", directory, join(this.directory, row.relative_path)], { timeout: 30_000, stdio: "ignore" });
       }
@@ -487,7 +488,8 @@ export class HtmlDocumentService {
     const current = this.requireAvailable(id);
     const row = this.row(id)!;
     const path = join(this.directory, row.relative_path);
-    const command = current.kind === "docx" || current.kind === "xlsx" ? "libreoffice" : "xdg-open";
+    const command = process.platform === "darwin" ? "/usr/bin/open"
+      : current.kind === "docx" || current.kind === "xlsx" ? "libreoffice" : "xdg-open";
     Bun.spawn([command, path], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
   }
 
