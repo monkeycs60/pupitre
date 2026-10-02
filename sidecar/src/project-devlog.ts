@@ -144,6 +144,17 @@ export class ProjectDevlogService {
   documentsConversation(projectId: string) {
     const existing = this.conversations.latestByOrigin("documents", projectId);
     if (existing) return existing;
+    const legacy = this.db
+      .query(
+        "SELECT id FROM conversations WHERE project_id=? AND title='Documents du projet' AND origin_type IS NULL AND deleted_at IS NULL ORDER BY created_at LIMIT 1",
+      )
+      .get(projectId) as { id: string } | null;
+    if (legacy) {
+      this.db
+        .query("UPDATE conversations SET ticket_locked=1 WHERE id=?")
+        .run(legacy.id);
+      return this.conversations.setOrigin(legacy.id, "documents", projectId)!;
+    }
     const created = this.conversations.create({
       projectId,
       provider: "codex",
@@ -156,6 +167,36 @@ export class ProjectDevlogService {
       .query("UPDATE conversations SET ticket_locked=1 WHERE id=?")
       .run(created.id);
     return created;
+  }
+  migrateDocuments() {
+    const rows = this.db
+      .query(
+        `SELECT d.id, d.project_id AS projectId FROM documents d
+         LEFT JOIN conversations c ON c.id = d.conversation_id
+         WHERE d.project_id IS NOT NULL AND d.deleted_at IS NULL
+           AND (d.title LIKE 'Devlog · %' OR d.title LIKE 'Notes de version · %')
+           AND (c.origin_type IS NULL OR c.origin_type != 'documents')`,
+      )
+      .all() as Array<{ id: string; projectId: string }>;
+    let moved = 0;
+    for (const row of rows) {
+      if (!this.projects.get(row.projectId)) continue;
+      const target = this.documentsConversation(row.projectId);
+      this.db.transaction(() => {
+        this.db
+          .query(
+            "UPDATE documents SET conversation_id=?, conversation_title=? WHERE id=?",
+          )
+          .run(target.id, target.title, row.id);
+        this.db
+          .query(
+            "UPDATE events SET conversation_id=? WHERE json_extract(payload,'$.documentId')=? AND json_extract(payload,'$.type') IN ('document-ref','html-document-ref')",
+          )
+          .run(target.id, row.id);
+      })();
+      moved++;
+    }
+    return moved;
   }
   overview(projectId: string) {
     const project = this.projects.get(projectId);

@@ -76,3 +76,52 @@ test("le devlog publie un document du projet et les notes imposent un style util
     rmSync(root, { recursive: true, force: true });
   }
 });
+test("la migration range les anciens devlogs dans « Documents du projet » avec leur carte", () => {
+  const root = mkdtempSync(join(tmpdir(), "devlog-migration-"));
+  const db = openDb(root);
+  try {
+    const projects = new ProjectStore(db),
+      conversations = new ConversationStore(db);
+    const p = projects.create({ name: "Vrac", path: root });
+    const legacy = conversations.create({
+      projectId: p.id,
+      provider: "codex",
+      model: "x",
+      firstMessage: "Documents du projet",
+    });
+    const work = conversations.create({
+      projectId: p.id,
+      provider: "claude",
+      model: "x",
+      firstMessage: "Refonte de la landing",
+    });
+    const insert = db.query(
+      "INSERT INTO documents (id,conversation_id,project_id,title,relative_path,size_bytes,sha256,created_at) VALUES (?,?,?,?,'x',1,'x','2026-09-02')",
+    );
+    insert.run("devlog", work.id, p.id, "Devlog · Vrac · a — b");
+    insert.run("capture", work.id, p.id, "Capture de la landing");
+    conversations.appendStoredEvent(work.id, { type: "document-ref", documentId: "devlog" } as any);
+    conversations.appendStoredEvent(work.id, { type: "document-ref", documentId: "capture" } as any);
+    const service = new ProjectDevlogService(
+      db,
+      projects,
+      conversations,
+      {} as HtmlDocumentService,
+      async () => "",
+    );
+    expect(service.migrateDocuments()).toBe(1);
+    expect(service.migrateDocuments()).toBe(0);
+    const owner = (id: string) =>
+      (db.query("SELECT conversation_id AS c FROM documents WHERE id=?").get(id) as { c: string }).c;
+    const eventOwner = (id: string) =>
+      (db.query("SELECT conversation_id AS c FROM events WHERE json_extract(payload,'$.documentId')=?").get(id) as { c: string }).c;
+    expect(owner("devlog")).toBe(legacy.id);
+    expect(eventOwner("devlog")).toBe(legacy.id);
+    expect(owner("capture")).toBe(work.id);
+    expect(eventOwner("capture")).toBe(work.id);
+    expect(conversations.get(legacy.id)?.origin_type).toBe("documents");
+  } finally {
+    db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -211,6 +211,12 @@ if (process.argv.includes("--pupitre-mcp")) {
   personalEnvironments.onTriage = (id, prompt) => { void runner.runTurn(id, prompt, []).catch(console.error); };
   if (backgroundJobsEnabled()) setInterval(() => { void personalEnvironments.scan().catch(console.error); }, 300000).unref();
   const devlog = new ProjectDevlogService(db, projects, conversations, htmlDocuments, (prompt, cwd) => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas));
+  try {
+    const moved = devlog.migrateDocuments();
+    if (moved) console.log(`[devlog] ${moved} document(s) déplacé(s) vers « Documents du projet »`);
+  } catch (error) {
+    console.error("[devlog] migration des documents impossible", error);
+  }
   const resume = new ProjectResumeService(db, projects, tickets, (prompt, cwd) => automaticCalls.run("reprise", () => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas)));
   const telegram = new TelegramCapture(db, projects, tickets, new TodoStore(db), (prompt, cwd) => automaticCalls.run("telegram", () => cheapJson(prompt, cwd)), resume, instance.name, instance.dataDir);
   telegram.start();

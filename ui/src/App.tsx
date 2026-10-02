@@ -1112,6 +1112,7 @@ function App() {
               </div>
               <div className="header-actions">
                 {selectedConversation !== null
+                && selectedConversation.origin_type !== 'documents'
                 && (selectedConversation.ticket_id === null
                   || ticketLinks.get(selectedConversation.ticket_id)?.externalUrl == null) ? (
                   <ChantierAssignment
