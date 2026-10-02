@@ -6,7 +6,7 @@ const sidecar = process.argv.includes('--sidecar')
 const watch = process.argv.includes('--watch')
 const command = sidecar
   ? ['bun', 'run', '--cwd', 'sidecar', ...(watch ? ['--watch'] : []), 'src/index.ts']
-  : ['bunx', 'tauri', 'dev', '--config', 'src-tauri/tauri.dev.conf.json']
+  : ['bunx', '--bun', 'tauri', 'dev', '--config', 'src-tauri/tauri.dev.conf.json']
 
 const child = Bun.spawn(command, {
   cwd: root,

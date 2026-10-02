@@ -1,6 +1,7 @@
+import { canonicalPath } from "./filesystem-path";
 import { listeningSockets, processCwd, processCommand } from './host-processes';
 import { existsSync, readFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 export interface ApplicationContext {
   projectId: string;
@@ -77,7 +78,7 @@ export function listRunningApplications(contexts: ApplicationContext[]): Running
 
   const normalizedContexts = contexts.map((context) => ({
     ...context,
-    root: resolve(context.root),
+    root: canonicalPath(context.root),
   }));
   const cwdCache = new Map<number, string | null>();
   const commandCache = new Map<number, string>();

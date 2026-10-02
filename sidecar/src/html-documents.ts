@@ -1,3 +1,4 @@
+import { canonicalPath } from "./filesystem-path";
 import type { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
 import {
@@ -119,7 +120,7 @@ function numberFromEnv(name: string, fallback: number): number {
 }
 
 function isInside(root: string, target: string): boolean {
-  const path = relative(resolve(root), resolve(target));
+  const path = relative(canonicalPath(root), canonicalPath(target));
   return path === "" || (!path.startsWith("..") && !isAbsolute(path));
 }
 

@@ -1,7 +1,7 @@
 import { test, expect, afterAll } from "bun:test";
 import { join } from "node:path";
 import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { runClaudeTurn } from "../src/adapters/claude";
 import type { AppEvent } from "../src/events";
 
@@ -114,7 +114,7 @@ test("YOLO transmet le bypass dangereux à Claude", async () => {
   const args = readFileSync(argsFile, "utf8");
   expect(args).toContain("--permission-mode bypassPermissions");
   expect(args).toContain("--dangerously-skip-permissions");
-  expect(args).toContain("--add-dir /home/clement/.claude /home/clement/.codex /home/clement/.grok");
+  expect(args).toContain(`--add-dir ${join(homedir(), ".claude")} ${join(homedir(), ".codex")} ${join(homedir(), ".grok")}`);
   expect(args).toContain("Edit(~/.claude/**)");
   expect(args).toContain("Write(~/.codex/**)");
   expect(args).toContain("Bash(npm run build:*)");

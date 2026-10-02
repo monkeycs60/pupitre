@@ -1,6 +1,7 @@
+import { canonicalPath } from "./filesystem-path";
 import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { dataDir } from "./db";
 import { discoverRepositories, listWorktreePaths, readHead, readRemoteRefs, repositoryOfWorktree, ticketKeyOf } from "./git-repositories";
 import type { ProjectStore } from "./stores/projects";
@@ -188,7 +189,7 @@ export class GitProjectService {
       ...(repositoryDirectory ? [repositoryDirectory] : []),
       branch.replaceAll("/", "-"),
     );
-    if (!resolve(directory).startsWith(resolve(this.worktreeRoot))) {
+    if (!canonicalPath(directory).startsWith(canonicalPath(this.worktreeRoot))) {
       throw new GitProjectError(`nom de branche invalide : ${input.branch}`);
     }
     mkdirSync(dirname(directory), { recursive: true });
@@ -202,7 +203,7 @@ export class GitProjectService {
       ? ["worktree", "add", directory, branch]
       : ["worktree", "add", "-b", branch, directory, input.startPoint ?? (remote ? `origin/${branch}` : "HEAD")]);
 
-    const created = this.worktrees(cwd).find((item) => item.path === directory);
+    const created = this.worktrees(cwd).find((item) => canonicalPath(item.path) === canonicalPath(directory));
     if (!created) throw new GitProjectError("worktree créé mais introuvable");
     return created;
   }
@@ -216,9 +217,9 @@ export class GitProjectService {
     try {
       for (const input of inputs) {
         const cwd = this.repositoryPath(projectId, input.repositoryPath);
-        const before = new Set(this.worktrees(cwd).map((item) => resolve(item.path)));
+        const before = new Set(this.worktrees(cwd).map((item) => canonicalPath(item.path)));
         const worktree = this.createWorktree(projectId, input);
-        created.push({ worktree, preexisting: before.has(resolve(worktree.path)) });
+        created.push({ worktree, preexisting: before.has(canonicalPath(worktree.path)) });
       }
       return created.map((item) => item.worktree);
     } catch (error) {
@@ -244,11 +245,11 @@ export class GitProjectService {
       `detached-${name.replaceAll("/", "-")}`,
     );
     mkdirSync(join(this.worktreeRoot, projectId), { recursive: true });
-    const existing = this.worktrees(cwd).find((item) => item.path === directory);
+    const existing = this.worktrees(cwd).find((item) => canonicalPath(item.path) === canonicalPath(directory));
     if (existing) return existing;
     if (existsSync(directory)) rmSync(directory, { recursive: true, force: true });
     this.runGit(cwd, ["worktree", "add", "--detach", directory, input.startPoint]);
-    const created = this.worktrees(cwd).find((item) => item.path === directory);
+    const created = this.worktrees(cwd).find((item) => canonicalPath(item.path) === canonicalPath(directory));
     if (!created) throw new GitProjectError("worktree détaché créé mais introuvable");
     return created;
   }
@@ -267,7 +268,7 @@ export class GitProjectService {
    */
   removeWorktree(projectId: string, path: string): void {
     const cwd = this.projectPath(projectId);
-    if (resolve(path) === resolve(cwd)) {
+    if (canonicalPath(path) === canonicalPath(cwd)) {
       throw new GitProjectError("le dépôt principal ne peut pas être retiré");
     }
     const holders = this.db.query(
@@ -300,7 +301,7 @@ export class GitProjectService {
         .filter(Boolean),
     );
     return this.worktrees(cwd).filter((item) =>
-      resolve(item.path) !== resolve(cwd)
+      canonicalPath(item.path) !== canonicalPath(cwd)
       && item.branch !== null
       && merged.has(item.branch)
     );
@@ -545,9 +546,9 @@ export class GitProjectService {
    * pendant son tour, où qu'ils aient été faits.
    */
   beginTurn(projectId: string, context: { cwd?: string | null; cwds?: string[] } = {}): GitTurnTracking {
-    const projectPath = resolve(this.projectPath(projectId));
-    const conversationCwds = new Set((context.cwds ?? (context.cwd ? [context.cwd] : [])).map((cwd) => resolve(cwd)));
-    const conversationCwd = context.cwd ? resolve(context.cwd) : conversationCwds.values().next().value ?? null;
+    const projectPath = canonicalPath(this.projectPath(projectId));
+    const conversationCwds = new Set((context.cwds ?? (context.cwd ? [context.cwd] : [])).map((cwd) => canonicalPath(cwd)));
+    const conversationCwd = context.cwd ? canonicalPath(context.cwd) : conversationCwds.values().next().value ?? null;
     const snapshot = this.snapshotHeads(projectPath, conversationCwd);
     const tracking: GitTurnTracking = {
       id: crypto.randomUUID(),
@@ -596,7 +597,7 @@ export class GitProjectService {
     const active = this.activeTurns.get(tracking.projectId);
     active?.delete(tracking);
     if (active?.size === 0) this.activeTurns.delete(tracking.projectId);
-    const projectPath = resolve(this.projectPath(tracking.projectId));
+    const projectPath = canonicalPath(this.projectPath(tracking.projectId));
     const after = this.snapshotHeads(projectPath, tracking.conversationCwd);
     const linked = new Set<string>();
     for (const [worktree, sha] of after.heads) {
@@ -690,11 +691,11 @@ export class GitProjectService {
   }
 
   private repositoryPath(projectId: string, requestedPath?: string): string {
-    const projectPath = resolve(this.projectPath(projectId));
+    const projectPath = canonicalPath(this.projectPath(projectId));
     if (!requestedPath) return projectPath;
-    const candidate = resolve(requestedPath);
+    const candidate = canonicalPath(requestedPath);
     const rel = relative(projectPath, candidate);
-    if (rel.startsWith("..") || resolve(this.optionalGit(candidate, ["rev-parse", "--show-toplevel"])?.trim() ?? "") !== candidate) {
+    if (rel.startsWith("..") || canonicalPath(this.optionalGit(candidate, ["rev-parse", "--show-toplevel"])?.trim() ?? "") !== candidate) {
       throw new GitProjectError("dépôt applicatif invalide");
     }
     return candidate;
@@ -709,8 +710,8 @@ export class GitProjectService {
   private workspacePath(projectId: string, requestedCwd?: string | null): string {
     const projectPath = this.projectPath(projectId);
     if (!requestedCwd) return projectPath;
-    const wanted = resolve(requestedCwd);
-    const known = this.worktrees(projectPath).some((item) => resolve(item.path) === wanted);
+    const wanted = canonicalPath(requestedCwd);
+    const known = this.worktrees(projectPath).some((item) => canonicalPath(item.path) === wanted);
     if (!known) throw new GitProjectError("worktree inconnu pour ce projet");
     return wanted;
   }
@@ -881,9 +882,9 @@ export class GitProjectService {
 
   private safePath(cwd: string, path: string): string {
     const normalized = path.trim();
-    const absolute = resolve(cwd, normalized);
-    const rel = relative(resolve(cwd), absolute);
-    if (!normalized || rel.startsWith("..") || rel.includes("\0") || resolve(cwd, rel) !== absolute) {
+    const absolute = canonicalPath(cwd, normalized);
+    const rel = relative(canonicalPath(cwd), absolute);
+    if (!normalized || rel.startsWith("..") || rel.includes("\0") || canonicalPath(cwd, rel) !== absolute) {
       throw new GitProjectError(`chemin de fichier invalide : ${path}`);
     }
     return rel;

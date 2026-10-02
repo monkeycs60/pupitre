@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -252,4 +252,15 @@ test("ne propose pas la suppression d'un worktree non fusionné", () => {
   Bun.spawnSync(["git", "commit", "-qm", "travail"], { cwd: created.path });
 
   expect(git.mergedWorktrees(projectId).map((item) => item.path)).not.toContain(created.path);
+});
+
+test("retrouve un worktree créé à travers un alias de répertoire", () => {
+  const alias = join(root, "alias");
+  symlinkSync(root, alias);
+  const service = new GitProjectService(db, projects, { worktreeRoot: join(alias, "trees") });
+  const worktree = service.createWorktree(projectId, { branch: "via-alias" });
+  expect(worktree.path).toBe(realpathSync(join(alias, "trees", projectId, "via-alias")));
+  expect(service.snapshot(projectId, worktree.path).currentBranch).toBe("via-alias");
+  service.removeWorktree(projectId, worktree.path);
+  expect(existsSync(worktree.path)).toBe(false);
 });

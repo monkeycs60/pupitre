@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
@@ -30,7 +30,7 @@ function commit(file: string, content: string, message: string): string {
 }
 
 beforeEach(() => {
-  const dir = mkdtempSync(join(tmpdir(), "pupitre-git-"));
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "pupitre-git-")));
   repo = join(dir, "repo");
   mkdirSync(repo);
   git("init", "-q", "-b", "main");
