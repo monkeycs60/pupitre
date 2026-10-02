@@ -1,4 +1,4 @@
-import { afterEach, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
 
@@ -14,6 +14,10 @@ class SilentSocket {
   addEventListener() {}
   close() {}
 }
+
+beforeEach(() => {
+  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
+})
 
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -95,7 +99,6 @@ test('affiche le chat et l’état d’une mission en cours', async () => {
 
 test('crée la mission au clic', async () => {
   let started = false
-  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
   globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input)
     const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
