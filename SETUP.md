@@ -2,7 +2,7 @@
 
 Pupitre est une application de bureau pour **Linux et macOS 13+** (Apple Silicon et Intel). Elle utilise les CLIs Claude Code et Codex installés sur votre ordinateur. Vos projets, conversations et identifiants restent propres à votre installation.
 
-Le parcours macOS est en cours de validation : les adaptations sont présentes, mais ne considérez pas la compilation CI comme une validation du lancement dans Finder, de l'authentification ou de Claude Design. La recette ci-dessous doit être effectuée sur un vrai Mac avant de déclarer la version validée.
+La compilation et le démarrage natif avec des données vierges ont été vérifiés en CI sur macOS 15, Apple Silicon et Intel, ainsi que l'arrêt du backend avec l'application. Les connexions réelles aux comptes, le lancement depuis Finder et Claude Design restent à vérifier sur votre Mac avec la recette ci-dessous. macOS 13 est la version minimale ciblée, pas une version testée en CI.
 
 ## Le plus simple : confier l'installation à votre agent
 
@@ -51,7 +51,7 @@ Sous Linux, les paquets système Tauri sont contrôlés ; s'ils manquent, le set
 2. Fermer puis ouvrir Pupitre depuis Finder ou le menu Linux, sans terminal de développement. Vérifier que l'application charge et que les CLIs restent détectés.
 3. Ajouter un dossier personnel, sélectionner un modèle disponible et obtenir une réponse courte de Claude puis de Codex. Ces essais utilisent les quotas habituels.
 4. Fermer et relancer l'application ; vérifier la conservation du projet et des conversations et la reprise d'un fil.
-5. Tester l'ouverture d'un document, le panneau Claude Design si utilisé et la détection d'une application locale. Une éventuelle permission macOS d'automatisation de Terminal doit être validée pour la reconnexion depuis Pupitre.
+5. Tester l'ouverture d'un document, le panneau Claude Design si utilisé et la détection d'une application locale. La reconnexion ouvre une fenêtre Terminal avec la commande du fournisseur choisi.
 6. Rapporter les versions de macOS, Bun, Rust et des CLIs, les essais réussis et les limites, sans secrets ni captures d'identifiants.
 
 Ne pas annoncer « validé sur Mac » sur la seule base des tests Linux ou d'un workflow de compilation.
@@ -96,7 +96,7 @@ La dev utilise le port 4821 et `~/.local/share/pupitre-dev`, sans toucher aux do
 Pour produire un DMG sur Mac :
 
 ```bash
-bunx tauri build --bundles dmg
+bunx --bun tauri build --bundles dmg
 ```
 
 Le workflow GitHub « Desktop Linux et macOS » construit les variantes Linux, Mac ARM et Mac Intel et conserve les binaires en artefacts. Un bundle téléchargé est distinct d'un build local : pour une distribution grand public sans alertes Gatekeeper, prévoir signature Developer ID et notarisation Apple. Le setup ne désactive aucune protection macOS et ne supprime pas les attributs de quarantaine.

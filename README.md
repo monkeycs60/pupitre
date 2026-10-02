@@ -13,8 +13,8 @@ bash scripts/setup.sh
 Le setup installe les outils manquants, accompagne les connexions Claude/Codex,
 construit Pupitre et crée son lanceur. Sur Mac : `~/Applications/Pupitre.app` ;
 sous Linux : menu des applications. Aucun accès Doppler ni projet Affilae requis.
-Le parcours Mac doit encore passer une recette sur un vrai Mac ; le guide précise
-les vérifications et les limites de distribution.
+La compilation et le démarrage natif sont vérifiés en CI sur macOS 15 ARM et Intel.
+Le guide précise les essais de première utilisation et les limites de distribution.
 
 ## Architecture (M4)
 
