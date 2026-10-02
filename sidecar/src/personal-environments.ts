@@ -52,11 +52,13 @@ export function readSshHosts() {
 }
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 export function sshProbeCommands(config: EnvironmentConfig, since: string) {
+  const label = config.type === "ssh-docker" && config.service?.startsWith("label:") ? config.service.slice(6) : null;
+  if (label !== null && !/^[A-Za-z0-9_.-]+=[A-Za-z0-9_.-]+$/.test(label)) throw new Error("label Docker invalide");
   if (
     !config.host ||
     !/^[\w.-]+$/.test(config.host) ||
     !config.service ||
-    !/^[\w.@-]+$/.test(config.service)
+    (!label && !/^[\w.@-]+$/.test(config.service))
   )
     throw new Error("hôte ou service invalide");
   if (
@@ -64,7 +66,7 @@ export function sshProbeCommands(config: EnvironmentConfig, since: string) {
     (!config.directory.startsWith("/") || config.directory.includes("\0"))
   )
     throw new Error("répertoire invalide");
-  const service = quote(config.service),
+  const service = label ? '"$1"' : quote(config.service),
     commands =
       config.type === "ssh-systemd"
         ? [
@@ -79,7 +81,9 @@ export function sshProbeCommands(config: EnvironmentConfig, since: string) {
             `docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' ${service}`,
             `docker logs --since ${quote(since)} --tail 200 ${service} 2>&1`,
           ];
-  return commands;
+  if (!label) return commands;
+  const resolve = `set -- $(docker ps --filter ${quote(`label=${label}`)} --format '{{.ID}}'); [ "$#" -eq 1 ] || { echo 'Un conteneur unique est requis pour ce label' >&2; exit 1; }; `;
+  return commands.map(command => command ? resolve + command : null);
 }
 export async function probeEnvironment(
   config: EnvironmentConfig,

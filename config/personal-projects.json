@@ -51,7 +51,15 @@
         "kind": "run"
       }
     ],
-    "environments": []
+    "environments": [
+      {
+        "name": "Production — veille-immo",
+        "type": "ssh-docker",
+        "host": "pupitre-vps",
+        "service": "label:coolify.resourceName=veille-immo"
+      }
+    ],
+    "revision": 2
   },
   {
     "project": "todo-app",

@@ -7,7 +7,7 @@ Aucune commande n’est exécutée pendant l’installation. Les commandes de v�
 | Projet | Commandes | Environnement personnel |
 |---|---|---|
 | Helion | Développement Rust/Wasm/Vite ; tests Rust et TypeScript | HTTPS public documenté |
-| veille-immo | Serveur local avec ordonnanceur et Telegram coupés ; tests/types | Production privée non configurée : alias SSH et accès Coolify à préciser |
+| veille-immo | Serveur local avec ordonnanceur et Telegram coupés ; tests/types | Docker privé via alias SSH `pupitre-vps`, sélection par label Coolify |
 | Vrac (`todo-app`) | API locale ; Expo web utilisant cette API ; vérifications serveur et interface | `/health` du backend HTTPS |
 | politics-cards | API et application ; tests/types/lint | Aucun hébergement établi |
 | coworker-malin | Développement avec PostgreSQL local ; Vitest | Aucun nouvel environnement déduit |
@@ -18,3 +18,5 @@ Aucune commande n’est exécutée pendant l’installation. Les commandes de v�
 Les scripts Doppler conservent leur authentification habituelle. Vrac nécessite son fichier serveur `.env` existant. Les projets partageant un port ne doivent pas être lancés simultanément sans adapter leurs configurations ; le bouton de lancement signale le port principal occupé. Helion et politics-cards utilisent plusieurs ports : le port déclaré pour le suivi ne doit pas être injecté comme `PORT` dans tous leurs processus. Seul le choix explicite d’un port alternatif surcharge cette variable, et un serveur qui ignore `PORT` doit être configuré via sa commande.
 
 Aucun déploiement des projets n’est déclenché. Pupitre, Affilae, Downloads et les dossiers sans commande d’application établie sont exclus de ce préréglage.
+
+La révision 2 de veille-immo ajoute uniquement son environnement aux installations déjà configurées. Le conteneur est résolu par `coolify.resourceName=veille-immo` : aucun nom éphémère ni jeton Coolify n’est stocké. L’alias SSH reste local au poste ; il reprend l’hôte et l’utilisateur du runbook privé Recall People. Une sélection vide ou ambiguë échoue explicitement.

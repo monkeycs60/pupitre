@@ -115,3 +115,13 @@ test("HTTP et endpoint de version simulés, aucun accès réseau", async () => {
   });
   expect(urls).toHaveLength(2);
 });
+
+test('un label Coolify résout un seul conteneur sans autoriser de commande libre', async () => {
+  const config={name:'Production',type:'ssh-docker' as const,host:'pupitre-vps',service:'label:coolify.resourceName=veille-immo'};
+  const commands=sshProbeCommands(config,'2026-10-02T20:00:00Z');
+  expect(commands).toHaveLength(3);
+  for(const command of commands){expect(command).toContain("docker ps --filter 'label=coolify.resourceName=veille-immo'");expect(command).toContain('[ "$#" -eq 1 ]');}
+  const result=await probeEnvironment(config,'2026-10-02T20:00:00Z',async(_host,command)=>command.includes('.State.Status')?'running':command.includes('.Config.Labels')?'a'.repeat(40):'panic worker 123');
+  expect(result).toMatchObject({healthy:true,commit:'a'.repeat(40),errors:['panic worker 123']});
+  expect(()=>sshProbeCommands({...config,service:'label:coolify.resourceName=x;touch /tmp/no'},'now')).toThrow('label Docker invalide');
+});

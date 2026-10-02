@@ -1,3 +1,4 @@
+import { readSshHosts } from "./personal-environments";
 import { basename } from "node:path";
 import type { Database } from "bun:sqlite";
 import profiles from "../../config/personal-projects.json";
@@ -13,9 +14,11 @@ export function applyPersonalProjectPresets(
   projects: ProjectStore,
   launches: ProjectLaunchService,
   environments: PersonalEnvironments,
+  sshAliases: string[] = readSshHosts(),
 ): { projects: number; commands: number; environments: number } {
   const counts = { projects: 0, commands: 0, environments: 0 };
   for (const profile of profiles) {
+    if (profile.environments.some(environment => "host" in environment && !sshAliases.includes(String(environment.host)))) continue;
     const project = projects
       .list()
       .find(
@@ -24,11 +27,13 @@ export function applyPersonalProjectPresets(
           basename(item.path) === profile.project,
       );
     if (!project) continue;
-    const key = `personal-project-presets-v1:${project.id}`;
+    const revision = "revision" in profile ? profile.revision : 1;
+    const key = `personal-project-presets-v${revision}:${project.id}`;
+    const hasPrevious = db.query("SELECT 1 FROM settings WHERE key=?").get(`personal-project-presets-v1:${project.id}`);
     if (db.query("SELECT 1 FROM settings WHERE key=?").get(key)) continue;
     db.transaction(() => {
       const existingCommands = launches.list(project.id);
-      for (const command of profile.commands) {
+      for (const command of hasPrevious ? [] : profile.commands) {
         if (existingCommands.some((item) => item.name === command.name))
           continue;
         launches.save(project.id, command as Partial<LaunchCommand>);
