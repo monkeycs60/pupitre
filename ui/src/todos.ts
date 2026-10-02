@@ -22,6 +22,8 @@ export interface TodoInput {
   attachments?: Attachment[]
 }
 export interface TodoItem {
+  proposed?: boolean
+  probably_done?: boolean
   id: string
   project_id: string
   title: string

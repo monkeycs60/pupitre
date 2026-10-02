@@ -1,3 +1,4 @@
+import { BacklogHarvest } from "./backlog-harvest";
 import { ChantierService } from "./chantiers";
 import { ProjectLaunchService } from "./project-launch";
 import { SharedFilesService } from "./shared-files";
@@ -194,17 +195,19 @@ if (process.argv.includes("--pupitre-mcp")) {
     () => actionFormat(settings.get("actionFormat")),
     problemAxisRuns,
   );
-  const chantiers = new ChantierService(db, projects, conversations, tickets, async (prompt, cwd) => {
+  const cheapJson = async (prompt: string, cwd: string): Promise<unknown> => {
     const raw = await generateWithAdapters({ cwd, provider: "claude", model: "claude-haiku-4-5-20251001", effort: "low", speed: "standard", prompt }, quotas);
     const match = raw.match(/\{[\s\S]*\}/); return match ? JSON.parse(match[0]) : null;
-  });
+  };
+  const chantiers = new ChantierService(db, projects, conversations, tickets, cheapJson);
+  const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), cheapJson);
+  if (backgroundJobsEnabled()) setInterval(() => { void harvest.scan().catch(console.error); }, 300000).unref();
   runner.onDigest = (id) => chantiers.classify(id);
   if (backgroundJobsEnabled()) {
     void chantiers.scan().catch(console.error);
     setInterval(() => { void chantiers.scan().catch(console.error); }, 3600000).unref();
   }
   const launches = new ProjectLaunchService(db, projects, instance.dataDir);
-  process.once("SIGTERM", () => { void launches.close().finally(() => process.exit(0)); });
   const todos = new TodoService(new TodoStore(db), projects, conversations, runner, git, tickets, quotas);
   const activityReports = new ActivityReportService(
     new ActivityStore(db),
@@ -290,10 +293,11 @@ if (process.argv.includes("--pupitre-mcp")) {
   // une instance plus récente), tout le reste vaut « je suis mort sans l'avoir
   // demandé, relance-moi ». Sortir 0 sur un SIGTERM externe laissait l'app sans
   // backend jusqu'au prochain lancement.
-  const shutdownGracefully = (cause: "requested" | "signal") => {
+  const shutdownGracefully = async (cause: "requested" | "signal") => {
     if (stopping) return;
     stopping = true;
     try {
+      await launches.close();
       quotaRefresher.stop();
       integrationsRefresher.stop();
       conversationTicketLinker.stop();
@@ -310,6 +314,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   process.on("SIGTERM", () => shutdownGracefully("signal"));
   process.on("SIGINT", () => shutdownGracefully("signal"));
 
+  debriefs.onHarvest = (id, content) => harvest.harvest(id, content);
   server = await claimServer(() => createServer({
     port,
     instance,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
-import { completeTodo, deleteTodo, drainTodos, isStartable, reopenTodo, reorderTodos, setTodoQueue, startTodo, TODO_FINISH_LABELS, TODO_LABELS, type TodoItem, type TodoSnapshot } from './todos'
+import { enqueueTodo, completeTodo, deleteTodo, drainTodos, isStartable, reopenTodo, reorderTodos, setTodoQueue, startTodo, TODO_FINISH_LABELS, TODO_LABELS, type TodoItem, type TodoSnapshot } from './todos'
 import type { TicketLinks } from './ticketLinks'
 import { ExternalLink } from './externalLink'
 import './styles/project-todos.css'
@@ -139,7 +139,7 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
               </button>}
           <div className="todo-row-main">
             <button type="button" className="todo-row-open" title={item.conversation_id ? 'Ouvrir la conversation liée' : 'Ouvrir dans une conversation préremplie'} onClick={() => onOpenConversation(item)} onKeyDown={(event) => handleRowKeyDown(event, item)} aria-current={item.id === selectedId ? 'true' : undefined}>
-              <span className="todo-row-title">{item.title}</span>
+              <span className="todo-row-title">{item.proposed ? <em>{item.title}</em> : item.title}{item.probably_done && <small> · probablement fait</small>}</span>
               <span className="project-task-meta">
                 {item.status !== 'backlog' && !isDone ? <span className={`project-task-state is-${item.status}`} title={item.error ?? undefined}>{TODO_LABELS[item.status]}</span> : null}
                 {ticket?.ticketKey ? <span className="project-task-ticket">{ticket.ticketKey}</span> : null}
@@ -158,6 +158,10 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
             {startableItem && !isDone ? <button type="button" disabled={busy} aria-label={`Modifier ${item.title}`} title="Modifier dans le composer" onClick={() => onEdit(item)}>
               <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m11.2 2.8 2 2L5.5 12.5l-2.7.7.7-2.7z" /></svg>
             </button> : null}
+            {item.proposed && item.status === 'backlog' && <>
+              <button type="button" disabled={busy} onClick={() => void act(() => enqueueTodo(item.id))}>En file</button>
+              <button type="button" disabled={busy} onClick={() => void act(() => deleteTodo(item.id))}>Écarter</button>
+            </>}
             {startableItem && !isDone ? <button type="button" disabled={busy || !!queue.activeTodoId} aria-label={`Lancer l’agent sur ${item.title}`} title="Lancer l’agent" onClick={() => void act(() => startTodo(item.id))}>
               <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M4.5 3v10L12.5 8z" /></svg>
             </button> : null}
