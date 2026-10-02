@@ -567,3 +567,18 @@ test('un groupe de ticket replié montre au plus trois conversations de moins de
   expect(ids(compactGroupItems([at('a', 30), at('b', 50)], new Set(), now))).toEqual(['a'])
   expect(ids(compactGroupItems(busy, new Set(['e']), now))).toEqual(['a', 'b', 'c', 'e'])
 })
+
+test('un groupe de ticket replié garde visible une conversation non lue de plus de 24 h', async () => {
+  const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString()
+  const ticket = { ...startedConversation, ticket_id: 'ticket-9', ticket_key: 'TECH-9' }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [
+    { ...ticket, id: 'recent-read', title: 'Récente lue', updated_at: hoursAgo(1) },
+    { ...ticket, id: 'old-unread', title: 'Ancienne non lue', updated_at: hoursAgo(48), answered_turn: 3, last_read_turn: 1 },
+    { ...ticket, id: 'old-read', title: 'Ancienne lue', updated_at: hoursAgo(72) },
+  ])
+  renderSidebar()
+
+  await waitFor(() => expect(document.querySelectorAll('.conv-row-title')).toHaveLength(2))
+  expect([...document.querySelectorAll('.conv-row-title')].map((element) => element.textContent)).toEqual(['Récente lue', 'Ancienne non lue'])
+  expect(screen.getByRole('button', { name: 'Afficher 1 de plus' })).not.toBeNull()
+})

@@ -250,7 +250,8 @@ const COMPACT_GROUP_WINDOW_MS = 24 * 3_600_000
 
 /** Conversations montrées par un groupe de ticket replié : les trois plus
  *  récentes de moins de 24 h, au moins la plus récente, plus celles qu'on ne
- *  doit jamais masquer (sélectionnée, en cours). L'ordre du groupe est gardé. */
+ *  doit jamais masquer (sélectionnée, en cours, non lue). L'ordre du groupe
+ *  est gardé. */
 export function compactGroupItems(items: Conversation[], alwaysVisible: Set<string>, now = Date.now()): Conversation[] {
   const byRecency = [...items].sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))
   const recent = byRecency
@@ -342,8 +343,11 @@ export const Sidebar = memo(function Sidebar({
   const alwaysVisibleConversationIds = useMemo(() => {
     const ids = new Set(displayedActiveConversationIds)
     if (selectedConversation !== null) ids.add(selectedConversation.id)
+    for (const conversation of conversations) {
+      if (conversationRowState(conversation, displayedActiveConversationIds) === 'unread') ids.add(conversation.id)
+    }
     return ids
-  }, [displayedActiveConversationIds, selectedConversation])
+  }, [conversations, displayedActiveConversationIds, selectedConversation])
   const unreadConversationCount = useMemo(
     () => conversations.filter(
       (conversation) => conversationRowState(conversation, displayedActiveConversationIds) === 'unread',
