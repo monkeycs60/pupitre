@@ -1,3 +1,4 @@
+import type { ChantierService } from "./chantiers";
 import type { ProjectLaunchService } from "./project-launch";
 import { projectCwd } from "./workspace";
 import type { SharedFilesService } from "./shared-files";
@@ -135,6 +136,7 @@ export class ConversationEventBus {
 
 export interface ServerDeps {
   launches?: ProjectLaunchService;
+  chantiers?: ChantierService;
   todos?: TodoService;
   port: number;
   instance?: InstanceInfo;
@@ -1290,6 +1292,8 @@ export function createServer(deps: ServerDeps) {
           return json(currentFleet());
         }
 
+        const chantierResponse = await deps.chantiers?.handle(request, pathname);
+        if (chantierResponse) return chantierResponse;
         const launchResponse = await deps.launches?.handle(request, pathname);
         if (launchResponse) return launchResponse;
         if (request.method === "GET" && pathname === "/api/applications") {

@@ -211,7 +211,7 @@ export class ConversationStore {
        LEFT JOIN tickets t ON t.id = c.ticket_id
        LEFT JOIN sentry_triages st ON st.conversation_id = c.id OR st.correction_conversation_id = c.id
        LEFT JOIN sentry_issues si ON si.id = st.issue_id
-       WHERE c.project_id = ? AND ${predicate}
+       WHERE c.project_id = ? AND ${predicate} ${scope === 'active' ? "AND (t.source IS NULL OR t.source != 'chantier' OR t.archived_at IS NULL)" : ''}
        ORDER BY c.pinned DESC, c.updated_at DESC`
     ).all(projectId) as any[];
     return rows.map((r) => ({

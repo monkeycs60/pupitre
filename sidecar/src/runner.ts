@@ -85,6 +85,7 @@ function selectedMcpServers(
 }
 
 export class ConversationRunner {
+  onDigest?: (id: string) => Promise<unknown>;
   private active = new Map<string, ActiveTurn>();
 
   constructor(
@@ -496,6 +497,7 @@ export class ConversationRunner {
       if (!digest) return;
       const updated = this.convs.updateDigest(conversationId, digest, turn);
       if (!updated) return;
+      await this.onDigest?.(conversationId);
       persist({
         type: "conversation-digest",
         title: updated.title,

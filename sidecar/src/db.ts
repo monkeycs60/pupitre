@@ -171,7 +171,7 @@ export function openDb(dir: string = dataDir()): Database {
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       key TEXT NOT NULL,
-      source TEXT NOT NULL CHECK (source IN ('clickup', 'notion', 'git')),
+      source TEXT NOT NULL CHECK (source IN ('clickup', 'notion', 'git', 'chantier')),
       title TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT '',
       external_url TEXT NULL,
@@ -605,6 +605,9 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "worktree_path TEXT NULL");
   addColumn(db, "conversations", "worktree_paths TEXT NOT NULL DEFAULT '[]'");
   // Un renommage manuel fige le titre : la régénération automatique le respecte.
+  addColumn(db, "projects", "chantiers_enabled INTEGER NOT NULL DEFAULT 1");
+  addColumn(db, "conversations", "ticket_locked INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "conversations", "ticket_confidence REAL NULL");
   addColumn(db, "projects", "trunk_branch TEXT NULL");
   addColumn(db, "projects", "sort_order INTEGER NULL");
   addColumn(db, "projects", "removed_at TEXT NULL");
@@ -740,6 +743,13 @@ export function openDb(dir: string = dataDir()): Database {
     migrateTrunkTickets(db);
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
+  const ticketSchema = db.query("SELECT sql FROM sqlite_master WHERE name='tickets'").get() as { sql: string };
+  if (!ticketSchema.sql.includes("'chantier'")) db.transaction(() => {
+    const triggers = db.query("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name!='tickets' AND sql LIKE '%tickets%'").all() as Array<{name:string;sql:string}>;
+    for (const trigger of triggers) db.exec(`DROP TRIGGER "${trigger.name}"`);
+    rebuildTable(db, "tickets", ticketSchema.sql.replace("'notion', 'git'", "'notion', 'git', 'chantier'"));
+    for (const trigger of triggers) db.exec(trigger.sql);
+  })();
   widenProviderCheck(db, "skills");
   widenProviderCheck(db, "workflows");
   widenProviderCheck(db, "routines");

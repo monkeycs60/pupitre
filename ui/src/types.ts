@@ -315,7 +315,7 @@ export interface DashboardIntegration {
   config: Record<string, unknown>
 }
 
-export type TicketSource = 'clickup' | 'notion' | 'git'
+export type TicketSource = 'clickup' | 'notion' | 'git' | 'chantier'
 export type TicketRefKind = 'branch' | 'mr' | 'pipeline' | 'deployment' | 'sentry_issue'
 
 export interface TicketRef {

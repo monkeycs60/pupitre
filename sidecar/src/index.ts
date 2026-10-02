@@ -1,3 +1,4 @@
+import { ChantierService } from "./chantiers";
 import { ProjectLaunchService } from "./project-launch";
 import { SharedFilesService } from "./shared-files";
 import { TodoService } from "./todos";
@@ -193,6 +194,15 @@ if (process.argv.includes("--pupitre-mcp")) {
     () => actionFormat(settings.get("actionFormat")),
     problemAxisRuns,
   );
+  const chantiers = new ChantierService(db, projects, conversations, tickets, async (prompt, cwd) => {
+    const raw = await generateWithAdapters({ cwd, provider: "claude", model: "claude-haiku-4-5-20251001", effort: "low", speed: "standard", prompt }, quotas);
+    const match = raw.match(/\{[\s\S]*\}/); return match ? JSON.parse(match[0]) : null;
+  });
+  runner.onDigest = (id) => chantiers.classify(id);
+  if (backgroundJobsEnabled()) {
+    void chantiers.scan().catch(console.error);
+    setInterval(() => { void chantiers.scan().catch(console.error); }, 3600000).unref();
+  }
   const launches = new ProjectLaunchService(db, projects, instance.dataDir);
   process.once("SIGTERM", () => { void launches.close().finally(() => process.exit(0)); });
   const todos = new TodoService(new TodoStore(db), projects, conversations, runner, git, tickets, quotas);
@@ -328,6 +338,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     routines,
     todos,
     launches,
+    chantiers,
     notifications,
     search,
     costs,

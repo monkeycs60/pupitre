@@ -1,3 +1,4 @@
+import { ChantierAssignment } from './ChantiersView'
 import { ProjectLaunch } from './ProjectLaunch'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -641,6 +642,7 @@ export const Sidebar = memo(function Sidebar({
           </div>
         </div>
 
+        {selectedProject && selectedConversation && <ChantierAssignment key={selectedConversation.id} projectId={selectedProject.id} conversationId={selectedConversation.id} />}
         {selectedProject && <ProjectLaunch key={selectedProject.id} project={selectedProject} conversationId={selectedConversation?.id} />}
         {selectedProject ? (
           <button
@@ -788,7 +790,7 @@ export const Sidebar = memo(function Sidebar({
                     <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={isCollapsed ? { transform: 'rotate(-90deg)' } : undefined}>
                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="conv-group-key">{group.label}</span>
+                    <span className="conv-group-key">{group.ticketKey?.startsWith('CH-') ? `◇ ${group.label}` : group.label}</span>
                   </button>
                   {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
                   {groupSentryUrl !== undefined ? <SentryLinkIcon url={groupSentryUrl} issueKey={group.sentryKey!} /> : null}
@@ -860,6 +862,7 @@ export const Sidebar = memo(function Sidebar({
                       {conversation.origin_type === 'sentry' ? (
                         <ProviderMark provider="sentry" className="conv-row-mark" />
                       ) : <ProviderMark provider={conversation.provider} className="conv-row-mark" />}
+                      {(conversation as typeof conversation & {ticket_confidence?:number}).ticket_confidence != null && (conversation as typeof conversation & {ticket_confidence:number}).ticket_confidence < 0.7 && <span>à confirmer</span>}
                       {conversation.ticket_key ? (
                         <span className="conv-row-ticket" title={`${conversation.ticket_key} · ${conversation.ticket_title ?? ''}`}>{conversation.ticket_key}</span>
                       ) : null}

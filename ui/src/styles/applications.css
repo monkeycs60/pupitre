@@ -280,3 +280,13 @@
   stroke-linejoin: round;
   stroke-width: 1.3;
 }
+
+.managed-launches { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+.managed-launches > div { padding: 12px 0; }
+.managed-launches button, .chantier-row button { margin: 4px 8px 4px 0; }
+.managed-launches pre { max-height: 240px; overflow: auto; white-space: pre-wrap; }
+.chantiers-view { padding: 20px; display: grid; gap: 16px; }
+.chantiers-view label { display: grid; gap: 6px; }
+.chantiers-view input, .chantiers-view textarea, .chantiers-view select { color: inherit; background: var(--bg); border: 1px solid var(--border); padding: 8px; }
+.chantier-row { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.chantier-row > span { margin-left: 12px; opacity: .7; }

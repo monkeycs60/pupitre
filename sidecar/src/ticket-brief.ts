@@ -34,6 +34,7 @@ function clipToBudget(text: string, max: number): string {
 }
 
 function ticketSourceLabel(source: TicketSource): string {
+  if (source === "chantier") return "Chantier";
   if (source === "clickup") return "ClickUp";
   if (source === "notion") return "Notion";
   return "Git";
