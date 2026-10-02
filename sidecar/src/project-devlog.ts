@@ -97,14 +97,7 @@ export class ProjectDevlogService {
       cwd,
     );
     if (!content.trim()) throw new Error("document généré vide");
-    const existing =
-      this.conversations.listByProject(projectId)[0] ??
-      this.conversations.create({
-        projectId,
-        provider: "codex",
-        model: "gpt-6-luna",
-        firstMessage: "Documents du projet",
-      });
+    const existing = this.documentsConversation(projectId);
     const screenshots: string[] = [];
     let screenshotBytes = 0;
     if (!release)
@@ -148,12 +141,28 @@ export class ProjectDevlogService {
       rmSync(root, { recursive: true, force: true });
     }
   }
+  documentsConversation(projectId: string) {
+    const existing = this.conversations.latestByOrigin("documents", projectId);
+    if (existing) return existing;
+    const created = this.conversations.create({
+      projectId,
+      provider: "codex",
+      model: "gpt-6-luna",
+      originType: "documents",
+      originKey: projectId,
+      firstMessage: "Documents du projet",
+    });
+    this.db
+      .query("UPDATE conversations SET ticket_locked=1 WHERE id=?")
+      .run(created.id);
+    return created;
+  }
   overview(projectId: string) {
     const project = this.projects.get(projectId);
     if (!project) throw new Error("projet inconnu");
     const documents = this.db
       .query(
-        "SELECT id,title,created_at AS createdAt FROM documents WHERE project_id=? AND deleted_at IS NULL AND expired_at IS NULL AND (title LIKE 'Devlog · %' OR title LIKE 'Notes de version · %') ORDER BY created_at DESC LIMIT 5",
+        "SELECT id,title,kind,original_name AS originalName,created_at AS createdAt FROM documents WHERE project_id=? AND deleted_at IS NULL AND expired_at IS NULL AND (title LIKE 'Devlog · %' OR title LIKE 'Notes de version · %') ORDER BY created_at DESC LIMIT 5",
       )
       .all(projectId);
     const result = Bun.spawnSync(

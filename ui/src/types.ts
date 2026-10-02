@@ -277,7 +277,7 @@ export interface Conversation {
   ticket_backlog_count?: number
   ticket_title?: string | null
   ticket_instruction: string | null
-  origin_type?: 'sentry' | 'problem' | 'promotion' | null
+  origin_type?: 'sentry' | 'problem' | 'promotion' | 'documents' | null
   origin_key?: string | null
   cli_session_id: string | null
   preset_id?: string | null

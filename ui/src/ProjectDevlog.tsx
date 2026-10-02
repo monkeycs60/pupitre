@@ -1,10 +1,95 @@
-import { useEffect, useState } from 'react'
-import { launchRequest, openDocumentInSystem } from './api'
+import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { createHtmlDocumentViewToken, launchRequest } from './api'
 import { relativeCodeDate } from './codeFormat'
+import Markdown from './Markdown'
+import { documentDownloadUrl, htmlDocumentContentUrl } from './transport'
 
-type Overview = {
-  documents: Array<{ id: string; title: string; createdAt: string }>
-  tags: string[]
+type DevlogDocument = {
+  id: string
+  title: string
+  kind: string
+  originalName: string
+  createdAt: string
+}
+type Overview = { documents: DevlogDocument[]; tags: string[] }
+const shortTitle = (title: string) =>
+  title.split(' · ').filter((_, index) => index !== 1).join(' · ')
+
+function DevlogPreview({
+  doc,
+  onClose,
+}: {
+  doc: DevlogDocument
+  onClose: () => void
+}) {
+  const [token, setToken] = useState<string | null>(null)
+  const [markdown, setMarkdown] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let ignore = false
+    void createHtmlDocumentViewToken(doc.id)
+      .then(async (grant) => {
+        if (ignore) return
+        setToken(grant.token)
+        if (doc.kind !== 'markdown') return
+        const response = await fetch(htmlDocumentContentUrl(doc.id, grant.token))
+        if (!response.ok) throw new Error('Chargement impossible')
+        const text = await response.text()
+        if (!ignore) setMarkdown(text)
+      })
+      .catch((reason: unknown) => {
+        if (!ignore) setError(reason instanceof Error ? reason.message : 'Aperçu indisponible')
+      })
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', close)
+    return () => {
+      ignore = true
+      window.removeEventListener('keydown', close)
+    }
+  }, [doc.id, doc.kind, onClose])
+  return createPortal(
+    <>
+      <button
+        type="button"
+        className="html-document-backdrop"
+        aria-label="Fermer l’aperçu du document"
+        onClick={onClose}
+      />
+      <section className="asset-document-preview" role="dialog" aria-modal="true" aria-label={`Aperçu de ${doc.title}`}>
+        <header>
+          <div>
+            <span>{doc.kind.toUpperCase()}</span>
+            <strong>{shortTitle(doc.title)}</strong>
+          </div>
+          <div className="html-document-actions">
+            {token ? (
+              <a href={documentDownloadUrl(doc.id, token)} download={doc.originalName}>
+                Télécharger
+              </a>
+            ) : null}
+            <button type="button" onClick={onClose} autoFocus>Fermer</button>
+          </div>
+        </header>
+        <div className={`html-document-preview${doc.kind === 'markdown' ? ' devlog-preview-markdown' : ''}`}>
+          {error ? <p role="alert">{error}</p> : null}
+          {doc.kind === 'markdown' ? (
+            markdown !== null ? <div className="devlog-markdown"><Markdown>{markdown}</Markdown></div> : error ? null : <p>Préparation de l’aperçu…</p>
+          ) : token ? (
+            <iframe
+              src={htmlDocumentContentUrl(doc.id, token)}
+              title={`Contenu de ${doc.title}`}
+              sandbox="allow-scripts allow-modals"
+              referrerPolicy="no-referrer"
+            />
+          ) : error ? null : <p>Préparation de l’aperçu…</p>}
+        </div>
+      </section>
+    </>,
+    window.document.body,
+  )
 }
 type Period = '7' | '30' | 'dates' | 'tags'
 const day = (offset: number) =>
@@ -20,6 +105,8 @@ export function ProjectDevlog({ projectId }: { projectId: string }) {
   const [toTag, setToTag] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [previewed, setPreviewed] = useState<DevlogDocument | null>(null)
+  const closePreview = useCallback(() => setPreviewed(null), [])
   async function load() {
     try {
       const next = await launchRequest<Overview>(`/api/projects/${projectId}/devlog`)
@@ -37,7 +124,7 @@ export function ProjectDevlog({ projectId }: { projectId: string }) {
     setBusy(true)
     setMessage('')
     try {
-      await launchRequest(`/api/projects/${projectId}/devlog`, 'POST', {
+      const created = await launchRequest<DevlogDocument>(`/api/projects/${projectId}/devlog`, 'POST', {
         kind,
         ...(period === 'tags'
           ? { fromTag, toTag }
@@ -46,6 +133,7 @@ export function ProjectDevlog({ projectId }: { projectId: string }) {
             : { from: day(Number(period)), to: day(0) }),
       })
       await load()
+      setPreviewed(created)
     } catch (error) {
       setMessage(String(error))
     } finally {
@@ -116,12 +204,8 @@ export function ProjectDevlog({ projectId }: { projectId: string }) {
         <ul className="devlog-documents">
           {overview.documents.map((doc) => (
             <li key={doc.id}>
-              <button
-                type="button"
-                onClick={() => void openDocumentInSystem(doc.id).catch((error) => setMessage(String(error)))}
-                title="Ouvrir le document"
-              >
-                {doc.title.split(' · ').filter((_, index) => index !== 1).join(' · ')}
+              <button type="button" onClick={() => setPreviewed(doc)} title="Afficher le document">
+                {shortTitle(doc.title)}
               </button>
               <span>{relativeCodeDate(doc.createdAt)}</span>
             </li>
@@ -130,6 +214,7 @@ export function ProjectDevlog({ projectId }: { projectId: string }) {
       ) : (
         <p className="devlog-empty">Aucun document publié pour ce projet.</p>
       )}
+      {previewed ? <DevlogPreview doc={previewed} onClose={closePreview} /> : null}
     </section>
   )
 }

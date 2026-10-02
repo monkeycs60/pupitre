@@ -35,7 +35,7 @@ export interface Conversation {
   ticket_backlog_count?: number;
   ticket_title?: string | null;
   ticket_instruction: string | null;
-  origin_type?: "sentry" | "problem" | "promotion" | null;
+  origin_type?: "sentry" | "problem" | "promotion" | "documents" | null;
   origin_key?: string | null;
   created_at: string; updated_at: string;
 }
@@ -118,7 +118,7 @@ export class ConversationStore {
     createdOnBranch?: string | null;
     ticketId?: string | null;
     ticketInstruction?: string | null;
-    originType?: "sentry" | "problem" | "promotion" | null;
+    originType?: "sentry" | "problem" | "promotion" | "documents" | null;
     originKey?: string | null;
     firstMessage: string;
   }): Conversation {
@@ -165,14 +165,14 @@ export class ConversationStore {
     return this.get(id);
   }
 
-  setOrigin(id: string, originType: "sentry" | "problem" | "promotion" | null, originKey: string | null): Conversation | null {
+  setOrigin(id: string, originType: "sentry" | "problem" | "promotion" | "documents" | null, originKey: string | null): Conversation | null {
     this.db.query(
       "UPDATE conversations SET origin_type = ?, origin_key = ?, updated_at = ? WHERE id = ?",
     ).run(originType, originKey, new Date().toISOString(), id);
     return this.get(id);
   }
 
-  latestByOrigin(originType: "sentry" | "problem" | "promotion", originKey: string): Conversation | null {
+  latestByOrigin(originType: "sentry" | "problem" | "promotion" | "documents", originKey: string): Conversation | null {
     const row = this.db.query(`
       SELECT * FROM conversations
       WHERE origin_type = ? AND origin_key = ? AND deleted_at IS NULL

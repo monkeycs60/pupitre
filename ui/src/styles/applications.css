@@ -323,3 +323,4 @@
 .devlog-documents button:hover { color: var(--accent); text-decoration: underline; }
 .devlog-documents span, .devlog-empty { flex: none; color: var(--text-muted); font-size: var(--text-xs); }
 .devlog-message { margin: 0; color: var(--warn); font-size: var(--text-sm); }
+.html-document-preview.devlog-preview-markdown { overflow: auto; padding: 24px 32px; color: var(--text); background: var(--bg-workspace); }

@@ -20,6 +20,7 @@ test("le devlog publie un document du projet et les notes imposent un style util
       publish: async (id: string, input: { path: string; title: string }) => {
         published = input.title;
         expect(conversations.get(id)?.project_id).toBe(p.id);
+        expect(conversations.get(id)?.origin_type).toBe("documents");
         expect(await Bun.file(input.path).text()).toBe(
           "Des idées plus faciles à retrouver.",
         );
@@ -42,6 +43,19 @@ test("le devlog publie un document du projet et les notes imposent un style util
       to: "2026-09-30",
     });
     expect(prompt).toContain("Aucun nom de fichier");
+    const dedicated = service.documentsConversation(p.id);
+    expect(dedicated.origin_type).toBe("documents");
+    expect(dedicated.title).toBe("Documents du projet");
+    conversations.create({
+      projectId: p.id,
+      provider: "claude",
+      model: "x",
+      firstMessage: "Autre travail",
+    });
+    expect(service.documentsConversation(p.id).id).toBe(dedicated.id);
+    expect(
+      (db.query("SELECT ticket_locked FROM conversations WHERE id=?").get(dedicated.id) as { ticket_locked: number }).ticket_locked,
+    ).toBe(1);
     expect(published).toContain("Notes de version · Vrac");
     await expect(service.create(p.id, { from: "bad" })).rejects.toThrow(
       "période",
