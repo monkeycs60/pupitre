@@ -1,3 +1,4 @@
+import type { ProjectDevlogService } from "./project-devlog";
 import type { ProjectResumeService } from "./project-resume";
 import type { ChantierService } from "./chantiers";
 import type { ProjectLaunchService } from "./project-launch";
@@ -139,6 +140,7 @@ export interface ServerDeps {
   launches?: ProjectLaunchService;
   chantiers?: ChantierService;
   resume?: ProjectResumeService;
+  devlog?: ProjectDevlogService;
   todos?: TodoService;
   port: number;
   instance?: InstanceInfo;
@@ -1298,6 +1300,8 @@ export function createServer(deps: ServerDeps) {
           return json(currentFleet());
         }
 
+        const devlogResponse = await deps.devlog?.handle(request, pathname);
+        if (devlogResponse) return devlogResponse;
         const resumeResponse = await deps.resume?.handle(request, pathname);
         if (resumeResponse) return resumeResponse;
         const chantierResponse = await deps.chantiers?.handle(request, pathname);

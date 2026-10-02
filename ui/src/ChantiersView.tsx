@@ -1,3 +1,4 @@
+import { ProjectDevlog } from './ProjectDevlog'
 import { useState } from 'react'
 import { launchRequest } from './api'
 import type { Project } from './types'
@@ -22,6 +23,7 @@ export function ChantiersView({ project, onStartConversation }: {project:Project
     <label>Fusionner dans<select value="" onChange={(event)=>{if(event.target.value)void change(item.id,{mergeInto:event.target.value})}}><option value="">Choisir…</option>{items.filter(x=>x.id!==item.id).map(x=><option key={x.id} value={x.id}>{x.title}</option>)}</select></label>
   </div>
   return <section aria-label="Chantiers" className="chantiers-view">
+    <ProjectDevlog projectId={project.id} />
     <button className="secondary-button" onClick={()=>void load()}>{loaded?'Actualiser':'Afficher les chantiers'}</button>
     {error&&<p role="alert">{error}</p>}
     {items.filter(x=>!x.archived_at).map(render)}

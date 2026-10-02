@@ -1,3 +1,4 @@
+import { ProjectDevlogService } from "./project-devlog";
 import { ProjectResumeService } from "./project-resume";
 import { BacklogHarvest } from "./backlog-harvest";
 import { ChantierService } from "./chantiers";
@@ -201,6 +202,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     const match = raw.match(/\{[\s\S]*\}/); return match ? JSON.parse(match[0]) : null;
   };
   const chantiers = new ChantierService(db, projects, conversations, tickets, cheapJson);
+  const devlog = new ProjectDevlogService(db, projects, conversations, htmlDocuments, (prompt, cwd) => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas));
   const resume = new ProjectResumeService(db, projects, tickets, (prompt, cwd) => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas));
   const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), cheapJson);
   if (backgroundJobsEnabled()) setInterval(() => { void harvest.scan().catch(console.error); }, 300000).unref();
@@ -353,6 +355,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     launches,
     chantiers,
     resume,
+    devlog,
     notifications,
     search,
     costs,
