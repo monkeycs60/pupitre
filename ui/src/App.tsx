@@ -1,4 +1,5 @@
 import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type InspectorView } from './WorkspaceInspector'
+import { ChantierAssignment } from './ChantiersView'
 import { TodoList } from './TodoList'
 import { WorkflowsView } from './WorkflowsView'
 import { linkTodo, useTodos, type TodoItem } from './todos'
@@ -1109,6 +1110,22 @@ function App() {
                 })()}
               </div>
               <div className="header-actions">
+                {selectedConversation !== null
+                && (selectedConversation.ticket_id === null
+                  || ticketLinks.get(selectedConversation.ticket_id)?.externalUrl == null) ? (
+                  <ChantierAssignment
+                    key={selectedConversation.id}
+                    projectId={selectedConversation.project_id}
+                    conversationId={selectedConversation.id}
+                    label={selectedConversation.ticket_id ? selectedConversation.ticket_title ?? selectedConversation.ticket_key ?? null : null}
+                    onChange={(chantier) => {
+                      setSelectedConversation((current) => current === null || current.id !== selectedConversation.id
+                        ? current
+                        : { ...current, ticket_id: chantier?.id ?? null, ticket_key: chantier?.key ?? null, ticket_title: chantier?.title ?? null })
+                      setConversationListVersion((current) => current + 1)
+                    }}
+                  />
+                ) : null}
                 {selectedConversation !== null
                 && branchOfWorktree(selectedConversation.worktree_path) !== null ? (
                   <span

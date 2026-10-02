@@ -1,5 +1,6 @@
 import { ProjectDevlog } from './ProjectDevlog'
-import { useState } from 'react'
+import { ProjectResume } from './ProjectResume'
+import { useEffect, useState } from 'react'
 import { launchRequest } from './api'
 import type { Project } from './types'
 
@@ -22,7 +23,6 @@ export function ChantiersView({
   }) => void
 }) {
   const [items, setItems] = useState<Chantier[]>([])
-  const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -31,12 +31,14 @@ export function ChantiersView({
   async function load() {
     try {
       setItems(await launchRequest<Chantier[]>(base))
-      setLoaded(true)
       setError('')
     } catch (error) {
       setError(String(error))
     }
   }
+  useEffect(() => {
+    void load()
+  }, [base])
   async function change(id: string, body: unknown) {
     try {
       await launchRequest(`${base}/${id}`, 'PUT', body)
@@ -116,10 +118,13 @@ export function ChantiersView({
   )
   return (
     <section aria-label="Chantiers" className="chantiers-view">
+      <ProjectResume
+        projectId={project.id}
+        onResume={(ticketId, ticketKey) =>
+          onStartConversation({ ticketId, ticketKey, branch: null })
+        }
+      />
       <ProjectDevlog projectId={project.id} />
-      <button className="secondary-button" onClick={() => void load()}>
-        {loaded ? 'Actualiser' : 'Afficher les chantiers'}
-      </button>
       {error && <p role="alert">{error}</p>}
       {items.filter((x) => !x.archived_at).map(render)}
       <details>
@@ -152,35 +157,38 @@ export function ChantiersView({
 export function ChantierAssignment({
   projectId,
   conversationId,
-  onSelect,
+  label,
+  onChange,
 }: {
   projectId: string
-  conversationId?: string
-  onSelect?: (id: string | null, key: string | null) => void
+  conversationId: string
+  label: string | null
+  onChange: (chantier: { id: string; key: string; title: string } | null) => void
 }) {
   const [items, setItems] = useState<Chantier[]>([])
   const [open, setOpen] = useState(false)
   const [error, setError] = useState('')
   const [title, setTitle] = useState('')
-  async function load() {
+  async function toggle() {
+    if (open) return setOpen(false)
     try {
       setItems(
         await launchRequest<Chantier[]>(`/api/projects/${projectId}/chantiers`),
       )
-      setOpen(!open)
+      setError('')
+      setOpen(true)
     } catch (error) {
       setError(String(error))
     }
   }
-  async function assign(id: string) {
+  async function assign(id: string | null) {
     try {
-      if (conversationId)
-        await launchRequest(
-          `/api/projects/${projectId}/chantiers${id ? `/${id}` : ''}`,
-          'PUT',
-          { conversationId, ...(!id ? { automatic: true } : {}) },
-        )
-      else onSelect?.(id || null, items.find((x) => x.id === id)?.key ?? null)
+      await launchRequest(
+        `/api/projects/${projectId}/chantiers${id ? `/${id}` : ''}`,
+        'PUT',
+        { conversationId, ...(id ? {} : { automatic: true }) },
+      )
+      onChange(items.find((item) => item.id === id) ?? null)
       setOpen(false)
     } catch (error) {
       setError(String(error))
@@ -193,43 +201,58 @@ export function ChantierAssignment({
         'POST',
         { title, conversationId },
       )
-      if (!conversationId) onSelect?.(item.id, item.key)
+      onChange(item)
+      setTitle('')
       setOpen(false)
     } catch (error) {
       setError(String(error))
     }
   }
   return (
-    <div style={{ position: 'relative' }}>
-      <button className="secondary-button" onClick={() => void load()}>
-        {conversationId ? 'Chantier…' : 'Chantier : auto ▾'}
+    <div className="chantier-chip-wrap">
+      <button
+        type="button"
+        className={`chantier-chip${label ? '' : ' is-empty'}`}
+        onClick={() => void toggle()}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title={error || 'Changer le chantier de cette conversation'}
+      >
+        <span aria-hidden="true">◇</span>
+        {label ?? 'Sans chantier'}
       </button>
       {open && (
-        <div className="conversation-actions-menu">
-          <select
-            aria-label="Déplacer vers un chantier"
-            defaultValue=""
-            onChange={(event) => void assign(event.target.value)}
-          >
-            <option value="">Automatique</option>
-            {items.map((item) => (
-              <option value={item.id} key={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-          <label>
-            Nouveau chantier
-            <input value={title} onChange={(e) => setTitle(e.target.value)} />
-          </label>
-          <button disabled={!title.trim()} onClick={() => void create()}>
-            {conversationId
-              ? 'Créer depuis cette conversation'
-              : 'Créer et sélectionner'}
+        <div className="conversation-actions-menu chantier-menu" role="menu">
+          <button type="button" role="menuitem" onClick={() => void assign(null)}>
+            Automatique
           </button>
+          {items
+            .filter((item) => !item.archived_at)
+            .map((item) => (
+              <button
+                type="button"
+                role="menuitem"
+                key={item.id}
+                onClick={() => void assign(item.id)}
+              >
+                ◇ {item.title}
+              </button>
+            ))}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (title.trim()) void create()
+            }}
+          >
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Nouveau chantier…"
+              aria-label="Nouveau chantier"
+            />
+          </form>
         </div>
       )}
-      {error && <p role="alert">{error}</p>}
     </div>
   )
 }

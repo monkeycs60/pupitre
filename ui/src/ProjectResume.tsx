@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 import { launchRequest } from './api'
 import Markdown from './Markdown'
 
@@ -74,35 +74,15 @@ function ResumeContent({
 }
 export function ProjectResume({
   projectId,
-  inactive,
   onResume,
 }: {
   projectId: string
-  inactive: boolean
   onResume: (id: string, key: string) => void
 }) {
-  const [expanded, setExpanded] = useState<boolean | null>(null)
-  const open = expanded ?? inactive
   return (
-    <section className="project-resume" aria-label="Où j’en suis">
-      <button
-        className="secondary-button"
-        onClick={() => {
-          if (!open) {
-            const entry = store(projectId)
-            entry.started = false
-            const unsubscribe = subscribe(projectId, () => {})
-            unsubscribe()
-          }
-          setExpanded(!open)
-        }}
-      >
-        Où j’en suis
-      </button>
-      {inactive && <p>Ce projet attend votre reprise.</p>}
-      {open && (
-        <ResumeContent projectId={projectId} onResume={onResume} />
-      )}
-    </section>
+    <details className="project-resume" open>
+      <summary>Où j’en suis</summary>
+      <ResumeContent projectId={projectId} onResume={onResume} />
+    </details>
   )
 }
