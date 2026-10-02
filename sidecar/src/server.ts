@@ -1,3 +1,4 @@
+import type { TelegramCapture } from "./telegram-capture";
 import type { PersonalEnvironments } from "./personal-environments";
 import type { ProjectDevlogService } from "./project-devlog";
 import type { ProjectResumeService } from "./project-resume";
@@ -143,6 +144,7 @@ export interface ServerDeps {
   resume?: ProjectResumeService;
   devlog?: ProjectDevlogService;
   personalEnvironments?: PersonalEnvironments;
+  telegram?: TelegramCapture;
   todos?: TodoService;
   port: number;
   instance?: InstanceInfo;
@@ -1302,6 +1304,8 @@ export function createServer(deps: ServerDeps) {
           return json(currentFleet());
         }
 
+        const telegramResponse = await deps.telegram?.handle(request, pathname);
+        if (telegramResponse) return telegramResponse;
         const environmentResponse = await deps.personalEnvironments?.handle(request, pathname);
         if (environmentResponse) return environmentResponse;
         const devlogResponse = await deps.devlog?.handle(request, pathname);

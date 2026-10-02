@@ -1,3 +1,4 @@
+import { TelegramCapture } from "./telegram-capture";
 import { PersonalEnvironments } from "./personal-environments";
 import { ProjectDevlogService } from "./project-devlog";
 import { ProjectResumeService } from "./project-resume";
@@ -207,6 +208,8 @@ if (process.argv.includes("--pupitre-mcp")) {
   if (backgroundJobsEnabled()) setInterval(() => { void personalEnvironments.scan().catch(console.error); }, 300000).unref();
   const devlog = new ProjectDevlogService(db, projects, conversations, htmlDocuments, (prompt, cwd) => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas));
   const resume = new ProjectResumeService(db, projects, tickets, (prompt, cwd) => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas));
+  const telegram = new TelegramCapture(db, projects, tickets, new TodoStore(db), cheapJson, resume, instance.name, instance.dataDir);
+  telegram.start();
   const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), cheapJson);
   if (backgroundJobsEnabled()) setInterval(() => { void harvest.scan().catch(console.error); }, 300000).unref();
   runner.onDigest = (id) => chantiers.classify(id);
@@ -304,6 +307,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     if (stopping) return;
     stopping = true;
     try {
+      telegram.stop();
       await launches.close();
       quotaRefresher.stop();
       integrationsRefresher.stop();
@@ -360,6 +364,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     resume,
     devlog,
     personalEnvironments,
+    telegram,
     notifications,
     search,
     costs,

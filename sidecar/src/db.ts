@@ -748,6 +748,8 @@ export function openDb(dir: string = dataDir()): Database {
     migrateTrunkTickets(db);
   }
   db.exec("DROP TABLE IF EXISTS review_decisions");
+  const integrationSchema = db.query("SELECT sql FROM sqlite_master WHERE name='project_integrations'").get() as {sql:string};
+  if (!integrationSchema.sql.includes("'telegram'")) db.transaction(() => rebuildTable(db, "project_integrations", integrationSchema.sql.replace("'notion', 'sentry'", "'notion', 'sentry', 'telegram'")))();
   const ticketSchema = db.query("SELECT sql FROM sqlite_master WHERE name='tickets'").get() as { sql: string };
   if (!ticketSchema.sql.includes("'chantier'")) db.transaction(() => {
     const triggers = db.query("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name!='tickets' AND sql LIKE '%tickets%'").all() as Array<{name:string;sql:string}>;
