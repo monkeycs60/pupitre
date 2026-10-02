@@ -17,9 +17,7 @@ async function authenticateOnMac(command: string[]): Promise<void> {
   const status = join(directory, 'status')
   writeFileSync(script, macAuthScript(command, status, process.env.PATH ?? ''), { mode: 0o700 })
   try {
-    const child = Bun.spawn(['/usr/bin/osascript', '-e',
-      'on run argv\ntell application "Terminal"\nactivate\ndo script (item 1 of argv)\nend tell\nend run',
-      shellQuote(script)], { stdout: 'ignore', stderr: 'pipe' })
+    const child = Bun.spawn(['/usr/bin/open', '-a', 'Terminal', script], { stdout: 'ignore', stderr: 'pipe' })
     if (await child.exited !== 0) {
       throw new Error((await new Response(child.stderr).text()).trim() || 'Impossible d’ouvrir Terminal.')
     }

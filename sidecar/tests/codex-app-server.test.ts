@@ -1,6 +1,6 @@
 import { test, expect, afterEach } from "bun:test";
 import { dirname, join } from "node:path";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { CodexAppServerClient, requestTimeoutMs } from "../src/adapters/codex-app-server";
 import type { AppEvent } from "../src/events";
@@ -53,6 +53,14 @@ function sentRequests(logFile: string): { method: string; params: any }[] {
     .split("\n")
     .map((line) => JSON.parse(line))
     .filter((message) => typeof message.method === "string");
+}
+
+async function waitForRequest(logFile: string, method: string): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    if (existsSync(logFile) && sentRequests(logFile).some((request) => request.method === method)) return;
+    await Bun.sleep(20);
+  }
+  throw new Error(`Requête ${method} absente du journal`);
 }
 
 afterEach(() => {
@@ -553,12 +561,12 @@ test("annulation pendant la réponse à turn/start : interrompt le tour dès que
     turnOptions({ signal: controller.signal }),
     (event) => events.push(event),
   );
-  await Bun.sleep(100);
+  await waitForRequest(files.log, "turn/start");
   controller.abort();
   await turn;
 
   expect(events.at(-1)).toEqual({ type: "status", state: "error", error: "annulé" });
-  await Bun.sleep(350);
+  await waitForRequest(files.log, "turn/interrupt");
   const requests = sentRequests(files.log);
   expect(requests.filter((request) => request.method === "turn/interrupt")).toHaveLength(1);
   expect(requests.find((request) => request.method === "turn/interrupt")?.params)
