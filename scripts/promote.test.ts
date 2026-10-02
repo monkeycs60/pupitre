@@ -54,3 +54,9 @@ test('arrête aussi les processus WebKit descendants avant une relance', async (
   expect(() => process.kill(processGroup.pid, 0)).toThrow()
   expect(() => process.kill(childPid, 0)).toThrow()
 })
+
+test('attend la fermeture même quand le processus ne dirige pas un groupe', async () => {
+  const child = Bun.spawn(['sleep', '60'])
+  await terminateProcessGroup(child.pid, { timeoutMs: 2_000 })
+  expect(() => process.kill(child.pid, 0)).toThrow()
+})

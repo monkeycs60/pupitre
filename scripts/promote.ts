@@ -219,7 +219,9 @@ function processGroupAlive(pid: number): boolean {
     process.kill(-pid, 0)
     return true
   } catch {
-    return false
+    // Une application lancée par Finder n'est pas forcément leader de groupe.
+    // Attendre aussi le PID évite de relancer avant sa fermeture effective.
+    try { process.kill(pid, 0); return true } catch { return false }
   }
 }
 
