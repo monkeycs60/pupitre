@@ -33,13 +33,13 @@ jobs:
       - run: bun test --isolate --timeout 15000
         working-directory: ui
       - name: Construire Linux
-        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        if: runner.os == 'Linux'
         run: bunx --bun tauri build --bundles deb
       - name: Construire macOS
-        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        if: runner.os == 'macOS'
         run: bunx --bun tauri build --bundles app
       - name: Vérifier le démarrage et l’arrêt natifs sur Mac
-        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        if: runner.os == 'macOS'
         run: bun run scripts/smoke-desktop.ts src-tauri/target/release/bundle/macos/Pupitre.app/Contents/MacOS/app
       - name: Compiler et tester Rust
         run: cargo test --release --locked --manifest-path src-tauri/Cargo.toml
