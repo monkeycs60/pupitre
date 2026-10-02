@@ -1,6 +1,6 @@
 import { ProjectDevlog } from './ProjectDevlog'
 import { ProjectResume } from './ProjectResume'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { launchRequest } from './api'
 import type { Project } from './types'
 
@@ -10,6 +10,140 @@ type Chantier = {
   title: string
   archived_at: string | null
   payload: { description?: string }
+}
+function ChantierForm({
+  initial,
+  submitLabel,
+  onSubmit,
+  onCancel,
+}: {
+  initial: { title: string; description: string }
+  submitLabel: string
+  onSubmit: (value: { title: string; description: string }) => void
+  onCancel: () => void
+}) {
+  const [title, setTitle] = useState(initial.title)
+  const [description, setDescription] = useState(initial.description)
+  return (
+    <form
+      className="chantier-form"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (title.trim()) onSubmit({ title, description })
+      }}
+    >
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Titre du chantier"
+        aria-label="Titre du chantier"
+      />
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Description (facultative)"
+        aria-label="Description"
+        rows={2}
+      />
+      <div className="chantier-form-actions">
+        <button type="button" className="secondary-button" onClick={onCancel}>
+          Annuler
+        </button>
+        <button type="submit" className="primary-button" disabled={!title.trim()}>
+          {submitLabel}
+        </button>
+      </div>
+    </form>
+  )
+}
+function ChantierMenu({
+  item,
+  others,
+  onEdit,
+  onChange,
+}: {
+  item: Chantier
+  others: Chantier[]
+  onEdit: () => void
+  onChange: (body: unknown) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [merging, setMerging] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+  const pick = (body: unknown) => {
+    setOpen(false)
+    onChange(body)
+  }
+  return (
+    <div className="chantier-chip-wrap" ref={ref}>
+      <button
+        type="button"
+        className="chantier-card-more"
+        aria-label={`Actions du chantier ${item.title}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          setMerging(false)
+          setOpen(!open)
+        }}
+      >
+        ⋯
+      </button>
+      {open && (
+        <div className="conversation-actions-menu chantier-menu" role="menu">
+          {merging ? (
+            <>
+              <span className="chantier-menu-label">Fusionner dans…</span>
+              {others.map((other) => (
+                <button
+                  type="button"
+                  role="menuitem"
+                  key={other.id}
+                  onClick={() => pick({ mergeInto: other.id })}
+                >
+                  ◇ {other.title}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false)
+                  onEdit()
+                }}
+              >
+                Modifier
+              </button>
+              {others.length > 0 && (
+                <button type="button" role="menuitem" onClick={() => setMerging(true)}>
+                  Fusionner dans…
+                </button>
+              )}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => pick({ closed: !item.archived_at })}
+              >
+                {item.archived_at ? 'Rouvrir' : 'Fermer le chantier'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 export function ChantiersView({
   project,
@@ -24,8 +158,6 @@ export function ChantiersView({
 }) {
   const [items, setItems] = useState<Chantier[]>([])
   const [error, setError] = useState('')
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const base = `/api/projects/${project.id}/chantiers`
   async function load() {
@@ -39,83 +171,54 @@ export function ChantiersView({
   useEffect(() => {
     void load()
   }, [base])
-  async function change(id: string, body: unknown) {
+  async function send(path: string, method: string, body: unknown) {
     try {
-      await launchRequest(`${base}/${id}`, 'PUT', body)
-      await load()
-    } catch (error) {
-      setError(String(error))
-    }
-  }
-  async function save() {
-    try {
-      await launchRequest(
-        `${base}${editing ? `/${editing}` : ''}`,
-        editing ? 'PUT' : 'POST',
-        { title, description },
-      )
-      setTitle('')
-      setDescription('')
+      await launchRequest(`${base}${path}`, method, body)
       setEditing(null)
       await load()
     } catch (error) {
       setError(String(error))
     }
   }
-  const render = (item: Chantier) => (
-    <div className="chantier-row" key={item.id}>
-      <strong>◇ {item.title}</strong>
-      <span>{item.key}</span>
-      <p>{item.payload.description}</p>
-      <button
-        className="secondary-button"
-        onClick={() =>
-          onStartConversation({
-            ticketId: item.id,
-            ticketKey: item.key,
-            branch: null,
-          })
-        }
-      >
-        Reprendre
-      </button>
-      <button
-        className="secondary-button"
-        onClick={() => {
-          setEditing(item.id)
-          setTitle(item.title)
-          setDescription(item.payload.description ?? '')
-        }}
-      >
-        Modifier
-      </button>
-      <button
-        className="secondary-button"
-        onClick={() => void change(item.id, { closed: !item.archived_at })}
-      >
-        {item.archived_at ? 'Rouvrir' : 'Fermer le chantier'}
-      </button>
-      <label>
-        Fusionner dans
-        <select
-          value=""
-          onChange={(event) => {
-            if (event.target.value)
-              void change(item.id, { mergeInto: event.target.value })
-          }}
+  const open = items.filter((x) => !x.archived_at)
+  const closed = items.filter((x) => x.archived_at)
+  const render = (item: Chantier) =>
+    editing === item.id ? (
+      <li className="chantier-card" key={item.id}>
+        <ChantierForm
+          initial={{ title: item.title, description: item.payload.description ?? '' }}
+          submitLabel="Enregistrer"
+          onSubmit={(value) => void send(`/${item.id}`, 'PUT', value)}
+          onCancel={() => setEditing(null)}
+        />
+      </li>
+    ) : (
+      <li className={`chantier-card${item.archived_at ? ' is-closed' : ''}`} key={item.id}>
+        <div className="chantier-card-main">
+          <div className="chantier-card-title">
+            <span aria-hidden="true">◇</span>
+            <strong>{item.title}</strong>
+            <span className="chantier-card-key">{item.key}</span>
+          </div>
+          {item.payload.description ? <p>{item.payload.description}</p> : null}
+        </div>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() =>
+            onStartConversation({ ticketId: item.id, ticketKey: item.key, branch: null })
+          }
         >
-          <option value="">Choisir…</option>
-          {items
-            .filter((x) => x.id !== item.id)
-            .map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.title}
-              </option>
-            ))}
-        </select>
-      </label>
-    </div>
-  )
+          Reprendre
+        </button>
+        <ChantierMenu
+          item={item}
+          others={open.filter((x) => x.id !== item.id)}
+          onEdit={() => setEditing(item.id)}
+          onChange={(body) => void send(`/${item.id}`, 'PUT', body)}
+        />
+      </li>
+    )
   return (
     <section aria-label="Chantiers" className="chantiers-view">
       <ProjectResume
@@ -124,33 +227,40 @@ export function ChantiersView({
           onStartConversation({ ticketId, ticketKey, branch: null })
         }
       />
-      <ProjectDevlog projectId={project.id} />
+      <div className="chantiers-heading">
+        <h2>
+          Chantiers <span>{open.length}</span>
+        </h2>
+        {editing !== 'new' && (
+          <button type="button" className="secondary-button" onClick={() => setEditing('new')}>
+            + Nouveau
+          </button>
+        )}
+      </div>
       {error && <p role="alert">{error}</p>}
-      {items.filter((x) => !x.archived_at).map(render)}
-      <details>
-        <summary>
-          Chantiers fermés ({items.filter((x) => x.archived_at).length})
-        </summary>
-        {items.filter((x) => x.archived_at).map(render)}
-      </details>
-      <label>
-        Titre du chantier
-        <input value={title} onChange={(e) => setTitle(e.target.value)} />
-      </label>
-      <label>
-        Description
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </label>
-      <button
-        className="primary-button"
-        disabled={!title.trim()}
-        onClick={() => void save()}
-      >
-        {editing ? 'Enregistrer' : 'Créer un chantier'}
-      </button>
+      <ul className="chantier-list">
+        {editing === 'new' && (
+          <li className="chantier-card">
+            <ChantierForm
+              initial={{ title: '', description: '' }}
+              submitLabel="Créer le chantier"
+              onSubmit={(value) => void send('', 'POST', value)}
+              onCancel={() => setEditing(null)}
+            />
+          </li>
+        )}
+        {open.map(render)}
+        {open.length === 0 && editing !== 'new' ? (
+          <li className="chantier-empty">Aucun chantier ouvert.</li>
+        ) : null}
+      </ul>
+      {closed.length > 0 && (
+        <details className="chantiers-closed">
+          <summary>Chantiers fermés ({closed.length})</summary>
+          <ul className="chantier-list">{closed.map(render)}</ul>
+        </details>
+      )}
+      <ProjectDevlog projectId={project.id} />
     </section>
   )
 }

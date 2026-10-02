@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { launchRequest } from './api'
 import Markdown from './Markdown'
 
@@ -85,4 +85,34 @@ export function ProjectResume({
       <ResumeContent projectId={projectId} onResume={onResume} />
     </details>
   )
+}
+export function InactiveProjectResume({
+  projectId,
+  onResume,
+}: {
+  projectId: string
+  onResume: (id: string, key: string) => void
+}) {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    let ignore = false
+    setShow(false)
+    void launchRequest<{ showAutomatically: boolean }>(
+      `/api/projects/${projectId}/resume/status`,
+    ).then(
+      (status) => {
+        if (!ignore) setShow(status.showAutomatically)
+      },
+      () => {},
+    )
+    return () => {
+      ignore = true
+    }
+  }, [projectId])
+  return show ? (
+    <div className="welcome-resume">
+      <p className="welcome-resume-hint">Ce projet attend votre reprise.</p>
+      <ProjectResume projectId={projectId} onResume={onResume} />
+    </div>
+  ) : null
 }

@@ -147,3 +147,7 @@
   .project-sections-list button:not(.is-selected) .project-section-count { display:none; }
   .project-sections-list button { gap:4px; }
 }
+.welcome-resume { margin-top:32px; padding-top:20px; border-top:1px solid var(--border-subtle); }
+.welcome-resume .welcome-resume-hint { margin-bottom:12px; color:var(--text-muted); font-size:13px; }
+.welcome-resume .project-resume { border-bottom:0; }
+.workspace-welcome:has(.welcome-resume) { max-width:640px; }

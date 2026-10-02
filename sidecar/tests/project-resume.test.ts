@@ -40,10 +40,15 @@ test("la reprise suit l’inactivité et ne régénère que si les entrées chan
       },
     );
     expect(service.inputs(p.id).showAutomatically).toBe(false);
+    expect(service.status(p.id).showAutomatically).toBe(false);
     db.query("UPDATE conversations SET updated_at='2020-01-01' WHERE id=?").run(
       c.id,
     );
     expect(service.inputs(p.id).showAutomatically).toBe(true);
+    expect(service.status(p.id).showAutomatically).toBe(true);
+    db.query("UPDATE tickets SET archived_at='2020-01-02' WHERE id=?").run(t.id);
+    expect(service.status(p.id).showAutomatically).toBe(false);
+    db.query("UPDATE tickets SET archived_at=NULL WHERE id=?").run(t.id);
     await service.get(p.id);
     await service.get(p.id);
     expect(calls).toBe(1);

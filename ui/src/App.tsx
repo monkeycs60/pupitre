@@ -1,5 +1,6 @@
 import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type InspectorView } from './WorkspaceInspector'
 import { ChantierAssignment } from './ChantiersView'
+import { InactiveProjectResume } from './ProjectResume'
 import { TodoList } from './TodoList'
 import { WorkflowsView } from './WorkflowsView'
 import { linkTodo, useTodos, type TodoItem } from './todos'
@@ -1076,7 +1077,7 @@ function App() {
         )
         : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">
-            <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Retrouve les tâches et le suivi dans le panneau projet.</p><div className="todo-detail-actions"><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button><button className="secondary-button" onClick={() => openInspector('dashboard')}>Tâches du projet</button></div></div>
+            <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Retrouve les tâches et le suivi dans le panneau projet.</p><div className="todo-detail-actions"><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button><button className="secondary-button" onClick={() => openInspector('dashboard')}>Tâches du projet</button></div><InactiveProjectResume key={selectedProject.id} projectId={selectedProject.id} onResume={(ticketId, ticketKey) => handleStartFromContext({ ticketId, ticketKey, branch: null })} /></div>
           </div>
         ) : (
           <>
