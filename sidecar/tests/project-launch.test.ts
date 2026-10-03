@@ -126,3 +126,14 @@ test("le port déclaré n’écrase pas le port du backend d’une commande mult
   await service.stop(command.id);
   expect((await service.launch(command.id,{port:18574})).logs).toContain("PORT:18574");
 });
+
+
+test("détecte un port occupé et refuse de lancer une commande dessus", async () => {
+  const { project, service } = fixture();
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("ok") });
+  cleanups.push(() => { server.stop(true); });
+  const command = service.save(project.id, { name: "Port occupé", command: "echo lancé", port: server.port! });
+  expect(service.conflict(command.id)).toMatchObject({ port: server.port, pid: process.pid });
+  await expect(service.launch(command.id)).rejects.toThrow("occupé");
+  expect(service.status(command.id).running).toBe(false);
+});

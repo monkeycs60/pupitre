@@ -13,7 +13,7 @@ import type { ChildProcess } from "node:child_process";
 import { spawnGroup, killGroup } from "./process-group";
 import type { ProjectStore } from "./stores/projects";
 import { projectCwd } from "./workspace";
-import { parseListeningSockets } from "./running-applications";
+import { listeningSockets } from "./host-processes";
 
 export interface LaunchCommand {
   id: string;
@@ -239,12 +239,7 @@ export class ProjectLaunchService {
     if (!value) return null;
     this.checkPort(value);
     return (
-      parseListeningSockets(
-        Bun.spawnSync(["ss", "-ltnpH"], {
-          stdout: "pipe",
-          stderr: "pipe",
-        }).stdout.toString(),
-      ).find((socket) => socket.port === value) ?? null
+      listeningSockets().find((socket) => socket.port === value) ?? null
     );
   }
   async launch(
@@ -277,12 +272,7 @@ export class ProjectLaunchService {
     const port = options.port ?? command.port;
     this.checkPort(port);
     if (port) {
-      const sockets = parseListeningSockets(
-        Bun.spawnSync(["ss", "-ltnpH"], {
-          stdout: "pipe",
-          stderr: "pipe",
-        }).stdout.toString(),
-      );
+      const sockets = listeningSockets();
       const owner = sockets.find((socket) => socket.port === port);
       if (owner) {
         if (options.replacePid !== owner.pid || owner.pid === process.pid)
