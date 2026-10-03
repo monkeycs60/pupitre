@@ -1727,6 +1727,14 @@
   position: relative;
 }
 
+.conv-group-header.is-chantier .conv-group-toggle {
+  gap: 5px;
+}
+
+.conv-group-header.is-chantier .conv-group-rule {
+  min-width: 0;
+}
+
 .conv-group-header.is-chantier .conv-group-key {
   color: var(--text-muted);
   font-size: 12px;
@@ -1737,6 +1745,15 @@
 
 .conv-group-header.is-chantier .conv-group-toggle:hover .conv-group-key {
   color: var(--text);
+}
+
+.conv-group-unread-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--unread);
+  border-radius: var(--r-full);
+  box-shadow: 0 0 0 3px var(--unread-soft);
 }
 
 .conv-group-chantier-key {

@@ -867,7 +867,9 @@ export const Sidebar = memo(function Sidebar({
                     >⋯</button>
                   ) : null}
                   {unread > 0 ? (
-                    <span className="conv-group-count is-attention">{unread} à lire</span>
+                    isChantier
+                      ? <span className="conv-group-unread-dot" role="img" aria-label={`${unread} à lire`} title={`${unread} à lire`} />
+                      : <span className="conv-group-count is-attention">{unread} à lire</span>
                   ) : null}
                   {hiddenCount > 0 || isExpanded ? (
                     <button

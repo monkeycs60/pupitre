@@ -591,7 +591,7 @@ test('un chantier se présente par son nom, garde sa clé en retrait et se renom
   const chantier = { ...startedConversation, ticket_id: 'chantier-9', ticket_key: 'CH-9', ticket_title: 'Setup, déploiement et configuration utilisateur' }
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [
     { ...chantier, id: 'c1', title: 'Préparer Pupitre pour macOS' },
-    { ...chantier, id: 'c2', title: 'Désinstaller claude-notifications' },
+    { ...chantier, id: 'c2', title: 'Désinstaller claude-notifications', answered_turn: 3, last_read_turn: 1 },
   ])
   const requests: Array<{ url: string; method?: string; body?: unknown }> = []
   const originalFetch = globalThis.fetch
@@ -610,6 +610,8 @@ test('un chantier se présente par son nom, garde sa clé en retrait et se renom
     expect(header.querySelector('.conv-group-key')?.textContent).toBe('Setup, déploiement et configuration utilisateur')
     expect(header.querySelector('.conv-group-chantier-key')?.textContent).toBe('CH-9')
     expect(header.querySelector('.conv-chantier-dot')).not.toBeNull()
+    expect(header.querySelector('.conv-group-count.is-attention')).toBeNull()
+    expect(header.querySelector('.conv-group-unread-dot')?.getAttribute('aria-label')).toBe('1 à lire')
     expect(document.querySelectorAll('.conv-row-ticket, .conv-row-ticket-title')).toHaveLength(0)
 
     fireEvent.click(screen.getByRole('button', { name: 'Actions pour le chantier Setup, déploiement et configuration utilisateur' }))
