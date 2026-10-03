@@ -202,11 +202,16 @@ if (process.argv.includes("--pupitre-mcp")) {
     problemAxisRuns,
   );
   const automaticCalls = new AutomaticCalls(db);
-  const cheapJson = async (prompt: string, cwd: string): Promise<unknown> => {
-    const raw = await generateWithAdapters({ cwd, provider: "claude", model: "claude-haiku-4-5-20251001", effort: "low", speed: "standard", prompt }, quotas);
+  const claudeJson = async (model: string, prompt: string, cwd: string): Promise<unknown> => {
+    const raw = await generateWithAdapters({ cwd, provider: "claude", model, effort: "low", speed: "standard", prompt }, quotas);
     const match = raw.match(/\{[\s\S]*\}/); return match ? JSON.parse(match[0]) : null;
   };
-  const chantiers = new ChantierService(db, projects, conversations, tickets, (prompt, cwd) => automaticCalls.run("classification", () => cheapJson(prompt, cwd)));
+  const cheapJson = (prompt: string, cwd: string) => claudeJson("claude-haiku-4-5-20251001", prompt, cwd);
+  const chantiers = new ChantierService(
+    db, projects, conversations, tickets,
+    (prompt, cwd) => automaticCalls.run("classification", () => cheapJson(prompt, cwd)),
+    (prompt, cwd) => automaticCalls.run("renommage", () => claudeJson("sonnet-5.5", prompt, cwd)),
+  );
   const personalEnvironments = new PersonalEnvironments(db, projects, conversations);
   personalEnvironments.onTriage = (id, prompt) => { void runner.runTurn(id, prompt, []).catch(console.error); };
   if (backgroundJobsEnabled()) setInterval(() => { void personalEnvironments.scan().catch(console.error); }, 300000).unref();

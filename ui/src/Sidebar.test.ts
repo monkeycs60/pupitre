@@ -588,18 +588,19 @@ test('un groupe de ticket replié garde visible une conversation non lue de plus
 })
 
 test('un chantier se présente par son nom, garde sa clé en retrait et se renomme depuis son en-tête', async () => {
-  const chantier = { ...startedConversation, ticket_id: 'chantier-9', ticket_key: 'CH-9', ticket_title: 'Setup, déploiement et configuration utilisateur' }
+  const chantier = { ...startedConversation, ticket_id: 'chantier-9', ticket_key: 'CH-9', ticket_title: 'Setup, déploiement et configuration utilisateur', ticket_backlog_count: 5 }
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [
     { ...chantier, id: 'c1', title: 'Préparer Pupitre pour macOS' },
-    { ...chantier, id: 'c2', title: 'Désinstaller claude-notifications' },
+    { ...chantier, id: 'c2', title: 'Désinstaller claude-notifications', answered_turn: 3, last_read_turn: 1 },
   ])
   const requests: Array<{ url: string; method?: string; body?: unknown }> = []
   const originalFetch = globalThis.fetch
   globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.includes('/chantiers/')) {
-      requests.push({ url, method: init?.method, body: JSON.parse(String(init?.body)) })
-      return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
+      const body = JSON.parse(String(init?.body))
+      requests.push({ url, method: init?.method, body })
+      return new Response(JSON.stringify(body.suggestTitle ? { title: 'Installation Pupitre sur Mac' } : { ok: true }), { headers: { 'content-type': 'application/json' } })
     }
     return originalFetch(input, init)
   }) as unknown as typeof fetch
@@ -608,8 +609,11 @@ test('un chantier se présente par son nom, garde sa clé en retrait et se renom
     await waitFor(() => expect(document.querySelector('.conv-group-header.is-chantier')).not.toBeNull())
     const header = document.querySelector('.conv-group-header.is-chantier')!
     expect(header.querySelector('.conv-group-key')?.textContent).toBe('Setup, déploiement et configuration utilisateur')
+    expect(header.querySelector('.conv-group-key')?.getAttribute('title')).toBe('Setup, déploiement et configuration utilisateur · CH-9 · 5 à faire')
     expect(header.querySelector('.conv-group-chantier-key')?.textContent).toBe('CH-9')
     expect(header.querySelector('.conv-chantier-dot')).not.toBeNull()
+    expect(header.querySelector('.conv-group-count.is-attention')).toBeNull()
+    expect(header.querySelector('.conv-group-unread-dot')?.getAttribute('aria-label')).toBe('1 à lire')
     expect(document.querySelectorAll('.conv-row-ticket, .conv-row-ticket-title')).toHaveLength(0)
 
     fireEvent.click(screen.getByRole('button', { name: 'Actions pour le chantier Setup, déploiement et configuration utilisateur' }))
@@ -620,6 +624,15 @@ test('un chantier se présente par son nom, garde sa clé en retrait et se renom
     await waitFor(() => expect(header.querySelector('.conv-group-key')?.textContent).toBe('Installation Pupitre sur macOS'))
     expect(requests).toEqual([expect.objectContaining({ method: 'PUT', body: { title: 'Installation Pupitre sur macOS' } })])
     expect(requests[0]!.url).toContain('/chantiers/chantier-9')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions pour le chantier Installation Pupitre sur macOS' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Proposer un nouveau nom' }))
+    const proposal = await screen.findByRole('textbox', { name: /Nouveau nom pour le chantier/ }) as HTMLInputElement
+    expect(proposal.value).toBe('Installation Pupitre sur Mac')
+    expect(requests[1]!.body).toEqual({ suggestTitle: true })
+    expect(header.querySelector('.conv-group-key')?.textContent).toBe('Installation Pupitre sur macOS')
+    fireEvent.submit(proposal.closest('form')!)
+    await waitFor(() => expect(header.querySelector('.conv-group-key')?.textContent).toBe('Installation Pupitre sur Mac'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Récentes' }))
     await waitFor(() => expect(document.querySelectorAll('.conv-row-ticket-title .conv-chantier-dot')).toHaveLength(2))

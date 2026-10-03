@@ -323,6 +323,7 @@ export const Sidebar = memo(function Sidebar({
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [renameChantierId, setRenameChantierId] = useState<string | null>(null)
+  const [suggestingChantierId, setSuggestingChantierId] = useState<string | null>(null)
   const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null)
   const selectedConversationRef = useRef(selectedConversation)
   selectedConversationRef.current = selectedConversation
@@ -548,6 +549,20 @@ export const Sidebar = memo(function Sidebar({
     setOpenConversationMenu(null)
     setRenameChantierId(ticketId)
     setRenameDraft(title)
+  }
+
+  async function suggestChantierTitle(ticketId: string) {
+    if (!selectedProject) return
+    setError(null)
+    setSuggestingChantierId(ticketId)
+    try {
+      const { title } = await launchRequest<{ title: string }>(`/api/projects/${selectedProject.id}/chantiers/${ticketId}`, 'PUT', { suggestTitle: true })
+      startChantierRename(ticketId, title)
+    } catch (suggestError: unknown) {
+      setError(errorMessage(suggestError))
+    } finally {
+      setSuggestingChantierId(null)
+    }
   }
 
   async function handleChantierRenameSubmit(ticketId: string) {
@@ -805,6 +820,7 @@ export const Sidebar = memo(function Sidebar({
               const isChantier = isChantierKey(group.ticketKey)
               const chantierId = isChantier ? group.items[0]?.ticket_id ?? null : null
               const groupMenuKey = `group:${group.key}`
+              const backlogCount = group.items[0]?.ticket_backlog_count ?? 0
               const ticketTitle = !isChantier && group.ticketKey && groupLinks?.title
                 ? ticketTitleWithoutKey(groupLinks.title, group.ticketKey)
                 : null
@@ -831,7 +847,7 @@ export const Sidebar = memo(function Sidebar({
                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     {chantierId ? <span className="conv-chantier-dot" style={{ background: chantierColor(group.ticketKey!) }} aria-hidden="true" /> : null}
-                    <span className="conv-group-key" title={isChantier ? `${group.label} · ${group.ticketKey}` : undefined}>{group.label}{group.items[0]?.ticket_backlog_count ? ` · ${group.items[0].ticket_backlog_count} à faire` : ''}</span>
+                    <span className="conv-group-key" title={isChantier || backlogCount ? [group.label, isChantier ? group.ticketKey : null, backlogCount ? `${backlogCount} à faire` : null].filter(Boolean).join(' · ') : undefined}>{group.label}</span>
                     {isChantier ? <span className="conv-group-chantier-key">{group.ticketKey}</span> : null}
                   </button>
                   {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
@@ -867,7 +883,9 @@ export const Sidebar = memo(function Sidebar({
                     >⋯</button>
                   ) : null}
                   {unread > 0 ? (
-                    <span className="conv-group-count is-attention">{unread} à lire</span>
+                    isChantier
+                      ? <span className="conv-group-unread-dot" role="img" aria-label={`${unread} à lire`} title={`${unread} à lire`} />
+                      : <span className="conv-group-count is-attention">{unread} à lire</span>
                   ) : null}
                   {hiddenCount > 0 || isExpanded ? (
                     <button
@@ -889,6 +907,9 @@ export const Sidebar = memo(function Sidebar({
                   {chantierId && openConversationMenu === groupMenuKey ? (
                     <div className="conversation-actions-menu" role="menu">
                       <button type="button" role="menuitem" onClick={() => startChantierRename(chantierId, group.label)}>Renommer le chantier</button>
+                      <button type="button" role="menuitem" disabled={suggestingChantierId === chantierId} onClick={() => void suggestChantierTitle(chantierId)}>
+                        {suggestingChantierId === chantierId ? 'Recherche d’un nom…' : 'Proposer un nouveau nom'}
+                      </button>
                     </div>
                   ) : null}
                   {chantierId && renameChantierId === chantierId ? (
