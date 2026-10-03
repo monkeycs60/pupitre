@@ -6,9 +6,9 @@ La compilation et le démarrage natif avec des données vierges ont été vérif
 
 ## Le plus simple : confier l'installation à votre agent
 
-Après avoir cloné le dépôt, ouvrez Claude Code dans ce dossier et donnez-lui cette instruction :
+Donnez cette instruction à **Claude Code ou Codex capable d’exécuter des commandes sur ce Mac** (un simple chat web ne suffit pas). Si aucun agent local n’est installé, clonez ou téléchargez le dépôt et double-cliquez `Installer-Pupitre.command` : le setup installe aussi les agents.
 
-> Lis SETUP.md et installe Pupitre sur cet ordinateur avec le setup fourni. Préserve mes configurations et mes données existantes. Prends en charge les commandes et les vérifications. Laisse-moi seulement les connexions aux comptes et les éventuelles validations système. N'importe aucune configuration de Clément. Termine par un lancement réel et indique ce qui reste non vérifié.
+> Clone https://github.com/monkeycs60/pupitre.git (branche master), puis lis SETUP.md et installe Pupitre sur cet ordinateur avec le setup fourni, y compris agent-browser pour piloter mon Chrome. Si le dépôt existe déjà, préserve ses modifications. Préserve mes configurations et mes données existantes. Prends en charge les commandes et les vérifications. Laisse-moi seulement les connexions aux comptes et les éventuelles validations système. N'importe aucune configuration de Clément. Termine par un lancement réel et indique ce qui reste non vérifié.
 
 L'agent doit exécuter, depuis le dossier cloné :
 
@@ -28,6 +28,7 @@ Le premier build peut prendre plusieurs minutes. Gardez le terminal ouvert jusqu
 | Installer les outils Apple s'ils manquent | Ouvre l'installateur système | Accepter l'installation Apple, attendre sa fin, relancer le setup |
 | Installer Bun et Rust s'ils manquent | Oui, depuis les installateurs officiels | Accès réseau |
 | Installer Claude Code et Codex s'ils manquent | Oui ; Codex natif depuis openai/codex, archive vérifiée par SHA-256 | Aucun compte partagé dans le code |
+| Installer agent-browser et son skill pour Claude/Codex | Oui, binaire natif officiel vérifié et commandes personnelles préservées | Ouvrir Chrome et autoriser le débogage |
 | Installer les dépendances et compiler Pupitre | Oui, sans Doppler ni clé API Pupitre | Attendre la fin |
 | Connecter Claude et Codex | Réutilise les connexions existantes ; ouvre le login sinon | Se connecter avec les comptes souhaités |
 | Installer et ouvrir l'application | Oui | Ajouter ensuite ses dossiers de projets |
@@ -55,6 +56,27 @@ Sous Linux, les paquets système Tauri sont contrôlés ; s'ils manquent, le set
 6. Rapporter les versions de macOS, Bun, Rust et des CLIs, les essais réussis et les limites, sans secrets ni captures d'identifiants.
 
 Ne pas annoncer « validé sur Mac » sur la seule base des tests Linux ou d'un workflow de compilation.
+
+## Piloter son Chrome avec @browser
+
+Le setup installe agent-browser 0.38.2 et le skill générique, sans fichiers Affilae, cookies ou sessions du créateur. Il enregistre le skill pour Claude Code et Codex et ajoute `ab` dans `~/.local/bin`. Les skills et commandes déjà présents sont conservés et signalés : l’agent doit alors vérifier la configuration existante.
+
+Après le setup :
+
+1. Installer [Google Chrome](https://www.google.com/chrome/) s’il manque, puis ouvrir son profil habituel (Chrome 144+).
+2. Ouvrir `chrome://inspect/#remote-debugging`, activer le débogage et accepter la demande de connexion lorsqu’elle apparaît.
+3. Ouvrir une **nouvelle conversation** dans Pupitre pour charger le skill et demander : « @browser ouvre example.com et lis le titre ».
+4. Vérifier que l’agent travaille dans son propre onglet et le ferme avec `ab close`.
+
+Cette autorisation Chrome est manuelle. Les sites restent connectés avec les comptes de ce profil Chrome. Une nouvelle conversation ou un redémarrage peut demander une nouvelle autorisation. Cette version utilise la [connexion officielle auto-connect](https://agent-browser.dev/cdp-mode) ; elle n’installe pas le relais Linux du créateur et ne garantit pas une fenêtre sans prise de focus.
+
+Pour ajouter seulement cette fonction à une installation existante, depuis le dépôt :
+
+```bash
+bun run setup:browser
+```
+
+Ce parcours n’effectue aucune promotion ni reconnexion des fournisseurs. Le binaire est conservé dans `~/.local/opt/pupitre-browser`, indépendamment du dépôt ; les skills sont accessibles via `~/.claude/skills`, `~/.codex/skills` et `~/.agents/skills` (les dossiers personnalisés Claude/Codex sont respectés si configurés au setup).
 
 ## Diagnostic et mise à jour
 
