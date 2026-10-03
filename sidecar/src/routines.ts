@@ -1,3 +1,6 @@
+import { executeCommand, type CommandResult } from "./command-runner";
+import { trunkOf } from "./trunk";
+import { projectCwd } from "./workspace";
 import type { Database } from "bun:sqlite";
 import type { Provider } from "./events";
 import type { ConversationRunner } from "./runner";
@@ -8,6 +11,9 @@ import type { ProjectStore } from "./stores/projects";
 import type { WorkflowStore } from "./stores/workflows";
 
 export interface RoutineInput {
+  operation?: "devlog" | "health" | "production" | null;
+  kind?: "prompt" | "workflow" | "command";
+  command?: string | null;
   projectId: string;
   name: string;
   schedule: string;
@@ -22,6 +28,9 @@ export interface RoutineInput {
 }
 
 export interface Routine {
+  operation?: "devlog" | "health" | "production" | null;
+  kind?: "prompt" | "workflow" | "command";
+  command?: string | null;
   id: string;
   project_id: string;
   name: string;
@@ -183,7 +192,13 @@ export class RoutineStore {
       input.enabled ? 1 : 0, nextRun,
       now.toISOString(), now.toISOString(),
     );
+    this.db.query("UPDATE routines SET kind=?,command=? WHERE id=?").run(input.kind ?? (input.workflowId ? "workflow" : "prompt"), input.command ?? null, id);
+    this.db.query("UPDATE routines SET operation=? WHERE id=?").run(input.operation ?? null,id);
     return this.get(id)!;
+  }
+
+  saveCommandResult(id: string, result: CommandResult) {
+    this.db.query("UPDATE routine_runs SET output=?,exit_code=?,duration_ms=? WHERE id=?").run(result.output,result.exitCode,result.durationMs,id);
   }
 
   delete(id: string): boolean {
@@ -241,6 +256,10 @@ export class RoutineStore {
 }
 
 export class RoutineScheduler {
+  commandExecutor = executeCommand;
+  onProduction?: (projectId:string) => Promise<CommandResult>;
+  onDevlog?: (projectId:string) => Promise<unknown>;
+  onCommandFailure?: (routine: Routine, result: CommandResult) => Promise<void>;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -286,6 +305,33 @@ export class RoutineScheduler {
     try {
       const project = this.projects.get(routine.project_id);
       if (!project) throw new Error("projet de routine introuvable");
+      if (routine.operation === "devlog" && this.onDevlog) {
+        await this.onDevlog(routine.project_id);
+        this.routines.complete(run.id,"done");
+        this.notifications.create({kind:"routine",title:`Routine terminée · ${routine.name}`,body:"Devlog publié dans la bibliothèque du projet.",conversation_id:null});
+        return;
+      }
+      if (routine.kind === "command") {
+        if (!routine.command?.trim()) throw new Error("commande manquante");
+        let cwd=projectCwd(project);
+        if(routine.operation === "health") {
+          const trunk=trunkOf(project.path,project.trunk_branch);
+          const worktrees=Bun.spawnSync(["git","worktree","list","--porcelain"],{cwd,stdout:"pipe",stderr:"pipe"}).stdout.toString().split("\n\n");
+          const checkout=worktrees.find(block=>block.split("\n").includes(`branch refs/heads/${trunk}`))?.split("\n").find(line=>line.startsWith("worktree "))?.slice(9);
+          if(!checkout)throw new Error("Aucun checkout du tronc disponible pour le contrôle de santé");
+          cwd=checkout;
+        }
+        const result = routine.operation === "production" && this.onProduction
+          ? await this.onProduction(routine.project_id)
+          : await this.commandExecutor(routine.command, cwd);
+        this.routines.saveCommandResult(run.id, result);
+        this.routines.complete(run.id, result.exitCode === 0 ? "done" : "error", result.exitCode === 0 ? undefined : `Code de sortie ${result.exitCode}`);
+        if (result.exitCode !== 0) {
+          this.notifications.create({kind:"routine",title:`Routine en échec · ${routine.name}`,body:result.output.slice(-2000),conversation_id:null});
+          await this.onCommandFailure?.(routine,result);
+        }
+        return;
+      }
       const workflow = routine.workflow_id ? this.workflows.get(routine.workflow_id) : null;
       const presetId = workflow?.preset_id ?? routine.preset_id;
       const preset = presetId ? this.presets.get(presetId) : null;
@@ -317,6 +363,7 @@ export class RoutineScheduler {
     } catch (error) {
       const message = error instanceof Error ? error.message : "échec de routine";
       this.routines.complete(run.id, "error", message);
+      if(routine.kind === "command") await this.onCommandFailure?.(routine,{output:message,exitCode:1,durationMs:0}).catch(error=>console.error("[routine] backlog indisponible",error));
       this.notifications.create({
         kind: "routine",
         title: `Routine en échec · ${routine.name}`,

@@ -30,10 +30,12 @@ export interface Conversation {
   /** Branche courante du projet au moment de la création ; null = non capturé (avant la migration). */
   created_on_branch: string | null;
   ticket_id: string | null;
+  ticket_locked?: number;
   ticket_key?: string | null;
+  ticket_backlog_count?: number;
   ticket_title?: string | null;
   ticket_instruction: string | null;
-  origin_type?: "sentry" | "problem" | "promotion" | null;
+  origin_type?: "sentry" | "problem" | "promotion" | "documents" | null;
   origin_key?: string | null;
   created_at: string; updated_at: string;
 }
@@ -116,7 +118,7 @@ export class ConversationStore {
     createdOnBranch?: string | null;
     ticketId?: string | null;
     ticketInstruction?: string | null;
-    originType?: "sentry" | "problem" | "promotion" | null;
+    originType?: "sentry" | "problem" | "promotion" | "documents" | null;
     originKey?: string | null;
     firstMessage: string;
   }): Conversation {
@@ -163,14 +165,14 @@ export class ConversationStore {
     return this.get(id);
   }
 
-  setOrigin(id: string, originType: "sentry" | "problem" | "promotion" | null, originKey: string | null): Conversation | null {
+  setOrigin(id: string, originType: "sentry" | "problem" | "promotion" | "documents" | null, originKey: string | null): Conversation | null {
     this.db.query(
       "UPDATE conversations SET origin_type = ?, origin_key = ?, updated_at = ? WHERE id = ?",
     ).run(originType, originKey, new Date().toISOString(), id);
     return this.get(id);
   }
 
-  latestByOrigin(originType: "sentry" | "problem" | "promotion", originKey: string): Conversation | null {
+  latestByOrigin(originType: "sentry" | "problem" | "promotion" | "documents", originKey: string): Conversation | null {
     const row = this.db.query(`
       SELECT * FROM conversations
       WHERE origin_type = ? AND origin_key = ? AND deleted_at IS NULL
@@ -205,13 +207,14 @@ export class ConversationStore {
         : "c.deleted_at IS NULL AND c.archived = 0";
     const rows = this.db.query(
       `SELECT c.*, t.key AS ticket_key, t.title AS ticket_title,
+              (SELECT COUNT(*) FROM project_todos pt WHERE pt.project_id=c.project_id AND json_extract(pt.payload,'$.ticket_id')=t.id AND json_extract(pt.payload,'$.status')='backlog') AS ticket_backlog_count,
               COALESCE(c.origin_type, CASE WHEN st.issue_id IS NOT NULL THEN 'sentry' ELSE NULL END) AS origin_type,
               COALESCE(c.origin_key, json_extract(si.payload_json, '$.shortId')) AS origin_key
        FROM conversations c
        LEFT JOIN tickets t ON t.id = c.ticket_id
        LEFT JOIN sentry_triages st ON st.conversation_id = c.id OR st.correction_conversation_id = c.id
        LEFT JOIN sentry_issues si ON si.id = st.issue_id
-       WHERE c.project_id = ? AND ${predicate}
+       WHERE c.project_id = ? AND ${predicate} ${scope === 'active' ? "AND (t.source IS NULL OR t.source != 'chantier' OR t.archived_at IS NULL)" : ''}
        ORDER BY c.pinned DESC, c.updated_at DESC`
     ).all(projectId) as any[];
     return rows.map((r) => ({
@@ -496,6 +499,7 @@ export class ConversationStore {
         ).get(conversationId) as { type?: string } | null;
         assistantResponseCounted = lastMessageEvent?.type === "text-final";
       }
+      if (event.type === "user-message") this.db.query("UPDATE tickets SET archived_at=NULL,updated_at=? WHERE source='chantier' AND id=(SELECT ticket_id FROM conversations WHERE id=?)").run(createdAt, conversationId);
       const result = this.db
         .query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
         .run(conversationId, JSON.stringify(event), createdAt);

@@ -22,6 +22,9 @@ export interface TodoInput {
   attachments?: MediaAttachment[];
 }
 export interface TodoItem {
+  proposed?: boolean;
+  probably_done?: boolean;
+  origin?: {kind: string; conversationId?: string; summaryId?: string};
   id: string;
   project_id: string;
   title: string;

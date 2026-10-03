@@ -7,7 +7,7 @@ import { formatActiveDuration } from './formatActiveDuration'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
-const { Sidebar, compactGroupItems } = await import('./Sidebar')
+const { Sidebar, chantierColor, compactGroupItems } = await import('./Sidebar')
 const { WorkflowsView } = await import('./WorkflowsView')
 
 const project: Project = {
@@ -351,9 +351,13 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   expect(ticketTitle?.getAttribute('title')).toBe('Corriger les pipelines de déploiement')
   const ticketIcons = document.querySelector('.ticket-link-icons')
   expect(ticketIcons?.compareDocumentPosition(ticketTitle!) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-  expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(1)
-  fireEvent.click(screen.getByRole('button', { name: 'Afficher 1 de plus' }))
-  expect(document.querySelectorAll('.conv-row-ticket')).toHaveLength(2)
+  const ticketGroup = () => document.querySelectorAll('.conv-group')[2]!
+  expect(ticketGroup().querySelectorAll('.navigation-row')).toHaveLength(1)
+  expect(document.querySelector('.conv-group-more')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Afficher les 2 conversations de TECH-1' }))
+  expect(ticketGroup().querySelectorAll('.navigation-row')).toHaveLength(2)
+  expect(ticketGroup().querySelectorAll('.conv-row-ticket, .conv-row-ticket-title')).toHaveLength(0)
+  expect(screen.getByRole('button', { name: 'Réduire TECH-1' }).getAttribute('aria-expanded')).toBe('true')
   expect(document.querySelector('.conv-row-sentry .provider-mark.is-sentry')).not.toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /Nouvelle conversation dans Sentry/ }))
   expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
@@ -580,5 +584,52 @@ test('un groupe de ticket replié garde visible une conversation non lue de plus
 
   await waitFor(() => expect(document.querySelectorAll('.conv-row-title')).toHaveLength(2))
   expect([...document.querySelectorAll('.conv-row-title')].map((element) => element.textContent)).toEqual(['Récente lue', 'Ancienne non lue'])
-  expect(screen.getByRole('button', { name: 'Afficher 1 de plus' })).not.toBeNull()
+  expect(screen.getByRole('button', { name: 'Afficher les 3 conversations de TECH-9' }).getAttribute('title')).toBe('Afficher 1 de plus')
+})
+
+test('un chantier se présente par son nom, garde sa clé en retrait et se renomme depuis son en-tête', async () => {
+  const chantier = { ...startedConversation, ticket_id: 'chantier-9', ticket_key: 'CH-9', ticket_title: 'Setup, déploiement et configuration utilisateur' }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [
+    { ...chantier, id: 'c1', title: 'Préparer Pupitre pour macOS' },
+    { ...chantier, id: 'c2', title: 'Désinstaller claude-notifications' },
+  ])
+  const requests: Array<{ url: string; method?: string; body?: unknown }> = []
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.includes('/chantiers/')) {
+      requests.push({ url, method: init?.method, body: JSON.parse(String(init?.body)) })
+      return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
+    }
+    return originalFetch(input, init)
+  }) as unknown as typeof fetch
+  try {
+    renderSidebar()
+    await waitFor(() => expect(document.querySelector('.conv-group-header.is-chantier')).not.toBeNull())
+    const header = document.querySelector('.conv-group-header.is-chantier')!
+    expect(header.querySelector('.conv-group-key')?.textContent).toBe('Setup, déploiement et configuration utilisateur')
+    expect(header.querySelector('.conv-group-chantier-key')?.textContent).toBe('CH-9')
+    expect(header.querySelector('.conv-chantier-dot')).not.toBeNull()
+    expect(document.querySelectorAll('.conv-row-ticket, .conv-row-ticket-title')).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions pour le chantier Setup, déploiement et configuration utilisateur' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Renommer le chantier' }))
+    const input = screen.getByRole('textbox', { name: /Nouveau nom pour le chantier/ })
+    fireEvent.change(input, { target: { value: 'Installation Pupitre sur macOS' } })
+    fireEvent.submit(input.closest('form')!)
+    await waitFor(() => expect(header.querySelector('.conv-group-key')?.textContent).toBe('Installation Pupitre sur macOS'))
+    expect(requests).toEqual([expect.objectContaining({ method: 'PUT', body: { title: 'Installation Pupitre sur macOS' } })])
+    expect(requests[0]!.url).toContain('/chantiers/chantier-9')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Récentes' }))
+    await waitFor(() => expect(document.querySelectorAll('.conv-row-ticket-title .conv-chantier-dot')).toHaveLength(2))
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('deux chantiers consécutifs reçoivent deux couleurs différentes', () => {
+  const colors = ['CH-1', 'CH-2', 'CH-3', 'CH-4', 'CH-5', 'CH-6', 'CH-7', 'CH-8'].map(chantierColor)
+  expect(new Set(colors).size).toBe(8)
+  expect(chantierColor('CH-9')).toBe(chantierColor('CH-1'))
 })

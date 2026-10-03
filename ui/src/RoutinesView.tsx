@@ -1,3 +1,4 @@
+import { RoutineTrend } from './RoutineTrend'
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
@@ -35,7 +36,7 @@ function compactDate(value: string | null): string {
 function duration(run: RoutineRun): string {
   if (!run.completed_at) return 'en cours'
   const seconds = Math.max(0, Math.round(
-    (new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1_000,
+    (run.duration_ms ?? (new Date(run.completed_at).getTime() - new Date(run.started_at).getTime())) / 1_000,
   ))
   if (seconds < 60) return `${seconds} s`
   return `${Math.floor(seconds / 60)} min ${seconds % 60} s`
@@ -56,6 +57,9 @@ function toInput(routine: Routine, enabled = routine.enabled): RoutineInput {
     projectId: routine.project_id,
     name: routine.name,
     schedule: routine.schedule,
+    kind: routine.kind,
+    command: routine.command,
+    operation: routine.operation,
     workflowId: routine.workflow_id,
     prompt: routine.prompt,
     presetId: routine.preset_id,
@@ -81,6 +85,9 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
   const [name, setName] = useState('')
   const [schedule, setSchedule] = useState('0 9 * * 1-5')
   const [workflowId, setWorkflowId] = useState('')
+  const [operation, setOperation] = useState<'devlog' | 'health' | 'production' | null>(null)
+  const [commandKind, setCommandKind] = useState(false)
+  const [command, setCommand] = useState('')
   const [prompt, setPrompt] = useState('')
   const [presetId, setPresetId] = useState('builtin-speed')
   const [enabled, setEnabled] = useState(true)
@@ -172,6 +179,9 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
     setSchedule('0 9 * * 1-5')
     setWorkflowId('')
     setPrompt('')
+    setOperation(null)
+    setCommandKind(false)
+    setCommand('')
     setPresetId(initialProject?.default_preset_id ?? 'builtin-speed')
     setEnabled(true)
   }
@@ -187,6 +197,9 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
     setName(routine.name)
     setSchedule(routine.schedule)
     setWorkflowId(routine.workflow_id ?? '')
+    setOperation(routine.operation ?? null)
+    setCommandKind(routine.kind === 'command')
+    setCommand(routine.command ?? '')
     setPrompt(routine.prompt ?? '')
     setPresetId(routine.preset_id ?? 'builtin-speed')
     setEnabled(routine.enabled)
@@ -204,7 +217,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!projectId || !name.trim() || !schedule.trim()) return
-    if (!workflowId && !prompt.trim()) {
+    if (!workflowId && !prompt.trim() && !(commandKind && command.trim())) {
       setError('Choisissez un workflow ou saisissez un prompt.')
       return
     }
@@ -215,7 +228,10 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
       projectId,
       name: name.trim(),
       schedule: schedule.trim(),
-      workflowId: workflowId || null,
+      operation,
+      kind: commandKind ? 'command' : workflowId ? 'workflow' : 'prompt',
+      command: commandKind ? command : null,
+      workflowId: commandKind ? null : workflowId || null,
       prompt: workflowId ? null : prompt.trim(),
       presetId: workflowId ? null : presetId || null,
       provider: config?.provider ?? 'codex',
@@ -305,12 +321,15 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
 
       {showForm ? (
         <form className="routine-form" onSubmit={(event) => void submit(event)}>
+          <label><span>Modèle de routine</span><select defaultValue="" onChange={event => { const title=event.target.value; setOperation(title==='Devlog du vendredi'?'devlog':title==='Santé du projet'?'health':title==='Vérification de prod'?'production':null); setName(title); setWorkflowId(''); const shell=['Santé du projet','Commande nocturne','Vérification de prod'].includes(title); setCommandKind(shell); setCommand(title==='Vérification de prod'?'Pupitre : sonder les environnements configurés':''); setSchedule(title==='Devlog du vendredi'?'0 17 * * 5':title==='Commande nocturne'?'0 2 * * *':title==='Vérification de prod'?'*/5 * * * *':'0 9 * * 1'); setPrompt(shell?'':title==='Audit des dépendances'?'Vérifie les dépendances obsolètes ou vulnérables et propose les mises à jour utiles.':'Rédige et publie le devlog des sept derniers jours à partir des chantiers et des commits.'); }}><option value="">Choisir…</option>{['Santé du projet','Audit des dépendances','Devlog du vendredi','Commande nocturne','Vérification de prod'].map(name=><option key={name}>{name}</option>)}</select></label>
           <label><span>Projet</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)} required disabled={editingId !== null}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
           <label><span>Nom</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label>
           <label><span>Fréquence</span><select value={selectedSchedulePreset} onChange={(event) => setSchedule(event.target.value === 'custom' ? '' : event.target.value)} required><option value="custom">Planning personnalisé</option>{SCHEDULE_PRESETS.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}</select></label>
           {selectedSchedulePreset === 'custom' ? <label><span>Cron avancé</span><input className="cron-input" value={schedule} onChange={(event) => setSchedule(event.target.value)} placeholder="0 9 * * 1-5" required aria-describedby="routine-schedule-help" /><small id="routine-schedule-help">Fuseau local · cinq champs cron</small></label> : null}
+          <label><span>Type</span><select value={commandKind ? 'command' : 'prompt'} onChange={e => setCommandKind(e.target.value === 'command')}><option value="prompt">Prompt ou workflow</option><option value="command">Commande sans modèle</option></select></label>
+          {commandKind && <label><span>Commande</span><input value={command} onChange={e => setCommand(e.target.value)} required /></label>}
           <label><span>Workflow</span><select value={workflowId} onChange={(event) => setWorkflowId(event.target.value)}><option value="">Prompt libre</option>{workflows.map((workflow) => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>
-          {!workflowId ? <label className="routine-prompt"><span>Prompt</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} required /></label> : null}
+          {!workflowId && !commandKind ? <label className="routine-prompt"><span>Prompt</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} required /></label> : null}
           {!workflowId ? <label><span>Preset</span><select value={presetId} onChange={(event) => setPresetId(event.target.value)}>{presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}</select></label> : null}
           <label className="routine-enabled"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /><span>Active</span></label>
           <div className="routine-form-actions">
@@ -345,7 +364,8 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
                   <button type="button" className="header-action" onClick={() => void runNow(selected)} disabled={busy === `run-${selected.id}`}>{busy === `run-${selected.id}` ? 'Exécution…' : 'Lancer maintenant'}</button>
                 </div>
               </header>
-              <div className="routine-meta"><span>{scheduleLabel(selected.schedule)} · <code>{selected.schedule}</code></span><span>{selected.provider} · {selected.model}</span><span>prochain {compactDate(selected.next_run_at)}</span></div>
+              <div className="routine-meta"><span>{scheduleLabel(selected.schedule)} · <code>{selected.schedule}</code></span><span>{selected.kind === 'command' ? 'Commande · sans quota en cas de succès' : `${selected.provider} · ${selected.model}`}</span><span>prochain {compactDate(selected.next_run_at)}</span></div>
+              <RoutineTrend runs={runs} />
               <h3>Historique</h3>
               {runs.length === 0 ? <div className="routine-empty"><strong>Aucun passage</strong><p>Lancez la routine maintenant ou attendez sa prochaine occurrence.</p></div> : (
                 <div className="routine-runs">
@@ -356,7 +376,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
                       <span className={`run-status is-${run.status}`}>{run.status === 'done' ? 'terminé' : run.status === 'error' ? 'échec' : 'en cours'}</span>
                       <span>{duration(run)}</span>
                       <span>{run.tokens.toLocaleString('fr-FR')} tokens</span>
-                      <span>{run.conversation_id ? <button type="button" className="text-button" onClick={() => onConversationSelect(selected.project_id, run.conversation_id as string)}>Ouvrir</button> : run.error ?? '—'}</span>
+                      <span>{run.conversation_id ? <button type="button" className="text-button" onClick={() => onConversationSelect(selected.project_id, run.conversation_id as string)}>Ouvrir</button> : run.output ? <details><summary>Code {run.exit_code}</summary><pre>{run.output}</pre></details> : run.error ?? '—'}</span>
                     </div>
                   ))}
                 </div>

@@ -1,3 +1,5 @@
+import { PersonalEnvironments } from './PersonalEnvironments'
+import { ChantiersView } from './ChantiersView'
 import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { BranchIcon } from './BranchIcon'
 import { TicketLinkIcons } from './TicketLinkIcons'
@@ -40,15 +42,17 @@ type DashboardTab = ProjectSection
 
 const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
   { id: 'todos', label: 'Tâches' },
+  { id: 'chantiers', label: 'Chantiers' },
   { id: 'tickets', label: 'Mes tickets' },
   { id: 'sentry', label: 'Issues Sentry' },
   { id: 'changelog', label: 'Changelog' },
   { id: 'environments', label: 'Environnements' },
 ]
 
-const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { todos: 'Tâches', tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements', code: 'Code' }
+const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { chantiers: 'Chantiers', todos: 'Tâches', tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements', code: 'Code' }
 
 const PROJECT_SECTION_ICONS: Record<DashboardTab, ReactNode> = {
+  chantiers: <path d="M8 2 14 8 8 14 2 8Z" />,
   todos: <path d="m2.5 4 1.2 1.2L6 2.9M8 4h5M2.5 8h3M8 8h5M2.5 12h3M8 12h5" />,
   tickets: <><rect x="2" y="4" width="12" height="8" rx="1.5" /><path d="M2 7h12" /></>,
   sentry: <path d="M8 2.5 13.5 12H10a2 2 0 0 0-2-2 2 2 0 0 0-2 2H2.5Z" />,
@@ -499,6 +503,7 @@ export function DashboardView({
           ))}
         </div> : null}
 
+        {activeTab === 'chantiers' && <ChantiersView key={project.id} project={project} onStartConversation={onStartConversation} />}
         {activeTab === 'todos' ? (
           <section id="dashboard-panel-todos" role="tabpanel" aria-label={sectionOnly ? 'Tâches' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-todos' : 'dashboard-tab-todos'} className="dashboard-todos">
             {typeof todoPanel === 'function' ? todoPanel(hasTicketIntegration) : todoPanel}
@@ -772,6 +777,7 @@ export function DashboardView({
           <section id="dashboard-panel-environments" role="tabpanel" aria-label={sectionOnly ? 'Environnements' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-environments' : 'dashboard-tab-environments'} className="dashboard-section">
             <div className="dashboard-section-head">
               <h2 className="dashboard-section-title">Environnements</h2>
+              <PersonalEnvironments projectId={project.id} onConversation={onConversationSelect} />
             </div>
             {data === null ? null : data.environments.length === 0 ? (
               <div className="dashboard-empty"><strong>Aucun environnement détecté</strong><p>Les derniers déploiements apparaîtront ici.</p></div>

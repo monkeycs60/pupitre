@@ -114,6 +114,9 @@ export interface ActivityReportTodo {
 }
 
 export interface ActivityReportProject {
+  personal?: boolean;
+  chantiersOpened?: Array<{id:string;title:string}>;
+  chantiersClosed?: Array<{id:string;title:string}>;
   projectId: string;
   projectName: string;
   userMs: number;

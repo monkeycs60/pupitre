@@ -41,13 +41,12 @@ _Avoid_ : dashboard, agrégateur, poste
 L'unité de travail d'un projet, quelle que soit sa source — tâche ClickUp (`TECH-XXXXX`), item Notion, ou simple branche. Agrège branche, MR, pipeline, déploiements, conversations et notes.
 _Avoid_ : tâche (réservé à ClickUp), issue, carte
 
-**Domaine** :
-Un label métier (Match AI, onboarding…) ou technique (API, BackOffice…) d'un projet ; taxonomie évolutive qui étiquette les conversations et porte la doc vivante et le changelog produit.
-_Avoid_ : tag, catégorie, module
+**Chantier** :
+L’unité de travail d’un projet qui n’en reçoit pas d’un outil externe. C’est un thème né des conversations, qui a un début et une fin. Il porte les mêmes choses qu’un ticket : groupe, notes, consigne, backlog, brief de reprise.
+_Avoid_ : domaine, catégorie, tag, épopée.
 
-**Répétition** :
-Le pré-mâchage d'un item de backlog ou d'un ticket, en lecture seule par défaut, qui produit un dossier injecté au démarrage du travail. Déclenchée à la main, sur proposition quota, ou automatiquement.
-_Avoid_ : pré-mâchage (acceptable à l'oral), warm-up, préparation
+**Commande de lancement** :
+Une commande nommée du projet, lancée sans conversation ni quota, suivie dans Applications.
 
 ### Providers
 

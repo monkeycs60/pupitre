@@ -137,6 +137,9 @@ export interface WorkflowInput {
 }
 
 export interface RoutineInput {
+  operation?: 'devlog' | 'health' | 'production' | null
+  kind?: 'prompt' | 'workflow' | 'command'
+  command?: string | null
   projectId: string
   name: string
   schedule: string
@@ -173,6 +176,7 @@ export interface Settings {
     effort: string
     speed: ConversationSpeed
   }
+  chantierIdleDays?: number
   activityReportHour?: string
 }
 
@@ -200,6 +204,9 @@ export interface ActivityReportTicketReady { ticketId: string; key: string; titl
 export interface ActivityReportCommit { sha: string; repositoryPath: string; branch: string; subject: string; productMessage: string | null; linesAdded: number | null; linesRemoved: number | null; committedAt: string; conversationId: string | null; isMerge: boolean }
 export interface ActivityCalendarDay { day: string; commits: number; linesAdded: number; linesRemoved: number; mergeRequests: number; userMs: number; hasReport: boolean; projects: Array<{ projectId: string; projectName: string; commits: number; linesAdded: number; linesRemoved: number; mergeRequests: number }> }
 export interface ActivityReportProject {
+  personal?: boolean;
+  chantiersOpened?: Array<{id:string;title:string}>;
+  chantiersClosed?: Array<{id:string;title:string}>;
   projectId: string; projectName: string; userMs: number; agentMs: number; linesAdded: number; linesRemoved: number; unlinkedCommitCount: number
   topics: Array<{ title: string; detail: string; conversationIds: string[] }>
   conversations: Array<{ id: string; title: string; ticketId: string | null; ticketKey: string | null; startedDay: string; turns: number }>
@@ -1361,4 +1368,12 @@ export function reorderProjects(ids: string[]): Promise<Project[]> {
 
 export function removeProject(projectId: string): Promise<void> {
   return fetchVoid(`/api/projects/${routeId(projectId)}`, { method: 'DELETE' })
+}
+
+export function setProjectTrunk(projectId: string, branch: string | null): Promise<Project> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/trunk`, { method: 'PUT', body: JSON.stringify({ branch }) })
+}
+
+export function launchRequest<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  return fetchJson(path, { method, ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) })
 }

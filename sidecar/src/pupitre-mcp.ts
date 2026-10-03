@@ -134,6 +134,16 @@ export function createPupitreServer(): McpServer {
     description: DESCRIPTION,
     inputSchema,
   }, publish);
+  server.registerTool("launch_project_command", {
+    description: "Lance une commande nommée du projet courant dans le répertoire de la conversation et renvoie son URL et ses logs.",
+    inputSchema: { name: z.string() },
+  }, async ({ name }: { name: string }) => {
+    try {
+      const launched = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(conversationId())}/launch-command`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
+      if (!launched.ok) throw new Error(await errorMessage(launched));
+      return text(JSON.stringify(await launched.json()));
+    } catch (error) { return text(String(error), true); }
+  });
   server.registerTool("read_sibling_conversation", {
     title: "Lire une conversation Pupitre liée",
     description: "Rend le titre, le résumé, le dernier débrief et les derniers échanges d’une autre conversation Pupitre liée au ticket courant.",
@@ -152,6 +162,17 @@ export function createPupitreServer(): McpServer {
     } catch (error) {
       return text(`Lecture impossible : ${error instanceof Error ? error.message : String(error)}`, true);
     }
+  });
+  server.registerTool("report_incident_triage", {
+    title: "Rendre le triage d’un incident personnel",
+    description: "Enregistre le verdict pour l’incident d’environnement lié à cette conversation.",
+    inputSchema: {verdict:z.enum(["real_fixable","real_investigate","noise","uncertain"]),summary:z.string().min(1),evidence:z.array(z.string()).default([]),proposed_fix:z.string().optional()},
+  }, async (report: {verdict:string;summary:string;evidence:string[];proposed_fix?:string}) => {
+    try {
+      const response=await fetch(`${baseUrl()}/api/personal-incidents/triage-report`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({conversationId:conversationId(),report})});
+      if(!response.ok)throw new Error(await errorMessage(response));
+      return text("Triage enregistré dans l’inbox d’incidents du projet.");
+    }catch(error){return text(String(error),true);}
   });
   server.registerTool("report_sentry_triage", {
     title: "Rendre le verdict Scout Sentry",

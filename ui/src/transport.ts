@@ -55,9 +55,6 @@ export function documentDownloadUrl(id: string, token: string): string {
   return `${htmlDocumentContentUrl(id, token)}&download=1`
 }
 
-export const documentContentUrl = htmlDocumentContentUrl
-export const documentExternalUrl = htmlDocumentExternalUrl
-
 export function documentThumbnailUrl(id: string, sha256?: string): string {
   const version = sha256 ? `?v=${encodeURIComponent(sha256.slice(0, 12))}` : ''
   return httpUrl(`/api/documents/${encodeURIComponent(id)}/thumbnail${version}`)

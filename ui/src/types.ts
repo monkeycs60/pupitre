@@ -139,6 +139,9 @@ export interface Workflow {
 }
 
 export interface Routine {
+  operation?: 'devlog' | 'health' | 'production' | null
+  kind?: 'prompt' | 'workflow' | 'command'
+  command?: string | null
   id: string
   project_id: string
   name: string
@@ -157,6 +160,9 @@ export interface Routine {
 }
 
 export interface RoutineRun {
+  output?: string | null
+  exit_code?: number | null
+  duration_ms?: number | null
   id: string
   routine_id: string
   conversation_id: string | null
@@ -208,6 +214,8 @@ export interface UnreadConversation {
 }
 
 export interface Project {
+  trunk_branch?: string | null
+  detected_trunk?: string | null
   id: string
   name: string
   path: string
@@ -266,9 +274,10 @@ export interface Conversation {
   created_on_branch: string | null
   ticket_id: string | null
   ticket_key?: string | null
+  ticket_backlog_count?: number
   ticket_title?: string | null
   ticket_instruction: string | null
-  origin_type?: 'sentry' | 'problem' | 'promotion' | null
+  origin_type?: 'sentry' | 'problem' | 'promotion' | 'documents' | null
   origin_key?: string | null
   cli_session_id: string | null
   preset_id?: string | null
@@ -313,7 +322,7 @@ export interface DashboardIntegration {
   config: Record<string, unknown>
 }
 
-export type TicketSource = 'clickup' | 'notion' | 'git'
+export type TicketSource = 'clickup' | 'notion' | 'git' | 'chantier'
 export type TicketRefKind = 'branch' | 'mr' | 'pipeline' | 'deployment' | 'sentry_issue'
 
 export interface TicketRef {
@@ -432,6 +441,7 @@ export interface Problem {
   project_id: string
   ticket_id: string | null
   ticket_key?: string | null
+  ticket_backlog_count?: number
   ticket_title?: string | null
   ticket_branch?: string | null
   title: string

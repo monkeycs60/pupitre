@@ -41,12 +41,12 @@ export class IntegrationStore {
   }
 
   listByProject(projectId: string): ProjectIntegration[] {
-    const rows = this.db.query("SELECT * FROM project_integrations WHERE project_id = ? ORDER BY type").all(projectId) as Record<string, unknown>[];
+    const rows = this.db.query("SELECT * FROM project_integrations WHERE project_id = ? AND type != 'telegram' ORDER BY type").all(projectId) as Record<string, unknown>[];
     return rows.map(hydrate);
   }
 
   listAll(): ProjectIntegration[] {
-    const rows = this.db.query("SELECT * FROM project_integrations ORDER BY project_id, type").all() as Record<string, unknown>[];
+    const rows = this.db.query("SELECT * FROM project_integrations WHERE type != 'telegram' ORDER BY project_id, type").all() as Record<string, unknown>[];
     return rows.map(hydrate);
   }
 

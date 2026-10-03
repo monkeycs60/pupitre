@@ -89,3 +89,7 @@ locales, le groupement des conversations par ticket, l'inbox **Sentry** et les
 
 Le **backlog Notion** et les **Répétitions** arriveront ensuite. Le périmètre
 visé est détaillé dans [le design validé](../plans/2026-08-19-tableau-de-bord-design.md).
+
+## Chantiers
+
+L’onglet Chantiers rassemble les thèmes des projets personnels, avec leurs conversations et leur cycle de fermeture. Voir l’aide Chantiers.

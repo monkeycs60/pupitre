@@ -1,3 +1,4 @@
+import { ProjectLaunch } from './ProjectLaunch'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
   listProjectConversations,
@@ -8,6 +9,7 @@ import {
   setConversationDeleted,
   setConversationPinned,
   setConversationPermissionMode,
+  launchRequest,
 } from './api'
 import type { Conversation, FleetItem, Project, Provider, QuotaSnapshot, TimeMode, TimeSnapshot, WorkspaceView } from './types'
 import { QuotaStatus } from './QuotaBar'
@@ -231,7 +233,7 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
   ]
     .map((context) => ({
       key: `${context.type}-${context.key}`,
-      label: context.type === 'sentry' ? `Sentry · ${context.key}` : context.key,
+      label: context.type === 'sentry' ? `Sentry · ${context.key}` : isChantierKey(context.key) ? context.grouped[0]?.ticket_title || context.key : context.key,
       ticketKey: context.type === 'ticket' ? context.key : null,
       sentryKey: context.type === 'sentry' ? context.key : null,
       items: context.grouped,
@@ -239,10 +241,25 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
     }))
   const recencyGroups = groupConversationsByRecency(withoutTicket).map((group) => ({
     ...group,
+    label: conversationsByTicket.size && [...conversationsByTicket.keys()].some(isChantierKey) ? `Hors chantier · ${group.label}` : group.label,
     latestUpdatedAt: Math.max(...group.items.map((conversation) => Date.parse(conversation.updated_at))),
   }))
   return [...contextualGroups, ...recencyGroups]
     .sort((left, right) => left.key === 'pinned' ? -1 : right.key === 'pinned' ? 1 : (right.latestUpdatedAt ?? 0) - (left.latestUpdatedAt ?? 0))
+}
+
+const CHANTIER_KEY = /^CH-\d+$/
+const CHANTIER_COLORS = ['#e8915a', '#5fb3a1', '#8f8ce6', '#d7b94e', '#e07a9a', '#5aa2e0', '#9cc163', '#c48ae0']
+
+export function isChantierKey(key: string | null | undefined): key is string {
+  return key != null && CHANTIER_KEY.test(key)
+}
+
+/** Couleur d'un chantier tirée de son numéro : deux chantiers ouverts à la
+ *  suite ne partagent jamais la même. */
+export function chantierColor(chantierKey: string): string {
+  const number = Number(chantierKey.slice(3)) || 0
+  return CHANTIER_COLORS[(number + CHANTIER_COLORS.length - 1) % CHANTIER_COLORS.length]!
 }
 
 const COMPACT_GROUP_LIMIT = 3
@@ -305,6 +322,7 @@ export const Sidebar = memo(function Sidebar({
   const [openConversationMenu, setOpenConversationMenu] = useState<string | null>(null)
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
+  const [renameChantierId, setRenameChantierId] = useState<string | null>(null)
   const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null)
   const selectedConversationRef = useRef(selectedConversation)
   selectedConversationRef.current = selectedConversation
@@ -522,7 +540,28 @@ export const Sidebar = memo(function Sidebar({
   function closeConversationMenu() {
     setOpenConversationMenu(null)
     setRenameConversationId(null)
+    setRenameChantierId(null)
     setRenameDraft('')
+  }
+
+  function startChantierRename(ticketId: string, title: string) {
+    setOpenConversationMenu(null)
+    setRenameChantierId(ticketId)
+    setRenameDraft(title)
+  }
+
+  async function handleChantierRenameSubmit(ticketId: string) {
+    const title = renameDraft.trim()
+    if (!title || !selectedProject) return
+    setError(null)
+    try {
+      await launchRequest(`/api/projects/${selectedProject.id}/chantiers/${ticketId}`, 'PUT', { title })
+      setConversations((current) => current.map((item) => item.ticket_id === ticketId ? { ...item, ticket_title: title } : item))
+      if (selectedConversation?.ticket_id === ticketId) onConversationSelect({ ...selectedConversation, ticket_title: title })
+      closeConversationMenu()
+    } catch (renameError: unknown) {
+      setError(errorMessage(renameError))
+    }
   }
 
   function startRename(conversation: Conversation) {
@@ -640,6 +679,7 @@ export const Sidebar = memo(function Sidebar({
           </div>
         </div>
 
+        {selectedProject && <ProjectLaunch key={selectedProject.id} project={selectedProject} conversationId={selectedConversation?.id} />}
         {selectedProject ? (
           <button
             type="button"
@@ -762,7 +802,10 @@ export const Sidebar = memo(function Sidebar({
                 conversationRowState(conversation, displayedActiveConversationIds) === 'unread'
               )).length
               const groupLinks = group.ticketKey ? ticketLinks?.get(group.ticketKey) : undefined
-              const ticketTitle = group.ticketKey && groupLinks?.title
+              const isChantier = isChantierKey(group.ticketKey)
+              const chantierId = isChantier ? group.items[0]?.ticket_id ?? null : null
+              const groupMenuKey = `group:${group.key}`
+              const ticketTitle = !isChantier && group.ticketKey && groupLinks?.title
                 ? ticketTitleWithoutKey(groupLinks.title, group.ticketKey)
                 : null
               const groupSentryUrl = group.sentryKey ? sentryLinks?.get(group.sentryKey) : undefined
@@ -773,9 +816,10 @@ export const Sidebar = memo(function Sidebar({
                 : group.items
               const hiddenCount = group.items.length - compactItems.length
               const shownItems = isExpanded ? group.items : compactItems
+              const repeatsTicket = group.ticketKey != null
               return (
               <div className="conv-group" key={group.key}>
-                <div className="conv-group-header">
+                <div className={`conv-group-header${isChantier ? ' is-chantier' : ''}`}>
                   <button
                     type="button"
                     className="conv-group-toggle"
@@ -786,7 +830,9 @@ export const Sidebar = memo(function Sidebar({
                     <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={isCollapsed ? { transform: 'rotate(-90deg)' } : undefined}>
                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="conv-group-key">{group.label}</span>
+                    {chantierId ? <span className="conv-chantier-dot" style={{ background: chantierColor(group.ticketKey!) }} aria-hidden="true" /> : null}
+                    <span className="conv-group-key" title={isChantier ? `${group.label} · ${group.ticketKey}` : undefined}>{group.label}{group.items[0]?.ticket_backlog_count ? ` · ${group.items[0].ticket_backlog_count} à faire` : ''}</span>
+                    {isChantier ? <span className="conv-group-chantier-key">{group.ticketKey}</span> : null}
                   </button>
                   {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
                   {groupSentryUrl !== undefined ? <SentryLinkIcon url={groupSentryUrl} issueKey={group.sentryKey!} /> : null}
@@ -811,10 +857,52 @@ export const Sidebar = memo(function Sidebar({
                       }}
                     >+</button>
                   ) : null}
+                  {chantierId ? (
+                    <button
+                      type="button"
+                      className="conv-group-create conv-group-menu-button"
+                      aria-label={`Actions pour le chantier ${group.label}`}
+                      aria-expanded={openConversationMenu === groupMenuKey}
+                      onClick={() => setOpenConversationMenu((current) => current === groupMenuKey ? null : groupMenuKey)}
+                    >⋯</button>
+                  ) : null}
                   {unread > 0 ? (
                     <span className="conv-group-count is-attention">{unread} à lire</span>
                   ) : null}
-                  <span className="conv-group-count">{group.items.length}</span>
+                  {hiddenCount > 0 || isExpanded ? (
+                    <button
+                      type="button"
+                      className="conv-group-count is-toggle"
+                      aria-expanded={isExpanded}
+                      aria-label={isExpanded ? `Réduire ${group.label}` : `Afficher les ${group.items.length} conversations de ${group.label}`}
+                      title={isExpanded ? 'Réduire' : `Afficher ${hiddenCount} de plus`}
+                      onClick={() => toggleGroupExpanded(group.key)}
+                    >
+                      {group.items.length}
+                      <svg width="8" height="8" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={isExpanded ? { transform: 'rotate(180deg)' } : undefined}>
+                        <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <span className="conv-group-count">{group.items.length}</span>
+                  )}
+                  {chantierId && openConversationMenu === groupMenuKey ? (
+                    <div className="conversation-actions-menu" role="menu">
+                      <button type="button" role="menuitem" onClick={() => startChantierRename(chantierId, group.label)}>Renommer le chantier</button>
+                    </div>
+                  ) : null}
+                  {chantierId && renameChantierId === chantierId ? (
+                    <form className="conversation-rename-form" onSubmit={(event) => { event.preventDefault(); void handleChantierRenameSubmit(chantierId) }}>
+                      <input
+                        value={renameDraft}
+                        onChange={(event) => setRenameDraft(event.target.value)}
+                        aria-label={`Nouveau nom pour le chantier ${group.label}`}
+                        autoFocus
+                        onKeyDown={(event) => { if (event.key === 'Escape') closeConversationMenu() }}
+                      />
+                      <button type="submit">OK</button>
+                    </form>
+                  ) : null}
                 </div>
                 {isCollapsed ? null : shownItems.map((conversation) => {
                 const isSelected = (workspaceView === 'conversations' || workspaceView === 'git')
@@ -846,7 +934,12 @@ export const Sidebar = memo(function Sidebar({
                         : shortConversationTime(conversation.updated_at)}
                     </span>
                   </span>
-                  {conversation.ticket_key && conversation.ticket_title && ticketTitleWithoutKey(conversation.ticket_title, conversation.ticket_key) ? <span className="conv-row-ticket-title" title={`${conversation.ticket_key} · ${conversation.ticket_title}`}>{ticketTitleWithoutKey(conversation.ticket_title, conversation.ticket_key)}</span> : null}
+                  {!repeatsTicket && conversation.ticket_key && conversation.ticket_title && ticketTitleWithoutKey(conversation.ticket_title, conversation.ticket_key) ? (
+                    <span className="conv-row-ticket-title" title={`${conversation.ticket_key} · ${conversation.ticket_title}`}>
+                      {conversation.ticket_id && isChantierKey(conversation.ticket_key) ? <span className="conv-chantier-dot" style={{ background: chantierColor(conversation.ticket_key) }} aria-hidden="true" /> : null}
+                      {ticketTitleWithoutKey(conversation.ticket_title, conversation.ticket_key)}
+                    </span>
+                  ) : null}
                   {state === 'live' ? (
                     <span className="conv-row-activity">
                       <span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span>
@@ -858,21 +951,22 @@ export const Sidebar = memo(function Sidebar({
                       {conversation.origin_type === 'sentry' ? (
                         <ProviderMark provider="sentry" className="conv-row-mark" />
                       ) : <ProviderMark provider={conversation.provider} className="conv-row-mark" />}
-                      {conversation.ticket_key ? (
+                      {(conversation as typeof conversation & {ticket_confidence?:number}).ticket_confidence != null && (conversation as typeof conversation & {ticket_confidence:number}).ticket_confidence < 0.7 && <span>à confirmer</span>}
+                      {!repeatsTicket && conversation.ticket_key ? (
                         <span className="conv-row-ticket" title={`${conversation.ticket_key} · ${conversation.ticket_title ?? ''}`}>{conversation.ticket_key}</span>
                       ) : null}
-                      {branch !== null ? (
+                      {branch !== null && !['main', 'master', 'develop', 'dev', 'staging', 'preprod', 'production', selectedProject?.detected_trunk].includes(branch.replace(/^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/, '')) ? (
                         <span className="conv-row-branch" title={`Worktrees : ${(conversation.worktree_paths?.length ? conversation.worktree_paths : [conversation.worktree_path]).join(', ')}`}>
                           <BranchIcon />{branch}{(conversation.worktree_paths?.length ?? 0) > 1 ? ` +${conversation.worktree_paths!.length - 1}` : ''}
                         </span>
-                      ) : conversation.created_on_branch !== null ? (
+                      ) : conversation.created_on_branch !== null && !['main', 'master', 'develop', 'dev', 'staging', 'preprod', 'production', selectedProject?.detected_trunk].includes(conversation.created_on_branch.replace(/^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/, '')) ? (
                         <span className="conv-row-branch" title={`Branche à la création`}>
                           <BranchIcon />{conversation.created_on_branch}
                         </span>
                       ) : null}
                     </span>
                   )}
-                  {state === 'live' && conversation.ticket_key ? <span className="conv-row-line2"><span className="conv-row-ticket" title={`${conversation.ticket_key} · ${conversation.ticket_title ?? ''}`}>{conversation.ticket_key}</span></span> : null}
+                  {state === 'live' && !repeatsTicket && conversation.ticket_key ? <span className="conv-row-line2"><span className="conv-row-ticket" title={`${conversation.ticket_key} · ${conversation.ticket_title ?? ''}`}>{conversation.ticket_key}</span></span> : null}
                   {conversationRelation(conversation, conversations) ? (
                     <span className="conversation-link">
                       {conversationRelation(conversation, conversations)}
@@ -948,16 +1042,6 @@ export const Sidebar = memo(function Sidebar({
               </div>
                 )
                 })}
-                {!isCollapsed && hiddenCount > 0 ? (
-                  <button
-                    type="button"
-                    className="conv-group-more"
-                    aria-expanded={isExpanded}
-                    onClick={() => toggleGroupExpanded(group.key)}
-                  >
-                    {isExpanded ? 'Réduire' : `Afficher ${hiddenCount} de plus`}
-                  </button>
-                ) : null}
               </div>
               )
             })

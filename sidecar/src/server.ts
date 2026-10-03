@@ -1,3 +1,11 @@
+import type { AutomaticCalls } from "./automatic-calls";
+import type { TelegramCapture } from "./telegram-capture";
+import type { PersonalEnvironments } from "./personal-environments";
+import type { ProjectDevlogService } from "./project-devlog";
+import type { ProjectResumeService } from "./project-resume";
+import type { ChantierService } from "./chantiers";
+import type { ProjectLaunchService } from "./project-launch";
+import { projectCwd } from "./workspace";
 import type { SharedFilesService } from "./shared-files";
 import { TodoError, type TodoService } from "./todos";
 import type { TodoInput } from "./stores/todos";
@@ -132,6 +140,13 @@ export class ConversationEventBus {
 }
 
 export interface ServerDeps {
+  launches?: ProjectLaunchService;
+  chantiers?: ChantierService;
+  resume?: ProjectResumeService;
+  devlog?: ProjectDevlogService;
+  personalEnvironments?: PersonalEnvironments;
+  telegram?: TelegramCapture;
+  automaticCalls?: AutomaticCalls;
   todos?: TodoService;
   port: number;
   instance?: InstanceInfo;
@@ -212,8 +227,9 @@ async function ticketBriefFor(
     branches: deps.tickets.branchesOf(ticket.id),
     refs: deps.tickets.refsByTicket(ticket.id),
     instruction: ticket.instruction,
-    clickup: await deps.integrationsRefresher.clickUpContext(ticket.project_id, ticket.key),
+    clickup: ticket.source === "chantier" ? null : await deps.integrationsRefresher.clickUpContext(ticket.project_id, ticket.key),
     siblings,
+    ...(ticket.source === "chantier" ? { description: String(ticket.payload.description ?? ""), notes: deps.tickets.notesByTicket(ticket.id).map(note => note.body), backlog: deps.todos?.snapshot(ticket.project_id).items.filter(item => item.ticket_id === ticket.id && item.status !== "done").map(item => item.title) ?? [] } : {}),
   });
 }
 
@@ -900,7 +916,8 @@ function routineInput(
   }
   const promptValue = body.prompt;
   const prompt = typeof promptValue === "string" && promptValue.trim() ? promptValue.trim() : null;
-  if (!workflow && !prompt) throw new HttpError(400, "workflow ou prompt requis");
+  if (body.kind === "command" && (typeof body.command !== "string" || !body.command.trim())) throw new HttpError(400, "commande requise");
+  if (!workflow && !prompt && body.kind !== "command") throw new HttpError(400, "workflow ou prompt requis");
   const presetIdValue = body.presetId;
   if (presetIdValue !== null && presetIdValue !== undefined && typeof presetIdValue !== "string") {
     throw new HttpError(400, "presetId invalide");
@@ -926,6 +943,9 @@ function routineInput(
   }
   return {
     projectId,
+    operation: ["devlog","health","production"].includes(String(body.operation)) ? body.operation as "devlog" | "health" | "production" : null,
+    kind: body.kind === "command" ? "command" : workflow ? "workflow" : "prompt",
+    command: body.kind === "command" ? String(body.command).trim() : null,
     name: requiredString(body, "name"),
     schedule: requiredString(body, "schedule"),
     workflowId: workflow?.id ?? null,
@@ -1287,6 +1307,19 @@ export function createServer(deps: ServerDeps) {
           return json(currentFleet());
         }
 
+        if (pathname === "/api/automatic-calls" && request.method === "GET") return json(deps.automaticCalls?.list() ?? []);
+        const telegramResponse = await deps.telegram?.handle(request, pathname);
+        if (telegramResponse) return new Response(telegramResponse.body, {status: telegramResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
+        const environmentResponse = await deps.personalEnvironments?.handle(request, pathname);
+        if (environmentResponse) return new Response(environmentResponse.body, {status: environmentResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
+        const devlogResponse = await deps.devlog?.handle(request, pathname);
+        if (devlogResponse) return new Response(devlogResponse.body, {status: devlogResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
+        const resumeResponse = await deps.resume?.handle(request, pathname);
+        if (resumeResponse) return new Response(resumeResponse.body, {status: resumeResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
+        const chantierResponse = await deps.chantiers?.handle(request, pathname);
+        if (chantierResponse) return new Response(chantierResponse.body, {status: chantierResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
+        const launchResponse = await deps.launches?.handle(request, pathname);
+        if (launchResponse) return new Response(launchResponse.body, {status: launchResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
         if (request.method === "GET" && pathname === "/api/applications") {
           const contexts: ApplicationContext[] = deps.projects.list().flatMap((project) => {
             const worktrees = (["active", "archived"] as const)
@@ -2138,6 +2171,20 @@ export function createServer(deps: ServerDeps) {
           return json(deps.projects.get(projectPermissionModeId));
         }
 
+        const projectTrunkId = routeId(pathname, /^\/api\/projects\/([^/]+)\/trunk$/);
+        if (request.method === "PUT" && projectTrunkId !== null) {
+          const project = deps.projects.get(projectTrunkId);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const body = await readObject(request);
+          const branch = body.branch;
+          if (branch !== null && (typeof branch !== "string" || !branch.trim()
+            || Bun.spawnSync(["git", "check-ref-format", "--branch", branch], { cwd: projectCwd(project), stdout: "pipe", stderr: "pipe" }).exitCode !== 0)) {
+            throw new HttpError(400, "branche principale invalide");
+          }
+          deps.projects.setTrunkBranch(projectTrunkId, branch as string | null);
+          return json(deps.projects.get(projectTrunkId));
+        }
+
         const projectAutoRescanId = routeId(
           pathname,
           /^\/api\/projects\/([^/]+)\/auto-rescan$/,
@@ -2583,6 +2630,10 @@ export function createServer(deps: ServerDeps) {
             deps.settings.set("longTaskThresholdSeconds", threshold);
             updated = true;
           }
+          if ("chantierIdleDays" in body) {
+            if (!Number.isInteger(body.chantierIdleDays) || Number(body.chantierIdleDays) < 1 || Number(body.chantierIdleDays) > 365) return json({error:"Délai de fermeture invalide"},400);
+            deps.settings.set("chantierIdleDays",body.chantierIdleDays);
+          }
           if ("activityReportHour" in body) {
             if (typeof body.activityReportHour !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.activityReportHour)) {
               throw new HttpError(400, "heure du rapport invalide");
@@ -2953,6 +3004,7 @@ export function createServer(deps: ServerDeps) {
               }
             }
           }
+          if (ticketId && ticket?.source === "chantier") deps.chantiers?.assign(conversation.id, ticket.id, true);
           const ticketPreamble = ticket
             ? await ticketBriefFor(deps, ticket, conversation.id)
             : null;

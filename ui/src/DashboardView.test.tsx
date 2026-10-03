@@ -121,6 +121,7 @@ test('affiche les sections disponibles et mémorise le dernier onglet du projet'
   const tabs = screen.getAllByRole('tab')
   expect(tabs.map((tab) => tab.textContent)).toEqual([
     'Tâches',
+    'Chantiers',
     'Mes tickets',
     'Changelog',
     'Environnements',
@@ -404,7 +405,7 @@ test('un projet sans intégration ouvre ses tâches, masque Tickets et Sentry et
   }))
 
   await waitFor(() => expect(requestedUrls).toHaveLength(2))
-  expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('title'))).toEqual(['Tâches', 'Changelog', 'Environnements'])
+  expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('title'))).toEqual(['Tâches', 'Chantiers', 'Changelog', 'Environnements'])
   const tasksTab = screen.getByRole('tab', { name: 'Tâches 3' })
   expect(tasksTab.getAttribute('aria-selected')).toBe('true')
   expect(screen.getByRole('tabpanel', { name: 'Tâches 3' }).textContent).toContain('Mes tâches personnelles')
@@ -413,7 +414,7 @@ test('un projet sans intégration ouvre ses tâches, masque Tickets et Sentry et
   fireEvent.click(screen.getByRole('button', { name: 'Actualiser' }))
   expect(refreshTodos).toHaveBeenCalledTimes(1)
   fireEvent.keyDown(tasksTab, { key: 'ArrowRight' })
-  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Changelog' }))
+  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Chantiers' }))
   fireEvent.keyDown(document.activeElement!, { key: 'End' })
   expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Environnements' }))
   fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })

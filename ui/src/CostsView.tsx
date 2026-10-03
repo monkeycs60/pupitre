@@ -1,3 +1,4 @@
+import { AutomaticCalls } from './AutomaticCalls'
 import { useEffect, useMemo, useState } from 'react'
 import { getProjectCosts } from './api'
 import type { Project, ProjectCostReport, Provider, QuotaState } from './types'
@@ -204,6 +205,7 @@ export function CostsView({ project, onConversationSelect }: CostsViewProps) {
           </div>
           <label><span>Mois</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>
         </header>
+        <AutomaticCalls />
         {error ? <p className="costs-error" role="alert">{error}</p> : null}
 
         <div className="quota-card-grid">

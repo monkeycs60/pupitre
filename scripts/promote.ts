@@ -109,7 +109,7 @@ function gitOutput(...args: string[]): string {
   return result.stdout.toString().trim()
 }
 
-async function fetchJson<T>(url: string, timeout = 1_000): Promise<T | null> {
+async function fetchJson<T>(url: string, timeout = 5_000): Promise<T | null> {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(timeout) })
     if (!response.ok) return null
@@ -187,10 +187,10 @@ async function drainStable(
   let previous = ''
   let consecutiveFailures = 0
   while (Date.now() < deadline) {
-    const activity = await fetchJson<Activity>(`${options.stableOrigin}/api/activity`)
+    const activity = await fetchJson<Activity>(`${options.stableOrigin}/api/activity`, 15_000)
     if (!activity) {
       consecutiveFailures += 1
-      if (consecutiveFailures >= 3) throw new Error('activité de la stable inaccessible pendant le drain')
+      if (consecutiveFailures >= 6) throw new Error('activité de la stable inaccessible pendant le drain')
       await Bun.sleep(2_000)
       continue
     }
@@ -258,7 +258,7 @@ async function stopStable(origin: string, required: boolean, force = false): Pro
   }
   if (!validStableHealth(health, origin)) throw new Error('Le processus sur le port stable n’est pas une instance stable valide.')
   if (!force) {
-    const activity = await fetchJson<Activity>(`${origin}/api/activity`)
+    const activity = await fetchJson<Activity>(`${origin}/api/activity`, 15_000)
     if (!activity) throw new Error('L’activité de la stable est inaccessible juste avant son arrêt.')
     if (activity.busy) throw new Error('La stable a repris une activité avant son arrêt ; promotion annulée.')
   }
