@@ -1723,6 +1723,67 @@
   padding: 12px 6px 4px;
 }
 
+.conv-group-header.is-chantier {
+  position: relative;
+}
+
+.conv-group-header.is-chantier .conv-group-key {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.conv-group-header.is-chantier .conv-group-toggle:hover .conv-group-key {
+  color: var(--text);
+}
+
+.conv-group-chantier-key {
+  flex: none;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.conv-chantier-dot {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-full);
+}
+
+.navigation-main .conv-row-ticket-title .conv-chantier-dot {
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+.conv-group-header.is-chantier .conv-group-create {
+  width: 0;
+  margin-left: -7px;
+  overflow: hidden;
+  transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), width var(--dur-fast) var(--ease), margin var(--dur-fast) var(--ease);
+}
+
+.conv-group-header.is-chantier:hover .conv-group-create,
+.conv-group-header.is-chantier:focus-within .conv-group-create {
+  width: 20px;
+  margin-left: 0;
+}
+
+.conv-group-header .conversation-actions-menu {
+  top: 30px;
+  right: 6px;
+}
+
+.conv-group-header .conversation-rename-form {
+  right: 4px;
+  bottom: 0;
+}
+
 /* Replier un groupe = replier un ticket : chevron + libellé, un seul bouton. */
 .conv-group-toggle {
   display: inline-flex;
@@ -1816,6 +1877,28 @@
   color: var(--text-faint);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+}
+
+.conv-group-count.is-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  margin: -1px -5px -1px 0;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+
+.conv-group-count.is-toggle:hover,
+.conv-group-count.is-toggle:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.conv-group-count.is-toggle svg {
+  transition: transform var(--dur-fast) var(--ease);
 }
 
 .conv-group-create {
@@ -2122,25 +2205,6 @@
 
 .conv-row-line2:has(.conv-row-ticket) .conv-row-branch {
   opacity: .65;
-}
-
-.conv-group-more {
-  justify-self: start;
-  margin: 0 0 6px 20px;
-  border: 0;
-  padding: 3px 8px;
-  background: transparent;
-  color: var(--text-muted);
-  border-radius: var(--r-xs);
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
-.conv-group-more:hover,
-.conv-group-more:focus-visible {
-  color: var(--accent);
-  background: var(--accent-soft);
 }
 
 .project-resume { padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle); }

@@ -170,3 +170,33 @@ test("la vue d’ensemble compte les conversations et annonce la fermeture", () 
   service.edit(a.id, { closed: true });
   expect(service.overview(project.id)[0]!.closes_at).toBeNull();
 });
+test("renomme une seule fois les chantiers générés et épargne les noms édités à la main", async () => {
+  const { db, project, tickets, conversations } = fixture();
+  const prompts: string[] = [];
+  const service = new ChantierService(
+    db,
+    new ProjectStore(db),
+    conversations,
+    tickets,
+    async (prompt) => {
+      prompts.push(prompt);
+      const ids = [...prompt.matchAll(/"id":"([^"]+)"/g)].map((m) => m[1]);
+      return {
+        titles: [
+          ...ids.map((id) => ({ id, title: "Alertes Telegram des annonces." })),
+          { id: "inconnu", title: "Chantier fantôme ajouté" },
+        ],
+      };
+    },
+  );
+  const generic = service.create(project.id, "Améliorations UI et interactions", "", "llm");
+  const manual = service.create(project.id, "Nom choisi");
+  service.edit(manual.id, { title: "Nom choisi à la main" });
+  expect(await service.retitle(project.id)).toBe(1);
+  expect(tickets.get(generic.id)?.title).toBe("Alertes Telegram des annonces");
+  expect(tickets.get(manual.id)?.title).toBe("Nom choisi à la main");
+  expect(prompts[0]).toContain("la précision passe avant la brièveté");
+  expect(prompts[0]).not.toContain(manual.id);
+  expect(await service.retitle(project.id)).toBe(0);
+  expect(prompts).toHaveLength(1);
+});
