@@ -919,6 +919,7 @@ function App() {
         help: 'Aide',
         progress: 'Progression',
         settings: 'Paramètres',
+        chaos: 'Chaos',
       }[workspaceView]
 
   const railView: WorkspaceView = inspector === 'workflows'
