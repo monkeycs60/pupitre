@@ -1,3 +1,7 @@
+## Installation sur un nouvel ordinateur
+
+Pour une demande d’installation ou de configuration de Pupitre, lire [SETUP.md](SETUP.md) avant de commencer. Le setup installe Claude Code, Codex et le skill agent-browser pour les ordinateurs Linux et Mac. Les connexions aux comptes et l’autorisation Chrome restent interactives.
+
 # Interface
 
 ## Documents de réflexion

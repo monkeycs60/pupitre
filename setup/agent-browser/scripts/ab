@@ -1,0 +1,18 @@
+#!/bin/bash
+set -euo pipefail
+AB_BIN="${AGENT_BROWSER_BIN:-$HOME/.local/opt/pupitre-browser/v0.38.2/agent-browser}"
+session="${AB_SESSION:-${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-manual}}}"
+args=(--session "pupitre-$session" --pin-tab)
+if [ -n "${AB_RELAY:-}" ]; then
+  args+=(--cdp "$AB_RELAY")
+else
+  args+=(--auto-connect)
+fi
+if [ "${1:-}" = close ]; then
+  if [ "$#" -ne 1 ]; then
+    echo 'ab : utilisez ab close pour fermer uniquement votre onglet.' >&2
+    exit 2
+  fi
+  set -- tab close
+fi
+exec "$AB_BIN" "${args[@]}" "$@"
