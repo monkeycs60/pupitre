@@ -13,7 +13,8 @@
     "tauri:before-build": "bun run typecheck:sidecar && bun run build:sidecar && bun run --bun --cwd ui build",
     "dev:secrets": "doppler run -- bun run scripts/dev.ts",
     "setup": "bash scripts/setup.sh",
-    "doctor": "bun run scripts/setup.ts --check"
+    "doctor": "bun run scripts/setup.ts --check",
+    "setup:browser": "bun run scripts/setup-browser.ts"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4"

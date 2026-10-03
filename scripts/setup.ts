@@ -30,7 +30,7 @@ async function setup(args: string[]): Promise<void> {
   process.env.PATH = setupPath(homedir(), process.env.PATH ?? '')
   if (check) {
     let missing = false
-    for (const tool of ['git', 'bun', 'cargo', 'rustc', 'claude', 'codex']) {
+    for (const tool of ['git', 'bun', 'cargo', 'rustc', 'claude', 'codex', 'ab']) {
       const path = Bun.which(tool)
       console.log(`${path ? 'OK' : 'MANQUANT'} — ${tool}${path ? ` : ${path}` : ''}`)
       if (!path) missing = true
@@ -64,6 +64,7 @@ async function setup(args: string[]): Promise<void> {
       if (!authenticated(provider)) throw new Error(`La connexion ${provider} reste à terminer.`)
     }
   }
+  await run(['bun', 'run', 'scripts/setup-browser.ts'])
   const config = join(homedir(), '.config/pupitre')
   mkdirSync(config, { recursive: true })
   writeFileSync(join(config, 'path'), process.env.PATH!, { mode: 0o600 })
