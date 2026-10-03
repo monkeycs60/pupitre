@@ -200,3 +200,20 @@ test("renomme une seule fois les chantiers générés et épargne les noms édit
   expect(await service.retitle(project.id)).toBe(0);
   expect(prompts).toHaveLength(1);
 });
+test("propose un nom pour un seul chantier sans l'enregistrer", async () => {
+  const { db, project, tickets, conversations } = fixture();
+  const prompts: string[] = [];
+  const service = new ChantierService(db, new ProjectStore(db), conversations, tickets, async () => null, async (prompt) => {
+    prompts.push(prompt);
+    const id = prompt.match(/"id":"([^"]+)"/)![1];
+    return { titles: [{ id, title: "Installation Pupitre sur Mac" }] };
+  });
+  const item = service.create(project.id, "Setup et configuration", "", "llm");
+  const response = await service.handle(
+    new Request(`http://x/api/projects/${project.id}/chantiers/${item.id}`, { method: "PUT", body: JSON.stringify({ suggestTitle: true }) }),
+    `/api/projects/${project.id}/chantiers/${item.id}`,
+  );
+  expect(await response!.json()).toEqual({ title: "Installation Pupitre sur Mac" });
+  expect(tickets.get(item.id)?.title).toBe("Setup et configuration");
+  expect(prompts[0]).toContain("Setup et configuration");
+});
