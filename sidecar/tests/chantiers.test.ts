@@ -217,3 +217,44 @@ test("propose un nom pour un seul chantier sans l'enregistrer", async () => {
   expect(tickets.get(item.id)?.title).toBe("Setup et configuration");
   expect(prompts[0]).toContain("Setup et configuration");
 });
+test("propose un nouveau nom quand le sujet dérive, puis l'applique ou l'oublie sur validation", async () => {
+  const { db, project, tickets, conversations } = fixture();
+  let answer: unknown = { drifted: false };
+  let calls = 0;
+  const service = new ChantierService(db, new ProjectStore(db), conversations, tickets, async () => null, async (prompt) => {
+    calls++;
+    const id = prompt.match(/"id":"([^"]+)"/)![1];
+    return typeof answer === "function" ? (answer as (id: string) => unknown)(id) : answer;
+  });
+  const item = service.create(project.id, "Setup et configuration", "", "llm");
+  const add = () => service.assign(conversations.create({ projectId: project.id, provider: "claude", model: "test", firstMessage: "x" }).id, item.id, true);
+  const put = (body: unknown) => service.handle(
+    new Request(`http://x/api/projects/${project.id}/chantiers/${item.id}`, { method: "PUT", body: JSON.stringify(body) }),
+    `/api/projects/${project.id}/chantiers/${item.id}`,
+  );
+  add();
+  expect(await service.reviewTitleDrift(item.id)).toBe(false);
+  add(); add();
+  expect(await service.reviewTitleDrift(item.id)).toBe(false);
+  expect(calls).toBe(0);
+  add();
+  expect(await service.reviewTitleDrift(item.id)).toBe(false);
+  expect(calls).toBe(1);
+  answer = (id: string) => ({ drifted: true, titles: [{ id, title: "Installation Pupitre sur Mac" }] });
+  add(); add(); add();
+  expect(await service.reviewTitleDrift(item.id)).toBe(true);
+  expect(conversations.listByProject(project.id)[0]?.ticket_title_proposal).toBe("Installation Pupitre sur Mac");
+  add(); add(); add();
+  expect(await service.reviewTitleDrift(item.id)).toBe(false);
+  expect(calls).toBe(2);
+  await put({ titleProposal: "accept" });
+  expect(tickets.get(item.id)?.title).toBe("Installation Pupitre sur Mac");
+  expect(tickets.get(item.id)?.payload.titleProposal).toBeNull();
+  answer = (id: string) => ({ drifted: true, titles: [{ id, title: "Autre sujet du chantier" }] });
+  expect(await service.reviewTitleDrift(item.id)).toBe(false);
+  add(); add(); add();
+  expect(await service.reviewTitleDrift(item.id)).toBe(true);
+  await put({ titleProposal: "dismiss" });
+  expect(tickets.get(item.id)?.title).toBe("Installation Pupitre sur Mac");
+  expect(conversations.listByProject(project.id)[0]?.ticket_title_proposal).toBeNull();
+});
