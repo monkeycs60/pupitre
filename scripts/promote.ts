@@ -304,7 +304,9 @@ X-GNOME-WMClass=fr.clementserizay.pupitre
 
 function launchStable(): number {
   const log = Bun.file(join(installRoot, 'stable.log'))
-  const child = Bun.spawn([releaseExecutable(currentLink)], {
+  // Tauri refuse de résoudre ses sidecars depuis un exécutable lancé par un
+  // lien symbolique sur macOS : la fenêtre s'ouvre alors sans backend.
+  const child = Bun.spawn([realpathSync(releaseExecutable(currentLink))], {
     cwd: installRoot,
     env: cleanEnv(process.env),
     detached: true,

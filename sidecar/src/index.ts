@@ -348,10 +348,10 @@ if (process.argv.includes("--pupitre-mcp")) {
     visualFeedback,
   }), port);
   void problems.resume();
+  if (backgroundJobsEnabled() || instance.name === "stable") quotaRefresher.start();
   if (backgroundJobsEnabled()) {
     routines.start();
     changelog.start();
-    quotaRefresher.start();
     integrationsRefresher.start();
     runScheduledActivityReport();
   } else {
