@@ -311,7 +311,13 @@ export function QuotaStatus({
  * expirée, app-server éteint), la barre nomme la cause au lieu d'afficher
  * « inconnu » — qui se lirait comme une panne de Pupitre.
  */
-export function QuotaBar({ snapshot }: { snapshot: QuotaSnapshot }) {
+export function QuotaBar({
+  snapshot,
+  providers = QUOTA_PROVIDERS,
+}: {
+  snapshot: QuotaSnapshot
+  providers?: readonly Provider[]
+}) {
   const now = useNow()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -335,10 +341,9 @@ export function QuotaBar({ snapshot }: { snapshot: QuotaSnapshot }) {
 
   return (
     <section className="quota-bar" aria-label="Quotas">
-      <ProviderQuota provider="claude" state={snapshot.claude} now={now} />
-      <ProviderQuota provider="codex" state={snapshot.codex} now={now} />
-      <ProviderQuota provider="grok" state={snapshot.grok ?? null} now={now} />
-      <ProviderQuota provider="reasonix" state={snapshot.reasonix ?? null} now={now} />
+      {providers.map((provider) => (
+        <ProviderQuota key={provider} provider={provider} state={snapshot[provider as keyof QuotaSnapshot] ?? null} now={now} />
+      ))}
 
       <div className="quota-bar-footer">
         {freshness !== null ? <span className="quota-freshness">{freshness}</span> : null}
