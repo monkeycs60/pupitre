@@ -646,3 +646,35 @@ test('deux chantiers consécutifs reçoivent deux couleurs différentes', () => 
   expect(new Set(colors).size).toBe(8)
   expect(chantierColor('CH-9')).toBe(chantierColor('CH-1'))
 })
+
+test('une proposition de nom s’affiche sous le chantier et s’applique ou s’ignore', async () => {
+  const chantier = { ...startedConversation, ticket_id: 'chantier-3', ticket_key: 'CH-3', ticket_title: 'Améliorations UI', ticket_title_proposal: 'Finitions de l’interface Pupitre' }
+  const other = { ...startedConversation, ticket_id: 'chantier-5', ticket_key: 'CH-5', ticket_title: 'Pièces jointes', ticket_title_proposal: 'Aperçu des documents' }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [
+    { ...chantier, id: 'c1' },
+    { ...other, id: 'c2' },
+  ])
+  const bodies: unknown[] = []
+  const baseFetch = globalThis.fetch
+  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes('/chantiers/')) {
+      bodies.push(JSON.parse(String(init?.body)))
+      return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
+    }
+    return baseFetch(input, init)
+  }) as unknown as typeof fetch
+  renderSidebar()
+  await waitFor(() => expect(document.querySelectorAll('.conv-chantier-proposal')).toHaveLength(2))
+  const banner = (key: string) => [...document.querySelectorAll('.conv-group')].find((group) => group.querySelector('.conv-group-chantier-key')?.textContent === key)!.querySelector('.conv-chantier-proposal')
+
+  fireEvent.click(banner('CH-3')!.querySelector('button.is-primary')!)
+  await waitFor(() => expect(document.querySelectorAll('.conv-chantier-proposal')).toHaveLength(1))
+  expect(banner('CH-3')).toBeNull()
+  const groupKey = (key: string) => [...document.querySelectorAll('.conv-group-header')].find((header) => header.querySelector('.conv-group-chantier-key')?.textContent === key)!.querySelector('.conv-group-key')!.textContent
+  expect(groupKey('CH-3')).toBe('Finitions de l’interface Pupitre')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Ignorer' }))
+  await waitFor(() => expect(document.querySelectorAll('.conv-chantier-proposal')).toHaveLength(0))
+  expect(groupKey('CH-5')).toBe('Pièces jointes')
+  expect(bodies).toEqual([{ titleProposal: 'accept' }, { titleProposal: 'dismiss' }])
+})

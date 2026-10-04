@@ -565,13 +565,28 @@ export const Sidebar = memo(function Sidebar({
     }
   }
 
+  async function resolveChantierProposal(ticketId: string, proposal: string, decision: 'accept' | 'dismiss') {
+    if (!selectedProject) return
+    setError(null)
+    try {
+      await launchRequest(`/api/projects/${selectedProject.id}/chantiers/${ticketId}`, 'PUT', { titleProposal: decision })
+      const patch = decision === 'accept'
+        ? { ticket_title: proposal, ticket_title_proposal: null }
+        : { ticket_title_proposal: null }
+      setConversations((current) => current.map((item) => item.ticket_id === ticketId ? { ...item, ...patch } : item))
+      if (decision === 'accept' && selectedConversation?.ticket_id === ticketId) onConversationSelect({ ...selectedConversation, ticket_title: proposal })
+    } catch (proposalError: unknown) {
+      setError(errorMessage(proposalError))
+    }
+  }
+
   async function handleChantierRenameSubmit(ticketId: string) {
     const title = renameDraft.trim()
     if (!title || !selectedProject) return
     setError(null)
     try {
       await launchRequest(`/api/projects/${selectedProject.id}/chantiers/${ticketId}`, 'PUT', { title })
-      setConversations((current) => current.map((item) => item.ticket_id === ticketId ? { ...item, ticket_title: title } : item))
+      setConversations((current) => current.map((item) => item.ticket_id === ticketId ? { ...item, ticket_title: title, ticket_title_proposal: null } : item))
       if (selectedConversation?.ticket_id === ticketId) onConversationSelect({ ...selectedConversation, ticket_title: title })
       closeConversationMenu()
     } catch (renameError: unknown) {
@@ -821,6 +836,7 @@ export const Sidebar = memo(function Sidebar({
               const chantierId = isChantier ? group.items[0]?.ticket_id ?? null : null
               const groupMenuKey = `group:${group.key}`
               const backlogCount = group.items[0]?.ticket_backlog_count ?? 0
+              const titleProposal = chantierId ? group.items.find((item) => item.ticket_title_proposal)?.ticket_title_proposal ?? null : null
               const ticketTitle = !isChantier && group.ticketKey && groupLinks?.title
                 ? ticketTitleWithoutKey(groupLinks.title, group.ticketKey)
                 : null
@@ -925,6 +941,17 @@ export const Sidebar = memo(function Sidebar({
                     </form>
                   ) : null}
                 </div>
+                {chantierId && titleProposal ? (
+                  <div className="conv-chantier-proposal" role="status">
+                    <span className="conv-chantier-proposal-text">
+                      <span className="conv-chantier-proposal-label">✦ Nom proposé</span> {titleProposal}
+                    </span>
+                    <span className="conv-chantier-proposal-actions">
+                      <button type="button" className="is-primary" onClick={() => void resolveChantierProposal(chantierId, titleProposal, 'accept')}>Appliquer</button>
+                      <button type="button" onClick={() => void resolveChantierProposal(chantierId, titleProposal, 'dismiss')}>Ignorer</button>
+                    </span>
+                  </div>
+                ) : null}
                 {isCollapsed ? null : shownItems.map((conversation) => {
                 const isSelected = (workspaceView === 'conversations' || workspaceView === 'git')
                   && selectedConversation?.id === conversation.id

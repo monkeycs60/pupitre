@@ -276,6 +276,7 @@ export interface Conversation {
   ticket_key?: string | null
   ticket_backlog_count?: number
   ticket_title?: string | null
+  ticket_title_proposal?: string | null
   ticket_instruction: string | null
   origin_type?: 'sentry' | 'problem' | 'promotion' | 'documents' | null
   origin_key?: string | null

@@ -1753,6 +1753,53 @@
   color: var(--text);
 }
 
+.conv-chantier-proposal {
+  display: grid;
+  gap: 6px;
+  margin: 0 6px 4px 20px;
+  padding: 7px 9px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-sm);
+}
+
+.conv-chantier-proposal-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.conv-chantier-proposal-text {
+  color: var(--text);
+}
+
+.conv-chantier-proposal-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.conv-chantier-proposal-actions button {
+  padding: 2px 8px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+
+.conv-chantier-proposal-actions button:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.conv-chantier-proposal-actions button.is-primary {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
 .conv-group-unread-dot {
   flex: none;
   width: 7px;
