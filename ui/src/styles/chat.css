@@ -915,9 +915,24 @@
   animation: stroke-draw 320ms 60ms var(--ease-out) forwards;
 }
 
+.background-task-notice {
+  --notice-tone: var(--text-faint);
+  width: fit-content;
+  max-width: 100%;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--notice-tone) 26%, var(--border-subtle));
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--notice-tone) 7%, transparent);
+}
+
+.background-task-notice[data-status="completed"] { --notice-tone: var(--ok); }
+.background-task-notice[data-status="failed"] { --notice-tone: var(--danger); }
+.background-task-notice[data-status="killed"],
+.background-task-notice[data-status="stopped"] { --notice-tone: var(--warn); }
+
 .background-task-notice .tool-activity-icon {
   flex: none;
-  color: var(--text-faint);
+  color: var(--notice-tone);
 }
 
 .background-task-notice > span:first-of-type,

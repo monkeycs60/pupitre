@@ -1,3 +1,6 @@
+import { FleetIsland } from './FleetIsland'
+import { ToastHost } from './ToastHost'
+import { pushToast } from './toasts'
 import { ReadingControls } from './ReadingControls'
 import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type InspectorView } from './WorkspaceInspector'
 import { ChantierAssignment } from './ChantiersView'
@@ -22,7 +25,7 @@ import { Titlebar, type TitlebarDestination } from './Titlebar'
 import { navigationShortcutLabel } from './navigationShortcuts'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
-import type { Attachment, Conversation, Project, UnreadConversation } from './types'
+import type { Attachment, Conversation, FleetItem, Project, UnreadConversation } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import {
@@ -348,6 +351,27 @@ function App() {
   useEffect(() => {
     setRailReadVersion((current) => current + 1)
   }, [fleetMembership])
+
+  const previousFleetRef = useRef<FleetItem[]>([])
+  const selectedConversationIdRef = useRef(selectedConversationId)
+  selectedConversationIdRef.current = selectedConversationId
+  const openFleetConversationRef = useRef(handleRoutineConversationSelect)
+  openFleetConversationRef.current = handleRoutineConversationSelect
+  useEffect(() => {
+    const previous = previousFleetRef.current
+    previousFleetRef.current = fleet.items
+    const activeIds = new Set(fleet.items.map((item) => item.id))
+    for (const item of previous) {
+      if (activeIds.has(item.id) || item.kind === 'subtask') continue
+      if (document.hasFocus() && item.conversationId === selectedConversationIdRef.current) continue
+      pushToast({
+        tone: 'ok',
+        title: item.kind === 'routine' ? 'Routine terminée' : 'Tour terminé',
+        detail: `${item.projectName} · ${item.title}`,
+        onOpen: () => void openFleetConversationRef.current(item.projectId, item.conversationId),
+      })
+    }
+  }, [fleet.items])
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
@@ -981,7 +1005,9 @@ function App() {
         destinations={destinations}
         workspaceView={railView}
         hasProject={selectedProject !== null}
+        island={<FleetIsland items={fleet.items} onOpen={(item) => void handleRoutineConversationSelect(item.projectId, item.conversationId)} />}
       />
+      <ToastHost />
       <Rail
         selectedProject={selectedProject}
         projectListVersion={projectListVersion}

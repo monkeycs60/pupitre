@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { getCurrentWindow, type Window } from '@tauri-apps/api/window'
 import type { InstanceHealth } from './types'
 import { InstanceBadge } from './InstanceBadge'
@@ -31,6 +31,8 @@ interface TitlebarProps {
   destinations?: TitlebarDestination[]
   workspaceView?: WorkspaceView
   hasProject?: boolean
+  /** Exécutions en cours, au centre de la barre. */
+  island?: ReactNode
 }
 
 const RESIZE_HANDLES: ReadonlyArray<[string, ResizeDirection]> = [
@@ -52,6 +54,7 @@ export function Titlebar({
   destinations = [],
   workspaceView,
   hasProject = true,
+  island,
 }: TitlebarProps) {
   const visibleCrumbs = (crumbs ?? []).filter(
     (crumb): crumb is string => typeof crumb === 'string' && crumb.length > 0,
@@ -90,6 +93,7 @@ export function Titlebar({
             <kbd>Ctrl K</kbd>
           </button>
         ) : null}
+        {island}
       </div>
 
       {destinations.length > 0 ? (
