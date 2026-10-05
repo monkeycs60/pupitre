@@ -1693,6 +1693,7 @@
   overflow: hidden;
   cursor: zoom-out;
   place-items: center;
+  animation: scrim-in var(--dur) var(--ease) both;
 }
 
 .lightbox-viewport {

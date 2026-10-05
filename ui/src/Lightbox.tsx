@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PointerEvent, WheelEvent } from 'react'
 
 interface LightboxProps {
@@ -9,6 +9,8 @@ interface LightboxProps {
 
 export function Lightbox({ alt, src, onClose }: LightboxProps) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const imageRef = useRef<HTMLImageElement>(null)
+  const openedRef = useRef(false)
   const dragRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
   const [scale, setScale] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
@@ -28,6 +30,32 @@ export function Lightbox({ alt, src, onClose }: LightboxProps) {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
+
+  function playOpening() {
+    const image = imageRef.current
+    if (image === null || openedRef.current || image.naturalWidth === 0) return
+    openedRef.current = true
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    const thumbnail = Array.from(document.images).find((candidate) =>
+      candidate !== image && candidate.currentSrc === image.currentSrc && candidate.getBoundingClientRect().width > 0)
+    const to = image.getBoundingClientRect()
+    if (thumbnail === undefined || to.width === 0) {
+      image.animate([{ opacity: 0, transform: 'scale(0.94)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' })
+      return
+    }
+    const from = thumbnail.getBoundingClientRect()
+    const dx = from.left + from.width / 2 - (to.left + to.width / 2)
+    const dy = from.top + from.height / 2 - (to.top + to.height / 2)
+    const ratio = from.width / to.width
+    image.animate(
+      [{ transform: `translate(${dx}px, ${dy}px) scale(${ratio})`, opacity: 0.6 }, { transform: 'none', opacity: 1 }],
+      { duration: 380, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+    )
+  }
+
+  useLayoutEffect(() => {
+    if (imageRef.current?.complete) playOpening()
+  }, [])
 
   useEffect(() => {
     if (scale === 1) setOffset({ x: 0, y: 0 })
@@ -77,6 +105,8 @@ export function Lightbox({ alt, src, onClose }: LightboxProps) {
       </button>
       <div className="lightbox-viewport">
         <img
+          ref={imageRef}
+          onLoad={playOpening}
           src={src}
           alt={alt}
           draggable={false}

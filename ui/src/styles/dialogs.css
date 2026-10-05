@@ -12,6 +12,11 @@
   padding: var(--space-6);
   background: var(--scrim);
   place-items: center;
+  animation: scrim-in var(--dur) var(--ease) both;
+}
+
+.modal-backdrop > * {
+  animation: modal-in 380ms var(--spring) backwards;
 }
 
 /* --- Panneau ------------------------------------------------------------- */

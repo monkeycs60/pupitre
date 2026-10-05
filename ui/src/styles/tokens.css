@@ -260,6 +260,18 @@ pre {
   to { opacity: 1; transform: none; }
 }
 
+@keyframes scrim-in {
+  from { opacity: 0; }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+}
+
+@keyframes view-enter {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
 @keyframes spring-pop {
   from { transform: scale(0.6); }
   to { transform: scale(1); }

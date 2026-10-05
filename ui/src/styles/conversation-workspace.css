@@ -1,6 +1,7 @@
 .inspector-tabs button { padding:7px 10px; color:var(--text-muted); background:transparent; border:0; border-radius:var(--r-sm); font-size:12px; transition:background 150ms, color 150ms; }
 .workspace-split { display:flex; flex:1; min-height:0; min-width:0; position:relative; }
 .conversation-workspace { display:flex; flex-direction:column; position:relative; flex:1; min-width:0; min-height:0; overflow:hidden; }
+.conversation-workspace > :not(.chat-layout,.conversation-header,.workspace-inspector-slot,.lightbox,.modal-backdrop) { animation:view-enter 220ms var(--ease-out) backwards; }
 .conversation-workspace > :is(.chat-layout,.empty-state) { margin-right:0; transition:margin-right 200ms cubic-bezier(.2,.8,.2,1); }
 .conversation-workspace.has-inspector > :is(.chat-layout,.empty-state) { margin-right:min(var(--inspector-width), 90%); }
 .workspace-inspector-slot { position:absolute; z-index:30; top:56px; right:0; bottom:0; display:flex; width:0; min-width:0; min-height:0; overflow:hidden; transition:width 200ms cubic-bezier(.2,.8,.2,1); }

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { getCurrentWindow, type Window } from '@tauri-apps/api/window'
 import type { InstanceHealth } from './types'
 import { InstanceBadge } from './InstanceBadge'
@@ -60,6 +60,30 @@ export function Titlebar({
     (crumb): crumb is string => typeof crumb === 'string' && crumb.length > 0,
   )
   const drag = IS_TAURI ? { 'data-tauri-drag-region': true } : {}
+  const navRef = useRef<HTMLElement>(null)
+  const [indicator, setIndicator] = useState<{ left: number; top: number; width: number; height: number; animate: boolean } | null>(null)
+
+  useLayoutEffect(() => {
+    const nav = navRef.current
+    if (nav === null) return
+    function measure(animate: boolean) {
+      const active = nav?.querySelector<HTMLElement>('.titlebar-nav-button.is-active')
+      if (!nav || !active) {
+        setIndicator(null)
+        return
+      }
+      const next = { left: active.offsetLeft, top: active.offsetTop, width: active.offsetWidth, height: active.offsetHeight }
+      setIndicator((current) => current !== null
+        && current.left === next.left && current.width === next.width && current.top === next.top && current.height === next.height
+        ? current
+        : { ...next, animate: animate && current !== null })
+    }
+    measure(true)
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => measure(false))
+    observer.observe(nav)
+    return () => observer.disconnect()
+  }, [workspaceView, destinations.length])
 
   return (
     <header className="titlebar">
@@ -97,7 +121,14 @@ export function Titlebar({
       </div>
 
       {destinations.length > 0 ? (
-        <nav className="titlebar-nav" aria-label="Navigation">
+        <nav className="titlebar-nav" aria-label="Navigation" ref={navRef}>
+          {indicator !== null ? (
+            <span
+              className={`titlebar-nav-indicator${indicator.animate ? ' is-moving' : ''}`}
+              aria-hidden="true"
+              style={{ transform: `translate(${indicator.left}px, ${indicator.top}px)`, width: indicator.width, height: indicator.height }}
+            />
+          ) : null}
           {destinations.map((destination) => (
             <button
               key={destination.name}
