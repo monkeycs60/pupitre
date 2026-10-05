@@ -20,6 +20,7 @@ export interface ReleaseVersion { sha: string; dirty: boolean; builtAt: string }
 interface PromotionOptions {
   json: boolean
   timeoutMinutes: number
+  verifyTimeoutSeconds: number
   force: boolean
   skipBuild: boolean
   rollback: boolean
@@ -79,16 +80,19 @@ function compareReleaseDates(left: string, right: string): number {
   return timestamp(left).localeCompare(timestamp(right)) || left.localeCompare(right)
 }
 
-function parseOptions(args: string[]): PromotionOptions {
+export function parseOptions(args: string[]): PromotionOptions {
   const valueAfter = (flag: string) => {
     const index = args.indexOf(flag)
     return index < 0 ? undefined : args[index + 1]
   }
   const timeout = Number(valueAfter('--timeout') ?? '30')
   if (!Number.isFinite(timeout) || timeout <= 0) throw new Error('--timeout doit être un nombre positif')
+  const verifyTimeout = Number(valueAfter('--verify-timeout') ?? '180')
+  if (!Number.isFinite(verifyTimeout) || verifyTimeout <= 0) throw new Error('--verify-timeout doit être un nombre positif de secondes')
   return {
     json: args.includes('--json'),
     timeoutMinutes: timeout,
+    verifyTimeoutSeconds: verifyTimeout,
     force: args.includes('--force'),
     skipBuild: args.includes('--skip-build'),
     rollback: args.includes('--rollback'),
@@ -322,24 +326,33 @@ function launchStable(): number {
 /// ne s'exécute pas répond `/api/health` sur le bon SHA derrière un écran noir.
 /// `frontendAt` n'est daté que lorsque la webview a atteint son premier appel,
 /// donc lorsqu'elle a rendu quelque chose.
-async function verifyStable(origin: string, sha: string): Promise<void> {
-  const deadline = Date.now() + 60_000
-  let buildSeen = false
+/// Rend le délai de démarrage, en secondes : le sidecar qui répond, puis la
+/// fenêtre qui appelle.
+async function verifyStable(origin: string, sha: string, timeoutSeconds: number): Promise<{ sidecar: number; window: number }> {
+  const started = Date.now()
+  const deadline = started + timeoutSeconds * 1_000
+  const elapsed = () => Math.round((Date.now() - started) / 1_000)
+  let sidecarReady: number | null = null
   while (Date.now() < deadline) {
     const health = await fetchJson<Health>(`${origin}/api/health`)
     if (health?.build?.sha === sha && health.build.source === 'build') {
-      buildSeen = true
+      sidecarReady ??= elapsed()
       // Champ absent : sidecar antérieur à `frontendAt`, cas d'un rollback vers
       // une release plus ancienne. `null` signale au contraire une fenêtre qui
       // n'a jamais appelé.
-      if (!('frontendAt' in health)) return
-      if (typeof health.frontendAt === 'string') return
+      if (!('frontendAt' in health) || typeof health.frontendAt === 'string') {
+        return { sidecar: sidecarReady, window: elapsed() }
+      }
     }
     await Bun.sleep(1_000)
   }
-  throw new Error(buildSeen
-    ? `la stable répond sur ${sha} mais sa fenêtre reste vide`
-    : `la stable ne répond pas avec le build ${sha}`)
+  throw new Error(sidecarReady !== null
+    ? `la stable répond sur ${sha} depuis ${sidecarReady} s mais sa fenêtre reste vide après ${timeoutSeconds} s`
+    : `la stable ne répond pas avec le build ${sha} après ${timeoutSeconds} s (une migration longue au premier démarrage ? --verify-timeout pour attendre plus)`)
+}
+
+function startupSummary(startup: { sidecar: number; window: number }): string {
+  return `sidecar prêt en ${startup.sidecar} s, fenêtre en ${startup.window} s`
 }
 
 function pruneReleases(current: string): void {
@@ -372,7 +385,8 @@ async function promote(options: PromotionOptions): Promise<void> {
       report('switch', 'done', `release ${targetName} activée`)
       launchedPid = launchStable()
       report('launch', 'done', 'stable relancée')
-      await verifyStable(options.stableOrigin, version.sha)
+      const startup = await verifyStable(options.stableOrigin, version.sha, options.verifyTimeoutSeconds)
+      report('verify', 'done', `stable vérifiée sur ${version.sha} (${startupSummary(startup)})`)
     } catch (error) {
       const runningHealth = await fetchJson<Health>(`${options.stableOrigin}/api/health`)
       if (runningHealth) await stopStable(options.stableOrigin, false, true)
@@ -383,10 +397,9 @@ async function promote(options: PromotionOptions): Promise<void> {
       const previousVersion = parseVersion(readFileSync(join(previousPath, 'VERSION.json'), 'utf8'))
       activateRelease(previousPath)
       launchStable()
-      await verifyStable(options.stableOrigin, previousVersion.sha)
+      await verifyStable(options.stableOrigin, previousVersion.sha, options.verifyTimeoutSeconds)
       throw new Error(`rollback vers ${version.sha} annulé, stable restaurée : ${error instanceof Error ? error.message : String(error)}`)
     }
-    report('verify', 'done', `stable vérifiée sur ${version.sha}`)
     return
   }
 
@@ -420,8 +433,8 @@ async function promote(options: PromotionOptions): Promise<void> {
     report('switch', 'done', `${sha} activé`)
     launchedPid = launchStable()
     report('launch', 'done', 'stable relancée')
-    await verifyStable(options.stableOrigin, sha)
-    report('verify', 'done', `stable vérifiée sur ${sha}`)
+    const startup = await verifyStable(options.stableOrigin, sha, options.verifyTimeoutSeconds)
+    report('verify', 'done', `stable vérifiée sur ${sha} (${startupSummary(startup)})`)
   } catch (error) {
     if (!previousRelease) {
       rmSync(currentLink, { force: true })
@@ -439,7 +452,7 @@ async function promote(options: PromotionOptions): Promise<void> {
     activateRelease(previousPath)
     launchStable()
     try {
-      await verifyStable(options.stableOrigin, previousVersion.sha)
+      await verifyStable(options.stableOrigin, previousVersion.sha, options.verifyTimeoutSeconds)
     } catch (restoration) {
       const detail = restoration instanceof Error ? restoration.message : String(restoration)
       throw new Error(`promotion de ${sha} annulée (${cause}), et restauration incertaine : ${detail}`)

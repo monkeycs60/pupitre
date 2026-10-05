@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import {
   cleanEnv,
+  parseOptions,
   parseVersion,
   releaseDirectoryName,
   releasesToPrune,
@@ -59,4 +60,11 @@ test('attend la fermeture même quand le processus ne dirige pas un groupe', asy
   const child = Bun.spawn(['sleep', '60'])
   await terminateProcessGroup(child.pid, { timeoutMs: 2_000 })
   expect(() => process.kill(child.pid, 0)).toThrow()
+})
+
+test('attend 180 s par défaut que la stable redémarre, réglable avec --verify-timeout', () => {
+  expect(parseOptions([]).verifyTimeoutSeconds).toBe(180)
+  expect(parseOptions(['--verify-timeout', '300']).verifyTimeoutSeconds).toBe(300)
+  expect(parseOptions(['--timeout', '60']).verifyTimeoutSeconds).toBe(180)
+  expect(() => parseOptions(['--verify-timeout', '0'])).toThrow('--verify-timeout')
 })
