@@ -1932,7 +1932,7 @@
 .navigation-main .conv-row-line1 {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -2018,7 +2018,7 @@
 }
 
 .navigation-main {
-  --conv-row-indent: 45px;
+  --conv-row-indent: 39px;
 }
 
 .navigation-main .conv-row-line2 {
@@ -2207,10 +2207,37 @@
 }
 
 .sidebar-section.conversations .navigation-row {
+  grid-template-columns: minmax(0, 1fr);
   min-height: 34px;
-  padding-block: 5px;
+  padding: 5px 6px;
 }
 
 .sidebar-section.conversations .conversation-row-actions {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  z-index: 3;
   min-height: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.sidebar-section.conversations .navigation-row:hover .conversation-row-actions,
+.sidebar-section.conversations .navigation-row:has(:focus-visible) .conversation-row-actions,
+.sidebar-section.conversations .navigation-row:has(.conversation-actions-menu) .conversation-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sidebar-section.conversations .navigation-row:hover .navigation-main,
+.sidebar-section.conversations .navigation-row:has(:focus-visible) .navigation-main,
+.sidebar-section.conversations .navigation-row:has(.conversation-actions-menu) .navigation-main {
+  padding-right: 50px;
+}
+
+.conv-row-pin {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 9px;
 }

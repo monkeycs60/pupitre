@@ -896,6 +896,7 @@ export const Sidebar = memo(function Sidebar({
                       <ProviderMark provider="sentry" className="conv-row-mark" />
                     ) : <ProviderMark provider={conversation.provider} className="conv-row-mark" />}
                     <span className="conv-row-title">{conversation.title}</span>
+                    {conversation.pinned ? <span className="conv-row-pin" aria-hidden="true">◆</span> : null}
                     <span className="conv-row-time">
                       {state === 'live'
                         ? elapsedConversationTime(activeItem?.startedAt, now)
