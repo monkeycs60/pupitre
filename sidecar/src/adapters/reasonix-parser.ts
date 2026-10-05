@@ -45,6 +45,7 @@ export function parseReasonixLine(line: string): AppEvent[] {
         toolId: tool.id,
         output: boundedToolOutput(typeof tool.output === "string" ? tool.output : JSON.stringify(tool.output ?? "")),
         images: [],
+        ...(tool.isError === true || tool.is_error === true ? { isError: true } : {}),
       }];
     }
     case "usage": {

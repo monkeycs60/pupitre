@@ -331,6 +331,7 @@ export function groupEvents(
         if (tool !== undefined) {
           tool.output = event.output
           tool.images = event.images
+          if (event.isError) tool.isError = true
         }
         break
       }

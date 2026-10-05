@@ -15,6 +15,7 @@ export function ToolActivityGroup({ tools, onImageOpen, onImageLoad }: {
   const [userOpen, setUserOpen] = useState<boolean | null>(null)
   const open = userOpen ?? running
   const doneCount = tools.filter((tool) => tool.output !== undefined).length
+  const failedCount = tools.filter((tool) => tool.output !== undefined && tool.isError === true).length
   const plural = tools.length > 1 ? 's' : ''
   const label = running
     ? `${tools.length} action${plural} en cours`
@@ -32,10 +33,11 @@ export function ToolActivityGroup({ tools, onImageOpen, onImageLoad }: {
         <span className="tool-activity-chevron" aria-hidden="true" />
         <span className="tool-activity-pips" aria-hidden="true">
           {pips.map((tool) => (
-            <i key={tool.id} className={tool.output === undefined ? 'is-running' : 'is-done'} />
+            <i key={tool.id} className={tool.output === undefined ? 'is-running' : tool.isError ? 'is-error' : 'is-done'} />
           ))}
         </span>
         <span>{label}</span>
+        {failedCount > 0 ? <span className="tool-activity-failed">{failedCount} en échec</span> : null}
         {running && tools.length > 1 ? <span className="tool-activity-count">{doneCount}/{tools.length}</span> : null}
       </button>
       <div className="tool-activity-body" inert={!open}>

@@ -97,3 +97,12 @@ test("le prompt du digest ne demande aucune détection de domaine", () => {
   expect(prompt).not.toContain('"domains"');
   expect(prompt).not.toContain("domaine");
 });
+
+test("latestStatus renvoie l'issue du dernier tour, en ignorant les événements plus récents", () => {
+  const conv = newConversation();
+  expect(conversations.latestStatus(conv.id)).toBeUndefined();
+  conversations.appendEvent(conv.id, { type: "status", state: "running" });
+  conversations.appendEvent(conv.id, { type: "status", state: "error", error: "quota dépassé" });
+  conversations.appendEvent(conv.id, { type: "text-final", text: "après" });
+  expect(conversations.latestStatus(conv.id)).toMatchObject({ type: "status", state: "error", error: "quota dépassé" });
+});

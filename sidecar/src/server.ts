@@ -3661,6 +3661,21 @@ export function createServer(deps: ServerDeps) {
           return json(deps.conversations.listReplayEvents(conversationEventsId, true));
         }
 
+        const conversationOutcomeId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/outcome$/,
+        );
+        if (request.method === "GET" && conversationOutcomeId !== null) {
+          if (!deps.conversations.get(conversationOutcomeId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          const status = deps.conversations.latestStatus(conversationOutcomeId);
+          if (!status) return json({ state: null, error: null });
+          // Les adapters signalent l'annulation par un statut error « annulé ».
+          const cancelled = status.state === "error" && status.error === "annulé";
+          return json({ state: cancelled ? "cancelled" : status.state, error: cancelled ? null : status.error ?? null });
+        }
+
         const conversationDiffId = routeId(
           pathname,
           /^\/api\/conversations\/([^/]+)\/diff$/,

@@ -808,6 +808,16 @@
 
 .tool-activity-pips i:first-child { margin-left: 0; }
 .tool-activity-pips i.is-done { background: color-mix(in srgb, var(--ok) 70%, var(--text-faint)); }
+.tool-activity-pips i.is-error { background: var(--danger); }
+
+.tool-activity-failed {
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
 
 .tool-activity-pips i.is-running {
   background: var(--accent);
@@ -913,6 +923,31 @@
   stroke-dasharray: 14;
   stroke-dashoffset: 14;
   animation: stroke-draw 320ms 60ms var(--ease-out) forwards;
+}
+
+.tool-activity.is-error { color: var(--text-muted); }
+
+.tool-activity.is-error .tool-activity-state {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.tool-activity.is-error.is-fresh .tool-activity-state {
+  color: var(--danger);
+  animation: tool-error-shake 420ms var(--ease-out);
+}
+
+.tool-activity.is-error.is-fresh .tool-activity-state path {
+  stroke-dasharray: 15;
+  stroke-dashoffset: 15;
+}
+
+@keyframes tool-error-shake {
+  0%, 100% { transform: none; }
+  25% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+  75% { transform: translateX(-2px); }
 }
 
 .background-task-notice {

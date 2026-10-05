@@ -987,7 +987,7 @@ export type AppEvent =
   | { type: 'turn-phase'; phase: string }
   | { type: 'background-task'; status: string; summary: string }
   | { type: 'tool-start'; toolId: string; toolName: string; input: unknown }
-  | { type: 'tool-end'; toolId: string; output: string; images: string[] }
+  | { type: 'tool-end'; toolId: string; output: string; images: string[]; isError?: boolean }
   | {
       type: 'turn-timing'
       phase: 'started' | 'first-response' | 'completed'

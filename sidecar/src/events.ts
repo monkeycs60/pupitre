@@ -26,6 +26,8 @@ export type AppEvent =
       toolId: string;
       output: string;
       images: string[];
+      /** L'outil a échoué (code de sortie non nul, erreur signalée par le provider). */
+      isError?: boolean;
       /** Blocs image transitoires du provider, importés avant persistance. */
       inlineImages?: Array<{ mediaType: string; data: string }>;
     }

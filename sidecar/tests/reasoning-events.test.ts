@@ -45,7 +45,7 @@ describe("parseReasonixAcpMessage", () => {
       toolCallId: "call-1",
       status: "failed",
       content: [{ type: "content", content: { type: "text", text: "no such file" } }],
-    }))).toEqual([{ type: "tool-end", toolId: "call-1", output: "no such file", images: [] }]);
+    }))).toEqual([{ type: "tool-end", toolId: "call-1", output: "no such file", images: [], isError: true }]);
   });
 
   test("expose la phase et l'usage du tour tant qu'il tourne", () => {

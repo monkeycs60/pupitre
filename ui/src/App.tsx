@@ -1,3 +1,4 @@
+import { summarizeTurnError } from './turnError'
 import { FleetIsland } from './FleetIsland'
 import { ToastHost } from './ToastHost'
 import { pushToast } from './toasts'
@@ -39,7 +40,7 @@ import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { useAppNotifications } from './useAppNotifications'
 import { CommandPalette } from './CommandPalette'
-import { createSessionSummary, createTestInventory } from './api'
+import { createSessionSummary, createTestInventory, getConversationOutcome } from './api'
 import type { SkillSummary } from './types'
 import type { AppEvent, WorkspaceView } from './types'
 import { useTimeTracking } from './useTimeTracking'
@@ -363,13 +364,25 @@ function App() {
     const activeIds = new Set(fleet.items.map((item) => item.id))
     for (const item of previous) {
       if (activeIds.has(item.id) || item.kind === 'subtask') continue
-      if (document.hasFocus() && item.conversationId === selectedConversationIdRef.current) continue
-      pushToast({
-        tone: 'ok',
-        title: item.kind === 'routine' ? 'Routine terminée' : 'Tour terminé',
-        detail: `${item.projectName} · ${item.title}`,
-        onOpen: () => void openFleetConversationRef.current(item.projectId, item.conversationId),
-      })
+      const inFront = document.hasFocus() && item.conversationId === selectedConversationIdRef.current
+      void getConversationOutcome(item.conversationId)
+        .catch(() => null)
+        .then((outcome) => {
+          const failed = outcome?.state === 'error'
+          const cancelled = outcome?.state === 'cancelled'
+          if (inFront && !failed) return
+          const noun = item.kind === 'routine' ? 'Routine' : 'Tour'
+          const feminine = item.kind === 'routine' ? 'e' : ''
+          pushToast({
+            tone: failed ? 'danger' : cancelled ? 'info' : 'ok',
+            title: failed ? `${noun} en échec` : cancelled ? `${noun} annulé${feminine}` : `${noun} terminé${feminine}`,
+            detail: failed && outcome?.error
+              ? `${item.title} · ${summarizeTurnError(outcome.error).message}`
+              : `${item.projectName} · ${item.title}`,
+            durationMs: failed ? 12_000 : undefined,
+            onOpen: () => void openFleetConversationRef.current(item.projectId, item.conversationId),
+          })
+        })
     }
   }, [fleet.items])
 

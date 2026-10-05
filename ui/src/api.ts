@@ -1106,6 +1106,15 @@ export interface EventPage {
   nextBefore: number | null
 }
 
+export interface ConversationOutcome {
+  state: 'running' | 'done' | 'error' | 'cancelled' | null
+  error: string | null
+}
+
+export async function getConversationOutcome(conversationId: string, signal?: AbortSignal): Promise<ConversationOutcome> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/outcome`, { signal })
+}
+
 export async function getConversationEventPage(
   conversationId: string,
   before: number | null,

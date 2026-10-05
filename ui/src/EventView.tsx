@@ -241,17 +241,22 @@ function ToolActivity({ block }: { block: Extract<EventBlock, { kind: 'tool' }> 
   const [startedAt] = useState(Date.now)
   const now = useNow(running ? 1000 : 60_000)
   const elapsed = running ? now - startedAt : 0
-  const state = running ? ' is-running' : mountedRunning ? ' is-done is-fresh' : ' is-done'
+  const failed = !running && block.isError === true
+  const state = running ? ' is-running' : `${failed ? ' is-error' : ' is-done'}${mountedRunning ? ' is-fresh' : ''}`
   return (
     <div className={`tool-activity${state}`} role={running ? 'status' : undefined}>
       <span className="tool-activity-state" aria-hidden="true">
-        {running ? null : (
+        {running ? null : failed ? (
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+            <path d="M3.5 3.5l5 5M8.5 3.5l-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        ) : (
           <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
             <path d="M2.5 6.2 5 8.5l4.5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
       </span>
-      <span>{presentation.label}{running ? ' en cours' : ' terminée'}</span>
+      <span>{presentation.label}{running ? ' en cours' : failed ? ' en échec' : ' terminée'}</span>
       {presentation.detail ? <span className="tool-activity-detail" title={presentation.detail}>{presentation.detail}</span> : null}
       {elapsed >= TOOL_ELAPSED_VISIBLE_MS ? <span className="tool-activity-elapsed">{Math.floor(elapsed / 1000)} s</span> : null}
     </div>

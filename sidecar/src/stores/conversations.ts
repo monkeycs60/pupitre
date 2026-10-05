@@ -726,6 +726,20 @@ export class ConversationStore {
 
   /** Le dernier événement seul : le snapshot fleet le lit chaque seconde,
    *  charger tout le replay pour un `.at(-1)` coûtait des Mo de JSON.parse. */
+  /** Dernier statut de tour : l'issue d'un tour qui vient de quitter la flotte. */
+  latestStatus(conversationId: string): Extract<StoredEvent, { type: "status" }> | undefined {
+    const row = this.db.query(
+      "SELECT id, payload, created_at FROM events WHERE conversation_id = ? AND json_extract(payload, '$.type') = 'status' ORDER BY id DESC LIMIT 1"
+    ).get(conversationId) as { id: number; payload: string; created_at: string } | null;
+    if (!row) return undefined;
+    try {
+      return { ...JSON.parse(row.payload), id: Number(row.id), createdAt: row.created_at };
+    } catch (error) {
+      console.error("Statut de conversation corrompu, ligne ignorée", error);
+      return undefined;
+    }
+  }
+
   latestEvent(conversationId: string): StoredEvent | undefined {
     const row = this.db.query(
       "SELECT id, payload FROM events WHERE conversation_id = ? ORDER BY id DESC LIMIT 1"

@@ -83,6 +83,7 @@ export function parseReasonixAcpMessage(message: unknown): AppEvent[] {
         toolId: update.toolCallId,
         output: boundedToolOutput(contentText(update.content)),
         images: [],
+        ...(update.status === "failed" ? { isError: true } : {}),
       }];
     }
     default:

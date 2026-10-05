@@ -24,6 +24,7 @@ interface ToolBlock {
   toolName: string
   input: unknown
   output?: string
+  isError?: boolean
   images: string[]
 }
 

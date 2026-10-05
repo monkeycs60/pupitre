@@ -78,6 +78,7 @@ export function parseClaudeLine(line: string, provider: Provider = "claude"): Ap
               typeof block.content === "string" ? block.content : JSON.stringify(printableContent),
             ),
             images: [],
+            ...(block.is_error === true ? { isError: true } : {}),
             ...(inlineImages.length > 0 ? { inlineImages } : {}),
           });
         }

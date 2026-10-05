@@ -727,6 +727,7 @@ export class CodexAppServerClient {
           toolId: item.id,
           output: boundedToolOutput(item.aggregatedOutput),
           images: [],
+          ...(item.status === "failed" || (typeof item.exitCode === "number" && item.exitCode !== 0) ? { isError: true } : {}),
         });
       }
     }

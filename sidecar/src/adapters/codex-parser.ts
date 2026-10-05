@@ -41,6 +41,7 @@ export function parseCodexLine(line: string): AppEvent[] {
           toolId: item.id,
           output: boundedToolOutput(item.aggregated_output),
           images: [],
+          ...(item.status === "failed" || (typeof item.exit_code === "number" && item.exit_code !== 0) ? { isError: true } : {}),
         }];
       }
 

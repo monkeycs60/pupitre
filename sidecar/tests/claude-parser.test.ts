@@ -132,3 +132,14 @@ test("traduit `system/task_notification` en notification de tâche de fond", () 
     summary: "Background command \"Sleep\" completed (exit code 0)",
   }]);
 });
+
+test("marque en échec un résultat d'outil signalé is_error", () => {
+  const line = JSON.stringify({
+    type: "user",
+    message: { content: [{ type: "tool_result", tool_use_id: "bash-1", is_error: true, content: "Exit code 1" }] },
+  });
+
+  expect(parseClaudeLine(line)).toEqual([
+    { type: "tool-end", toolId: "bash-1", output: "Exit code 1", images: [], isError: true },
+  ]);
+});

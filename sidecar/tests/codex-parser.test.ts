@@ -68,3 +68,17 @@ test("borne une longue sortie d'outil en conservant sa fin", () => {
   expect(output).toContain("sortie intermédiaire tronquée");
   expect(output).toEndWith("RÉSUMÉ FINAL: 1 test échoue");
 });
+
+test("marque en échec une commande Codex au code de sortie non nul", () => {
+  const [event] = parseCodexLine(JSON.stringify({
+    type: "item.completed",
+    item: { id: "cmd-1", type: "command_execution", aggregated_output: "boom", exit_code: 2, status: "failed" },
+  }));
+  expect(event).toMatchObject({ type: "tool-end", toolId: "cmd-1", isError: true });
+
+  const [ok] = parseCodexLine(JSON.stringify({
+    type: "item.completed",
+    item: { id: "cmd-2", type: "command_execution", aggregated_output: "ok", exit_code: 0, status: "completed" },
+  }));
+  expect(ok).not.toHaveProperty("isError");
+});

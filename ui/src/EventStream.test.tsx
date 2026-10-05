@@ -108,3 +108,16 @@ test('referme le groupe en fin d’exécution sans le remonter, et respecte un d
   expect(group?.classList.contains('is-auto')).toBe(false)
   cleanup()
 })
+
+test('signale une action en échec dans la ligne et dans le résumé du groupe', () => {
+  const { container } = render(<EventStream {...callbacks} blocks={[
+    { kind: 'tool', id: 'a', toolId: 'a', toolName: 'Bash', input: { command: 'bun test' }, output: 'Exit code 1', isError: true, images: [] },
+    { kind: 'tool', id: 'b', toolId: 'b', toolName: 'Read', input: { file_path: '/tmp/a.ts' }, output: 'ok', images: [] },
+  ]} />)
+
+  expect(container.querySelectorAll('.tool-activity.is-error')).toHaveLength(1)
+  expect(container.querySelector('.tool-activity.is-error')?.textContent).toContain('en échec')
+  expect(container.querySelectorAll('.tool-activity-pips i.is-error')).toHaveLength(1)
+  expect(screen.getByText('1 en échec')).toBeTruthy()
+  cleanup()
+})
