@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { runCodexAppServerTurn } from "./adapters/codex-app-server";
-import { runCodexTurn } from "./adapters/codex";
+import { runProviderTurn } from "./adapters/run";
+import { BACKGROUND_MODEL } from "./background-model";
 import type { AppEvent } from "./events";
 import type { QuotaTracker } from "./quotas";
 import { skillInvocation, type SkillDetail, type SkillInventory } from "./skills";
@@ -81,7 +81,7 @@ function normalizedSkillMarkdown(skill: GeneratedSkill, slug: string): string {
   ].join("\n");
 }
 
-async function generateWithCodex(
+async function generateSkill(
   input: SkillGenerationRequest,
   quotas: QuotaTracker,
 ): Promise<string> {
@@ -98,16 +98,16 @@ async function generateWithCodex(
   };
   const options = {
     cwd: input.cwd,
-    model: "gpt-6-sol",
-    effort: "high",
+    model: BACKGROUND_MODEL.model,
+    effort: BACKGROUND_MODEL.effort,
+    speed: BACKGROUND_MODEL.speed,
     prompt: input.prompt,
     cliSessionId: null,
     permissionMode: "plan",
     sandboxMode: "read-only" as const,
     images: [],
   };
-  if (process.env.PUPITRE_CODEX_MODE === "exec") await runCodexTurn(options, emit);
-  else await runCodexAppServerTurn(options, emit);
+  await runProviderTurn(BACKGROUND_MODEL.provider, options, emit);
   if (providerError !== null) throw new Error(providerError);
   const output = finals.at(-1)?.trim() || deltas.join("").trim();
   if (!output) throw new Error("sortie vide du composer de skill");
@@ -125,7 +125,7 @@ export class SkillComposer {
     options: SkillComposerOptions = {},
   ) {
     this.homeDir = options.homeDir ?? homedir();
-    this.generator = options.generator ?? ((input) => generateWithCodex(input, quotas));
+    this.generator = options.generator ?? ((input) => generateSkill(input, quotas));
   }
 
   async compose(input: SkillCompositionInput): Promise<SkillDetail> {

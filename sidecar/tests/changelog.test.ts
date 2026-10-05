@@ -77,7 +77,7 @@ function commits(count: number): GitChangelogCommit[] {
   }));
 }
 
-test("importe et enrichit tout le backfill par lots de dix avec Luna medium standard", async () => {
+test("importe et enrichit tout le backfill par lots de dix avec Haiku medium", async () => {
   const generations: import("../src/debriefs").DebriefGenerationInput[] = [];
   const history = commits(12);
   const context = setup({
@@ -101,9 +101,9 @@ test("importe et enrichit tout le backfill par lots de dix avec Luna medium stan
   expect(generations).toHaveLength(2);
   expect(generations[0]).toEqual(expect.objectContaining({
     cwd: context.root,
-    provider: "codex",
-    model: "gpt-6-luna",
-    effort: "xhigh",
+    provider: "claude",
+    model: "haiku",
+    effort: "medium",
     speed: "standard",
   }));
   expect(payload.state.backfill_version).toBe(CHANGELOG_BACKFILL_VERSION);

@@ -58,6 +58,7 @@ import { PromotionAgentService } from "./promotion-agent";
 import { VisualFeedbackService } from "./visual-feedback";
 import { TicketAuditService } from "./ticket-audits";
 import { ActivityJournal, ActivityReportService, ActivityStore } from "./activity-report";
+import { BACKGROUND_MODEL } from "./background-model";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -199,7 +200,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     new ActivityJournal(db, projects, new ChangelogStore(db), time, tickets, new TodoStore(db)),
     projects, problemStore, todos, conversations, presets, time, new ChangelogStore(db),
     async (prompt, cwd) => {
-      const raw = await generateWithAdapters({ cwd, provider: "claude", model: "claude-haiku-4-5-20251001", effort: "low", speed: "standard", prompt }, quotas);
+      const raw = await generateWithAdapters({ cwd, ...BACKGROUND_MODEL, prompt }, quotas);
       const match = raw.match(/\{[\s\S]*\}/);
       return match ? JSON.parse(match[0]) : null;
     },
