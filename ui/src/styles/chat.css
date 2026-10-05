@@ -965,6 +965,28 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
 .tool-diff-status.is-added { background: var(--ok-soft); color: var(--ok); }
 .tool-diff-status.is-deleted { background: var(--danger-soft); color: var(--danger); }
 
+.tool-diff-open {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.tool-diff-file:hover .tool-diff-open,
+.tool-diff-open:focus-visible { opacity: 1; }
+.tool-diff-open:hover { border-color: var(--border); color: var(--text); }
+.tool-diff-open:disabled { cursor: default; opacity: 0.5; }
+
 .tool-diff-stats {
   display: flex;
   flex: none;
@@ -1925,3 +1947,5 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
     padding-left: var(--space-5);
   }
 }
+
+.tool-diff-open + .tool-diff-stats { margin-left: 0; }

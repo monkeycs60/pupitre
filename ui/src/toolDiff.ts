@@ -12,6 +12,7 @@ export interface ToolDiffFile {
   path: string
   status: 'added' | 'deleted' | 'modified'
   lines: ToolDiffLine[]
+  replaced?: { before: string; after: string }
 }
 
 function recordOf(value: unknown): Record<string, unknown> {
@@ -88,7 +89,7 @@ function fileChangeFiles(input: Record<string, unknown>): ToolDiffFile[] {
   })
 }
 
-function dedented(file: ToolDiffFile): ToolDiffFile {
+export function dedented(file: ToolDiffFile): ToolDiffFile {
   const indents = file.lines
     .filter((line) => line.kind !== 'gap' && line.text.trim())
     .map((line) => /^[ \t]*/.exec(line.text)![0])
@@ -110,7 +111,14 @@ export function toolDiff(tool: ToolBlock): ToolDiffFile[] | null {
   let files: ToolDiffFile[] = []
   switch (tool.toolName.toLocaleLowerCase('en-US')) {
     case 'edit':
-      files = [{ path, status: 'modified', lines: replacement(input.old_string, input.new_string) }]
+      files = [{
+        path,
+        status: 'modified',
+        lines: replacement(input.old_string, input.new_string),
+        ...(typeof input.old_string === 'string' && typeof input.new_string === 'string'
+          ? { replaced: { before: input.old_string, after: input.new_string } }
+          : {}),
+      }]
       break
     case 'multiedit':
       files = [{
@@ -134,7 +142,7 @@ export function toolDiff(tool: ToolBlock): ToolDiffFile[] | null {
       break
   }
   files = files.filter((file) => file.lines.some((line) => line.kind === 'added' || line.kind === 'removed'))
-  return files.length > 0 ? files.map(dedented) : null
+  return files.length > 0 ? files : null
 }
 
 export function changedRange(before: string, after: string): { before: [number, number]; after: [number, number] } | null {
@@ -148,4 +156,44 @@ export function changedRange(before: string, after: string): { before: [number, 
   const shared = prefix + suffix
   if (shared === 0 || shared < Math.min(before.length, after.length) * 0.3) return null
   return { before: [prefix, before.length - suffix], after: [prefix, after.length - suffix] }
+}
+
+const CONTEXT_LINES = 3
+
+export function locatedInFile(file: ToolDiffFile, content: string): ToolDiffFile | null {
+  const after = file.replaced?.after
+  if (!after || !file.replaced) return null
+  const index = content.indexOf(after)
+  if (index < 0 || content.indexOf(after, index + 1) >= 0) return null
+
+  const lineStart = content.lastIndexOf('\n', index - 1) + 1
+  const afterEnd = index + after.length - (after.endsWith('\n') ? 1 : 0)
+  const nextBreak = content.indexOf('\n', afterEnd)
+  const lineEnd = nextBreak < 0 ? content.length : nextBreak
+  const prefix = content.slice(lineStart, index)
+  const suffix = content.slice(index + after.length, lineEnd)
+  const oldLines = `${prefix}${file.replaced.before}${suffix}`.split('\n')
+  const newLines = content.slice(lineStart, lineEnd).split('\n')
+  const fileLines = content.split('\n')
+  const firstLine = content.slice(0, lineStart).split('\n').length
+
+  let head = 0
+  while (head < oldLines.length - 1 && head < newLines.length - 1 && oldLines[head] === newLines[head]) head += 1
+  let tail = 0
+  while (
+    tail < oldLines.length - head - 1 && tail < newLines.length - head - 1
+    && oldLines[oldLines.length - 1 - tail] === newLines[newLines.length - 1 - tail]
+  ) tail += 1
+
+  const changeStart = firstLine + head
+  const newEnd = firstLine + newLines.length - tail
+  const oldChanged = oldLines.slice(head, oldLines.length - tail)
+  const contextBefore = Math.max(1, changeStart - CONTEXT_LINES)
+  const lines: ToolDiffLine[] = [
+    ...fileLines.slice(contextBefore - 1, changeStart - 1).map((text, offset) => ({ kind: 'context' as const, text, line: contextBefore + offset })),
+    ...oldChanged.map((text, offset) => ({ kind: 'removed' as const, text, line: changeStart + offset })),
+    ...newLines.slice(head, newLines.length - tail).map((text, offset) => ({ kind: 'added' as const, text, line: changeStart + offset })),
+    ...fileLines.slice(newEnd - 1, newEnd - 1 + CONTEXT_LINES).map((text, offset) => ({ kind: 'context' as const, text, line: newEnd + offset })),
+  ]
+  return { path: file.path, status: file.status, lines }
 }

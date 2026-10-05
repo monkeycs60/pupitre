@@ -67,6 +67,8 @@ import { retryUntilAvailable } from './startupRetry'
 import { subscribeVisualFeedbackNavigation } from './visualFeedbackNavigation'
 import { ProjectSectionSwitch } from './ProjectSectionSwitch'
 import { codeViewMemoryKey, writeCodeViewMemory } from './codeViewMemory'
+import { ancestorDirectories } from './codeTree'
+import { createToolFileAccess, ToolFileContext, type ToolFileLocation } from './toolFiles'
 import {
   PROJECT_SECTIONS,
   projectNavigationIndexForShortcut,
@@ -166,6 +168,7 @@ function App() {
   const [railReadVersion, setRailReadVersion] = useState(0)
   const readSyncKeyRef = useRef<string | null>(null)
   const navigationShortcutRef = useRef<(view: NavigationShortcutView) => void>(() => {})
+  const openToolFileRef = useRef<(location: ToolFileLocation, line: number | null) => void>(() => {})
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [showHandoff, setShowHandoff] = useState(false)
@@ -533,6 +536,34 @@ function App() {
     setInspector(layout === 'docked' ? 'dashboard' : null)
     setWorkspaceView('conversations')
   }
+
+  const selectedProjectId = selectedProject?.id ?? null
+  const toolFileAccess = useMemo(() => (
+    selectedProjectId === null
+      ? null
+      : createToolFileAccess(selectedProjectId, (location, line) => openToolFileRef.current(location, line))
+  ), [selectedProjectId, selectedConversation?.id])
+
+  function openToolFileInCode(location: ToolFileLocation, line: number | null) {
+    if (selectedProject === null) return
+    writeCodeViewMemory(codeViewMemoryKey(selectedProject.id, selectedConversation?.id ?? null), {
+      scopeId: `source:${location.source.path}`,
+      openFile: {
+        display: location.relative,
+        source: location.source.path,
+        path: location.relative,
+        line,
+        diffSha: null,
+        nonce: Date.now(),
+      },
+      readerScrollTop: undefined,
+      expandedDirectories: ancestorDirectories(location.relative),
+      selected: null,
+      graphExpanded: false,
+    })
+    openProjectSection('code')
+  }
+  openToolFileRef.current = openToolFileInCode
 
   function openCodeForConversation(conversationId: string, target: 'conversation' | 'ticket' = 'conversation') {
     if (selectedProject === null) return
@@ -1193,6 +1224,7 @@ function App() {
                 />
               </div>
             </header>
+            <ToolFileContext.Provider value={toolFileAccess}>
             <Chat
               key={selectedConversation === null
                 ? `chat-new-${selectedProject.id}-${conversationSeed?.ticketId ?? ''}-${newConversationDraft}`
@@ -1229,6 +1261,7 @@ function App() {
               onSwitchModel={() => setShowSwitchModel(true)}
               onOpenCode={openCodeForConversation}
             />
+            </ToolFileContext.Provider>
             {showSwitchModel && selectedConversation !== null ? (
               <SwitchModelModal
                 key={`switch-model-${selectedConversation.id}`}

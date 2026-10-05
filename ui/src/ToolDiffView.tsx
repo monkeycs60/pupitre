@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { escapeHtml, highlightCode } from './codeHighlight'
-import { changedRange, type ToolDiffFile, type ToolDiffLine } from './toolDiff'
+import { changedRange, dedented, locatedInFile, type ToolDiffFile, type ToolDiffLine } from './toolDiff'
+import { ToolFileContext } from './toolFiles'
 
 const HEAD_LINES = 40
 const WORD_MARK = '<mark class="tool-diff-word">'
@@ -52,8 +53,27 @@ function wordRanges(lines: ToolDiffLine[]): Map<number, [number, number]> {
   return ranges
 }
 
-function DiffFile({ file }: { file: ToolDiffFile }) {
+function DiffFile({ file: rawFile }: { file: ToolDiffFile }) {
+  const access = useContext(ToolFileContext)
   const [full, setFull] = useState(false)
+  const [located, setLocated] = useState<ToolDiffFile | null>(null)
+  const [unreachable, setUnreachable] = useState(false)
+  const absolute = rawFile.path.startsWith('/')
+
+  useEffect(() => {
+    if (!access || !absolute || !rawFile.replaced) return
+    let cancelled = false
+    access.readFile(rawFile.path)
+      .then((content) => {
+        if (!cancelled && content !== null) setLocated(locatedInFile(rawFile, content))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [access, absolute, rawFile])
+
+  const file = useMemo(() => dedented(located ?? rawFile), [located, rawFile])
   const texts = useMemo(() => file.lines.map((line) => (line.kind === 'gap' ? '' : line.text)), [file])
   const ranges = useMemo(() => wordRanges(file.lines), [file])
   const [highlighted, setHighlighted] = useState<{ source: string[]; lines: string[] } | null>(null)
@@ -88,6 +108,23 @@ function DiffFile({ file }: { file: ToolDiffFile }) {
         </span>
         {file.status !== 'modified' ? (
           <span className={`tool-diff-status is-${file.status}`}>{file.status === 'added' ? 'nouveau' : 'supprimé'}</span>
+        ) : null}
+        {access && absolute ? (
+          <button
+            type="button"
+            className="tool-diff-open"
+            disabled={unreachable}
+            title={unreachable ? 'Fichier hors des dépôts du projet' : 'Ouvrir dans l’onglet Code'}
+            onClick={() => {
+              const firstLine = file.lines.find((line) => (line.kind === 'added' || line.kind === 'removed') && line.line !== undefined)?.line ?? null
+              void access.openInCode(rawFile.path, firstLine).then((opened) => setUnreachable(!opened))
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M6 4 2 8l4 4M10 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Ouvrir
+          </button>
         ) : null}
         <span className="tool-diff-stats">
           {added > 0 ? <span className="is-added">+{added}</span> : null}

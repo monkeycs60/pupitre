@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { changedRange, toolDiff } from './toolDiff'
+import { changedRange, dedented, locatedInFile, toolDiff } from './toolDiff'
 import type { EventBlock } from './eventBlocks'
 
 function tool(toolName: string, input: unknown): Extract<EventBlock, { kind: 'tool' }> {
@@ -10,6 +10,7 @@ test('une modification montre les lignes retirées puis ajoutées', () => {
   expect(toolDiff(tool('Edit', { file_path: '/a.ts', old_string: 'const a = 1\nconst b = 2', new_string: 'const a = 3' }))).toEqual([{
     path: '/a.ts',
     status: 'modified',
+    replaced: { before: 'const a = 1\nconst b = 2', after: 'const a = 3' },
     lines: [
       { kind: 'removed', text: 'const a = 1' },
       { kind: 'removed', text: 'const b = 2' },
@@ -76,10 +77,39 @@ test('le passage modifié d’une ligne se limite à ce qui diffère', () => {
 })
 
 test('un extrait perd son indentation commune, pas l’indentation relative', () => {
-  expect(toolDiff(tool('Edit', { file_path: '/a.ts', old_string: '    if (x) {\n      y()', new_string: '    if (z) {\n      y()' }))?.[0].lines.map((line) => line.text))
+  expect(dedented(toolDiff(tool('Edit', { file_path: '/a.ts', old_string: '    if (x) {\n      y()', new_string: '    if (z) {\n      y()' }))![0]).lines.map((line) => line.text))
     .toEqual(['if (x) {', '  y()', 'if (z) {', '  y()'])
 })
 
 test('le surlignage garde un préfixe commun court comme celui d’un return', () => {
   expect(changedRange('return "Hello " + name', 'return `Hello ${name}`')).toEqual({ before: [7, 22], after: [7, 22] })
+})
+
+test('un Edit retrouvé dans le fichier gagne ses numéros et trois lignes de contexte', () => {
+  const content = ['l1', 'l2', 'l3', 'l4', '  return `Hello ${name}`', 'l6', 'l7', 'l8', 'l9'].join('\n')
+  const [file] = toolDiff(tool('Edit', { file_path: '/repo/a.ts', old_string: '"Hello " + name', new_string: '`Hello ${name}`' }))!
+  expect(locatedInFile(file, content)?.lines).toEqual([
+    { kind: 'context', text: 'l2', line: 2 },
+    { kind: 'context', text: 'l3', line: 3 },
+    { kind: 'context', text: 'l4', line: 4 },
+    { kind: 'removed', text: '  return "Hello " + name', line: 5 },
+    { kind: 'added', text: '  return `Hello ${name}`', line: 5 },
+    { kind: 'context', text: 'l6', line: 6 },
+    { kind: 'context', text: 'l7', line: 7 },
+    { kind: 'context', text: 'l8', line: 8 },
+  ])
+})
+
+test('un Edit dont les lignes extrêmes ne changent pas les montre en contexte', () => {
+  const content = 'a\nb\nc2\nd\ne'
+  const [file] = toolDiff(tool('Edit', { file_path: '/a', old_string: 'b\nc\nd', new_string: 'b\nc2\nd' }))!
+  expect(locatedInFile(file, content)?.lines.map((line) => `${line.kind}:${line.line}:${line.text}`)).toEqual([
+    'context:1:a', 'context:2:b', 'removed:3:c', 'added:3:c2', 'context:4:d', 'context:5:e',
+  ])
+})
+
+test('un Edit introuvable ou ambigu garde son extrait sans numéros', () => {
+  const [file] = toolDiff(tool('Edit', { file_path: '/a', old_string: 'x', new_string: 'y' }))!
+  expect(locatedInFile(file, 'rien ici')).toBeNull()
+  expect(locatedInFile(file, 'y\ny')).toBeNull()
 })
