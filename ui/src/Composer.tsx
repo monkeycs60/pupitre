@@ -74,7 +74,7 @@ interface UploadedAttachment {
 }
 
 const IMAGE_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.svg', '.webp'])
-const COMPOSER_MIN_HEIGHT = 64
+const COMPOSER_MIN_HEIGHT = 56
 const COMPOSER_MAX_HEIGHT = 200
 
 function resizeComposerTextarea(area: HTMLTextAreaElement) {
@@ -714,7 +714,7 @@ export function Composer({
             onPaste={(event) => void handlePaste(event)}
             placeholder={isRunning ? (canSteer ? 'Ajoute une précision au tour en cours…' : 'tour en cours…') : ''}
             aria-label="Message"
-            rows={3}
+            rows={2}
             disabled={isRunning && !canSteer}
             autoFocus={isNewConversation || focusRequest > 0}
           />

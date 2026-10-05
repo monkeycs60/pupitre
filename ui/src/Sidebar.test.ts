@@ -345,7 +345,8 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
   const headers = [...document.querySelectorAll('.conv-group-key')].map((element) => element.textContent)
   expect(headers[0]).toBe('Sentry · REACTOR-B4S')
   expect(headers[1]).toBe("Aujourd'hui")
-  expect(headers[2]).toBe('TECH-1')
+  expect(headers[2]).toBe('1')
+  expect(document.querySelectorAll('.conv-group-key')[2]?.getAttribute('title')).toBe('TECH-1')
   const ticketTitle = document.querySelector('.conv-group-ticket-title')
   expect(ticketTitle?.textContent).toBe('Corriger les pipelines de déploiement')
   expect(ticketTitle?.getAttribute('title')).toBe('Corriger les pipelines de déploiement')
@@ -677,4 +678,11 @@ test('une proposition de nom s’affiche sous le chantier et s’applique ou s�
   await waitFor(() => expect(document.querySelectorAll('.conv-chantier-proposal')).toHaveLength(0))
   expect(groupKey('CH-5')).toBe('Pièces jointes')
   expect(bodies).toEqual([{ titleProposal: 'accept' }, { titleProposal: 'dismiss' }])
+})
+
+test('raccourcit une clé de ticket à son numéro, sans toucher aux autres libellés', async () => {
+  const { shortTicketKey } = await import('./Sidebar')
+  expect(shortTicketKey('TECH-25064')).toBe('25064')
+  expect(shortTicketKey('Cette semaine')).toBe('Cette semaine')
+  expect(shortTicketKey('CH-1')).toBe('1')
 })

@@ -150,6 +150,11 @@ function relativeConversationTime(value: string): string {
   return days < 7 ? `il y a ${days} j` : new Date(value).toLocaleDateString('fr-FR')
 }
 
+/** « TECH-25064 » → « 25064 » : à côté du titre du ticket, le préfixe du projet n'apprend rien. */
+export function shortTicketKey(label: string): string {
+  return /^[A-Z][A-Z0-9]*-\d+$/.test(label) ? label.slice(label.indexOf('-') + 1) : label
+}
+
 export function ticketTitleWithoutKey(title: string, ticketKey: string): string {
   return title
     .replace(new RegExp(`^${ticketKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(?:[-–—:·]\\s*)?`, 'i'), '')
@@ -852,12 +857,13 @@ export const Sidebar = memo(function Sidebar({
               const hiddenCount = group.items.length - compactItems.length
               const shownItems = isExpanded ? group.items : compactItems
               const repeatsTicket = group.ticketKey != null
+              const keyLabel = ticketTitle ? shortTicketKey(group.label) : group.label
               return (
               <div className="conv-group" key={group.key}>
                 <div className={`conv-group-header${isChantier ? ' is-chantier' : ''}`}>
                   <button
                     type="button"
-                    className="conv-group-toggle"
+                    className={`conv-group-toggle${keyLabel !== group.label ? ' is-short-key' : ''}`}
                     aria-expanded={!isCollapsed}
                     aria-label={`${isCollapsed ? 'Déplier' : 'Replier'} ${group.label}`}
                     onClick={() => toggleGroupCollapsed(group.key)}
@@ -866,7 +872,7 @@ export const Sidebar = memo(function Sidebar({
                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     {chantierId ? <span className="conv-chantier-dot" style={{ background: chantierColor(group.ticketKey!) }} aria-hidden="true" /> : null}
-                    <span className="conv-group-key" title={isChantier || backlogCount ? [group.label, isChantier ? group.ticketKey : null, backlogCount ? `${backlogCount} à faire` : null].filter(Boolean).join(' · ') : undefined}>{group.label}</span>
+                    <span className="conv-group-key" title={isChantier || backlogCount || keyLabel !== group.label ? [group.label, isChantier ? group.ticketKey : null, backlogCount ? `${backlogCount} à faire` : null].filter(Boolean).join(' · ') : undefined}>{keyLabel}</span>
                     {isChantier ? <span className="conv-group-chantier-key">{group.ticketKey}</span> : null}
                   </button>
                   {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}

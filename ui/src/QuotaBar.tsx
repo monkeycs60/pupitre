@@ -160,12 +160,12 @@ function CompactProviderQuota({ provider, state, now, onAuthenticate, authentica
       ) : (
         <span className={gaugeClassName} aria-hidden="true" />
       )}
-      <span className={`quota-status-value${stale ? ' is-stale' : ''}`}>
+      <span className={`quota-status-value${stale ? ' is-stale' : ''}`} title={stale ? `Données périmées · dernier relevé ${freshness.label}` : undefined}>
         {authentication === 'running'
           ? 'connexion…'
           : authentication === 'error'
             ? 'connexion requise'
-            : stale ? 'données périmées' : summary.headline}
+            : stale ? (usedPercent === null ? 'périmé' : `${Math.round(usedPercent)} %`) : summary.headline}
       </span>
 
       {freshness.stale ? (

@@ -25,7 +25,7 @@ test('signale un quota périmé et permet de relancer sa relève', async () => {
   const snapshot = staleSnapshot()
   render(<QuotaStatus snapshot={snapshot} onRefresh={async () => snapshot} />)
 
-  expect(screen.getByText('données périmées')).toBeTruthy()
+  expect(screen.getByTitle(/^Données périmées · dernier relevé/).textContent).toBe('37 %')
   expect(screen.getByRole('meter').getAttribute('aria-label')).toContain('dernier relevé périmé')
   expect(screen.getByText('37 % au dernier relevé')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Actualiser les quotas' }))

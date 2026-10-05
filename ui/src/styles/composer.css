@@ -893,7 +893,7 @@
 
 .composer textarea {
   width: 100%;
-  min-height: 64px;
+  min-height: 56px;
   max-height: 200px;
   padding: var(--space-2) var(--space-3);
   overflow-y: hidden;
@@ -1297,6 +1297,8 @@
 }
 
 .send-button {
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur-fast) var(--ease);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1316,6 +1318,16 @@
 
 .send-button:hover:not(:disabled) {
   background: var(--accent-hover);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.send-button:active:not(:disabled) { transform: scale(0.96); }
+
+.send-button:disabled:not(.is-running) {
+  color: var(--text-faint);
+  background: var(--bg-hover);
+  border-color: var(--border-subtle);
+  opacity: 1;
 }
 
 /* Tour en cours : un reflet balaie le bouton d'envoi, écho du filet de la
@@ -1331,7 +1343,7 @@
   width: 40%;
   pointer-events: none;
   content: '';
-  background: linear-gradient(105deg, transparent, color-mix(in srgb, var(--tint) 35%, transparent), transparent);
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.35), transparent);
   animation: sheen 1.8s var(--ease) infinite;
 }
 

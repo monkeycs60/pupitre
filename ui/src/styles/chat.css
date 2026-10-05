@@ -1552,27 +1552,39 @@
 }
 
 .turn-reasoning > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   width: fit-content;
+  min-height: 22px;
   color: var(--text-faint);
   font-size: var(--text-xs);
   list-style: none;
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
 }
+
+.turn-reasoning > summary:hover { color: var(--text); }
 
 .turn-reasoning > summary::-webkit-details-marker {
   display: none;
 }
 
 .turn-reasoning > summary::before {
-  display: inline-block;
-  margin-right: 6px;
-  content: '›';
-  transition: transform var(--dur-fast) var(--ease);
+  width: 6px;
+  height: 6px;
+  content: '';
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur) var(--ease-out);
 }
 
 .turn-reasoning[open] > summary::before {
-  transform: rotate(90deg);
+  transform: rotate(45deg) translate(-1px, -1px);
 }
+
+.turn-reasoning[open] > .turn-reasoning-body { animation: rise-in var(--dur-slow) var(--ease-out); }
 
 .turn-reasoning-body {
   max-height: 360px;

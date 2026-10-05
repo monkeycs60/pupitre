@@ -949,7 +949,22 @@
 }
 
 .quota-status-value.is-stale {
-  color: var(--warn);
+  color: var(--text-faint);
+}
+
+.quota-status-value.is-stale::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  border: 1.2px solid color-mix(in srgb, var(--warn) 80%, transparent);
+  border-radius: var(--r-full);
+  background:
+    linear-gradient(color-mix(in srgb, var(--warn) 80%, transparent), color-mix(in srgb, var(--warn) 80%, transparent)) 3.4px 1.6px / 1.2px 3px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--warn) 80%, transparent), color-mix(in srgb, var(--warn) 80%, transparent)) 3.4px 3.4px / 2.6px 1.2px no-repeat;
+  box-sizing: border-box;
 }
 
 .quota-status-actions {
@@ -1882,6 +1897,12 @@
 .conv-group-toggle svg {
   flex: none;
   transition: transform var(--dur-fast) var(--ease);
+}
+
+.conv-group-toggle.is-short-key {
+  flex: none;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .conv-group-key {
