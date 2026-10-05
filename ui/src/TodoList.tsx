@@ -125,7 +125,7 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
         if (dragId === item.id) classes.push('is-dragging')
         if (overId === item.id && dragId && dragId !== item.id) classes.push('is-drop-target')
         return <Fragment key={item.id}>
-          {(index === 0 || visible[index - 1]?.ticket_id !== item.ticket_id) && <li className="project-task-group"><strong>{ticket?.title ?? ticket?.ticketKey ?? 'Hors chantier'}</strong></li>}
+          {(index === 0 || visible[index - 1]?.ticket_id !== item.ticket_id) && <li className="project-task-group"><strong>{ticket?.title ?? ticket?.ticketKey ?? 'Sans ticket'}</strong></li>}
           <li className={classes.join(' ')} data-status={item.status}
           draggable={canDrag && !running}
           onDragStart={(event) => handleDragStart(event, item)}

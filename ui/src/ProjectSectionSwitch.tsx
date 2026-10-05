@@ -6,7 +6,6 @@ import { PROJECT_SECTIONS, type ProjectSection } from './projectSections'
 const CONVERSATION_ICON = <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2Z" />
 
 const ICONS: Record<ProjectSection, ReactNode> = {
-  chantiers: <path d="M8 2 14 8 8 14 2 8Z" />,
   todos: <path d="m2.5 4 1.2 1.2L6 2.9M8 4h5M2.5 8h3M8 8h5M2.5 12h3M8 12h5" />,
   tickets: <><rect x="2" y="4" width="12" height="8" rx="1.5" /><path d="M2 7h12" /></>,
   sentry: <path d="M8 2.5 13.5 12H10a2 2 0 0 0-2-2 2 2 0 0 0-2 2H2.5Z" />,

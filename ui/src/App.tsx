@@ -3,7 +3,6 @@ import { ToastHost } from './ToastHost'
 import { pushToast } from './toasts'
 import { ReadingControls } from './ReadingControls'
 import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type InspectorView } from './WorkspaceInspector'
-import { ChantierAssignment } from './ChantiersView'
 import { InactiveProjectResume } from './ProjectResume'
 import { TodoList } from './TodoList'
 import { WorkflowsView } from './WorkflowsView'
@@ -1107,7 +1106,7 @@ function App() {
         )
         : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">
-            <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Retrouve les tâches et le suivi dans le panneau projet.</p><div className="todo-detail-actions"><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button><button className="secondary-button" onClick={() => openInspector('dashboard')}>Tâches du projet</button></div><InactiveProjectResume key={selectedProject.id} projectId={selectedProject.id} onResume={(ticketId, ticketKey) => handleStartFromContext({ ticketId, ticketKey, branch: null })} /></div>
+            <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Retrouve les tâches et le suivi dans le panneau projet.</p><div className="todo-detail-actions"><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button><button className="secondary-button" onClick={() => openInspector('dashboard')}>Tâches du projet</button></div><InactiveProjectResume key={selectedProject.id} projectId={selectedProject.id} onResume={(conversationId) => void handleGitConversationSelect(conversationId)} /></div>
           </div>
         ) : (
           <>
@@ -1141,23 +1140,6 @@ function App() {
                 })()}
               </div>
               <div className="header-actions">
-                {selectedConversation !== null
-                && selectedConversation.origin_type !== 'documents'
-                && (selectedConversation.ticket_id === null
-                  || ticketLinks.get(selectedConversation.ticket_id)?.externalUrl == null) ? (
-                  <ChantierAssignment
-                    key={selectedConversation.id}
-                    projectId={selectedConversation.project_id}
-                    conversationId={selectedConversation.id}
-                    label={selectedConversation.ticket_id ? selectedConversation.ticket_title ?? selectedConversation.ticket_key ?? null : null}
-                    onChange={(chantier) => {
-                      setSelectedConversation((current) => current === null || current.id !== selectedConversation.id
-                        ? current
-                        : { ...current, ticket_id: chantier?.id ?? null, ticket_key: chantier?.key ?? null, ticket_title: chantier?.title ?? null })
-                      setConversationListVersion((current) => current + 1)
-                    }}
-                  />
-                ) : null}
                 {selectedConversation !== null
                 && branchOfWorktree(selectedConversation.worktree_path) !== null ? (
                   <span

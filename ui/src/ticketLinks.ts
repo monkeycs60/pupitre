@@ -59,7 +59,7 @@ export function ticketLinksOf(ticket: TicketRow, gitlab?: GitLabContext): Ticket
   const mergeRequestUrl = mergeRequest ? textValue(mergeRequest.payload.url) : null
   return {
     ticketKey: ticket.key,
-    title: ticket.source === 'clickup' || ticket.source === 'chantier' ? ticket.title : null,
+    title: ticket.source === 'clickup' ? ticket.title : null,
     externalUrl: ticket.external_url,
     mergeRequestUrl: mergeRequestUrl === null || gitlab === undefined
       ? mergeRequestUrl

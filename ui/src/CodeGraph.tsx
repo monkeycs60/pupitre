@@ -400,7 +400,7 @@ export function CodeGraph({
         onClick={onToggleChanges}
       >
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 2.5v6M2 5.5h6M9 12.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
-        <span>Diff du chantier</span>
+        <span>Diff de la branche</span>
       </button> : null}
     </div> : null}
     {repositories.length > 1 ? <div className="code-graph-repos" role="group" aria-label="Dépôts affichés">

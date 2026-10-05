@@ -25,7 +25,7 @@ function source(path: string, repositoryLabel: string, branch: string | null, ma
   }
 }
 
-test('un ticket sans worktree devient un chantier lu depuis ses branches ; les vieilles branches sont masquées', () => {
+test('un ticket sans worktree se lit depuis ses branches ; les vieilles branches sont masquées', () => {
   const branch = (repositoryLabel: string, ref: string, updatedAt: string): CodeSource => ({
     ...source(`/mono/${repositoryLabel}#${ref}`, repositoryLabel, ref.replace(/^origin\//, ''), false),
     ref,
@@ -87,7 +87,7 @@ test('le graphe ouvre une lane pour une branche fusionnée puis la referme', () 
   expect(codeGraphPaths(rows[1]!, 28).map((path) => path.lane)).toEqual([1, 0, 0])
 })
 
-test('un ticket présent dans plusieurs dépôts devient un chantier multi-dépôts', () => {
+test('un ticket présent dans plusieurs dépôts se lit sur plusieurs dépôts', () => {
   const sources = [
     source('/mono', 'mono', 'main', true, ['c-root']),
     source('/mono/apps/api', 'apps/api', 'develop', true),

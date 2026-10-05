@@ -4,7 +4,7 @@ import Markdown from './Markdown'
 
 type Resume = {
   content: string
-  chantiers: Array<{ id: string; key: string; title: string }>
+  conversations: Array<{ id: string; title: string }>
 }
 type Snapshot = { data?: Resume; error?: string; loading?: boolean }
 const stores = new Map<
@@ -50,7 +50,7 @@ function ResumeContent({
   onResume,
 }: {
   projectId: string
-  onResume: (id: string, key: string) => void
+  onResume: (conversationId: string) => void
 }) {
   const snapshot = useSyncExternalStore(
     (listener) => subscribe(projectId, listener),
@@ -62,11 +62,11 @@ function ResumeContent({
       {snapshot.data ? (
         <>
           <Markdown>{snapshot.data.content}</Markdown>
-          {snapshot.data.chantiers.map((item) => (
+          {snapshot.data.conversations.slice(0, 3).map((item) => (
             <button
               className="secondary-button"
               key={item.id}
-              onClick={() => onResume(item.id, item.key)}
+              onClick={() => onResume(item.id)}
             >
               Reprendre · {item.title}
             </button>
@@ -94,7 +94,7 @@ export function ProjectResume({
   onResume,
 }: {
   projectId: string
-  onResume: (id: string, key: string) => void
+  onResume: (conversationId: string) => void
 }) {
   return (
     <details className="project-resume" open>
@@ -108,7 +108,7 @@ export function InactiveProjectResume({
   onResume,
 }: {
   projectId: string
-  onResume: (id: string, key: string) => void
+  onResume: (conversationId: string) => void
 }) {
   const [show, setShow] = useState(false)
   useEffect(() => {

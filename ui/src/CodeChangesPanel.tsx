@@ -52,10 +52,10 @@ export function CodeChangesPanel({
   const added = files.reduce((total, file) => total + (file.added ?? 0), 0)
   const removed = files.reduce((total, file) => total + (file.removed ?? 0), 0)
 
-  return <section className={`code-commit is-${variant}`} aria-label="Diff du chantier">
+  return <section className={`code-commit is-${variant}`} aria-label="Diff de la branche">
     <header className="code-commit-header">
-      <span className="code-commit-meta">Diff du chantier</span>
-      <button type="button" className="code-icon-button" title="Revenir au détail du commit" aria-label="Fermer le diff du chantier" onClick={onClose}>
+      <span className="code-commit-meta">Diff de la branche</span>
+      <button type="button" className="code-icon-button" title="Revenir au détail du commit" aria-label="Fermer le diff de la branche" onClick={onClose}>
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
       </button>
     </header>

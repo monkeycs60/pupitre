@@ -9,7 +9,6 @@ type Config = {
   host?: string
   service?: string
   directory?: string
-  ticketId?: string
 }
 interface Environment {
   id: string
@@ -39,9 +38,6 @@ export function PersonalEnvironments({
 }) {
   const [items, setItems] = useState<Environment[]>([])
   const [hosts, setHosts] = useState<string[]>([])
-  const [chantiers, setChantiers] = useState<
-    Array<{ id: string; title: string }>
-  >([])
   const [deploys, setDeploys] = useState<
     Array<{ id: string; name: string; kind: string }>
   >([])
@@ -58,7 +54,6 @@ export function PersonalEnvironments({
       }>(base)
       setItems(data.environments)
       setHosts(data.hosts)
-      setChantiers(await launchRequest(`/api/projects/${projectId}/chantiers`))
       setDeploys(
         (
           await launchRequest<
@@ -89,13 +84,13 @@ export function PersonalEnvironments({
   const field = (key: keyof Config, value: string) =>
     setDraft((current) => ({ ...current, [key]: value }))
   return (
-    <section className="chantiers-view" aria-label="Environnements personnels">
+    <section className="personal-environments-view" aria-label="Environnements personnels">
       <button className="secondary-button" onClick={() => void load()}>
         Actualiser les environnements personnels
       </button>
       {error && <p role="alert">{error}</p>}
       {items.map((item) => (
-        <div className="chantier-row" key={item.id}>
+        <div className="personal-environment-row" key={item.id}>
           <strong>{item.config.name}</strong>
           <p>
             {item.result
@@ -257,20 +252,6 @@ export function PersonalEnvironments({
             </label>
           </>
         )}
-        <label>
-          Chantier des incidents
-          <select
-            value={draft.ticketId ?? ''}
-            onChange={(event) => field('ticketId', event.target.value)}
-          >
-            <option value="">Hors chantier</option>
-            {chantiers.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-        </label>
         <button className="primary-button" onClick={() => void save()}>
           Enregistrer l’environnement
         </button>

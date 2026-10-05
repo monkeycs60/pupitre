@@ -12,7 +12,7 @@ interface CodeSourcePickerProps {
 }
 
 function scopeKind(scope: CodeScope, originConversationId: string | null): string {
-  if (scope.kind === 'ticket') return `Chantier sur ${scope.sources.length} dépôts`
+  if (scope.kind === 'ticket') return `Ticket sur ${scope.sources.length} dépôts`
   if (scope.kind === 'mains') return scope.detail
   const source = scope.sources[0]!
   if (source.ref !== null) return 'Branche sans worktree, lecture seule'
@@ -45,7 +45,7 @@ export function CodeSourcePicker({ scopes, value, originConversationId, onChange
     ))
     const result: Array<{ label: string, scopes: CodeScope[] }> = []
     const tickets = filtered.filter((scope) => scope.kind === 'ticket')
-    if (tickets.length > 0) result.push({ label: 'Chantiers multi-dépôts', scopes: tickets })
+    if (tickets.length > 0) result.push({ label: 'Tickets multi-dépôts', scopes: tickets })
     const overview = filtered.filter((scope) => scope.kind === 'mains')
     if (overview.length > 0) result.push({ label: 'Vue d’ensemble', scopes: overview })
     const singles = filtered.filter((scope) => scope.kind === 'source')
