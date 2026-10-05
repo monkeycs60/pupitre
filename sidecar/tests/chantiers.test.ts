@@ -319,3 +319,76 @@ test("une conversation inclassable va dans Divers puis rejoint un vrai chantier 
   expect(prompts.at(-1)).not.toContain(misc.id);
   expect(service.list(project.id).filter((item) => item.title === "Divers")).toHaveLength(1);
 });
+
+function pendingFixture(generate: (prompt: string) => Promise<unknown>) {
+  const dir = mkdtempSync(join(tmpdir(), "chantiers-"));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const db = openDb(dir);
+  cleanup.push(() => db.close());
+  const projects = new ProjectStore(db),
+    conversations = new ConversationStore(db),
+    tickets = new TicketStore(db);
+  const project = projects.create({ name: "Test", path: dir });
+  const service = new ChantierService(db, projects, conversations, tickets, generate);
+  const conv = (text: string) => {
+    const created = conversations.create({ projectId: project.id, provider: "claude", model: "test", firstMessage: text });
+    conversations.appendEvent(created.id, { type: "user-message", text, images: [] });
+    return created;
+  };
+  return { db, project, service, conv, conversations, tickets };
+}
+
+test("le modèle voit les thèmes en attente et une conversation proche crée le chantier avec eux", async () => {
+  const prompts: string[] = [];
+  let title = "Audit Match AI et trous de mesure";
+  const f = pendingFixture(async (prompt) => {
+    prompts.push(prompt);
+    return { chantierId: null, new: { title, description: "" }, confidence: 0.9 };
+  });
+  const first = f.conv("Auditer la mesure Match AI");
+  expect(await f.service.classify(first.id)).toBe(false);
+  const second = f.conv("Profils Match AI incomplets");
+  expect(await f.service.classify(second.id)).toBe(true);
+  expect(prompts[1]).toContain("pendingThemes");
+  expect(prompts[1]).toContain("Audit Match AI et trous de mesure");
+  expect(f.conversations.get(first.id)!.ticket_id).toBe(f.conversations.get(second.id)!.ticket_id);
+  title = "Autre sujet";
+});
+
+test("une conversation seule sur son sujet depuis 7 jours rejoint Divers", async () => {
+  let n = 0;
+  const f = pendingFixture(async () => ({ chantierId: null, new: { title: `Sujet isolé ${++n}`, description: "" }, confidence: 0.9 }));
+  const old = f.conv("Ancienne tâche");
+  const recent = f.conv("Tâche récente");
+  await f.service.classify(old.id);
+  await f.service.classify(recent.id);
+  f.db.query("UPDATE conversations SET updated_at=? WHERE id=?").run(new Date(Date.now() - 8 * 86400000).toISOString(), old.id);
+
+  expect(f.service.parkStale(f.project.id)).toBe(1);
+  expect(f.tickets.get(f.conversations.get(old.id)!.ticket_id!)!.title).toBe("Divers");
+  expect(f.conversations.get(recent.id)!.ticket_id).toBeNull();
+});
+
+test("le regroupement unique crée les chantiers partagés et ne repasse pas", async () => {
+  let ids: string[] = [];
+  let calls = 0;
+  const f = pendingFixture(async (prompt) => {
+    if (!prompt.startsWith("Regroupe")) return { chantierId: null, new: { title: `Seul ${Math.random()}`, description: "" }, confidence: 0.9 };
+    calls++;
+    return { groups: [
+      { title: "Stories Instagram", description: "Scraping", conversationIds: [ids[0], ids[1], "inconnue"] },
+      { title: "Groupe trop petit", conversationIds: [ids[2]] },
+    ] };
+  });
+  const convs = [f.conv("Extraction stories Instagram"), f.conv("API stories Instagram tierce"), f.conv("Reset mot de passe preprod")];
+  ids = convs.map((item) => item.id);
+  for (const item of convs) await f.service.classify(item.id);
+
+  expect(await f.service.regroup(f.project.id)).toBe(1);
+  const instagram = f.conversations.get(ids[0]!)!.ticket_id;
+  expect(f.tickets.get(instagram!)!.title).toBe("Stories Instagram");
+  expect(f.conversations.get(ids[1]!)!.ticket_id).toBe(instagram);
+  expect(f.conversations.get(ids[2]!)!.ticket_id).toBeNull();
+  expect(await f.service.regroup(f.project.id)).toBe(0);
+  expect(calls).toBe(1);
+});
