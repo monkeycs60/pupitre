@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { JsonGenerator } from "./chantiers";
+import type { JsonGenerator } from "./json-generator";
 import type { ConversationStore } from "./stores/conversations";
 import { projectLaunchConfig, type ProjectStore } from "./stores/projects";
 import { TodoStore } from "./stores/todos";

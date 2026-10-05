@@ -14,7 +14,6 @@ export interface EnvironmentConfig {
   host?: string;
   service?: string;
   directory?: string;
-  ticketId?: string;
 }
 export interface ProbeResult {
   healthy: boolean;
@@ -251,6 +250,7 @@ export class PersonalEnvironments {
     ]);
     if (Object.keys(config).some((key) => !allowed.has(key)))
       throw new Error("champ de configuration inconnu");
+    delete (config as { ticketId?: unknown }).ticketId;
     if (
       !this.projects.get(projectId) ||
       !config.name?.trim() ||
@@ -273,13 +273,6 @@ export class PersonalEnvironments {
       if (!readSshHosts().includes(config.host!))
         throw new Error("hôte absent de ~/.ssh/config");
     }
-    if (
-      config.ticketId &&
-      !this.db
-        .query("SELECT 1 FROM tickets WHERE id=? AND project_id=?")
-        .get(config.ticketId, projectId)
-    )
-      throw new Error("chantier invalide");
     this.db
       .query(
         "INSERT INTO personal_environments(id,project_id,config) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET config=excluded.config,result=NULL",
@@ -379,7 +372,6 @@ export class PersonalEnvironments {
       provider: "claude",
       model: "haiku",
       effort: "medium",
-      ticketId: config.ticketId ?? null,
       firstMessage: `Triage de ${config.name}. Erreur à analyser :\n${incident.message}`,
     });
     this.db

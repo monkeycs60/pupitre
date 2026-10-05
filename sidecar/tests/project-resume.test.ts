@@ -21,14 +21,6 @@ test("la reprise suit l’inactivité et ne régénère que si les entrées chan
       model: "x",
       firstMessage: "Test",
     });
-    const t = tickets.upsert(p.id, {
-      key: "CH-1",
-      source: "chantier",
-      title: "Moteur Rust",
-      status: "",
-      externalUrl: null,
-    });
-    tickets.linkConversation(c.id, t.id);
     let calls = 0;
     const service = new ProjectResumeService(
       db,
@@ -46,13 +38,10 @@ test("la reprise suit l’inactivité et ne régénère que si les entrées chan
     );
     expect(service.inputs(p.id).showAutomatically).toBe(true);
     expect(service.status(p.id).showAutomatically).toBe(true);
-    db.query("UPDATE tickets SET archived_at='2020-01-02' WHERE id=?").run(t.id);
-    expect(service.status(p.id).showAutomatically).toBe(false);
-    db.query("UPDATE tickets SET archived_at=NULL WHERE id=?").run(t.id);
     await service.get(p.id);
     await service.get(p.id);
     expect(calls).toBe(1);
-    tickets.setInstruction(t.id, "Vérifier tests");
+    db.query("UPDATE conversations SET summary='Moteur Rust migré' WHERE id=?").run(c.id);
     await service.get(p.id);
     expect(calls).toBe(2);
     await service.get(p.id, true);

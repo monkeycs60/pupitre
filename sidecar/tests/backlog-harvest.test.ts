@@ -61,8 +61,8 @@ test("un commit couvrant un élément le marque probablement fait sans le suppri
     const p = projects.create({ name: "Test", path: root });
     const { TicketStore } = await import("../src/stores/tickets");
     const ticket = new TicketStore(db).upsert(p.id, {
-      key: "CH-1",
-      source: "chantier",
+      key: "TECH-1",
+      source: "clickup",
       title: "Moteur",
       status: "",
       externalUrl: null,

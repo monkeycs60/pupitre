@@ -787,8 +787,47 @@ export function openDb(dir: string = dataDir()): Database {
   const changelogColumns = db.query("PRAGMA table_info(project_changelog_entries)").all() as Array<{ name: string }>;
   if (changelogColumns.some((column) => column.name === "domain_id")) db.exec("ALTER TABLE project_changelog_entries DROP COLUMN domain_id");
   db.exec("DROP TABLE IF EXISTS conversation_domains; DROP TABLE IF EXISTS domain_changes; DROP TABLE IF EXISTS domain_publications; DROP TABLE IF EXISTS domains;");
+  removeChantiers(db);
   db.exec("PRAGMA foreign_keys = ON");
   return db;
+}
+
+/**
+ * Les chantiers ont été retirés de Pupitre. Chacun est copié dans
+ * `removed_chantiers` (ticket, notes, conversations et TODO rattachées) avant
+ * d'être supprimé ; les conversations et les TODO restent, sans rattachement.
+ */
+function removeChantiers(db: Database): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS removed_chantiers (
+    ticket_id TEXT PRIMARY KEY, ticket TEXT NOT NULL, notes TEXT NOT NULL,
+    conversation_ids TEXT NOT NULL, todo_ids TEXT NOT NULL, removed_at TEXT NOT NULL
+  )`);
+  const chantiers = db.query("SELECT * FROM tickets WHERE source = 'chantier'").all() as Array<Record<string, unknown> & { id: string }>;
+  const hasCaptures = db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='telegram_captures'").get();
+  const removedAt = new Date().toISOString();
+  db.transaction(() => {
+    for (const chantier of chantiers) {
+      const notes = db.query("SELECT body, created_at FROM ticket_notes WHERE ticket_id = ?").all(chantier.id);
+      const conversations = db.query("SELECT id FROM conversations WHERE ticket_id = ?").all(chantier.id) as Array<{ id: string }>;
+      const todos = db.query("SELECT id FROM project_todos WHERE json_extract(payload, '$.ticket_id') = ?").all(chantier.id) as Array<{ id: string }>;
+      db.query("INSERT OR REPLACE INTO removed_chantiers VALUES (?, ?, ?, ?, ?, ?)").run(
+        chantier.id, JSON.stringify(chantier), JSON.stringify(notes),
+        JSON.stringify(conversations.map((row) => row.id)), JSON.stringify(todos.map((row) => row.id)), removedAt,
+      );
+      db.query("UPDATE conversations SET ticket_id = NULL, ticket_locked = 0, ticket_confidence = NULL WHERE ticket_id = ?").run(chantier.id);
+      db.query("UPDATE project_todos SET payload = json_set(payload, '$.ticket_id', NULL) WHERE json_extract(payload, '$.ticket_id') = ?").run(chantier.id);
+      if (hasCaptures) db.query("UPDATE telegram_captures SET ticket_id = NULL WHERE ticket_id = ?").run(chantier.id);
+      for (const table of ["ticket_refs", "ticket_status_changes", "ticket_notes", "ticket_audits"]) {
+        db.query(`DELETE FROM ${table} WHERE ticket_id = ?`).run(chantier.id);
+      }
+      for (const table of ["problems", "sentry_triages"]) {
+        db.query(`UPDATE ${table} SET ticket_id = NULL WHERE ticket_id = ?`).run(chantier.id);
+      }
+      db.query("DELETE FROM tickets WHERE id = ?").run(chantier.id);
+    }
+    db.exec("DROP TABLE IF EXISTS chantier_reviews; DROP TABLE IF EXISTS chantier_sequences;");
+    db.exec("DELETE FROM settings WHERE key = 'chantierIdleDays' OR key LIKE 'chantiers.%'");
+  })();
 }
 
 function assignMissingProjectColors(db: Database): void {

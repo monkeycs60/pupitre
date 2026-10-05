@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 
-export type TicketSource = "clickup" | "notion" | "git" | "chantier";
+export type TicketSource = "clickup" | "notion" | "git";
 export type TicketRefKind = "branch" | "mr" | "pipeline" | "deployment" | "sentry_issue";
 
 export interface Ticket {
@@ -71,7 +71,6 @@ export interface TicketInput {
 
 const SOURCE_RANK: Record<TicketSource, number> = {
   git: 0,
-  chantier: 0,
   notion: 1,
   clickup: 1,
 };
@@ -226,7 +225,6 @@ export class TicketStore {
          SET archived_at = ?,
              updated_at = ?
        WHERE project_id = ?
-         AND source != 'chantier'
          AND archived_at IS NULL
          AND last_seen_at <= ?
     `).run(archivedAt, archivedAt, projectId, cutoff).changes;

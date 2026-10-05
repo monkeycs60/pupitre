@@ -63,7 +63,7 @@ export const ROUTINE_TEMPLATES = [
     schedule: "0 17 * * 5",
     command: null,
     prompt:
-      "Rédige et publie le devlog des sept derniers jours, à partir des chantiers et des commits du projet.",
+      "Rédige et publie le devlog des sept derniers jours, à partir des conversations et des commits du projet.",
   },
   {
     name: "Commande nocturne",

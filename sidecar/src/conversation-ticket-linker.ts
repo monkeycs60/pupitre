@@ -51,7 +51,7 @@ export class ConversationTicketLinker {
     const resolutions = new Map<string, Ticket | null>();
     try {
       for (const project of this.projects.list()) {
-        const tickets = this.tickets.listActive(project.id).filter((ticket) => ticket.source !== 'chantier');
+        const tickets = this.tickets.listActive(project.id);
         const branches = new Map(tickets.map((ticket) => [ticket.id, this.tickets.branchesOf(ticket.id)]));
         for (const conversation of this.conversations.listByProject(project.id)) {
           if (conversation.ticket_id || conversation.origin_type || (this.db.query('SELECT ticket_locked FROM conversations WHERE id=?').get(conversation.id) as {ticket_locked:number}).ticket_locked) continue;

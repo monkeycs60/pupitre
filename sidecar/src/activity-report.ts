@@ -139,15 +139,13 @@ export class ActivityJournal {
       const mergeRequests = this.mergeRequestsOfDay(project.id, window);
       const ticketsReady = this.ticketsReadyOfDay(project.id, window);
       const personal = !this.db.query("SELECT 1 FROM project_integrations WHERE project_id=? AND type IN ('clickup','notion','gitlab','github')").get(project.id);
-      const chantiersOpened = this.db.query("SELECT id,title FROM tickets WHERE project_id=? AND source='chantier' AND created_at>=? AND created_at<?").all(project.id,window.startIso,window.endIso) as Array<{id:string;title:string}>;
-      const chantiersClosed = this.db.query("SELECT id,title FROM tickets WHERE project_id=? AND source='chantier' AND archived_at>=? AND archived_at<?").all(project.id,window.startIso,window.endIso) as Array<{id:string;title:string}>;
       if (hours.userMs === 0 && hours.agentMs === 0 && conversations.length === 0 && commits.length === 0 && todosDone.length === 0
-        && mergeRequests.length === 0 && ticketsReady.length === 0 && chantiersOpened.length === 0 && chantiersClosed.length === 0) continue;
+        && mergeRequests.length === 0 && ticketsReady.length === 0) continue;
       const tickets = this.ticketsTouched(project.id, conversations, commits, todosDone, mergeRequests, ticketsReady);
       out.push({
         projectId: project.id,
         projectName: project.name,
-        personal, chantiersOpened, chantiersClosed,
+        personal,
         cwd: projectCwd(project),
         userMs: hours.userMs,
         agentMs: hours.agentMs,
