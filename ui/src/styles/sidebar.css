@@ -2017,13 +2017,17 @@
   color: var(--accent-hover);
 }
 
+.navigation-main {
+  --conv-row-indent: 45px;
+}
+
 .navigation-main .conv-row-line2 {
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
   margin-top: 3px;
-  padding-left: 17px;
+  padding-left: var(--conv-row-indent);
 }
 
 .navigation-main .conv-row-activity {
@@ -2096,7 +2100,7 @@
   gap: 6px;
   min-width: 0;
   margin-top: 3px;
-  padding-left: 17px;
+  padding-left: var(--conv-row-indent);
   color: var(--accent-hover);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -2168,7 +2172,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   margin-top: 3px;
-  padding-left: 17px;
+  padding-left: var(--conv-row-indent);
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
@@ -2200,4 +2204,13 @@
   background: color-mix(in srgb, var(--project-color) 24%, var(--bg-raised));
   border: 0;
   border-radius: 50%;
+}
+
+.sidebar-section.conversations .navigation-row {
+  min-height: 34px;
+  padding-block: 5px;
+}
+
+.sidebar-section.conversations .conversation-row-actions {
+  min-height: 24px;
 }

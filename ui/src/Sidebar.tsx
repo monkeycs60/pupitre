@@ -253,6 +253,27 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
 }
 
 
+const TRUNK_BRANCHES = ['main', 'master', 'develop', 'dev', 'staging', 'preprod', 'production']
+
+function isTrunkBranch(branch: string, detectedTrunk: string | null | undefined): boolean {
+  const name = branch.replace(/^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/, '')
+  return TRUNK_BRANCHES.includes(name) || name === detectedTrunk
+}
+
+/** Branche de travail affichée sous une conversation ; le tronc n'en est pas une. */
+export function workBranchLabel(conversation: Conversation, worktreeBranch: string | null, detectedTrunk?: string | null): { label: string; title: string } | null {
+  if (worktreeBranch !== null) {
+    if (isTrunkBranch(worktreeBranch, detectedTrunk)) return null
+    const paths = conversation.worktree_paths?.length ? conversation.worktree_paths : [conversation.worktree_path]
+    return {
+      label: `${worktreeBranch}${paths.length > 1 ? ` +${paths.length - 1}` : ''}`,
+      title: `Worktrees : ${paths.join(', ')}`,
+    }
+  }
+  if (conversation.created_on_branch === null || isTrunkBranch(conversation.created_on_branch, detectedTrunk)) return null
+  return { label: conversation.created_on_branch, title: 'Branche à la création' }
+}
+
 const COMPACT_GROUP_LIMIT = 3
 const COMPACT_GROUP_WINDOW_MS = 24 * 3_600_000
 
@@ -853,6 +874,8 @@ export const Sidebar = memo(function Sidebar({
                 const state = conversationRowState(conversation, displayedActiveConversationIds)
                 const branch = branchOfWorktree(conversation.worktree_path)
                 const messageCount = isSelected ? liveConversationMessageCount : undefined
+                const shownTicketKey = !repeatsTicket ? conversation.ticket_key ?? null : null
+                const shownBranch = state === 'live' ? null : workBranchLabel(conversation, branch, selectedProject?.detected_trunk)
                 return (
               <div
                 className={`navigation-row conv-row-state-${state}${conversation.origin_type === 'sentry' ? ' conv-row-sentry' : ''} ${isSelected ? 'is-selected' : ''}`}
@@ -869,6 +892,9 @@ export const Sidebar = memo(function Sidebar({
                 >
                   <span className="conv-row-line1">
                     <span className={`conv-row-dot is-${state}`} aria-hidden="true" />
+                    {conversation.origin_type === 'sentry' ? (
+                      <ProviderMark provider="sentry" className="conv-row-mark" />
+                    ) : <ProviderMark provider={conversation.provider} className="conv-row-mark" />}
                     <span className="conv-row-title">{conversation.title}</span>
                     <span className="conv-row-time">
                       {state === 'live'
@@ -887,27 +913,19 @@ export const Sidebar = memo(function Sidebar({
                       <span className="conv-row-activity-label">écrit la réponse</span>
                       <span className="conv-row-count">{conversationMessageCount(conversation, messageCount)}</span>
                     </span>
-                  ) : (
+                  ) : null}
+                  {shownTicketKey || shownBranch ? (
                     <span className="conv-row-line2">
-                      {conversation.origin_type === 'sentry' ? (
-                        <ProviderMark provider="sentry" className="conv-row-mark" />
-                      ) : <ProviderMark provider={conversation.provider} className="conv-row-mark" />}
-                      {(conversation as typeof conversation & {ticket_confidence?:number}).ticket_confidence != null && (conversation as typeof conversation & {ticket_confidence:number}).ticket_confidence < 0.7 && <span>à confirmer</span>}
-                      {!repeatsTicket && conversation.ticket_key ? (
-                        <span className="conv-row-ticket" title={`${conversation.ticket_key} · ${conversation.ticket_title ?? ''}`}>{conversation.ticket_key}</span>
+                      {shownTicketKey ? (
+                        <span className="conv-row-ticket" title={`${shownTicketKey} · ${conversation.ticket_title ?? ''}`}>{shownTicketKey}</span>
                       ) : null}
-                      {branch !== null && !['main', 'master', 'develop', 'dev', 'staging', 'preprod', 'production', selectedProject?.detected_trunk].includes(branch.replace(/^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/, '')) ? (
-                        <span className="conv-row-branch" title={`Worktrees : ${(conversation.worktree_paths?.length ? conversation.worktree_paths : [conversation.worktree_path]).join(', ')}`}>
-                          <BranchIcon />{branch}{(conversation.worktree_paths?.length ?? 0) > 1 ? ` +${conversation.worktree_paths!.length - 1}` : ''}
-                        </span>
-                      ) : conversation.created_on_branch !== null && !['main', 'master', 'develop', 'dev', 'staging', 'preprod', 'production', selectedProject?.detected_trunk].includes(conversation.created_on_branch.replace(/^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/, '')) ? (
-                        <span className="conv-row-branch" title={`Branche à la création`}>
-                          <BranchIcon />{conversation.created_on_branch}
+                      {shownBranch ? (
+                        <span className="conv-row-branch" title={shownBranch.title}>
+                          <BranchIcon />{shownBranch.label}
                         </span>
                       ) : null}
                     </span>
-                  )}
-                  {state === 'live' && !repeatsTicket && conversation.ticket_key ? <span className="conv-row-line2"><span className="conv-row-ticket" title={`${conversation.ticket_key} · ${conversation.ticket_title ?? ''}`}>{conversation.ticket_key}</span></span> : null}
+                  ) : null}
                   {conversationRelation(conversation, conversations) ? (
                     <span className="conversation-link">
                       {conversationRelation(conversation, conversations)}

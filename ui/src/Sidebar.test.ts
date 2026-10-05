@@ -7,7 +7,7 @@ import { formatActiveDuration } from './formatActiveDuration'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
-const { Sidebar, compactGroupItems } = await import('./Sidebar')
+const { Sidebar, compactGroupItems, workBranchLabel } = await import('./Sidebar')
 const { WorkflowsView } = await import('./WorkflowsView')
 
 const project: Project = {
@@ -593,4 +593,27 @@ test('raccourcit une clé de ticket à son numéro, sans toucher aux autres libe
   expect(shortTicketKey('TECH-25064')).toBe('25064')
   expect(shortTicketKey('Cette semaine')).toBe('Cette semaine')
   expect(shortTicketKey('CH-1')).toBe('1')
+})
+
+test('le tronc n’est jamais affiché comme branche de travail, une branche de travail l’est', () => {
+  const base = { ...startedConversation, worktree_path: null, worktree_paths: [], created_on_branch: null }
+  expect(workBranchLabel({ ...base, created_on_branch: 'main' }, null)).toBeNull()
+  expect(workBranchLabel({ ...base, created_on_branch: 'origin/master' }, null)).toBeNull()
+  expect(workBranchLabel({ ...base, created_on_branch: 'trunk' }, null, 'trunk')).toBeNull()
+  expect(workBranchLabel({ ...base, created_on_branch: 'feature/agenda' }, null)).toEqual({ label: 'feature/agenda', title: 'Branche à la création' })
+  expect(workBranchLabel({ ...base, worktree_path: '/w/a', worktree_paths: ['/w/a', '/w/b'] }, 'fix/dictee')).toEqual({ label: 'fix/dictee +1', title: 'Worktrees : /w/a, /w/b' })
+  expect(workBranchLabel({ ...base, worktree_path: '/w/a' }, 'develop')).toBeNull()
+})
+
+test('le provider s’affiche sur la première ligne et la seconde n’existe que pour une branche de travail', async () => {
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [
+    { ...startedConversation, id: 'trunk', title: 'Sur le tronc', created_on_branch: 'main', worktree_path: null },
+    { ...startedConversation, id: 'work', title: 'Sur une branche', created_on_branch: 'feature/agenda', worktree_path: null },
+  ])
+  renderSidebar()
+  await waitFor(() => expect(document.querySelectorAll('.conv-row-title')).toHaveLength(2))
+  const row = (id: string) => document.querySelector(`[data-conversation-id="${id}"]`)!
+  expect(row('trunk').querySelector('.conv-row-line1 .conv-row-mark')).not.toBeNull()
+  expect(row('trunk').querySelector('.conv-row-line2')).toBeNull()
+  expect(row('work').querySelector('.conv-row-line2')?.textContent).toBe('feature/agenda')
 })
