@@ -107,6 +107,7 @@ export class SearchIndex {
 
       DROP TRIGGER IF EXISTS search_conversations_insert;
       DROP TRIGGER IF EXISTS search_conversations_title;
+      DROP TRIGGER IF EXISTS search_conversations_meta;
       DROP TRIGGER IF EXISTS search_tickets_title;
       CREATE TRIGGER IF NOT EXISTS search_conversations_insert AFTER INSERT ON conversations BEGIN
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
@@ -115,7 +116,16 @@ export class SearchIndex {
       CREATE TRIGGER IF NOT EXISTS search_conversations_delete AFTER DELETE ON conversations BEGIN
         DELETE FROM search_index WHERE conversation_id = OLD.id;
       END;
-      CREATE TRIGGER IF NOT EXISTS search_conversations_title AFTER UPDATE OF title, summary, ticket_id, created_on_branch, worktree_path ON conversations BEGIN
+      CREATE TRIGGER IF NOT EXISTS search_conversations_meta AFTER UPDATE OF summary, ticket_id, created_on_branch, worktree_path ON conversations
+      WHEN NEW.title IS OLD.title
+      BEGIN
+        DELETE FROM search_index WHERE kind = 'conversation' AND conversation_id = NEW.id;
+        INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
+        VALUES ('conversation', NEW.id, NEW.id, NEW.project_id, NEW.title, ${conversationSearchBody('NEW')});
+      END;
+      CREATE TRIGGER IF NOT EXISTS search_conversations_title AFTER UPDATE OF title ON conversations
+      WHEN NEW.title IS NOT OLD.title
+      BEGIN
         DELETE FROM search_index WHERE conversation_id = NEW.id;
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
         VALUES ('conversation', NEW.id, NEW.id, NEW.project_id, NEW.title, ${conversationSearchBody('NEW')});

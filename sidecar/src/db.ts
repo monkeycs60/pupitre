@@ -804,7 +804,7 @@ function removeChantiers(db: Database): void {
   const hasSearch = db.query("SELECT 1 FROM sqlite_master WHERE name='search_index'").get();
   // Ce déclencheur réindexe tous les messages d'une conversation à chaque
   // changement de ticket_id ; SearchIndex le recrée au démarrage.
-  db.exec("DROP TRIGGER IF EXISTS search_conversations_title");
+  db.exec("DROP TRIGGER IF EXISTS search_conversations_title; DROP TRIGGER IF EXISTS search_conversations_meta");
   db.transaction(() => {
     for (const chantier of chantiers) {
       const detached = db.query("SELECT id FROM conversations WHERE ticket_id = ?").all(chantier.id) as Array<{ id: string }>;

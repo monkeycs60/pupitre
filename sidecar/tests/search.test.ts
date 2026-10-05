@@ -66,3 +66,34 @@ test("recherche les tickets et les branches, suit les rattachements et masque le
   expect(search.search("audience")).toEqual([]);
   db.close();
 });
+
+test("changer de ticket ne réindexe que la conversation ; changer de titre réindexe ses messages", () => {
+  const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-search-triggers-")));
+  const project = new ProjectStore(db).create({ name: "Index", path: "/tmp/index" });
+  const conversations = new ConversationStore(db);
+  const tickets = new TicketStore(db);
+  const conversation = conversations.create({ projectId: project.id, provider: "codex", model: "test", firstMessage: "Départ" });
+  conversations.appendEvent(conversation.id, { type: "user-message", text: "Le pangolin dort", images: [] });
+  conversations.appendEvent(conversation.id, { type: "text-final", text: "Le pangolin mange" });
+  const later = conversations.create({ projectId: project.id, provider: "codex", model: "test", firstMessage: "Ailleurs" });
+  conversations.appendEvent(later.id, { type: "text-final", text: "Autre sujet" });
+  const search = new SearchIndex(db);
+  const eventRows = () => db.query("SELECT rowid, title FROM search_index WHERE kind = 'event' AND conversation_id = ? ORDER BY rowid").all(conversation.id) as Array<{ rowid: number; title: string }>;
+  const before = eventRows();
+  expect(before).toHaveLength(2);
+
+  const ticket = tickets.upsert(project.id, { key: "TECH-7", title: "Zoologie", source: "clickup", status: "open", externalUrl: null });
+  tickets.linkConversation(conversation.id, ticket.id);
+  conversations.updateDigest(conversation.id, { title: conversation.title, summary: "Résumé sur les fourmiliers" }, 1);
+  expect(eventRows()).toEqual(before);
+  expect(search.search("zoologie")[0]?.conversationId).toBe(conversation.id);
+  expect(search.search("fourmiliers")[0]?.conversationId).toBe(conversation.id);
+  expect(db.query("SELECT COUNT(*) AS n FROM search_index WHERE kind = 'conversation' AND conversation_id = ?").get(conversation.id)).toEqual({ n: 1 });
+
+  conversations.rename(conversation.id, "Étude du pangolin");
+  const renamed = eventRows();
+  expect(renamed).toHaveLength(2);
+  expect(renamed.every((row) => row.title === "Étude du pangolin")).toBe(true);
+  expect(search.search("zoologie")[0]?.conversationId).toBe(conversation.id);
+  db.close();
+});
