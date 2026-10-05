@@ -177,7 +177,7 @@
 .bad-practices-meter { margin-top: var(--space-4); }
 .bad-practices-meter-label { display: flex; justify-content: space-between; margin-bottom: 5px; color: var(--text-faint); font-size: var(--text-xs); }
 .bad-practices-meter-label strong { color: var(--danger); font-family: var(--font-mono); }
-.bad-practices-meter-track { height: 7px; overflow: hidden; background: rgba(255, 255, 255, 0.08); }
+.bad-practices-meter-track { height: 7px; overflow: hidden; background: color-mix(in srgb, var(--tint) 8%, transparent); }
 .bad-practices-meter-track span { display: block; height: 100%; background: var(--danger); transition: width var(--dur) var(--ease); }
 
 @media (max-width: 980px) {

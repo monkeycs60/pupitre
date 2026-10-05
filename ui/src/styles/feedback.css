@@ -18,7 +18,7 @@
   padding: 0 10px 0 9px;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
   border-radius: var(--r-full);
-  background: color-mix(in srgb, var(--bg-app) 70%, black);
+  background: var(--bg-input);
   color: var(--text-muted);
   font: inherit;
   font-size: var(--text-xs);

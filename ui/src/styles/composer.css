@@ -1331,7 +1331,7 @@
   width: 40%;
   pointer-events: none;
   content: '';
-  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  background: linear-gradient(105deg, transparent, color-mix(in srgb, var(--tint) 35%, transparent), transparent);
   animation: sheen 1.8s var(--ease) infinite;
 }
 
@@ -1346,7 +1346,7 @@
   padding: 0 12px;
   color: var(--danger);
   background: transparent;
-  border: 1px solid rgba(242, 85, 90, 0.32);
+  border: 1px solid color-mix(in srgb, var(--danger) 32%, transparent);
 }
 
 .cancel-button:hover:not(:disabled) {

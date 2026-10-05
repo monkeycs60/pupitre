@@ -1,3 +1,4 @@
+import { ThemePicker } from './ThemePicker'
 import { useEffect, useState } from 'react'
 import {
   getPromotionMission,
@@ -314,6 +315,14 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
           <p>Les valeurs ici servent de défaut aux nouveaux projets.</p>
         </div>
       </header>
+
+      <div className="settings-card" id="settings-appearance">
+        <div>
+          <h2>Apparence</h2>
+          <p>Le thème s’applique tout de suite, sur cet ordinateur.</p>
+        </div>
+        <ThemePicker />
+      </div>
 
       {instance?.instance === 'dev' ? (
         <div className="settings-card" id="settings-instance">

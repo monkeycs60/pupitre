@@ -1,3 +1,4 @@
+import { setThemePreference, THEME_OPTIONS } from './theme'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import {
@@ -173,6 +174,14 @@ export function CommandPalette({
     ] as const
     for (const [view, label, detail] of views) {
       if (matches(query, label, detail)) add({ id: `view-${view}`, group: 'Aller à', label, detail, run: () => onViewSelect(view) })
+    }
+    if (query.trim().length > 0) {
+      for (const option of THEME_OPTIONS) {
+        const label = `Thème ${option.label.toLocaleLowerCase('fr-FR')}`
+        if (matches(query, label, `apparence ${option.hint}`)) {
+          add({ id: `theme-${option.value}`, group: 'Apparence', label, detail: option.hint, run: () => setThemePreference(option.value) })
+        }
+      }
     }
     if (currentConversation) {
       const actions: Array<[PaletteAction, string, string]> = [

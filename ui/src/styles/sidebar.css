@@ -339,11 +339,11 @@
 }
 
 .navigation-row.conv-row-state-unread {
-  background: rgba(240, 182, 74, 0.08);
+  background: color-mix(in srgb, var(--unread) 8%, transparent);
 }
 
 .navigation-row.conv-row-state-live {
-  background: rgba(139, 124, 255, 0.09);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
 
 .navigation-row.conv-row-state-unread:hover,
@@ -402,7 +402,7 @@
 .conv-row-land {
   inset: 0;
   z-index: 0;
-  background: linear-gradient(90deg, rgba(240, 182, 74, 0.3), transparent 72%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--unread) 30%, transparent), transparent 72%);
   opacity: 0;
 }
 
@@ -1496,7 +1496,7 @@
 
 .context-gauge.is-near-limit .context-gauge-handoff {
   color: var(--warn);
-  border-color: rgba(240, 168, 82, 0.45);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
 }
 
 .context-gauge-handoff:hover {
@@ -2186,7 +2186,7 @@
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
-  background: rgba(255, 255, 255, 0.07);
+  background: color-mix(in srgb, var(--tint) 7%, transparent);
   border-radius: var(--r-full);
 }
 
@@ -2295,7 +2295,7 @@
 .conv-sidebar-avatar.project-avatar {
   width: 30px;
   height: 30px;
-  color: color-mix(in srgb, var(--project-color) 70%, #fff);
+  color: color-mix(in srgb, var(--project-color) 70%, var(--text-strong));
   font-size: 11px;
   background: color-mix(in srgb, var(--project-color) 24%, var(--bg-raised));
   border: 0;

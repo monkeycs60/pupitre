@@ -340,3 +340,100 @@
   min-width: 0;
   resize: vertical;
 }
+
+/* --- Apparence ------------------------------------------------------------- */
+
+.theme-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+.theme-option {
+  display: grid;
+  gap: 3px;
+  padding: var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease);
+}
+
+.theme-option:hover { transform: translateY(-1px); border-color: var(--border-strong); }
+
+.theme-option.is-active {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.theme-option strong {
+  padding: 0 var(--space-1);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.theme-option > span:last-child {
+  padding: 0 var(--space-1);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.theme-swatch {
+  --sw-app: #17181c;
+  --sw-side: #24272e;
+  --sw-main: #1c1e23;
+  --sw-line: rgba(255, 255, 255, 0.14);
+  --sw-accent: #8b7cff;
+  display: grid;
+  grid-template-columns: 10px 34% 1fr;
+  height: 64px;
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: var(--sw-app);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+.theme-swatch-night { --sw-app: #0a0a0c; --sw-side: #101013; --sw-main: #0d0d10; --sw-line: rgba(255, 255, 255, 0.1); --sw-accent: #9d91ff; }
+.theme-swatch-light { --sw-app: #e8e7e3; --sw-side: #f3f2ef; --sw-main: #f9f8f6; --sw-line: rgba(24, 20, 40, 0.14); --sw-accent: #5b4ae6; }
+
+.theme-swatch-system {
+  background: linear-gradient(115deg, #17181c 0 50%, #e8e7e3 50% 100%);
+  --sw-side: transparent;
+  --sw-main: transparent;
+  --sw-line: rgba(128, 128, 140, 0.4);
+}
+
+.theme-swatch i {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 8px 6px;
+}
+
+.theme-swatch-rail { background: var(--sw-app); }
+.theme-swatch-sidebar { background: var(--sw-side); }
+.theme-swatch-main { background: var(--sw-main); }
+
+.theme-swatch b {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--sw-line);
+}
+
+.theme-swatch-main b:nth-child(2) { width: 70%; }
+
+.theme-swatch-main b.theme-swatch-accent {
+  width: 38%;
+  height: 8px;
+  margin-top: 6px;
+  margin-left: auto;
+  border-radius: 3px;
+  background: var(--sw-accent);
+}

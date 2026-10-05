@@ -19,6 +19,7 @@
   --bg-raised: #26282f;
   --bg-overlay: #2a2d35;
   --bg-input: #272a31;
+  --tint: #fff;
   --bg-hover: rgba(255, 255, 255, 0.07);
   --bg-active: rgba(139, 124, 255, 0.14);
   --scrim: rgba(12, 12, 15, 0.66);
@@ -226,6 +227,132 @@ pre {
   background-clip: content-box;
   border: 2px solid transparent;
   border-radius: var(--r-full);
+}
+
+/* --- Thèmes -------------------------------------------------------------
+   :root porte le thème Sombre. Nuit et Clair ne redéfinissent que les
+   couleurs ; data-theme est posé sur <html> par theme.ts avant le rendu. */
+
+:root[data-theme="night"] {
+  --bg-app: #0a0a0c;
+  --bg-workspace: #0d0d10;
+  --bg-panel: #121215;
+  --bg-sidebar: #101013;
+  --bg-rail: #0b0b0d;
+  --bg-sidebar-header: #101013;
+  --bg-titlebar: #0a0a0c;
+  --bg-toolbar: #121215;
+  --bg-raised: #17171b;
+  --bg-overlay: #1b1b20;
+  --bg-input: #141418;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(157, 145, 255, 0.13);
+  --scrim: rgba(0, 0, 0, 0.74);
+  --border-subtle: rgba(255, 255, 255, 0.055);
+  --border: rgba(255, 255, 255, 0.085);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --text: #dddce2;
+  --text-strong: #f4f3f7;
+  --text-muted: #a5a2ad;
+  --text-faint: #7c7984;
+  --accent: #9d91ff;
+  --accent-hover: #b1a7ff;
+  --accent-bright: #cfc8ff;
+  --accent-soft: rgba(157, 145, 255, 0.12);
+  --accent-border: rgba(157, 145, 255, 0.45);
+  --neutral-soft: rgba(255, 255, 255, 0.04);
+  --shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --tint: #000;
+
+  --bg-app: #eeede9;
+  --bg-workspace: #f9f8f6;
+  --bg-panel: #ffffff;
+  --bg-sidebar: #f3f2ef;
+  --bg-rail: #e8e7e3;
+  --bg-sidebar-header: #f3f2ef;
+  --bg-titlebar: #e8e7e3;
+  --bg-toolbar: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-overlay: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: rgba(24, 20, 40, 0.055);
+  --bg-active: rgba(91, 74, 230, 0.1);
+  --scrim: rgba(36, 32, 48, 0.34);
+
+  --border-subtle: rgba(24, 20, 40, 0.07);
+  --border: rgba(24, 20, 40, 0.12);
+  --border-strong: rgba(24, 20, 40, 0.2);
+
+  --text: #24222b;
+  --text-strong: #0f0e14;
+  --text-muted: #565260;
+  --text-faint: #7f7b88;
+
+  --accent: #5b4ae6;
+  --accent-hover: #4b3ad8;
+  --accent-bright: #4434c4;
+  --accent-soft: rgba(91, 74, 230, 0.1);
+  --accent-border: rgba(91, 74, 230, 0.42);
+  --on-accent: #ffffff;
+  --danger: #d0343d;
+  --danger-soft: rgba(208, 52, 61, 0.1);
+  --warn: #b0640c;
+  --warn-soft: rgba(176, 100, 12, 0.11);
+  --ok: #0f8466;
+  --ok-soft: rgba(15, 132, 102, 0.1);
+  --streak: #b2740f;
+  --streak-soft: rgba(178, 116, 15, 0.12);
+  --unread: #b8760a;
+  --unread-soft: rgba(184, 118, 10, 0.13);
+  --prov-codex: #0f8466;
+  --prov-codex-soft: rgba(15, 132, 102, 0.1);
+  --prov-claude: #c05a37;
+  --prov-claude-soft: rgba(192, 90, 55, 0.1);
+  --prov-grok: #8a7420;
+  --prov-grok-soft: rgba(138, 116, 32, 0.12);
+  --prov-reasonix: #2b8573;
+  --prov-reasonix-soft: rgba(43, 133, 115, 0.12);
+  --sentry-gold: #9f7514;
+  --neutral-soft: rgba(24, 20, 40, 0.04);
+
+  --code-keyword: #5a3ccf;
+  --code-builtin: #0b7482;
+  --code-type: #94650a;
+  --code-number: #b0500c;
+  --code-string: #17755a;
+  --code-regexp: #b02f68;
+  --code-comment: #8a8693;
+  --code-meta: #6d6977;
+  --code-title: #1d5cba;
+  --code-tag: #bd3139;
+  --code-attr: #6a4ed6;
+  --code-property: #3a3743;
+  --code-variable: #24222b;
+  --code-punct: #565260;
+
+  --shadow-overlay: 0 18px 48px rgba(30, 26, 48, 0.16), 0 2px 8px rgba(30, 26, 48, 0.08);
+  --shadow-popover: 0 8px 24px rgba(30, 26, 48, 0.13);
+}
+
+:root[data-theme="light"] ::highlight(pupitre-search) {
+  color: #0f0e14;
+  background-color: rgba(214, 150, 20, 0.3);
+}
+
+:root[data-theme="light"] ::highlight(pupitre-search-current) {
+  color: #ffffff;
+  background-color: #5b4ae6;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* --- Focus visible obligatoire ------------------------------------------ */

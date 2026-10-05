@@ -1,7 +1,7 @@
 .complexity-track {
   display: block;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.09);
+  background: color-mix(in srgb, var(--tint) 9%, transparent);
 }
 .complexity-track > span {
   display: block;
@@ -132,7 +132,7 @@
   position: absolute;
   inset: 0;
   width: 22%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--tint) 40%, transparent), transparent);
   animation: sheen 3.6s var(--ease) infinite;
 }
 

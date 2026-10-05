@@ -465,7 +465,7 @@ button.titlebar-instance {
   width: 32px;
   height: 32px;
   overflow: hidden;
-  color: color-mix(in srgb, var(--project-color) 70%, #fff);
+  color: color-mix(in srgb, var(--project-color) 70%, var(--text-strong));
   font-family: var(--font-mono);
   font-size: 11.5px;
   font-weight: 650;
@@ -649,8 +649,8 @@ button.titlebar-instance {
 
 
 @keyframes rail-live {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 124, 255, 0); }
-  50% { box-shadow: 0 0 0 3px rgba(139, 124, 255, 0.18); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 }
 
 /* --- Zone de travail ----------------------------------------------------- */
@@ -785,7 +785,7 @@ button.titlebar-instance {
   flex: none;
   margin-left: auto;
   padding: 3px;
-  background: #191b20;
+  background: var(--bg-titlebar);
   border: 1px solid var(--border-subtle);
   border-radius: 9px;
 }
