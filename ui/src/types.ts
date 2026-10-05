@@ -3,7 +3,7 @@ export type ConversationSpeed = 'standard' | 'fast'
 export type PresetPermissionMode =
   'plan' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions'
 export type FilesystemScope = 'project-and-ai-roots' | 'full-system'
-export type WorkspaceView = 'conversations' | 'applications' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'attention' | 'activity-report' | 'costs' | 'memory' | 'help' | 'progress' | 'dashboard' | 'settings' | 'chaos'
+export type WorkspaceView = 'conversations' | 'applications' | 'git' | 'documents' | 'design' | 'library' | 'routines' | 'fleet' | 'attention' | 'activity-report' | 'costs' | 'memory' | 'help' | 'progress' | 'dashboard' | 'settings'
 
 /** Joignabilité de claude.ai, renvoyée par `GET /api/design/reachability`.
  *
@@ -282,7 +282,6 @@ export interface Conversation {
   ticket_key?: string | null
   ticket_backlog_count?: number
   ticket_title?: string | null
-  ticket_title_proposal?: string | null
   ticket_instruction: string | null
   origin_type?: 'sentry' | 'problem' | 'promotion' | 'documents' | null
   origin_key?: string | null
@@ -329,7 +328,7 @@ export interface DashboardIntegration {
   config: Record<string, unknown>
 }
 
-export type TicketSource = 'clickup' | 'notion' | 'git' | 'chantier'
+export type TicketSource = 'clickup' | 'notion' | 'git'
 export type TicketRefKind = 'branch' | 'mr' | 'pipeline' | 'deployment' | 'sentry_issue'
 
 export interface TicketRef {

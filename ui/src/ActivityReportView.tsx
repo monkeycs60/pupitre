@@ -78,8 +78,6 @@ function ProjectCard({ project, onOpenConversation }: { project: ActivityReportP
       ) : null}
 
       {project.personal && <div className="activity-outcomes">
-        {(project.chantiersOpened ?? []).map(item => <span className="activity-outcome" key={item.id}>Chantier ouvert · {item.title}</span>)}
-        {(project.chantiersClosed ?? []).map(item => <span className="activity-outcome" key={item.id}>Chantier fermé · {item.title}</span>)}
         {project.todosDone.length > 0 && <span className="activity-outcome">{project.todosDone.length} éléments de backlog terminés</span>}
       </div>}
       {!project.personal && (project.mergeRequests.length > 0 || project.ticketsReady.length > 0) ? (

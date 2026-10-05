@@ -7,7 +7,7 @@ import { formatActiveDuration } from './formatActiveDuration'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
-const { Sidebar, chantierColor, compactGroupItems } = await import('./Sidebar')
+const { Sidebar, compactGroupItems } = await import('./Sidebar')
 const { WorkflowsView } = await import('./WorkflowsView')
 
 const project: Project = {
@@ -586,98 +586,6 @@ test('un groupe de ticket replié garde visible une conversation non lue de plus
   await waitFor(() => expect(document.querySelectorAll('.conv-row-title')).toHaveLength(2))
   expect([...document.querySelectorAll('.conv-row-title')].map((element) => element.textContent)).toEqual(['Récente lue', 'Ancienne non lue'])
   expect(screen.getByRole('button', { name: 'Afficher les 3 conversations de TECH-9' }).getAttribute('title')).toBe('Afficher 1 de plus')
-})
-
-test('un chantier se présente par son nom, garde sa clé en retrait et se renomme depuis son en-tête', async () => {
-  const chantier = { ...startedConversation, ticket_id: 'chantier-9', ticket_key: 'CH-9', ticket_title: 'Setup, déploiement et configuration utilisateur', ticket_backlog_count: 5 }
-  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [
-    { ...chantier, id: 'c1', title: 'Préparer Pupitre pour macOS' },
-    { ...chantier, id: 'c2', title: 'Désinstaller claude-notifications', answered_turn: 3, last_read_turn: 1 },
-  ])
-  const requests: Array<{ url: string; method?: string; body?: unknown }> = []
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input)
-    if (url.includes('/chantiers/')) {
-      const body = JSON.parse(String(init?.body))
-      requests.push({ url, method: init?.method, body })
-      return new Response(JSON.stringify(body.suggestTitle ? { title: 'Installation Pupitre sur Mac' } : { ok: true }), { headers: { 'content-type': 'application/json' } })
-    }
-    return originalFetch(input, init)
-  }) as unknown as typeof fetch
-  try {
-    renderSidebar()
-    await waitFor(() => expect(document.querySelector('.conv-group-header.is-chantier')).not.toBeNull())
-    const header = document.querySelector('.conv-group-header.is-chantier')!
-    expect(header.querySelector('.conv-group-key')?.textContent).toBe('Setup, déploiement et configuration utilisateur')
-    expect(header.querySelector('.conv-group-key')?.getAttribute('title')).toBe('Setup, déploiement et configuration utilisateur · CH-9 · 5 à faire')
-    expect(header.querySelector('.conv-group-chantier-key')?.textContent).toBe('CH-9')
-    expect(header.querySelector('.conv-chantier-dot')).not.toBeNull()
-    expect(header.querySelector('.conv-group-count.is-attention')).toBeNull()
-    expect(header.querySelector('.conv-group-unread-dot')?.getAttribute('aria-label')).toBe('1 à lire')
-    expect(document.querySelectorAll('.conv-row-ticket, .conv-row-ticket-title')).toHaveLength(0)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Actions pour le chantier Setup, déploiement et configuration utilisateur' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Renommer le chantier' }))
-    const input = screen.getByRole('textbox', { name: /Nouveau nom pour le chantier/ })
-    fireEvent.change(input, { target: { value: 'Installation Pupitre sur macOS' } })
-    fireEvent.submit(input.closest('form')!)
-    await waitFor(() => expect(header.querySelector('.conv-group-key')?.textContent).toBe('Installation Pupitre sur macOS'))
-    expect(requests).toEqual([expect.objectContaining({ method: 'PUT', body: { title: 'Installation Pupitre sur macOS' } })])
-    expect(requests[0]!.url).toContain('/chantiers/chantier-9')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Actions pour le chantier Installation Pupitre sur macOS' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Proposer un nouveau nom' }))
-    const proposal = await screen.findByRole('textbox', { name: /Nouveau nom pour le chantier/ }) as HTMLInputElement
-    expect(proposal.value).toBe('Installation Pupitre sur Mac')
-    expect(requests[1]!.body).toEqual({ suggestTitle: true })
-    expect(header.querySelector('.conv-group-key')?.textContent).toBe('Installation Pupitre sur macOS')
-    fireEvent.submit(proposal.closest('form')!)
-    await waitFor(() => expect(header.querySelector('.conv-group-key')?.textContent).toBe('Installation Pupitre sur Mac'))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Récentes' }))
-    await waitFor(() => expect(document.querySelectorAll('.conv-row-ticket-title .conv-chantier-dot')).toHaveLength(2))
-  } finally {
-    globalThis.fetch = originalFetch
-  }
-})
-
-test('deux chantiers consécutifs reçoivent deux couleurs différentes', () => {
-  const colors = ['CH-1', 'CH-2', 'CH-3', 'CH-4', 'CH-5', 'CH-6', 'CH-7', 'CH-8'].map(chantierColor)
-  expect(new Set(colors).size).toBe(8)
-  expect(chantierColor('CH-9')).toBe(chantierColor('CH-1'))
-})
-
-test('une proposition de nom s’affiche sous le chantier et s’applique ou s’ignore', async () => {
-  const chantier = { ...startedConversation, ticket_id: 'chantier-3', ticket_key: 'CH-3', ticket_title: 'Améliorations UI', ticket_title_proposal: 'Finitions de l’interface Pupitre' }
-  const other = { ...startedConversation, ticket_id: 'chantier-5', ticket_key: 'CH-5', ticket_title: 'Pièces jointes', ticket_title_proposal: 'Aperçu des documents' }
-  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [
-    { ...chantier, id: 'c1' },
-    { ...other, id: 'c2' },
-  ])
-  const bodies: unknown[] = []
-  const baseFetch = globalThis.fetch
-  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (String(input).includes('/chantiers/')) {
-      bodies.push(JSON.parse(String(init?.body)))
-      return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
-    }
-    return baseFetch(input, init)
-  }) as unknown as typeof fetch
-  renderSidebar()
-  await waitFor(() => expect(document.querySelectorAll('.conv-chantier-proposal')).toHaveLength(2))
-  const banner = (key: string) => [...document.querySelectorAll('.conv-group')].find((group) => group.querySelector('.conv-group-chantier-key')?.textContent === key)!.querySelector('.conv-chantier-proposal')
-
-  fireEvent.click(banner('CH-3')!.querySelector('button.is-primary')!)
-  await waitFor(() => expect(document.querySelectorAll('.conv-chantier-proposal')).toHaveLength(1))
-  expect(banner('CH-3')).toBeNull()
-  const groupKey = (key: string) => [...document.querySelectorAll('.conv-group-header')].find((header) => header.querySelector('.conv-group-chantier-key')?.textContent === key)!.querySelector('.conv-group-key')!.textContent
-  expect(groupKey('CH-3')).toBe('Finitions de l’interface Pupitre')
-
-  fireEvent.click(screen.getByRole('button', { name: 'Ignorer' }))
-  await waitFor(() => expect(document.querySelectorAll('.conv-chantier-proposal')).toHaveLength(0))
-  expect(groupKey('CH-5')).toBe('Pièces jointes')
-  expect(bodies).toEqual([{ titleProposal: 'accept' }, { titleProposal: 'dismiss' }])
 })
 
 test('raccourcit une clé de ticket à son numéro, sans toucher aux autres libellés', async () => {

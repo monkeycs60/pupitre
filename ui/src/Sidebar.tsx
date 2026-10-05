@@ -239,7 +239,7 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
   ]
     .map((context) => ({
       key: `${context.type}-${context.key}`,
-      label: context.type === 'sentry' ? `Sentry · ${context.key}` : isChantierKey(context.key) ? context.grouped[0]?.ticket_title || context.key : context.key,
+      label: context.type === 'sentry' ? `Sentry · ${context.key}` : context.key,
       ticketKey: context.type === 'ticket' ? context.key : null,
       sentryKey: context.type === 'sentry' ? context.key : null,
       items: context.grouped,
@@ -247,26 +247,12 @@ function groupConversations(items: Conversation[]): ConversationGroup[] {
     }))
   const recencyGroups = groupConversationsByRecency(withoutTicket).map((group) => ({
     ...group,
-    label: conversationsByTicket.size && [...conversationsByTicket.keys()].some(isChantierKey) ? `Hors chantier · ${group.label}` : group.label,
     latestUpdatedAt: Math.max(...group.items.map((conversation) => Date.parse(conversation.updated_at))),
   }))
   return [...contextualGroups, ...recencyGroups]
     .sort((left, right) => left.key === 'pinned' ? -1 : right.key === 'pinned' ? 1 : (right.latestUpdatedAt ?? 0) - (left.latestUpdatedAt ?? 0))
 }
 
-const CHANTIER_KEY = /^CH-\d+$/
-const CHANTIER_COLORS = ['#e8915a', '#5fb3a1', '#8f8ce6', '#d7b94e', '#e07a9a', '#5aa2e0', '#9cc163', '#c48ae0']
-
-export function isChantierKey(key: string | null | undefined): key is string {
-  return key != null && CHANTIER_KEY.test(key)
-}
-
-/** Couleur d'un chantier tirée de son numéro : deux chantiers ouverts à la
- *  suite ne partagent jamais la même. */
-export function chantierColor(chantierKey: string): string {
-  const number = Number(chantierKey.slice(3)) || 0
-  return CHANTIER_COLORS[(number + CHANTIER_COLORS.length - 1) % CHANTIER_COLORS.length]!
-}
 
 const COMPACT_GROUP_LIMIT = 3
 const COMPACT_GROUP_WINDOW_MS = 24 * 3_600_000
@@ -328,8 +314,6 @@ export const Sidebar = memo(function Sidebar({
   const [openConversationMenu, setOpenConversationMenu] = useState<string | null>(null)
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
-  const [renameChantierId, setRenameChantierId] = useState<string | null>(null)
-  const [suggestingChantierId, setSuggestingChantierId] = useState<string | null>(null)
   const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null)
   const selectedConversationRef = useRef(selectedConversation)
   selectedConversationRef.current = selectedConversation
@@ -547,57 +531,7 @@ export const Sidebar = memo(function Sidebar({
   function closeConversationMenu() {
     setOpenConversationMenu(null)
     setRenameConversationId(null)
-    setRenameChantierId(null)
     setRenameDraft('')
-  }
-
-  function startChantierRename(ticketId: string, title: string) {
-    setOpenConversationMenu(null)
-    setRenameChantierId(ticketId)
-    setRenameDraft(title)
-  }
-
-  async function suggestChantierTitle(ticketId: string) {
-    if (!selectedProject) return
-    setError(null)
-    setSuggestingChantierId(ticketId)
-    try {
-      const { title } = await launchRequest<{ title: string }>(`/api/projects/${selectedProject.id}/chantiers/${ticketId}`, 'PUT', { suggestTitle: true })
-      startChantierRename(ticketId, title)
-    } catch (suggestError: unknown) {
-      setError(errorMessage(suggestError))
-    } finally {
-      setSuggestingChantierId(null)
-    }
-  }
-
-  async function resolveChantierProposal(ticketId: string, proposal: string, decision: 'accept' | 'dismiss') {
-    if (!selectedProject) return
-    setError(null)
-    try {
-      await launchRequest(`/api/projects/${selectedProject.id}/chantiers/${ticketId}`, 'PUT', { titleProposal: decision })
-      const patch = decision === 'accept'
-        ? { ticket_title: proposal, ticket_title_proposal: null }
-        : { ticket_title_proposal: null }
-      setConversations((current) => current.map((item) => item.ticket_id === ticketId ? { ...item, ...patch } : item))
-      if (decision === 'accept' && selectedConversation?.ticket_id === ticketId) onConversationSelect({ ...selectedConversation, ticket_title: proposal })
-    } catch (proposalError: unknown) {
-      setError(errorMessage(proposalError))
-    }
-  }
-
-  async function handleChantierRenameSubmit(ticketId: string) {
-    const title = renameDraft.trim()
-    if (!title || !selectedProject) return
-    setError(null)
-    try {
-      await launchRequest(`/api/projects/${selectedProject.id}/chantiers/${ticketId}`, 'PUT', { title })
-      setConversations((current) => current.map((item) => item.ticket_id === ticketId ? { ...item, ticket_title: title, ticket_title_proposal: null } : item))
-      if (selectedConversation?.ticket_id === ticketId) onConversationSelect({ ...selectedConversation, ticket_title: title })
-      closeConversationMenu()
-    } catch (renameError: unknown) {
-      setError(errorMessage(renameError))
-    }
   }
 
   function startRename(conversation: Conversation) {
@@ -840,12 +774,8 @@ export const Sidebar = memo(function Sidebar({
                 conversationRowState(conversation, displayedActiveConversationIds) === 'unread'
               )).length
               const groupLinks = group.ticketKey ? ticketLinks?.get(group.ticketKey) : undefined
-              const isChantier = isChantierKey(group.ticketKey)
-              const chantierId = isChantier ? group.items[0]?.ticket_id ?? null : null
-              const groupMenuKey = `group:${group.key}`
               const backlogCount = group.items[0]?.ticket_backlog_count ?? 0
-              const titleProposal = chantierId ? group.items.find((item) => item.ticket_title_proposal)?.ticket_title_proposal ?? null : null
-              const ticketTitle = !isChantier && group.ticketKey && groupLinks?.title
+              const ticketTitle = group.ticketKey && groupLinks?.title
                 ? ticketTitleWithoutKey(groupLinks.title, group.ticketKey)
                 : null
               const groupSentryUrl = group.sentryKey ? sentryLinks?.get(group.sentryKey) : undefined
@@ -860,7 +790,7 @@ export const Sidebar = memo(function Sidebar({
               const keyLabel = ticketTitle ? shortTicketKey(group.label) : group.label
               return (
               <div className="conv-group" key={group.key}>
-                <div className={`conv-group-header${isChantier ? ' is-chantier' : ''}`}>
+                <div className="conv-group-header">
                   <button
                     type="button"
                     className={`conv-group-toggle${keyLabel !== group.label ? ' is-short-key' : ''}`}
@@ -871,9 +801,7 @@ export const Sidebar = memo(function Sidebar({
                     <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={isCollapsed ? { transform: 'rotate(-90deg)' } : undefined}>
                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    {chantierId ? <span className="conv-chantier-dot" style={{ background: chantierColor(group.ticketKey!) }} aria-hidden="true" /> : null}
-                    <span className="conv-group-key" title={isChantier || backlogCount || keyLabel !== group.label ? [group.label, isChantier ? group.ticketKey : null, backlogCount ? `${backlogCount} à faire` : null].filter(Boolean).join(' · ') : undefined}>{keyLabel}</span>
-                    {isChantier ? <span className="conv-group-chantier-key">{group.ticketKey}</span> : null}
+                    <span className="conv-group-key" title={backlogCount || keyLabel !== group.label ? [group.label, backlogCount ? `${backlogCount} à faire` : null].filter(Boolean).join(' · ') : undefined}>{keyLabel}</span>
                   </button>
                   {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
                   {groupSentryUrl !== undefined ? <SentryLinkIcon url={groupSentryUrl} issueKey={group.sentryKey!} /> : null}
@@ -898,19 +826,8 @@ export const Sidebar = memo(function Sidebar({
                       }}
                     >+</button>
                   ) : null}
-                  {chantierId ? (
-                    <button
-                      type="button"
-                      className="conv-group-create conv-group-menu-button"
-                      aria-label={`Actions pour le chantier ${group.label}`}
-                      aria-expanded={openConversationMenu === groupMenuKey}
-                      onClick={() => setOpenConversationMenu((current) => current === groupMenuKey ? null : groupMenuKey)}
-                    >⋯</button>
-                  ) : null}
                   {unread > 0 ? (
-                    isChantier
-                      ? <span className="conv-group-unread-dot" role="img" aria-label={`${unread} à lire`} title={`${unread} à lire`} />
-                      : <span className="conv-group-count is-attention">{unread} à lire</span>
+                    <span className="conv-group-count is-attention">{unread} à lire</span>
                   ) : null}
                   {hiddenCount > 0 || isExpanded ? (
                     <button
@@ -929,38 +846,7 @@ export const Sidebar = memo(function Sidebar({
                   ) : (
                     <span className="conv-group-count">{group.items.length}</span>
                   )}
-                  {chantierId && openConversationMenu === groupMenuKey ? (
-                    <div className="conversation-actions-menu" role="menu">
-                      <button type="button" role="menuitem" onClick={() => startChantierRename(chantierId, group.label)}>Renommer le chantier</button>
-                      <button type="button" role="menuitem" disabled={suggestingChantierId === chantierId} onClick={() => void suggestChantierTitle(chantierId)}>
-                        {suggestingChantierId === chantierId ? 'Recherche d’un nom…' : 'Proposer un nouveau nom'}
-                      </button>
-                    </div>
-                  ) : null}
-                  {chantierId && renameChantierId === chantierId ? (
-                    <form className="conversation-rename-form" onSubmit={(event) => { event.preventDefault(); void handleChantierRenameSubmit(chantierId) }}>
-                      <input
-                        value={renameDraft}
-                        onChange={(event) => setRenameDraft(event.target.value)}
-                        aria-label={`Nouveau nom pour le chantier ${group.label}`}
-                        autoFocus
-                        onKeyDown={(event) => { if (event.key === 'Escape') closeConversationMenu() }}
-                      />
-                      <button type="submit">OK</button>
-                    </form>
-                  ) : null}
                 </div>
-                {chantierId && titleProposal ? (
-                  <div className="conv-chantier-proposal" role="status">
-                    <span className="conv-chantier-proposal-text">
-                      <span className="conv-chantier-proposal-label">✦ Nom proposé</span> {titleProposal}
-                    </span>
-                    <span className="conv-chantier-proposal-actions">
-                      <button type="button" className="is-primary" onClick={() => void resolveChantierProposal(chantierId, titleProposal, 'accept')}>Appliquer</button>
-                      <button type="button" onClick={() => void resolveChantierProposal(chantierId, titleProposal, 'dismiss')}>Ignorer</button>
-                    </span>
-                  </div>
-                ) : null}
                 {isCollapsed ? null : shownItems.map((conversation) => {
                 const isSelected = (workspaceView === 'conversations' || workspaceView === 'git')
                   && selectedConversation?.id === conversation.id
@@ -993,7 +879,6 @@ export const Sidebar = memo(function Sidebar({
                   </span>
                   {!repeatsTicket && conversation.ticket_key && conversation.ticket_title && ticketTitleWithoutKey(conversation.ticket_title, conversation.ticket_key) ? (
                     <span className="conv-row-ticket-title" title={`${conversation.ticket_key} · ${conversation.ticket_title}`}>
-                      {conversation.ticket_id && isChantierKey(conversation.ticket_key) ? <span className="conv-chantier-dot" style={{ background: chantierColor(conversation.ticket_key) }} aria-hidden="true" /> : null}
                       {ticketTitleWithoutKey(conversation.ticket_title, conversation.ticket_key)}
                     </span>
                   ) : null}

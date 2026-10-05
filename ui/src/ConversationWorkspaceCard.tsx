@@ -27,14 +27,14 @@ function ticketTitle(key: string, commits: number, linked: number): string {
 }
 
 function authorsLabel(titles: string[]): string {
-  if (titles.length === 0) return 'Chantier du ticket'
+  if (titles.length === 0) return 'Travail du ticket'
   const [first, ...others] = titles
   if (others.length === 0) return `Commité par ${first}`
   const s = others.length > 1 ? 's' : ''
   return `Commité par ${first} et ${others.length} autre${s} conversation${s}`
 }
 
-/** Ce que la conversation a commité, dépôt par dépôt ; à défaut, le chantier du ticket qu'elle partage. */
+/** Ce que la conversation a commité, dépôt par dépôt ; à défaut, le travail du ticket qu'elle partage. */
 export function ConversationWorkspaceCard({ projectId, conversationId, onOpenCode }: ConversationWorkspaceCardProps) {
   const [data, setData] = useState<CodeConversationCommits | null>(null)
 
@@ -62,10 +62,10 @@ export function ConversationWorkspaceCard({ projectId, conversationId, onOpenCod
   const title = own
     ? `${plural(data.total, 'commit')} sur ${plural(repositories.length, 'dépôt')}`
     : ticketTitle(ticket!.key, Math.max(ticket!.branchCommits, ticket!.total), ticket!.total)
-  const detail = own ? 'Chantier de la conversation' : authorsLabel(ticket!.conversations.map((item) => item.title))
+  const detail = own ? 'Travail de la conversation' : authorsLabel(ticket!.conversations.map((item) => item.title))
   const target = own ? 'conversation' : 'ticket'
 
-  return <article className="code-workspace-card" aria-label={own ? 'Chantier de la conversation' : 'Chantier du ticket'}>
+  return <article className="code-workspace-card" aria-label={own ? 'Travail de la conversation' : 'Travail du ticket'}>
     <div className="code-workspace-card-main">
       <span className={own ? 'code-workspace-card-icon' : 'code-workspace-card-icon is-ticket'} aria-hidden="true">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><circle cx="4.5" cy="3.5" r="1.5" /><circle cx="4.5" cy="12.5" r="1.5" /><circle cx="11.5" cy="5.5" r="1.5" /><path d="M4.5 5v6M11.5 7c0 3-7 2-7 4" /></g></svg>
@@ -75,7 +75,7 @@ export function ConversationWorkspaceCard({ projectId, conversationId, onOpenCod
         <small>{detail}</small>
       </span>
       {onOpenCode ? <button type="button" className="code-workspace-card-open" onClick={() => onOpenCode(conversationId, target)}>
-        {own ? 'Voir dans Code' : 'Voir le chantier'}
+        {own ? 'Voir dans Code' : 'Voir le ticket dans Code'}
       </button> : null}
     </div>
     <ul className="code-workspace-card-repos">

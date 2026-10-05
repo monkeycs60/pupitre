@@ -173,7 +173,7 @@ test('agrandit le graphe en table puis revient au fichier ouvert avec Échap', a
   expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: 'Chercher un fichier ou du texte' }))
 })
 
-test('retrouve l’état de l’onglet au retour et liste le diff du chantier', async () => {
+test('retrouve l’état de l’onglet au retour et liste le diff de la branche', async () => {
   mockApi(singleFixture())
   const props = { project, conversation: baseConversation, ticketLinks: new Map(), onOpenConversation: () => {} }
   const first = render(createElement(CodeView, props))
@@ -184,10 +184,10 @@ test('retrouve l’état de l’onglet au retour et liste le diff du chantier', 
   render(createElement(CodeView, props))
   await waitFor(() => expect(document.querySelector('.code-breadcrumb strong')?.textContent).toBe('README.md'))
 
-  fireEvent.click(await screen.findByRole('button', { name: /Diff du chantier/ }))
+  fireEvent.click(await screen.findByRole('button', { name: /Diff de la branche/ }))
   fireEvent.click(await screen.findByTitle('Voir le diff de src/app.ts sur la branche'))
   await waitFor(() => expect(document.querySelectorAll('.code-diff-line.is-addition')).toHaveLength(1))
-  expect(document.querySelector('.code-reader-chip')?.textContent).toContain('Diff du chantier')
+  expect(document.querySelector('.code-reader-chip')?.textContent).toContain('Diff de la branche')
   expect(document.querySelector('.code-commit-file.is-active strong')?.textContent).toBe('app.ts')
 })
 
@@ -214,7 +214,7 @@ test('réunit les worktrees d’un ticket, filtre par conversation et par dépô
   })
   render(createElement(CodeView, { project, conversation, ticketLinks: new Map(), onOpenConversation: () => {} }))
 
-  expect(await screen.findByText('Chantier sur 2 dépôts')).toBeTruthy()
+  expect(await screen.findByText('Ticket sur 2 dépôts')).toBeTruthy()
   expect(await screen.findByRole('treeitem', { name: 'api/src' })).toBeTruthy()
   await waitFor(() => expect(document.querySelectorAll('.code-graph-row')).toHaveLength(2))
   expect([...document.querySelectorAll('.code-graph-row .code-repo-badge')].map((badge) => badge.textContent)).toEqual(['web', 'api'])

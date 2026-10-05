@@ -4,7 +4,6 @@ import { ToastHost } from './ToastHost'
 import { pushToast } from './toasts'
 import { ReadingControls } from './ReadingControls'
 import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type InspectorView } from './WorkspaceInspector'
-import { ChantierAssignment } from './ChantiersView'
 import { InactiveProjectResume } from './ProjectResume'
 import { TodoList } from './TodoList'
 import { WorkflowsView } from './WorkflowsView'
@@ -87,7 +86,6 @@ const DesignView = lazy(() => import('./DesignView').then((module) => ({ default
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
 const ActivityReportView = lazy(() => import('./ActivityReportView').then((module) => ({ default: module.ActivityReportView })))
 const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })))
-const BadPracticesMuseum = lazy(() => import('./BadPracticesMuseum').then((module) => ({ default: module.BadPracticesMuseum })))
 const ApplicationsView = lazy(() => import('./ApplicationsView').then((module) => ({ default: module.ApplicationsView })))
 
 const DEFAULT_SIDEBAR_WIDTH = 296
@@ -852,12 +850,6 @@ function App() {
     setShowSwitchModel(false)
   }
 
-  function handleChaosSelect() {
-    if (!confirmLeaveMemory()) return
-    setWorkspaceView('chaos')
-    setShowSwitchModel(false)
-  }
-
   function handleActivityReportSelect() {
     if (!confirmLeaveMemory()) return
     setWorkspaceView('activity-report')
@@ -957,7 +949,6 @@ function App() {
         help: 'Aide',
         progress: 'Progression',
         settings: 'Paramètres',
-        chaos: 'Chaos',
       }[workspaceView]
 
   const railView: WorkspaceView = inspector === 'workflows'
@@ -991,7 +982,6 @@ function App() {
     { name: 'activity-report', label: 'Rapport', view: 'activity-report', onClick: handleActivityReportSelect },
     { name: 'costs', label: 'Utilisation', view: 'costs', onClick: () => openInspector('costs') },
     { name: 'settings', label: 'Réglages', view: 'settings', onClick: handleSettingsSelect },
-    { name: 'chaos', label: 'Chaos', view: 'chaos', onClick: handleChaosSelect },
     { name: 'help', label: 'Aide', view: 'help', onClick: () => handleHelpSelect() },
   ]
 
@@ -1095,8 +1085,7 @@ function App() {
           style={{ '--inspector-width': `${inspectorWidth}px` } as CSSProperties}
         >
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
-        {workspaceView === 'chaos' ? <BadPracticesMuseum />
-        : workspaceView === 'design' ? <DesignView />
+        {workspaceView === 'design' ? <DesignView />
         : workspaceView === 'applications' ? <ApplicationsView />
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         : workspaceView === 'settings' ? <AppSettingsView instance={instance} quotas={quotas.snapshot} />
@@ -1130,7 +1119,7 @@ function App() {
         )
         : selectedConversation === null && !isCreatingConversation ? (
           <div className="empty-state">
-            <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Retrouve les tâches et le suivi dans le panneau projet.</p><div className="todo-detail-actions"><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button><button className="secondary-button" onClick={() => openInspector('dashboard')}>Tâches du projet</button></div><InactiveProjectResume key={selectedProject.id} projectId={selectedProject.id} onResume={(ticketId, ticketKey) => handleStartFromContext({ ticketId, ticketKey, branch: null })} /></div>
+            <div className="workspace-welcome"><h1>{selectedProject.name}</h1><p>Retrouve les tâches et le suivi dans le panneau projet.</p><div className="todo-detail-actions"><button className="primary-button" onClick={handleConversationCreate}>Nouvelle conversation</button><button className="secondary-button" onClick={() => openInspector('dashboard')}>Tâches du projet</button></div><InactiveProjectResume key={selectedProject.id} projectId={selectedProject.id} onResume={(conversationId) => void handleGitConversationSelect(conversationId)} /></div>
           </div>
         ) : (
           <>
@@ -1164,23 +1153,6 @@ function App() {
                 })()}
               </div>
               <div className="header-actions">
-                {selectedConversation !== null
-                && selectedConversation.origin_type !== 'documents'
-                && (selectedConversation.ticket_id === null
-                  || ticketLinks.get(selectedConversation.ticket_id)?.externalUrl == null) ? (
-                  <ChantierAssignment
-                    key={selectedConversation.id}
-                    projectId={selectedConversation.project_id}
-                    conversationId={selectedConversation.id}
-                    label={selectedConversation.ticket_id ? selectedConversation.ticket_title ?? selectedConversation.ticket_key ?? null : null}
-                    onChange={(chantier) => {
-                      setSelectedConversation((current) => current === null || current.id !== selectedConversation.id
-                        ? current
-                        : { ...current, ticket_id: chantier?.id ?? null, ticket_key: chantier?.key ?? null, ticket_title: chantier?.title ?? null })
-                      setConversationListVersion((current) => current + 1)
-                    }}
-                  />
-                ) : null}
                 {selectedConversation !== null
                 && branchOfWorktree(selectedConversation.worktree_path) !== null ? (
                   <span

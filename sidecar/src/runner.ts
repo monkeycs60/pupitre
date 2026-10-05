@@ -85,7 +85,6 @@ function selectedMcpServers(
 }
 
 export class ConversationRunner {
-  onDigest?: (id: string) => Promise<unknown>;
   private active = new Map<string, ActiveTurn>();
 
   constructor(
@@ -318,7 +317,7 @@ export class ConversationRunner {
       const worktrees = conversationWorktrees(conv)
       const toolPrompt = withToolMentions(prompt, conv.provider);
       const workspacePreamble = worktrees.length > 1
-        ? `Espaces de travail Git de cette conversation :\n${worktrees.map((path) => `- ${path}`).join("\n")}\nTravaille dans chacun selon les besoins du chantier ; ne modifie pas les checkouts sources du projet.`
+        ? `Espaces de travail Git de cette conversation :\n${worktrees.map((path) => `- ${path}`).join("\n")}\nTravaille dans chacun selon les besoins de la tâche ; ne modifie pas les checkouts sources du projet.`
         : null;
       const preamble = [options.preamble, workspacePreamble].filter(Boolean).join("\n\n");
       const providerPrompt = (preamble
@@ -497,7 +496,6 @@ export class ConversationRunner {
       if (!digest) return;
       const updated = this.convs.updateDigest(conversationId, digest, turn);
       if (!updated) return;
-      await this.onDigest?.(conversationId);
       persist({
         type: "conversation-digest",
         title: updated.title,

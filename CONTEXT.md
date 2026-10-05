@@ -41,10 +41,6 @@ _Avoid_ : dashboard, agrégateur, poste
 L'unité de travail d'un projet, quelle que soit sa source — tâche ClickUp (`TECH-XXXXX`), item Notion, ou simple branche. Agrège branche, MR, pipeline, déploiements, conversations et notes.
 _Avoid_ : tâche (réservé à ClickUp), issue, carte
 
-**Chantier** :
-L’unité de travail d’un projet qui n’en reçoit pas d’un outil externe. C’est un thème né des conversations, qui a un début et une fin. Il porte les mêmes choses qu’un ticket : groupe, notes, consigne, backlog, brief de reprise.
-_Avoid_ : domaine, catégorie, tag, épopée.
-
 **Commande de lancement** :
 Une commande nommée du projet, lancée sans conversation ni quota, suivie dans Applications.
 

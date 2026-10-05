@@ -383,7 +383,6 @@ export function ProjectSettingsDialog({ project, onClose, onUpdated }: ProjectSe
         <div className="project-settings-body">
           <ProjectLaunch project={project} settings />
           <TelegramSettings projectId={project.id} />
-          <label>Chantiers<select defaultValue={(project as Project & {chantiers_enabled?:number}).chantiers_enabled === 0 ? 'off' : 'on'} onChange={(event) => void launchRequest(`/api/projects/${project.id}/chantiers`, 'PUT', { enabled: event.target.value === 'on' }).catch((error) => setError(String(error)))}><option value="on">Automatiques</option><option value="off">Désactivés</option></select></label>
           <label>
             Branche principale
             <input value={trunk} onChange={(event) => setTrunk(event.target.value)} placeholder={`Détectée automatiquement — ${project.detected_trunk ?? 'inconnue'}`} />

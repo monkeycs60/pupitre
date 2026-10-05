@@ -371,7 +371,7 @@ export function CodeReader({
         </nav>
         {status ? <span className={`code-dirty-badge is-${statusClass(status)}`}>{DIRTY_LABELS[status]}</span> : null}
         {mode === 'diff' ? <span className="code-reader-chip" title={branchDiff ? 'Tout ce que la branche change sur ce fichier' : diffSha ?? 'Modifications non commitées du worktree'}>
-          {branchDiff ? 'Diff du chantier' : diffSha ? `Commit ${diffSha.slice(0, 8)}` : 'Non commité'}
+          {branchDiff ? 'Diff de la branche' : diffSha ? `Commit ${diffSha.slice(0, 8)}` : 'Non commité'}
           {diffSha || branchDiff ? <button type="button" title="Revenir aux modifications non commitées" aria-label="Revenir aux modifications non commitées" onClick={onClearDiffCommit}>
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
           </button> : null}

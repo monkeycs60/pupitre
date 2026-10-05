@@ -73,7 +73,6 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
   const [promotionMission, setPromotionMission] = useState<PromotionMission | null>(null)
   const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
   const [longTaskThreshold, setLongTaskThreshold] = useState(120)
-  const [chantierIdleDays, setChantierIdleDays] = useState(5)
   const [activityReportHour, setActivityReportHour] = useState('18:00')
   const [visualFeedbackPaired, setVisualFeedbackPaired] = useState(false)
   const [quotaProviders, setQuotaProviders] = useState<Provider[]>(() => [...QUOTA_PROVIDERS])
@@ -90,7 +89,6 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
         setScope(settings.filesystemScope ?? DEFAULT_SCOPE)
         setLongTaskThreshold(settings.longTaskThresholdSeconds ?? 120)
         setActivityReportHour(settings.activityReportHour ?? '18:00')
-        setChantierIdleDays(settings.chantierIdleDays ?? 5)
         setVisualFeedbackPaired(settings.visualFeedbackPaired === true)
         setQuotaProviders(visibleQuotaProviders(settings.quotaVisibleProviders))
         setQuotaOrder(quotaProviderOrder(settings.quotaProviderOrder))
@@ -435,11 +433,6 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
       </div>
 
       <VisualFeedbackSettings initialPaired={visualFeedbackPaired} />
-      <div className="settings-card">
-        <div><h2>Fermeture des chantiers inactifs</h2><p>Un nouveau message rouvre automatiquement son chantier.</p></div>
-        <label>Jours sans activité<input type="number" min="1" max="365" value={chantierIdleDays} onChange={event => setChantierIdleDays(Number(event.target.value))} /></label>
-        <button className="secondary-button" disabled={loading || saving} onClick={async () => {setSaving(true);setError(null);try {await updateSettings({chantierIdleDays});setSaved(true)} catch(error) {setError(errorMessage(error))} finally {setSaving(false)}}}>Enregistrer le délai</button>
-      </div>
 
       <div className="settings-card">
         <div><h2>Rapport d’activité quotidien</h2><p>La passe s’exécute une fois par jour après l’heure choisie. Une journée sans activité ne crée aucun rapport.</p><p className="settings-help">Prochaine passe : {nextActivityRun(activityReportHour)}.</p></div>

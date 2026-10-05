@@ -1433,54 +1433,6 @@ button.titlebar-instance {
   color: var(--danger);
 }
 
-.chantier-chip-wrap {
-  position: relative;
-  flex: none;
-}
-
-.chantier-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 220px;
-  padding: 1px var(--space-2);
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-
-.chantier-chip:hover {
-  color: var(--text);
-  border-color: var(--accent-border);
-}
-
-.chantier-chip.is-empty {
-  border-style: dashed;
-}
-
-.chantier-menu {
-  top: calc(100% + 4px);
-  max-height: 320px;
-  overflow: auto;
-}
-
-.chantier-menu input {
-  width: 100%;
-  margin-top: var(--space-1);
-  padding: 6px var(--space-2);
-  color: inherit;
-  font-size: var(--text-sm);
-  background: var(--bg-workspace);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-xs);
-}
-
 /* --- Réglages de lecture -------------------------------------------------- */
 
 .reading-controls {

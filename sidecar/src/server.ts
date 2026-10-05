@@ -3,7 +3,6 @@ import type { TelegramCapture } from "./telegram-capture";
 import type { PersonalEnvironments } from "./personal-environments";
 import type { ProjectDevlogService } from "./project-devlog";
 import type { ProjectResumeService } from "./project-resume";
-import type { ChantierService } from "./chantiers";
 import type { ProjectLaunchService } from "./project-launch";
 import { projectCwd } from "./workspace";
 import type { SharedFilesService } from "./shared-files";
@@ -144,7 +143,6 @@ export class ConversationEventBus {
 
 export interface ServerDeps {
   launches?: ProjectLaunchService;
-  chantiers?: ChantierService;
   resume?: ProjectResumeService;
   devlog?: ProjectDevlogService;
   personalEnvironments?: PersonalEnvironments;
@@ -230,9 +228,8 @@ async function ticketBriefFor(
     branches: deps.tickets.branchesOf(ticket.id),
     refs: deps.tickets.refsByTicket(ticket.id),
     instruction: ticket.instruction,
-    clickup: ticket.source === "chantier" ? null : await deps.integrationsRefresher.clickUpContext(ticket.project_id, ticket.key),
+    clickup: await deps.integrationsRefresher.clickUpContext(ticket.project_id, ticket.key),
     siblings,
-    ...(ticket.source === "chantier" ? { description: String(ticket.payload.description ?? ""), notes: deps.tickets.notesByTicket(ticket.id).map(note => note.body), backlog: deps.todos?.snapshot(ticket.project_id).items.filter(item => item.ticket_id === ticket.id && item.status !== "done").map(item => item.title) ?? [] } : {}),
   });
 }
 
@@ -1319,8 +1316,6 @@ export function createServer(deps: ServerDeps) {
         if (devlogResponse) return new Response(devlogResponse.body, {status: devlogResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
         const resumeResponse = await deps.resume?.handle(request, pathname);
         if (resumeResponse) return new Response(resumeResponse.body, {status: resumeResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
-        const chantierResponse = await deps.chantiers?.handle(request, pathname);
-        if (chantierResponse) return new Response(chantierResponse.body, {status: chantierResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
         const launchResponse = await deps.launches?.handle(request, pathname);
         if (launchResponse) return new Response(launchResponse.body, {status: launchResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
         if (request.method === "GET" && pathname === "/api/applications") {
@@ -2675,10 +2670,6 @@ export function createServer(deps: ServerDeps) {
             deps.settings.set("longTaskThresholdSeconds", threshold);
             updated = true;
           }
-          if ("chantierIdleDays" in body) {
-            if (!Number.isInteger(body.chantierIdleDays) || Number(body.chantierIdleDays) < 1 || Number(body.chantierIdleDays) > 365) return json({error:"Délai de fermeture invalide"},400);
-            deps.settings.set("chantierIdleDays",body.chantierIdleDays);
-          }
           if ("activityReportHour" in body) {
             if (typeof body.activityReportHour !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.activityReportHour)) {
               throw new HttpError(400, "heure du rapport invalide");
@@ -3049,7 +3040,6 @@ export function createServer(deps: ServerDeps) {
               }
             }
           }
-          if (ticketId && ticket?.source === "chantier") deps.chantiers?.assign(conversation.id, ticket.id, true);
           const ticketPreamble = ticket
             ? await ticketBriefFor(deps, ticket, conversation.id)
             : null;

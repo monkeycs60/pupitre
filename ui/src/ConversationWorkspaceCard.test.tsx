@@ -40,7 +40,7 @@ test('résume les commits de la conversation par dépôt et ouvre l’onglet Cod
   expect(onOpenCode).toHaveBeenCalledWith('conversation-1', 'conversation')
 })
 
-test('sans commit propre, montre le chantier du ticket et qui l’a commité', async () => {
+test('sans commit propre, montre le travail du ticket et qui l’a commité', async () => {
   const data: CodeConversationCommits = {
     conversationId: 'reader',
     total: 0,
@@ -63,9 +63,9 @@ test('sans commit propre, montre le chantier du ticket et qui l’a commité', a
 
   expect(await screen.findByText('TECH-24128 : 177 commits, dont 21 reliés à des conversations')).toBeTruthy()
   expect(screen.getByText('Commité par Script migration Match AI')).toBeTruthy()
-  expect(screen.getByRole('article', { name: 'Chantier du ticket' })).toBeTruthy()
+  expect(screen.getByRole('article', { name: 'Travail du ticket' })).toBeTruthy()
   expect(document.querySelectorAll('.code-workspace-card-repos li')).toHaveLength(2)
-  fireEvent.click(screen.getByRole('button', { name: 'Voir le chantier' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Voir le ticket dans Code' }))
   expect(onOpenCode).toHaveBeenCalledWith('reader', 'ticket')
 })
 
