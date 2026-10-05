@@ -286,3 +286,36 @@ test("renommer un chantier ne relance pas le classement des conversations en att
   await service.classify(pending.id);
   expect(calls).toBe(2);
 });
+
+test("une conversation inclassable va dans Divers puis rejoint un vrai chantier quand il apparaît", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "chantiers-"));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const db = openDb(dir);
+  cleanup.push(() => db.close());
+  const projects = new ProjectStore(db),
+    conversations = new ConversationStore(db),
+    tickets = new TicketStore(db);
+  const project = projects.create({ name: "Test", path: dir });
+  let target: string | null = null;
+  const prompts: string[] = [];
+  const service = new ChantierService(db, projects, conversations, tickets, async (prompt) => {
+    prompts.push(prompt);
+    return target
+      ? { chantierId: target, new: null, confidence: 0.9 }
+      : { chantierId: null, new: null, confidence: 0.1 };
+  });
+  const conversation = conversations.create({ projectId: project.id, provider: "claude", model: "test", firstMessage: "Petite question" });
+  conversations.appendEvent(conversation.id, { type: "user-message", text: "Petite question", images: [] });
+
+  expect(await service.classify(conversation.id)).toBe(true);
+  const misc = tickets.get(conversations.get(conversation.id)!.ticket_id!)!;
+  expect(misc).toEqual(expect.objectContaining({ title: "Divers" }));
+  expect(misc.payload).toEqual(expect.objectContaining({ origin: "divers", titleSource: "manual" }));
+
+  const real = service.create(project.id, "Facturation");
+  target = real.id;
+  expect(await service.classify(conversation.id)).toBe(true);
+  expect(conversations.get(conversation.id)!.ticket_id).toBe(real.id);
+  expect(prompts.at(-1)).not.toContain(misc.id);
+  expect(service.list(project.id).filter((item) => item.title === "Divers")).toHaveLength(1);
+});

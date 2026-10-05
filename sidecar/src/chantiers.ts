@@ -59,6 +59,12 @@ export function chantierDecision(
     confidence: item.confidence,
   };
 }
+const MISC_ORIGIN = "divers";
+
+function isMisc(ticket: Ticket | null | undefined): boolean {
+  return ticket?.source === "chantier" && ticket.payload.origin === MISC_ORIGIN;
+}
+
 export class ChantierService {
   private scanning = false;
   private calls = 0;
@@ -78,6 +84,22 @@ export class ChantierService {
       "CREATE TABLE IF NOT EXISTS chantier_sequences(project_id TEXT PRIMARY KEY, last_number INTEGER NOT NULL)",
     );
     this.migrateBranches();
+  }
+  /** Chantier « Divers » du projet, créé ou rouvert à la demande. */
+  miscChantier(projectId: string): Ticket {
+    const existing = this.list(projectId).find(isMisc);
+    if (existing) {
+      if (existing.archived_at) this.db.query("UPDATE tickets SET archived_at=NULL WHERE id=?").run(existing.id);
+      return this.tickets.get(existing.id)!;
+    }
+    const created = this.create(
+      projectId,
+      "Divers",
+      "Conversations que le classement n'a rattachées à aucun sujet.",
+      MISC_ORIGIN,
+    );
+    this.setPayload(created.id, { titleSource: "manual" });
+    return this.tickets.get(created.id)!;
   }
   list(projectId: string): Ticket[] {
     const rows = this.db
@@ -307,8 +329,9 @@ export class ChantierService {
     try {
       const conversation = this.conversations.get(id);
       if (!conversation) return false;
-      if (conversation.ticket_id) {
-        const ticket = this.tickets.get(conversation.ticket_id);
+      const current = conversation.ticket_id ? this.tickets.get(conversation.ticket_id) : null;
+      if (conversation.ticket_id && !isMisc(current)) {
+        const ticket = current;
         if (
           ticket?.source === "chantier" &&
           ticket.archived_at &&
@@ -376,8 +399,8 @@ export class ChantierService {
       const candidates = this.list(project.id)
         .filter(
           (item) =>
-            !item.archived_at ||
-            Date.parse(item.archived_at) >= Date.now() - 30 * 86400000,
+            !isMisc(item) && (!item.archived_at ||
+            Date.parse(item.archived_at) >= Date.now() - 30 * 86400000),
         )
         .map((item) => ({
           id: item.id,
@@ -426,7 +449,10 @@ export class ChantierService {
           "INSERT INTO chantier_reviews VALUES (?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET fingerprint=excluded.fingerprint,proposal=excluded.proposal",
         )
         .run(id, fingerprint, JSON.stringify(decision));
-      if (decision.confidence < 0.4) return false;
+      if (decision.confidence < 0.4) {
+        if (current) return false;
+        return this.assign(id, this.miscChantier(project.id).id, false, decision.confidence);
+      }
       if (
         decision.chantierId &&
         candidates.some((item) => item.id === decision.chantierId)
@@ -565,7 +591,7 @@ export class ChantierService {
   }
   async reviewTitleDrift(id: string): Promise<boolean> {
     const item = this.chantier(id);
-    if (item.archived_at || item.payload.titleProposal) return false;
+    if (item.archived_at || item.payload.titleProposal || isMisc(item)) return false;
     const count = this.conversationCount(id);
     const reviewed = item.payload.titleReviewedCount;
     if (typeof reviewed !== "number") {
@@ -662,7 +688,7 @@ export class ChantierService {
         for (const conversation of this.conversations.listByProject(
           project.id,
         )) {
-          if (conversation.ticket_id) continue;
+          if (conversation.ticket_id && !isMisc(this.tickets.get(conversation.ticket_id))) continue;
           await this.classify(conversation.id);
         }
       this.closeIdle(this.idleDays());
