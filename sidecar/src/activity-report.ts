@@ -36,7 +36,6 @@ import {
   retroPrompt,
   type RetroChanges,
 } from "./activity-retro";
-import { BACKGROUND_MODEL } from "./background-model";
 
 /** Bornes de la synthèse bon marché des sujets : jamais un vrai tour. */
 const TOPIC_USER_MESSAGE_MAX = 600;
@@ -548,7 +547,12 @@ export interface StrongModelConfig {
   speed: "standard" | "fast";
 }
 
-export const DEFAULT_ACTIVITY_MODEL: StrongModelConfig = BACKGROUND_MODEL;
+export const DEFAULT_ACTIVITY_MODEL: StrongModelConfig = {
+  provider: "claude",
+  model: "sonnet-5.5",
+  effort: "low",
+  speed: "standard",
+};
 
 export interface ActivityRetroPayload {
   state: ActivityState;

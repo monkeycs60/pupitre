@@ -395,7 +395,12 @@ export class ChantierService {
         candidates,
       };
       const fingerprint = new Bun.CryptoHasher("sha256")
-        .update(JSON.stringify(input))
+        .update(JSON.stringify({
+          title: input.title,
+          first: input.first,
+          summary: input.summary,
+          candidates: candidates.map((item) => item.id).sort(),
+        }))
         .digest("hex");
       const old = this.db
         .query(

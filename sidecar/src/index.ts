@@ -66,8 +66,7 @@ import { PromotionRunner } from "./promotion";
 import { PromotionAgentService } from "./promotion-agent";
 import { VisualFeedbackService } from "./visual-feedback";
 import { TicketAuditService } from "./ticket-audits";
-import { ActivityJournal, ActivityReportService, ActivityStore } from "./activity-report";
-import { BACKGROUND_MODEL } from "./background-model";
+import { ActivityJournal, ActivityReportService, ActivityStore, DEFAULT_ACTIVITY_MODEL } from "./activity-report";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -203,14 +202,14 @@ if (process.argv.includes("--pupitre-mcp")) {
     problemAxisRuns,
   );
   const automaticCalls = new AutomaticCalls(db);
-  const claudeJson = async (model: string, prompt: string, cwd: string): Promise<unknown> => {
-    const raw = await generateWithAdapters({ cwd, provider: "claude", model, effort: "low", speed: "standard", prompt }, quotas);
+  const claudeJson = async (model: string, prompt: string, cwd: string, effort = "low"): Promise<unknown> => {
+    const raw = await generateWithAdapters({ cwd, provider: "claude", model, effort, speed: "standard", prompt }, quotas);
     const match = raw.match(/\{[\s\S]*\}/); return match ? JSON.parse(match[0]) : null;
   };
   const cheapJson = (prompt: string, cwd: string) => claudeJson("claude-haiku-4-5-20251001", prompt, cwd);
   const chantiers = new ChantierService(
     db, projects, conversations, tickets,
-    (prompt, cwd) => automaticCalls.run("classification", () => cheapJson(prompt, cwd)),
+    (prompt, cwd) => automaticCalls.run("classification", () => claudeJson("sonnet-5.5", prompt, cwd)),
     (prompt, cwd) => automaticCalls.run("renommage", () => claudeJson("sonnet-5.5", prompt, cwd)),
   );
   const personalEnvironments = new PersonalEnvironments(db, projects, conversations);
@@ -226,7 +225,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const resume = new ProjectResumeService(db, projects, tickets, (prompt, cwd) => automaticCalls.run("reprise", () => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas)));
   const telegram = new TelegramCapture(db, projects, tickets, new TodoStore(db), (prompt, cwd) => automaticCalls.run("telegram", () => cheapJson(prompt, cwd)), resume, instance.name, instance.dataDir);
   telegram.start();
-  const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), (prompt, cwd, kind) => automaticCalls.run(kind ?? "récolte", () => cheapJson(prompt, cwd)));
+  const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), (prompt, cwd, kind) => automaticCalls.run(kind ?? "récolte", () => claudeJson("claude-haiku-4-5-20251001", prompt, cwd, "medium")));
   if (backgroundJobsEnabled()) setInterval(() => { void harvest.scan().catch(console.error); }, 300000).unref();
   runner.onDigest = (id) => chantiers.classify(id).catch(error => { console.error("[chantiers] classement différé", error); return false; });
   if (backgroundJobsEnabled()) {
@@ -241,7 +240,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     new ActivityJournal(db, projects, new ChangelogStore(db), time, tickets, new TodoStore(db)),
     projects, problemStore, todos, conversations, presets, time, new ChangelogStore(db),
     async (prompt, cwd) => {
-      const raw = await generateWithAdapters({ cwd, ...BACKGROUND_MODEL, prompt }, quotas);
+      const raw = await generateWithAdapters({ cwd, ...DEFAULT_ACTIVITY_MODEL, prompt }, quotas);
       const match = raw.match(/\{[\s\S]*\}/);
       return match ? JSON.parse(match[0]) : null;
     },

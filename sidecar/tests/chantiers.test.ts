@@ -258,3 +258,31 @@ test("propose un nouveau nom quand le sujet dérive, puis l'applique ou l'oublie
   expect(tickets.get(item.id)?.title).toBe("Installation Pupitre sur Mac");
   expect(conversations.listByProject(project.id)[0]?.ticket_title_proposal).toBeNull();
 });
+
+test("renommer un chantier ne relance pas le classement des conversations en attente", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "chantiers-"));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const db = openDb(dir);
+  cleanup.push(() => db.close());
+  const projects = new ProjectStore(db),
+    conversations = new ConversationStore(db),
+    tickets = new TicketStore(db);
+  const project = projects.create({ name: "Test", path: dir });
+  let calls = 0;
+  const service = new ChantierService(db, projects, conversations, tickets, async () => {
+    calls++;
+    return { chantierId: null, new: null, confidence: 0.2 };
+  });
+  const existing = service.create(project.id, "Moteur Rust");
+  const pending = conversations.create({ projectId: project.id, provider: "claude", model: "test", firstMessage: "Refaire la doc" });
+  conversations.appendEvent(pending.id, { type: "user-message", text: "Refaire la doc", images: [] });
+
+  await service.classify(pending.id);
+  expect(calls).toBe(1);
+  db.query("UPDATE tickets SET title='Moteur Rust v2' WHERE id=?").run(existing.id);
+  await service.classify(pending.id);
+  expect(calls).toBe(1);
+  service.create(project.id, "Documentation");
+  await service.classify(pending.id);
+  expect(calls).toBe(2);
+});

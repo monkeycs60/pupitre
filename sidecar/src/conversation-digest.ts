@@ -1,7 +1,8 @@
 import { killGroup, spawnGroup } from "./process-group";
 
-/** Modèle volontairement bon marché : le digest tourne à chaque palier de tours. */
-const DIGEST_MODEL = process.env.PUPITRE_DIGEST_MODEL ?? "claude-haiku-4-5-20251001";
+/** Le digest tourne à chaque palier de tours : effort bas pour rester bon marché. */
+const DIGEST_MODEL = process.env.PUPITRE_DIGEST_MODEL ?? "claude-sonnet-5-5";
+const DIGEST_EFFORT = "low";
 const DIGEST_TIMEOUT_MS = 45_000;
 /** Bornes des textes envoyés : un digest ne doit jamais coûter un vrai tour. */
 const FIRST_MAX = 1_200;
@@ -81,7 +82,7 @@ function runClaude(prompt: string, cwd: string): Promise<string> {
     const bin = process.env.PUPITRE_CLAUDE_BIN ?? "claude";
     const child = spawnGroup(
       bin,
-      ["-p", "--output-format", "json", "--model", DIGEST_MODEL, "--", prompt],
+      ["-p", "--output-format", "json", "--model", DIGEST_MODEL, "--effort", DIGEST_EFFORT, "--", prompt],
       { cwd, stdio: ["ignore", "pipe", "pipe"] },
     );
     let stdout = "";

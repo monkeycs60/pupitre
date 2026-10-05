@@ -376,8 +376,9 @@ export class PersonalEnvironments {
     const config = JSON.parse(incident.config) as EnvironmentConfig;
     const conversation = this.conversations.create({
       projectId: incident.project_id,
-      provider: "codex",
-      model: "gpt-6-luna",
+      provider: "claude",
+      model: "haiku",
+      effort: "medium",
       ticketId: config.ticketId ?? null,
       firstMessage: `Triage de ${config.name}. Erreur à analyser :\n${incident.message}`,
     });
