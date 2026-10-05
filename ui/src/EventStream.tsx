@@ -1,5 +1,6 @@
 import { EventView } from './EventView'
 import { SubtaskCard } from './SubtaskCard'
+import { ToolActivityGroup } from './ToolActivityGroup'
 import { DebriefCard } from './DebriefCard'
 import { SessionSummaryCard } from './SessionSummaryCard'
 import type { DebriefBlock, StreamBlock } from './groupEvents'
@@ -48,23 +49,8 @@ function EventStreamImpl({
         tools.push(blocks[index] as Extract<EventBlock, { kind: 'tool' }>)
         index += 1
       }
-      const running = tools.some((tool) => tool.output === undefined)
       rendered.push(
-        <details
-          className="tool-activity-group"
-          key={`tool-activity-group-${tools[0].id}-${running ? 'running' : 'done'}`}
-          open={running}
-        >
-          <summary>
-            <span className="tool-activity-chevron" aria-hidden="true" />
-            <span>{tools.length} action{tools.length > 1 ? 's' : ''} {running ? 'en cours' : 'effectuée'}{!running && tools.length > 1 ? 's' : ''}</span>
-          </summary>
-          <div className="tool-activity-list">
-            {tools.map((tool) => (
-              <EventView key={tool.id} block={tool} onImageOpen={onImageOpen} onImageLoad={onImageLoad} />
-            ))}
-          </div>
-        </details>,
+        <ToolActivityGroup key={`tool-activity-group-${tools[0].id}`} tools={tools} onImageOpen={onImageOpen} onImageLoad={onImageLoad} />,
       )
       continue
     }

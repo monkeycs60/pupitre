@@ -14,9 +14,9 @@ test('replie les actions consécutives lorsque leur exécution est terminée', (
     { kind: 'tool', id: 'b', toolId: 'b', toolName: 'Grep', input: { pattern: 'route' }, output: 'ok', images: [] },
   ]} />)
 
-  const group = container.querySelector('details')
+  const group = container.querySelector('.tool-activity-group')
   expect(screen.getByText('2 actions effectuées')).toBeTruthy()
-  expect(group?.open).toBe(false)
+  expect(group?.classList.contains('is-open')).toBe(false)
   expect(container.querySelectorAll('.tool-activity')).toHaveLength(2)
   cleanup()
 })
@@ -27,7 +27,7 @@ test('garde le groupe ouvert tant qu’une action est en cours', () => {
   ]} />)
 
   expect(screen.getByText('1 action en cours')).toBeTruthy()
-  expect(container.querySelector('details')?.open).toBe(true)
+  expect(container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(true)
   cleanup()
 })
 
@@ -44,7 +44,7 @@ test('signale une tâche de fond entre deux groupes d’actions sans les fusionn
 
   expect(screen.getByText('Tâche de fond terminée')).toBeTruthy()
   expect(screen.getByText('Wait for recette results')).toBeTruthy()
-  expect(container.querySelectorAll('details')).toHaveLength(2)
+  expect(container.querySelectorAll('.tool-activity-group')).toHaveLength(2)
   cleanup()
 })
 
@@ -89,5 +89,22 @@ test('étiquette le pied d’un tour ouvert par l’agent', () => {
   ]} />)
 
   expect(screen.getByText('Réaction à une tâche de fond')).toBeTruthy()
+  cleanup()
+})
+
+test('referme le groupe en fin d’exécution sans le remonter, et respecte un dépliage manuel', async () => {
+  const { fireEvent } = await import('@testing-library/react')
+  const running = [{ kind: 'tool' as const, id: 'a', toolId: 'a', toolName: 'Read', input: { file_path: '/tmp/a.ts' }, images: [] }]
+  const { container, rerender } = render(<EventStream {...callbacks} blocks={running} />)
+  const group = container.querySelector('.tool-activity-group')
+
+  rerender(<EventStream {...callbacks} blocks={[{ ...running[0], output: 'ok' }]} />)
+  expect(container.querySelector('.tool-activity-group')).toBe(group)
+  expect(group?.classList.contains('is-open')).toBe(false)
+  expect(container.querySelector('.tool-activity.is-fresh')).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: /1 action effectuée/ }))
+  expect(group?.classList.contains('is-open')).toBe(true)
+  expect(group?.classList.contains('is-auto')).toBe(false)
   cleanup()
 })

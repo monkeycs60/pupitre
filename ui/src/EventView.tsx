@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react'
+import { memo, useState, type ReactNode } from 'react'
 import Markdown from './Markdown'
 import { eventIdOfBlock, type EventBlock } from './eventBlocks'
 import type { Attachment } from './types'
@@ -159,6 +159,7 @@ function TurnFooter({ block, action }: {
   const isRunning = block.status?.state === 'running'
   const isDone = block.status?.state === 'done'
   const isError = block.status?.state === 'error'
+  const [mountedRunning] = useState(isRunning)
   // Synchronisation avec l'horloge système : seul effet nécessaire au compteur.
   // 100 ms en cours de tour : le dixième de seconde de formatDuration vit.
   const now = useNow(isRunning ? 100 : 30_000)
@@ -207,8 +208,12 @@ function TurnFooter({ block, action }: {
           </span>
         ) : null}
         {isDone ? (
-          <span className="done-indicator">
-            <span aria-hidden="true">●</span> terminé
+          <span className={`done-indicator${mountedRunning ? ' is-fresh' : ''}`}>
+            <svg className="done-indicator-ring" width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M5 8.2 7 10l4-4.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            terminé
           </span>
         ) : null}
         {totalMs !== null ? (
@@ -224,6 +229,32 @@ function TurnFooter({ block, action }: {
         {action}
       </div>
     </footer>
+  )
+}
+
+const TOOL_ELAPSED_VISIBLE_MS = 3000
+
+function ToolActivity({ block }: { block: Extract<EventBlock, { kind: 'tool' }> }) {
+  const presentation = toolPresentation(block)
+  const running = block.output === undefined
+  const [mountedRunning] = useState(running)
+  const [startedAt] = useState(Date.now)
+  const now = useNow(running ? 1000 : 60_000)
+  const elapsed = running ? now - startedAt : 0
+  const state = running ? ' is-running' : mountedRunning ? ' is-done is-fresh' : ' is-done'
+  return (
+    <div className={`tool-activity${state}`} role={running ? 'status' : undefined}>
+      <span className="tool-activity-state" aria-hidden="true">
+        {running ? null : (
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+            <path d="M2.5 6.2 5 8.5l4.5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </span>
+      <span>{presentation.label}{running ? ' en cours' : ' terminée'}</span>
+      {presentation.detail ? <span className="tool-activity-detail" title={presentation.detail}>{presentation.detail}</span> : null}
+      {elapsed >= TOOL_ELAPSED_VISIBLE_MS ? <span className="tool-activity-elapsed">{Math.floor(elapsed / 1000)} s</span> : null}
+    </div>
   )
 }
 
@@ -278,20 +309,8 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: Ev
         </article>
       )
 
-    case 'tool': {
-      const presentation = toolPresentation(block)
-      const running = block.output === undefined
-      return (
-        <div className={`tool-activity${running ? ' is-running' : ''}`} role={running ? 'status' : undefined}>
-          <svg className="tool-activity-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2.75 3.25h3.5l1 1.25h6v8.25h-10.5z" stroke="currentColor" strokeWidth="1.15" strokeLinejoin="round" />
-            <path d="m6 7 1.5 1.5L6 10M9 10h2" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span>{presentation.label}{running ? ' en cours' : ' terminée'}</span>
-          {presentation.detail ? <span className="tool-activity-detail" title={presentation.detail}>{presentation.detail}</span> : null}
-        </div>
-      )
-    }
+    case 'tool':
+      return <ToolActivity block={block} />
 
     case 'background-task': {
       const statuses = new Set(block.tasks.map((task) => task.status))
