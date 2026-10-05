@@ -16,6 +16,7 @@ import {
 } from "./stores/settings";
 import { defaultDataDir, readInstance } from "./instance";
 import { BUILT_INS } from "./stores/presets";
+import { PROJECT_COLORS } from "./stores/projects";
 
 export function dataDir(): string {
   return process.env.PUPITRE_DATA_DIR ?? defaultDataDir(readInstance().name);
@@ -619,6 +620,10 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "projects", "sort_order INTEGER NULL");
   addColumn(db, "projects", "removed_at TEXT NULL");
   addColumn(db, "projects", "mcp_servers TEXT NULL");
+  addColumn(db, "projects", "icon TEXT NULL");
+  addColumn(db, "projects", "archived_at TEXT NULL");
+  addColumn(db, "projects", "appearance_version INTEGER NOT NULL DEFAULT 0");
+  if (addColumn(db, "projects", "color TEXT NULL")) assignMissingProjectColors(db);
   addColumn(db, "conversations", "title_locked INTEGER NOT NULL DEFAULT 0");
   // Nombre de tours au moment du dernier digest (0 = jamais généré).
   addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");
@@ -784,6 +789,14 @@ export function openDb(dir: string = dataDir()): Database {
   db.exec("DROP TABLE IF EXISTS conversation_domains; DROP TABLE IF EXISTS domain_changes; DROP TABLE IF EXISTS domain_publications; DROP TABLE IF EXISTS domains;");
   db.exec("PRAGMA foreign_keys = ON");
   return db;
+}
+
+function assignMissingProjectColors(db: Database): void {
+  const rows = db.query(
+    "SELECT id FROM projects WHERE color IS NULL ORDER BY sort_order IS NULL, sort_order ASC, created_at ASC",
+  ).all() as { id: string }[];
+  const update = db.query("UPDATE projects SET color = ? WHERE id = ?");
+  rows.forEach((row, index) => update.run(PROJECT_COLORS[index % PROJECT_COLORS.length]!, row.id));
 }
 
 function addColumn(db: Database, table: string, definition: string): boolean {

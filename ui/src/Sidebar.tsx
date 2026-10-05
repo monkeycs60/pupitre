@@ -17,7 +17,8 @@ import { LevelCard } from './LevelCard'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { modelLabel } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
-import { projectInitials, shortenHomePath } from './projectInitials'
+import { shortenHomePath } from './projectInitials'
+import { ProjectAvatar } from './ProjectAvatar'
 import { useNow } from './useNow'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
@@ -697,9 +698,11 @@ export const Sidebar = memo(function Sidebar({
   return (
     <aside className="sidebar">
       <div className="conv-sidebar-header">
-        <span className="conv-sidebar-avatar" aria-hidden="true">
-          {selectedProject ? projectInitials(selectedProject.name) : '··'}
-        </span>
+        {selectedProject ? (
+          <ProjectAvatar project={selectedProject} className="conv-sidebar-avatar" />
+        ) : (
+          <span className="conv-sidebar-avatar" aria-hidden="true">··</span>
+        )}
         <div className="conv-sidebar-project">
           <div className="conv-sidebar-name">
             {selectedProject ? selectedProject.name : 'Aucun projet'}

@@ -12,6 +12,7 @@ import type { TodoInput } from "./stores/todos";
 import { ActivityBusyError, ActivityNotFoundError, type ActivityReportService } from "./activity-report";
 import type { ServerWebSocket } from "bun";
 import { basename, extname, join, resolve as resolvePath } from "node:path";
+import { detectProjectLogo, LOGO_MIME_TYPES } from "./project-logo";
 import { existsSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { AppEvent, MediaAttachment, Provider, StoredEvent } from "./events";
@@ -25,6 +26,8 @@ import {
   type ProjectLaunchConfig,
   type ProjectLaunchSlot,
   type ProjectStore,
+  type ProjectAppearanceInput,
+  MAX_PROJECT_ICON_BYTES,
 } from "./stores/projects";
 import type {
   PresetInput,
@@ -2205,6 +2208,48 @@ export function createServer(deps: ServerDeps) {
           if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) throw new HttpError(400, "ordre invalide");
           try { deps.projects.reorder(ids); } catch { throw new HttpError(400, "l'ordre doit contenir tous les projets une seule fois"); }
           return json(deps.projects.list());
+        }
+
+        const appearanceProjectId = routeId(pathname, /^\/api\/projects\/([^/]+)$/);
+        if (request.method === "PATCH" && appearanceProjectId !== null) {
+          if (!deps.projects.get(appearanceProjectId)) throw new HttpError(404, "projet inconnu");
+          const body = await readObject(request, MAX_PROJECT_ICON_BYTES + 4096);
+          const input: ProjectAppearanceInput = {};
+          if (body.name !== undefined) {
+            if (typeof body.name !== "string") throw new HttpError(400, "nom de projet invalide");
+            input.name = body.name;
+          }
+          if (body.color !== undefined) {
+            if (typeof body.color !== "string") throw new HttpError(400, "couleur invalide");
+            input.color = body.color;
+          }
+          if (body.icon !== undefined) {
+            if (typeof body.icon !== "string") throw new HttpError(400, "icône invalide");
+            input.icon = body.icon;
+          }
+          if (body.archived !== undefined) {
+            if (typeof body.archived !== "boolean") throw new HttpError(400, "archivage invalide");
+            input.archived = body.archived;
+          }
+          try { deps.projects.updateAppearance(appearanceProjectId, input); }
+          catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "modification invalide"); }
+          return json(deps.projects.get(appearanceProjectId));
+        }
+
+        const projectIconId = routeId(pathname, /^\/api\/projects\/([^/]+)\/icon$/);
+        if (request.method === "GET" && projectIconId !== null) {
+          const project = deps.projects.get(projectIconId);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const headers = { ...TAURI_CORS_HEADERS, "cache-control": "private, max-age=300", "x-content-type-options": "nosniff" };
+          const source = url.searchParams.get("source");
+          const custom = source === "logo" ? null : deps.projects.customIcon(projectIconId);
+          if (custom) return new Response(new Uint8Array(custom.bytes), { headers: { ...headers, "content-type": custom.mimeType } });
+          if (source === "custom") throw new HttpError(404, "aucune image");
+          const logo = detectProjectLogo(project.path);
+          if (!logo) throw new HttpError(404, "aucun logo");
+          return new Response(Bun.file(logo), {
+            headers: { ...headers, "content-type": LOGO_MIME_TYPES[extname(logo).toLowerCase()] ?? "application/octet-stream" },
+          });
         }
 
         const removedProjectId = routeId(pathname, /^\/api\/projects\/([^/]+)$/);

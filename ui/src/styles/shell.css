@@ -432,18 +432,61 @@ button.titlebar-instance {
   height: 38px;
   padding: 0;
   color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-base);
-  font-weight: 600;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: 11px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
   cursor: pointer;
   transition: width 140ms var(--ease), grid-template-columns 140ms var(--ease), gap 140ms var(--ease), padding 140ms var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
 
-.rail-project-initials {
-  min-width: 0;
+.project-avatar {
+  --project-color: #8b7cff;
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--project-color) 70%, #fff);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  background: color-mix(in srgb, var(--project-color) 24%, var(--bg-raised));
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--project-color) 45%, transparent);
+  transition: box-shadow var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.project-avatar img {
+  position: absolute;
+  inset: 4px;
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+  object-fit: contain;
+}
+
+.project-avatar.is-filled img {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.project-avatar.is-large {
+  width: 44px;
+  height: 44px;
+  font-size: 15px;
+}
+
+.rail-avatar:hover .project-avatar {
+  background: color-mix(in srgb, var(--project-color) 34%, var(--bg-raised));
+}
+
+.rail-avatar.is-current .project-avatar {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--project-color) 60%, transparent), 0 0 0 2px var(--bg-rail), 0 0 0 3.5px var(--project-color);
 }
 
 .rail-project-label {
@@ -464,16 +507,20 @@ button.titlebar-instance {
 
 .rail-avatar:hover {
   color: var(--text-strong);
-  border-color: var(--border-strong);
 }
 
-.rail-avatar.is-current {
-  color: var(--accent-bright);
+.rail.is-label-expanded .rail-avatar:hover,
+.rail.is-label-expanded .rail-project.is-menu-open .rail-avatar {
+  background: var(--bg-raised);
+}
+
+.rail.is-label-expanded .rail-avatar.is-current {
+  color: var(--text-strong);
   background: var(--accent-soft);
   border-color: var(--accent-border);
 }
 
-.rail-avatar.is-live {
+.rail-avatar.is-live .project-avatar {
   animation: rail-live 1.8s var(--ease) infinite;
 }
 
@@ -556,7 +603,7 @@ button.titlebar-instance {
   padding: 0 8px;
 }
 
-.rail.is-label-expanded .rail-project-initials {
+.rail.is-label-expanded .rail-avatar .project-avatar {
   justify-self: center;
 }
 
@@ -1030,20 +1077,24 @@ button.titlebar-instance {
 }
 
 .rail-project.is-dragging .rail-avatar {
-  color: transparent;
-  background: var(--accent-soft);
   border: 1px dashed var(--accent-border);
+  background: var(--accent-soft);
 }
 
+.rail-project.is-dragging .rail-avatar > *,
 .rail-project.is-dragging > :not(.rail-avatar) {
   visibility: hidden;
 }
 
 .rail.is-reordering .rail-avatar:hover {
-  border-color: var(--border);
+  background: transparent;
 }
 
-.rail-project-remove {
+.rail.is-reordering .rail-project:not(.is-dragging) {
+  pointer-events: none;
+}
+
+.rail-project-more {
   position: absolute;
   top: 50%;
   right: 14px;
@@ -1053,7 +1104,7 @@ button.titlebar-instance {
   width: 24px;
   height: 24px;
   padding: 0;
-  color: var(--text-faint);
+  color: var(--text-muted);
   background: transparent;
   border: 0;
   border-radius: var(--r-xs);
@@ -1062,26 +1113,268 @@ button.titlebar-instance {
   transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
 
-.rail.is-label-expanded:not(.is-reordering) .rail-project:is(:hover, :focus-within) .rail-project-remove {
+.rail.is-label-expanded:not(.is-reordering) .rail-project:is(:hover, :focus-within, .is-menu-open) .rail-project-more {
   display: grid;
 }
 
-.rail.is-label-expanded:not(.is-reordering) .rail-project:is(:hover, :focus-within) .rail-project-count {
+.rail.is-label-expanded:not(.is-reordering) .rail-project:is(:hover, :focus-within, .is-menu-open) .rail-project-count {
   opacity: 0;
 }
 
-.rail.is-label-expanded .rail-project:is(:hover, :focus-within) .rail-project-label {
+.rail.is-label-expanded .rail-project:is(:hover, :focus-within, .is-menu-open) .rail-project-label {
   max-width: 98px;
 }
 
-.rail-project-remove:hover:not(:disabled) {
-  color: var(--danger);
-  background: var(--danger-soft);
+.rail-project-more:hover,
+.rail-project.is-menu-open .rail-project-more {
+  color: var(--text-strong);
+  background: var(--bg-hover);
 }
 
-.rail-project-remove:disabled {
-  opacity: 0.4;
+.rail-project-menu {
+  z-index: 1000;
+}
+
+.rail-project-menu button:disabled {
+  opacity: 0.45;
   cursor: default;
+}
+
+.rail-rename {
+  cursor: default;
+}
+
+.rail-rename input {
+  min-width: 0;
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  color: var(--text-strong);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  background: var(--bg-input, var(--bg));
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-xs);
+  outline: none;
+}
+
+.rail-archive {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.rail-archive-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  align-self: center;
+  width: 38px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  flex: none;
+}
+
+.rail-archive-toggle:hover,
+.rail-archive.is-open .rail-archive-toggle {
+  color: var(--text-muted);
+  background: var(--bg-raised);
+}
+
+.rail-archive-label {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 120ms var(--ease), opacity 100ms var(--ease);
+}
+
+.rail-archive-count {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 14px;
+  padding: 0 3px;
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  text-align: center;
+  background: var(--bg-raised);
+  border-radius: var(--r-full);
+}
+
+.rail.is-label-expanded .rail-archive-toggle {
+  align-self: stretch;
+  justify-content: flex-start;
+  gap: 8px;
+  width: auto;
+  margin: 0 8px;
+  padding: 0 12px;
+}
+
+.rail.is-label-expanded .rail-archive-label {
+  max-width: 100px;
+  opacity: 1;
+}
+
+.rail.is-label-expanded .rail-archive-count {
+  position: static;
+  margin-left: auto;
+  background: transparent;
+}
+
+.rail-project.is-archived .project-avatar {
+  opacity: 0.6;
+  filter: saturate(0.55);
+}
+
+.rail-project.is-archived .rail-avatar:hover .project-avatar,
+.rail-project.is-archived .rail-avatar.is-current .project-avatar {
+  opacity: 1;
+  filter: none;
+}
+
+.rail-appearance {
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 248px;
+  padding: 12px;
+  color: var(--text);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 10px);
+  box-shadow: var(--shadow-popover);
+}
+
+.rail-appearance-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
+.rail-appearance-head > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rail-appearance-head strong {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-appearance-head span {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.rail-appearance-label {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rail-appearance-swatches {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.rail-appearance-swatch {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: var(--swatch);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.rail-appearance-swatch:hover {
+  transform: scale(1.1);
+}
+
+.rail-appearance-swatch[aria-checked='true'] {
+  box-shadow: 0 0 0 2px var(--bg-overlay), 0 0 0 3.5px var(--text-strong);
+}
+
+.rail-appearance-swatch.is-custom {
+  background: conic-gradient(#ff6b6b, #fcc419, #51cf66, #22b8cf, #8b7cff, #f06595, #ff6b6b);
+}
+
+.rail-appearance-swatch.is-custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.rail-appearance-icons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.rail-appearance-icons button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 4px 6px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  text-align: center;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.rail-appearance-icons button:hover:not(:disabled) {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.rail-appearance-icons button[aria-pressed='true'] {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.rail-appearance-icons button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.rail-appearance-icons img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 
 .project-remove-note {

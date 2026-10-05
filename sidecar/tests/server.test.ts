@@ -2128,3 +2128,46 @@ test("TODO HTTP endpoints preserve prepared configuration and reject protected f
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("projects can be renamed, recolored, given an icon and archived", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pupitre-logo-"));
+  mkdirSync(join(root, "public"));
+  mkdirSync(join(root, ".git"));
+  writeFileSync(join(root, "public", "logo.svg"), "<svg xmlns='http://www.w3.org/2000/svg'/>");
+  const other = mkdtempSync(join(tmpdir(), "pupitre-nologo-"));
+  try {
+    const project = await createProject(root);
+    const second = await createProject(other);
+    const listed = await (await fetch(`${current!.baseUrl}/api/projects`)).json() as { id: string; color: string; icon: string; archived_at: string | null }[];
+    expect(listed.find((item) => item.id === project.id)).toEqual(expect.objectContaining({ icon: "auto", archived_at: null }));
+    expect(listed[0]!.color).not.toBe(listed[1]!.color);
+
+    const patch = (id: string, body: unknown) => fetch(`${current!.baseUrl}/api/projects/${id}`, {
+      method: "PATCH", headers: jsonHeaders(), body: JSON.stringify(body),
+    });
+    const updated = await patch(project.id, { name: "  Mon projet ", color: "#22B8CF", archived: true });
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toEqual(expect.objectContaining({
+      name: "Mon projet", color: "#22b8cf", archived_at: expect.any(String),
+    }));
+    expect((await patch(project.id, { color: "red" })).status).toBe(400);
+    expect((await patch(project.id, { name: " " })).status).toBe(400);
+    expect((await patch(project.id, { icon: "data:text/html;base64,AAAA" })).status).toBe(400);
+
+    const logo = await fetch(`${current!.baseUrl}/api/projects/${project.id}/icon`);
+    expect(logo.headers.get("content-type")).toBe("image/svg+xml");
+    expect((await fetch(`${current!.baseUrl}/api/projects/${second.id}/icon`)).status).toBe(404);
+
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+    const custom = await patch(project.id, { icon: `data:image/png;base64,${png}`, archived: false });
+    expect(await custom.json()).toEqual(expect.objectContaining({ icon: "custom", archived_at: null }));
+    const served = await fetch(`${current!.baseUrl}/api/projects/${project.id}/icon`);
+    expect(served.headers.get("content-type")).toBe("image/png");
+    expect(new Uint8Array(await served.arrayBuffer())[1]).toBe(0x50);
+    const fromRepo = await fetch(`${current!.baseUrl}/api/projects/${project.id}/icon?source=logo`);
+    expect(fromRepo.headers.get("content-type")).toBe("image/svg+xml");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(other, { recursive: true, force: true });
+  }
+});

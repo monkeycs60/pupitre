@@ -1,10 +1,11 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { open } from '@tauri-apps/plugin-dialog'
-import { createProject, getUnreadConversationCounts, listProjects, reorderProjects, removeProject } from './api'
+import { createProject, getUnreadConversationCounts, listProjects, reorderProjects, removeProject, updateProject, type ProjectAppearancePatch } from './api'
 import type { Project, WorkspaceView } from './types'
 import { retryUntilAvailable } from './startupRetry'
-import { projectInitials } from './projectInitials'
+import { ProjectAvatar } from './ProjectAvatar'
+import { ProjectAppearancePanel, ProjectMenu } from './ProjectActions'
 
 /** Rail vertical (56 px) : bascule de projet. Les destinations globales
  *  vivent dans la barre de titre. */
@@ -16,6 +17,7 @@ interface RailProps {
   onProjectSelect: (project: Project) => void
   onProjectCreated: (project: Project) => void
   onProjectRemoved?: (project: Project, remaining: Project[]) => void
+  onProjectUpdated?: (project: Project) => void
   workspaceView: WorkspaceView
   /** Projets ayant au moins un run actif dans Fleet. */
   activeProjectIds?: string[]
@@ -26,6 +28,20 @@ function pathBasename(path: string): string {
   return trimmed.split(/[\\/]/).pop() || path
 }
 
+interface DragGeometry {
+  top: number
+  slot: number
+  scrollTop: number
+}
+
+type Popup = { kind: 'menu' | 'appearance'; projectId: string; anchor: DOMRect }
+
+const ARCHIVE_OPEN_KEY = 'pupitre.rail.archiveOpen'
+
+function readArchiveOpen(): boolean {
+  try { return localStorage.getItem(ARCHIVE_OPEN_KEY) === '1' } catch { return false }
+}
+
 export const Rail = memo(function Rail({
   selectedProject,
   projectListVersion,
@@ -33,15 +49,22 @@ export const Rail = memo(function Rail({
   onProjectSelect,
   onProjectCreated,
   onProjectRemoved,
+  onProjectUpdated,
   workspaceView,
   activeProjectIds = [],
 }: RailProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [previewOrder, setPreviewOrder] = useState<string[] | null>(null)
   const [removalCandidate, setRemovalCandidate] = useState<Project | null>(null)
+  const [popup, setPopup] = useState<Popup | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [archiveOpen, setArchiveOpen] = useState(readArchiveOpen)
   const [error, setError] = useState<string | null>(null)
+  const navRef = useRef<HTMLElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const rowRefs = useRef(new Map<string, HTMLDivElement>())
   const rowTops = useRef(new Map<string, number>())
+  const dragGeometry = useRef<DragGeometry | null>(null)
   const [saving, setSaving] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [unreadByProject, setUnreadByProject] = useState<Record<string, number>>({})
@@ -52,6 +75,7 @@ export const Rail = memo(function Rail({
    *  passerait derrière elle et s'afficherait tronqué. Voir
    *  `.app-shell--pinned-rail` dans `styles/shell.css`. */
   const isRailPinned = workspaceView === 'design'
+  const isExpanded = isLabelExpanded || isRailPinned || popup !== null || renamingId !== null
 
   useEffect(() => {
     let ignore = false
@@ -77,7 +101,7 @@ export const Rail = memo(function Rail({
       const selectedPath = await open({ directory: true })
       if (typeof selectedPath !== 'string') return
       const project = await createProject({ name: pathBasename(selectedPath), path: selectedPath })
-      setProjects((current) => [project, ...current])
+      setProjects((current) => [project, ...current.filter((item) => item.id !== project.id)])
       onProjectCreated(project)
     } catch {
       // Dialog annulée ou création refusée : rien à afficher dans le rail.
@@ -85,9 +109,11 @@ export const Rail = memo(function Rail({
   }
 
   const byId = new Map(projects.map((project) => [project.id, project]))
+  const activeProjects = projects.filter((project) => !project.archived_at)
+  const archivedProjects = projects.filter((project) => project.archived_at)
   const displayed = previewOrder
     ? previewOrder.flatMap((id) => byId.get(id) ?? [])
-    : projects
+    : activeProjects
   const displayedKey = displayed.map((project) => project.id).join(',')
 
   useLayoutEffect(() => {
@@ -107,16 +133,36 @@ export const Rail = memo(function Rail({
     rowTops.current = next
   }, [displayedKey])
 
-  function previewMove(targetId: string) {
-    if (!draggedId || draggedId === targetId) return
-    const order = displayed.map((project) => project.id)
-    const targetIndex = order.indexOf(targetId)
-    const next = order.filter((id) => id !== draggedId)
-    next.splice(targetIndex, 0, draggedId)
-    if (next.join(',') !== order.join(',')) setPreviewOrder(next)
+  function startDrag(projectId: string) {
+    const first = activeProjects[0] && rowRefs.current.get(activeProjects[0].id)
+    const second = activeProjects[1] && rowRefs.current.get(activeProjects[1].id)
+    if (!first) return
+    const firstRect = first.getBoundingClientRect()
+    dragGeometry.current = {
+      top: firstRect.top,
+      slot: second ? second.getBoundingClientRect().top - firstRect.top : firstRect.height,
+      scrollTop: listRef.current?.scrollTop ?? 0,
+    }
+    window.setTimeout(() => setDraggedId(projectId), 0)
+  }
+
+  /** L'emplacement visé ne dépend que de la hauteur du pointeur, mesurée sur la
+   *  grille relevée au début du glisser : les lignes qui s'animent sous le
+   *  curseur ne peuvent pas relancer un déplacement. */
+  function previewAt(clientY: number) {
+    const geometry = dragGeometry.current
+    if (!draggedId || !geometry || geometry.slot <= 0) return
+    const scrolled = (listRef.current?.scrollTop ?? 0) - geometry.scrollTop
+    const others = activeProjects.map((project) => project.id).filter((id) => id !== draggedId)
+    const index = Math.max(0, Math.min(others.length, Math.floor((clientY + scrolled - geometry.top) / geometry.slot)))
+    const next = [...others]
+    next.splice(index, 0, draggedId)
+    const current = displayed.map((project) => project.id)
+    if (next.join(',') !== current.join(',')) setPreviewOrder(next)
   }
 
   function endDrag() {
+    dragGeometry.current = null
     setDraggedId(null)
     setPreviewOrder(null)
   }
@@ -125,16 +171,29 @@ export const Rail = memo(function Rail({
     const order = previewOrder
     const previous = projects
     endDrag()
-    if (!order || order.join(',') === previous.map((project) => project.id).join(',')) return
-    setProjects(order.flatMap((id) => byId.get(id) ?? []))
+    if (!order || order.join(',') === activeProjects.map((project) => project.id).join(',')) return
+    const fullOrder = [...order, ...archivedProjects.map((project) => project.id)]
+    setProjects(fullOrder.flatMap((id) => byId.get(id) ?? []))
     setSaving(true)
     setError(null)
-    try { setProjects(await reorderProjects(order)) }
+    try { setProjects(await reorderProjects(fullOrder)) }
     catch (reason) {
       setProjects(previous)
       setError(reason instanceof Error ? reason.message : 'Impossible de déplacer le projet.')
     }
     finally { setSaving(false) }
+  }
+
+  async function patchProject(project: Project, patch: ProjectAppearancePatch) {
+    const updated = await updateProject(project.id, patch)
+    setProjects((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+    onProjectUpdated?.(updated)
+  }
+
+  async function runPatch(project: Project, patch: ProjectAppearancePatch) {
+    setError(null)
+    try { await patchProject(project, patch) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Modification impossible.') }
   }
 
   async function handleRemove(project: Project) {
@@ -150,9 +209,116 @@ export const Rail = memo(function Rail({
     finally { setSaving(false) }
   }
 
+  function closePopup() {
+    setPopup(null)
+    if (!navRef.current?.matches(':hover')) setIsLabelExpanded(false)
+  }
+
+  function toggleArchive() {
+    const next = !archiveOpen
+    setArchiveOpen(next)
+    try { localStorage.setItem(ARCHIVE_OPEN_KEY, next ? '1' : '0') } catch { /* stockage indisponible */ }
+  }
+
+  function renderRow(project: Project, archived: boolean) {
+    const active = selectedProject?.id === project.id && workspaceView === 'conversations'
+    const current = selectedProject?.id === project.id
+    const unread = unreadByProject[project.id] ?? 0
+    const live = activeProjectIds.includes(project.id)
+    const renaming = renamingId === project.id
+    const menuOpen = popup?.projectId === project.id
+    return (
+      <div
+        className={`rail-project${draggedId === project.id ? ' is-dragging' : ''}${archived ? ' is-archived' : ''}${menuOpen ? ' is-menu-open' : ''}`}
+        key={project.id}
+        ref={archived ? undefined : (element) => {
+          if (element) rowRefs.current.set(project.id, element)
+          else rowRefs.current.delete(project.id)
+        }}
+        draggable={!archived && !saving && !renaming}
+        onDragStart={archived ? undefined : (event) => {
+          event.dataTransfer.setData('text/plain', project.id)
+          event.dataTransfer.effectAllowed = 'move'
+          setPopup(null)
+          startDrag(project.id)
+        }}
+        onDragEnd={archived ? undefined : endDrag}
+      >
+        <span
+          className={`rail-project-bar ${active ? 'is-active' : ''} ${!active && unread > 0 ? 'is-unread' : ''}`}
+          aria-hidden="true"
+        />
+        {renaming ? (
+          <form
+            className="rail-avatar rail-rename"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const name = new FormData(event.currentTarget).get('name')
+              setRenamingId(null)
+              if (typeof name === 'string' && name.trim() && name.trim() !== project.name) void runPatch(project, { name })
+            }}
+          >
+            <ProjectAvatar project={project} />
+            <input
+              name="name"
+              aria-label={`Nouveau nom du projet ${project.name}`}
+              defaultValue={project.name}
+              autoFocus
+              onFocus={(event) => event.currentTarget.select()}
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape') return
+                event.currentTarget.value = project.name
+                setRenamingId(null)
+              }}
+              onBlur={(event) => event.currentTarget.form?.requestSubmit()}
+            />
+          </form>
+        ) : (
+          <button
+            type="button"
+            className={`rail-avatar ${current ? 'is-current' : ''} ${project.id !== selectedProject?.id && live ? 'is-live' : ''}`}
+            onClick={() => onProjectSelect(project)}
+            onDoubleClick={() => setRenamingId(project.id)}
+            title={unread > 0 ? `${project.name} · ${unread} à lire` : project.name}
+            aria-current={current ? 'true' : undefined}
+            aria-label={unread > 0 ? `${project.name}, ${unread} conversation${unread > 1 ? 's' : ''} à lire` : project.name}
+          >
+            <ProjectAvatar project={project} />
+            <span className="rail-project-label">{project.name}</span>
+          </button>
+        )}
+        {renaming ? null : (
+          <button
+            type="button"
+            className="rail-project-more"
+            aria-label={`Actions pour le projet ${project.name}`}
+            aria-haspopup="menu"
+            aria-expanded={popup?.kind === 'menu' && menuOpen}
+            onClick={(event) => {
+              const row = event.currentTarget.getBoundingClientRect()
+              const railRight = navRef.current?.getBoundingClientRect().right ?? row.right
+              const anchor = new DOMRect(railRight, row.top - 6, 0, row.height)
+              setPopup(popup?.kind === 'menu' && menuOpen ? null : { kind: 'menu', projectId: project.id, anchor })
+            }}
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+              <circle cx="3.5" cy="8" r="1.3" /><circle cx="8" cy="8" r="1.3" /><circle cx="12.5" cy="8" r="1.3" />
+            </svg>
+          </button>
+        )}
+        {unread > 0 && !renaming ? (
+          <span className="rail-project-count" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>
+        ) : null}
+      </div>
+    )
+  }
+
+  const popupProject = popup ? byId.get(popup.projectId) ?? null : null
+
   return (
     <nav
-      className={`rail${isLabelExpanded || isRailPinned ? ' is-label-expanded' : ''}${draggedId ? ' is-reordering' : ''}`}
+      ref={navRef}
+      className={`rail${isExpanded ? ' is-label-expanded' : ''}${draggedId ? ' is-reordering' : ''}`}
       aria-label="Projets"
       onMouseEnter={() => setIsLabelExpanded(true)}
       onMouseLeave={() => setIsLabelExpanded(false)}
@@ -164,66 +330,18 @@ export const Rail = memo(function Rail({
       }}
     >
       <div
+        ref={listRef}
         className="rail-projects"
         onDragEnter={(event) => { if (draggedId) event.preventDefault() }}
-        onDragOver={(event) => { if (draggedId) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }}
+        onDragOver={(event) => {
+          if (!draggedId) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'move'
+          previewAt(event.clientY)
+        }}
         onDrop={(event) => { event.preventDefault(); void commitDrag() }}
       >
-        {displayed.map((project) => {
-          const active = selectedProject?.id === project.id && workspaceView === 'conversations'
-          const current = selectedProject?.id === project.id
-          const unread = unreadByProject[project.id] ?? 0
-          return (
-            <div
-              className={`rail-project${draggedId === project.id ? ' is-dragging' : ''}`}
-              key={project.id}
-              ref={(element) => {
-                if (element) rowRefs.current.set(project.id, element)
-                else rowRefs.current.delete(project.id)
-              }}
-              draggable={!saving}
-              onDragStart={(event) => {
-                event.dataTransfer.setData('text/plain', project.id)
-                event.dataTransfer.effectAllowed = 'move'
-                const id = project.id
-                window.setTimeout(() => setDraggedId(id), 0)
-              }}
-              onDragEnter={() => previewMove(project.id)}
-              onDragEnd={endDrag}
-            >
-              <span
-                className={`rail-project-bar ${active ? 'is-active' : ''} ${!active && unread > 0 ? 'is-unread' : ''}`}
-                aria-hidden="true"
-              />
-              <button
-                type="button"
-                className={`rail-avatar ${current ? 'is-current' : ''} ${project.id !== selectedProject?.id && activeProjectIds.includes(project.id) ? 'is-live' : ''}`}
-                onClick={() => onProjectSelect(project)}
-                title={unread > 0 ? `${project.name} · ${unread} à lire` : project.name}
-                aria-current={current ? 'true' : undefined}
-                aria-label={unread > 0 ? `${project.name}, ${unread} conversation${unread > 1 ? 's' : ''} à lire` : project.name}
-              >
-                <span className="rail-project-initials">{projectInitials(project.name)}</span>
-                <span className="rail-project-label">{project.name}</span>
-              </button>
-              <button
-                type="button"
-                className="rail-project-remove"
-                disabled={saving || activeProjectIds.includes(project.id)}
-                title={activeProjectIds.includes(project.id) ? 'Un run est en cours dans ce projet' : 'Retirer le projet'}
-                aria-label={`Retirer le projet ${project.name}`}
-                onClick={() => setRemovalCandidate(project)}
-              >
-                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M6.8 7v4M9.2 7v4" />
-                </svg>
-              </button>
-              {unread > 0 ? (
-                <span className="rail-project-count" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>
-              ) : null}
-            </div>
-          )
-        })}
+        {displayed.map((project) => renderRow(project, false))}
         {window.__TAURI__ ? (
           <button
             type="button"
@@ -236,8 +354,46 @@ export const Rail = memo(function Rail({
             <span aria-hidden="true">+</span>
           </button>
         ) : null}
+        {archivedProjects.length > 0 ? (
+          <div className={`rail-archive${archiveOpen ? ' is-open' : ''}`}>
+            <button
+              type="button"
+              className="rail-archive-toggle"
+              aria-expanded={archiveOpen}
+              title={`${archivedProjects.length} projet${archivedProjects.length > 1 ? 's' : ''} archivé${archivedProjects.length > 1 ? 's' : ''}`}
+              onClick={toggleArchive}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2.5 3.5h11v2.5h-11zM3.5 6v6.5h9V6M6.5 8.5h3" />
+              </svg>
+              <span className="rail-archive-label">Archives</span>
+              <span className="rail-archive-count">{archivedProjects.length}</span>
+            </button>
+            {archiveOpen ? archivedProjects.map((project) => renderRow(project, true)) : null}
+          </div>
+        ) : null}
         {error ? <p role="alert" className="rail-error">{error}</p> : null}
       </div>
+      {popup?.kind === 'menu' && popupProject ? (
+        <ProjectMenu
+          project={popupProject}
+          anchor={popup.anchor}
+          live={activeProjectIds.includes(popupProject.id)}
+          onClose={closePopup}
+          onRename={() => setRenamingId(popupProject.id)}
+          onAppearance={() => setPopup({ kind: 'appearance', projectId: popupProject.id, anchor: popup.anchor })}
+          onToggleArchive={() => void runPatch(popupProject, { archived: !popupProject.archived_at })}
+          onRemove={() => setRemovalCandidate(popupProject)}
+        />
+      ) : null}
+      {popup?.kind === 'appearance' && popupProject ? (
+        <ProjectAppearancePanel
+          project={popupProject}
+          anchor={popup.anchor}
+          onClose={closePopup}
+          onChange={(patch) => patchProject(popupProject, patch)}
+        />
+      ) : null}
       {removalCandidate ? (
         <ProjectRemoveModal
           project={removalCandidate}

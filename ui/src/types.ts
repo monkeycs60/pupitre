@@ -231,6 +231,12 @@ export interface Project {
   scout_launch_config?: ProjectLaunchConfig | null
   todo_launch_config?: ProjectLaunchConfig | null
   auto_rescan: boolean
+  /** Couleur de la pastille, `#rrggbb`. */
+  color?: string
+  /** `auto` : logo du dépôt s'il existe, sinon initiales. */
+  icon?: 'auto' | 'initials' | 'custom'
+  archived_at?: string | null
+  appearance_version?: number
 }
 
 export type ProjectLaunchSlot = 'default' | 'scout' | 'todo'

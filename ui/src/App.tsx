@@ -987,6 +987,9 @@ function App() {
         conversationListVersion={conversationListVersion + railReadVersion}
         onProjectSelect={handleProjectSelect}
         onProjectCreated={handleProjectSelect}
+        onProjectUpdated={(project) => {
+          setSelectedProject((current) => (current?.id === project.id ? project : current))
+        }}
         onProjectRemoved={(project, remaining) => {
           setProjectListVersion((version) => version + 1)
           if (selectedProject?.id !== project.id) return

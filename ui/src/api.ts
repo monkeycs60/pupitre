@@ -1366,6 +1366,28 @@ export function reorderProjects(ids: string[]): Promise<Project[]> {
   return fetchJson('/api/projects/order', jsonPut({ ids }))
 }
 
+export interface ProjectAppearancePatch {
+  name?: string
+  color?: string
+  /** `auto`, `initials` ou une image en data URL. */
+  icon?: string
+  archived?: boolean
+}
+
+export function updateProject(projectId: string, patch: ProjectAppearancePatch): Promise<Project> {
+  return fetchJson(`/api/projects/${routeId(projectId)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+}
+
+export function projectIconUrl(project: Pick<Project, 'id' | 'appearance_version'>, source?: 'logo'): string {
+  const query = new URLSearchParams({ v: String(project.appearance_version ?? 0) })
+  if (source) query.set('source', source)
+  return httpUrl(`/api/projects/${routeId(project.id)}/icon?${query}`)
+}
+
 export function removeProject(projectId: string): Promise<void> {
   return fetchVoid(`/api/projects/${routeId(projectId)}`, { method: 'DELETE' })
 }

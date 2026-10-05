@@ -22,6 +22,28 @@ export const FALLBACK_PROJECT_LAUNCH_CONFIG: ProjectLaunchConfig = {
   speed: "standard",
 };
 
+export const PROJECT_COLORS = [
+  "#8b7cff", "#4f8cff", "#22b8cf", "#20c997", "#51cf66", "#fcc419",
+  "#ff922b", "#ff6b6b", "#f06595", "#cc5de8", "#94a3b8", "#a9e34b",
+] as const;
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+export const MAX_PROJECT_ICON_BYTES = 512 * 1024;
+
+/**
+ * `auto` : logo trouvé dans le dépôt, sinon initiales. `custom` : image
+ * envoyée par l'utilisateur, servie par `/api/projects/:id/icon`.
+ */
+export type ProjectIconMode = "auto" | "initials" | "custom";
+
+export interface ProjectAppearanceInput {
+  name?: string;
+  color?: string;
+  icon?: "auto" | "initials" | string;
+  archived?: boolean;
+}
+
 export interface Project {
   id: string; name: string; path: string;
   trunk_branch?: string | null;
@@ -48,6 +70,11 @@ export interface Project {
    * liste, même vide, active le filtrage strict.
    */
   mcp_servers: string[] | null;
+  color: string;
+  icon: ProjectIconMode;
+  archived_at: string | null;
+  /** Change à chaque modification d'apparence : sert à invalider l'image en cache. */
+  appearance_version: number;
 }
 
 /** Colonne stockée en JSON : une valeur illisible vaut « aucun filtre ». */
@@ -75,9 +102,24 @@ function parseLaunchConfig(value: unknown): ProjectLaunchConfig | null {
   }
 }
 
+function iconMode(value: unknown): ProjectIconMode {
+  if (typeof value === "string" && value.startsWith("data:")) return "custom";
+  return value === "initials" ? "initials" : "auto";
+}
+
+function hashColor(id: string): string {
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return PROJECT_COLORS[hash % PROJECT_COLORS.length]!;
+}
+
 function hydrate(row: any): Project {
   return {
     ...row,
+    color: typeof row.color === "string" && HEX_COLOR.test(row.color) ? row.color : hashColor(row.id),
+    icon: iconMode(row.icon),
+    archived_at: row.archived_at ?? null,
+    appearance_version: row.appearance_version ?? 0,
     detected_trunk: trunkOf(row.path, row.trunk_branch),
     pinned: !!row.pinned,
     auto_rescan: !!row.auto_rescan,
@@ -106,8 +148,8 @@ export class ProjectStore {
     }
     const id = crypto.randomUUID();
     this.db.query(
-      "INSERT INTO projects (id, name, path, created_at) VALUES (?, ?, ?, ?)"
-    ).run(id, input.name, input.path, new Date().toISOString());
+      "INSERT INTO projects (id, name, path, created_at, color) VALUES (?, ?, ?, ?, ?)"
+    ).run(id, input.name, input.path, new Date().toISOString(), this.leastUsedColor());
     return this.get(id)!;
   }
 
@@ -121,6 +163,49 @@ export class ProjectStore {
       "SELECT * FROM projects WHERE removed_at IS NULL ORDER BY sort_order IS NULL, sort_order ASC, pinned DESC, created_at DESC"
     ).all() as any[];
     return rows.map(hydrate);
+  }
+
+  private leastUsedColor(): string {
+    const rows = this.db.query("SELECT color FROM projects WHERE removed_at IS NULL").all() as { color: string | null }[];
+    const usage = new Map<string, number>(PROJECT_COLORS.map((color) => [color, 0]));
+    for (const row of rows) if (row.color && usage.has(row.color)) usage.set(row.color, usage.get(row.color)! + 1);
+    let best: string = PROJECT_COLORS[0];
+    for (const [color, count] of usage) if (count < usage.get(best)!) best = color;
+    return best;
+  }
+
+  /** Lève une `Error` dont le message est destiné à l'utilisateur. */
+  updateAppearance(id: string, input: ProjectAppearanceInput): void {
+    const sets: string[] = [];
+    const values: (string | null)[] = [];
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (!name || name.length > 80) throw new Error("nom de projet invalide");
+      sets.push("name = ?"); values.push(name);
+    }
+    if (input.color !== undefined) {
+      if (!HEX_COLOR.test(input.color)) throw new Error("couleur invalide");
+      sets.push("color = ?"); values.push(input.color.toLowerCase());
+    }
+    if (input.icon !== undefined) {
+      const icon = input.icon;
+      if (icon !== "auto" && icon !== "initials" && !IMAGE_DATA_URL.test(icon)) throw new Error("icône invalide");
+      if (icon.length > MAX_PROJECT_ICON_BYTES) throw new Error("image trop lourde");
+      sets.push("icon = ?"); values.push(icon === "auto" ? null : icon);
+    }
+    if (input.archived !== undefined) {
+      sets.push("archived_at = ?"); values.push(input.archived ? new Date().toISOString() : null);
+    }
+    if (!sets.length) return;
+    sets.push("appearance_version = COALESCE(appearance_version, 0) + 1");
+    this.db.query(`UPDATE projects SET ${sets.join(", ")} WHERE id = ?`).run(...values, id);
+  }
+
+  /** Image personnalisée du projet, telle qu'enregistrée. */
+  customIcon(id: string): { mimeType: string; bytes: Buffer } | null {
+    const row = this.db.query("SELECT icon FROM projects WHERE id = ? AND removed_at IS NULL").get(id) as { icon: string | null } | null;
+    const match = row?.icon?.match(/^data:([^;]+);base64,(.+)$/);
+    return match ? { mimeType: match[1]!, bytes: Buffer.from(match[2]!, "base64") } : null;
   }
 
   remove(id: string): void {

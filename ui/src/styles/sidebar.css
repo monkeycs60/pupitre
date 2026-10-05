@@ -2291,3 +2291,13 @@
   color: var(--text-muted);
   cursor: progress;
 }
+
+.conv-sidebar-avatar.project-avatar {
+  width: 30px;
+  height: 30px;
+  color: color-mix(in srgb, var(--project-color) 70%, #fff);
+  font-size: 11px;
+  background: color-mix(in srgb, var(--project-color) 24%, var(--bg-raised));
+  border: 0;
+  border-radius: 50%;
+}
