@@ -18,10 +18,8 @@ export type NavName =
   | 'routines'
   | 'help'
   | 'settings'
-  | 'chaos'
 
 const NAV_PATHS: Record<NavName, ReactNode> = {
-  chaos: <path d="M2.5 3.5h11v9h-11Zm2 2.5 2 2-2 2M8 10h3.5" />,
   conversations: (
     <>
       <path d="M3 3h10v7H7l-3.5 2v-2H3Z" />

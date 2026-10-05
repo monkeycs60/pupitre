@@ -86,7 +86,6 @@ const DesignView = lazy(() => import('./DesignView').then((module) => ({ default
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
 const ActivityReportView = lazy(() => import('./ActivityReportView').then((module) => ({ default: module.ActivityReportView })))
 const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })))
-const BadPracticesMuseum = lazy(() => import('./BadPracticesMuseum').then((module) => ({ default: module.BadPracticesMuseum })))
 const ApplicationsView = lazy(() => import('./ApplicationsView').then((module) => ({ default: module.ApplicationsView })))
 
 const DEFAULT_SIDEBAR_WIDTH = 296
@@ -839,12 +838,6 @@ function App() {
     setShowSwitchModel(false)
   }
 
-  function handleChaosSelect() {
-    if (!confirmLeaveMemory()) return
-    setWorkspaceView('chaos')
-    setShowSwitchModel(false)
-  }
-
   function handleActivityReportSelect() {
     if (!confirmLeaveMemory()) return
     setWorkspaceView('activity-report')
@@ -944,7 +937,6 @@ function App() {
         help: 'Aide',
         progress: 'Progression',
         settings: 'Paramètres',
-        chaos: 'Chaos',
       }[workspaceView]
 
   const railView: WorkspaceView = inspector === 'workflows'
@@ -978,7 +970,6 @@ function App() {
     { name: 'activity-report', label: 'Rapport', view: 'activity-report', onClick: handleActivityReportSelect },
     { name: 'costs', label: 'Utilisation', view: 'costs', onClick: () => openInspector('costs') },
     { name: 'settings', label: 'Réglages', view: 'settings', onClick: handleSettingsSelect },
-    { name: 'chaos', label: 'Chaos', view: 'chaos', onClick: handleChaosSelect },
     { name: 'help', label: 'Aide', view: 'help', onClick: () => handleHelpSelect() },
   ]
 
@@ -1082,8 +1073,7 @@ function App() {
           style={{ '--inspector-width': `${inspectorWidth}px` } as CSSProperties}
         >
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
-        {workspaceView === 'chaos' ? <BadPracticesMuseum />
-        : workspaceView === 'design' ? <DesignView />
+        {workspaceView === 'design' ? <DesignView />
         : workspaceView === 'applications' ? <ApplicationsView />
         : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
         : workspaceView === 'settings' ? <AppSettingsView instance={instance} quotas={quotas.snapshot} />
