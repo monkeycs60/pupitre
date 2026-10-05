@@ -9,7 +9,6 @@ import {
   setConversationDeleted,
   setConversationPinned,
   setConversationPermissionMode,
-  launchRequest,
 } from './api'
 import type { Conversation, FleetItem, Project, Provider, QuotaSnapshot, TimeMode, TimeSnapshot, WorkspaceView } from './types'
 import { QuotaStatus } from './QuotaBar'

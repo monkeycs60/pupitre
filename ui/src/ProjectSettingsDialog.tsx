@@ -3,7 +3,6 @@ import { ProjectLaunch } from './ProjectLaunch'
 import { useEffect, useState } from 'react'
 import {
   deleteProjectIntegration,
-  launchRequest,
   setProjectTrunk,
   listProjectMcpServers,
   listProjectIntegrations,
