@@ -153,3 +153,33 @@ test('garde ouvert un groupe dont une action a échoué pendant le tour en cours
   expect(history.container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(false)
   cleanup()
 })
+
+test('un clic sur une action terminée déplie la fin de sa sortie, puis le reste à la demande', async () => {
+  const { fireEvent } = await import('@testing-library/react')
+  const output = Array.from({ length: 25 }, (_, index) => `ligne ${index + 1}`).join('\n')
+  const { container } = render(<EventStream {...callbacks} blocks={[
+    { kind: 'tool', id: 'a', toolId: 'a', toolName: 'Bash', input: { command: 'bun test' }, output: `\x1b[32m${output}\x1b[0m\n\n`, images: [] },
+  ]} />)
+
+  expect(container.querySelector('.tool-output')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /Tests/ }))
+  const pre = () => container.querySelector('.tool-output pre')?.textContent ?? ''
+  expect(pre().split('\n')).toHaveLength(20)
+  expect(pre().startsWith('ligne 6\n')).toBe(true)
+  expect(pre().endsWith('ligne 25')).toBe(true)
+
+  fireEvent.click(screen.getByRole('button', { name: '5 lignes précédentes' }))
+  expect(pre().split('\n')).toHaveLength(25)
+  expect(pre()).not.toContain('\x1b')
+  cleanup()
+})
+
+test('une action sans sortie ni résultat reste une ligne inerte', () => {
+  const { container } = render(<EventStream {...callbacks} blocks={[
+    { kind: 'tool', id: 'a', toolId: 'a', toolName: 'Bash', input: { command: 'true' }, output: '  ', images: [] },
+    { kind: 'tool', id: 'b', toolId: 'b', toolName: 'Bash', input: { command: 'sleep 9' }, images: [] },
+  ]} />)
+
+  expect(container.querySelectorAll('button.tool-activity')).toHaveLength(0)
+  cleanup()
+})

@@ -241,16 +241,37 @@ function TurnFooter({ block, action }: {
 
 const TOOL_ELAPSED_VISIBLE_MS = 3000
 
+const TOOL_OUTPUT_TAIL_LINES = 20
+
+function ToolOutput({ output }: { output: string }) {
+  const [full, setFull] = useState(false)
+  const lines = output.replace(/\x1b\[[0-9;]*m/g, '').replace(/\s+$/, '').split('\n')
+  const hidden = full ? 0 : Math.max(0, lines.length - TOOL_OUTPUT_TAIL_LINES)
+  const s = hidden > 1 ? 's' : ''
+  return (
+    <div className="tool-output">
+      {hidden > 0 ? (
+        <button type="button" className="tool-output-more" onClick={() => setFull(true)}>
+          {hidden} ligne{s} précédente{s}
+        </button>
+      ) : null}
+      <pre>{lines.slice(hidden).join('\n')}</pre>
+    </div>
+  )
+}
+
 function ToolActivity({ block }: { block: Extract<EventBlock, { kind: 'tool' }> }) {
   const presentation = toolPresentation(block)
   const running = block.output === undefined
   const [startedAt] = useState(Date.now)
+  const [open, setOpen] = useState(false)
   const now = useNow(running ? 1000 : 60_000)
   const elapsed = running ? now - startedAt : 0
   const failed = !running && block.isError === true
-  const state = running ? ' is-running' : failed ? ' is-error' : ' is-done'
-  return (
-    <div className={`tool-activity${state}`} role={running ? 'status' : undefined}>
+  const expandable = !running && Boolean(block.output?.trim())
+  const state = `${running ? ' is-running' : failed ? ' is-error' : ' is-done'}${expandable ? ' is-expandable' : ''}${open ? ' is-open' : ''}`
+  const content = (
+    <>
       <span className="tool-activity-state" aria-hidden="true">
         {failed ? (
           <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
@@ -262,6 +283,17 @@ function ToolActivity({ block }: { block: Extract<EventBlock, { kind: 'tool' }> 
       {presentation.detail ? <span className="tool-activity-detail" title={presentation.detail}>{presentation.detail}</span> : null}
       {failed ? <span className="tool-activity-failed">échec</span> : null}
       {elapsed >= TOOL_ELAPSED_VISIBLE_MS ? <span className="tool-activity-elapsed">{Math.floor(elapsed / 1000)} s</span> : null}
+    </>
+  )
+  if (!expandable) {
+    return <div className={`tool-activity${state}`} role={running ? 'status' : undefined}>{content}</div>
+  }
+  return (
+    <div className="tool-entry">
+      <button type="button" className={`tool-activity${state}`} aria-expanded={open} onClick={() => setOpen(!open)}>
+        {content}
+      </button>
+      {open ? <ToolOutput output={block.output!} /> : null}
     </div>
   )
 }
