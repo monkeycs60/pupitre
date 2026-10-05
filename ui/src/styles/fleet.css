@@ -347,3 +347,29 @@
 }
 .fleet-empty strong { color: var(--text-strong); }
 .fleet-empty p { max-width: 460px; margin: var(--space-1) 0 0; }
+
+/* --- Issue d'un run de l'historique ----------------------------------------- */
+
+.fleet-card-outcome {
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--outcome-tone, var(--ok)) 14%, transparent);
+  color: var(--outcome-tone, var(--ok));
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.fleet-card.is-outcome-error {
+  --outcome-tone: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+}
+
+.fleet-card.is-outcome-cancelled { --outcome-tone: var(--text-faint); }
+
+.fleet-card.is-history.is-outcome-done .fleet-card-dot,
+.fleet-card.is-history.is-outcome-done .fleet-card-bar span { background: var(--ok); }
+
+.fleet-card.is-history.is-outcome-error .fleet-card-dot,
+.fleet-card.is-history.is-outcome-error .fleet-card-bar span { background: var(--danger); }
+
+.fleet-card.is-outcome-error .fleet-card-last { color: var(--danger); }

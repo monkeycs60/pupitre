@@ -6,16 +6,20 @@ type ToolBlock = Extract<EventBlock, { kind: 'tool' }>
 
 const MAX_PIPS = 8
 
-export function ToolActivityGroup({ tools, onImageOpen, onImageLoad }: {
+export function ToolActivityGroup({ tools, live = false, onImageOpen, onImageLoad }: {
   tools: ToolBlock[]
+  /** Le groupe appartient au tour en cours. */
+  live?: boolean
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
 }) {
   const running = tools.some((tool) => tool.output === undefined)
   const [userOpen, setUserOpen] = useState<boolean | null>(null)
-  const open = userOpen ?? running
+  const [seenLive, setSeenLive] = useState(live)
+  if (live && !seenLive) setSeenLive(true)
   const doneCount = tools.filter((tool) => tool.output !== undefined).length
   const failedCount = tools.filter((tool) => tool.output !== undefined && tool.isError === true).length
+  const open = userOpen ?? (running || (seenLive && failedCount > 0))
   const plural = tools.length > 1 ? 's' : ''
   const label = running
     ? `${tools.length} action${plural} en cours`

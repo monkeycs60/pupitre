@@ -121,3 +121,19 @@ test('signale une action en échec dans la ligne et dans le résumé du groupe',
   expect(screen.getByText('1 en échec')).toBeTruthy()
   cleanup()
 })
+
+test('garde ouvert un groupe dont une action a échoué pendant le tour en cours, même instantanément', () => {
+  const user = { kind: 'user' as const, id: 'u', text: 'lance les tests', images: [], attachments: [] }
+  const failed = { kind: 'tool' as const, id: 'a', toolId: 'a', toolName: 'Bash', input: { command: 'ls /x' }, output: 'No such file', isError: true, images: [] }
+  const footer = (state: 'running' | 'done') => ({ kind: 'turn-footer' as const, id: 'f', status: { type: 'status' as const, state } })
+
+  const { container, rerender } = render(<EventStream {...callbacks} blocks={[user, failed, footer('running')]} />)
+  expect(container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(true)
+  rerender(<EventStream {...callbacks} blocks={[user, failed, footer('done')]} />)
+  expect(container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(true)
+  cleanup()
+
+  const history = render(<EventStream {...callbacks} blocks={[user, failed, footer('done')]} />)
+  expect(history.container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(false)
+  cleanup()
+})

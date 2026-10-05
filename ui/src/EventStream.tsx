@@ -38,19 +38,24 @@ function EventStreamImpl({
 }: EventStreamProps) {
   const rendered: ReactNode[] = []
   const newestHtmlDocumentId = blocks.findLast((item) => item.kind === 'html-document')?.id
-  const newestTurnFooterId = blocks.findLast((item) => item.kind === 'turn-footer')?.id
+  const newestTurnFooter = blocks.findLast((item) => item.kind === 'turn-footer')
+  const newestTurnFooterId = newestTurnFooter?.id
+  const liveFrom = newestTurnFooter?.kind === 'turn-footer' && newestTurnFooter.status?.state === 'running'
+    ? blocks.findLastIndex((item) => item.kind === 'user')
+    : blocks.length
   let index = 0
 
   while (index < blocks.length) {
     const block = blocks[index]
     if (block.kind === 'tool') {
+      const live = index > liveFrom
       const tools: Array<Extract<EventBlock, { kind: 'tool' }>> = []
       while (index < blocks.length && blocks[index].kind === 'tool') {
         tools.push(blocks[index] as Extract<EventBlock, { kind: 'tool' }>)
         index += 1
       }
       rendered.push(
-        <ToolActivityGroup key={`tool-activity-group-${tools[0].id}`} tools={tools} onImageOpen={onImageOpen} onImageLoad={onImageLoad} />,
+        <ToolActivityGroup key={`tool-activity-group-${tools[0].id}`} tools={tools} live={live} onImageOpen={onImageOpen} onImageLoad={onImageLoad} />,
       )
       continue
     }

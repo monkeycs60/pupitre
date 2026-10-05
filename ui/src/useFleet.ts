@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getFleet } from './api'
+import { getConversationOutcome, getFleet } from './api'
 import { reconnectDelayMs } from './backoff'
 import { webSocketUrl } from './transport'
 import type { FleetItem } from './types'
@@ -11,8 +11,13 @@ export const FLEET_HISTORY_LIMIT = 20
  * Mémoire locale uniquement : le backend ne publie pas encore de résultat
  * final pour un run qui sort du snapshot actif.
  */
+export type FleetOutcome = 'done' | 'error' | 'cancelled'
+
 export interface FleetHistoryItem extends FleetItem {
   leftActiveAt: string
+  /** Issue lue après la sortie du flux ; absente pour un agent délégué ou si la lecture a échoué. */
+  outcome?: FleetOutcome
+  outcomeError?: string
 }
 
 function isFleetItem(value: unknown): value is FleetItem {
@@ -31,8 +36,10 @@ function isFleetItem(value: unknown): value is FleetItem {
 }
 
 function isFleetHistoryItem(value: unknown): value is FleetHistoryItem {
+  const outcome = (value as FleetHistoryItem).outcome
   return isFleetItem(value)
     && typeof (value as FleetHistoryItem).leftActiveAt === 'string'
+    && (outcome === undefined || outcome === 'done' || outcome === 'error' || outcome === 'cancelled')
 
 }
 
@@ -110,12 +117,26 @@ export interface FleetState {
   connected: boolean
 }
 
-export function useFleet(projectId?: string): FleetState {
+/** Applique une issue lue à l'entrée d'historique du run concerné. */
+export function withFleetOutcome(
+  history: FleetHistoryItem[],
+  id: string,
+  outcome: FleetOutcome,
+  error: string | null,
+): FleetHistoryItem[] {
+  return history.map((item) => item.id === id
+    ? { ...item, outcome, ...(error ? { outcomeError: error } : {}) }
+    : item)
+}
+
+export function useFleet(projectId?: string, onSettled?: (item: FleetHistoryItem) => void): FleetState {
   const [items, setItems] = useState<FleetItem[]>([])
   const [history, setHistory] = useState<FleetHistoryItem[]>(loadFleetHistory)
   const [connected, setConnected] = useState(false)
   const activeRef = useRef<FleetItem[]>([])
   const historyRef = useRef(history)
+  const onSettledRef = useRef(onSettled)
+  onSettledRef.current = onSettled
 
   useEffect(() => {
     let disposed = false
@@ -135,11 +156,31 @@ export function useFleet(projectId?: string): FleetState {
         historyRef.current,
         new Date().toISOString(),
       )
+      const known = new Set(historyRef.current.map((item) => item.id))
+      const departed = nextHistory.filter((item) => !known.has(item.id) && item.kind !== 'subtask')
       activeRef.current = snapshot
       historyRef.current = nextHistory
       setItems(snapshot)
       setHistory(nextHistory)
       persistFleetHistory(nextHistory)
+      for (const item of departed) void settle(item)
+    }
+
+    async function settle(item: FleetHistoryItem) {
+      const outcome = await getConversationOutcome(item.conversationId, controller.signal).catch(() => null)
+      if (disposed) return
+      const state = outcome?.state === 'done' || outcome?.state === 'error' || outcome?.state === 'cancelled'
+        ? outcome.state
+        : null
+      if (state === null) {
+        onSettledRef.current?.(item)
+        return
+      }
+      const nextHistory = withFleetOutcome(historyRef.current, item.id, state, outcome?.error ?? null)
+      historyRef.current = nextHistory
+      setHistory(nextHistory)
+      persistFleetHistory(nextHistory)
+      onSettledRef.current?.(nextHistory.find((entry) => entry.id === item.id) ?? item)
     }
 
     function connect() {

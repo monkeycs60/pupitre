@@ -1,5 +1,6 @@
+import { summarizeTurnError } from './turnError'
 import { useMemo, useState } from 'react'
-import { useFleet, type FleetHistoryItem } from './useFleet'
+import { useFleet, type FleetHistoryItem, type FleetOutcome } from './useFleet'
 import { useNow } from './useNow'
 import type { FleetItem } from './types'
 
@@ -67,6 +68,12 @@ function groupByProject(items: (FleetItem | FleetHistoryItem)[]): FleetGroup[] {
     group.items.push(item)
   }
   return order.map((id) => byProject.get(id)!)
+}
+
+const OUTCOME_LABEL: Record<FleetOutcome, string> = {
+  done: 'terminé',
+  error: 'en échec',
+  cancelled: 'annulé',
 }
 
 export function FleetView({ onConversationSelect, projectId }: FleetViewProps) {
@@ -170,11 +177,14 @@ export function FleetView({ onConversationSelect, projectId }: FleetViewProps) {
               <div className="fleet-cards">
                 {group.items.map((item) => (
                   <article
-                    className={`fleet-card is-${item.kind}${historical ? ' is-history' : ''}`}
+                    className={`fleet-card is-${item.kind}${historical ? ' is-history' : ''}${isHistoryItem(item) && item.outcome ? ` is-outcome-${item.outcome}` : ''}`}
                     key={item.id}
                   >
                     <div className="fleet-card-top">
                       <span className="fleet-card-kind">{KIND_BADGE[item.kind]}</span>
+                      {isHistoryItem(item) && item.outcome ? (
+                        <span className="fleet-card-outcome">{OUTCOME_LABEL[item.outcome]}</span>
+                      ) : null}
                       <span className="fleet-card-elapsed">
                         {elapsed(item.startedAt, isHistoryItem(item) ? new Date(item.leftActiveAt).getTime() : now)}
                       </span>
@@ -185,7 +195,11 @@ export function FleetView({ onConversationSelect, projectId }: FleetViewProps) {
                     <div className="fleet-card-bar"><span /></div>
                     <div className="fleet-card-foot">
                       <span className="fleet-card-last">
-                        {isHistoryItem(item) ? `Sorti du flux ${observedAt(item.leftActiveAt)}` : item.lastEvent}
+                        {isHistoryItem(item)
+                          ? item.outcome === 'error' && item.outcomeError
+                            ? summarizeTurnError(item.outcomeError).message
+                            : `${item.outcome ? 'Fini le' : 'Sorti du flux'} ${observedAt(item.leftActiveAt)}`
+                          : item.lastEvent}
                       </span>
                       <button type="button" className="fleet-card-open" onClick={() => openConversation(item)}>
                         Ouvrir →

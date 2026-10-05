@@ -25,7 +25,7 @@ import { Titlebar, type TitlebarDestination } from './Titlebar'
 import { navigationShortcutLabel } from './navigationShortcuts'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
-import type { Attachment, Conversation, FleetItem, Project, UnreadConversation } from './types'
+import type { Attachment, Conversation, Project, UnreadConversation } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import {
@@ -39,11 +39,11 @@ import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { useAppNotifications } from './useAppNotifications'
 import { CommandPalette } from './CommandPalette'
-import { createSessionSummary, createTestInventory, getConversationOutcome } from './api'
+import { createSessionSummary, createTestInventory } from './api'
 import type { SkillSummary } from './types'
 import type { AppEvent, WorkspaceView } from './types'
 import { useTimeTracking } from './useTimeTracking'
-import { useFleet } from './useFleet'
+import { useFleet, type FleetHistoryItem } from './useFleet'
 import { countConversationMessages } from './conversationMessageCount'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { branchOfWorktree } from './conversationBranch'
@@ -210,7 +210,7 @@ function App() {
     inspector === 'progress' ? null : selectedProject?.id ?? null,
     inspector === 'progress' ? null : selectedConversation?.id ?? null,
   )
-  const fleet = useFleet(selectedProject?.id)
+  const fleet = useFleet(selectedProject?.id, handleFleetSettled)
   const attention = useUnreadConversations(railReadVersion)
   const instance = useInstance(fleet.connected)
   const ticketLinks = useTicketLinks(selectedProject?.id)
@@ -351,38 +351,28 @@ function App() {
     setRailReadVersion((current) => current + 1)
   }, [fleetMembership])
 
-  const previousFleetRef = useRef<FleetItem[]>([])
   const selectedConversationIdRef = useRef(selectedConversationId)
   selectedConversationIdRef.current = selectedConversationId
   const openFleetConversationRef = useRef(handleRoutineConversationSelect)
   openFleetConversationRef.current = handleRoutineConversationSelect
-  useEffect(() => {
-    const previous = previousFleetRef.current
-    previousFleetRef.current = fleet.items
-    const activeIds = new Set(fleet.items.map((item) => item.id))
-    for (const item of previous) {
-      if (activeIds.has(item.id) || item.kind === 'subtask') continue
-      const inFront = document.hasFocus() && item.conversationId === selectedConversationIdRef.current
-      void getConversationOutcome(item.conversationId)
-        .catch(() => null)
-        .then((outcome) => {
-          const failed = outcome?.state === 'error'
-          const cancelled = outcome?.state === 'cancelled'
-          if (inFront && !failed) return
-          const noun = item.kind === 'routine' ? 'Routine' : 'Tour'
-          const feminine = item.kind === 'routine' ? 'e' : ''
-          pushToast({
-            tone: failed ? 'danger' : cancelled ? 'info' : 'ok',
-            title: failed ? `${noun} en échec` : cancelled ? `${noun} annulé${feminine}` : `${noun} terminé${feminine}`,
-            detail: failed && outcome?.error
-              ? `${item.title} · ${summarizeTurnError(outcome.error).message}`
-              : `${item.projectName} · ${item.title}`,
-            durationMs: failed ? 12_000 : undefined,
-            onOpen: () => void openFleetConversationRef.current(item.projectId, item.conversationId),
-          })
-        })
-    }
-  }, [fleet.items])
+
+  function handleFleetSettled(item: FleetHistoryItem) {
+    const failed = item.outcome === 'error'
+    const cancelled = item.outcome === 'cancelled'
+    const inFront = document.hasFocus() && item.conversationId === selectedConversationIdRef.current
+    if (inFront && !failed) return
+    const noun = item.kind === 'routine' ? 'Routine' : 'Tour'
+    const feminine = item.kind === 'routine' ? 'e' : ''
+    pushToast({
+      tone: failed ? 'danger' : cancelled ? 'info' : 'ok',
+      title: failed ? `${noun} en échec` : cancelled ? `${noun} annulé${feminine}` : `${noun} terminé${feminine}`,
+      detail: failed && item.outcomeError
+        ? `${item.title} · ${summarizeTurnError(item.outcomeError).message}`
+        : `${item.projectName} · ${item.title}`,
+      durationMs: failed ? 12_000 : undefined,
+      onOpen: () => void openFleetConversationRef.current(item.projectId, item.conversationId),
+    })
+  }
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
