@@ -183,3 +183,20 @@ test('une action sans sortie ni résultat reste une ligne inerte', () => {
   expect(container.querySelectorAll('button.tool-activity')).toHaveLength(0)
   cleanup()
 })
+
+test('une modification se déplie en diff, et une lecture d’image en image sans JSON', async () => {
+  const { fireEvent } = await import('@testing-library/react')
+  const { container } = render(<EventStream {...callbacks} blocks={[
+    { kind: 'tool', id: 'a', toolId: 'a', toolName: 'Edit', input: { file_path: '/repo/src/a.ts', old_string: 'avant', new_string: 'après' }, output: 'The file has been updated successfully.', images: [] },
+    { kind: 'tool', id: 'b', toolId: 'b', toolName: 'Read', input: { file_path: '/repo/shot.png' }, output: '[{"type":"image","source":"[image importée]"}]', images: ['shot.png'] },
+  ]} />)
+
+  fireEvent.click(screen.getByRole('button', { name: /Modification/ }))
+  expect([...container.querySelectorAll('.tool-diff-line')].map((line) => line.textContent)).toEqual(['- avant', '+ après'])
+  expect(container.textContent).not.toContain('updated successfully')
+
+  fireEvent.click(screen.getByRole('button', { name: /^Lecture/ }))
+  expect(container.querySelectorAll('.tool-output-images img')).toHaveLength(1)
+  expect(container.textContent).not.toContain('"type":"image"')
+  cleanup()
+})

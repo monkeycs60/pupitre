@@ -918,6 +918,19 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
   white-space: pre;
 }
 
+.tool-output pre.tool-diff { padding: var(--space-1) 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-diff-line { display: block; min-width: fit-content; padding: 0 var(--space-3); }
+.tool-diff-line.is-added { background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--text); }
+.tool-diff-line.is-removed { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--text-muted); }
+.tool-diff-line.is-file { margin-top: var(--space-1); color: var(--text); font-weight: 600; }
+.tool-diff-line.is-gap { color: var(--text-faint); }
+
+.tool-output-images {
+  margin: 0 0 var(--space-2) 20px;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border);
+}
+
 .tool-output-more {
   padding: var(--space-1) var(--space-3) 0;
   border: 0;

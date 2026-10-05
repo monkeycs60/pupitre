@@ -7,6 +7,7 @@ import { useNow } from './useNow'
 import { AttachmentPreview } from './AttachmentPreview'
 import { summarizeTurnError } from './turnError'
 import { toolPresentation } from './toolPresentation'
+import { toolDiff, type ToolDiffLine } from './toolDiff'
 
 interface EventViewProps {
   block: EventBlock
@@ -260,7 +261,48 @@ function ToolOutput({ output }: { output: string }) {
   )
 }
 
-function ToolActivity({ block }: { block: Extract<EventBlock, { kind: 'tool' }> }) {
+const TOOL_DIFF_HEAD_LINES = 40
+const DIFF_MARKS: Record<ToolDiffLine['kind'], string> = { added: '+', removed: '-', context: ' ', file: '', gap: '⋯' }
+
+function ToolDiffView({ lines }: { lines: ToolDiffLine[] }) {
+  const [full, setFull] = useState(false)
+  const hidden = full ? 0 : Math.max(0, lines.length - TOOL_DIFF_HEAD_LINES)
+  const s = hidden > 1 ? 's' : ''
+  return (
+    <div className="tool-output">
+      <pre className="tool-diff">
+        {lines.slice(0, lines.length - hidden).map((line, index) => (
+          <span key={index} className={`tool-diff-line is-${line.kind}`}>
+            {line.kind === 'file' ? line.text : `${DIFF_MARKS[line.kind]} ${line.text}`}
+          </span>
+        ))}
+      </pre>
+      {hidden > 0 ? (
+        <button type="button" className="tool-output-more" onClick={() => setFull(true)}>
+          {hidden} ligne{s} suivante{s}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function readableOutput(output: string | undefined): string {
+  const trimmed = output?.trim() ?? ''
+  if (!trimmed.startsWith('[{')) return trimmed
+  try {
+    const parts: unknown = JSON.parse(trimmed)
+    const onlyImages = Array.isArray(parts) && parts.every((part) => (part as { type?: unknown } | null)?.type === 'image')
+    return onlyImages ? '' : trimmed
+  } catch {
+    return trimmed
+  }
+}
+
+function ToolActivity({ block, onImageOpen, onImageLoad }: {
+  block: Extract<EventBlock, { kind: 'tool' }>
+  onImageOpen: (src: string, alt: string) => void
+  onImageLoad: () => void
+}) {
   const presentation = toolPresentation(block)
   const running = block.output === undefined
   const [startedAt] = useState(Date.now)
@@ -268,7 +310,9 @@ function ToolActivity({ block }: { block: Extract<EventBlock, { kind: 'tool' }> 
   const now = useNow(running ? 1000 : 60_000)
   const elapsed = running ? now - startedAt : 0
   const failed = !running && block.isError === true
-  const expandable = !running && Boolean(block.output?.trim())
+  const output = readableOutput(block.output)
+  const diff = failed ? null : toolDiff(block)
+  const expandable = !running && (diff !== null || output !== '' || block.images.length > 0)
   const state = `${running ? ' is-running' : failed ? ' is-error' : ' is-done'}${expandable ? ' is-expandable' : ''}${open ? ' is-open' : ''}`
   const content = (
     <>
@@ -293,7 +337,13 @@ function ToolActivity({ block }: { block: Extract<EventBlock, { kind: 'tool' }> 
       <button type="button" className={`tool-activity${state}`} aria-expanded={open} onClick={() => setOpen(!open)}>
         {content}
       </button>
-      {open ? <ToolOutput output={block.output!} /> : null}
+      {open && diff ? <ToolDiffView lines={diff} /> : null}
+      {open && !diff && output ? <ToolOutput output={output} /> : null}
+      {open && block.images.length > 0 ? (
+        <div className="tool-output-images">
+          <ImageGallery images={block.images} label="Image de l’outil" onImageOpen={onImageOpen} onImageLoad={onImageLoad} />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -350,7 +400,7 @@ function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFoot
       )
 
     case 'tool':
-      return <ToolActivity block={block} />
+      return <ToolActivity block={block} onImageOpen={onImageOpen} onImageLoad={onImageLoad} />
 
     case 'reasoning':
       return <ReasoningView block={block} live={live} />
