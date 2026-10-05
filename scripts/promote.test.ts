@@ -62,9 +62,9 @@ test('attend la fermeture même quand le processus ne dirige pas un groupe', asy
   expect(() => process.kill(child.pid, 0)).toThrow()
 })
 
-test('attend 180 s par défaut que la stable redémarre, réglable avec --verify-timeout', () => {
-  expect(parseOptions([]).verifyTimeoutSeconds).toBe(180)
+test('attend 120 s par défaut que la stable redémarre, réglable avec --verify-timeout', () => {
+  expect(parseOptions([]).verifyTimeoutSeconds).toBe(120)
   expect(parseOptions(['--verify-timeout', '300']).verifyTimeoutSeconds).toBe(300)
-  expect(parseOptions(['--timeout', '60']).verifyTimeoutSeconds).toBe(180)
+  expect(parseOptions(['--timeout', '60']).verifyTimeoutSeconds).toBe(120)
   expect(() => parseOptions(['--verify-timeout', '0'])).toThrow('--verify-timeout')
 })

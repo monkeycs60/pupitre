@@ -87,7 +87,7 @@ export function parseOptions(args: string[]): PromotionOptions {
   }
   const timeout = Number(valueAfter('--timeout') ?? '30')
   if (!Number.isFinite(timeout) || timeout <= 0) throw new Error('--timeout doit être un nombre positif')
-  const verifyTimeout = Number(valueAfter('--verify-timeout') ?? '180')
+  const verifyTimeout = Number(valueAfter('--verify-timeout') ?? '120')
   if (!Number.isFinite(verifyTimeout) || verifyTimeout <= 0) throw new Error('--verify-timeout doit être un nombre positif de secondes')
   return {
     json: args.includes('--json'),
