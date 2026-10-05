@@ -10,6 +10,7 @@ import { toolPresentation } from './toolPresentation'
 
 interface EventViewProps {
   block: EventBlock
+  live?: boolean
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
   turnFooterAction?: ReactNode
@@ -131,24 +132,33 @@ function providerPhaseLabel(phase: string): string {
   return PROVIDER_PHASE_LABELS[phase] ?? phase.replaceAll('_', ' ')
 }
 
-const REASONING_PREVIEW_VISIBLE_CHARS = 280
-
-function reasoningPreview(text: string | undefined): string | null {
-  const flat = text?.slice(-REASONING_PREVIEW_VISIBLE_CHARS * 2).replace(/\s+/g, ' ').trim()
-  if (!flat) return null
-  return flat.length > REASONING_PREVIEW_VISIBLE_CHARS
-    ? `…${flat.slice(-REASONING_PREVIEW_VISIBLE_CHARS)}`
-    : flat
+function reasoningTitle(text: string): string {
+  const heading = /^\s*\*\*(.+?)\*\*/.exec(text)?.[1]
+  if (heading) return heading
+  const flat = text.replace(/\s+/g, ' ').trim()
+  return /^.+?[.!?:](?=\s|$)/.exec(flat)?.[0] ?? flat
 }
 
-function TurnReasoning({ segments }: { segments: string[] }) {
+function ReasoningView({ block, live }: { block: Extract<EventBlock, { kind: 'reasoning' }>; live: boolean }) {
+  const [userOpen, setUserOpen] = useState<boolean | null>(null)
+  const open = userOpen ?? live
+  const text = block.text.replace(/\*\*(.+?)\*\*/g, '$1').trim()
+  if (!text) return null
+
   return (
-    <details className="turn-reasoning">
-      <summary>Réflexion</summary>
-      <div className="turn-reasoning-body">
-        {segments.map((segment, index) => <p key={index}>{segment.trim()}</p>)}
-      </div>
-    </details>
+    <div className={`reasoning${open ? ' is-open' : ''}${live ? ' is-live' : ''}`}>
+      <button
+        type="button"
+        className="tool-activity-summary reasoning-summary"
+        aria-expanded={open}
+        onClick={() => setUserOpen(!open)}
+      >
+        <span className="tool-activity-chevron" aria-hidden="true" />
+        <span className="reasoning-label">Réflexion</span>
+        {open ? null : <span className="reasoning-title">{reasoningTitle(block.text)}</span>}
+      </button>
+      {open ? <p className="reasoning-body">{text}</p> : null}
+    </div>
   )
 }
 
@@ -171,13 +181,10 @@ function TurnFooter({ block, action }: {
     ? summarizeTurnError(block.status?.error ?? 'Une erreur est survenue.')
     : null
   const runningLabel = ACTIVITY_LABELS[block.activity ?? 'thinking']
-  const preview = isRunning && block.activity === 'thinking' ? reasoningPreview(block.reasoningSegments?.at(-1)) : null
 
   return (
     <footer className="turn-footer">
       {block.files ? <TurnFiles files={block.files} /> : null}
-      {preview ? <p className="turn-reasoning-preview" title="Aperçu de la réflexion en cours">{preview}</p> : null}
-      {!isRunning && block.reasoningSegments?.length ? <TurnReasoning segments={block.reasoningSegments} /> : null}
       {isError ? (
         <div className="turn-error" role="alert">
           <div>
@@ -237,27 +244,23 @@ const TOOL_ELAPSED_VISIBLE_MS = 3000
 function ToolActivity({ block }: { block: Extract<EventBlock, { kind: 'tool' }> }) {
   const presentation = toolPresentation(block)
   const running = block.output === undefined
-  const [mountedRunning] = useState(running)
   const [startedAt] = useState(Date.now)
   const now = useNow(running ? 1000 : 60_000)
   const elapsed = running ? now - startedAt : 0
   const failed = !running && block.isError === true
-  const state = running ? ' is-running' : `${failed ? ' is-error' : ' is-done'}${mountedRunning ? ' is-fresh' : ''}`
+  const state = running ? ' is-running' : failed ? ' is-error' : ' is-done'
   return (
     <div className={`tool-activity${state}`} role={running ? 'status' : undefined}>
       <span className="tool-activity-state" aria-hidden="true">
-        {running ? null : failed ? (
+        {failed ? (
           <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
             <path d="M3.5 3.5l5 5M8.5 3.5l-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
           </svg>
-        ) : (
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-            <path d="M2.5 6.2 5 8.5l4.5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
+        ) : null}
       </span>
-      <span>{presentation.label}{running ? ' en cours' : failed ? ' en échec' : ' terminée'}</span>
+      <span className="tool-activity-label">{presentation.label}</span>
       {presentation.detail ? <span className="tool-activity-detail" title={presentation.detail}>{presentation.detail}</span> : null}
+      {failed ? <span className="tool-activity-failed">échec</span> : null}
       {elapsed >= TOOL_ELAPSED_VISIBLE_MS ? <span className="tool-activity-elapsed">{Math.floor(elapsed / 1000)} s</span> : null}
     </div>
   )
@@ -280,7 +283,7 @@ function backgroundTaskStatusLabel(status: string, plural: boolean): string {
  */
 export const EventView = memo(EventViewImpl)
 
-function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: EventViewProps) {
+function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFooterAction }: EventViewProps) {
   switch (block.kind) {
     case 'user':
       return (
@@ -316,6 +319,9 @@ function EventViewImpl({ block, onImageOpen, onImageLoad, turnFooterAction }: Ev
 
     case 'tool':
       return <ToolActivity block={block} />
+
+    case 'reasoning':
+      return <ReasoningView block={block} live={live} />
 
     case 'background-task': {
       const statuses = new Set(block.tasks.map((task) => task.status))

@@ -250,11 +250,11 @@ export function groupEvents(
         })
         break
       case 'reasoning-delta': {
-        const footer = ensureTurnFooter()
-        const segments = footer.reasoningSegments ??= []
-        if (footer.activity === 'thinking' && segments.length > 0) segments[segments.length - 1] += event.text
-        else segments.push(event.text)
-        footer.activity = 'thinking'
+        ensureTurnFooter().activity = 'thinking'
+        assistant = null
+        const previous = blocks.at(-1)
+        if (previous?.kind === 'reasoning') previous.text += event.text
+        else blocks.push({ kind: 'reasoning', id: `reasoning-${eventKey}`, text: event.text })
         break
       }
       case 'turn-phase':

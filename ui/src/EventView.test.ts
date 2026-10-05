@@ -57,8 +57,8 @@ test('un outil est une activité autonome sans JSON ni sortie brute', () => {
     onImageLoad: () => {},
   }))
 
-  expect(screen.getByText('Lecture terminée')).toBeTruthy()
-  expect(screen.getByText('SKILL.md')).toBeTruthy()
+  expect(screen.getByText('Lecture')).toBeTruthy()
+  expect(screen.getByText('/tmp/SKILL.md')).toBeTruthy()
   expect(container.querySelector('.tool-activity')).toBeTruthy()
   expect(document.body.textContent).not.toContain('secret')
   expect(document.body.textContent).not.toContain('contenu technique')

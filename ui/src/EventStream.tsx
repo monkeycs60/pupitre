@@ -43,6 +43,8 @@ function EventStreamImpl({
   const liveFrom = newestTurnFooter?.kind === 'turn-footer' && newestTurnFooter.status?.state === 'running'
     ? blocks.findLastIndex((item) => item.kind === 'user')
     : blocks.length
+  const lastBlock = blocks.findLast((item) => item.kind !== 'turn-footer')
+  const liveReasoningId = liveFrom < blocks.length && lastBlock?.kind === 'reasoning' ? lastBlock.id : undefined
   let index = 0
 
   while (index < blocks.length) {
@@ -89,6 +91,7 @@ function EventStreamImpl({
           <EventView
             key={block.id}
             block={block}
+            live={block.id === liveReasoningId}
             onImageOpen={onImageOpen}
             onImageLoad={onImageLoad}
             turnFooterAction={block.id === newestTurnFooterId ? turnFooterAction : undefined}

@@ -15,18 +15,29 @@ test('replie les actions consécutives lorsque leur exécution est terminée', (
   ]} />)
 
   const group = container.querySelector('.tool-activity-group')
-  expect(screen.getByText('2 actions effectuées')).toBeTruthy()
+  expect(screen.getByText('1 lecture · 1 recherche')).toBeTruthy()
   expect(group?.classList.contains('is-open')).toBe(false)
   expect(container.querySelectorAll('.tool-activity')).toHaveLength(2)
   cleanup()
 })
 
-test('garde le groupe ouvert tant qu’une action est en cours', () => {
+test('montre une action isolée sans groupe repliable', () => {
   const { container } = render(<EventStream {...callbacks} blocks={[
-    { kind: 'tool', id: 'a', toolId: 'a', toolName: 'Read', input: { file_path: '/tmp/a.ts' }, images: [] },
+    { kind: 'tool', id: 'a', toolId: 'a', toolName: 'Read', input: { file_path: '/repo/src/a.ts', offset: 10, limit: 20 }, output: 'ok', images: [] },
   ]} />)
 
-  expect(screen.getByText('1 action en cours')).toBeTruthy()
+  expect(container.querySelector('.tool-activity-group')).toBeNull()
+  expect(container.querySelector('.tool-activity-summary')).toBeNull()
+  expect(container.querySelector('.tool-activity')?.textContent).toBe('Lecturesrc/a.ts L10-29')
+  cleanup()
+})
+
+test('garde le groupe ouvert tant qu’une action est en cours', () => {
+  const { container } = render(<EventStream {...callbacks} blocks={[
+    { kind: 'tool', id: 'a', toolId: 'a', toolName: 'Read', input: { file_path: '/tmp/a.ts' }, output: 'ok', images: [] },
+    { kind: 'tool' as const, id: 'b', toolId: 'b', toolName: 'Grep', input: { pattern: 'route' }, images: [] },
+  ]} />)
+
   expect(container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(true)
   cleanup()
 })
@@ -44,7 +55,7 @@ test('signale une tâche de fond entre deux groupes d’actions sans les fusionn
 
   expect(screen.getByText('Tâche de fond terminée')).toBeTruthy()
   expect(screen.getByText('Wait for recette results')).toBeTruthy()
-  expect(container.querySelectorAll('.tool-activity-group')).toHaveLength(2)
+  expect(container.querySelectorAll('.tool-activity-solo')).toHaveLength(2)
   cleanup()
 })
 
@@ -94,16 +105,19 @@ test('étiquette le pied d’un tour ouvert par l’agent', () => {
 
 test('referme le groupe en fin d’exécution sans le remonter, et respecte un dépliage manuel', async () => {
   const { fireEvent } = await import('@testing-library/react')
-  const running = [{ kind: 'tool' as const, id: 'a', toolId: 'a', toolName: 'Read', input: { file_path: '/tmp/a.ts' }, images: [] }]
+  const running = [
+    { kind: 'tool' as const, id: 'a', toolId: 'a', toolName: 'Read', input: { file_path: '/tmp/a.ts' }, output: 'ok', images: [] },
+    { kind: 'tool' as const, id: 'b', toolId: 'b', toolName: 'Grep', input: { pattern: 'route' }, images: [] },
+  ]
   const { container, rerender } = render(<EventStream {...callbacks} blocks={running} />)
   const group = container.querySelector('.tool-activity-group')
+  expect(group?.classList.contains('is-open')).toBe(true)
 
-  rerender(<EventStream {...callbacks} blocks={[{ ...running[0], output: 'ok' }]} />)
+  rerender(<EventStream {...callbacks} blocks={[running[0], { ...running[1], output: 'ok' }]} />)
   expect(container.querySelector('.tool-activity-group')).toBe(group)
   expect(group?.classList.contains('is-open')).toBe(false)
-  expect(container.querySelector('.tool-activity.is-fresh')).toBeTruthy()
 
-  fireEvent.click(screen.getByRole('button', { name: /1 action effectuée/ }))
+  fireEvent.click(screen.getByRole('button', { name: /1 lecture · 1 recherche/ }))
   expect(group?.classList.contains('is-open')).toBe(true)
   expect(group?.classList.contains('is-auto')).toBe(false)
   cleanup()
@@ -116,8 +130,9 @@ test('signale une action en échec dans la ligne et dans le résumé du groupe',
   ]} />)
 
   expect(container.querySelectorAll('.tool-activity.is-error')).toHaveLength(1)
-  expect(container.querySelector('.tool-activity.is-error')?.textContent).toContain('en échec')
-  expect(container.querySelectorAll('.tool-activity-pips i.is-error')).toHaveLength(1)
+  expect(container.querySelector('.tool-activity.is-error')?.textContent).toContain('échec')
+  expect(container.querySelectorAll('.tool-activity.is-done')).toHaveLength(1)
+  expect(container.querySelector('.tool-activity.is-done svg')).toBeNull()
   expect(screen.getByText('1 en échec')).toBeTruthy()
   cleanup()
 })
@@ -125,15 +140,16 @@ test('signale une action en échec dans la ligne et dans le résumé du groupe',
 test('garde ouvert un groupe dont une action a échoué pendant le tour en cours, même instantanément', () => {
   const user = { kind: 'user' as const, id: 'u', text: 'lance les tests', images: [], attachments: [] }
   const failed = { kind: 'tool' as const, id: 'a', toolId: 'a', toolName: 'Bash', input: { command: 'ls /x' }, output: 'No such file', isError: true, images: [] }
+  const read = { kind: 'tool' as const, id: 'b', toolId: 'b', toolName: 'Read', input: { file_path: '/tmp/a.ts' }, output: 'ok', images: [] }
   const footer = (state: 'running' | 'done') => ({ kind: 'turn-footer' as const, id: 'f', status: { type: 'status' as const, state } })
 
-  const { container, rerender } = render(<EventStream {...callbacks} blocks={[user, failed, footer('running')]} />)
+  const { container, rerender } = render(<EventStream {...callbacks} blocks={[user, failed, read, footer('running')]} />)
   expect(container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(true)
-  rerender(<EventStream {...callbacks} blocks={[user, failed, footer('done')]} />)
+  rerender(<EventStream {...callbacks} blocks={[user, failed, read, footer('done')]} />)
   expect(container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(true)
   cleanup()
 
-  const history = render(<EventStream {...callbacks} blocks={[user, failed, footer('done')]} />)
+  const history = render(<EventStream {...callbacks} blocks={[user, failed, read, footer('done')]} />)
   expect(history.container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(false)
   cleanup()
 })

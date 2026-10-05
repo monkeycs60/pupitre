@@ -25,25 +25,22 @@ function renderFooter(events: AppEvent[]) {
   }))
 }
 
-test('la réflexion en cours affiche son aperçu et la phase du provider', () => {
+test('la réflexion en cours affiche l’activité et la phase du provider', () => {
   renderFooter([
     { type: 'user-message', text: 'go', images: [] },
     running,
     { type: 'turn-phase', phase: 'waiting_permission' },
-    { type: 'reasoning-delta', text: 'Je lis   le\nfichier ' },
-    { type: 'reasoning-delta', text: 'package.json' },
+    { type: 'reasoning-delta', text: 'Je lis le fichier' },
   ])
 
   expect(screen.getByRole('status').textContent).toContain('réfléchit…')
   expect(screen.getByRole('status').textContent).toContain('attente d’autorisation')
-  expect(screen.getByTitle('Aperçu de la réflexion en cours').textContent).toBe('Je lis le fichier package.json')
   cleanup()
 })
 
-test('le texte ou un outil remplace l’aperçu de réflexion', () => {
+test('le texte ou un outil prend le relais de la réflexion dans le pied', () => {
   renderFooter([running, { type: 'reasoning-delta', text: 'hmm' }, { type: 'text-delta', text: 'Bon' }])
   expect(screen.getByRole('status').textContent).toContain('écrit…')
-  expect(screen.queryByTitle('Aperçu de la réflexion en cours')).toBeNull()
   cleanup()
 
   renderFooter([running, { type: 'reasoning-delta', text: 'hmm' }, { type: 'tool-start', toolId: 't', toolName: 'bash', input: {} }])
@@ -51,28 +48,37 @@ test('le texte ou un outil remplace l’aperçu de réflexion', () => {
   cleanup()
 })
 
-test('une nouvelle réflexion repart de zéro après une autre activité', () => {
-  const footer = footerOf([
-    running,
-    { type: 'reasoning-delta', text: 'ancienne' },
-    { type: 'text-delta', text: 'x' },
-    { type: 'reasoning-delta', text: 'nouvelle' },
-  ])
-  expect(footer.reasoningSegments).toEqual(['ancienne', 'nouvelle'])
-})
-
-test('une fois le tour terminé, la réflexion complète reste repliée sous le tour', () => {
-  const { container } = renderFooter([
+test('chaque réflexion prend sa place dans le fil, entre les actions qui l’entourent', () => {
+  const blocks = groupEvents([
     running,
     { type: 'reasoning-delta', text: 'Je lis ' },
     { type: 'reasoning-delta', text: 'le fichier.' },
     { type: 'tool-start', toolId: 't', toolName: 'bash', input: {} },
     { type: 'reasoning-delta', text: 'Puis je conclus.' },
-    { type: 'status', state: 'done' },
   ])
-  expect(screen.queryByTitle('Aperçu de la réflexion en cours')).toBeNull()
-  const details = container.querySelector('details.turn-reasoning') as HTMLDetailsElement
-  expect(details.open).toBe(false)
-  expect([...details.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['Je lis le fichier.', 'Puis je conclus.'])
+  expect(blocks.filter((block) => block.kind !== 'turn-footer').map((block) => block.kind === 'reasoning' ? block.text : block.kind))
+    .toEqual(['Je lis le fichier.', 'tool', 'Puis je conclus.'])
+})
+
+test('la réflexion en cours grandit en entier, puis se replie sur sa première phrase', async () => {
+  const { EventStream } = await import('./EventStream')
+  const events: AppEvent[] = [
+    { type: 'user-message', text: 'go', images: [] },
+    running,
+    { type: 'reasoning-delta', text: '**Inspecting config**\n\nJe lis le fichier. ' },
+    { type: 'reasoning-delta', text: 'Puis je regarde le thème.' },
+  ]
+  const props = { onImageOpen: () => {}, onImageLoad: () => {} }
+  const { container, rerender } = render(createElement(EventStream, { ...props, blocks: groupEvents(events) }))
+
+  expect(container.querySelector('.reasoning.is-live .reasoning-body')?.textContent)
+    .toBe('Inspecting config\n\nJe lis le fichier. Puis je regarde le thème.')
+
+  rerender(createElement(EventStream, {
+    ...props,
+    blocks: groupEvents([...events, { type: 'tool-start', toolId: 't', toolName: 'Read', input: { file_path: '/a.ts' } }]),
+  }))
+  expect(container.querySelector('.reasoning-body')).toBeNull()
+  expect(container.querySelector('.reasoning-title')?.textContent).toBe('Inspecting config')
   cleanup()
 })

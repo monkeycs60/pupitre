@@ -2,9 +2,12 @@ import type { EventBlock } from './eventBlocks'
 
 type ToolBlock = Extract<EventBlock, { kind: 'tool' }>
 
+export type ToolCategory = 'read' | 'search' | 'edit' | 'command' | 'web' | 'agent' | 'other'
+
 export interface ToolPresentation {
   label: string
   detail?: string
+  category: ToolCategory
 }
 
 function recordOf(value: unknown): Record<string, unknown> {
@@ -22,33 +25,58 @@ function basename(path: string): string {
   return path.split(/[/\\]/).at(-1) || path
 }
 
-function shellPresentation(input: Record<string, unknown>): ToolPresentation {
-  const command = textField(input, 'command') ?? ''
-  const actions = Array.isArray(input.actions) ? input.actions : []
-  const firstAction = recordOf(actions[0])
-  const actionPath = textField(firstAction, 'path')
-  const normalized = command.toLocaleLowerCase('en-US')
-  const detail = actionPath ? basename(actionPath) : undefined
+function shortPath(path: string): string {
+  const segments = path.split(/[/\\]/).filter(Boolean)
+  return segments.length > 2 ? segments.slice(-2).join('/') : path
+}
 
-  if (command.includes('*** Begin Patch') || actions.some((action) => {
-    const type = textField(recordOf(action), 'type') ?? ''
-    return !['read', 'list', 'search'].includes(type)
-  })) {
-    return { label: actionPath ? `Modification de ${basename(actionPath)}` : 'Modification de fichiers', detail }
+/** Codex enveloppe ses commandes dans `bash -lc '…'` : seule la commande utile est montrée. */
+function readableCommand(command: string): string {
+  const wrapped = /^(?:\/(?:usr\/)?bin\/)?(?:ba|z)?sh\s+-l?c\s+(['"])([\s\S]*)\1\s*$/.exec(command.trim())
+  return (wrapped?.[2] ?? command).replace(/\s+/g, ' ').trim()
+}
+
+function shellPresentation(input: Record<string, unknown>): ToolPresentation {
+  const command = readableCommand(textField(input, 'command') ?? '')
+  const description = textField(input, 'description')
+  const actions = Array.isArray(input.actions) ? input.actions.map(recordOf) : []
+  const actionPath = textField(actions[0] ?? {}, 'path')
+  const normalized = command.toLocaleLowerCase('en-US')
+  const detail = command || undefined
+
+  if (command.includes('*** Begin Patch') || actions.some((action) => !['read', 'list', 'listFiles', 'search'].includes(textField(action, 'type') ?? ''))) {
+    return { label: 'Modification', detail: actionPath ? shortPath(actionPath) : description, category: 'edit' }
+  }
+  if (description) {
+    const category = /^\s*(rg|grep|find|fd)\b/.test(normalized) ? 'search'
+      : /^\s*(cat|sed -n|head|tail)\b/.test(normalized) ? 'read'
+      : 'command'
+    return { label: description, detail, category }
   }
   if (/\b(bun|npm|pnpm|yarn)\s+(run\s+)?test\b|\b(pytest|vitest|jest|cargo test)\b/.test(normalized)) {
-    return { label: 'Exécution des tests', detail }
+    return { label: 'Tests', detail, category: 'command' }
   }
   if (/\b(bun|npm|pnpm|yarn)\s+(run\s+)?(build|lint|typecheck)\b|\b(cargo check|tsc)\b/.test(normalized)) {
-    return { label: 'Vérification du projet', detail }
+    return { label: 'Vérification', detail, category: 'command' }
   }
-  if (/\b(rg|grep|find|fd)\b/.test(normalized)) return { label: 'Recherche dans les fichiers', detail }
-  if (/\b(sed|cat|head|tail|less)\b/.test(normalized) || firstAction.type === 'read') {
-    return { label: actionPath ? `Lecture de ${basename(actionPath)}` : 'Lecture de fichiers', detail }
+  if (actions.length > 0 && actions.every((action) => action.type === 'read')) {
+    return { label: 'Lecture', detail: actionPath ? shortPath(actionPath) : detail, category: 'read' }
   }
-  if (/\bgit\s+(status|log|diff|show|branch)\b/.test(normalized)) return { label: 'Inspection du dépôt Git', detail }
-  if (/\b(bun|npm|pnpm|yarn)\s+(add|install)\b/.test(normalized)) return { label: 'Installation des dépendances', detail }
-  return { label: 'Exécution d’une commande' }
+  if (/^\s*(rg|grep|find|fd)\b/.test(normalized) || actions.some((action) => action.type === 'search')) {
+    return { label: 'Recherche', detail, category: 'search' }
+  }
+  if (/^\s*(sed|cat|head|tail|less|ls)\b/.test(normalized)) return { label: 'Lecture', detail, category: 'read' }
+  if (/\bgit\s+(status|log|diff|show|branch)\b/.test(normalized)) return { label: 'Git', detail, category: 'command' }
+  if (/\b(bun|npm|pnpm|yarn)\s+(add|install)\b/.test(normalized)) return { label: 'Installation', detail, category: 'command' }
+  return { label: 'Commande', detail, category: 'command' }
+}
+
+function lineRange(input: Record<string, unknown>): string {
+  const offset = typeof input.offset === 'number' ? input.offset : undefined
+  const limit = typeof input.limit === 'number' ? input.limit : undefined
+  if (offset === undefined && limit === undefined) return ''
+  const start = offset ?? 1
+  return limit === undefined ? ` L${start}+` : ` L${start}-${start + limit - 1}`
 }
 
 export function toolPresentation(tool: ToolBlock): ToolPresentation {
@@ -61,32 +89,65 @@ export function toolPresentation(tool: ToolBlock): ToolPresentation {
     case 'bash':
       return shellPresentation(input)
     case 'read':
-      return { label: path ? 'Lecture' : 'Lecture d’un fichier', detail: path ? basename(path) : undefined }
+      return { label: 'Lecture', detail: path ? `${shortPath(path)}${lineRange(input)}` : undefined, category: 'read' }
     case 'write':
+      return { label: 'Écriture', detail: path ? shortPath(path) : undefined, category: 'edit' }
     case 'edit':
     case 'multiedit':
     case 'notebookedit':
-      return { label: path ? 'Modification' : 'Modification d’un fichier', detail: path ? basename(path) : undefined }
-    case 'grep':
-      return { label: pattern ? `Recherche de « ${pattern} »` : 'Recherche dans les fichiers', detail: textField(input, 'path') ? basename(textField(input, 'path')!) : undefined }
+      return { label: 'Modification', detail: path ? shortPath(path) : undefined, category: 'edit' }
+    case 'grep': {
+      const scope = textField(input, 'path') ?? textField(input, 'glob')
+      return {
+        label: 'Recherche',
+        detail: pattern ? `${pattern}${scope ? ` dans ${basename(scope)}` : ''}` : undefined,
+        category: 'search',
+      }
+    }
     case 'glob':
-      return { label: 'Recherche de fichiers', detail: pattern }
+      return { label: 'Recherche de fichiers', detail: pattern, category: 'search' }
     case 'websearch':
-      return { label: 'Recherche sur le web', detail: pattern }
+      return { label: 'Recherche web', detail: pattern, category: 'web' }
     case 'webfetch':
-      return { label: 'Consultation d’une page web', detail: textField(input, 'url') }
+      return { label: 'Page web', detail: textField(input, 'url'), category: 'web' }
     case 'task':
-      return { label: 'Délégation à un agent', detail: textField(input, 'description', 'prompt') }
+    case 'agent':
+      return { label: 'Agent délégué', detail: textField(input, 'description', 'prompt'), category: 'agent' }
     case 'skill':
-      return { label: 'Chargement d’un skill', detail: textField(input, 'skill') }
+      return { label: 'Skill', detail: textField(input, 'skill'), category: 'other' }
+    case 'toolsearch':
+      return { label: 'Chargement d’outils', detail: pattern, category: 'other' }
     case 'askuserquestion':
-      return { label: 'Question à l’utilisateur' }
+      return { label: 'Question à l’utilisateur', category: 'other' }
     default: {
       const readableName = tool.toolName
-        .replace(/^mcp__[^_]+__/, '')
+        .replace(/^mcp__.+?__/, '')
         .replaceAll('_', ' ')
         .replace(/([a-z])([A-Z])/g, '$1 $2')
-      return { label: readableName.charAt(0).toLocaleUpperCase('fr-FR') + readableName.slice(1) }
+      return {
+        label: readableName.charAt(0).toLocaleUpperCase('fr-FR') + readableName.slice(1),
+        detail: textField(input, 'query', 'url', 'title', 'name', 'description', 'path'),
+        category: 'other',
+      }
     }
   }
+}
+
+const CATEGORY_NOUNS: Record<ToolCategory, [string, string]> = {
+  read: ['lecture', 'lectures'],
+  search: ['recherche', 'recherches'],
+  edit: ['modification', 'modifications'],
+  command: ['commande', 'commandes'],
+  web: ['recherche web', 'recherches web'],
+  agent: ['agent', 'agents'],
+  other: ['action', 'actions'],
+}
+
+export function toolGroupSummary(tools: ToolBlock[]): string {
+  const counts = new Map<ToolCategory, number>()
+  for (const tool of tools) {
+    const category = toolPresentation(tool).category
+    counts.set(category, (counts.get(category) ?? 0) + 1)
+  }
+  return Array.from(counts, ([category, count]) => `${count} ${CATEGORY_NOUNS[category][count > 1 ? 1 : 0]}`).join(' · ')
 }

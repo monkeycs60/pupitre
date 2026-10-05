@@ -28,6 +28,12 @@ interface ToolBlock {
   images: string[]
 }
 
+interface ReasoningBlock {
+  kind: 'reasoning'
+  id: string
+  text: string
+}
+
 interface BackgroundTaskBlock {
   kind: 'background-task'
   id: string
@@ -49,7 +55,6 @@ interface TurnFooterBlock {
   }
   activity?: 'thinking' | 'writing' | 'tool'
   phase?: string
-  reasoningSegments?: string[]
   files?: Array<{ path: string; added: number; removed: number }>
   /**
    * Nombre de sous-tâches réellement lancées pendant ce tour. Absent quand il
@@ -65,6 +70,7 @@ export type EventBlock =
   | UserBlock
   | AssistantBlock
   | ToolBlock
+  | ReasoningBlock
   | BackgroundTaskBlock
   | TurnFooterBlock
 
