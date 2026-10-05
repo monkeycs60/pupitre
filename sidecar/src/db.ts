@@ -799,10 +799,24 @@ export function openDb(dir: string = dataDir()): Database {
  */
 function removeChantiers(db: Database): void {
   const chantiers = db.query("SELECT id FROM tickets WHERE source = 'chantier'").all() as Array<{ id: string }>;
+  if (chantiers.length === 0) return;
   const hasCaptures = db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='telegram_captures'").get();
+  const hasSearch = db.query("SELECT 1 FROM sqlite_master WHERE name='search_index'").get();
+  // Ce déclencheur réindexe tous les messages d'une conversation à chaque
+  // changement de ticket_id ; SearchIndex le recrée au démarrage.
+  db.exec("DROP TRIGGER IF EXISTS search_conversations_title");
   db.transaction(() => {
     for (const chantier of chantiers) {
+      const detached = db.query("SELECT id FROM conversations WHERE ticket_id = ?").all(chantier.id) as Array<{ id: string }>;
       db.query("UPDATE conversations SET ticket_id = NULL, ticket_locked = 0, ticket_confidence = NULL WHERE ticket_id = ?").run(chantier.id);
+      if (hasSearch) {
+        for (const { id } of detached) {
+          db.query("DELETE FROM search_index WHERE kind = 'conversation' AND source_id = ?").run(id);
+          db.query(`INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
+            SELECT 'conversation', id, id, project_id, title, title || ' ' || summary || ' ' || COALESCE(created_on_branch, '') || ' ' || COALESCE(worktree_path, '')
+            FROM conversations WHERE id = ?`).run(id);
+        }
+      }
       db.query("UPDATE project_todos SET payload = json_set(payload, '$.ticket_id', NULL) WHERE json_extract(payload, '$.ticket_id') = ?").run(chantier.id);
       if (hasCaptures) db.query("UPDATE telegram_captures SET ticket_id = NULL WHERE ticket_id = ?").run(chantier.id);
       for (const table of ["ticket_refs", "ticket_status_changes", "ticket_notes", "ticket_audits"]) {
