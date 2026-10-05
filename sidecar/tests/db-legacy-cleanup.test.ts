@@ -19,7 +19,7 @@ test("retire les anciennes tables et colonnes du système de relecture", () => {
   db.close();
 });
 
-test("retire les chantiers en gardant leurs conversations et leurs TODO, et en archive une copie", async () => {
+test("retire les chantiers en gardant leurs conversations et leurs TODO", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-chantiers-"));
   const first = openDb(dir);
   const { ProjectStore } = await import("../src/stores/projects");
@@ -40,10 +40,6 @@ test("retire les chantiers en gardant leurs conversations et leurs TODO, et en a
   expect(db.query("SELECT COUNT(*) AS n FROM ticket_notes").get()).toEqual({ n: 0 });
   expect(db.query("SELECT ticket_id, ticket_locked FROM conversations WHERE id = ?").get(conversation.id)).toEqual({ ticket_id: null, ticket_locked: 0 });
   expect(db.query("SELECT json_extract(payload, '$.ticket_id') AS ticket, json_extract(payload, '$.title') AS title FROM project_todos").get()).toEqual({ ticket: null, title: "Tâche" });
-  const archived = db.query("SELECT ticket, notes, conversation_ids, todo_ids FROM removed_chantiers").get() as Record<string, string>;
-  expect(JSON.parse(archived.ticket).title).toBe("Moteur Rust");
-  expect(JSON.parse(archived.notes)).toHaveLength(1);
-  expect(JSON.parse(archived.conversation_ids)).toEqual([conversation.id]);
-  expect(JSON.parse(archived.todo_ids)).toEqual(["t1"]);
+  expect(db.query("SELECT name FROM sqlite_master WHERE name = 'removed_chantiers'").get()).toBeNull();
   db.close();
 });
