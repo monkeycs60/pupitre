@@ -421,6 +421,23 @@ test("un commit sans numstat (fusion) est compté 0/0 et n'est plus redemandé",
   context.db.close();
 });
 
+test("un commit disparu de l'historique ne bloque pas le calcul des lignes du lot", async () => {
+  let missing = "";
+  const context = setup({
+    commits: commits(3),
+    lineStats: async (_cwd, shas) => {
+      missing ||= shas[1]!;
+      if (shas.includes(missing)) throw new Error(`fatal : bad object ${missing}`);
+      return shas.map((sha) => ({ sha, added: 5, removed: 1 }));
+    },
+  });
+  const payload = await context.service.refreshNow(context.project.id);
+  expect(payload.state.status).toBe("idle");
+  const entries = context.store.list(context.project.id);
+  expect(entries.map((entry) => [entry.lines_added, entry.lines_removed]).sort()).toEqual([[0, 0], [5, 1], [5, 1]]);
+  context.db.close();
+});
+
 test("lit les lignes +/− réelles d'un dépôt Git", async () => {
   const root = mkdtempSync(join(tmpdir(), "pupitre-changelog-numstat-"));
   const git = (...args: string[]) => Bun.spawnSync([

@@ -188,13 +188,20 @@ export class ChangelogService {
       if (!repository) continue;
       for (let index = 0; index < shas.length; index += LINE_STATS_SHAS_PER_GIT) {
         const slice = shas.slice(index, index + LINE_STATS_SHAS_PER_GIT);
-        const stats = await this.lineStats(repository.path, slice);
+        const stats = await this.lineStats(repository.path, slice).catch(() => this.lineStatsOneByOne(repository.path, slice));
         // Un SHA absent de la sortie (commit de fusion, historique réécrit)
         // est compté 0/0 : il ne sera plus redemandé à chaque passage.
         const known = new Map(stats.map((item) => [item.sha, item]));
         this.store.setLineStats(projectId, slice.map((sha) => known.get(sha) ?? { sha, added: 0, removed: 0 }));
       }
     }
+  }
+
+  /** `git show` échoue en entier dès qu'un SHA du lot n'existe plus. */
+  private async lineStatsOneByOne(path: string, shas: string[]): Promise<CommitLineStats[]> {
+    const stats: CommitLineStats[] = [];
+    for (const sha of shas) stats.push(...await this.lineStats(path, [sha]).catch(() => []));
+    return stats;
   }
 
   private async enrichPending(projectId: string, path: string, backfill: boolean): Promise<void> {
