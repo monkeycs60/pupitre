@@ -5,7 +5,7 @@ import type { QuotaSnapshot } from './types'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
-const { QuotaStatus } = await import('./QuotaBar')
+const { QuotaBar, QuotaStatus } = await import('./QuotaBar')
 
 afterEach(cleanup)
 
@@ -56,4 +56,13 @@ test('n’affiche que les providers choisis dans les réglages', () => {
 
   const names = [...document.querySelectorAll('.quota-status-provider')].map((node) => node.textContent)
   expect(names).toEqual(['Codex', 'Grok'])
+})
+
+test('le panneau Quotas n’affiche que les providers retenus dans les réglages', () => {
+  const { container } = render(<QuotaBar snapshot={staleSnapshot()} providers={['claude', 'codex']} />)
+
+  const names = [...container.querySelectorAll('.quota-provider-name')].map((node) => node.textContent ?? '')
+  expect(names).toHaveLength(2)
+  expect(names.some((name) => name.includes('Grok'))).toBe(false)
+  expect(names.some((name) => name.includes('OpenCode'))).toBe(false)
 })

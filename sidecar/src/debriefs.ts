@@ -9,6 +9,7 @@ import {
   ConversationBusyError,
 } from "./conversation-activity";
 import { conversationCwd } from "./workspace";
+import { BACKGROUND_MODEL } from "./background-model";
 
 const MAX_TRANSCRIPT_CHARS = 180_000;
 const MAX_EVENT_CHARS = 8_000;
@@ -206,10 +207,7 @@ export class DebriefRunner {
 
     const generation = {
       cwd: conversationCwd(project, conversation),
-      provider: "codex" as const,
-      model: "gpt-6-luna",
-      effort: "xhigh",
-      speed: "fast" as const,
+      ...BACKGROUND_MODEL,
     };
     const partials: string[] = [];
     for (const transcript of transcriptChunks) {

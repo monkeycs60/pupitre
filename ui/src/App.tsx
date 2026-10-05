@@ -1298,7 +1298,7 @@ function App() {
           />
         ) : inspector === 'workflows' && selectedProject ? (
           <WorkflowsView key={selectedProject.id} project={selectedProject} onConversationSelect={handleConversationSelect} />
-        ) : inspector === 'quotas' ? <QuotaBar snapshot={quotas.snapshot} /> : null}
+        ) : inspector === 'quotas' ? <QuotaBar snapshot={quotas.snapshot} providers={quotas.visibleProviders} /> : null}
           </Suspense>
         </WorkspaceInspector> : null}
         </div>

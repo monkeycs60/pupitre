@@ -234,10 +234,10 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
       workflowId: commandKind ? null : workflowId || null,
       prompt: workflowId ? null : prompt.trim(),
       presetId: workflowId ? null : presetId || null,
-      provider: config?.provider ?? 'codex',
-      model: config?.model ?? 'gpt-6-luna',
-      effort: config?.effort ?? 'xhigh',
-      speed: config?.speed ?? 'fast',
+      provider: config?.provider ?? 'claude',
+      model: config?.model ?? 'haiku',
+      effort: config?.effort ?? 'medium',
+      speed: config?.speed ?? 'standard',
       enabled,
     }
     setBusy('save')

@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 
 // Claude Code lit lui-même son usage sur cet endpoint OAuth — c'est la source
@@ -43,7 +44,7 @@ interface ClaudeSessionRefreshDeps {
 }
 
 interface ClaudeUsageDeps {
-  readAccessToken?: () => string | null;
+  readAccessToken?: () => string | null | Promise<string | null>;
   fetchUsage?: (token: string, signal: AbortSignal) => Promise<Response>;
   refreshSession?: () => Promise<boolean>;
 }
@@ -64,9 +65,44 @@ function credentialsFile(): CredentialsFile | null {
   }
 }
 
+/// Sur macOS, Claude Code range ses identifiants dans le trousseau, sous un
+/// service suffixé par un hash du dossier de config quand CLAUDE_CONFIG_DIR est
+/// défini. `.credentials.json` n'y existe qu'en repli.
+export function keychainService(env: NodeJS.ProcessEnv = process.env): string {
+  const base = "Claude Code-credentials";
+  if (!env.CLAUDE_CONFIG_DIR) return base;
+  return `${base}-${createHash("sha256").update(env.CLAUDE_CONFIG_DIR).digest("hex").slice(0, 8)}`;
+}
+
+/// Lecture asynchrone : la première lecture déclenche la demande d'accès au
+/// trousseau, qui peut rester ouverte longtemps sans bloquer le sidecar.
+async function keychainCredentials(): Promise<CredentialsFile | null> {
+  try {
+    const child = Bun.spawn(
+      ["/usr/bin/security", "find-generic-password", "-s", keychainService(), "-a", userInfo().username, "-w"],
+      { stdout: "pipe", stderr: "ignore", stdin: "ignore" },
+    );
+    const output = await new Response(child.stdout).text();
+    if (await child.exited !== 0) return null;
+    return JSON.parse(output) as CredentialsFile;
+  } catch {
+    return null;
+  }
+}
+
+export async function readCredentials(
+  platform: NodeJS.Platform = process.platform,
+  readFile: () => CredentialsFile | null = credentialsFile,
+  readKeychain: () => Promise<CredentialsFile | null> = keychainCredentials,
+): Promise<CredentialsFile | null> {
+  const file = readFile();
+  if (file?.claudeAiOauth || platform !== "darwin") return file;
+  return readKeychain();
+}
+
 /** Jeton OAuth partagé avec Claude Code : jamais mis en cache ici. */
-function accessToken(): string | null {
-  const token = credentialsFile()?.claudeAiOauth?.accessToken;
+async function accessToken(): Promise<string | null> {
+  const token = (await readCredentials())?.claudeAiOauth?.accessToken;
   return typeof token === "string" && token !== "" ? token : null;
 }
 
@@ -156,7 +192,11 @@ export async function refreshClaudeSession(
   }
 }
 
+/// Le renouvellement fait tourner le refresh token : sans réécriture dans le
+/// trousseau, Claude Code garderait un jeton révoqué et serait déconnecté. Hors
+/// fichier, le renouvellement reste donc à Claude Code.
 async function refreshSession(): Promise<boolean> {
+  if (!credentialsFile()?.claudeAiOauth) return false;
   return refreshClaudeSession();
 }
 
@@ -169,13 +209,13 @@ export async function readClaudeUsage(
   const request = deps.fetchUsage ?? fetchUsage;
   const renew = deps.refreshSession ?? refreshSession;
   const requestSignal = () => signal ?? AbortSignal.timeout(TIMEOUT_MS);
-  let token = readToken();
+  let token = await readToken();
   if (token === null) return null;
 
   try {
     let response = await request(token, requestSignal());
     if (response.status === 401 && await renew()) {
-      token = readToken();
+      token = await readToken();
       if (token === null) return null;
       response = await request(token, requestSignal());
     }

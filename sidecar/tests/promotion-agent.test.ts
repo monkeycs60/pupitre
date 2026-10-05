@@ -53,13 +53,13 @@ function harness() {
   };
 }
 
-test("crée une conversation Luna high autonome dans le dépôt principal", () => {
+test("crée une conversation Haiku autonome dans le dépôt principal", () => {
   const state = harness();
   const mission = state.service.start();
 
   expect(mission.state).toBe("running");
-  expect(state.conversation?.model).toBe("gpt-6-luna");
-  expect(state.conversation?.effort).toBe("xhigh");
+  expect(state.conversation?.model).toBe("haiku");
+  expect(state.conversation?.effort).toBe("medium");
   expect(state.conversation?.permission_mode).toBe("bypassPermissions");
   expect(state.conversation?.worktree_path).toBeNull();
   expect(state.runInput).toContain("Committe automatiquement toutes les modifications");

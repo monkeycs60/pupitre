@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import type { StoredEvent } from "./events";
 import type { Conversation } from "./stores/conversations";
 import type { Project } from "./stores/projects";
+import { BACKGROUND_MODEL } from "./background-model";
 
 export const PROMOTION_SUCCESS_MARKER = "PROMOTION_VERIFIED";
 
@@ -18,7 +19,7 @@ export interface PromotionMission {
 interface PromotionConversationStore {
   create(input: {
     projectId: string;
-    provider: "codex";
+    provider: "claude";
     model: string;
     effort: string;
     speed: "standard";
@@ -135,10 +136,7 @@ export class PromotionAgentService {
     const prompt = promotionAgentPrompt();
     const conversation = this.conversations.create({
       projectId: project.id,
-      provider: "codex",
-      model: "gpt-6-luna",
-      effort: "xhigh",
-      speed: "standard",
+      ...BACKGROUND_MODEL,
       permissionMode: "bypassPermissions",
       worktreePath: null,
       createdOnBranch: null,

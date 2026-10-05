@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readClaudeUsage, refreshClaudeSession } from "../src/adapters/claude-usage";
+import { keychainService, readClaudeUsage, readCredentials, refreshClaudeSession } from "../src/adapters/claude-usage";
 
 test("renouvelle réellement le jeton OAuth Claude et le persiste", async () => {
   let credentials = {
@@ -104,4 +104,41 @@ test("conserve l'ancien relevé si Claude ne peut pas renouveler sa session", as
 
   expect(requests).toBe(1);
   expect(usage).toBeNull();
+});
+
+test("lit les identifiants Claude dans le trousseau macOS quand le fichier manque", async () => {
+  const keychain = { claudeAiOauth: { accessToken: "from-keychain" } };
+  let keychainReads = 0;
+  const readKeychain = async () => {
+    keychainReads += 1;
+    return keychain;
+  };
+
+  expect(await readCredentials("darwin", () => null, readKeychain)).toEqual(keychain);
+  expect(await readCredentials("linux", () => null, readKeychain)).toBeNull();
+  expect(keychainReads).toBe(1);
+});
+
+test("préfère le fichier d'identifiants Claude sur macOS comme sur Linux", async () => {
+  const file = { claudeAiOauth: { accessToken: "from-file" } };
+  const readKeychain = async () => {
+    throw new Error("trousseau interrogé à tort");
+  };
+
+  expect(await readCredentials("darwin", () => file, readKeychain)).toEqual(file);
+  expect(await readCredentials("linux", () => file, readKeychain)).toEqual(file);
+});
+
+test("suffixe le service du trousseau par le dossier de config Claude", () => {
+  expect(keychainService({})).toBe("Claude Code-credentials");
+  expect(keychainService({ CLAUDE_CONFIG_DIR: "/tmp/claude" })).toMatch(/^Claude Code-credentials-[0-9a-f]{8}$/);
+});
+
+test("accepte une lecture asynchrone du jeton Claude", async () => {
+  const usage = await readClaudeUsage(undefined, {
+    readAccessToken: async () => "valid",
+    fetchUsage: async () => Response.json({ seven_day: { utilization: 3 } }),
+  });
+
+  expect(usage).toEqual({ seven_day: { utilization: 3 } });
 });

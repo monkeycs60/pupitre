@@ -1,7 +1,7 @@
 import { AutomaticCalls } from './AutomaticCalls'
 import { useEffect, useMemo, useState } from 'react'
 import { getProjectCosts } from './api'
-import type { Project, ProjectCostReport, Provider, QuotaState } from './types'
+import type { Project, ProjectCostReport, Provider, QuotaSnapshot, QuotaState } from './types'
 import { HelpLink } from './HelpLink'
 import { modelLabel, PROVIDER_LABELS } from './modelOptions'
 import { useQuotas } from './useQuotas'
@@ -209,9 +209,9 @@ export function CostsView({ project, onConversationSelect }: CostsViewProps) {
         {error ? <p className="costs-error" role="alert">{error}</p> : null}
 
         <div className="quota-card-grid">
-          <QuotaCard provider="claude" state={quotas.snapshot.claude} now={now} />
-          <QuotaCard provider="codex" state={quotas.snapshot.codex} now={now} />
-          <QuotaCard provider="grok" state={quotas.snapshot.grok ?? null} now={now} />
+          {quotas.visibleProviders.filter((provider) => provider !== 'reasonix').map((provider) => (
+            <QuotaCard key={provider} provider={provider} state={quotas.snapshot[provider as keyof QuotaSnapshot] ?? null} now={now} />
+          ))}
         </div>
 
         {report ? (

@@ -36,6 +36,7 @@ import {
   retroPrompt,
   type RetroChanges,
 } from "./activity-retro";
+import { BACKGROUND_MODEL } from "./background-model";
 
 /** Bornes de la synthèse bon marché des sujets : jamais un vrai tour. */
 const TOPIC_USER_MESSAGE_MAX = 600;
@@ -547,9 +548,7 @@ export interface StrongModelConfig {
   speed: "standard" | "fast";
 }
 
-export const DEFAULT_ACTIVITY_MODEL: StrongModelConfig = {
-  provider: "codex", model: "gpt-6-luna", effort: "xhigh", speed: "standard",
-};
+export const DEFAULT_ACTIVITY_MODEL: StrongModelConfig = BACKGROUND_MODEL;
 
 export interface ActivityRetroPayload {
   state: ActivityState;

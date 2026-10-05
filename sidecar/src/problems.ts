@@ -7,6 +7,7 @@ import {
 import type { ProjectStore } from "./stores/projects";
 import type { Ticket, TicketStore } from "./stores/tickets";
 import { projectCwd } from "./workspace";
+import { BACKGROUND_MODEL } from "./background-model";
 export { problemIdsInCommit } from "./problem-id";
 
 export const MAX_CAPTURE_CHARS = 50_000;
@@ -81,10 +82,7 @@ export class ProblemService {
       const tickets = this.tickets.listActive(project.id);
       const raw = await this.generator({
         cwd: projectCwd(project),
-        provider: "codex",
-        model: "gpt-6-luna",
-        effort: "xhigh",
-        speed: "fast",
+        ...BACKGROUND_MODEL,
         prompt: problemPrompt(project.name, capture.raw_text, tickets),
       });
       const reserved = new Set<string>();

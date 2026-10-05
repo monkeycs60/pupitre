@@ -28,7 +28,7 @@ function serviceWith(generator: DebriefGenerator): ProblemService {
   return new ProblemService(store, projects, tickets, generator);
 }
 
-test("sauvegarde puis traite une capture avec Luna medium fast", async () => {
+test("sauvegarde puis traite une capture avec Haiku medium", async () => {
   const ticket = tickets.upsert(projectId, {
     key: "TECH-42",
     source: "clickup",
@@ -64,10 +64,10 @@ test("sauvegarde puis traite une capture avec Luna medium fast", async () => {
   expect(calls).toHaveLength(1);
   expect(calls[0]).toEqual(expect.objectContaining({
     cwd: projects.get(projectId)!.path,
-    provider: "codex",
-    model: "gpt-6-luna",
-    effort: "xhigh",
-    speed: "fast",
+    provider: "claude",
+    model: "haiku",
+    effort: "medium",
+    speed: "standard",
   }));
   expect(calls[0]?.prompt).toContain("TECH-42");
   expect(calls[0]?.prompt).toContain("deux sujets dans le même collage");

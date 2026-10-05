@@ -9,6 +9,7 @@ import {
   type ProjectChangelogPayload,
   type ProjectChangelogState,
 } from "./stores/changelog";
+import { BACKGROUND_MODEL } from "./background-model";
 
 export const CHANGELOG_BATCH_SIZE = 10;
 export const CHANGELOG_BACKFILL_CONCURRENCY = 8;
@@ -215,10 +216,7 @@ export class ChangelogService {
           try {
             const raw = await this.generateWithSlot({
               cwd: path,
-              provider: "codex",
-              model: "gpt-6-luna",
-              effort: "xhigh",
-              speed: "standard",
+              ...BACKGROUND_MODEL,
               prompt: enrichmentPrompt(batch),
             });
             const enriched = parseEnrichments(
