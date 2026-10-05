@@ -10,7 +10,6 @@ import { SettingsStore, TICKET_AUDIT_YOLO_MIGRATION_KEY } from "../src/stores/se
 import { TicketStore } from "../src/stores/tickets";
 import type { IntegrationsRefresher } from "../src/integrations/refresher";
 import type { ConversationRunner } from "../src/runner";
-import { BACKGROUND_MODEL } from "../src/background-model";
 
 test("la relecture démarre en YOLO et conserve l'interdiction d'écrire au premier tour", async () => {
   const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-ticket-audit-")));
@@ -28,7 +27,7 @@ test("la relecture démarre en YOLO et conserve l'interdiction d'écrire au prem
   const runner = {
     runTurn: async (conversationId: string, prompt: string) => {
       expect(conversations.get(conversationId)?.permission_mode).toBe("bypassPermissions");
-      expect(conversations.get(conversationId)).toMatchObject({ model: BACKGROUND_MODEL.model, effort: BACKGROUND_MODEL.effort });
+      expect(conversations.get(conversationId)).toMatchObject({ provider: "claude", model: "opus-5.5", effort: "medium" });
       expect(prompt).toContain("Ne modifie aucun fichier et ne publie rien");
       resolveTurn();
       return { state: "done", cancelled: false };

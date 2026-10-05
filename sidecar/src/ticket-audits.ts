@@ -5,7 +5,6 @@ import type { ProjectStore } from "./stores/projects";
 import type { SettingsStore } from "./stores/settings";
 import type { Ticket, TicketRef, TicketStore } from "./stores/tickets";
 import type { Database } from "bun:sqlite";
-import { BACKGROUND_MODEL } from "./background-model";
 
 export interface TicketAuditConfig {
   provider: "codex" | "claude" | "grok";
@@ -14,7 +13,12 @@ export interface TicketAuditConfig {
   speed: "standard" | "fast";
 }
 
-export const DEFAULT_TICKET_AUDIT_CONFIG: TicketAuditConfig = BACKGROUND_MODEL;
+export const DEFAULT_TICKET_AUDIT_CONFIG: TicketAuditConfig = {
+  provider: "claude",
+  model: "opus-5.5",
+  effort: "medium",
+  speed: "standard",
+};
 
 export class TicketAuditService {
   constructor(
