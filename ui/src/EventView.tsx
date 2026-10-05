@@ -7,7 +7,8 @@ import { useNow } from './useNow'
 import { AttachmentPreview } from './AttachmentPreview'
 import { summarizeTurnError } from './turnError'
 import { toolPresentation } from './toolPresentation'
-import { toolDiff, type ToolDiffLine } from './toolDiff'
+import { toolDiff } from './toolDiff'
+import { ToolDiffView } from './ToolDiffView'
 
 interface EventViewProps {
   block: EventBlock
@@ -261,31 +262,6 @@ function ToolOutput({ output }: { output: string }) {
   )
 }
 
-const TOOL_DIFF_HEAD_LINES = 40
-const DIFF_MARKS: Record<ToolDiffLine['kind'], string> = { added: '+', removed: '-', context: ' ', file: '', gap: '⋯' }
-
-function ToolDiffView({ lines }: { lines: ToolDiffLine[] }) {
-  const [full, setFull] = useState(false)
-  const hidden = full ? 0 : Math.max(0, lines.length - TOOL_DIFF_HEAD_LINES)
-  const s = hidden > 1 ? 's' : ''
-  return (
-    <div className="tool-output">
-      <pre className="tool-diff">
-        {lines.slice(0, lines.length - hidden).map((line, index) => (
-          <span key={index} className={`tool-diff-line is-${line.kind}`}>
-            {line.kind === 'file' ? line.text : `${DIFF_MARKS[line.kind]} ${line.text}`}
-          </span>
-        ))}
-      </pre>
-      {hidden > 0 ? (
-        <button type="button" className="tool-output-more" onClick={() => setFull(true)}>
-          {hidden} ligne{s} suivante{s}
-        </button>
-      ) : null}
-    </div>
-  )
-}
-
 function readableOutput(output: string | undefined): string {
   const trimmed = output?.trim() ?? ''
   if (!trimmed.startsWith('[{')) return trimmed
@@ -337,7 +313,7 @@ function ToolActivity({ block, onImageOpen, onImageLoad }: {
       <button type="button" className={`tool-activity${state}`} aria-expanded={open} onClick={() => setOpen(!open)}>
         {content}
       </button>
-      {open && diff ? <ToolDiffView lines={diff} /> : null}
+      {open && diff ? <ToolDiffView files={diff} /> : null}
       {open && !diff && output ? <ToolOutput output={output} /> : null}
       {open && block.images.length > 0 ? (
         <div className="tool-output-images">

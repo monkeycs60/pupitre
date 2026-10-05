@@ -918,12 +918,153 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
   white-space: pre;
 }
 
-.tool-output pre.tool-diff { padding: var(--space-1) 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.tool-diff-line { display: block; min-width: fit-content; padding: 0 var(--space-3); }
-.tool-diff-line.is-added { background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--text); }
-.tool-diff-line.is-removed { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--text-muted); }
-.tool-diff-line.is-file { margin-top: var(--space-1); color: var(--text); font-weight: 600; }
-.tool-diff-line.is-gap { color: var(--text-faint); }
+.tool-diff {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 var(--space-2) 20px;
+  animation: rise-in var(--dur) var(--ease-out);
+}
+
+.tool-diff-file {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bg-raised) 55%, transparent);
+}
+
+.tool-diff-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 6px var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.tool-diff-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-diff-folder { color: var(--text-faint); }
+
+.tool-diff-status {
+  flex: none;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  font-family: var(--font-sans, inherit);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+.tool-diff-status.is-added { background: var(--ok-soft); color: var(--ok); }
+.tool-diff-status.is-deleted { background: var(--danger-soft); color: var(--danger); }
+
+.tool-diff-stats {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-diff-stats .is-added { color: var(--ok); }
+.tool-diff-stats .is-removed { color: var(--danger); }
+
+.tool-diff-body {
+  max-height: 420px;
+  padding: 4px 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.tool-diff-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.tool-diff-body.is-numbered .tool-diff-row { grid-template-columns: 44px 18px minmax(0, 1fr); }
+
+.tool-diff-row code {
+  padding-right: var(--space-3);
+  color: var(--text);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tool-diff-number {
+  padding-right: 10px;
+  color: var(--text-faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  opacity: 0.7;
+}
+
+.tool-diff-sign {
+  color: var(--text-faint);
+  text-align: center;
+  user-select: none;
+}
+
+.tool-diff-row.is-added {
+  background: color-mix(in srgb, var(--ok) 9%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ok) 70%, transparent);
+}
+
+.tool-diff-row.is-removed {
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--danger) 70%, transparent);
+}
+
+.tool-diff-row.is-added .tool-diff-sign { color: var(--ok); }
+.tool-diff-row.is-removed .tool-diff-sign { color: var(--danger); }
+.tool-diff-row.is-removed code { opacity: 0.78; }
+
+.tool-diff-word {
+  border-radius: 3px;
+  color: inherit;
+}
+
+.tool-diff-row.is-added .tool-diff-word { background: color-mix(in srgb, var(--ok) 28%, transparent); }
+.tool-diff-row.is-removed .tool-diff-word { background: color-mix(in srgb, var(--danger) 28%, transparent); }
+
+.tool-diff-gap {
+  margin: 4px 0;
+  padding: 2px var(--space-3);
+  background: color-mix(in srgb, var(--text-faint) 7%, transparent);
+  color: var(--text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-diff-gap:first-child { margin-top: 0; }
+
+.tool-diff-more {
+  display: block;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.tool-diff-more:hover { color: var(--text); background: color-mix(in srgb, var(--text-faint) 6%, transparent); }
 
 .tool-output-images {
   margin: 0 0 var(--space-2) 20px;

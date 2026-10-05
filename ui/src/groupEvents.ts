@@ -1,4 +1,5 @@
 import type { EventBlock } from './eventBlocks'
+import { toolDiff } from './toolDiff'
 import type { AppEvent, Provider, TestScope } from './types'
 
 export interface SubtaskBlock {
@@ -312,7 +313,13 @@ export function groupEvents(
         tools.set(event.toolId, tool)
         blocks.push(tool)
         const fileEdit = fileEditFromTool(event.toolName, event.input)
-        const fileEdits = fileEdit !== null ? [fileEdit] : shellApplyPatchEdits(event.toolName, event.input)
+        const fileEdits = fileEdit !== null ? [fileEdit]
+          : event.toolName === 'file_change' ? (toolDiff(tool) ?? []).map((file) => ({
+            path: file.path,
+            added: file.lines.filter((line) => line.kind === 'added').length,
+            removed: file.lines.filter((line) => line.kind === 'removed').length,
+          }))
+          : shellApplyPatchEdits(event.toolName, event.input)
         if (fileEdits.length > 0) {
           for (const edit of fileEdits) {
             const existing = turnFiles.get(edit.path) ?? { added: 0, removed: 0 }

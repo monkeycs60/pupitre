@@ -730,8 +730,40 @@ export class CodexAppServerClient {
           ...(item.status === "failed" || (typeof item.exitCode === "number" && item.exitCode !== 0) ? { isError: true } : {}),
         });
       }
+      return;
+    }
+    if (item.type === "fileChange" && !started) {
+      for (const event of fileChangeEvents(item)) ctx.emit(event);
     }
   }
+}
+
+const FILE_CHANGE_DIFF_LIMIT = 40_000;
+
+export function fileChangeEvents(item: Record<string, any>): AppEvent[] {
+  const changes = (Array.isArray(item.changes) ? item.changes : []).flatMap((raw: unknown) => {
+    const change = raw as Record<string, any> | undefined;
+    if (!change || typeof change.path !== "string") return [];
+    const kind = typeof change.kind?.type === "string" ? change.kind.type : "update";
+    return [{
+      path: change.path,
+      kind,
+      ...(typeof change.kind?.move_path === "string" ? { movePath: change.kind.move_path } : {}),
+      diff: boundedToolOutput(change.diff, FILE_CHANGE_DIFF_LIMIT),
+    }];
+  });
+  if (changes.length === 0) return [];
+  const failed = item.status === "failed" || item.status === "declined";
+  return [
+    { type: "tool-start", toolId: item.id, toolName: "file_change", input: { changes } },
+    {
+      type: "tool-end",
+      toolId: item.id,
+      output: failed ? `Modification ${item.status === "declined" ? "refusée" : "en échec"}` : "",
+      images: [],
+      ...(failed ? { isError: true } : {}),
+    },
+  ];
 }
 
 function numberOrZero(value: unknown): number {

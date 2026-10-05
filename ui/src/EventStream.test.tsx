@@ -187,12 +187,14 @@ test('une action sans sortie ni résultat reste une ligne inerte', () => {
 test('une modification se déplie en diff, et une lecture d’image en image sans JSON', async () => {
   const { fireEvent } = await import('@testing-library/react')
   const { container } = render(<EventStream {...callbacks} blocks={[
-    { kind: 'tool', id: 'a', toolId: 'a', toolName: 'Edit', input: { file_path: '/repo/src/a.ts', old_string: 'avant', new_string: 'après' }, output: 'The file has been updated successfully.', images: [] },
+    { kind: 'tool', id: 'a', toolId: 'a', toolName: 'Edit', input: { file_path: '/repo/src/a.ts', old_string: 'const a = 1', new_string: 'const a = 22' }, output: 'The file has been updated successfully.', images: [] },
     { kind: 'tool', id: 'b', toolId: 'b', toolName: 'Read', input: { file_path: '/repo/shot.png' }, output: '[{"type":"image","source":"[image importée]"}]', images: ['shot.png'] },
   ]} />)
 
   fireEvent.click(screen.getByRole('button', { name: /Modification/ }))
-  expect([...container.querySelectorAll('.tool-diff-line')].map((line) => line.textContent)).toEqual(['- avant', '+ après'])
+  expect([...container.querySelectorAll('.tool-diff-row')].map((line) => line.textContent)).toEqual(['−const a = 1', '+const a = 22'])
+  expect(container.querySelector('.tool-diff-stats')?.textContent).toBe('+1−1')
+  expect([...container.querySelectorAll('.tool-diff-word')].map((mark) => mark.textContent)).toEqual(['1', '22'])
   expect(container.textContent).not.toContain('updated successfully')
 
   fireEvent.click(screen.getByRole('button', { name: /^Lecture/ }))

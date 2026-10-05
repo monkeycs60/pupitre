@@ -96,6 +96,13 @@ export function toolPresentation(tool: ToolBlock): ToolPresentation {
     case 'multiedit':
     case 'notebookedit':
       return { label: 'Modification', detail: path ? shortPath(path) : undefined, category: 'edit' }
+    case 'file_change': {
+      const changes = (Array.isArray(input.changes) ? input.changes : []).map(recordOf)
+      const kinds = new Set(changes.map((change) => change.kind))
+      const label = kinds.size === 1 && kinds.has('add') ? 'Création' : kinds.size === 1 && kinds.has('delete') ? 'Suppression' : 'Modification'
+      const paths = changes.flatMap((change) => typeof change.path === 'string' ? [shortPath(change.path)] : [])
+      return { label, detail: paths.join(', ') || undefined, category: 'edit' }
+    }
     case 'grep': {
       const scope = textField(input, 'path') ?? textField(input, 'glob')
       return {
