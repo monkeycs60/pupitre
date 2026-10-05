@@ -13,7 +13,7 @@
 
 .composer {
   display: grid;
-  width: min(100%, 840px);
+  width: min(100%, calc(var(--reading-measure, 840px) * var(--reading-zoom, 1)));
   margin: 0 auto;
   /* Les menus du modèle s'ouvrent au-dessus du composer : ils ne doivent pas
      être découpés par sa bordure. */
@@ -922,6 +922,8 @@
 
 /* Faux placeholder stylé (/ et $ en accent), comme la maquette. */
 .composer-input-wrap {
+  --text-base: calc(13px * var(--reading-zoom, 1));
+  --text-md: calc(15px * var(--reading-zoom, 1));
   position: relative;
 }
 

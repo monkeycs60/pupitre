@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -38,6 +39,7 @@ import { ConversationWorkspaceCard } from './ConversationWorkspaceCard'
 import { collectConversationAssets } from './conversationAssets'
 import type { TodoFinish, TodoItem } from './todos'
 import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
+import { readingZoomShortcut, setReadingZoom, stepReadingZoom, useReadingPrefs } from './readingPrefs'
 
 /** Outils du fil pilotés depuis le head : pièces jointes et recherche. */
 export interface ThreadTools {
@@ -211,6 +213,14 @@ export function Chat({
   const [assetsOpen, setAssetsOpen] = useState(false)
   const [conversationDocuments, setConversationDocuments] = useState<import('./types').HtmlDocument[]>([])
   const [atBottom, setAtBottom] = useState(true)
+  const reading = useReadingPrefs()
+  const [hudZoom, setHudZoom] = useState(reading.zoom)
+  const [zoomTouched, setZoomTouched] = useState(false)
+  if (hudZoom !== reading.zoom) {
+    setHudZoom(reading.zoom)
+    setZoomTouched(true)
+  }
+  const readingAnchorRef = useRef<{ element: Element; top: number } | null>(null)
   const locatedEventRef = useRef<number | null>(null)
   useEffect(() => {
     if (focusEventId === null || locatedEventRef.current === focusEventId) return
@@ -350,10 +360,53 @@ export function Chat({
     setFocusRequest((current) => current + 1)
   }, [selectedActions])
 
+  function captureReadingAnchor() {
+    const viewport = viewportRef.current
+    if (viewport === null) return
+    const box = viewport.getBoundingClientRect()
+    let fallback: Element | null = null
+    for (let y = box.top + 16; y < box.top + Math.min(box.height, 320); y += 16) {
+      const hit = document.elementFromPoint(box.left + box.width / 2, y)
+      if (hit === null || !viewport.contains(hit)) continue
+      const element = hit.closest('p, li, pre, tr, h1, h2, h3, h4, blockquote, .tool-activity, .tool-activity-summary, .turn-meta')
+      if (element !== null) {
+        readingAnchorRef.current = { element, top: element.getBoundingClientRect().top }
+        return
+      }
+      fallback ??= hit.closest('.message-row, .turn-footer, .events-list > *')
+    }
+    readingAnchorRef.current = fallback === null ? null : { element: fallback, top: fallback.getBoundingClientRect().top }
+  }
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current
+    const anchor = readingAnchorRef.current
+    if (viewport === null) return
+    if (followsBottomRef.current || anchor === null || !anchor.element.isConnected) {
+      scrollToBottomIfFollowing()
+      return
+    }
+    viewport.scrollTop += anchor.element.getBoundingClientRect().top - anchor.top
+  }, [reading.zoom, reading.width, scrollToBottomIfFollowing])
+
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (viewport === null) return
+    function handleZoomWheel(event: WheelEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.deltaY === 0) return
+      event.preventDefault()
+      captureReadingAnchor()
+      stepReadingZoom(event.deltaY < 0 ? 1 : -1)
+    }
+    viewport.addEventListener('wheel', handleZoomWheel, { passive: false })
+    return () => viewport.removeEventListener('wheel', handleZoomWheel)
+  }, [])
+
   function handleScroll() {
     if (scrollFrameRef.current !== null) return
     scrollFrameRef.current = requestAnimationFrame(() => {
       scrollFrameRef.current = null
+      captureReadingAnchor()
       const viewport = viewportRef.current
       if (viewport === null) return
       const followsBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 64
@@ -379,7 +432,14 @@ export function Chat({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
         event.preventDefault()
         setSearchOpen(true)
+        return
       }
+      const zoom = readingZoomShortcut(event)
+      if (zoom === null) return
+      event.preventDefault()
+      captureReadingAnchor()
+      if (zoom === 0) setReadingZoom(1)
+      else stepReadingZoom(zoom)
     }
     window.addEventListener('keydown', handleSearchShortcut)
     return () => window.removeEventListener('keydown', handleSearchShortcut)
@@ -448,6 +508,8 @@ export function Chat({
     <>
       <div
         className="chat-layout"
+        data-reading-width={reading.width}
+        style={{ '--reading-zoom': reading.zoom } as CSSProperties}
         onPointerDownCapture={() => onConversationReadRef.current?.()}
         onKeyDownCapture={() => onConversationReadRef.current?.()}
       >
@@ -473,6 +535,11 @@ export function Chat({
               onImageOpen={handleImageOpen}
               showTrigger={false}
             />
+            {zoomTouched ? (
+              <div className="reading-zoom-hud" key={reading.zoom} aria-live="polite">
+                {Math.round(reading.zoom * 100)} %
+              </div>
+            ) : null}
             {!atBottom ? (
               <button type="button" className="thread-jump" onClick={jumpToBottom} title="Aller au dernier message">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">

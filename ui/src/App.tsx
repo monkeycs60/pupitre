@@ -1,3 +1,4 @@
+import { ReadingControls } from './ReadingControls'
 import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type InspectorView } from './WorkspaceInspector'
 import { ChantierAssignment } from './ChantiersView'
 import { InactiveProjectResume } from './ProjectResume'
@@ -1182,6 +1183,7 @@ function App() {
                     </svg>
                   </button>
                 ) : null}
+                {threadTools !== null ? <ReadingControls /> : null}
                 <ProjectSectionSwitch
                   projectId={selectedProject.id}
                   activeSection={projectSurface?.section ?? null}

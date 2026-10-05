@@ -1463,3 +1463,98 @@ button.titlebar-instance {
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-xs);
 }
+
+/* --- Réglages de lecture -------------------------------------------------- */
+
+.reading-controls {
+  position: relative;
+}
+
+.reading-controls-glyph {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.reading-controls-glyph small {
+  font-size: 10.5px;
+}
+
+.reading-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  gap: var(--space-3);
+  width: 264px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-popover);
+  transform-origin: top right;
+  animation: pop-in var(--dur) var(--ease-out);
+}
+
+.reading-popover-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.reading-popover-label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.reading-zoom-stepper,
+.reading-width-seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+}
+
+.reading-zoom-stepper button,
+.reading-width-seg button {
+  min-width: 28px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: calc(var(--r-md) - 2px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.reading-zoom-stepper button:hover:not(:disabled),
+.reading-width-seg button:hover { background: var(--bg-hover); }
+.reading-zoom-stepper button:disabled { color: var(--text-faint); cursor: default; }
+
+.reading-zoom-stepper .reading-zoom-value {
+  min-width: 52px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.reading-width-seg button { color: var(--text-muted); }
+
+.reading-width-seg button.is-active {
+  background: var(--bg-active);
+  color: var(--text-strong);
+}
+
+.reading-popover-hint {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
