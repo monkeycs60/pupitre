@@ -30,6 +30,7 @@ test("reconnaît le port d'inspection Node implicite ou explicite", () => {
 test("écarte les navigateurs et éditeurs lancés depuis un worktree", () => {
   expect(isExcludedApplicationProcess("chrome")).toBeTrue();
   expect(isExcludedApplicationProcess("chromium-browser")).toBeTrue();
+  expect(isExcludedApplicationProcess("agent-browser-l")).toBeTrue();
   expect(isExcludedApplicationProcess("code")).toBeTrue();
   expect(isExcludedApplicationProcess("node")).toBeFalse();
 });

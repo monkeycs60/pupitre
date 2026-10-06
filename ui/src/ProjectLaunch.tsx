@@ -29,7 +29,9 @@ function LaunchLinks({ urls }: { urls: LaunchUrl[] }) {
           key={item.url}
           href={item.url}
           className={`launch-link${item.live ? ' is-live' : ' is-pending'}${index === 0 ? ' is-primary' : ''}`}
-          title={item.live ? `Ouvrir ${item.url}` : `${item.url} n’écoute pas encore`}
+          title={
+            item.live ? `Ouvrir ${item.url}` : `${item.url} n’écoute pas encore`
+          }
         >
           {launchUrlLabel(item.url)}
           <span aria-hidden="true"> ↗</span>
@@ -86,8 +88,13 @@ function LaunchLiveRow({
 }
 
 export function ProjectLiveLaunches({ project }: { project: Project }) {
-  const running = useProjectLaunches(project.id).filter((item) => item.running)
-  const applications = useRunningApplications().items
+  const launches = useProjectLaunches(project.id)
+  const running = launches.filter((item) => item.running)
+  const applications = useRunningApplications(15_000).items
+  const known = new Map<number, string>()
+  for (const item of launches)
+    for (const url of item.known_urls ?? [])
+      if (!known.has(url.port) || url.front) known.set(url.port, url.url)
   const managed = new Set(
     running.flatMap((item) => commandUrls(item).map((url) => url.port)),
   )
@@ -115,21 +122,24 @@ export function ProjectLiveLaunches({ project }: { project: Project }) {
             Lancé ailleurs
           </span>
           <span className="launch-live-links">
-            {external.map((application) => (
-              <ExternalLink
-                key={application.id}
-                href={application.url}
-                className="launch-link is-external"
-                title={`${application.name} · ${application.process} (PID ${application.pid}) · ${application.cwd}`}
-              >
-                localhost:{application.port}
-                <span className="launch-link-name">
-                  {' '}
-                  · {application.name.replace(/^@[^/]+\//, '')}
-                </span>
-                <span aria-hidden="true"> ↗</span>
-              </ExternalLink>
-            ))}
+            {external.map((application) => {
+              const href = known.get(application.port) ?? application.url
+              return (
+                <ExternalLink
+                  key={application.id}
+                  href={href}
+                  className="launch-link is-external"
+                  title={`${application.name} · ${application.process} (PID ${application.pid}) · ${application.cwd}`}
+                >
+                  {launchUrlLabel(href)}
+                  <span className="launch-link-name">
+                    {' '}
+                    · {application.name.replace(/^@[^/]+\//, '')}
+                  </span>
+                  <span aria-hidden="true"> ↗</span>
+                </ExternalLink>
+              )
+            })}
           </span>
         </div>
       )}
@@ -473,7 +483,10 @@ export function ManagedLaunches() {
   if (running.length === 0) return null
   const projects = new Map<string, Command[]>()
   for (const item of running)
-    projects.set(item.project_id, [...(projects.get(item.project_id) ?? []), item])
+    projects.set(item.project_id, [
+      ...(projects.get(item.project_id) ?? []),
+      item,
+    ])
   async function restart(item: Command) {
     try {
       await launchRequest(
@@ -488,13 +501,19 @@ export function ManagedLaunches() {
     }
   }
   return (
-    <section className="managed-launches" aria-label="Commandes lancées par Pupitre">
+    <section
+      className="managed-launches"
+      aria-label="Commandes lancées par Pupitre"
+    >
       <h2>
         Lancées par Pupitre <span>{running.length}</span>
       </h2>
       {error && <p role="alert">{error}</p>}
       {[...projects].map(([projectId, items]) => (
-        <div className="launch-live-strip managed-launches-project" key={projectId}>
+        <div
+          className="launch-live-strip managed-launches-project"
+          key={projectId}
+        >
           {items.map((item) => (
             <div key={item.id}>
               <LaunchLiveRow

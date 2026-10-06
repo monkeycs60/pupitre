@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 import { getRunningApplications, type RunningApplication } from './api'
 
 interface RunningApplicationsSnapshot {
@@ -8,8 +8,9 @@ interface RunningApplicationsSnapshot {
   updatedAt: number | null
 }
 
-const listeners = new Set<() => void>()
+const listeners = new Map<() => void, number>()
 let timer: ReturnType<typeof setInterval> | null = null
+let timerInterval: number | null = null
 let refreshing = false
 let snapshot: RunningApplicationsSnapshot = {
   items: [],
@@ -20,7 +21,7 @@ let snapshot: RunningApplicationsSnapshot = {
 
 function publish(next: RunningApplicationsSnapshot): void {
   snapshot = next
-  for (const listener of listeners) listener()
+  for (const listener of listeners.keys()) listener()
 }
 
 export async function refreshRunningApplications(): Promise<void> {
@@ -41,21 +42,26 @@ export async function refreshRunningApplications(): Promise<void> {
   }
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  if (listeners.size === 1) {
-    void refreshRunningApplications()
-    timer = setInterval(() => void refreshRunningApplications(), 5_000)
-  }
+function schedule(): void {
+  const interval = listeners.size === 0 ? null : Math.min(...listeners.values())
+  if (interval === timerInterval) return
+  if (timer !== null) clearInterval(timer)
+  timer = interval === null ? null : setInterval(() => void refreshRunningApplications(), interval)
+  timerInterval = interval
+}
+
+function subscribe(listener: () => void, intervalMs: number): () => void {
+  const first = listeners.size === 0
+  listeners.set(listener, intervalMs)
+  if (first || (snapshot.updatedAt !== null && Date.now() - snapshot.updatedAt > intervalMs)) void refreshRunningApplications()
+  schedule()
   return () => {
     listeners.delete(listener)
-    if (listeners.size === 0 && timer !== null) {
-      clearInterval(timer)
-      timer = null
-    }
+    schedule()
   }
 }
 
-export function useRunningApplications(): RunningApplicationsSnapshot {
-  return useSyncExternalStore(subscribe, () => snapshot, () => snapshot)
+export function useRunningApplications(intervalMs = 5_000): RunningApplicationsSnapshot {
+  const subscribeAt = useCallback((listener: () => void) => subscribe(listener, intervalMs), [intervalMs])
+  return useSyncExternalStore(subscribeAt, () => snapshot, () => snapshot)
 }

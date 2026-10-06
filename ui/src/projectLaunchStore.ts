@@ -23,6 +23,7 @@ export interface LaunchCommand {
   logs?: string
   url?: string | null
   urls?: LaunchUrl[]
+  known_urls?: Array<Omit<LaunchUrl, 'live'>>
 }
 
 export const ALL_LAUNCHES = '/api/launches?logs=0'

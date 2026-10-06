@@ -199,3 +199,23 @@ test("rend des logs lisibles sans séquences ANSI ni retours chariot de progress
     readableLog("\x1b[32m✓\x1b[39m ok\r\n\x1b]8;;http://x\x07lien\x1b]8;;\x07\n10%\r50%\r100%\n\x1b[2K\x1b[1Gfin"),
   ).toBe("✓ ok\nlien\n100%\nfin");
 });
+
+test("retient les adresses relevées après l’arrêt, une par port, la plus récente", async () => {
+  const { project, service } = fixture();
+  const command = service.save(project.id, {
+    name: "dev",
+    command: `printf '  ➜  Local:   http://localhost:18998/\\n'; printf '  ➜  Local:   http://localhost:18998/app/\\n[api] http://localhost:18997\\n'; sleep 30`,
+  });
+  await service.launch(command.id);
+  await Bun.sleep(100);
+  await service.stop(command.id);
+  const status = service.status(command.id);
+  expect(status.running).toBe(false);
+  expect(status.urls).toEqual([]);
+  expect(status.known_urls).toEqual([
+    { url: "http://localhost:18998/app/", port: 18998, front: true },
+    { url: "http://localhost:18997", port: 18997, front: false },
+  ]);
+  expect(service.save(project.id, { ...command, name: "dev renommé" }).name).toBe("dev renommé");
+  expect(service.status(command.id).known_urls).toHaveLength(2);
+});

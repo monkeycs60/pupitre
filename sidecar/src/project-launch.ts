@@ -26,6 +26,7 @@ export interface LaunchCommand {
   url: string | null;
   kind: "run" | "deploy";
   position: number;
+  known_urls: string;
 }
 export interface LaunchSuggestion {
   name: string;
@@ -148,6 +149,13 @@ export class ProjectLaunchService {
       name TEXT NOT NULL, command TEXT NOT NULL, cwd_relative TEXT NOT NULL DEFAULT '.', env_json TEXT NOT NULL DEFAULT '{}',
       port INTEGER, url TEXT, kind TEXT NOT NULL CHECK(kind IN ('run','deploy')), position INTEGER NOT NULL DEFAULT 0,
       UNIQUE(project_id, name))`);
+    const columns = db
+      .query("PRAGMA table_info(project_launch_commands)")
+      .all() as { name: string }[];
+    if (!columns.some((column) => column.name === "known_urls"))
+      db.exec(
+        "ALTER TABLE project_launch_commands ADD COLUMN known_urls TEXT NOT NULL DEFAULT '[]'",
+      );
     mkdirSync(join(dataDir, "launch-logs"), { recursive: true });
   }
   list(projectId: string): LaunchCommand[] {
@@ -192,7 +200,8 @@ export class ProjectLaunchService {
       throw new Error("arrêtez la commande avant modification");
     this.db
       .query(
-        `INSERT INTO project_launch_commands VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO project_launch_commands (id, project_id, name, command, cwd_relative, env_json, port, url, kind, position)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name, command=excluded.command, cwd_relative=excluded.cwd_relative,
       env_json=excluded.env_json, port=excluded.port, url=excluded.url, kind=excluded.kind, position=excluded.position`,
       )
@@ -264,6 +273,7 @@ export class ProjectLaunchService {
       : [];
     return {
       ...command,
+      known_urls: this.knownUrls(command),
       running: !!run,
       pid: run?.child.pid ?? null,
       cwd: run?.cwd,
@@ -271,6 +281,21 @@ export class ProjectLaunchService {
       urls,
       logs: logs ? this.logs(id) : "",
     };
+  }
+  private knownUrls(command: LaunchCommand): Array<{ url: string; port: number; front: boolean }> {
+    try {
+      return JSON.parse(command.known_urls);
+    } catch {
+      return [];
+    }
+  }
+  private remember(id: string, found: { url: string; port: number; front: boolean }) {
+    const known = this.knownUrls(this.get(id)).filter(
+      (item) => item.port !== found.port,
+    );
+    this.db
+      .query("UPDATE project_launch_commands SET known_urls=? WHERE id=?")
+      .run(JSON.stringify([...known, found].slice(-12)), id);
   }
   statuses(projectId?: string, options: { logs?: boolean } = {}) {
     const rows = (
@@ -362,8 +387,12 @@ export class ProjectLaunchService {
         pending = lines.pop()!.slice(-2000);
         for (const line of lines)
           for (const found of localUrlsInLine(line))
-            if (urls.size < 12 && !urls.has(found.url))
+            if (urls.size < 12 && !urls.has(found.url)) {
               urls.set(found.url, { port: found.port, front: found.front });
+              try {
+                this.remember(id, found);
+              } catch {}
+            }
       };
     };
     child.stdout.on("data", watch());

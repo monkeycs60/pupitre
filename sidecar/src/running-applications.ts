@@ -34,7 +34,7 @@ export function inspectorPort(command: string): number | null {
 }
 
 export function isExcludedApplicationProcess(process: string): boolean {
-  return /^(?:brave|chrome|chromium|code|firefox)(?:-|$)/iu.test(process);
+  return /^(?:agent-browser|brave|chrome|chromium|code|firefox)(?:-|$)/iu.test(process);
 }
 
 function isInside(path: string, root: string): boolean {
