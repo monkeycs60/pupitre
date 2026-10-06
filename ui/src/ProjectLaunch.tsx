@@ -10,6 +10,7 @@ import {
   type LaunchCommand as Command,
   type LaunchUrl,
 } from './projectLaunchStore'
+import { useRunningApplications } from './runningApplicationsStore'
 import type { Project } from './types'
 
 function commandUrls(item: Command): LaunchUrl[] {
@@ -86,12 +87,52 @@ function LaunchLiveRow({
 
 export function ProjectLiveLaunches({ project }: { project: Project }) {
   const running = useProjectLaunches(project.id).filter((item) => item.running)
-  if (running.length === 0) return null
+  const applications = useRunningApplications().items
+  const managed = new Set(
+    running.flatMap((item) => commandUrls(item).map((url) => url.port)),
+  )
+  const external = applications
+    .filter(
+      (application, index, all) =>
+        application.projectId === project.id &&
+        !managed.has(application.port) &&
+        all.findIndex((other) => other.port === application.port) === index,
+    )
+    .sort((a, b) => a.port - b.port)
+  if (running.length === 0 && external.length === 0) return null
   return (
     <div className="launch-live-strip" aria-label="Commandes en cours">
       {running.map((item) => (
         <LaunchLiveRow item={item} key={item.id} />
       ))}
+      {external.length > 0 && (
+        <div className="launch-live-row is-external">
+          <span className="launch-live-dot" aria-hidden="true" />
+          <span
+            className="launch-live-name"
+            title="Serveurs du projet lancés depuis un terminal, une autre instance ou un agent"
+          >
+            Lancé ailleurs
+          </span>
+          <span className="launch-live-links">
+            {external.map((application) => (
+              <ExternalLink
+                key={application.id}
+                href={application.url}
+                className="launch-link is-external"
+                title={`${application.name} · ${application.process} (PID ${application.pid}) · ${application.cwd}`}
+              >
+                localhost:{application.port}
+                <span className="launch-link-name">
+                  {' '}
+                  · {application.name.replace(/^@[^/]+\//, '')}
+                </span>
+                <span aria-hidden="true"> ↗</span>
+              </ExternalLink>
+            ))}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

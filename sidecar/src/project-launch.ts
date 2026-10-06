@@ -70,7 +70,15 @@ export interface LaunchUrl {
   front: boolean;
   live: boolean;
 }
-const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
+const ANSI =
+  /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/g;
+export function readableLog(text: string): string {
+  return text
+    .replace(ANSI, "")
+    .split("\n")
+    .map((line) => line.replace(/\r$/, "").split("\r").pop()!)
+    .join("\n");
+}
 const LOCAL_URL =
   /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{2,5})(?:\/[^\s"'<>)\]]*)?/g;
 export function localUrlsInLine(
@@ -240,7 +248,7 @@ export class ProjectLaunchService {
   logs(id: string) {
     const path = this.logPath(id);
     return existsSync(path)
-      ? readFileSync(path, "utf8").split("\n").slice(-50).join("\n")
+      ? readableLog(readFileSync(path, "utf8").split("\n").slice(-50).join("\n"))
       : "";
   }
   status(id: string, { logs = true, listening }: { logs?: boolean; listening?: Set<number> } = {}) {

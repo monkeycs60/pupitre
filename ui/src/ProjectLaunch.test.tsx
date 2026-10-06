@@ -49,3 +49,28 @@ test('ne montre rien quand aucune commande ne tourne', async () => {
   await waitFor(() => expect(fetchMock).toHaveBeenCalled())
   expect(container.querySelector('.launch-live-strip')).toBeNull()
 })
+
+test('montre en gris les serveurs du projet lancés ailleurs, sans doubler ceux de Pupitre', async () => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    if (String(input).includes('/api/applications')) {
+      const base = { projectName: 'coworker-malin', workspace: 'app', branch: 'master', cwd: '/code/cm', process: 'node' }
+      return Response.json([
+        { ...base, id: '1:5174', name: '@cm/app', projectId: 'p3', pid: 1, port: 5174, url: 'http://localhost:5174' },
+        { ...base, id: '2:3000', name: '@cm/api', projectId: 'p3', pid: 2, port: 3000, url: 'http://localhost:3000' },
+        { ...base, id: '3:8080', name: 'autre', projectId: 'other', pid: 3, port: 8080, url: 'http://localhost:8080' },
+      ])
+    }
+    return Response.json([
+      {
+        id: 'dev', project_id: 'p3', name: 'Développement', command: 'bun run dev', cwd_relative: '.', port: null, kind: 'run', running: true,
+        urls: [{ url: 'http://localhost:5174/app/', port: 5174, front: true, live: true }],
+      },
+    ])
+  }) as unknown as typeof fetch
+  render(<ProjectLiveLaunches project={{ ...(project as object), id: 'p3' } as never} />)
+  const api = await screen.findByRole('link', { name: /localhost:3000/ })
+  expect(api.className).toContain('is-external')
+  expect(screen.getByText('Lancé ailleurs')).toBeTruthy()
+  expect(screen.getAllByRole('link', { name: /localhost:5174/ })).toHaveLength(1)
+  expect(screen.queryByRole('link', { name: /8080/ })).toBeNull()
+})

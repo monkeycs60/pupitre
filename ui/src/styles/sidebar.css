@@ -2245,6 +2245,11 @@
 
 /* --- Commandes de lancement en cours -------------------------------------- */
 
+.launch-live-strip:not(:has(.launch-live-row:not(.is-external))) {
+  background: var(--bg-sidebar);
+  border-bottom-color: var(--border-subtle);
+}
+
 .launch-live-strip {
   display: grid;
   flex: none;
@@ -2270,6 +2275,20 @@
   height: 7px;
   background: var(--warn);
   border-radius: var(--r-full);
+}
+
+.launch-live-row.is-external .launch-live-dot {
+  background: var(--text-muted);
+}
+
+.launch-link.is-external:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.launch-link-name {
+  color: var(--text-faint);
+  opacity: 0.75;
 }
 
 .launch-live-row.is-live .launch-live-dot,

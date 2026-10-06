@@ -192,3 +192,10 @@ test("le lancement par nom attend une adresse à l’écoute et renvoie l’éta
   expect(second).toMatchObject({ running: true, already_running: true, url: first.url });
   expect(second.pid).toBe(first.pid);
 });
+
+test("rend des logs lisibles sans séquences ANSI ni retours chariot de progression", async () => {
+  const { readableLog } = await import("../src/project-launch");
+  expect(
+    readableLog("\x1b[32m✓\x1b[39m ok\r\n\x1b]8;;http://x\x07lien\x1b]8;;\x07\n10%\r50%\r100%\n\x1b[2K\x1b[1Gfin"),
+  ).toBe("✓ ok\nlien\n100%\nfin");
+});
