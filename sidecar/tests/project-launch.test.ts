@@ -160,3 +160,35 @@ test("relève les adresses locales des logs et place le front en premier", async
   await service.stop(command.id);
   expect(service.status(command.id).urls).toEqual([]);
 });
+
+test("le lancement par nom attend une adresse à l’écoute et renvoie l’état d’une commande déjà lancée", async () => {
+  const { db, project, service } = fixture();
+  const { ConversationStore } = await import("../src/stores/conversations");
+  const conversation = new ConversationStore(db).create({
+    projectId: project.id,
+    provider: "codex",
+    model: "test",
+    firstMessage: "Lancer",
+  });
+  service.save(project.id, {
+    name: "Front",
+    command: `bun -e 'setTimeout(() => { const s = Bun.serve({ port: 0, fetch: () => new Response("ok") }); console.log("  ➜  Local:   http://localhost:" + s.port + "/") }, 600)'`,
+  });
+  const url = `/api/conversations/${conversation.id}/launch-command`;
+  const call = async () =>
+    (await service.handle(
+      new Request(`http://localhost${url}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "Front" }),
+      }),
+      url,
+    ))!.json();
+  const first = await call();
+  expect(first).toMatchObject({ running: true, already_running: false });
+  expect(first.urls[0]).toMatchObject({ front: true, live: true });
+  expect(first.url).toBe(first.urls[0].url);
+  const second = await call();
+  expect(second).toMatchObject({ running: true, already_running: true, url: first.url });
+  expect(second.pid).toBe(first.pid);
+});

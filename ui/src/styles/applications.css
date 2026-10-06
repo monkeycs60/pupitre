@@ -281,10 +281,57 @@
   stroke-width: 1.3;
 }
 
-.managed-launches { padding: 16px 24px; border-bottom: 1px solid var(--border-subtle); }
-.managed-launches > div { padding: 12px 0; }
-.managed-launches button { margin: 4px 8px 4px 0; }
-.managed-launches pre { max-height: 240px; overflow: auto; white-space: pre-wrap; }
+.managed-launches {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-5) var(--space-6) 0;
+}
+
+.managed-launches h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.managed-launches h2 span {
+  padding: 0 7px;
+  color: var(--ok);
+  font-size: var(--text-xs);
+  background: var(--ok-soft);
+  border-radius: var(--r-full);
+}
+
+.managed-launches-project {
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--ok) 28%, var(--border-subtle));
+  border-radius: var(--r-md);
+}
+
+.managed-launches-project .launch-live-name {
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.managed-launch-logs {
+  margin: 4px 0 0 15px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.managed-launch-logs pre {
+  max-height: 240px;
+  margin: 4px 0 0;
+  padding: var(--space-2);
+  overflow: auto;
+  white-space: pre-wrap;
+  background: var(--bg-raised);
+  border-radius: var(--r-sm);
+}
 .personal-environments-view { padding: 20px; display: grid; gap: 16px; align-content: start; }
 .personal-environments-view label { display: grid; gap: 6px; }
 .personal-environments-view input, .personal-environments-view textarea, .personal-environments-view select { color: inherit; background: var(--bg-workspace); border: 1px solid var(--border-subtle); padding: 8px; }

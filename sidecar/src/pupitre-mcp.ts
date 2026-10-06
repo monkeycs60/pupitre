@@ -135,7 +135,7 @@ export function createPupitreServer(): McpServer {
     inputSchema,
   }, publish);
   server.registerTool("launch_project_command", {
-    description: "Lance une commande nommée du projet courant dans le répertoire de la conversation et renvoie son URL et ses logs.",
+    description: "Lance une commande nommée du projet courant dans le répertoire de la conversation et renvoie son état : `url` (le front), `urls` (adresses relevées dans la sortie, front en tête, `live` si le port écoute), `running`, `already_running` et les derniers logs. Attend jusqu’à 15 s qu’une adresse écoute. Une commande déjà lancée n’est pas relancée : son état est renvoyé tel quel.",
     inputSchema: { name: z.string() },
   }, async ({ name }: { name: string }) => {
     try {

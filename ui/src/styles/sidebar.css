@@ -2337,6 +2337,12 @@
   background: color-mix(in srgb, var(--ok) 22%, transparent);
 }
 
+.launch-live-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.launch-live-restart,
 .launch-live-stop {
   flex: none;
   width: 20px;
@@ -2348,6 +2354,11 @@
   border: 0;
   border-radius: var(--r-xs);
   cursor: pointer;
+}
+
+.launch-live-restart:hover {
+  color: var(--text);
+  background: var(--bg-hover);
 }
 
 .launch-live-stop:hover {

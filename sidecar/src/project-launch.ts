@@ -292,7 +292,7 @@ export class ProjectLaunchService {
     } = {},
   ) {
     const command = this.get(id);
-    if (this.running.has(id)) throw new Error("commande déjà lancée");
+    if (this.running.has(id)) return { ...this.status(id), already_running: true };
     const project = this.projects.get(command.project_id)!;
     let root = projectCwd(project);
     if (options.conversationId) {
@@ -374,6 +374,25 @@ export class ProjectLaunchService {
     await new Promise((resolve) => setTimeout(resolve, 150));
     return this.status(id);
   }
+  async launchUntilReady(
+    id: string,
+    options: { conversationId?: string } = {},
+    timeoutMs = 15_000,
+  ) {
+    const launched = await this.launch(id, options);
+    if ("already_running" in launched) return launched;
+    const deadline = Date.now() + timeoutMs;
+    let status = this.status(id);
+    while (
+      status.running &&
+      !status.urls.some((url) => url.live) &&
+      Date.now() < deadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      status = this.status(id);
+    }
+    return { ...status, already_running: false };
+  }
   async stop(id: string) {
     const run = this.running.get(id);
     if (!run) return this.status(id);
@@ -391,7 +410,14 @@ export class ProjectLaunchService {
       /^\/api\/projects\/([^/]+)\/launch(?:\/([^/]+))?(?:\/(stop|restart|conflict))?$/,
     );
     if (pathname === "/api/launches" && request.method === "GET")
-      return Response.json(this.statuses());
+      return Response.json(
+        this.statuses(undefined, {
+          logs: new URL(request.url).searchParams.get("logs") !== "0",
+        }).map((item) => ({
+          ...item,
+          project_name: this.projects.get(item.project_id)?.name ?? null,
+        })),
+      );
     const conversationMatch = pathname.match(
       /^\/api\/conversations\/([^/]+)\/launch-command$/,
     );
@@ -409,7 +435,7 @@ export class ProjectLaunchService {
         );
         if (!command) throw new Error("commande inconnue");
         return Response.json(
-          await this.launch(command.id, {
+          await this.launchUntilReady(command.id, {
             conversationId: conversationMatch[1]!,
           }),
         );
