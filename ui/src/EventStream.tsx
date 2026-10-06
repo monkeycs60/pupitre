@@ -7,6 +7,8 @@ import type { DebriefBlock, StreamBlock } from './groupEvents'
 import type { SubtaskStatus } from './types'
 import { TestInventoryCard } from './TestInventoryCard'
 import { HtmlDocumentCard } from './HtmlDocumentCard'
+import { TurnWorkGroup } from './TurnWorkGroup'
+import { foldFinishedTurns } from './turnWork'
 import { memo } from 'react'
 import type { ReactNode } from 'react'
 import type { EventBlock } from './eventBlocks'
@@ -29,7 +31,7 @@ interface EventStreamProps {
 export const EventStream = memo(EventStreamImpl)
 
 function EventStreamImpl({
-  blocks,
+  blocks: streamBlocks,
   onImageOpen,
   onImageLoad,
   onSubtaskStatusChange,
@@ -37,6 +39,7 @@ function EventStreamImpl({
   turnFooterAction,
 }: EventStreamProps) {
   const rendered: ReactNode[] = []
+  const blocks = foldFinishedTurns(streamBlocks)
   const newestHtmlDocumentId = blocks.findLast((item) => item.kind === 'html-document')?.id
   const newestTurnFooter = blocks.findLast((item) => item.kind === 'turn-footer')
   const newestTurnFooterId = newestTurnFooter?.id
@@ -49,6 +52,11 @@ function EventStreamImpl({
 
   while (index < blocks.length) {
     const block = blocks[index]
+    if (block.kind === 'turn-work') {
+      rendered.push(<TurnWorkGroup key={block.id} work={block} onImageOpen={onImageOpen} onImageLoad={onImageLoad} />)
+      index += 1
+      continue
+    }
     if (block.kind === 'tool') {
       const live = index > liveFrom
       const tools: Array<Extract<EventBlock, { kind: 'tool' }>> = []

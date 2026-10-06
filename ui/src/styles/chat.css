@@ -43,6 +43,8 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Chat.tsx ancre déjà la lecture en JS : l'ancrage natif de Chromium s'y ajouterait. */
+  overflow-anchor: none;
   background: var(--bg-workspace);
 }
 
@@ -489,13 +491,6 @@
   margin: 0 0 var(--space-6);
   /* Entrée douce : chaque message se pose au lieu d'apparaître sec. */
   animation: msg-in 220ms var(--ease) both;
-  /* Le navigateur saute la mise en page et la peinture des messages hors
-     écran. `contain-intrinsic-size` leur réserve une hauteur estimée, sinon
-     la barre de défilement sauterait à chaque message qui entre dans le
-     viewport. Complémentaire de la mémoïsation : celle-ci évite le re-rendu
-     React, celle-là le coût de rendu du navigateur. */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 180px;
 }
 
 .message-row-user {
@@ -751,8 +746,6 @@
 /* --- Activité des outils -------------------------------------------------- */
 
 .tool-activity-group {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 44px;
   margin: 0 0 var(--space-2);
 }
 
@@ -786,7 +779,7 @@
   transition: transform var(--dur) var(--ease-out);
 }
 
-.tool-activity-group.is-open .tool-activity-chevron {
+.tool-activity-group.is-open > .tool-activity-summary .tool-activity-chevron {
   transform: rotate(45deg) translate(-1px, -1px);
 }
 
@@ -819,6 +812,16 @@
   min-height: 0;
   overflow: hidden;
   padding: var(--space-1) 0 0 var(--space-1);
+}
+
+.turn-work {
+  margin-bottom: var(--space-4);
+}
+
+.tool-activity-list.turn-work-list {
+  padding: var(--space-3) 0 0 var(--space-4);
+  border-left: 1px solid var(--border-subtle);
+  margin-left: 2px;
 }
 
 .tool-activity {

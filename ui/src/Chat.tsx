@@ -97,6 +97,10 @@ function readDraft(key: string): string | null {
   }
 }
 
+function contentOffset(viewport: HTMLElement, element: Element): number {
+  return element.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop
+}
+
 function lastStatusIsRunning(events: AppEvent[]): boolean {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]
@@ -220,7 +224,7 @@ export function Chat({
     setHudZoom(reading.zoom)
     setZoomTouched(true)
   }
-  const readingAnchorRef = useRef<{ element: Element; top: number } | null>(null)
+  const readingAnchorRef = useRef<{ element: Element; offset: number } | null>(null)
   const locatedEventRef = useRef<number | null>(null)
   useEffect(() => {
     if (focusEventId === null || locatedEventRef.current === focusEventId) return
@@ -326,22 +330,36 @@ export function Chat({
     return () => onThreadToolsChange?.(null)
   }, [conversationAssets.length, onThreadToolsChange])
 
-  const scrollToBottomIfFollowing = useCallback(() => {
+  /**
+   * WebKitGTK n'ancre pas le défilement : quand un bloc au-dessus de l'écran
+   * change de hauteur (historique chargé, image, groupe déplié), le texte lu
+   * glisserait d'autant. L'élément lu est remis à sa place avant la peinture.
+   */
+  const keepReadingPosition = useCallback(() => {
     const viewport = viewportRef.current
-    if (viewport !== null && followsBottomRef.current) {
+    if (viewport === null) return
+    if (followsBottomRef.current) {
       viewport.scrollTop = viewport.scrollHeight
+      return
     }
+    const anchor = readingAnchorRef.current
+    if (anchor === null || !anchor.element.isConnected) return
+    const offset = contentOffset(viewport, anchor.element)
+    const drift = offset - anchor.offset
+    if (Math.abs(drift) < 1) return
+    viewport.scrollTop += drift
+    anchor.offset = offset
   }, [])
 
-  useLayoutEffect(scrollToBottomIfFollowing, [blocks, scrollToBottomIfFollowing])
+  useLayoutEffect(keepReadingPosition, [blocks, keepReadingPosition])
 
   useEffect(() => {
     const content = viewportRef.current?.firstElementChild
     if (!(content instanceof HTMLElement) || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(scrollToBottomIfFollowing)
+    const observer = new ResizeObserver(keepReadingPosition)
     observer.observe(content)
     return () => observer.disconnect()
-  }, [scrollToBottomIfFollowing])
+  }, [keepReadingPosition])
 
   const handleImageOpen = useCallback((src: string, alt: string) => {
     setLightboxImage({ src, alt })
@@ -369,25 +387,17 @@ export function Chat({
       const hit = document.elementFromPoint(box.left + box.width / 2, y)
       if (hit === null || !viewport.contains(hit)) continue
       const element = hit.closest('p, li, pre, tr, h1, h2, h3, h4, blockquote, .tool-activity, .tool-activity-summary, .turn-meta')
-      if (element !== null) {
-        readingAnchorRef.current = { element, top: element.getBoundingClientRect().top }
+      if (element !== null && element.getBoundingClientRect().top >= box.top) {
+        readingAnchorRef.current = { element, offset: contentOffset(viewport, element) }
         return
       }
-      fallback ??= hit.closest('.message-row, .turn-footer, .events-list > *')
+      const block = hit.closest('.message-row, .turn-footer, .events-list > *')
+      if (block !== null && block.getBoundingClientRect().top >= box.top) fallback ??= block
     }
-    readingAnchorRef.current = fallback === null ? null : { element: fallback, top: fallback.getBoundingClientRect().top }
+    readingAnchorRef.current = fallback === null ? null : { element: fallback, offset: contentOffset(viewport, fallback) }
   }
 
-  useLayoutEffect(() => {
-    const viewport = viewportRef.current
-    const anchor = readingAnchorRef.current
-    if (viewport === null) return
-    if (followsBottomRef.current || anchor === null || !anchor.element.isConnected) {
-      scrollToBottomIfFollowing()
-      return
-    }
-    viewport.scrollTop += anchor.element.getBoundingClientRect().top - anchor.top
-  }, [reading.zoom, reading.width, scrollToBottomIfFollowing])
+  useLayoutEffect(keepReadingPosition, [reading.zoom, reading.width, keepReadingPosition])
 
   useEffect(() => {
     const viewport = viewportRef.current
@@ -455,7 +465,7 @@ export function Chat({
   function jumpToBottom() {
     followsBottomRef.current = true
     setAtBottom(true)
-    scrollToBottomIfFollowing()
+    keepReadingPosition()
     onConversationRead?.()
   }
 
@@ -553,6 +563,7 @@ export function Chat({
             ref={viewportRef}
             onScroll={handleScroll}
             onWheel={(event) => handleManualScrollIntent(event.deltaY)}
+            onPointerDown={() => { manualScrollIntentRef.current = true }}
             onKeyDown={(event) => {
               if (event.key === 'ArrowUp' || event.key === 'PageUp' || event.key === 'Home') {
                 manualScrollIntentRef.current = true
@@ -572,7 +583,7 @@ export function Chat({
                     <EventStream
                       blocks={blocks}
                       onImageOpen={handleImageOpen}
-                      onImageLoad={scrollToBottomIfFollowing}
+                      onImageLoad={keepReadingPosition}
                       onSubtaskStatusChange={handleSubtaskStatusChange}
                       onDebriefQuestion={handleDebriefQuestion}
                       turnFooterAction={turnFooterAction}
