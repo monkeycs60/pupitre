@@ -1,4 +1,4 @@
-import { ProjectLaunch } from './ProjectLaunch'
+import { ProjectLaunch, ProjectLiveLaunches } from './ProjectLaunch'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
   listProjectConversations,
@@ -689,6 +689,7 @@ export const Sidebar = memo(function Sidebar({
           </button>
         ) : null}
       </div>
+      {selectedProject && <ProjectLiveLaunches key={selectedProject.id} project={selectedProject} />}
 
       <div className="sidebar-tabs conversation-list-heading">
         <span id="sidebar-conversations-title" title={`${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} à lire sur ${conversations.length}`}>

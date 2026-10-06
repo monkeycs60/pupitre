@@ -137,3 +137,26 @@ test("détecte un port occupé et refuse de lancer une commande dessus", async (
   await expect(service.launch(command.id)).rejects.toThrow("occupé");
   expect(service.status(command.id).running).toBe(false);
 });
+
+test("relève les adresses locales des logs et place le front en premier", async () => {
+  const { project, service } = fixture();
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("ok") });
+  cleanups.push(() => { server.stop(true); });
+  const command = service.save(project.id, {
+    name: "dev",
+    command: `printf '[api] Started development server: http://127.0.0.1:${server.port}\\n'; printf '\\033[32m  ➜  Local:   http://localhost:18999/app/\\033[0m\\n'; sleep 30`,
+  });
+  await service.launch(command.id);
+  await Bun.sleep(100);
+  const status = service.status(command.id);
+  expect(status.urls).toEqual([
+    { url: "http://localhost:18999/app/", port: 18999, front: true, live: false },
+    { url: `http://localhost:${server.port}`, port: server.port!, front: false, live: true },
+  ]);
+  expect(status.url).toBe("http://localhost:18999/app/");
+  const listUrl = `/api/projects/${project.id}/launch`;
+  const listed = await (await service.handle(new Request(`http://localhost${listUrl}`), listUrl))!.json();
+  expect(listed[0]).toMatchObject({ running: true, logs: "", urls: status.urls });
+  await service.stop(command.id);
+  expect(service.status(command.id).urls).toEqual([]);
+});

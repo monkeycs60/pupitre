@@ -64,6 +64,28 @@ export function historyLaunchSuggestions(
     }))
     .sort((a, b) => b.frequency - a.frequency);
 }
+export interface LaunchUrl {
+  url: string;
+  port: number;
+  front: boolean;
+  live: boolean;
+}
+const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
+const LOCAL_URL =
+  /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{2,5})(?:\/[^\s"'<>)\]]*)?/g;
+export function localUrlsInLine(
+  line: string,
+): Array<{ url: string; port: number; front: boolean }> {
+  const text = line.replace(ANSI, "");
+  const front = /\bLocal\b/i.test(text);
+  return [...text.matchAll(LOCAL_URL)].map((match) => ({
+    url: match[0]
+      .replace(/^(https?:\/\/)(?:127\.0\.0\.1|0\.0\.0\.0|\[::1?\])/, "$1localhost")
+      .replace(/[.,;:]+$/, ""),
+    port: Number(match[1]),
+    front,
+  }));
+}
 export function detectLaunchCommands(root: string): LaunchSuggestion[] {
   const result: LaunchSuggestion[] = [];
   const read = (file: string) =>
@@ -100,7 +122,13 @@ export class ProjectLaunchService {
   >();
   private running = new Map<
     string,
-    { child: ChildProcess; cwd: string; startedAt: string; port: number | null }
+    {
+      child: ChildProcess;
+      cwd: string;
+      startedAt: string;
+      port: number | null;
+      urls: Map<string, { port: number; front: boolean }>;
+    }
   >();
   constructor(
     private db: Database,
@@ -215,24 +243,37 @@ export class ProjectLaunchService {
       ? readFileSync(path, "utf8").split("\n").slice(-50).join("\n")
       : "";
   }
-  status(id: string) {
+  status(id: string, { logs = true, listening }: { logs?: boolean; listening?: Set<number> } = {}) {
     const command = this.get(id);
     const run = this.running.get(id);
+    const ports =
+      listening ??
+      (run ? new Set(listeningSockets().map((socket) => socket.port)) : new Set<number>());
+    const urls: LaunchUrl[] = run
+      ? [...run.urls]
+          .map(([url, item]) => ({ url, ...item, live: ports.has(item.port) }))
+          .sort((a, b) => Number(b.front) - Number(a.front))
+      : [];
     return {
       ...command,
       running: !!run,
       pid: run?.child.pid ?? null,
       cwd: run?.cwd,
-      url: run?.port ? `http://localhost:${run.port}` : command.url,
-      logs: this.logs(id),
+      url: run?.port ? `http://localhost:${run.port}` : (command.url ?? urls[0]?.url ?? null),
+      urls,
+      logs: logs ? this.logs(id) : "",
     };
   }
-  statuses() {
-    return (
-      this.db.query("SELECT id FROM project_launch_commands").all() as {
-        id: string;
-      }[]
-    ).map(({ id }) => this.status(id));
+  statuses(projectId?: string, options: { logs?: boolean } = {}) {
+    const rows = (
+      projectId
+        ? this.db.query("SELECT id FROM project_launch_commands WHERE project_id=? ORDER BY position, name").all(projectId)
+        : this.db.query("SELECT id FROM project_launch_commands").all()
+    ) as { id: string }[];
+    const listening = rows.some(({ id }) => this.running.has(id))
+      ? new Set(listeningSockets().map((socket) => socket.port))
+      : new Set<number>();
+    return rows.map(({ id }) => this.status(id, { ...options, listening }));
   }
   conflict(id: string, port?: number) {
     const value = port ?? this.get(id).port;
@@ -299,14 +340,27 @@ export class ProjectLaunchService {
       stdio: ["ignore", "pipe", "pipe"],
     });
     const path = this.logPath(id);
+    const urls = new Map<string, { port: number; front: boolean }>();
     const append = (data: Buffer | string) => {
       if (existsSync(path) && statSync(path).size >= 5 * 1024 * 1024)
         renameSync(path, `${path}.1`);
       appendFileSync(path, data);
     };
-    child.stdout.on("data", append);
-    child.stderr.on("data", append);
-    const run = { child, cwd, port, startedAt: new Date().toISOString() };
+    const watch = () => {
+      let pending = "";
+      return (data: Buffer | string) => {
+        append(data);
+        const lines = (pending + data.toString()).split("\n");
+        pending = lines.pop()!.slice(-2000);
+        for (const line of lines)
+          for (const found of localUrlsInLine(line))
+            if (urls.size < 12 && !urls.has(found.url))
+              urls.set(found.url, { port: found.port, front: found.front });
+      };
+    };
+    child.stdout.on("data", watch());
+    child.stderr.on("data", watch());
+    const run = { child, cwd, port, urls, startedAt: new Date().toISOString() };
     this.running.set(id, run);
     child.on("error", (error) => {
       append(error.message);
@@ -381,7 +435,7 @@ export class ProjectLaunchService {
                       : undefined,
                   )
                 : this.status(id)
-              : this.list(projectId!),
+              : this.statuses(projectId!, { logs: false }),
         );
       if (request.method === "PUT")
         return Response.json(

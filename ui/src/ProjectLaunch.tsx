@@ -1,19 +1,83 @@
 import { useState } from 'react'
 import { launchRequest } from './api'
+import { ExternalLink } from './externalLink'
+import {
+  launchUrlLabel,
+  refreshProjectLaunches,
+  useProjectLaunches,
+  type LaunchCommand as Command,
+  type LaunchUrl,
+} from './projectLaunchStore'
 import type { Project } from './types'
 
-type Command = {
-  env_json?: string
-  id: string
-  project_id: string
-  name: string
-  command: string
-  cwd_relative: string
-  port: number | null
-  kind: string
-  running?: boolean
-  logs?: string
-  url?: string
+function commandUrls(item: Command): LaunchUrl[] {
+  if (!item.running) return []
+  if (item.urls?.length) return item.urls
+  return item.url ? [{ url: item.url, port: 0, front: true, live: true }] : []
+}
+
+function LaunchLinks({ urls }: { urls: LaunchUrl[] }) {
+  if (urls.length === 0)
+    return <span className="launch-link is-pending">Démarrage…</span>
+  return (
+    <>
+      {urls.map((item, index) => (
+        <ExternalLink
+          key={item.url}
+          href={item.url}
+          className={`launch-link${item.live ? ' is-live' : ' is-pending'}${index === 0 ? ' is-primary' : ''}`}
+          title={item.live ? `Ouvrir ${item.url}` : `${item.url} n’écoute pas encore`}
+        >
+          {launchUrlLabel(item.url)}
+          <span aria-hidden="true"> ↗</span>
+        </ExternalLink>
+      ))}
+    </>
+  )
+}
+
+async function stopLaunch(item: Command) {
+  await launchRequest(
+    `/api/projects/${item.project_id}/launch/${item.id}/stop`,
+    'POST',
+    {},
+  )
+  await refreshProjectLaunches(item.project_id)
+}
+
+export function ProjectLiveLaunches({ project }: { project: Project }) {
+  const running = useProjectLaunches(project.id).filter((item) => item.running)
+  if (running.length === 0) return null
+  return (
+    <div className="launch-live-strip" aria-label="Commandes en cours">
+      {running.map((item) => {
+        const urls = commandUrls(item)
+        return (
+          <div
+            className={`launch-live-row${urls.some((url) => url.live) ? ' is-live' : ''}`}
+            key={item.id}
+          >
+            <span className="launch-live-dot" aria-hidden="true" />
+            <span className="launch-live-name" title={item.command}>
+              {item.name}
+            </span>
+            <span className="launch-live-links">
+              <LaunchLinks urls={urls} />
+            </span>
+            <button
+              className="launch-live-stop"
+              type="button"
+              aria-label={`Arrêter ${item.name}`}
+              title={`Arrêter ${item.name}`}
+              onClick={() => void stopLaunch(item).catch(() => {})}
+            >
+              ■
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 type Suggestion = { name: string; command: string; frequency?: number }
 
@@ -27,7 +91,7 @@ export function ProjectLaunch({
   settings?: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const [commands, setCommands] = useState<Command[]>([])
+  const commands = useProjectLaunches(project.id)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [error, setError] = useState('')
   const [output, setOutput] = useState('')
@@ -51,7 +115,7 @@ export function ProjectLaunch({
   async function load() {
     setError('')
     try {
-      setCommands(await launchRequest<Command[]>(base))
+      await refreshProjectLaunches(project.id)
       if (settings)
         setSuggestions(await launchRequest<Suggestion[]>(`${base}/suggestions`))
       setOpen(true)
@@ -69,7 +133,8 @@ export function ProjectLaunch({
         replacePid,
       })
       setConflict(null)
-      setOutput(`${result.url ?? ''}\n${result.logs ?? ''}`)
+      setOutput(result.logs ?? '')
+      await refreshProjectLaunches(project.id)
     } catch (error) {
       setError(String(error))
       const owner = await launchRequest<{
@@ -84,6 +149,20 @@ export function ProjectLaunch({
       setBusy(false)
     }
   }
+  async function stop(item: Command) {
+    setBusy(true)
+    setError('')
+    try {
+      await stopLaunch(item)
+    } catch (error) {
+      setError(String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const live = commands.some((item) =>
+    commandUrls(item).some((url) => url.live),
+  )
   async function save() {
     setBusy(true)
     setError('')
@@ -107,13 +186,14 @@ export function ProjectLaunch({
     }
   }
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={settings ? { position: 'relative' } : undefined}>
       <button
-        className="secondary-button"
+        className={`secondary-button${!settings && live ? ' launch-trigger is-live' : ''}`}
         type="button"
         aria-label={
           settings ? 'Configurer le lancement' : `Lancer ${project.name}`
         }
+        title={!settings && live ? 'Une commande tourne' : undefined}
         onClick={() => (open ? setOpen(false) : void load())}
       >
         {settings ? 'Lancement' : '▶'}
@@ -121,18 +201,9 @@ export function ProjectLaunch({
       {open && (
         <div
           className={
-            settings ? 'project-settings-defaults' : 'conversation-actions-menu'
-          }
-          style={
             settings
-              ? undefined
-              : {
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  minWidth: 280,
-                  zIndex: 20,
-                }
+              ? 'project-settings-defaults'
+              : 'conversation-actions-menu launch-menu'
           }
         >
           {conversationId && (
@@ -154,16 +225,40 @@ export function ProjectLaunch({
             </p>
           )}
           {commands.map((item) => (
-            <div key={item.id}>
-              <button
-                className="secondary-button"
-                type="button"
-                disabled={busy}
-                onClick={() => void execute(item.id)}
-              >
-                ▶ {item.name}
-                {item.kind === 'deploy' ? ' · Déployer' : ''}
-              </button>
+            <div
+              key={item.id}
+              className={item.running ? 'launch-running-row' : undefined}
+            >
+              {item.running ? (
+                <>
+                  <span className="launch-running-badge">
+                    <span className="launch-live-dot" aria-hidden="true" />
+                    En cours
+                  </span>
+                  <strong>{item.name}</strong>
+                  <span className="launch-live-links">
+                    <LaunchLinks urls={commandUrls(item)} />
+                  </span>
+                  <button
+                    className="secondary-button launch-running-stop"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void stop(item)}
+                  >
+                    Arrêter
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void execute(item.id)}
+                >
+                  ▶ {item.name}
+                  {item.kind === 'deploy' ? ' · Déployer' : ''}
+                </button>
+              )}
               {settings && (
                 <>
                   <code>{item.command}</code>
@@ -346,11 +441,7 @@ export function ManagedLaunches() {
           >
             Relancer
           </button>
-          {item.url && (
-            <a href={item.url} target="_blank" rel="noreferrer">
-              Ouvrir
-            </a>
-          )}
+          {item.running && <LaunchLinks urls={commandUrls(item)} />}
           <details>
             <summary>Logs</summary>
             <pre>{item.logs}</pre>
