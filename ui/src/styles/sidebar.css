@@ -187,8 +187,6 @@
   transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
 
-
-
 .conv-sidebar-gear:hover {
   color: var(--text);
   background: var(--bg-hover);
@@ -1353,141 +1351,6 @@
   font-weight: 500;
 }
 
-/* --- Anneau de répartition (coûts) --------------------------------------- */
-
-.donut-chart {
-  display: grid;
-  grid-template-columns: 152px minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: center;
-}
-
-.donut-chart svg {
-  width: 152px;
-  height: 152px;
-}
-
-.donut-arc {
-  fill: none;
-  stroke-width: 14;
-  transition: stroke-width var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
-}
-
-/* Le segment survole s epaissit ; les autres reculent sans disparaitre. */
-.donut-chart:hover .donut-arc {
-  opacity: 0.45;
-}
-
-.donut-chart .donut-arc.is-active {
-  stroke-width: 18;
-  opacity: 1;
-}
-
-.donut-arc.is-muted {
-  stroke-width: 10;
-}
-
-.donut-chart.is-selectable .donut-arc,
-.donut-chart.is-selectable .donut-legend li {
-  cursor: pointer;
-}
-
-/* Une part sélectionnée reste en avant même quand le curseur la quitte. */
-.donut-chart .donut-arc.is-selected {
-  stroke-width: 18;
-  opacity: 1;
-}
-
-.donut-legend li.is-selected {
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-
-/* Les hachures ne captent pas le survol : le segment coloré dessous s'en charge. */
-.donut-arc-hatch {
-  pointer-events: none;
-}
-
-.donut-value {
-  fill: var(--text-strong);
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-  text-anchor: middle;
-}
-
-.donut-caption {
-  fill: var(--text-faint);
-  font-size: 10px;
-  text-anchor: middle;
-}
-
-.donut-legend {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.donut-legend li {
-  display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto auto;
-  gap: var(--space-2);
-  align-items: center;
-  padding: var(--space-1) 5px;
-  color: var(--text);
-  font-size: var(--text-sm);
-  border-radius: var(--r-xs);
-}
-
-.donut-legend li.is-active {
-  background: var(--bg-hover);
-}
-
-.donut-legend li.is-inferred .donut-label {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.donut-chip {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-}
-
-.donut-chip.is-hatched {
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent 0 2px,
-    var(--bg-overlay) 2px 3px
-  );
-}
-
-/* Les libellés ne sont plus tronqués : ils passent à la ligne. La colonne est
-   assez large pour que ça reste rare. */
-.donut-label {
-  min-width: 0;
-  line-height: 1.35;
-}
-
-.donut-label abbr {
-  color: var(--text-faint);
-  text-decoration: none;
-}
-
-.donut-tokens,
-.donut-percent {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.donut-percent {
-  min-width: 42px;
-  text-align: right;
-}
-
 .context-gauge-handoff {
   position: absolute;
   right: 0;
@@ -1535,56 +1398,6 @@
 
 .context-gauge.is-near-limit .context-gauge-handoff:hover {
   background: var(--warn-soft);
-}
-
-/* Charge fixe élevée : la jauge le signale sans attendre le survol. */
-
-/* --- Légende groupée de l'anneau ----------------------------------------- */
-
-/* Sélecteur plus spécifique que `.donut-legend li` : sans ça, le titre héritait
-   de la grille à quatre colonnes et son texte se pliait dans la colonne de
-   10 px réservée à la pastille. */
-.donut-legend li.donut-group-title {
-  display: block;
-  padding: var(--space-3) 5px 2px;
-  color: var(--text-faint);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.donut-legend li.donut-group-title:first-child {
-  padding-top: 0;
-}
-
-.donut-detail {
-  display: block;
-  color: var(--text-faint);
-  font-size: 10px;
-  line-height: 1.35;
-}
-
-
-/* Filet de groupe : la couleur ne porte plus le regroupement, un trait le
-   rappelle le long des lignes d'une même section. */
-.donut-legend li.donut-legend-item {
-  position: relative;
-  padding-left: var(--space-3);
-}
-
-.donut-legend li.donut-legend-item::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 3px;
-  width: 1px;
-  background: var(--border);
-  content: '';
-}
-
-.donut-legend li.donut-group-title + li.donut-legend-item::before {
-  top: 3px;
-  border-top-left-radius: 1px;
 }
 
 /* --- Pied de sidebar gamifié (niveau + XP + quotas) ---------------------- */

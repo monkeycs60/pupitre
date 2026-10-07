@@ -166,7 +166,7 @@ export function CommandPalette({
     }
     const views = [
       ['dashboard', 'Projet', 'Tickets, Sentry, changelog, environnements'],
-      ['fleet', 'Exécutions', 'Runs actifs tous projets'],
+      ['fleet', 'Activité', 'En cours et à lire, tous projets'],
       ['routines', 'Automatisations', 'Planifiées et à la demande'],
       ['library', 'Skills', 'Compétences et prompts disponibles'],
       ['memory', 'Mémoire', 'Fichiers de mémoire persistante Claude'],

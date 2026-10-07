@@ -21,10 +21,9 @@
 .inspector-resize { width:7px; cursor:col-resize; touch-action:none; position:absolute; left:-4px; top:0; bottom:0; z-index:5; }
 .inspector-resize:hover, .inspector-resize:focus-visible { background:var(--accent-soft); }
 .inspector-content > section { min-width:0; }
-.inspector-content :is(.view-header,.fleet-header,.attention-header,.dashboard-header,.memory-header,.library-header,.routines-header,.costs-header,.progress-toolbar) { padding:16px; gap:12px; flex-wrap:wrap; }
+.inspector-content :is(.view-header,.dashboard-header,.memory-header,.library-header,.routines-header) { padding:16px; gap:12px; flex-wrap:wrap; }
 .inspector-content h1 { font-size:16px; line-height:1.4; }
-.inspector-content :is(.dashboard-view,.skills-library,.memory-view,.fleet-view,.routines-view,.costs-view,.progress-view,.attention-view) { min-width:0; width:100%; flex:1; }
-.inspector-content :is(.attention-card,.fleet-card) { border-radius:var(--r-sm); box-shadow:none; }
+.inspector-content :is(.dashboard-view,.skills-library,.memory-view,.routines-view) { min-width:0; width:100%; flex:1; }
 .inspector-content .dashboard-tabs { overflow-x:auto; flex-shrink:0; }
 .inspector-content .quota-bar { padding:20px; flex-direction:column; align-items:stretch; border:0; }
 .inspector-content .quota-provider { padding:12px 0; }
@@ -103,9 +102,6 @@
 .workspace-inspector .memory-editor { flex:1; min-height:200px; }
 .workspace-inspector .library-body { grid-template-columns:1fr; }
 .workspace-inspector .routines-body { grid-template-columns:1fr; }
-.workspace-inspector .fleet-counters { display:flex; flex-wrap:wrap; width:100%; }
-.workspace-inspector .fleet-counter { flex:1 1 92px; min-width:0; }
-.workspace-inspector .fleet-cards { grid-template-columns:minmax(0, 1fr); }
 .conversation-workspace .composer-actions { flex-wrap:wrap; gap:12px; }
 .conversation-workspace .composer-tools { min-width:0; flex-wrap:wrap; }
 .conversation-workspace .composer-send-group { margin-left:auto; }
@@ -113,7 +109,6 @@
 .conversation-workspace .composer-placeholder { white-space:normal; max-width:100%; overflow:hidden; }
 .conversation-workspace .config-panel { flex-wrap:wrap; }
 .is-located { outline:2px solid var(--accent); outline-offset:4px; border-radius:var(--r-sm); }
-.workspace-inspector .quota-card-grid { grid-template-columns:1fr; }
 /* Barre des sections du projet : les quatre sections tiennent en tête du
    panneau, la largeur restante revient au contenu. */
 .dashboard-view.is-sectioned { flex-direction:column; }

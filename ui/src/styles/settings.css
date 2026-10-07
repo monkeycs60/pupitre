@@ -400,10 +400,10 @@
 }
 
 .theme-swatch-night { --sw-app: #0a0a0c; --sw-side: #101013; --sw-main: #0d0d10; --sw-line: rgba(255, 255, 255, 0.1); --sw-accent: #9d91ff; }
-.theme-swatch-light { --sw-app: #e8e7e3; --sw-side: #f3f2ef; --sw-main: #f9f8f6; --sw-line: rgba(24, 20, 40, 0.14); --sw-accent: #5b4ae6; }
+.theme-swatch-light { --sw-app: #e2ded5; --sw-side: #f2f0eb; --sw-main: #f9f8f6; --sw-line: rgba(24, 20, 40, 0.14); --sw-accent: #5b4ae6; }
 
 .theme-swatch-system {
-  background: linear-gradient(115deg, #17181c 0 50%, #e8e7e3 50% 100%);
+  background: linear-gradient(115deg, #17181c 0 50%, #e2ded5 50% 100%);
   --sw-side: transparent;
   --sw-main: transparent;
   --sw-line: rgba(128, 128, 140, 0.4);

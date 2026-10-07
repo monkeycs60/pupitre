@@ -269,13 +269,13 @@ pre {
   color-scheme: light;
   --tint: #000;
 
-  --bg-app: #eeede9;
+  --bg-app: #ebe8e2;
   --bg-workspace: #f9f8f6;
   --bg-panel: #ffffff;
-  --bg-sidebar: #f3f2ef;
-  --bg-rail: #e8e7e3;
-  --bg-sidebar-header: #f3f2ef;
-  --bg-titlebar: #e8e7e3;
+  --bg-sidebar: #f2f0eb;
+  --bg-rail: #e2ded5;
+  --bg-sidebar-header: #f2f0eb;
+  --bg-titlebar: #e2ded5;
   --bg-toolbar: #ffffff;
   --bg-raised: #ffffff;
   --bg-overlay: #ffffff;
@@ -284,14 +284,14 @@ pre {
   --bg-active: rgba(91, 74, 230, 0.1);
   --scrim: rgba(36, 32, 48, 0.34);
 
-  --border-subtle: rgba(24, 20, 40, 0.07);
-  --border: rgba(24, 20, 40, 0.12);
-  --border-strong: rgba(24, 20, 40, 0.2);
+  --border-subtle: rgba(24, 20, 40, 0.1);
+  --border: rgba(24, 20, 40, 0.16);
+  --border-strong: rgba(24, 20, 40, 0.26);
 
   --text: #24222b;
   --text-strong: #0f0e14;
-  --text-muted: #565260;
-  --text-faint: #7f7b88;
+  --text-muted: #46424e;
+  --text-faint: #625e6a;
 
   --accent: #5b4ae6;
   --accent-hover: #4b3ad8;
@@ -318,7 +318,7 @@ pre {
   --prov-reasonix: #2b8573;
   --prov-reasonix-soft: rgba(43, 133, 115, 0.12);
   --sentry-gold: #9f7514;
-  --neutral-soft: rgba(24, 20, 40, 0.04);
+  --neutral-soft: rgba(24, 20, 40, 0.08);
 
   --code-keyword: #5a3ccf;
   --code-builtin: #0b7482;

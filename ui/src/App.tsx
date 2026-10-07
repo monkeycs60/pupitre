@@ -11,7 +11,6 @@ import { linkTodo, useTodos, type TodoItem } from './todos'
 import { ticketLinksOf } from './ticketLinks'
 import { newConversationDraftStorageKey } from './conversationDraft'
 import type { ConversationConfig } from './ConfigPanel'
-import { QuotaBar } from './QuotaBar'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   CSSProperties,
@@ -62,7 +61,6 @@ import {
 import { navigationViewForShortcut, type NavigationShortcutView } from './navigationShortcuts'
 import { useInstance } from './useInstance'
 import { useUnreadConversations } from './useUnreadConversations'
-import { AttentionInbox } from './AttentionInbox'
 import { retryUntilAvailable } from './startupRetry'
 import { subscribeVisualFeedbackNavigation } from './visualFeedbackNavigation'
 import { ProjectSectionSwitch } from './ProjectSectionSwitch'
@@ -78,11 +76,8 @@ import {
 
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
-const FleetView = lazy(() => import('./FleetView').then((module) => ({ default: module.FleetView })))
-const CostsView = lazy(() => import('./CostsView').then((module) => ({ default: module.CostsView })))
 const MemoryView = lazy(() => import('./MemoryView').then((module) => ({ default: module.MemoryView })))
 const HelpView = lazy(() => import('./HelpView').then((module) => ({ default: module.HelpView })))
-const ProgressView = lazy(() => import('./ProgressView').then((module) => ({ default: module.ProgressView })))
 const AppSettingsView = lazy(() => import('./AppSettingsView').then((module) => ({ default: module.AppSettingsView })))
 const DesignView = lazy(() => import('./DesignView').then((module) => ({ default: module.DesignView })))
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
@@ -177,6 +172,7 @@ function App() {
   const [memoryDirty, setMemoryDirty] = useState(false)
   const [inspector, setInspector] = useState<InspectorView | null>(null)
   const [inspectorWidth, setInspectorWidth] = useState(storedInspectorWidth)
+  const [activityOpen, setActivityOpen] = useState(false)
   const [projectSurface, setProjectSurface] = useState<{
     section: ProjectSection
     layout: 'full' | 'docked'
@@ -207,12 +203,7 @@ function App() {
     ? countConversationMessages(events)
     : undefined
   const quotas = useQuotas()
-  // La Progression est une vue globale : on y lit tous les projets, et le
-  // temps passé à consulter ses propres chiffres n'est imputé à aucun d'eux.
-  const time = useTimeTracking(
-    inspector === 'progress' ? null : selectedProject?.id ?? null,
-    inspector === 'progress' ? null : selectedConversation?.id ?? null,
-  )
+  const time = useTimeTracking(selectedProject?.id ?? null, selectedConversation?.id ?? null)
   const fleet = useFleet(selectedProject?.id, handleFleetSettled)
   const liveConversationsByProject = useMemo(() => {
     const conversations = new Map<string, Set<string>>()
@@ -829,15 +820,7 @@ function App() {
   }
 
   function handleFleetSelect() {
-    if (!confirmLeaveMemory()) return
-    openInspector('fleet')
-    setShowSwitchModel(false)
-  }
-
-  function handleAttentionSelect() {
-    if (!confirmLeaveMemory()) return
-    openInspector('attention')
-    setShowSwitchModel(false)
+    setActivityOpen((current) => !current)
   }
 
   async function handleAttentionOpen(item: UnreadConversation) {
@@ -969,21 +952,17 @@ function App() {
         applications: 'Applications',
         design: 'Claude Design',
         dashboard: 'Projet',
-        costs: 'Utilisation',
         library: 'Skills',
         routines: 'Automatisations',
-        fleet: 'Exécutions',
-        attention: 'À traiter',
         'activity-report': 'Rapport d’activité',
         memory: 'Mémoire',
         help: 'Aide',
-        progress: 'Progression',
         settings: 'Paramètres',
       }[workspaceView]
 
   const railView: WorkspaceView = inspector === 'workflows'
     ? 'routines'
-    : inspector === 'quotas' ? 'costs' : inspector ?? workspaceView
+    : inspector ?? workspaceView
 
   const destinations: TitlebarDestination[] = [
     {
@@ -1008,9 +987,7 @@ function App() {
           shortcut: navigationShortcutLabel('design'),
         }]
       : []),
-    { name: 'attention', label: 'Activité', view: 'attention', onClick: handleAttentionSelect, badge: attention.items.length },
     { name: 'activity-report', label: 'Rapport', view: 'activity-report', onClick: handleActivityReportSelect },
-    { name: 'costs', label: 'Utilisation', view: 'costs', onClick: () => openInspector('costs') },
     { name: 'settings', label: 'Réglages', view: 'settings', onClick: handleSettingsSelect },
     { name: 'help', label: 'Aide', view: 'help', onClick: () => handleHelpSelect() },
   ]
@@ -1038,7 +1015,14 @@ function App() {
         destinations={destinations}
         workspaceView={railView}
         hasProject={selectedProject !== null}
-        island={<FleetIsland items={fleet.items} onOpen={(item) => void handleRoutineConversationSelect(item.projectId, item.conversationId)} />}
+        island={<FleetIsland
+          items={fleet.items}
+          unread={attention.items}
+          open={activityOpen}
+          onOpenChange={setActivityOpen}
+          onOpenRunning={(item) => void handleRoutineConversationSelect(item.projectId, item.conversationId)}
+          onOpenUnread={(item) => void handleAttentionOpen(item)}
+        />}
       />
       <ToastHost />
       <Rail
@@ -1314,36 +1298,17 @@ function App() {
             initialProject={selectedProject}
             onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
           />
-        ) : inspector === 'fleet' ? (
-          <FleetView
-            projectId={selectedProject?.id}
-            onConversationSelect={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
-          />
-        ) : inspector === 'attention' ? (
-          <AttentionInbox
-            items={attention.items}
-            loading={attention.loading}
-            error={attention.error}
-            onOpen={handleAttentionOpen}
-          />
         ) : inspector === 'memory' ? (
           <MemoryView onDirtyChange={setMemoryDirty} />
-        ) : inspector === 'progress' ? (
-          <ProgressView snapshot={time.snapshot} />
         ) : selectedProject === null ? (
           <div className="empty-state">
             <p>Sélectionnez un projet pour commencer.</p>
           </div>
         ) : inspector === 'dashboard' ? (
           renderProjectDashboard()
-        ) : inspector === 'costs' ? (
-          <CostsView
-            project={selectedProject}
-            onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
-          />
         ) : inspector === 'workflows' && selectedProject ? (
           <WorkflowsView key={selectedProject.id} project={selectedProject} onConversationSelect={handleConversationSelect} />
-        ) : inspector === 'quotas' ? <QuotaBar snapshot={quotas.snapshot} providers={quotas.visibleProviders} /> : null}
+        ) : null}
           </Suspense>
         </WorkspaceInspector> : null}
         </div>

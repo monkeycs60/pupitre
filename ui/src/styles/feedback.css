@@ -73,34 +73,87 @@
   font-variant-numeric: tabular-nums;
 }
 
-.fleet-island-more {
+.fleet-island-title strong { color: var(--text); font-weight: 600; }
+
+.fleet-island.is-idle { border-color: color-mix(in srgb, var(--unread) 40%, var(--border)); }
+
+.fleet-island-badge {
   flex: none;
+  min-width: 16px;
   padding: 0 5px;
   border-radius: var(--r-full);
-  background: var(--accent-soft);
-  color: var(--accent-bright);
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 
-.fleet-island-menu {
+.fleet-island-badge.is-running { background: var(--accent-soft); color: var(--accent-bright); }
+.fleet-island-badge.is-unread { background: var(--unread-soft); color: var(--unread); }
+
+.activity-board {
   position: fixed;
   z-index: 60;
   display: grid;
-  gap: 2px;
-  width: 320px;
-  padding: var(--space-1);
+  gap: var(--space-3);
+  width: 440px;
+  max-height: min(70vh, 640px);
+  overflow-y: auto;
+  padding: var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   background: var(--bg-overlay);
   box-shadow: var(--shadow-popover);
-  transform-origin: top right;
+  transform-origin: top center;
   animation: pop-in var(--dur) var(--ease-out);
 }
 
-.fleet-island-item {
+.activity-board-section { display: grid; gap: 2px; }
+
+.activity-board-section header {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  padding: 0 var(--space-2) var(--space-1);
+}
+
+.activity-board-section h2 {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.activity-board-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-full);
+}
+
+.activity-board-dot.is-running { background: var(--accent); animation: fleet-island-ping 1.6s var(--ease) infinite; }
+.activity-board-dot.is-unread { background: var(--unread); }
+
+.activity-board-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: center;
+}
+
+.activity-board-count.is-running { background: var(--accent-soft); color: var(--accent-bright); }
+.activity-board-count.is-unread { background: var(--unread-soft); color: var(--unread); }
+
+.activity-board-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   padding: var(--space-2);
   border: 0;
   border-radius: var(--r-md);
@@ -109,25 +162,51 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background var(--dur) var(--ease);
 }
 
-.fleet-island-item:hover { background: var(--bg-hover); }
+.activity-board-row:hover,
+.activity-board-row:focus-visible { background: var(--bg-hover); }
 
-.fleet-island-item-text {
+.activity-board-provider { flex: none; width: 16px; height: 16px; }
+
+.activity-board-text {
   display: grid;
   flex: 1;
   min-width: 0;
 }
 
-.fleet-island-item-text strong,
-.fleet-island-item-text span {
+.activity-board-text > * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.fleet-island-item-text strong { font-size: var(--text-sm); font-weight: 500; }
-.fleet-island-item-text span { color: var(--text-faint); font-size: var(--text-xs); }
+.activity-board-project {
+  color: var(--accent-bright);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.activity-board-text strong { font-size: var(--text-sm); font-weight: 500; }
+.activity-board-meta { color: var(--text-faint); font-size: var(--text-xs); }
+
+.activity-board-time {
+  flex: none;
+  align-self: flex-start;
+  padding-top: 2px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-board-empty {
+  margin: 0;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
 
 /* --- Toasts ---------------------------------------------------------------- */
 
@@ -251,5 +330,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .toast-life { animation-duration: var(--toast-life, 6s) !important; }
-  .fleet-island-dot { animation: none !important; }
+  .fleet-island-dot,
+  .activity-board-dot { animation: none !important; }
 }

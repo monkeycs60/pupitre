@@ -13,15 +13,11 @@
 @import './design.css';
 @import './workflows.css';
 @import './routines.css';
-@import './fleet.css';
-@import './attention.css';
 @import './activity-report.css';
 @import './palette.css';
-@import './costs.css';
 @import './dashboard.css';
 @import './memory.css';
 @import './help.css';
-@import './progress.css';
 @import './cards.css';
 @import './dialogs.css';
 @import './feedback.css';

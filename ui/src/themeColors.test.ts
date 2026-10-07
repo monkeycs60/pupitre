@@ -14,7 +14,6 @@ const LITERAL_COLORS_CEILING: Record<string, number> = {
   'code.css': 11,
   'composer.css': 3,
   'design.css': 1,
-  'progress.css': 1,
   'project-todos.css': 1,
   'settings.css': 18,
   'shell.css': 11,

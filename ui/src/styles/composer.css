@@ -90,58 +90,8 @@
 
 /* Le quota est publié par provider, pas par modèle : la jauge vit à côté du
    choix du provider et n'est jamais répétée sur les cartes de modèles. */
-.quota-meter {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.quota-meter-gauge {
-  width: 64px;
-  height: 4px;
-  overflow: hidden;
-  background: var(--neutral-soft);
-  border-radius: var(--r-full);
-}
-
-.quota-meter-fill {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-  border-radius: var(--r-full);
-  transition: width var(--dur) var(--ease);
-}
-
-.quota-meter.is-critical .quota-meter-fill {
-  background: var(--danger);
-}
-
-.quota-meter.is-critical .quota-meter-text {
-  color: var(--danger);
-}
 
 /* Sans pourcentage publié, le texte porte seul l'information. */
-.quota-meter.is-flat .quota-meter-text {
-  color: var(--text-faint);
-}
-
-.quota-meter-note {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  color: var(--text-faint);
-  font-family: var(--font-sans);
-  font-size: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-full);
-  cursor: help;
-}
 
 /* --- Interrupteur sub-agents --------------------------------------------------- */
 
@@ -762,7 +712,6 @@
 .branch-suggestions li.is-active {
   background: var(--bg-hover);
 }
-
 
 /* --- Images jointes --------------------------------------------------------- */
 
