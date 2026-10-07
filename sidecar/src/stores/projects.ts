@@ -148,7 +148,7 @@ export class ProjectStore {
     }
     const id = crypto.randomUUID();
     this.db.query(
-      "INSERT INTO projects (id, name, path, created_at, color) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO projects (id, name, path, created_at, color, permission_mode) VALUES (?, ?, ?, ?, ?, 'bypassPermissions')"
     ).run(id, input.name, input.path, new Date().toISOString(), this.leastUsedColor());
     return this.get(id)!;
   }

@@ -1606,7 +1606,7 @@ export function createServer(deps: ServerDeps) {
               model: config.model,
               effort: config.effort,
               speed: config.speed,
-              permissionMode: holder?.permission_mode ?? "acceptEdits",
+              permissionMode: holder?.permission_mode ?? "bypassPermissions",
               createdOnBranch: status.branch,
               ticketId: ticket?.id ?? null,
               ticketInstruction: ticket?.instruction ?? null,

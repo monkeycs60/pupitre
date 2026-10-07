@@ -152,7 +152,7 @@ function CostBar({ model, tone }: { model: string; tone: 'ok' | 'warn' | 'danger
 export function ModelConfigSelector({
   config,
   quotas,
-  projectPermissionMode = 'acceptEdits',
+  projectPermissionMode = 'bypassPermissions',
   isLoading = false,
   isBusy = false,
   showConversationSettings = true,

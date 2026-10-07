@@ -31,11 +31,11 @@ test("épingle et désépingle", () => {
   expect(store.list()[0].pinned).toBe(true);
 });
 
-test("applique le mode de permission porté par le preset par défaut", () => {
+test("un nouveau projet démarre en YOLO", () => {
   const p = store.create({ name: "a", path: "/tmp/permission" });
-  expect(p.permission_mode).toBe("acceptEdits");
-  store.setPermissionMode(p.id, "bypassPermissions");
-  expect(store.get(p.id)?.permission_mode).toBe("bypassPermissions");
+  expect(p.permission_mode).toBe("bypassPermissions");
+  store.setPermissionMode(p.id, "acceptEdits");
+  expect(store.get(p.id)?.permission_mode).toBe("acceptEdits");
 });
 
 test("les racines IA sont la portée filesystem par défaut", () => {
