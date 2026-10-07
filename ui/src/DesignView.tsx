@@ -249,7 +249,7 @@ export function DesignView() {
                 <h2>claude.ai est injoignable</h2>
                 <p>
                   Aucune réponse de claude.ai
-                  {reachability !== null && !reachability.reachable
+                  {reachability !== null && 'message' in reachability
                     ? ` : ${reachability.message}`
                     : ''}
                   . Ni le panneau ni le navigateur n'iront plus loin — c'est la
