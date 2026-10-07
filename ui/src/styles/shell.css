@@ -555,6 +555,17 @@ button.titlebar-instance {
   position: absolute;
   inset: -2px;
   border-radius: 50%;
+  overflow: hidden;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), white calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), white calc(100% - 3px));
+  pointer-events: none;
+}
+
+.rail-live-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   background:
     repeating-conic-gradient(
       from 0deg,
@@ -566,10 +577,8 @@ button.titlebar-instance {
       transparent var(--live-period)
     ),
     color-mix(in srgb, var(--accent) 10%, transparent);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), white calc(100% - 3px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), white calc(100% - 3px));
-  pointer-events: none;
   animation: rail-live-spin 1.6s linear infinite;
+  will-change: transform;
 }
 
 .rail-project-count {
@@ -684,7 +693,7 @@ button.titlebar-instance {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rail-live-ring { animation: none; }
+  .rail-live-ring::before { animation: none; }
 }
 
 /* --- Zone de travail ----------------------------------------------------- */
