@@ -65,7 +65,7 @@ test("sauvegarde puis traite une capture avec Haiku medium", async () => {
   expect(calls[0]).toEqual(expect.objectContaining({
     cwd: projects.get(projectId)!.path,
     provider: "claude",
-    model: "haiku",
+    model: "haiku-5.5",
     effort: "medium",
     speed: "standard",
   }));

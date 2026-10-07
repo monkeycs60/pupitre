@@ -27,7 +27,7 @@ export const PROVIDER_SHORT_LABELS: Record<Provider, string> = {
 }
 
 export const PROVIDER_MODELS = {
-  claude: ['fable-5.1', 'opus-5.5', 'sonnet-5.5', 'haiku'],
+  claude: ['fable-5.1', 'opus-5.5', 'sonnet-5.5', 'haiku-5.5'],
   codex: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'],
   grok: ['grok-4.6', 'grok-4.5'],
   reasonix: ['go41'],
@@ -86,6 +86,7 @@ export const MODEL_LABELS: Record<string, string> = {
   opus: 'Opus 5',
   'sonnet-5.5': 'Sonnet 5.5',
   sonnet: 'Sonnet 5',
+  'haiku-5.5': 'Haiku 5.5',
   haiku: 'Haiku 4.5',
   'gpt-6-astra': 'GPT-6 Astra',
   'gpt-6.1-sol': 'GPT-6.1 Sol',
@@ -134,6 +135,7 @@ export const MODEL_HINTS: Record<string, string> = {
   opus: 'génération précédente',
   'sonnet-5.5': 'équilibré',
   sonnet: 'équilibré',
+  'haiku-5.5': 'rapide et économe',
   haiku: 'rapide et économe',
   'gpt-6-astra': 'le plus capable',
   'gpt-6.1-sol': 'proche d’Astra',
@@ -182,6 +184,7 @@ export const MODEL_PRICING: readonly ModelPricing[] = [
   { provider: 'claude', model: 'opus', input: 5, output: 25 },
   { provider: 'claude', model: 'sonnet-5.5', input: 2, output: 10 },
   { provider: 'claude', model: 'sonnet', input: 2, output: 10 },
+  { provider: 'claude', model: 'haiku-5.5', input: 0.1, output: 0.5 },
   { provider: 'claude', model: 'haiku', input: 1, output: 5 },
   { provider: 'grok', model: 'grok-4.6', input: 2, output: 6 },
   { provider: 'grok', model: 'grok-4.5', input: 2, output: 6 },

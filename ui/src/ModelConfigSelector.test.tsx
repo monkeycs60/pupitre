@@ -119,7 +119,7 @@ test('Claude ne propose plus Opus 5 ni Sonnet 5', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
 
   expect(screen.getAllByRole('menuitemradio').map((item) => item.getAttribute('aria-label')))
-    .toEqual(['Fable 5.1', 'Opus 5.5', 'Sonnet 5.5', 'Haiku 4.5'])
+    .toEqual(['Fable 5.1', 'Opus 5.5', 'Sonnet 5.5', 'Haiku 5.5'])
 })
 
 test('choisir un modèle ne touche qu’au modèle', () => {
@@ -127,9 +127,9 @@ test('choisir un modèle ne touche qu’au modèle', () => {
   render(selector({ onConfigChange: (config) => { next = config } }))
 
   fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
-  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Haiku 4.5' }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Haiku 5.5' }))
 
-  expect(next).toEqual({ ...config, model: 'haiku' })
+  expect(next).toEqual({ ...config, model: 'haiku-5.5' })
   expect(screen.queryByRole('menu', { name: 'Choisir un modèle' })).toBeNull()
 })
 

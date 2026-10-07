@@ -235,7 +235,7 @@ export function RoutinesView({ initialProject, onConversationSelect }: RoutinesV
       prompt: workflowId ? null : prompt.trim(),
       presetId: workflowId ? null : presetId || null,
       provider: config?.provider ?? 'claude',
-      model: config?.model ?? 'haiku',
+      model: config?.model ?? 'haiku-5.5',
       effort: config?.effort ?? 'medium',
       speed: config?.speed ?? 'standard',
       enabled,

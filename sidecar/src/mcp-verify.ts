@@ -71,7 +71,7 @@ function probeTurn(cwd: string, model: string, mcpConfig: string | null): Promis
 export async function verifyMcpContextCost(
   cwd: string,
   selected: Record<string, unknown>,
-  model = "claude-haiku-4-5-20251001",
+  model = "claude-haiku-5-5",
 ): Promise<ContextProbe> {
   try {
     const without = await probeTurn(cwd, model, JSON.stringify({ mcpServers: {} }));

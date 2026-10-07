@@ -11,6 +11,7 @@ const CLAUDE_MODEL_IDS: Record<string, string> = {
   "fable-5": "claude-fable-5",
   "opus-5.5": "claude-opus-5-5",
   "sonnet-5.5": "claude-sonnet-5-5",
+  "haiku-5.5": "claude-haiku-5-5",
 };
 
 export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {

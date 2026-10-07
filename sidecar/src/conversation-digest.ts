@@ -1,7 +1,7 @@
 import { killGroup, spawnGroup } from "./process-group";
 
 /** Le digest tourne à chaque palier de tours : effort bas pour rester bon marché. */
-const DIGEST_MODEL = process.env.PUPITRE_DIGEST_MODEL ?? "claude-sonnet-5-5";
+const DIGEST_MODEL = process.env.PUPITRE_DIGEST_MODEL ?? "claude-haiku-5-5";
 const DIGEST_EFFORT = "low";
 const DIGEST_TIMEOUT_MS = 45_000;
 /** Bornes des textes envoyés : un digest ne doit jamais coûter un vrai tour. */

@@ -57,6 +57,22 @@ test("ajoute --effort quand un effort est fourni", async () => {
   expect(readFileSync(argsFile, "utf8")).toContain("--effort xhigh");
 });
 
+test("pinne Haiku 5.5 sur son identifiant Claude Code", async () => {
+  const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
+  process.env.PUPITRE_CLAUDE_BIN = FAKE;
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  await collect({
+    cwd: "/tmp",
+    model: "haiku-5.5",
+    prompt: "analyse",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+  });
+
+  expect(readFileSync(argsFile, "utf8")).toContain("--model claude-haiku-5-5");
+});
+
 test("pinne Fable 5, Fable 5.1, Opus 5.5 et Sonnet 5.5 sur les identifiants Claude Code", async () => {
   const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
   process.env.PUPITRE_CLAUDE_BIN = FAKE;

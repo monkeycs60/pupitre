@@ -10,6 +10,7 @@ const MODEL_CONTEXT_WINDOWS: Partial<Record<Provider, Record<string, number>>> =
     opus: 200_000,
     'sonnet-5.5': 1_000_000,
     sonnet: 200_000,
+    'haiku-5.5': 1_000_000,
     haiku: 200_000,
   },
   codex: {

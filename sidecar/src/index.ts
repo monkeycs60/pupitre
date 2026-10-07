@@ -205,7 +205,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     const raw = await generateWithAdapters({ cwd, provider: "claude", model, effort, speed: "standard", prompt }, quotas);
     const match = raw.match(/\{[\s\S]*\}/); return match ? JSON.parse(match[0]) : null;
   };
-  const cheapJson = (prompt: string, cwd: string) => claudeJson("claude-haiku-4-5-20251001", prompt, cwd);
+  const cheapJson = (prompt: string, cwd: string) => claudeJson("claude-haiku-5-5", prompt, cwd);
   const personalEnvironments = new PersonalEnvironments(db, projects, conversations);
   personalEnvironments.onTriage = (id, prompt) => { void runner.runTurn(id, prompt, []).catch(console.error); };
   if (backgroundJobsEnabled()) setInterval(() => { void personalEnvironments.scan().catch(console.error); }, 300000).unref();
@@ -219,7 +219,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const resume = new ProjectResumeService(db, projects, tickets, (prompt, cwd) => automaticCalls.run("reprise", () => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas)));
   const telegram = new TelegramCapture(db, projects, tickets, new TodoStore(db), (prompt, cwd) => automaticCalls.run("telegram", () => cheapJson(prompt, cwd)), resume, instance.name, instance.dataDir);
   telegram.start();
-  const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), (prompt, cwd, kind) => automaticCalls.run(kind ?? "récolte", () => claudeJson("claude-haiku-4-5-20251001", prompt, cwd, "medium")));
+  const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), (prompt, cwd, kind) => automaticCalls.run(kind ?? "récolte", () => claudeJson("claude-haiku-5-5", prompt, cwd, "medium")));
   if (backgroundJobsEnabled()) setInterval(() => { void harvest.scan().catch(console.error); }, 300000).unref();
   const launches = new ProjectLaunchService(db, projects, instance.dataDir);
   applyPersonalProjectPresets(db, projects, launches, personalEnvironments);

@@ -28,3 +28,10 @@ test('demande une confirmation avant de lancer les modèles les plus coûteux', 
   expect(['fable-5.1', 'fable-5', 'gpt-6-astra'].every(options.requiresLaunchConfirmation)).toBe(true)
   expect(['opus', 'sonnet', 'gpt-5.6-sol', 'grok-4.6', 'go41'].some(options.requiresLaunchConfirmation)).toBe(false)
 })
+
+test('propose Haiku 5.5 à la place de Haiku 4.5', () => {
+  expect(options.PROVIDER_MODELS.claude).toContain('haiku-5.5')
+  expect(options.PROVIDER_MODELS.claude).not.toContain('haiku')
+  expect(options.modelLabel('haiku-5.5')).toBe('Haiku 5.5')
+  expect(options.formatModelPrice('haiku-5.5')).toBe('0,10 / 0,50 $')
+})

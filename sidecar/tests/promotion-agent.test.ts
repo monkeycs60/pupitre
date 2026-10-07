@@ -58,7 +58,7 @@ test("crée une conversation Haiku autonome dans le dépôt principal", () => {
   const mission = state.service.start();
 
   expect(mission.state).toBe("running");
-  expect(state.conversation?.model).toBe("haiku");
+  expect(state.conversation?.model).toBe("haiku-5.5");
   expect(state.conversation?.effort).toBe("medium");
   expect(state.conversation?.permission_mode).toBe("bypassPermissions");
   expect(state.conversation?.worktree_path).toBeNull();

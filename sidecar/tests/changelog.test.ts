@@ -96,7 +96,7 @@ test("importe et enrichit tout le backfill par lots de dix avec Haiku medium", a
   expect(generations[0]).toEqual(expect.objectContaining({
     cwd: context.root,
     provider: "claude",
-    model: "haiku",
+    model: "haiku-5.5",
     effort: "medium",
     speed: "standard",
   }));

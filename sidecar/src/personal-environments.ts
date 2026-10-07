@@ -370,7 +370,7 @@ export class PersonalEnvironments {
     const conversation = this.conversations.create({
       projectId: incident.project_id,
       provider: "claude",
-      model: "haiku",
+      model: "haiku-5.5",
       effort: "medium",
       firstMessage: `Triage de ${config.name}. Erreur à analyser :\n${incident.message}`,
     });
