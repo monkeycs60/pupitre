@@ -396,6 +396,7 @@ button.titlebar-instance {
   align-items: center;
   gap: 6px;
   width: 100%;
+  padding-block: 2px;
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: none;
@@ -506,6 +507,11 @@ button.titlebar-instance {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--project-color) 60%, transparent), 0 0 0 2px var(--bg-rail), 0 0 0 3.5px var(--project-color);
 }
 
+/* L'anneau du projet courant déborde de 3,5 px : il recouvrirait les comètes. */
+.rail-avatar.is-current:has(.rail-live-ring) .project-avatar {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--project-color) 60%, transparent), 0 0 0 1px var(--project-color);
+}
+
 .rail-project-label {
   min-width: 0;
   max-width: 0;
@@ -537,8 +543,33 @@ button.titlebar-instance {
   border-color: var(--accent-border);
 }
 
-.rail-avatar.is-live .project-avatar {
-  animation: rail-live 1.8s var(--ease) infinite;
+.rail-avatar-slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+}
+
+.rail-live-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      transparent calc(var(--live-period) - var(--live-arc)),
+      color-mix(in srgb, var(--accent) 30%, transparent) calc(var(--live-period) - var(--live-arc)),
+      var(--accent) calc(var(--live-period) - 6deg),
+      transparent calc(var(--live-period) - 6deg),
+      transparent var(--live-period)
+    ),
+    color-mix(in srgb, var(--accent) 10%, transparent);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), white calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), white calc(100% - 3px));
+  pointer-events: none;
+  animation: rail-live-spin 1.6s linear infinite;
 }
 
 .rail-project-count {
@@ -620,7 +651,7 @@ button.titlebar-instance {
   padding: 0 8px;
 }
 
-.rail.is-label-expanded .rail-avatar .project-avatar {
+.rail.is-label-expanded .rail-avatar .rail-avatar-slot {
   justify-self: center;
 }
 
@@ -648,9 +679,12 @@ button.titlebar-instance {
 }
 
 
-@keyframes rail-live {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
-  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+@keyframes rail-live-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-live-ring { animation: none; }
 }
 
 /* --- Zone de travail ----------------------------------------------------- */

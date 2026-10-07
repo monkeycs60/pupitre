@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { open } from '@tauri-apps/plugin-dialog'
 import { createProject, getUnreadConversationCounts, listProjects, reorderProjects, removeProject, updateProject, type ProjectAppearancePatch } from './api'
@@ -19,8 +19,8 @@ interface RailProps {
   onProjectRemoved?: (project: Project, remaining: Project[]) => void
   onProjectUpdated?: (project: Project) => void
   workspaceView: WorkspaceView
-  /** Projets ayant au moins un run actif dans Fleet. */
-  activeProjectIds?: string[]
+  /** Nombre de conversations en cours par projet, d'après Fleet. */
+  liveConversationsByProject?: Record<string, number>
 }
 
 function pathBasename(path: string): string {
@@ -35,6 +35,17 @@ interface DragGeometry {
 }
 
 type Popup = { kind: 'menu' | 'appearance'; projectId: string; anchor: DOMRect }
+
+const LIVE_RING_MAX = 6
+
+/** Une comète par conversation en cours, réparties à égale distance sur
+ *  l'anneau : le nombre se lit d'un coup d'œil, au-delà de six on ne compte plus. */
+function LiveRing({ count }: { count: number }) {
+  const shown = Math.min(count, LIVE_RING_MAX)
+  const period = 360 / shown
+  const style = { '--live-period': `${period}deg`, '--live-arc': `${Math.min(120, period * 0.55)}deg` } as CSSProperties
+  return <span className="rail-live-ring" data-count={shown} style={style} aria-hidden="true" />
+}
 
 const ARCHIVE_OPEN_KEY = 'pupitre.rail.archiveOpen'
 
@@ -51,7 +62,7 @@ export const Rail = memo(function Rail({
   onProjectRemoved,
   onProjectUpdated,
   workspaceView,
-  activeProjectIds = [],
+  liveConversationsByProject = {},
 }: RailProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [previewOrder, setPreviewOrder] = useState<string[] | null>(null)
@@ -224,7 +235,7 @@ export const Rail = memo(function Rail({
     const active = selectedProject?.id === project.id && workspaceView === 'conversations'
     const current = selectedProject?.id === project.id
     const unread = unreadByProject[project.id] ?? 0
-    const live = activeProjectIds.includes(project.id)
+    const liveCount = liveConversationsByProject[project.id] ?? 0
     const renaming = renamingId === project.id
     const menuOpen = popup?.projectId === project.id
     return (
@@ -276,14 +287,17 @@ export const Rail = memo(function Rail({
         ) : (
           <button
             type="button"
-            className={`rail-avatar ${current ? 'is-current' : ''} ${project.id !== selectedProject?.id && live ? 'is-live' : ''}`}
+            className={`rail-avatar ${current ? 'is-current' : ''}`}
             onClick={() => onProjectSelect(project)}
             onDoubleClick={() => setRenamingId(project.id)}
-            title={unread > 0 ? `${project.name} · ${unread} à lire` : project.name}
+            title={[project.name, liveCount > 0 ? `${liveCount} en cours` : '', unread > 0 ? `${unread} à lire` : ''].filter(Boolean).join(' · ')}
             aria-current={current ? 'true' : undefined}
-            aria-label={unread > 0 ? `${project.name}, ${unread} conversation${unread > 1 ? 's' : ''} à lire` : project.name}
+            aria-label={[project.name, liveCount > 0 ? `${liveCount} conversation${liveCount > 1 ? 's' : ''} en cours` : '', unread > 0 ? `${unread} conversation${unread > 1 ? 's' : ''} à lire` : ''].filter(Boolean).join(', ')}
           >
-            <ProjectAvatar project={project} />
+            <span className="rail-avatar-slot">
+              <ProjectAvatar project={project} />
+              {liveCount > 0 ? <LiveRing count={liveCount} /> : null}
+            </span>
             <span className="rail-project-label">{project.name}</span>
           </button>
         )}
@@ -378,7 +392,7 @@ export const Rail = memo(function Rail({
         <ProjectMenu
           project={popupProject}
           anchor={popup.anchor}
-          live={activeProjectIds.includes(popupProject.id)}
+          live={(liveConversationsByProject[popupProject.id] ?? 0) > 0}
           onClose={closePopup}
           onRename={() => setRenamingId(popupProject.id)}
           onAppearance={() => setPopup({ kind: 'appearance', projectId: popupProject.id, anchor: popup.anchor })}

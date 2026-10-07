@@ -214,6 +214,15 @@ function App() {
     inspector === 'progress' ? null : selectedConversation?.id ?? null,
   )
   const fleet = useFleet(selectedProject?.id, handleFleetSettled)
+  const liveConversationsByProject = useMemo(() => {
+    const conversations = new Map<string, Set<string>>()
+    for (const item of fleet.items) {
+      const ids = conversations.get(item.projectId) ?? new Set<string>()
+      ids.add(item.conversationId)
+      conversations.set(item.projectId, ids)
+    }
+    return Object.fromEntries([...conversations].map(([projectId, ids]) => [projectId, ids.size]))
+  }, [fleet.items])
   const attention = useUnreadConversations(railReadVersion)
   const instance = useInstance(fleet.connected)
   const ticketLinks = useTicketLinks(selectedProject?.id)
@@ -1052,7 +1061,7 @@ function App() {
           setWorkspaceView('conversations')
         }}
         workspaceView={railView}
-        activeProjectIds={[...new Set(fleet.items.map((item) => item.projectId))]}
+        liveConversationsByProject={liveConversationsByProject}
       />
       {showSidebar ? (
       <>

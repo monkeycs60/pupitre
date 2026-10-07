@@ -100,3 +100,29 @@ test('archiver un projet le range dans le groupe Archives, replié par défaut',
   expect(screen.getByRole('button', { name: 'pupitre' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'affilae mono' })).toBeTruthy()
 })
+
+test('dessine une comète par conversation en cours, sur le projet courant aussi', async () => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    if (String(input).includes('unread')) return Response.json({})
+    return Response.json([
+      { id: 'p1', name: 'affilae mono', path: '/tmp/a', pinned: false },
+      { id: 'p2', name: 'pupitre', path: '/tmp/b', pinned: false },
+      { id: 'p3', name: 'vrac', path: '/tmp/c', pinned: false },
+    ])
+  }) as typeof fetch
+  render(createElement(Rail, {
+    selectedProject: { id: 'p1', name: 'affilae mono', path: '/tmp/a', pinned: false } as never,
+    projectListVersion: 0,
+    workspaceView: 'conversations',
+    onProjectSelect: () => {},
+    onProjectCreated: () => {},
+    liveConversationsByProject: { p1: 3, p2: 1 },
+  }))
+
+  const current = await screen.findByRole('button', { name: 'affilae mono, 3 conversations en cours' })
+  const ring = current.querySelector<HTMLElement>('.rail-live-ring')
+  expect(ring?.dataset.count).toBe('3')
+  expect(ring?.style.getPropertyValue('--live-period')).toBe('120deg')
+  expect(screen.getByRole('button', { name: 'pupitre, 1 conversation en cours' }).querySelectorAll('.rail-live-ring')).toHaveLength(1)
+  expect(screen.getByRole('button', { name: 'vrac' }).querySelector('.rail-live-ring')).toBeNull()
+})
