@@ -954,6 +954,7 @@ function App() {
         dashboard: 'Projet',
         library: 'Skills',
         routines: 'Automatisations',
+        fleet: 'Activité',
         'activity-report': 'Rapport d’activité',
         memory: 'Mémoire',
         help: 'Aide',

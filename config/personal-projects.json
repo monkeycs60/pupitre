@@ -228,5 +228,68 @@
       }
     ],
     "environments": []
+  },
+  {
+    "project": "metaphore-coaching",
+    "commands": [
+      {
+        "name": "Site local — Next.js",
+        "command": "npm run dev -- --port 3010",
+        "cwd_relative": ".",
+        "port": 3010,
+        "url": "http://localhost:3010",
+        "env_json": "{}",
+        "kind": "run"
+      },
+      {
+        "name": "Vérifier le projet",
+        "command": "npm run lint && npx tsc --noEmit",
+        "cwd_relative": ".",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": []
+  },
+  {
+    "project": "equilibre-en-mouvement",
+    "commands": [
+      {
+        "name": "Site local — Astro",
+        "command": "npm run dev -- --port 4321",
+        "cwd_relative": ".",
+        "port": 4321,
+        "url": "http://localhost:4321",
+        "env_json": "{}",
+        "kind": "run"
+      },
+      {
+        "name": "Vérifier le projet",
+        "command": "npm run check && npm run build",
+        "cwd_relative": ".",
+        "port": null,
+        "url": null,
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": []
+  },
+  {
+    "project": "strava",
+    "commands": [
+      {
+        "name": "Tableau de bord local",
+        "command": "npm run dev -- --port 4322",
+        "cwd_relative": "dashboard",
+        "port": 4322,
+        "url": "http://localhost:4322",
+        "env_json": "{}",
+        "kind": "run"
+      }
+    ],
+    "environments": []
   }
 ]
