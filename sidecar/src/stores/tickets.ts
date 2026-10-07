@@ -96,6 +96,17 @@ export class TicketStore {
     return row ? hydrateTicket(row) : null;
   }
 
+  findByBranch(projectId: string, branch: string): Ticket | null {
+    const row = this.db.query(
+      `SELECT tickets.* FROM tickets
+       JOIN ticket_refs ON ticket_refs.ticket_id = tickets.id
+       WHERE tickets.project_id = ? AND ticket_refs.kind = 'branch' AND ticket_refs.ref = ?
+       ORDER BY tickets.archived_at IS NOT NULL, ticket_refs.seen_at DESC
+       LIMIT 1`,
+    ).get(projectId, branch) as Record<string, unknown> | null;
+    return row ? hydrateTicket(row) : null;
+  }
+
   findUniqueMention(projectId: string, text: string): Ticket | null {
     const mentioned = this.listActive(projectId).filter((ticket) => {
       const escaped = ticket.key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

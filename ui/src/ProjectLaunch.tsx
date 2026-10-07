@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { launchRequest } from './api'
+import { launchRequest, type RunningApplication } from './api'
 import { ExternalLink } from './externalLink'
 import {
   ALL_LAUNCHES,
@@ -121,31 +121,84 @@ export function ProjectLiveLaunches({ project }: { project: Project }) {
           >
             Lancé ailleurs
           </span>
-          <span className="launch-live-links">
-            {external.map((application) => {
-              const href = known.get(application.port) ?? application.url
-              return (
-                <ExternalLink
-                  key={application.id}
-                  href={href}
-                  className="launch-link is-external"
-                  title={`${application.name} · ${application.process} (PID ${application.pid}) · ${application.cwd}`}
-                >
-                  {launchUrlLabel(href)}
-                  <span className="launch-link-name">
-                    {' '}
-                    · {application.name.replace(/^@[^/]+\//, '')}
-                  </span>
-                  <span aria-hidden="true"> ↗</span>
-                </ExternalLink>
-              )
-            })}
-          </span>
+          <div className="launch-external-groups">
+            {externalGroups(external).map(({ origin, ticket, items }) => (
+              <div className="launch-external-group" key={origin}>
+                <ExternalOrigin origin={origin} ticket={ticket} />
+                <span className="launch-live-links">
+                  {items.map((application) => {
+                    const href = known.get(application.port) ?? application.url
+                    return (
+                      <ExternalLink
+                        key={application.id}
+                        href={href}
+                        className="launch-link is-external"
+                        title={`${application.name} · ${application.process} (PID ${application.pid}) · ${application.cwd}`}
+                      >
+                        {launchUrlLabel(href)}
+                        <span className="launch-link-name">
+                          {' '}
+                          · {application.name.replace(/^@[^/]+\//, '')}
+                        </span>
+                        <span aria-hidden="true"> ↗</span>
+                      </ExternalLink>
+                    )
+                  })}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
   )
 }
+
+function externalGroups(applications: RunningApplication[]) {
+  const groups = new Map<
+    string,
+    { origin: string; ticket: RunningApplication['ticket']; items: RunningApplication[] }
+  >()
+  for (const application of applications) {
+    const origin = application.branch ?? application.workspace
+    const group = groups.get(origin) ?? { origin, ticket: null, items: [] }
+    group.ticket ??= application.ticket ?? null
+    group.items.push(application)
+    groups.set(origin, group)
+  }
+  return [...groups.values()]
+}
+
+function ExternalOrigin({
+  origin,
+  ticket,
+}: {
+  origin: string
+  ticket: RunningApplication['ticket']
+}) {
+  if (!ticket)
+    return (
+      <span className="launch-external-origin" title={`Branche ${origin}`}>
+        <span className="launch-external-branch">{origin}</span>
+      </span>
+    )
+  const label = (
+    <>
+      <span className="launch-external-key">{ticket.key}</span> {ticket.title}
+    </>
+  )
+  const title = `${ticket.key} · ${ticket.title}\nBranche ${origin}`
+  return ticket.url ? (
+    <ExternalLink href={ticket.url} className="launch-external-origin" title={title}>
+      {label}
+    </ExternalLink>
+  ) : (
+    <span className="launch-external-origin" title={title}>
+      {label}
+    </span>
+  )
+}
+
 type Suggestion = { name: string; command: string; frequency?: number }
 
 export function ProjectLaunch({

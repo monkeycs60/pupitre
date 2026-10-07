@@ -186,6 +186,7 @@ export interface RunningApplication {
   projectName: string
   workspace: string
   branch: string | null
+  ticket?: { key: string; title: string; url: string | null } | null
   cwd: string
   process: string
   pid: number

@@ -88,7 +88,7 @@ import { verifyMcpContextCost } from "./mcp-verify";
 import { instructionsTokens } from "./context-profile";
 import type { McpServerWeight } from "./mcp-probe";
 import type { IntegrationsRefresher } from "./integrations/refresher";
-import { compileBranchPattern, extractTicketKey } from "./ticket-key";
+import { compileBranchPattern, DEFAULT_BRANCH_PATTERN, extractTicketKey } from "./ticket-key";
 import { DEFAULT_TICKET_AUDIT_CONFIG } from "./ticket-audits";
 import type { IntegrationStore, IntegrationType } from "./stores/integrations";
 import type { Ticket, TicketStore } from "./stores/tickets";
@@ -1337,7 +1337,22 @@ export function createServer(deps: ServerDeps) {
               kind: "project" as const,
             }, ...worktrees];
           });
-          return json((deps.runningApplications ?? listRunningApplications)(contexts));
+          const patterns = new Map<string, RegExp>();
+          const ticketOf = (projectId: string, branch: string) => {
+            const known = deps.tickets.findByBranch(projectId, branch);
+            if (known) return known;
+            if (!patterns.has(projectId)) {
+              const source = deps.integrations.listByProject(projectId)
+                .find((integration) => integration.branch_pattern)?.branch_pattern ?? DEFAULT_BRANCH_PATTERN;
+              patterns.set(projectId, compileBranchPattern(source));
+            }
+            const key = extractTicketKey(branch, patterns.get(projectId)!);
+            return key ? deps.tickets.findByKey(projectId, key) : null;
+          };
+          return json((deps.runningApplications ?? listRunningApplications)(contexts).map((application) => {
+            const ticket = application.branch ? ticketOf(application.projectId, application.branch) : null;
+            return { ...application, ticket: ticket ? { key: ticket.key, title: ticket.title, url: ticket.external_url } : null };
+          }));
         }
 
         if (request.method === "GET" && pathname === "/api/search") {

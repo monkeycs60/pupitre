@@ -240,3 +240,11 @@ test("un changement de statut laisse une trace datée, une simple relève identi
     [ticket.id, "in progress", "ready for production"],
   ]);
 });
+
+test("retrouve le ticket d'une branche sans clé dans son nom", () => {
+  const ticket = tickets.upsert(projectId, { key: "TECH-9", source: "clickup", title: "Agent", status: "open", externalUrl: null });
+  tickets.upsertRef(ticket.id, { kind: "branch", ref: "projet-agent", payload: {} });
+
+  expect(tickets.findByBranch(projectId, "projet-agent")?.key).toBe("TECH-9");
+  expect(tickets.findByBranch(projectId, "develop")).toBeNull();
+});

@@ -58,6 +58,8 @@ test('montre en gris les serveurs du projet lancés ailleurs, sans doubler ceux 
         { ...base, id: '1:5174', name: '@cm/app', projectId: 'p3', pid: 1, port: 5174, url: 'http://localhost:5174' },
         { ...base, id: '2:3000', name: '@cm/api', projectId: 'p3', pid: 2, port: 3000, url: 'http://localhost:3000' },
         { ...base, id: '3:8080', name: 'autre', projectId: 'other', pid: 3, port: 8080, url: 'http://localhost:8080' },
+        { ...base, id: '4:4219', name: 'affilae-api', branch: 'feature/TECH-1', projectId: 'p3', pid: 4, port: 4219, url: 'http://localhost:4219', ticket: { key: 'TECH-1', title: 'Match AI', url: 'https://app.clickup.com/t/1' } },
+        { ...base, id: '5:8106', name: 'reactor', branch: 'feature/TECH-1', projectId: 'p3', pid: 5, port: 8106, url: 'http://localhost:8106', ticket: { key: 'TECH-1', title: 'Match AI', url: 'https://app.clickup.com/t/1' } },
       ])
     }
     return Response.json([
@@ -73,4 +75,9 @@ test('montre en gris les serveurs du projet lancés ailleurs, sans doubler ceux 
   expect(screen.getByText('Lancé ailleurs')).toBeTruthy()
   expect(screen.getAllByRole('link', { name: /localhost:5174/ })).toHaveLength(1)
   expect(screen.queryByRole('link', { name: /8080/ })).toBeNull()
+  const groups = document.querySelectorAll('.launch-external-group')
+  expect(groups).toHaveLength(2)
+  expect(groups[0]!.querySelector('.launch-external-origin')!.textContent).toBe('master')
+  expect(groups[1]!.querySelector('.launch-external-origin')!.textContent).toBe('TECH-1 Match AI')
+  expect(groups[1]!.querySelectorAll('.launch-link')).toHaveLength(2)
 })

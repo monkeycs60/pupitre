@@ -2286,6 +2286,43 @@
   background: var(--bg-hover);
 }
 
+.launch-external-groups {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-row: 2;
+  gap: 6px;
+  min-width: 0;
+}
+
+.launch-external-group {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.launch-external-origin {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.launch-external-origin:hover {
+  color: var(--text);
+}
+
+.launch-external-key {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.launch-external-branch {
+  font-family: var(--font-mono);
+}
+
 .launch-link-name {
   color: var(--text-faint);
   opacity: 0.75;
