@@ -152,8 +152,8 @@ export class ProjectDevlogService {
     }
     const created = this.conversations.create({
       projectId,
-      provider: "codex",
-      model: "gpt-6-luna",
+      provider: "claude",
+      model: "haiku-5.5",
       originType: "documents",
       originKey: projectId,
       firstMessage: "Documents du projet",

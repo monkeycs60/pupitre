@@ -547,8 +547,8 @@ export interface StrongModelConfig {
 
 export const DEFAULT_ACTIVITY_MODEL: StrongModelConfig = {
   provider: "claude",
-  model: "sonnet-5.5",
-  effort: "low",
+  model: "haiku-5.5",
+  effort: "high",
   speed: "standard",
 };
 

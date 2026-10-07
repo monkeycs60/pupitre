@@ -371,7 +371,7 @@ export class PersonalEnvironments {
       projectId: incident.project_id,
       provider: "claude",
       model: "haiku-5.5",
-      effort: "medium",
+      effort: "high",
       firstMessage: `Triage de ${config.name}. Erreur à analyser :\n${incident.message}`,
     });
     this.db

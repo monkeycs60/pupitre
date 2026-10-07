@@ -99,7 +99,7 @@ async function generateSkill(
   const options = {
     cwd: input.cwd,
     model: BACKGROUND_MODEL.model,
-    effort: BACKGROUND_MODEL.effort,
+    effort: "high",
     speed: BACKGROUND_MODEL.speed,
     prompt: input.prompt,
     cliSessionId: null,

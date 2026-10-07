@@ -137,6 +137,7 @@ export class PromotionAgentService {
     const conversation = this.conversations.create({
       projectId: project.id,
       ...BACKGROUND_MODEL,
+      effort: "high",
       permissionMode: "bypassPermissions",
       worktreePath: null,
       createdOnBranch: null,

@@ -59,7 +59,7 @@ test("crée une conversation Haiku autonome dans le dépôt principal", () => {
 
   expect(mission.state).toBe("running");
   expect(state.conversation?.model).toBe("haiku-5.5");
-  expect(state.conversation?.effort).toBe("medium");
+  expect(state.conversation?.effort).toBe("high");
   expect(state.conversation?.permission_mode).toBe("bypassPermissions");
   expect(state.conversation?.worktree_path).toBeNull();
   expect(state.runInput).toContain("Committe automatiquement toutes les modifications");

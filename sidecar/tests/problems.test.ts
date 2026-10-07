@@ -66,7 +66,7 @@ test("sauvegarde puis traite une capture avec Haiku medium", async () => {
     cwd: projects.get(projectId)!.path,
     provider: "claude",
     model: "haiku-5.5",
-    effort: "medium",
+    effort: "high",
     speed: "standard",
   }));
   expect(calls[0]?.prompt).toContain("TECH-42");

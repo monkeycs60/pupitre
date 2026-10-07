@@ -83,6 +83,7 @@ export class ProblemService {
       const raw = await this.generator({
         cwd: projectCwd(project),
         ...BACKGROUND_MODEL,
+        effort: "high",
         prompt: problemPrompt(project.name, capture.raw_text, tickets),
       });
       const reserved = new Set<string>();

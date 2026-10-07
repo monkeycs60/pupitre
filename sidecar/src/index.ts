@@ -61,6 +61,7 @@ import { AttentionItemStore } from "./stores/attention-items";
 import { ConversationLinkStore } from "./stores/conversation-links";
 import { ProblemService } from "./problems";
 import { backgroundJobsEnabled, readInstance } from "./instance";
+import { BACKGROUND_MODEL } from "./background-model";
 import { PromotionRunner } from "./promotion";
 import { PromotionAgentService } from "./promotion-agent";
 import { VisualFeedbackService } from "./visual-feedback";
@@ -209,17 +210,17 @@ if (process.argv.includes("--pupitre-mcp")) {
   const personalEnvironments = new PersonalEnvironments(db, projects, conversations);
   personalEnvironments.onTriage = (id, prompt) => { void runner.runTurn(id, prompt, []).catch(console.error); };
   if (backgroundJobsEnabled()) setInterval(() => { void personalEnvironments.scan().catch(console.error); }, 300000).unref();
-  const devlog = new ProjectDevlogService(db, projects, conversations, htmlDocuments, (prompt, cwd) => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas));
+  const devlog = new ProjectDevlogService(db, projects, conversations, htmlDocuments, (prompt, cwd) => generateWithAdapters({ cwd, ...BACKGROUND_MODEL, effort: "high", prompt }, quotas));
   try {
     const moved = devlog.migrateDocuments();
     if (moved) console.log(`[devlog] ${moved} document(s) déplacé(s) vers « Documents du projet »`);
   } catch (error) {
     console.error("[devlog] migration des documents impossible", error);
   }
-  const resume = new ProjectResumeService(db, projects, tickets, (prompt, cwd) => automaticCalls.run("reprise", () => generateWithAdapters({ cwd, provider: "codex", model: "gpt-6-luna", effort: "low", speed: "standard", prompt }, quotas)));
-  const telegram = new TelegramCapture(db, projects, tickets, new TodoStore(db), (prompt, cwd) => automaticCalls.run("telegram", () => cheapJson(prompt, cwd)), resume, instance.name, instance.dataDir);
+  const resume = new ProjectResumeService(db, projects, tickets, (prompt, cwd) => automaticCalls.run("reprise", () => generateWithAdapters({ cwd, ...BACKGROUND_MODEL, effort: "medium", prompt }, quotas)));
+  const telegram = new TelegramCapture(db, projects, tickets, new TodoStore(db), (prompt, cwd) => automaticCalls.run("telegram", () => claudeJson("claude-haiku-5-5", prompt, cwd, "medium")), resume, instance.name, instance.dataDir);
   telegram.start();
-  const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), (prompt, cwd, kind) => automaticCalls.run(kind ?? "récolte", () => claudeJson("claude-haiku-5-5", prompt, cwd, "medium")));
+  const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), (prompt, cwd, kind) => automaticCalls.run(kind ?? "récolte", () => claudeJson("claude-haiku-5-5", prompt, cwd, "high")));
   if (backgroundJobsEnabled()) setInterval(() => { void harvest.scan().catch(console.error); }, 300000).unref();
   const launches = new ProjectLaunchService(db, projects, instance.dataDir);
   applyPersonalProjectPresets(db, projects, launches, personalEnvironments);

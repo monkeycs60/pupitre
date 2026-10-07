@@ -208,6 +208,7 @@ export class DebriefRunner {
     const generation = {
       cwd: conversationCwd(project, conversation),
       ...BACKGROUND_MODEL,
+      effort: "xhigh",
     };
     const partials: string[] = [];
     for (const transcript of transcriptChunks) {
