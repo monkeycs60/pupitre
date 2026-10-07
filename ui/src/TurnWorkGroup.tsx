@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { EventStream } from './EventStream'
+import { formatShortDuration } from './formatActiveDuration'
 import { toolGroupSummary } from './toolPresentation'
 import { turnWorkNoteCount, turnWorkTools, type TurnWorkBlock } from './turnWork'
 
@@ -14,6 +15,7 @@ export function TurnWorkGroup({ work, onImageOpen, onImageLoad }: {
   const notes = turnWorkNoteCount(work)
   const failedCount = tools.filter((tool) => tool.output !== undefined && tool.isError === true).length
   const parts = [
+    work.durationMs === undefined ? null : formatShortDuration(work.durationMs),
     tools.length > 0 ? toolGroupSummary(tools) : null,
     notes > 0 ? `${notes} ${notes > 1 ? 'messages intermédiaires' : 'message intermédiaire'}` : null,
   ].filter((part) => part !== null)

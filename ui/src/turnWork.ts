@@ -7,6 +7,7 @@ export interface TurnWorkBlock {
   kind: 'turn-work'
   id: string
   blocks: StreamBlock[]
+  durationMs?: number
 }
 
 const WORK_KINDS = new Set<StreamBlock['kind']>(['tool', 'reasoning', 'assistant', 'background-task'])
@@ -28,14 +29,22 @@ export function foldFinishedTurns(blocks: StreamBlock[]): Array<StreamBlock | Tu
     const state = block.status?.state
     const finished = index < newestFooterIndex ? state !== 'running' : state === 'done' || state === 'error'
     if (!finished) return
-    result.push(...foldTurn(blocks.slice(start, index)), block)
+    result.push(...foldTurn(blocks.slice(start, index), turnDuration(block)), block)
     start = index + 1
   })
   result.push(...blocks.slice(start))
   return result
 }
 
-function foldTurn(turn: StreamBlock[]): Array<StreamBlock | TurnWorkBlock> {
+function turnDuration(footer: Extract<StreamBlock, { kind: 'turn-footer' }>): number | undefined {
+  const startedAt = Date.parse(footer.timing?.startedAt ?? '')
+  const completedAt = Date.parse(footer.timing?.completedAt ?? '')
+  return Number.isFinite(startedAt) && Number.isFinite(completedAt) && completedAt >= startedAt
+    ? completedAt - startedAt
+    : undefined
+}
+
+function foldTurn(turn: StreamBlock[], durationMs: number | undefined): Array<StreamBlock | TurnWorkBlock> {
   const lastActivity = turn.findLastIndex((block) => ACTIVITY_KINDS.has(block.kind))
   if (lastActivity === -1) return turn
   if (!turn.slice(lastActivity + 1).some((block) => block.kind === 'assistant')) return turn
@@ -44,7 +53,7 @@ function foldTurn(turn: StreamBlock[]): Array<StreamBlock | TurnWorkBlock> {
   const work = range.filter((block) => WORK_KINDS.has(block.kind))
   return [
     ...turn.slice(0, firstWork),
-    { kind: 'turn-work', id: `turn-work-${work[0].id}`, blocks: work },
+    { kind: 'turn-work', id: `turn-work-${work[0].id}`, blocks: work, ...(durationMs === undefined ? {} : { durationMs }) },
     ...range.filter((block) => !WORK_KINDS.has(block.kind)),
     ...turn.slice(lastActivity + 1),
   ]

@@ -53,3 +53,17 @@ test('chaque tour terminé est replié indépendamment', () => {
 
   expect(ids(folded)).toEqual(['q1', '[a]', 'r1', 'f1', 'q2', 'r2', 'f2', 'q3', 'b', 'f3'])
 })
+
+test('la ligne repliée porte la durée du tour', () => {
+  const done: StreamBlock = {
+    kind: 'turn-footer',
+    id: 'f',
+    status: { type: 'status', state: 'done' },
+    timing: { startedAt: '2026-10-07T10:00:00.000Z', completedAt: '2026-10-07T10:07:30.000Z' },
+  }
+  const [, work] = foldFinishedTurns([user('q'), tool('t1'), say('r'), done]) as [StreamBlock, TurnWorkBlock]
+
+  expect(work.durationMs).toBe(450_000)
+  expect(foldFinishedTurns([user('q'), tool('t1'), say('r'), footer('g', 'done')])
+    .some((item) => item.kind === 'turn-work' && item.durationMs !== undefined)).toBe(false)
+})
