@@ -182,11 +182,84 @@
   white-space: nowrap;
 }
 
+.activity-board-group { display: grid; gap: 1px; }
+.activity-board-group + .activity-board-group { margin-top: var(--space-1); }
+
 .activity-board-project {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--space-2) 0 calc(var(--space-2) + 16px + var(--space-3));
   color: var(--accent-bright);
   font-size: 11px;
   font-weight: 600;
 }
+
+.activity-board-project-count {
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.activity-board-tool {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--text-xs);
+}
+
+.activity-board-tool-label {
+  flex: none;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.activity-board-tool-label::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: var(--r-full);
+  background: var(--text-faint);
+  vertical-align: 1px;
+}
+
+.activity-board-tool.is-edit .activity-board-tool-label::before { background: var(--warn); }
+.activity-board-tool.is-command .activity-board-tool-label::before { background: var(--ok); }
+.activity-board-tool.is-read .activity-board-tool-label::before,
+.activity-board-tool.is-search .activity-board-tool-label::before { background: var(--accent); }
+.activity-board-tool.is-agent .activity-board-tool-label::before,
+.activity-board-tool.is-web .activity-board-tool-label::before { background: var(--prov-claude); }
+
+.activity-board-tool-detail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-board-read-all {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.activity-board-read-all:hover:not(:disabled) { border-color: var(--unread); color: var(--unread); }
+.activity-board-read-all:disabled { cursor: wait; opacity: 0.6; }
+.activity-board-read-all + .activity-board-count { margin-left: 0; }
 
 .activity-board-text strong { font-size: var(--text-sm); font-weight: 500; }
 .activity-board-meta { color: var(--text-faint); font-size: var(--text-xs); }

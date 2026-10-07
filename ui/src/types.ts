@@ -68,6 +68,7 @@ export interface FleetItem {
   model: string
   startedAt: string
   lastEvent: string
+  lastTool?: { toolName: string; input: unknown }
 }
 
 

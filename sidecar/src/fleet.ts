@@ -16,6 +16,30 @@ export interface FleetItem {
   model: string;
   startedAt: string;
   lastEvent: string;
+  lastTool?: { toolName: string; input: unknown };
+}
+
+/* Les entrées d'outil peuvent porter un fichier entier (Write, patch) : la
+   flotte est diffusée chaque seconde, seul un aperçu borné y circule. */
+function previewInput(value: unknown, depth = 0): unknown {
+  if (typeof value === "string") return value.length > 240 ? `${value.slice(0, 240)}…` : value;
+  if (Array.isArray(value)) return depth >= 2 ? [] : value.slice(0, 4).map((entry) => previewInput(entry, depth + 1));
+  if (value !== null && typeof value === "object") {
+    if (depth >= 2) return {};
+    return Object.fromEntries(Object.entries(value).slice(0, 12).map(([key, entry]) => [key, previewInput(entry, depth + 1)]));
+  }
+  return value;
+}
+
+const toolCursors = new Map<string, { since: string; lastId: number; tool: FleetItem["lastTool"] }>();
+
+function lastTool(conversations: ConversationStore, eventStream: string, since: string): FleetItem["lastTool"] {
+  const cursor = toolCursors.get(eventStream);
+  const base = cursor?.since === since ? cursor : { since, lastId: 0, tool: undefined };
+  const { lastId, tool } = conversations.latestToolStartSince(eventStream, base.lastId, since);
+  const next = { since, lastId, tool: tool ? { toolName: tool.toolName, input: previewInput(tool.input) } : base.tool };
+  toolCursors.set(eventStream, next);
+  return next.tool;
 }
 
 function eventLabel(event: StoredEvent | undefined): string {
@@ -64,6 +88,7 @@ export function fleetSnapshot(deps: {
       model: conversation.model,
       startedAt: active.startedAt,
       lastEvent: eventLabel(deps.conversations.latestEvent(conversation.id)),
+      lastTool: lastTool(deps.conversations, conversation.id, active.startedAt),
     });
   }
   for (const subtask of deps.subtasks.activeSubtasks()) {
@@ -82,7 +107,10 @@ export function fleetSnapshot(deps: {
       model: subtask.model,
       startedAt: subtask.created_at,
       lastEvent: eventLabel(deps.conversations.latestEvent(subtask.id)),
+      lastTool: lastTool(deps.conversations, subtask.id, subtask.created_at),
     });
   }
+  const live = new Set(items.map((item) => item.kind === "subtask" ? item.id.slice("subtask:".length) : item.conversationId));
+  for (const stream of toolCursors.keys()) if (!live.has(stream)) toolCursors.delete(stream);
   return items.sort((left, right) => left.startedAt.localeCompare(right.startedAt));
 }

@@ -573,3 +573,23 @@ test("vider une corbeille vide ne supprime rien", () => {
 
   expect(convs.purgeTrashed()).toBe(0);
 });
+
+test("retrouve le dernier outil du tour sans relire les événements déjà vus", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "go" });
+  convs.appendEvent(c.id, { type: "tool-start", toolId: "old", toolName: "Read", input: {} }, "2026-10-07T09:00:00.000Z");
+  const since = "2026-10-07T10:00:00.000Z";
+  expect(convs.latestToolStartSince(c.id, 0, since).tool).toBeNull();
+
+  convs.appendEvent(c.id, { type: "tool-start", toolId: "a", toolName: "Edit", input: { file_path: "/a.ts" } }, "2026-10-07T10:00:01.000Z");
+  convs.appendEvent(c.id, { type: "text-delta", text: "…" }, "2026-10-07T10:00:02.000Z");
+  const first = convs.latestToolStartSince(c.id, 0, since);
+  expect(first.tool?.toolName).toBe("Edit");
+
+  convs.appendEvent(c.id, { type: "text-delta", text: "…" }, "2026-10-07T10:00:03.000Z");
+  const second = convs.latestToolStartSince(c.id, first.lastId, since);
+  expect(second.tool).toBeNull();
+  expect(second.lastId).toBeGreaterThan(first.lastId);
+
+  convs.appendEvent(c.id, { type: "tool-start", toolId: "b", toolName: "Bash", input: { command: "bun test" } }, "2026-10-07T10:00:04.000Z");
+  expect(convs.latestToolStartSince(c.id, second.lastId, since).tool?.toolName).toBe("Bash");
+});

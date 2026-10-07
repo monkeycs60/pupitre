@@ -1022,6 +1022,10 @@ function App() {
           onOpenChange={setActivityOpen}
           onOpenRunning={(item) => void handleRoutineConversationSelect(item.projectId, item.conversationId)}
           onOpenUnread={(item) => void handleAttentionOpen(item)}
+          onReadAll={async () => {
+            await attention.readAll()
+            setRailReadVersion((current) => current + 1)
+          }}
         />}
       />
       <ToastHost />

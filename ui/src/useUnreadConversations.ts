@@ -29,5 +29,12 @@ export function useUnreadConversations(refreshVersion = 0) {
     setItems((current) => current.filter((candidate) => candidate.id !== item.id))
   }
 
-  return { items, loading, error, refresh, read }
+  async function readAll() {
+    const snapshot = items
+    await Promise.all(snapshot.map((item) => markConversationRead(item.id, item.answered_turn)))
+    const done = new Set(snapshot.map((item) => item.id))
+    setItems((current) => current.filter((candidate) => !done.has(candidate.id)))
+  }
+
+  return { items, loading, error, refresh, read, readAll }
 }

@@ -737,6 +737,30 @@ export class ConversationStore {
     }
   }
 
+  /** Dernier `tool-start` postérieur à `afterId` et à `since`, avec l'id le plus récent examiné. */
+  latestToolStartSince(conversationId: string, afterId: number, since: string): {
+    lastId: number;
+    tool: Extract<AppEvent, { type: "tool-start" }> | null;
+  } {
+    const max = this.db.query(
+      "SELECT MAX(id) AS id FROM events WHERE conversation_id = ? AND id > ?"
+    ).get(conversationId, afterId) as { id: number | null };
+    if (max.id === null) return { lastId: afterId, tool: null };
+    const row = this.db.query(
+      `SELECT payload FROM events
+       WHERE conversation_id = ? AND id > ? AND id <= ? AND created_at >= ?
+         AND payload LIKE '%"type":"tool-start"%'
+       ORDER BY id DESC LIMIT 1`
+    ).get(conversationId, afterId, max.id, since) as { payload: string } | null;
+    if (!row) return { lastId: max.id, tool: null };
+    try {
+      const event = JSON.parse(row.payload) as AppEvent;
+      return { lastId: max.id, tool: event.type === "tool-start" ? event : null };
+    } catch {
+      return { lastId: max.id, tool: null };
+    }
+  }
+
   latestEvent(conversationId: string): StoredEvent | undefined {
     const row = this.db.query(
       "SELECT id, payload FROM events WHERE conversation_id = ? ORDER BY id DESC LIMIT 1"

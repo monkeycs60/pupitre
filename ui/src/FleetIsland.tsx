@@ -3,6 +3,7 @@ import type { FleetItem, UnreadConversation } from './types'
 import { ProviderMark } from './ProviderMark'
 import { useNow } from './useNow'
 import { formatShortDuration } from './formatActiveDuration'
+import { toolPresentation, type ToolPresentation } from './toolPresentation'
 
 const KIND_LABELS: Record<FleetItem['kind'], string> = {
   turn: 'Tour',
@@ -17,14 +18,27 @@ function since(value: string, now: number): string {
   return Number.isNaN(at) ? '' : formatShortDuration(now - at)
 }
 
-export function FleetIsland({ items, unread, open, onOpenChange, onOpenRunning, onOpenUnread }: {
+function byProject<T>(items: T[], projectOf: (item: T) => string): Array<[string, T[]]> {
+  const groups = new Map<string, T[]>()
+  for (const item of items) groups.set(projectOf(item), [...groups.get(projectOf(item)) ?? [], item])
+  return [...groups]
+}
+
+function toolLine(item: FleetItem): ToolPresentation | null {
+  if (!item.lastTool) return null
+  return toolPresentation({ kind: 'tool', id: item.id, toolId: item.id, toolName: item.lastTool.toolName, input: item.lastTool.input, images: [] })
+}
+
+export function FleetIsland({ items, unread, open, onOpenChange, onOpenRunning, onOpenUnread, onReadAll }: {
   items: FleetItem[]
   unread: UnreadConversation[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onOpenRunning: (item: FleetItem) => void
   onOpenUnread: (item: UnreadConversation) => void
+  onReadAll: () => Promise<void>
 }) {
+  const [readingAll, setReadingAll] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
   const [position, setPosition] = useState<CSSProperties | null>(null)
@@ -87,34 +101,56 @@ export function FleetIsland({ items, unread, open, onOpenChange, onOpenRunning, 
               <h2>En cours</h2>
               <span className="activity-board-count is-running">{items.length}</span>
             </header>
-            {items.length === 0 ? <p className="activity-board-empty">Aucun agent ne travaille.</p> : items.map((item) => (
-              <button key={item.id} type="button" className="activity-board-row" onClick={() => { onOpenChange(false); onOpenRunning(item) }}>
-                <ProviderMark provider={item.provider} className="activity-board-provider" />
-                <span className="activity-board-text">
-                  <span className="activity-board-project">{item.projectName}</span>
-                  <strong>{item.title}</strong>
-                  <span className="activity-board-meta">{KIND_LABELS[item.kind]} · {item.model}</span>
-                </span>
-                <span className="activity-board-time">{since(item.startedAt, now)}</span>
-              </button>
+            {items.length === 0 ? <p className="activity-board-empty">Aucun agent ne travaille.</p> : byProject(items, (item) => item.projectName).map(([project, group]) => (
+              <div key={project} className="activity-board-group">
+                <span className="activity-board-project">{project}{group.length > 1 ? <span className="activity-board-project-count">{group.length}</span> : null}</span>
+                {group.map((item) => {
+                  const tool = toolLine(item)
+                  return (
+                    <button key={item.id} type="button" className="activity-board-row" onClick={() => { onOpenChange(false); onOpenRunning(item) }}>
+                      <ProviderMark provider={item.provider} className="activity-board-provider" />
+                      <span className="activity-board-text">
+                        <strong>{item.title}</strong>
+                        {tool ? (
+                          <span className={`activity-board-tool is-${tool.category}`} title={tool.detail}>
+                            <span className="activity-board-tool-label">{tool.label}</span>
+                            {tool.detail ? <span className="activity-board-tool-detail">{tool.detail}</span> : null}
+                          </span>
+                        ) : <span className="activity-board-meta">{KIND_LABELS[item.kind]} · {item.lastEvent}</span>}
+                      </span>
+                      <span className="activity-board-time">{since(item.startedAt, now)}</span>
+                    </button>
+                  )
+                })}
+              </div>
             ))}
           </section>
           <section className="activity-board-section">
             <header>
               <span className="activity-board-dot is-unread" aria-hidden="true" />
               <h2>Terminé, à lire</h2>
+              {unread.length > 1 ? (
+                <button type="button" className="activity-board-read-all" disabled={readingAll} onClick={() => {
+                  setReadingAll(true)
+                  void onReadAll().finally(() => setReadingAll(false))
+                }}>Tout marquer comme lu</button>
+              ) : null}
               <span className="activity-board-count is-unread">{unread.length}</span>
             </header>
-            {unread.length === 0 ? <p className="activity-board-empty">Tout est lu.</p> : unread.map((item) => (
-              <button key={item.id} type="button" className="activity-board-row" onClick={() => { onOpenChange(false); onOpenUnread(item) }}>
-                <ProviderMark provider={item.provider} className="activity-board-provider" />
-                <span className="activity-board-text">
-                  <span className="activity-board-project">{item.project_name}</span>
-                  <strong>{item.title}</strong>
-                  {item.summary ? <span className="activity-board-meta">{item.summary}</span> : null}
-                </span>
-                <span className="activity-board-time">il y a {since(item.updated_at, now)}</span>
-              </button>
+            {unread.length === 0 ? <p className="activity-board-empty">Tout est lu.</p> : byProject(unread, (item) => item.project_name).map(([project, group]) => (
+              <div key={project} className="activity-board-group">
+                <span className="activity-board-project">{project}{group.length > 1 ? <span className="activity-board-project-count">{group.length}</span> : null}</span>
+                {group.map((item) => (
+                  <button key={item.id} type="button" className="activity-board-row" onClick={() => { onOpenChange(false); onOpenUnread(item) }}>
+                    <ProviderMark provider={item.provider} className="activity-board-provider" />
+                    <span className="activity-board-text">
+                      <strong>{item.title}</strong>
+                      {item.summary ? <span className="activity-board-meta">{item.summary}</span> : null}
+                    </span>
+                    <span className="activity-board-time">il y a {since(item.updated_at, now)}</span>
+                  </button>
+                ))}
+              </div>
             ))}
           </section>
         </div>
