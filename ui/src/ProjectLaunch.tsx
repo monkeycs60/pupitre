@@ -320,7 +320,7 @@ export function ProjectLaunch({
     }
   }
   return (
-    <div className={settings ? undefined : 'launch-wrap'} style={settings ? { position: 'relative' } : undefined}>
+    <div style={settings ? { position: 'relative' } : undefined}>
       <button
         className={`secondary-button${!settings && live ? ' launch-trigger is-live' : ''}`}
         type="button"
