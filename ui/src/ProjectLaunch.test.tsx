@@ -9,7 +9,7 @@ mock.module('@tauri-apps/plugin-opener', () => ({
   revealItemInDir: async () => {},
 }))
 
-const { cleanup, render, screen, waitFor } = await import('@testing-library/react')
+const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { ProjectLiveLaunches } = await import('./ProjectLaunch')
 const defaultFetch = globalThis.fetch
 
@@ -75,6 +75,10 @@ test('montre en gris les serveurs du projet lancés ailleurs, sans doubler ceux 
   expect(screen.getByText('Lancé ailleurs')).toBeTruthy()
   expect(screen.getAllByRole('link', { name: /localhost:5174/ })).toHaveLength(1)
   expect(screen.queryByRole('link', { name: /8080/ })).toBeNull()
+  expect(document.querySelectorAll('.launch-external-group')).toHaveLength(1)
+  const toggle = screen.getByRole('button', { name: /\+1/ })
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(toggle)
   const groups = document.querySelectorAll('.launch-external-group')
   expect(groups).toHaveLength(2)
   expect(groups[0]!.querySelector('.launch-external-origin')!.textContent).toBe('master')

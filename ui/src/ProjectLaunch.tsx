@@ -88,6 +88,7 @@ function LaunchLiveRow({
 }
 
 export function ProjectLiveLaunches({ project }: { project: Project }) {
+  const [expanded, setExpanded] = useState(false)
   const launches = useProjectLaunches(project.id)
   const running = launches.filter((item) => item.running)
   const applications = useRunningApplications(15_000).items
@@ -107,6 +108,8 @@ export function ProjectLiveLaunches({ project }: { project: Project }) {
     )
     .sort((a, b) => a.port - b.port)
   if (running.length === 0 && external.length === 0) return null
+  const groups = externalGroups(external)
+  const hidden = expanded ? 0 : groups.length - 1
   return (
     <div className="launch-live-strip" aria-label="Commandes en cours">
       {running.map((item) => (
@@ -121,8 +124,19 @@ export function ProjectLiveLaunches({ project }: { project: Project }) {
           >
             Lancé ailleurs
           </span>
+          {groups.length > 1 && (
+            <button
+              className="launch-external-toggle"
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? 'Réduire' : `+${hidden}`}
+              <span aria-hidden="true">{expanded ? ' ▴' : ' ▾'}</span>
+            </button>
+          )}
           <div className="launch-external-groups">
-            {externalGroups(external).map(({ origin, ticket, items }) => (
+            {(expanded ? groups : groups.slice(0, 1)).map(({ origin, ticket, items }) => (
               <div className="launch-external-group" key={origin}>
                 <ExternalOrigin origin={origin} ticket={ticket} />
                 <span className="launch-live-links">
@@ -306,7 +320,7 @@ export function ProjectLaunch({
     }
   }
   return (
-    <div style={settings ? { position: 'relative' } : undefined}>
+    <div className={settings ? undefined : 'launch-wrap'} style={settings ? { position: 'relative' } : undefined}>
       <button
         className={`secondary-button${!settings && live ? ' launch-trigger is-live' : ''}`}
         type="button"
@@ -339,7 +353,7 @@ export function ProjectLaunch({
             </label>
           )}
           {commands.length === 0 && (
-            <p>
+            <p className="launch-empty">
               Aucune commande. Configurez le lancement dans les paramètres du
               projet.
             </p>
@@ -413,9 +427,10 @@ export function ProjectLaunch({
               )}
             </div>
           ))}
-          <label>
+          <label className="launch-port">
             Port alternatif
             <input
+              placeholder="auto"
               type="number"
               value={port}
               onChange={(event) => setPort(event.target.value)}
