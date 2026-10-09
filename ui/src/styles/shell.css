@@ -77,32 +77,6 @@ body.is-resizing-documents-list {
   -webkit-user-select: none;
 }
 
-.titlebar-search {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  margin-left: var(--space-3);
-  padding: 2px 8px 2px 8px;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--r-full);
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
-}
-
-.titlebar-search:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-
-.titlebar-search kbd {
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-
 .titlebar-nav {
   position: relative;
   display: flex;

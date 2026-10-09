@@ -77,8 +77,7 @@ import {
 const SkillsLibrary = lazy(() => import('./SkillsLibrary').then((module) => ({ default: module.SkillsLibrary })))
 const RoutinesView = lazy(() => import('./RoutinesView').then((module) => ({ default: module.RoutinesView })))
 const MemoryView = lazy(() => import('./MemoryView').then((module) => ({ default: module.MemoryView })))
-const HelpView = lazy(() => import('./HelpView').then((module) => ({ default: module.HelpView })))
-const AppSettingsView = lazy(() => import('./AppSettingsView').then((module) => ({ default: module.AppSettingsView })))
+const SettingsShell = lazy(() => import('./SettingsShell').then((module) => ({ default: module.SettingsShell })))
 const DesignView = lazy(() => import('./DesignView').then((module) => ({ default: module.DesignView })))
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
 const ActivityReportView = lazy(() => import('./ActivityReportView').then((module) => ({ default: module.ActivityReportView })))
@@ -247,7 +246,7 @@ function App() {
   })
 
   useEffect(() => {
-    if (workspaceView === 'help' || !window.location.hash.startsWith('#help/')) return
+    if (workspaceView === 'settings' || !window.location.hash.startsWith('#help/')) return
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
   }, [workspaceView])
 
@@ -503,7 +502,7 @@ function App() {
       const match = window.location.hash.match(/^#help\/([a-z0-9-]+)$/)
       if (!match) return
       setHelpSlug(match[1]!)
-      setWorkspaceView('help')
+      setWorkspaceView('settings')
     }
     syncHelpHash()
     window.addEventListener('hashchange', syncHelpHash)
@@ -852,13 +851,14 @@ function App() {
     if (!confirmLeaveMemory()) return
     const nextSlug = slug ?? helpSlug ?? 'conversations'
     setHelpSlug(nextSlug)
-    setWorkspaceView('help')
+    setWorkspaceView('settings')
     window.location.hash = `help/${nextSlug}`
     setShowSwitchModel(false)
   }
 
   function handleSettingsSelect() {
     if (!confirmLeaveMemory()) return
+    setHelpSlug(null)
     setWorkspaceView('settings')
     setShowSwitchModel(false)
   }
@@ -957,7 +957,6 @@ function App() {
         fleet: 'Activité',
         'activity-report': 'Rapport d’activité',
         memory: 'Mémoire',
-        help: 'Aide',
         settings: 'Paramètres',
       }[workspaceView]
 
@@ -990,7 +989,6 @@ function App() {
       : []),
     { name: 'activity-report', label: 'Rapport', view: 'activity-report', onClick: handleActivityReportSelect },
     { name: 'settings', label: 'Réglages', view: 'settings', onClick: handleSettingsSelect },
-    { name: 'help', label: 'Aide', view: 'help', onClick: () => handleHelpSelect() },
   ]
 
   const showSidebar = workspaceView === 'conversations'
@@ -1010,7 +1008,6 @@ function App() {
     >
       <Titlebar
         crumbs={[selectedProject?.name, titlebarView]}
-        onSearch={() => setPaletteOpen(true)}
         instance={instance}
         onRestart={restartApp}
         destinations={destinations}
@@ -1106,8 +1103,7 @@ function App() {
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
         {workspaceView === 'design' ? <DesignView />
         : workspaceView === 'applications' ? <ApplicationsView />
-        : workspaceView === 'help' ? <HelpView key={helpSlug ?? 'index'} initialSlug={helpSlug} />
-        : workspaceView === 'settings' ? <AppSettingsView instance={instance} quotas={quotas.snapshot} />
+        : workspaceView === 'settings' ? <SettingsShell instance={instance} quotas={quotas.snapshot} helpSlug={helpSlug} />
         : workspaceView === 'activity-report' ? <ActivityReportView onOpenConversation={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)} />
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
         : projectSurface?.layout === 'full' ? (

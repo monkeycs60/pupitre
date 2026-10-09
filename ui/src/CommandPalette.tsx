@@ -31,7 +31,7 @@ interface CommandPaletteProps {
   onProjectSelect: (project: Project) => void
   onConversationSelect: (projectId: string, conversationId: string) => void | Promise<void>
   onSkillLaunch: (skill: SkillSummary) => void
-  onViewSelect: (view: Extract<WorkspaceView, 'dashboard' | 'fleet' | 'routines' | 'library' | 'memory' | 'help'>) => void
+  onViewSelect: (view: 'dashboard' | 'fleet' | 'routines' | 'library' | 'memory' | 'help') => void
   onAction: (action: PaletteAction) => void | Promise<void>
   instance?: InstanceHealth | null
   onPromotionSelect?: () => void

@@ -24,7 +24,6 @@ export interface TitlebarDestination {
 interface TitlebarProps {
   /** Fil d'Ariane discret (projet · vue) ; les entrées vides sont ignorées. */
   crumbs?: Array<string | null | undefined>
-  onSearch?: () => void
   instance?: InstanceHealth | null
   onRestart?: () => Promise<void>
   /** Destinations globales : elles remplacent la navigation de l'ancien rail. */
@@ -48,7 +47,6 @@ const RESIZE_HANDLES: ReadonlyArray<[string, ResizeDirection]> = [
 
 export function Titlebar({
   crumbs,
-  onSearch,
   instance,
   onRestart,
   destinations = [],
@@ -104,18 +102,6 @@ export function Titlebar({
               </span>
             ))}
           </span>
-        ) : null}
-        {onSearch ? (
-          <button type="button" className="titlebar-search" onClick={onSearch}>
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-                <circle cx="7" cy="7" r="4.2" />
-                <path d="m10.2 10.2 3 3" />
-              </g>
-            </svg>
-            <span>Rechercher partout</span>
-            <kbd>Ctrl K</kbd>
-          </button>
         ) : null}
         {island}
       </div>
