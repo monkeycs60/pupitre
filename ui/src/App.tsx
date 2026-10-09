@@ -1145,7 +1145,9 @@ function App() {
             <header className="conversation-header">
               <div className="conversation-title-block">
                 <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
-                {selectedConversation === null && conversationSeed?.ticketKey ? (() => {
+                {selectedConversation === null && conversationSeed?.originType === 'sentry' && conversationSeed.originKey ? (
+                  <span className="conversation-context-badge" title={`Cette conversation sera rattachée à l'issue Sentry ${conversationSeed.originKey}`}>Pour l'issue Sentry {conversationSeed.originKey}</span>
+                ) : selectedConversation === null && conversationSeed?.ticketKey ? (() => {
                   const key = conversationSeed.ticketKey
                   const title = ticketLinks.get(key)?.title
                   const label = title ? `${key} · ${ticketTitleWithoutKey(title, key)}` : key
