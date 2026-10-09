@@ -18,7 +18,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react'
 import { Chat, type ThreadTools } from './Chat'
-import { Sidebar } from './Sidebar'
+import { Sidebar, ticketTitleWithoutKey } from './Sidebar'
 import { Rail } from './Rail'
 import { Titlebar, type TitlebarDestination } from './Titlebar'
 import { navigationShortcutLabel } from './navigationShortcuts'
@@ -1145,6 +1145,12 @@ function App() {
             <header className="conversation-header">
               <div className="conversation-title-block">
                 <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
+                {selectedConversation === null && conversationSeed?.ticketKey ? (() => {
+                  const key = conversationSeed.ticketKey
+                  const title = ticketLinks.get(key)?.title
+                  const label = title ? `${key} · ${ticketTitleWithoutKey(title, key)}` : key
+                  return <span className="conversation-context-badge" title={`Cette conversation sera rattachée au ticket ${label}`}>Pour le ticket {label}</span>
+                })() : null}
                 {selectedConversation?.ticket_instruction ? (
                   <ConversationInstruction instruction={selectedConversation.ticket_instruction} />
                 ) : null}

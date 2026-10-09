@@ -781,6 +781,21 @@ button.titlebar-instance {
   cursor: pointer;
 }
 
+.conversation-context-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+  padding: 2px 8px;
+  overflow: hidden;
+  color: var(--accent-bright);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--r-xs);
+}
+
 .conversation-instruction-badge:hover {
   border-color: var(--accent-border);
 }
