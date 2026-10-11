@@ -1,11 +1,11 @@
 /* ---------------------------------------------------------------------------
-   Onglet Carte : le changement d'une branche posé sur la structure du dépôt.
+   Onglet Structure : le changement d'une branche lu dans l'arborescence.
 --------------------------------------------------------------------------- */
 
 .structure-view {
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -58,6 +58,18 @@
   font-size: 12px;
 }
 
+.structure-view .is-added {
+  color: var(--ok);
+}
+
+.structure-view .is-modified {
+  color: var(--warn);
+}
+
+.structure-view .is-deleted {
+  color: var(--danger);
+}
+
 .structure-stats {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -67,17 +79,14 @@
 
 .structure-stats > div {
   grid-column: span 2;
-}
-
-.structure-stats > div:nth-child(n + 4) {
-  grid-column: span 3;
-}
-
-.structure-stats > div {
   padding: 8px 10px;
   background: var(--neutral-soft);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
+}
+
+.structure-stats > div:nth-child(n + 4) {
+  grid-column: span 3;
 }
 
 .structure-stats dt {
@@ -91,19 +100,6 @@
   font-size: 17px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  white-space: nowrap;
-}
-
-.structure-view .is-added {
-  color: var(--ok);
-}
-
-.structure-view .is-modified {
-  color: var(--warn);
-}
-
-.structure-view .is-deleted {
-  color: var(--danger);
 }
 
 .structure-quiet {
@@ -131,15 +127,6 @@
 }
 
 .structure-signal {
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-}
-
-.structure-signal.is-open {
-  border-color: var(--border-strong);
-}
-
-.structure-signal > button {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -150,12 +137,18 @@
   font-size: 13px;
   text-align: left;
   background: transparent;
-  border: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
   cursor: pointer;
 }
 
-.structure-signal > button:hover {
+.structure-signal:hover {
   background: var(--bg-hover);
+}
+
+.structure-signal.is-open {
+  background: var(--bg-active);
+  border-color: var(--accent-border);
 }
 
 .structure-signal-dot {
@@ -184,221 +177,210 @@
 }
 
 .structure-signal-hint {
-  margin: 0;
-  padding: 0 10px 6px 26px;
+  margin: 2px 0 0;
   color: var(--text-faint);
   font-size: 12px;
 }
 
-.structure-signal ul {
-  max-height: 240px;
-  margin: 0;
-  padding: 0 4px 6px;
-  overflow-y: auto;
-  list-style: none;
-}
-
-.structure-signal li button {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  width: 100%;
-  padding: 5px 8px;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.structure-signal li button:hover,
-.structure-signal li button.is-selected {
-  background: var(--bg-active);
-}
-
-.structure-signal-path {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11.5px;
-  overflow-wrap: anywhere;
-}
-
-.structure-signal-reason {
-  color: var(--text-faint);
-  font-size: 11.5px;
-}
-
-.structure-selection {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 10px 12px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
-  border-radius: 8px;
-}
-
-.structure-selection-path {
-  max-width: 100%;
-  margin: 0;
-  color: var(--text-strong);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.structure-selection-meta {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.structure-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  margin: auto 0 0;
-  padding: 10px 0 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  list-style: none;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.structure-legend li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.structure-legend-note {
-  flex-basis: 100%;
-  color: var(--text-faint);
-}
-
-.structure-swatch {
-  width: 10px;
-  height: 10px;
-  background: currentColor;
-  border-radius: 2px;
-}
-
-.structure-swatch.is-untouched {
-  color: var(--text-faint);
-  opacity: 0.55;
-}
-
-.structure-stage {
-  position: relative;
+.structure-tree {
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
-  background: radial-gradient(circle at 50% 35%, var(--bg-raised), var(--bg-workspace) 70%);
+  overflow: auto;
+  padding: 16px 20px 40px;
 }
 
-.structure-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  touch-action: none;
-}
-
-.structure-labels {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.structure-label {
-  position: absolute;
-  top: 0;
-  left: 0;
-  padding: 1px 6px;
-  color: var(--text-muted);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
-  white-space: nowrap;
-  background: color-mix(in srgb, var(--bg-app) 72%, transparent);
-  border-radius: 4px;
-  transition: opacity 120ms ease;
-  will-change: transform;
-}
-
-.structure-label.is-root {
-  color: var(--text-strong);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-
-.structure-label.is-new {
-  color: var(--ok);
-  box-shadow: inset 0 0 0 1px var(--ok);
-}
-
-.structure-overlay {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  z-index: 2;
+.structure-message {
+  margin: 40px auto;
   max-width: 420px;
-  margin: 0;
-  padding: 10px 14px;
   color: var(--text-muted);
   font-size: 13px;
   text-align: center;
-  background: var(--bg-overlay);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  transform: translate(-50%, -50%);
 }
 
-.structure-overlay.is-error {
+.structure-message.is-error {
   color: var(--danger);
 }
 
-.structure-tooltip {
-  position: absolute;
-  z-index: 3;
+.structure-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 28px;
+  align-items: start;
+}
+
+.structure-column {
+  min-width: 0;
+}
+
+.structure-column h2 {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-width: 420px;
-  padding: 7px 10px;
-  color: var(--text-muted);
-  font-size: 12px;
-  background: var(--bg-overlay);
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  pointer-events: none;
-}
-
-.structure-tooltip strong {
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
   color: var(--text-strong);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11.5px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
 }
 
-.structure-recenter {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  z-index: 2;
-  padding: 5px 11px;
-  color: var(--text-muted);
-  font: inherit;
+.structure-column h2 span {
+  color: var(--text-faint);
   font-size: 12px;
-  background: var(--bg-overlay);
-  border: 1px solid var(--border);
-  border-radius: 7px;
+  font-weight: 400;
+}
+
+.structure-children {
+  margin: 0 0 0 9px;
+  padding: 0 0 0 11px;
+  list-style: none;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.structure-children.is-root {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+.structure-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 24px;
+  padding: 1px 6px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+button.structure-row {
   cursor: pointer;
 }
 
-.structure-recenter:hover {
+button.structure-row:hover {
+  background: var(--bg-hover);
+}
+
+.structure-row.is-directory {
   color: var(--text-strong);
-  border-color: var(--border-strong);
+  font-weight: 600;
+}
+
+.structure-row.is-directory.is-new .structure-name {
+  color: var(--ok);
+}
+
+.structure-row.is-dimmed {
+  opacity: 0.28;
+}
+
+.structure-row.is-quiet-toggle,
+.structure-row.is-quiet {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.structure-caret {
+  flex: none;
+  width: 10px;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.structure-status {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 4px;
+}
+
+.structure-status.is-A {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.structure-status.is-M,
+.structure-status.is-R {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.structure-status.is-D {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.structure-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.structure-flag {
+  flex: none;
+  padding: 0 6px;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  border-radius: 99px;
+}
+
+.structure-flag.is-alert {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.structure-flag.is-warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.structure-flag.is-info {
+  color: var(--text-muted);
+  background: var(--neutral-soft);
+}
+
+.structure-count {
+  flex: none;
+  margin-left: auto;
+  padding-left: 10px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.structure-churn {
+  display: flex;
+  flex: none;
+  gap: 1px;
+  width: 60px;
+}
+
+.structure-churn-added,
+.structure-churn-removed {
+  height: 7px;
+  border-radius: 2px;
+}
+
+.structure-churn-added {
+  background: var(--ok);
+}
+
+.structure-churn-removed {
+  background: var(--danger);
 }

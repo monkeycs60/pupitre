@@ -47,7 +47,7 @@ const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
   { id: 'environments', label: 'Environnements' },
 ]
 
-const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { todos: 'Tâches', tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements', code: 'Code', structure: 'Carte' }
+const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { todos: 'Tâches', tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements', code: 'Code', structure: 'Structure' }
 
 const PROJECT_SECTION_ICONS: Record<DashboardTab, ReactNode> = {
   todos: <path d="m2.5 4 1.2 1.2L6 2.9M8 4h5M2.5 8h3M8 8h5M2.5 12h3M8 12h5" />,

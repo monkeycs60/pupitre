@@ -6,13 +6,11 @@ import { CodeSourcePicker } from './CodeSourcePicker'
 import {
   buildStructureTree,
   detectStructureSignals,
-  layoutStructure,
-  pruneStructureTree,
   summarizeStructure,
   type StructureNode,
+  type StructureSignal,
   type StructureSourceInput,
 } from './structureMap'
-import type { StructurePalette, StructureScene } from './StructureScene'
 import type { CodeSource, Conversation, Project } from './types'
 
 interface StructureViewProps {
@@ -27,23 +25,30 @@ interface LoadedScope {
   truncated: boolean
 }
 
-const STATUS_LABELS: Record<string, string> = { A: 'Créé', M: 'Modifié', D: 'Supprimé', R: 'Renommé' }
+interface Flag {
+  kind: StructureSignal['kind']
+  severity: StructureSignal['severity']
+  text: string
+}
 
-function readPalette(element: HTMLElement): StructurePalette {
-  const styles = getComputedStyle(element)
-  const token = (name: string, fallback: string): string => styles.getPropertyValue(name).trim() || fallback
-  return {
-    background: token('--bg-workspace', '#1c1e23'),
-    ground: token('--bg-app', '#17181c'),
-    platform: token('--bg-raised', '#26282f'),
-    platformTouched: token('--bg-overlay', '#2a2d35'),
-    untouched: token('--text-faint', '#898691'),
-    added: token('--ok', '#4ec9a5'),
-    modified: token('--warn', '#f0a852'),
-    deleted: token('--danger', '#f2555a'),
-    renamed: token('--viz-1', '#3987e5'),
-    highlight: token('--text-strong', '#fbf9fd'),
-  }
+interface TreeContext {
+  flags: ReadonlyMap<string, Flag[]>
+  focus: ReadonlySet<string> | null
+  collapsed: ReadonlySet<string>
+  revealed: ReadonlySet<string>
+  toggle: (id: string) => void
+  reveal: (id: string) => void
+  onOpenFile: (source: string, path: string) => void
+}
+
+const STATUS_LABELS: Record<string, string> = { A: 'créé', M: 'modifié', D: 'supprimé', R: 'renommé' }
+const FLAG_LABELS: Record<StructureSignal['kind'], string> = {
+  'new-directory': 'nouveau dossier',
+  suspect: 'à vérifier',
+  isolated: 'isolé',
+  large: 'gros fichier',
+  uncommitted: 'non commité',
+  deleted: 'supprimé',
 }
 
 async function loadScope(projectId: string, sources: CodeSource[], prefixes: ReadonlyMap<string, string>, signal: AbortSignal): Promise<LoadedScope> {
@@ -67,6 +72,131 @@ async function loadScope(projectId: string, sources: CodeSource[], prefixes: Rea
   }
 }
 
+function byName(left: StructureNode, right: StructureNode): number {
+  return left.name.localeCompare(right.name)
+}
+
+function churnWidth(value: number): number {
+  return value > 0 ? Math.max(3, Math.round(Math.log2(value + 1) * 5)) : 0
+}
+
+function sumChurn(node: StructureNode, key: 'added' | 'removed'): number {
+  return node.kind === 'file' ? node.file![key] : node.children.reduce((total, child) => total + sumChurn(child, key), 0)
+}
+
+function quietSummary(nodes: StructureNode[]): string {
+  const directories = nodes.filter((node) => node.kind === 'dir').length
+  const files = nodes.length - directories
+  const parts: string[] = []
+  if (directories > 0) parts.push(`${directories} dossier${directories > 1 ? 's' : ''}`)
+  if (files > 0) parts.push(`${files} fichier${files > 1 ? 's' : ''}`)
+  return `${parts.join(' et ')} sans changement`
+}
+
+function selfAndDescendantIds(node: StructureNode): string[] {
+  return [node.id, ...node.children.flatMap(selfAndDescendantIds)]
+}
+
+function pathIds(root: StructureNode, targets: ReadonlySet<string>): Set<string> {
+  const found = new Set<string>()
+  const walk = (node: StructureNode): boolean => {
+    let inside = targets.has(node.id)
+    for (const child of node.children) if (walk(child)) inside = true
+    if (inside) found.add(node.id)
+    return inside
+  }
+  walk(root)
+  return found
+}
+
+function ChurnBar({ added, removed }: { added: number, removed: number }) {
+  return <span className="structure-churn" aria-hidden="true">
+    <span className="structure-churn-added" style={{ width: churnWidth(added) }} />
+    <span className="structure-churn-removed" style={{ width: churnWidth(removed) }} />
+  </span>
+}
+
+function FlagChips({ flags }: { flags: Flag[] }) {
+  return <>{flags.map((flag) => (
+    <span key={flag.kind} className={`structure-flag is-${flag.severity}`} title={flag.text}>{FLAG_LABELS[flag.kind]}</span>
+  ))}</>
+}
+
+function QuietRows({ id, nodes, context }: { id: string, nodes: StructureNode[], context: TreeContext }) {
+  if (nodes.length === 0) return null
+  const open = context.revealed.has(id)
+  const sorted = [...nodes].sort((left, right) => Number(right.kind === 'dir') - Number(left.kind === 'dir') || byName(left, right))
+  return <li className="structure-node">
+    <button type="button" className="structure-row is-quiet-toggle" aria-expanded={open} onClick={() => context.reveal(id)}>
+      <span className="structure-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+      <span className="structure-name">{quietSummary(nodes)}</span>
+    </button>
+    {open ? <ul className="structure-children">
+      {sorted.map((child) => <li key={child.id} className="structure-row is-quiet">
+        <span className="structure-caret" aria-hidden="true" />
+        <span className="structure-name">{child.name}{child.kind === 'dir' ? '/' : ''}</span>
+        {child.kind === 'dir' ? <span className="structure-count">{child.total}</span> : null}
+      </li>)}
+    </ul> : null}
+  </li>
+}
+
+function Children({ node, context }: { node: StructureNode, context: TreeContext }) {
+  const touched = node.children.filter((child) => child.touched > 0)
+  return <>
+    {touched.filter((child) => child.kind === 'dir').sort(byName).map((child) => <DirectoryRows key={child.id} node={child} context={context} />)}
+    {touched.filter((child) => child.kind === 'file').sort(byName).map((child) => <FileRow key={child.id} node={child} context={context} />)}
+    <QuietRows id={node.id} nodes={node.children.filter((child) => child.touched === 0)} context={context} />
+  </>
+}
+
+function DirectoryRows({ node, context }: { node: StructureNode, context: TreeContext }) {
+  const chain = [node]
+  let current = node
+  while (current.children.length === 1 && current.children[0]!.kind === 'dir' && current.children[0]!.touched > 0) {
+    current = current.children[0]!
+    chain.push(current)
+  }
+  const flags = chain.flatMap((item) => context.flags.get(item.id) ?? [])
+  const open = !context.collapsed.has(current.id)
+  const dimmed = context.focus !== null && !chain.some((item) => context.focus!.has(item.id))
+
+  return <li className="structure-node">
+    <button
+      type="button"
+      className={`structure-row is-directory${chain.some((item) => item.isNew) ? ' is-new' : ''}${dimmed ? ' is-dimmed' : ''}`}
+      aria-expanded={open}
+      data-structure-id={current.id}
+      onClick={() => context.toggle(current.id)}
+    >
+      <span className="structure-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+      <span className="structure-name" title={current.display}>{chain.map((item) => item.name).join('/')}/</span>
+      <FlagChips flags={flags} />
+      <span className="structure-count">{current.touched} sur {current.total}</span>
+      <ChurnBar added={sumChurn(current, 'added')} removed={sumChurn(current, 'removed')} />
+    </button>
+    {open ? <ul className="structure-children"><Children node={current} context={context} /></ul> : null}
+  </li>
+}
+
+function FileRow({ node, context }: { node: StructureNode, context: TreeContext }) {
+  const file = node.file!
+  const dimmed = context.focus !== null && !context.focus.has(node.id)
+  const className = `structure-row is-file${dimmed ? ' is-dimmed' : ''}`
+  const content = <>
+    <span className={`structure-status is-${file.status}`} title={STATUS_LABELS[file.status ?? 'M']}>{file.status}</span>
+    <span className="structure-name">{node.name}</span>
+    <FlagChips flags={context.flags.get(node.id) ?? []} />
+    <span className="structure-count">{file.added + file.removed > 0 ? <><span className="is-added">+{file.added}</span> <span className="is-deleted">−{file.removed}</span></> : null}</span>
+    <ChurnBar added={file.added} removed={file.removed} />
+  </>
+  return <li className="structure-node">
+    {file.status === 'D'
+      ? <div className={className} data-structure-id={node.id}>{content}</div>
+      : <button type="button" className={className} data-structure-id={node.id} title={`Ouvrir ${node.display} dans Code`} onClick={() => context.onOpenFile(file.source, file.path)}>{content}</button>}
+  </li>
+}
+
 export function StructureView({ project, conversation, onOpenFile }: StructureViewProps) {
   const conversationId = conversation?.id ?? null
   const [sources, setSources] = useState<CodeSource[] | null>(null)
@@ -74,13 +204,10 @@ export function StructureView({ project, conversation, onOpenFile }: StructureVi
   const [loaded, setLoaded] = useState<LoadedScope | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [revision, setRevision] = useState(0)
-  const [activeSignal, setActiveSignal] = useState<string | null>(null)
-  const [hover, setHover] = useState<{ node: StructureNode, x: number, y: number } | null>(null)
-  const [selected, setSelected] = useState<StructureNode | null>(null)
-  const [sceneError, setSceneError] = useState<string | null>(null)
-  const [sceneReady, setSceneReady] = useState(false)
-  const stageRef = useRef<HTMLDivElement | null>(null)
-  const sceneRef = useRef<StructureScene | null>(null)
+  const [activeSignal, setActiveSignal] = useState<StructureSignal['kind'] | null>(null)
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(() => new Set())
+  const treeRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -100,8 +227,9 @@ export function StructureView({ project, conversation, onOpenFile }: StructureVi
     const controller = new AbortController()
     setLoaded(null)
     setError(null)
-    setSelected(null)
     setActiveSignal(null)
+    setCollapsed(new Set())
+    setRevealed(new Set())
     loadScope(project.id, scope.sources, scopePrefixes(scope), controller.signal)
       .then((data) => { if (!controller.signal.aborted) setLoaded(data) })
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(codeErrorMessage(reason)) })
@@ -111,63 +239,66 @@ export function StructureView({ project, conversation, onOpenFile }: StructureVi
   const model = useMemo(() => {
     if (!loaded) return null
     const tree = buildStructureTree(loaded.inputs)
-    return {
-      summary: summarizeStructure(tree),
-      signals: detectStructureSignals(tree),
-      layout: layoutStructure(pruneStructureTree(tree)),
+    const signals = detectStructureSignals(tree)
+    const flags = new Map<string, Flag[]>()
+    for (const signal of signals) {
+      for (const entry of signal.nodes) {
+        flags.set(entry.node.id, [...(flags.get(entry.node.id) ?? []), { kind: signal.kind, severity: signal.severity, text: entry.reason }])
+      }
     }
+    return { tree, signals, flags, summary: summarizeStructure(tree), roots: loaded.inputs.length > 1 ? tree.children : [tree] }
   }, [loaded])
 
-  const openFileRef = useRef(onOpenFile)
-  openFileRef.current = onOpenFile
-
-  useEffect(() => {
-    const stage = stageRef.current
-    if (!stage) return
-    let disposed = false
-    let created: StructureScene | null = null
-    import('./StructureScene')
-      .then(({ StructureScene: Scene }) => {
-        if (disposed) return
-        created = new Scene(stage, readPalette(stage), {
-          onHover: (node, x, y) => setHover(node ? { node, x, y } : null),
-          onSelect: (node) => setSelected(node),
-        })
-        sceneRef.current = created
-        setSceneReady(true)
-      })
-      .catch(() => { if (!disposed) setSceneError('Le rendu 3D n’a pas pu démarrer sur cet écran.') })
-    return () => {
-      disposed = true
-      created?.dispose()
-      sceneRef.current = null
-      setSceneReady(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (model && sceneReady) sceneRef.current?.setLayout(model.layout)
-  }, [model, sceneReady])
-
   const signal = model?.signals.find((item) => item.kind === activeSignal) ?? null
-  useEffect(() => {
-    sceneRef.current?.setHighlight(signal ? signal.nodes.flatMap((entry) => descendantIds(entry.node)) : [])
-  }, [signal, model, sceneReady])
+  const focus = useMemo(() => {
+    if (!model || !signal) return null
+    return pathIds(model.tree, new Set(signal.nodes.flatMap((entry) => selfAndDescendantIds(entry.node))))
+  }, [model, signal])
 
-  function selectSignalNode(node: StructureNode) {
-    setSelected(node)
-    const scene = sceneRef.current
-    if (scene && !scene.focus(node.id)) scene.focus(descendantIds(node)[0] ?? '')
+  function selectSignal(kind: StructureSignal['kind']) {
+    const next = kind === activeSignal ? null : kind
+    setActiveSignal(next)
+    const target = next ? model?.signals.find((item) => item.kind === next)?.nodes[0]?.node : null
+    if (!target || !model) return
+    const path = pathIds(model.tree, new Set([target.id]))
+    setCollapsed((current) => new Set([...current].filter((id) => !path.has(id))))
+    const ids = new Set(selfAndDescendantIds(target))
+    requestAnimationFrame(() => {
+      const rows = Array.from(treeRef.current?.querySelectorAll<HTMLElement>('[data-structure-id]') ?? [])
+      for (const row of rows) {
+        if (!ids.has(row.dataset.structureId ?? '')) continue
+        row.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+        break
+      }
+    })
+  }
+
+  function toggleIn(setter: typeof setCollapsed, id: string) {
+    setter((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const summary = model?.summary ?? null
   const base = loaded?.bases.join(', ') || null
+  const context: TreeContext | null = model ? {
+    flags: model.flags,
+    focus,
+    collapsed,
+    revealed,
+    toggle: (id) => toggleIn(setCollapsed, id),
+    reveal: (id) => toggleIn(setRevealed, id),
+    onOpenFile,
+  } : null
 
   return <div className="structure-view">
     <aside className="structure-panel" aria-label="Lecture du changement">
       <div className="structure-panel-head">
         <CodeSourcePicker scopes={scopes} value={activeScopeId} originConversationId={conversationId} onChange={setScopeId} />
-        <button type="button" className="structure-refresh" title="Relire le dépôt" aria-label="Rafraîchir la carte" onClick={() => setRevision((value) => value + 1)}>
+        <button type="button" className="structure-refresh" title="Relire le dépôt" aria-label="Rafraîchir la structure" onClick={() => setRevision((value) => value + 1)}>
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
       </div>
@@ -190,64 +321,36 @@ export function StructureView({ project, conversation, onOpenFile }: StructureVi
 
       {model && model.signals.length > 0 ? <div className="structure-signals">
         <h3>À regarder</h3>
-        {model.signals.map((item) => {
-          const open = item.kind === activeSignal
-          return <section key={item.kind} className={`structure-signal is-${item.severity}${open ? ' is-open' : ''}`}>
-            <button type="button" aria-expanded={open} onClick={() => setActiveSignal(open ? null : item.kind)}>
-              <span className="structure-signal-dot" aria-hidden="true" />
-              <span className="structure-signal-label">{item.label}</span>
-              <span className="structure-signal-count">{item.nodes.length}</span>
-            </button>
-            {open ? <>
-              <p className="structure-signal-hint">{item.hint}</p>
-              <ul>
-                {item.nodes.map((entry) => <li key={entry.node.id}>
-                  <button type="button" className={selected?.id === entry.node.id ? 'is-selected' : ''} title={entry.node.display} onClick={() => selectSignalNode(entry.node)}>
-                    <span className="structure-signal-path">{entry.node.display}</span>
-                    <span className="structure-signal-reason">{entry.reason}</span>
-                  </button>
-                </li>)}
-              </ul>
-            </> : null}
-          </section>
-        })}
+        {model.signals.map((item) => (
+          <button
+            key={item.kind}
+            type="button"
+            className={`structure-signal is-${item.severity}${item.kind === activeSignal ? ' is-open' : ''}`}
+            aria-pressed={item.kind === activeSignal}
+            title={item.hint}
+            onClick={() => selectSignal(item.kind)}
+          >
+            <span className="structure-signal-dot" aria-hidden="true" />
+            <span className="structure-signal-label">{item.label}</span>
+            <span className="structure-signal-count">{item.nodes.length}</span>
+          </button>
+        ))}
+        {signal ? <p className="structure-signal-hint">{signal.hint} Le reste de l’arborescence est estompé.</p> : null}
       </div> : null}
-
-      {selected?.file ? <div className="structure-selection">
-        <p className="structure-selection-path">{selected.display}</p>
-        <p className="structure-selection-meta">
-          {selected.file.status ? STATUS_LABELS[selected.file.status] : 'Inchangé'}
-          {selected.file.status ? <> · <span className="is-added">+{selected.file.added}</span> <span className="is-deleted">−{selected.file.removed}</span></> : null}
-          {selected.file.uncommitted ? ' · non commité' : ''}
-        </p>
-        {selected.file.status !== 'D' ? <button type="button" className="secondary-button" onClick={() => openFileRef.current(selected.file!.source, selected.file!.path)}>Ouvrir dans Code</button> : null}
-      </div> : null}
-
-      <ul className="structure-legend" aria-label="Légende">
-        <li><span className="structure-swatch is-added" />Créé</li>
-        <li><span className="structure-swatch is-modified" />Modifié</li>
-        <li><span className="structure-swatch is-deleted" />Supprimé</li>
-        <li><span className="structure-swatch is-untouched" />Voisin inchangé</li>
-        <li className="structure-legend-note">Hauteur : lignes changées. Toit clair : non commité. Contour vert : nouveau dossier.</li>
-      </ul>
     </aside>
 
-    <div className="structure-stage" ref={stageRef}>
-      {error ? <p className="structure-overlay is-error">{error}</p> : null}
-      {sceneError ? <p className="structure-overlay is-error">{sceneError}</p> : null}
-      {!error && !loaded ? <p className="structure-overlay">Lecture du dépôt…</p> : null}
-      {!error && summary && summary.files === 0 ? <p className="structure-overlay">Aucun fichier touché sur cette branche{base ? ` par rapport à ${base}` : ''}.</p> : null}
-      {hover ? <div className="structure-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
-        <strong>{hover.node.display}</strong>
-        {hover.node.file?.status
-          ? <span>{STATUS_LABELS[hover.node.file.status]} · +{hover.node.file.added} −{hover.node.file.removed}{hover.node.file.uncommitted ? ' · non commité' : ''}</span>
-          : <span>{hover.node.kind === 'block' ? `${hover.node.total} fichier${hover.node.total > 1 ? 's' : ''} inchangé${hover.node.total > 1 ? 's' : ''}` : 'Inchangé'}</span>}
+    <div className="structure-tree" ref={treeRef}>
+      {error ? <p className="structure-message is-error">{error}</p> : null}
+      {!error && !loaded ? <p className="structure-message">Lecture du dépôt…</p> : null}
+      {!error && summary && summary.files === 0 ? <p className="structure-message">Aucun fichier touché sur cette branche{base ? ` par rapport à ${base}` : ''}.</p> : null}
+      {model && context && summary && summary.files > 0 ? <div className="structure-columns">
+        {model.roots.filter((root) => root.touched > 0).map((root) => (
+          <section key={root.id || 'root'} className="structure-column" aria-label={root.name || project.name}>
+            {root.name ? <h2>{root.name}<span>{root.touched} fichier{root.touched > 1 ? 's' : ''} sur {root.total}</span></h2> : null}
+            <ul className="structure-children is-root"><Children node={root} context={context} /></ul>
+          </section>
+        ))}
       </div> : null}
-      <button type="button" className="structure-recenter" onClick={() => sceneRef.current?.resetCamera()}>Recentrer</button>
     </div>
   </div>
-}
-
-function descendantIds(node: StructureNode): string[] {
-  return node.kind === 'file' ? [node.id] : node.children.flatMap(descendantIds)
 }

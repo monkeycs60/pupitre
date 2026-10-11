@@ -21,28 +21,13 @@ export interface StructureNode {
   id: string
   name: string
   display: string
-  kind: 'dir' | 'file' | 'block'
+  kind: 'dir' | 'file'
   children: StructureNode[]
   file: StructureFile | null
   total: number
   touched: number
   churn: number
   isNew: boolean
-}
-
-export interface StructureRect {
-  node: StructureNode
-  x: number
-  z: number
-  width: number
-  depth: number
-  level: number
-}
-
-export interface StructureLayout {
-  platforms: StructureRect[]
-  buildings: StructureRect[]
-  size: number
 }
 
 export type StructureSignalKind = 'new-directory' | 'suspect' | 'isolated' | 'large' | 'uncommitted' | 'deleted'
@@ -55,7 +40,6 @@ export interface StructureSignal {
   nodes: Array<{ node: StructureNode, reason: string }>
 }
 
-const UNTOUCHED_SIBLING_LIMIT = 48
 const LARGE_ADDITION = 400
 const TEMPORARY_NAME = /(^|[._-])(tmp|temp|bak|backup|old|copy|draft|scratch|debug|wip)([._-]|$)|\.(orig|rej|log|bak|tmp)$|~$/i
 const GENERATED_FILE = /(^|\/)__snapshots__\/|\.snap$|(^|\/)(bun\.lockb?|package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/
@@ -159,123 +143,6 @@ function aggregate(node: StructureNode): void {
     node.churn += child.churn
   }
   node.isNew = node.children.length > 0 && node.children.every((child) => child.isNew)
-}
-
-/** Replie ce qui n'a pas changé pour que la carte tienne à l'écran, en gardant les voisins directs des fichiers touchés. */
-export function pruneStructureTree(root: StructureNode): StructureNode {
-  const prune = (node: StructureNode): StructureNode => {
-    if (node.kind !== 'dir') return node
-    if (node.touched === 0) return { ...node, kind: 'block', children: [] }
-
-    let current = node
-    let name = node.name
-    while (current.children.length === 1 && current.children[0]!.kind === 'dir' && current.children[0]!.touched > 0 && current.name !== '') {
-      current = current.children[0]!
-      name = `${name}/${current.name}`
-    }
-
-    const directories = current.children.filter((child) => child.kind === 'dir').map(prune)
-    const touchedFiles = current.children.filter((child) => child.kind === 'file' && child.touched > 0)
-    const untouchedFiles = current.children.filter((child) => child.kind === 'file' && child.touched === 0)
-    const kept = untouchedFiles.slice(0, UNTOUCHED_SIBLING_LIMIT)
-    const overflow = untouchedFiles.length - kept.length
-    const children = [...directories, ...touchedFiles, ...kept]
-    if (overflow > 0) {
-      children.push({
-        id: `${current.id}\n+`,
-        name: `${overflow} autres fichiers`,
-        display: `${current.display} (${overflow} autres fichiers)`,
-        kind: 'block',
-        children: [],
-        file: null,
-        total: overflow,
-        touched: 0,
-        churn: 0,
-        isNew: false,
-      })
-    }
-    return { ...current, name, children }
-  }
-  return prune(root)
-}
-
-function weightOf(node: StructureNode): number {
-  if (node.kind === 'file') return node.touched > 0 ? 5 + Math.log2(1 + node.churn) : 1
-  if (node.kind === 'block') return Math.min(14, Math.max(1.5, Math.sqrt(node.total)))
-  return node.children.reduce((total, child) => total + weightOf(child), 0) + 1.5
-}
-
-interface Box { x: number, z: number, width: number, depth: number }
-
-function squarify(items: Array<{ node: StructureNode, weight: number }>, box: Box): Array<{ node: StructureNode, box: Box }> {
-  const placed: Array<{ node: StructureNode, box: Box }> = []
-  const total = items.reduce((sum, item) => sum + item.weight, 0)
-  if (total <= 0 || box.width <= 0 || box.depth <= 0) return placed
-  const scale = (box.width * box.depth) / total
-  const queue = items.map((item) => ({ node: item.node, area: item.weight * scale })).sort((left, right) => right.area - left.area)
-  let free = { ...box }
-
-  const worst = (row: number[], side: number): number => {
-    const sum = row.reduce((accumulator, value) => accumulator + value, 0)
-    const max = Math.max(...row)
-    const min = Math.min(...row)
-    return Math.max((side * side * max) / (sum * sum), (sum * sum) / (side * side * min))
-  }
-
-  let index = 0
-  while (index < queue.length) {
-    const side = Math.min(free.width, free.depth)
-    const row = [queue[index]!]
-    let areas = [row[0]!.area]
-    let next = index + 1
-    while (next < queue.length) {
-      const candidate = [...areas, queue[next]!.area]
-      if (worst(candidate, side) > worst(areas, side)) break
-      areas = candidate
-      row.push(queue[next]!)
-      next += 1
-    }
-    const rowArea = areas.reduce((sum, value) => sum + value, 0)
-    const thickness = rowArea / side
-    let offset = 0
-    for (const item of row) {
-      const length = item.area / thickness
-      placed.push({
-        node: item.node,
-        box: free.width >= free.depth
-          ? { x: free.x, z: free.z + offset, width: thickness, depth: length }
-          : { x: free.x + offset, z: free.z, width: length, depth: thickness },
-      })
-      offset += length
-    }
-    free = free.width >= free.depth
-      ? { x: free.x + thickness, z: free.z, width: free.width - thickness, depth: free.depth }
-      : { x: free.x, z: free.z + thickness, width: free.width, depth: free.depth - thickness }
-    index = next
-  }
-  return placed
-}
-
-export function layoutStructure(root: StructureNode): StructureLayout {
-  const size = Math.max(24, Math.sqrt(weightOf(root)) * 2.6)
-  const platforms: StructureRect[] = []
-  const buildings: StructureRect[] = []
-
-  const place = (node: StructureNode, box: Box, level: number): void => {
-    if (node.kind !== 'dir') {
-      const gap = Math.min(0.12, box.width * 0.12, box.depth * 0.12)
-      buildings.push({ node, x: box.x + gap, z: box.z + gap, width: box.width - gap * 2, depth: box.depth - gap * 2, level })
-      return
-    }
-    if (node.name !== '') platforms.push({ node, x: box.x, z: box.z, width: box.width, depth: box.depth, level })
-    const padding = node.name === '' ? 0 : Math.min(0.32, box.width * 0.08, box.depth * 0.08)
-    const inner = { x: box.x + padding, z: box.z + padding, width: box.width - padding * 2, depth: box.depth - padding * 2 }
-    const items = node.children.map((child) => ({ node: child, weight: weightOf(child) }))
-    for (const child of squarify(items, inner)) place(child.node, child.box, node.name === '' ? level : level + 1)
-  }
-
-  place(root, { x: -size / 2, z: -size / 2, width: size, depth: size }, 0)
-  return { platforms, buildings, size }
 }
 
 function touchedFiles(root: StructureNode): StructureNode[] {

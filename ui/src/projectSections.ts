@@ -7,7 +7,7 @@ export const PROJECT_SECTIONS: ReadonlyArray<{ id: ProjectSection; label: string
   { id: 'environments', label: 'Environnements' },
   { id: 'todos', label: 'Tâches' },
   { id: 'code', label: 'Code' },
-  { id: 'structure', label: 'Carte' },
+  { id: 'structure', label: 'Structure' },
 ]
 
 export function projectSectionStorageKey(projectId: string): string {
