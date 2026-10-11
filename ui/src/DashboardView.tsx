@@ -47,7 +47,7 @@ const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
   { id: 'environments', label: 'Environnements' },
 ]
 
-const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { todos: 'Tâches', tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements', code: 'Code' }
+const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { todos: 'Tâches', tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements', code: 'Code', structure: 'Carte' }
 
 const PROJECT_SECTION_ICONS: Record<DashboardTab, ReactNode> = {
   todos: <path d="m2.5 4 1.2 1.2L6 2.9M8 4h5M2.5 8h3M8 8h5M2.5 12h3M8 12h5" />,
@@ -56,6 +56,7 @@ const PROJECT_SECTION_ICONS: Record<DashboardTab, ReactNode> = {
   changelog: <><path d="M4 4.2A5 5 0 1 1 3 9" /><path d="M4 1.8v2.8H1.2M8 5v3l2 1.2" /></>,
   environments: <><circle cx="8" cy="3" r="1.5" /><circle cx="3.5" cy="12" r="1.5" /><circle cx="12.5" cy="12" r="1.5" /><path d="M8 4.5v3M3.5 10.5V8h9v2.5" /></>,
   code: <path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5" />,
+  structure: <><path d="M2 12.5 8 15l6-2.5M2 12.5v-4L8 6l6 2.5v4M8 15v-4" /><path d="M5.5 7V3.5L8 2.5l2.5 1V7" /></>,
 }
 
 function dashboardTabStorageKey(projectId: string): string {

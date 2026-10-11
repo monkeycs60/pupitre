@@ -82,6 +82,7 @@ const DesignView = lazy(() => import('./DesignView').then((module) => ({ default
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
 const ActivityReportView = lazy(() => import('./ActivityReportView').then((module) => ({ default: module.ActivityReportView })))
 const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })))
+const StructureView = lazy(() => import('./StructureView').then((module) => ({ default: module.StructureView })))
 const ApplicationsView = lazy(() => import('./ApplicationsView').then((module) => ({ default: module.ApplicationsView })))
 
 const DEFAULT_SIDEBAR_WIDTH = 296
@@ -563,6 +564,19 @@ function App() {
     openProjectSection('code')
   }
   openToolFileRef.current = openToolFileInCode
+
+  function openStructureFileInCode(source: string, path: string) {
+    if (selectedProject === null) return
+    writeCodeViewMemory(codeViewMemoryKey(selectedProject.id, selectedConversation?.id ?? null), {
+      scopeId: `source:${source}`,
+      openFile: { display: path, source, path, line: null, diffSha: null, branchDiff: true, nonce: Date.now() },
+      readerScrollTop: undefined,
+      expandedDirectories: ancestorDirectories(path),
+      selected: null,
+      graphExpanded: false,
+    })
+    openProjectSection('code')
+  }
 
   function openCodeForConversation(conversationId: string, target: 'conversation' | 'ticket' = 'conversation') {
     if (selectedProject === null) return
@@ -1128,6 +1142,13 @@ function App() {
                 conversation={selectedConversation}
                 ticketLinks={ticketLinks}
                 onOpenConversation={(conversationId) => void handleGitConversationSelect(conversationId)}
+              />
+              : projectSurface.section === 'structure'
+              ? <StructureView
+                key={`structure-${selectedProject.id}-${selectedConversation?.id ?? 'none'}`}
+                project={selectedProject}
+                conversation={selectedConversation}
+                onOpenFile={openStructureFileInCode}
               />
               : renderProjectDashboard()}
           </>
