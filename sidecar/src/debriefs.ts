@@ -501,7 +501,7 @@ function sessionSummaryPrompt(
     "Ne liste pas les appels d'outils, les détails de raisonnement ou les décisions sans effet pratique.",
     "N'invente aucun correctif, fichier, test ou TODO.",
     "Retourne uniquement du Markdown avec exactement le titre ## Implémenté et, uniquement s'il reste des éléments explicitement ouverts, le titre ## À terminer.",
-    'Ajoute un bloc ```json {"remaining":[{"title":"…","detail":"…"}]} ``` pour les seuls éléments ouverts qui sont du travail différé sérieux (3 au plus ; jamais d\'action triviale ou non technique comme envoyer un message), liste vide sinon.',
+    'Ajoute un bloc ```json {"remaining":[{"title":"…","detail":"…","reason":"…","ticket":"same|none","branch":"trunk|conversation"}]} ``` pour au plus 3 chantiers découverts pendant la session mais hors de son cadre (bug voisin laissé, dette identifiée, gros chantier repoussé), jamais la suite normale de la tâche ni une action triviale ; reason = pourquoi il sort du cadre, ticket = same (même ticket) ou none, branch = trunk (branche principale) ou conversation (dépend de la branche de la conversation). Liste vide en cas de doute.',
     "Utilise 2 à 8 puces au total. Chaque puce doit être courte et actionnable. Cite [événement #N] seulement lorsque cela clarifie la preuve.",
     "",
     "SEGMENT À RÉSUMER",

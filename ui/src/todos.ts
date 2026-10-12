@@ -23,7 +23,7 @@ export interface TodoInput {
 }
 export interface TodoItem {
   proposed?: boolean
-  origin?: { kind: string; conversationId?: string; summaryId?: string }
+  origin?: { kind: string; conversationId?: string; summaryId?: string; reason?: string }
   probably_done?: boolean
   id: string
   project_id: string

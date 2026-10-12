@@ -24,7 +24,7 @@ export interface TodoInput {
 export interface TodoItem {
   proposed?: boolean;
   probably_done?: boolean;
-  origin?: {kind: string; conversationId?: string; summaryId?: string};
+  origin?: {kind: string; conversationId?: string; summaryId?: string; reason?: string};
   id: string;
   project_id: string;
   title: string;

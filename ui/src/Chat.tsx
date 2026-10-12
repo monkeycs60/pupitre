@@ -1,3 +1,4 @@
+import type { TicketLinks } from './ticketLinks'
 import { TodoSuggestions } from './TodoSuggestions'
 import {
   type CSSProperties,
@@ -52,6 +53,7 @@ export interface ThreadTools {
 interface ChatProps {
   /** Tâches suggérées par la récolte à partir de cette conversation. */
   todoSuggestions?: TodoItem[]
+  ticketLinks?: Map<string, TicketLinks>
   onTodoSuggestionsChanged?: () => void
   todoMode?: boolean
   onTodoModeChange?: (todoMode: boolean) => void
@@ -203,6 +205,7 @@ export function Chat({
   onSwitchModel,
   onOpenCode,
   todoSuggestions,
+  ticketLinks,
   onTodoSuggestionsChanged,
 }: ChatProps) {
   const draftStorageKey = conversation === null
@@ -596,7 +599,7 @@ export function Chat({
                       conversationId={conversation?.id}
                     />
                     {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
-                    {todoSuggestions?.length ? <TodoSuggestions items={todoSuggestions} onChanged={onTodoSuggestionsChanged ?? (() => {})} /> : null}
+                    {todoSuggestions?.length ? <TodoSuggestions items={todoSuggestions} ticketLinks={ticketLinks} onChanged={onTodoSuggestionsChanged ?? (() => {})} /> : null}
                     {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onOpenCode={onOpenCode} /> : null}
                   </TaskSelectionContext.Provider>
                 </TaskToggleContext.Provider>

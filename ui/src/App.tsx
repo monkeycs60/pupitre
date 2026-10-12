@@ -1284,6 +1284,7 @@ function App() {
               onSwitchModel={() => setShowSwitchModel(true)}
               onOpenCode={openCodeForConversation}
               todoSuggestions={selectedConversation ? todos.items.filter((item) => isSuggestion(item) && item.origin?.conversationId === selectedConversation.id) : undefined}
+              ticketLinks={ticketLinks}
               onTodoSuggestionsChanged={todos.refresh}
             />
             </ToolFileContext.Provider>

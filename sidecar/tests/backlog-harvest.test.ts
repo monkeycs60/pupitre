@@ -92,3 +92,21 @@ test("un commit couvrant un élément le marque probablement fait sans le suppri
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("une proposition porte le ticket, la branche et la raison suggérés", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harvest-scope-"));
+  const db = openDb(root);
+  try {
+    const projects = new ProjectStore(db), conversations = new ConversationStore(db), todos = new TodoStore(db);
+    const p = projects.create({ name: "Test", path: root });
+    const c = conversations.create({ projectId: p.id, provider: "claude", model: "test", firstMessage: "Faire" });
+    const service = new BacklogHarvest(db, conversations, projects, todos, async () => ({ duplicateId: null }));
+    await service.harvest(c.id, "```json\n" + JSON.stringify({ remaining: [{ title: "Dette", detail: "Refaire X", reason: "Hors cadre", ticket: "none", branch: "conversation" }] }) + "\n```");
+    const [item] = todos.list(p.id);
+    expect(item!.ticket_id).toBeNull();
+    expect(item!.origin?.reason).toBe("Hors cadre");
+  } finally {
+    db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
