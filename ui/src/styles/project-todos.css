@@ -112,5 +112,9 @@
 .todo-suggestion-actions .is-keep:hover { background: var(--accent-hover); }
 .todo-suggestion-verdict { color: var(--ok); font-size: var(--text-sm); font-weight: 650; }
 .todo-suggestion-error { margin: 8px 0 0; color: var(--danger); font-size: var(--text-sm); }
+.todo-suggestion-scope button, .todo-suggestion-edit button { padding: 1px 8px; border-radius: 999px; border: 1px dashed var(--border-strong); background: transparent; color: var(--text-faint); font-size: var(--text-xs); cursor: pointer; }
+.todo-suggestion-scope button:hover { color: var(--accent-bright); border-color: var(--accent-border); }
+.todo-suggestion-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
+.todo-suggestion-edit select, .todo-suggestion-edit input { max-width: 220px; padding: 3px 8px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); font-size: var(--text-xs); }
 @keyframes todo-suggestions-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
 @media (prefers-reduced-motion: reduce) { .todo-suggestions, .todo-suggestions li, .todo-suggestion-actions button { animation: none; transition: none; } }

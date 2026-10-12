@@ -21,3 +21,17 @@ test('une suggestion se garde ou s’écarte depuis le fil de la conversation', 
   await waitFor(() => expect(urls.at(-1)).toBe('/api/todos/B'))
   await waitFor(() => expect(changed).toBe(2), { timeout: 3000 })
 })
+
+test('la portée suggérée se corrige avant de garder', async () => {
+  const calls: { url: string; body: unknown }[] = []
+  globalThis.fetch = (async (url, options) => { calls.push({ url: String(url), body: options?.body ? JSON.parse(String(options.body)) : undefined }); return Response.json({}) }) as typeof fetch
+  const links = new Map([['t1', { ticketKey: 'TECH-1', title: 'Un ticket', externalUrl: null, mergeRequestUrl: null, branch: null }]])
+  render(<TodoSuggestions items={[{ id: 'A', title: 'A', message: 'A', proposed: true, ticket_id: null, target_branch: 'develop' } as TodoItem]} ticketLinks={links} onChanged={() => {}} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Changer' }))
+  fireEvent.change(screen.getByLabelText('Ticket'), { target: { value: 't1' } })
+  fireEvent.change(screen.getByLabelText('Branche cible'), { target: { value: 'feature/x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'OK' }))
+  await waitFor(() => expect(calls[0]).toEqual({ url: '/api/todos/A', body: { ticketId: 't1', targetBranch: 'feature/x' } }))
+  await waitFor(() => expect(document.querySelector('.todo-suggestion-scope')?.textContent).toContain('TECH-1'))
+  expect(document.querySelector('.todo-suggestion-scope')?.textContent).toContain('sur feature/x')
+})
