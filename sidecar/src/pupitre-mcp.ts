@@ -163,6 +163,27 @@ export function createPupitreServer(): McpServer {
       return text(`Lecture impossible : ${error instanceof Error ? error.message : String(error)}`, true);
     }
   });
+  server.registerTool("add_todo", {
+    title: "Ajouter une tâche à la pile Pupitre",
+    description: "Ajoute une tâche au backlog du projet de cette conversation. À n’utiliser que si l’utilisateur le demande explicitement : n’ajoute jamais de tâche de ta propre initiative.",
+    inputSchema: {
+      title: z.string().min(1).describe("Titre court de la tâche."),
+      message: z.string().min(1).describe("Consigne complète que l’agent recevra pour réaliser la tâche."),
+    },
+  }, async (args: { title: string; message: string }) => {
+    try {
+      const response = await fetch(`${baseUrl()}/api/todo-inbox`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ conversationId: conversationId(), ...args }),
+      });
+      if (!response.ok) throw new Error(await errorMessage(response));
+      const created = await response.json() as { title: string; project: string };
+      return text(`Tâche ajoutée au backlog de ${created.project} : ${created.title}`);
+    } catch (error) {
+      return text(`Ajout impossible : ${error instanceof Error ? error.message : String(error)}`, true);
+    }
+  });
   server.registerTool("report_incident_triage", {
     title: "Rendre le triage d’un incident personnel",
     description: "Enregistre le verdict pour l’incident d’environnement lié à cette conversation.",

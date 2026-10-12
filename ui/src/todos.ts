@@ -23,6 +23,7 @@ export interface TodoInput {
 }
 export interface TodoItem {
   proposed?: boolean
+  origin?: { kind: string; conversationId?: string; summaryId?: string }
   probably_done?: boolean
   id: string
   project_id: string
@@ -80,6 +81,8 @@ export const updateTodo = (id: string, input: Partial<TodoInput>) => todoRequest
 export const completeTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/complete`, 'POST', {})
 export const reopenTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/reopen`, 'POST', {})
 export const enqueueTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}/enqueue`, 'POST', {})
+export const acceptTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/accept`, 'POST', {})
+export const isSuggestion = (item: TodoItem) => item.proposed === true && item.origin?.kind === 'harvest' && item.status === 'backlog'
 export const startTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}/start`, 'POST', {})
 export const linkTodo = (id: string, conversationId: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/link`, 'POST', { conversationId })
 export const deleteTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}`, 'DELETE')

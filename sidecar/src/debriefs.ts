@@ -501,7 +501,7 @@ function sessionSummaryPrompt(
     "Ne liste pas les appels d'outils, les détails de raisonnement ou les décisions sans effet pratique.",
     "N'invente aucun correctif, fichier, test ou TODO.",
     "Retourne uniquement du Markdown avec exactement le titre ## Implémenté et, uniquement s'il reste des éléments explicitement ouverts, le titre ## À terminer.",
-    'Ajoute un bloc ```json {"remaining":[{"title":"…","detail":"…"}]} ``` pour les seuls éléments ouverts, liste vide sinon.',
+    'Ajoute un bloc ```json {"remaining":[{"title":"…","detail":"…"}]} ``` pour les seuls éléments ouverts qui sont du travail différé sérieux (3 au plus ; jamais d\'action triviale ou non technique comme envoyer un message), liste vide sinon.',
     "Utilise 2 à 8 puces au total. Chaque puce doit être courte et actionnable. Cite [événement #N] seulement lorsque cela clarifie la preuve.",
     "",
     "SEGMENT À RÉSUMER",

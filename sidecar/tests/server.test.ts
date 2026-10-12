@@ -2129,6 +2129,26 @@ test("TODO HTTP endpoints preserve prepared configuration and reject protected f
   }
 });
 
+test("la boîte de tâches range un ajout manuel dans le backlog du projet du dossier", async () => {
+  const { TodoStore } = await import("../src/stores/todos");
+  const { TodoService } = await import("../src/todos");
+  const root = mkdtempSync(join(tmpdir(), "pupitre-todo-inbox-"));
+  try {
+    const d = current!.deps;
+    d.todos = new TodoService(new TodoStore(current!.db), d.projects, d.conversations, d.runner, d.git, d.tickets, d.quotas);
+    const project = d.projects.create({ name: "inbox", path: root });
+    const created = await postJson("/api/todo-inbox", { projectPath: `${root}/sous-dossier`, title: "Plus tard", message: "Faire X" });
+    expect(created.status).toBe(201);
+    const items = d.todos.store.list(project.id);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.status).toBe("backlog");
+    expect(items[0]!.proposed).toBeUndefined();
+    expect((await postJson("/api/todo-inbox", { projectPath: "/ailleurs", message: "Y" })).status).toBe(404);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("projects can be renamed, recolored, given an icon and archived", async () => {
   const root = mkdtempSync(join(tmpdir(), "pupitre-logo-"));
   mkdirSync(join(root, "public"));

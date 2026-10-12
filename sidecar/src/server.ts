@@ -2506,8 +2506,32 @@ export function createServer(deps: ServerDeps) {
           return empty(204);
         }
 
+        if (request.method === "POST" && pathname === "/api/todo-inbox") {
+          if (!deps.todos) throw new HttpError(503, "Service TODO indisponible");
+          const body = await readObject(request);
+          const message = typeof body.message === "string" ? body.message.trim() : "";
+          if (!message) throw new HttpError(400, "message requis");
+          const conversation = typeof body.conversationId === "string" ? deps.conversations.get(body.conversationId) : null;
+          const path = typeof body.projectPath === "string" ? body.projectPath.replace(/\/+$/, "") : "";
+          const project = conversation
+            ? deps.projects.get(conversation.project_id)
+            : deps.projects.list().find((p) => path === p.path || path.startsWith(`${p.path}/`));
+          if (!project) throw new HttpError(404, "projet Pupitre introuvable");
+          const launch = projectLaunchConfig(project, "todo");
+          const item = await deps.todos.create(project.id, {
+            status: "backlog",
+            title: typeof body.title === "string" ? body.title : undefined,
+            message,
+            provider: launch.provider,
+            model: launch.model,
+            effort: launch.effort,
+            speed: launch.speed,
+          });
+          return json({ id: item.id, title: item.title, project: project.name }, 201);
+        }
+
         const todoProjectRoute = pathname.match(/^\/api\/projects\/([^/]+)\/todos(?:\/(queue|reorder|drain))?$/);
-        const todoRoute = pathname.match(/^\/api\/todos\/([^/]+)(?:\/(start|complete|reopen|enqueue|link))?$/);
+        const todoRoute = pathname.match(/^\/api\/todos\/([^/]+)(?:\/(start|complete|reopen|enqueue|link|accept))?$/);
         if (todoProjectRoute || todoRoute) {
           if (!deps.todos) throw new HttpError(503, "Service TODO indisponible");
           try {
@@ -2536,6 +2560,7 @@ export function createServer(deps: ServerDeps) {
               if (action === "complete" && request.method === "POST") return json(deps.todos.complete(id));
               if (action === "reopen" && request.method === "POST") return json(deps.todos.reopen(id));
               if (action === "enqueue" && request.method === "POST") return json(await deps.todos.enqueue(id));
+              if (action === "accept" && request.method === "POST") return json(deps.todos.accept(id));
               if (action === "link" && request.method === "POST") {
                 const body = await readObject(request);
                 if (typeof body.conversationId !== "string") throw new HttpError(400, "conversationId requis");

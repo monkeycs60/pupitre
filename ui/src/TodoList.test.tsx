@@ -136,3 +136,16 @@ test('branch and MR links open in the system browser without opening the row', (
   ])
   expect(openedConversations).toEqual([])
 })
+
+test('harvested suggestions sit apart from the pile until kept or discarded', async () => {
+  const calls = recordCalls()
+  const suggested = (id: string) => item(id, 'backlog', { proposed: true, origin: { kind: 'harvest' } })
+  render(<TodoList {...defaults} items={[item('Real', 'backlog'), suggested('S1'), suggested('S2')]} />)
+  expect([...document.querySelectorAll('.project-task-row .todo-row-title')].map((node) => node.textContent)).toEqual(['Real'])
+  expect(document.querySelectorAll('.project-task-suggestions li').length).toBe(2)
+  expect(screen.getByRole('tab', { name: 'Ouvertes 1' })).toBeDefined()
+  fireEvent.click(document.querySelectorAll<HTMLButtonElement>('.project-task-suggestions li')[0]!.querySelectorAll('button')[1]!)
+  await waitFor(() => expect(calls.at(-1)?.url).toBe('/api/todos/S1/accept'))
+  fireEvent.click(document.querySelectorAll<HTMLButtonElement>('.project-task-suggestions li')[1]!.querySelectorAll('button')[2]!)
+  await waitFor(() => expect(calls.at(-1)?.url).toBe('/api/todos/S2'))
+})

@@ -251,6 +251,11 @@ export class TodoService {
       throw new TodoError("Une tâche en cours ne peut pas être supprimée", 409);
     this.store.delete(id);
   }
+  /** Garde une suggestion : elle devient une tâche ordinaire du backlog. */
+  accept(id: string) {
+    this.item(id);
+    return this.store.update(id, { proposed: false });
+  }
   complete(id: string) {
     const item = this.item(id);
     if (this.running(item))
