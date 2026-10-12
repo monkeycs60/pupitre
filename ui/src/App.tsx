@@ -944,7 +944,7 @@ function App() {
       project={selectedProject}
       activeSection={projectSurface.section}
       onSectionChange={openProjectSection}
-      todoCount={todos.items.filter((item) => item.status !== 'done').length}
+      todoCount={todos.items.filter((item) => item.status !== 'done' && !isSuggestion(item)).length}
       todoPanelRequest={todoPanelRequest}
       onRefreshTodos={todos.refresh}
       onCreateTodoFromTicket={(ticket) => handleTodoCreate({ ticketId: ticket.id, ticketKey: ticket.key, branch: ticketLinksOf(ticket).branch ?? null })}
@@ -1130,7 +1130,7 @@ function App() {
                 <ProjectSectionSwitch
                   projectId={selectedProject.id}
                   activeSection={projectSurface.section}
-                  todoCount={todos.items.filter((item) => item.status !== 'done').length}
+                  todoCount={todos.items.filter((item) => item.status !== 'done' && !isSuggestion(item)).length}
                   onSelect={(section) => section === null ? closeProjectSurface() : openProjectSection(section)}
                 />
               </div>
@@ -1242,7 +1242,7 @@ function App() {
                 <ProjectSectionSwitch
                   projectId={selectedProject.id}
                   activeSection={projectSurface?.section ?? null}
-                  todoCount={todos.items.filter((item) => item.status !== 'done').length}
+                  todoCount={todos.items.filter((item) => item.status !== 'done' && !isSuggestion(item)).length}
                   onSelect={(section) => section === null ? closeProjectSurface() : openProjectSection(section)}
                 />
               </div>
