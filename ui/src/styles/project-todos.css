@@ -92,3 +92,8 @@
 .project-task-suggestions ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .project-task-suggestions li { display: flex; align-items: center; gap: 6px; }
 .project-task-suggestion-text { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; background: none; border: 0; color: inherit; cursor: pointer; padding: 2px 0; }
+.todo-suggestions { margin: 12px 0; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 8px; }
+.todo-suggestions h4 { margin: 0 0 6px; font-size: 12px; font-weight: 600; opacity: .8; }
+.todo-suggestions ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.todo-suggestions li { display: flex; align-items: center; gap: 6px; }
+.todo-suggestions li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
