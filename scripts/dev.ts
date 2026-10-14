@@ -15,4 +15,6 @@ const child = Bun.spawn(command, {
   stdout: 'inherit',
   stderr: 'inherit',
 })
-process.exit(await child.exited)
+const code = await child.exited
+console.error(`[${new Date().toISOString()}] ${sidecar ? 'sidecar dev' : 'app dev'} arrêté (code ${code})`)
+process.exit(code)

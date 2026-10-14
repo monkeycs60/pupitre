@@ -15,12 +15,17 @@ test("un signal externe ne sort pas 0, sinon le superviseur ne relance pas", () 
   const source = read("sidecar/src/index.ts");
 
   // Les deux signaux passent par la branche « subie », pas par « requested ».
-  expect(source).toContain('process.on("SIGTERM", () => shutdownGracefully("signal"))');
-  expect(source).toContain('process.on("SIGINT", () => shutdownGracefully("signal"))');
+  expect(source).toContain('process.on("SIGTERM", () => shutdownGracefully("signal", "SIGTERM"))');
+  expect(source).toContain('process.on("SIGINT", () => shutdownGracefully("signal", "SIGINT"))');
   // Seule l'éviction demandée par une instance plus récente sort 0.
-  expect(source).toContain('shutdown: () => shutdownGracefully("requested")');
+  expect(source).toContain('shutdown: () => shutdownGracefully("requested", ');
   expect(source).toMatch(/cause === "requested" \? 0 : KILLED_EXIT_CODE/);
   expect(source).toMatch(/const KILLED_EXIT_CODE = 143/);
+});
+
+test("une promesse rejetée sans gestionnaire ne tue pas le sidecar", () => {
+  const source = read("sidecar/src/index.ts");
+  expect(source).toContain('process.on("unhandledRejection"');
 });
 
 test("le superviseur Tauri ne considère volontaire que le code 0", () => {

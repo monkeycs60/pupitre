@@ -311,9 +311,10 @@ if (process.argv.includes("--pupitre-mcp")) {
   // une instance plus récente), tout le reste vaut « je suis mort sans l'avoir
   // demandé, relance-moi ». Sortir 0 sur un SIGTERM externe laissait l'app sans
   // backend jusqu'au prochain lancement.
-  const shutdownGracefully = async (cause: "requested" | "signal") => {
+  const shutdownGracefully = async (cause: "requested" | "signal", detail: string) => {
     if (stopping) return;
     stopping = true;
+    console.error(`[${new Date().toISOString()}] arrêt du sidecar : ${detail}`);
     try {
       telegram.stop();
       await launches.close();
@@ -330,8 +331,17 @@ if (process.argv.includes("--pupitre-mcp")) {
       process.exit(cause === "requested" ? 0 : KILLED_EXIT_CODE);
     }
   };
-  process.on("SIGTERM", () => shutdownGracefully("signal"));
-  process.on("SIGINT", () => shutdownGracefully("signal"));
+  process.on("SIGTERM", () => shutdownGracefully("signal", "SIGTERM"));
+  process.on("SIGINT", () => shutdownGracefully("signal", "SIGINT"));
+  // Sous Bun, une promesse rejetée sans gestionnaire tue le process entier,
+  // et avec lui tous les tours en cours.
+  process.on("unhandledRejection", (reason) => {
+    console.error(`[${new Date().toISOString()}] promesse rejetée sans gestionnaire, le sidecar continue :`, reason);
+  });
+  process.on("uncaughtException", (error) => {
+    console.error(`[${new Date().toISOString()}] exception non rattrapée, arrêt du sidecar :`, error);
+    process.exit(1);
+  });
 
   routines.onProduction = async (projectId) => {
     const started=Date.now();const environments=personalEnvironments.list(projectId);
@@ -351,7 +361,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     instance,
     promotion,
     promotionAgent,
-    shutdown: () => shutdownGracefully("requested"),
+    shutdown: () => shutdownGracefully("requested", "éviction par une autre instance (POST /api/shutdown)"),
     projects,
     conversations,
     media,
