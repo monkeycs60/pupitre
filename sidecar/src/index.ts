@@ -61,6 +61,7 @@ import { ProblemAxisRunStore } from "./stores/problem-axis-runs";
 import { AttentionItemStore } from "./stores/attention-items";
 import { ConversationLinkStore } from "./stores/conversation-links";
 import { ReviewCommentStore } from "./stores/review-comments";
+import { VscodeWebService } from "./vscode-web";
 import { ProblemService } from "./problems";
 import { backgroundJobsEnabled, readInstance } from "./instance";
 import { BACKGROUND_MODEL } from "./background-model";
@@ -117,6 +118,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const attention = new AttentionItemStore(db);
   const conversationLinks = new ConversationLinkStore(db);
   const reviewComments = new ReviewCommentStore(db);
+  const vscodeWeb = new VscodeWebService(instance.dataDir);
   const problems = new ProblemService(
     problemStore,
     projects,
@@ -329,6 +331,7 @@ if (process.argv.includes("--pupitre-mcp")) {
       runner.abortAll();
       claudeSessions.shutdown();
       codexAppServer.shutdown();
+      vscodeWeb.stop();
     } finally {
       process.exit(cause === "requested" ? 0 : KILLED_EXIT_CODE);
     }
@@ -404,6 +407,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     attention,
     conversationLinks,
     reviewComments,
+    vscodeWeb,
     problems,
     integrationSecrets,
     sentry,

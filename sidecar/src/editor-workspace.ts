@@ -144,7 +144,7 @@ export function planEditorWorkspace(
   };
 }
 
-function editorCommand(): string {
+export function editorCommand(): string {
   const candidates = [
     Bun.which("code"),
     join(homedir(), ".local/bin/code"),
@@ -160,7 +160,7 @@ function editorCommand(): string {
 
 export const REVISIONS_DIRECTORY = "editor-revisions";
 
-function writeWorkspace(plan: EditorWorkspacePlan, directory: string): string {
+export function writeWorkspace(plan: EditorWorkspacePlan, directory: string): string {
   if (!plan.workspace) return plan.folders[0]!.path;
   mkdirSync(directory, { recursive: true });
   const target = join(directory, plan.workspace.fileName);

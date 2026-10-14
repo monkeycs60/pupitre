@@ -59,6 +59,7 @@ import type {
   InstanceHealth,
   PromotionState,
   PromotionMission,
+  SidecarJournal,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -219,6 +220,7 @@ export interface ActivityReport {
 }
 export interface ActivityReportIndex { days: Array<{ day: string; generated_at: string; projectCount: number; commits: number; mergeRequests: number; ticketsReady: number; userMs: number }>; calendar: { from: string; to: string; days: ActivityCalendarDay[] }; retro: { cumulative: { firstDay: string | null; activeDays: number; userMs: number; agentMs: number; commits: number; linesAdded: number; linesRemoved: number; projects: number }; trends: Array<{ days: number; userMs: number; agentMs: number; activeDays: number; commits: number; linesAdded: number; linesRemoved: number }>; motifs: ActivityMotif[] }; run: { running: boolean; runningDay: string | null } }
 
+export const getSidecarJournal = (): Promise<SidecarJournal> => fetchJson('/api/sidecar-journal')
 export const getActivityReportIndex = (): Promise<ActivityReportIndex> => fetchJson('/api/activity-reports')
 export const getActivityReport = (day: string): Promise<ActivityReport> => fetchJson(`/api/activity-reports/${routeId(day)}`)
 export const runActivityReport = (day: string): Promise<ActivityReport | null> => fetchJson('/api/activity-reports/run', jsonPost({ day }))
@@ -508,6 +510,10 @@ export function sendReviewComments(conversationId: string): Promise<ReviewCommen
 
 export function getConversationChanges(conversationId: string, signal?: AbortSignal): Promise<ConversationChanges> {
   return fetchJson(`/api/conversations/${routeId(conversationId)}/changes`, { signal })
+export function getVscodeWebUrl(conversationId: string): Promise<{ url: string }> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/vscode-web`)
+}
+
 }
 
 export function openConversationChangesInEditor(conversationId: string): Promise<{ changed: number; openedFiles: number }> {

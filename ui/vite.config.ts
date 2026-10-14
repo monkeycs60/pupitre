@@ -30,6 +30,7 @@ export default defineConfig({
     proxy: {
       '/api': sidecarHttp,
       '/media': sidecarHttp,
+      '/vscode-web': { target: sidecarHttp, ws: true },
       '/ws': { target: sidecarWs, ws: true },
     },
   },

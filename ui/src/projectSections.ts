@@ -1,4 +1,4 @@
-export type ProjectSection = 'todos' | 'tickets' | 'sentry' | 'changelog' | 'environments' | 'structure'
+export type ProjectSection = 'todos' | 'tickets' | 'sentry' | 'changelog' | 'environments' | 'structure' | 'vscode'
 
 export const PROJECT_SECTIONS: ReadonlyArray<{ id: ProjectSection; label: string }> = [
   { id: 'tickets', label: 'Tickets' },
@@ -7,6 +7,7 @@ export const PROJECT_SECTIONS: ReadonlyArray<{ id: ProjectSection; label: string
   { id: 'environments', label: 'Environnements' },
   { id: 'todos', label: 'Tâches' },
   { id: 'structure', label: 'Structure' },
+  { id: 'vscode', label: 'VS Code' },
 ]
 
 export function projectSectionStorageKey(projectId: string): string {

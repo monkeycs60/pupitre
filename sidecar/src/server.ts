@@ -6,7 +6,7 @@ import type { ProjectResumeService } from "./project-resume";
 import type { ProjectLaunchService } from "./project-launch";
 import { CodeExcerptError, readCodeExcerpt } from "./code-excerpts";
 import { conversationCwd, projectCwd } from "./workspace";
-import { changedFiles, EditorWorkspaceError, MAX_CHANGED_FILES_OPENED, openEditorFiles, openEditorWorkspace, planEditorWorkspace, writeRevision } from "./editor-workspace";
+import { changedFiles, EditorWorkspaceError, MAX_CHANGED_FILES_OPENED, openEditorFiles, openEditorWorkspace, planEditorWorkspace, writeRevision, writeWorkspace } from "./editor-workspace";
 import { resolveCitations, touchedFiles } from "./file-citations";
 import { conversationChanges, conversationWork } from "./conversation-changes";
 import { tmpdir } from "node:os";
@@ -107,8 +107,11 @@ import type { ProblemAxisRunStore } from "./stores/problem-axis-runs";
 import type { AttentionItemStore } from "./stores/attention-items";
 import type { ConversationLinkStore } from "./stores/conversation-links";
 import type { ReviewCommentInput, ReviewCommentStore } from "./stores/review-comments";
+import { VscodeWebError, type VscodeWebService } from "./vscode-web";
+import { closeVscodeWebSocket, isVscodeWebPath, openVscodeWebSocket, proxyVscodeWeb, relayToVscodeWeb, type VscodeWebSocketData } from "./vscode-web-proxy";
 import type { ProblemService } from "./problems";
-import { buildInfo, readInstance, staleSourcesSince, type InstanceInfo } from "./instance";
+import { buildInfo, defaultDataDir, readInstance, staleSourcesSince, type InstanceInfo } from "./instance";
+import { processLogPath, readLifecycle } from "./process-log";
 import { PromotionConflictError, type PromotionRunner } from "./promotion";
 import {
   PromotionAgentConflictError,
@@ -193,6 +196,7 @@ export interface ServerDeps {
   conversationLinks?: ConversationLinkStore;
   reviewComments?: ReviewCommentStore;
   problems?: ProblemService;
+  vscodeWeb?: VscodeWebService;
   integrationSecrets?: IntegrationSecretStore;
   sentry?: SentryStore;
   integrationsRefresher: IntegrationsRefresher;
@@ -291,6 +295,7 @@ async function createContinuationFromHandoff(
 // canal global `quotas`.
 type WebSocketData =
   | { channel: "conversation"; conversationId: string }
+  | VscodeWebSocketData
   | { channel: "quotas" }
   | { channel: "fleet" }
   | { channel: "tickets"; projectId: string }
@@ -1094,6 +1099,10 @@ export function createServer(deps: ServerDeps) {
           throw new HttpError(403, "origine interdite");
         }
         if (request.method === "OPTIONS") {
+        if (isVscodeWebPath(pathname)) {
+          if (!deps.vscodeWeb) throw new HttpError(503, "VS Code web indisponible");
+          return await proxyVscodeWeb(request, deps.vscodeWeb, server);
+        }
           if (visualExtensionOrigin) return new Response(null, { status: 204, headers: {
             "access-control-allow-origin": origin!,
             "access-control-allow-headers": "authorization, content-type",
@@ -1153,6 +1162,15 @@ export function createServer(deps: ServerDeps) {
             for (const socket of navigationSockets) socket.send(message);
             return corsJson(result, 202);
           }
+        }
+
+        if (request.method === "GET" && pathname === "/api/sidecar-journal") {
+          return json({
+            instances: (["stable", "dev"] as const).map((name) => {
+              const path = processLogPath(name === instance.name ? instance.dataDir : defaultDataDir(name));
+              return { name, current: name === instance.name, path, entries: readLifecycle(path) };
+            }),
+          });
         }
 
         if (request.method === "GET" && pathname === "/api/health") {
@@ -1658,6 +1676,24 @@ export function createServer(deps: ServerDeps) {
           if (request.method === "GET" && target === null) return json(store.list(conversationId));
           if (request.method === "POST" && target === "send") return json(store.markSent(conversationId));
           if (request.method === "POST" && target === null) {
+        const vscodeWebConversationId = routeId(pathname, /^\/api\/conversations\/([^/]+)\/vscode-web$/);
+        if (request.method === "GET" && vscodeWebConversationId !== null) {
+          if (!deps.vscodeWeb) throw new HttpError(503, "VS Code web indisponible");
+          const conversation = deps.conversations.get(vscodeWebConversationId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const project = deps.projects.get(conversation.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const sources = deps.codeExplorer ? await deps.codeExplorer.sources(project.id).catch(() => []) : [];
+          const plan = planEditorWorkspace(project, conversation, sources);
+          const target = writeWorkspace(plan, join(deps.instance?.dataDir ?? tmpdir(), "editor-workspaces"));
+          try {
+            return json({ url: await deps.vscodeWeb.url(plan.workspace ? { workspace: target } : { folder: target }), folders: plan.folders });
+          } catch (error) {
+            if (error instanceof VscodeWebError || error instanceof EditorWorkspaceError) throw new HttpError(503, error.message);
+            throw error;
+          }
+        }
+
             const body = await readObject(request);
             const side = body.side === "old" ? "old" : "new";
             const startLine = Number(body.startLine);
@@ -4233,6 +4269,11 @@ export function createServer(deps: ServerDeps) {
         }
         if (socket.data.channel === "fleet") {
           fleetSockets.add(socket);
+        if (socket.data.channel === "vscode-web") {
+          if (deps.vscodeWeb) openVscodeWebSocket(socket as ServerWebSocket<VscodeWebSocketData>, deps.vscodeWeb);
+          else socket.close();
+          return;
+        }
           const message = JSON.stringify(currentFleet());
           socket.send(message);
           fleetTimer ??= setInterval(broadcastFleet, 1_000);
@@ -4272,6 +4313,10 @@ export function createServer(deps: ServerDeps) {
             clearInterval(fleetTimer);
             fleetTimer = null;
           }
+        if (socket.data.channel === "vscode-web") {
+          closeVscodeWebSocket(socket as ServerWebSocket<VscodeWebSocketData>);
+          return;
+        }
           return;
         }
         if (socket.data.channel === "tickets") {
@@ -4290,7 +4335,9 @@ export function createServer(deps: ServerDeps) {
         subscribers?.delete(socket);
         if (subscribers?.size === 0) sockets.delete(conversationId);
       },
-      message() {},
+      message(socket, message) {
+        if (socket.data.channel === "vscode-web") relayToVscodeWeb(socket as ServerWebSocket<VscodeWebSocketData>, message);
+      },
     },
   });
 }

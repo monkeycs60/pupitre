@@ -66,6 +66,7 @@ import { retryUntilAvailable } from './startupRetry'
 import { subscribeVisualFeedbackNavigation } from './visualFeedbackNavigation'
 import { ProjectSectionSwitch } from './ProjectSectionSwitch'
 import { createToolFileAccess, ToolFileContext } from './toolFiles'
+import { VscodeWebHost } from './VscodeWebHost'
 import {
   PROJECT_SECTIONS,
   projectNavigationIndexForShortcut,
@@ -1133,7 +1134,8 @@ function App() {
                 />
               </div>
             </header>
-            {projectSurface.section === 'structure'
+            {projectSurface.section === 'vscode' ? null
+              : projectSurface.section === 'structure'
               ? <StructureView
                 key={`structure-${selectedProject.id}-${selectedConversation?.id ?? 'none'}`}
                 project={selectedProject}
@@ -1303,6 +1305,13 @@ function App() {
           </>
         )}
         </Suspense>
+        {selectedProject !== null ? (
+          <VscodeWebHost
+            active={workspaceView === 'conversations' && projectSurface?.section === 'vscode' && projectSurface.layout === 'full'}
+            conversationId={selectedConversation?.id ?? null}
+            onBackToConversation={closeProjectSurface}
+          />
+        ) : null}
         <div
           className={`workspace-inspector-slot${workspaceView === 'conversations' && inspector ? ' is-open' : ''}`}
         >
