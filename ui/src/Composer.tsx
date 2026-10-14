@@ -207,6 +207,7 @@ async function readClipboardImages(): Promise<File[]> {
 }
 
 const SLOW_CREATION_MESSAGE = 'La création prend plus de 10 s, mais le sidecar répond : la conversation devrait s’ouvrir.'
+const SLOW_SEND_MESSAGE = 'L’envoi prend plus de 10 s, mais le sidecar répond : le message devrait partir.'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Une erreur est survenue.'
@@ -493,6 +494,15 @@ export function Composer({
     }
   }, [])
 
+  function watchSidecar<T>(pending: Promise<T>, slowMessage: string): Promise<T> {
+    let settled = false
+    return withSlowNotice(pending, () => void sidecarResponds().then((responds) => {
+      if (settled) return
+      if (responds) setToast(slowMessage)
+      else setSidecarStalled('stalled')
+    })).finally(() => { settled = true })
+  }
+
   async function handleSubmit(event?: FormEvent<HTMLFormElement>, launchConfirmed = false) {
     event?.preventDefault()
     const trimmedMessage = message.trim()
@@ -520,8 +530,7 @@ export function Composer({
         setToast(null)
         onTodoCreated?.(todo)
       } else if (conversationId === null) {
-        let settled = false
-        const creation = withSlowNotice(createConversation(buildCreateConversationInput({
+        const conversation = await watchSidecar(createConversation(buildCreateConversationInput({
           projectId: project.id,
           ...config,
           ticketId,
@@ -535,12 +544,7 @@ export function Composer({
           message: trimmedMessage,
           images: imageNames,
           attachments: attachmentInputs,
-        })), () => void sidecarResponds().then((responds) => {
-          if (settled) return
-          if (responds) setToast(SLOW_CREATION_MESSAGE)
-          else setSidecarStalled('stalled')
-        }))
-        const conversation = await creation.finally(() => { settled = true })
+        })), SLOW_CREATION_MESSAGE)
         setToast(null)
         setSidecarStalled(null)
         onConversationCreated(conversation)
@@ -553,11 +557,13 @@ export function Composer({
           onConversationCreated(created.conversation)
           return
         }
-        await sendMessage(conversationId, {
+        await watchSidecar(sendMessage(conversationId, {
           message: trimmedMessage,
           images: imageNames,
           attachments: attachmentInputs,
-        })
+        }), SLOW_SEND_MESSAGE)
+        setToast(null)
+        setSidecarStalled(null)
         onMessageChange('')
         setAttachments([])
       }
