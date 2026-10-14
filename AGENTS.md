@@ -18,6 +18,7 @@ Pour une demande d’installation ou de configuration de Pupitre, lire [SETUP.md
 
 - Le port 4820 appartient à l'instance stable et ne doit jamais être pris par un script de développement. `bun run dev:sidecar` et `bun run dev:sidecar:watch` visent exclusivement l'instance dev sur 4821, avec les données séparées de `~/.local/share/pupitre-dev`.
 - Ces commandes sont utilisables depuis une conversation Pupitre stable : redémarrer la dev ne coupe aucun tour de la stable. Une modification backend se vérifie avec la dev et le front Vite sur `http://localhost:5173`.
+- Plusieurs conversations partagent le sidecar dev : le tuer coupe leurs vérifications en cours. Avant de le relancer, interroge `curl -sf 127.0.0.1:4821/api/health` et ne relance que s'il ne répond pas ou s'il sert un code périmé (`staleSources > 0`). Lance-le en ajoutant au journal, jamais en l'écrasant : `bun run dev:sidecar >> /tmp/pupitre-dev-sidecar.log 2>&1`. Chaque arrêt y écrit son heure et sa cause ; un `>` efface celle du précédent.
 - Le sidecar dev lancé par Tauri n'a pas de watch automatique. Utilise `dev:sidecar` pour choisir le moment du redémarrage ou `dev:sidecar:watch` pour le relancer à chaque sauvegarde.
 - Aucun changement de source n'atteint la stable sans promotion. Seul l'utilisateur déclenche `bun run promote` ou le bouton « Promouvoir cette version » dans les réglages de la dev.
 

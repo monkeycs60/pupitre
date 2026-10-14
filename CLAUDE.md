@@ -15,6 +15,15 @@ Ces commandes sont utilisables depuis une conversation Pupitre stable :
 redémarrer la dev ne coupe aucun tour stable. Une modification backend se
 vérifie avec la dev et le front Vite sur `http://localhost:5173`.
 
+Plusieurs conversations partagent ce sidecar dev : le tuer coupe leurs
+vérifications en cours. Avant de le relancer, interroge
+`curl -sf 127.0.0.1:4821/api/health` et ne relance que s'il ne répond pas ou
+s'il sert un code périmé (`staleSources > 0`). Lance-le en ajoutant au journal,
+jamais en l'écrasant :
+`bun run dev:sidecar >> /tmp/pupitre-dev-sidecar.log 2>&1`. Chaque arrêt y
+écrit son heure et sa cause (signal, éviction, exception, promesse rejetée) ;
+un `>` efface celle du précédent.
+
 Le sidecar dev lancé par Tauri n'a pas de watch automatique. `dev:sidecar`
 laisse choisir le moment du redémarrage ; `dev:sidecar:watch` relance à chaque
 sauvegarde. Aucun changement de source n'atteint la stable sans promotion.
