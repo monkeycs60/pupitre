@@ -195,8 +195,8 @@ export interface ServerDeps {
   attention?: AttentionItemStore;
   conversationLinks?: ConversationLinkStore;
   reviewComments?: ReviewCommentStore;
-  problems?: ProblemService;
   vscodeWeb?: VscodeWebService;
+  problems?: ProblemService;
   integrationSecrets?: IntegrationSecretStore;
   sentry?: SentryStore;
   integrationsRefresher: IntegrationsRefresher;
@@ -294,8 +294,8 @@ async function createContinuationFromHandoff(
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
 // canal global `quotas`.
 type WebSocketData =
-  | { channel: "conversation"; conversationId: string }
   | VscodeWebSocketData
+  | { channel: "conversation"; conversationId: string }
   | { channel: "quotas" }
   | { channel: "fleet" }
   | { channel: "tickets"; projectId: string }
@@ -1098,11 +1098,11 @@ export function createServer(deps: ServerDeps) {
         ) {
           throw new HttpError(403, "origine interdite");
         }
-        if (request.method === "OPTIONS") {
         if (isVscodeWebPath(pathname)) {
           if (!deps.vscodeWeb) throw new HttpError(503, "VS Code web indisponible");
           return await proxyVscodeWeb(request, deps.vscodeWeb, server);
         }
+        if (request.method === "OPTIONS") {
           if (visualExtensionOrigin) return new Response(null, { status: 204, headers: {
             "access-control-allow-origin": origin!,
             "access-control-allow-headers": "authorization, content-type",
@@ -1666,16 +1666,6 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
-        const reviewRoute = pathname.match(/^\/api\/conversations\/([^/]+)\/review-comments(?:\/(send|[^/]+))?$/);
-        if (reviewRoute) {
-          if (!deps.reviewComments) throw new HttpError(503, "relecture indisponible");
-          const store = deps.reviewComments;
-          const conversationId = decodeURIComponent(reviewRoute[1]!);
-          if (!deps.conversations.get(conversationId)) throw new HttpError(404, "conversation inconnue");
-          const target = reviewRoute[2] ? decodeURIComponent(reviewRoute[2]) : null;
-          if (request.method === "GET" && target === null) return json(store.list(conversationId));
-          if (request.method === "POST" && target === "send") return json(store.markSent(conversationId));
-          if (request.method === "POST" && target === null) {
         const vscodeWebConversationId = routeId(pathname, /^\/api\/conversations\/([^/]+)\/vscode-web$/);
         if (request.method === "GET" && vscodeWebConversationId !== null) {
           if (!deps.vscodeWeb) throw new HttpError(503, "VS Code web indisponible");
@@ -1694,6 +1684,16 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        const reviewRoute = pathname.match(/^\/api\/conversations\/([^/]+)\/review-comments(?:\/(send|[^/]+))?$/);
+        if (reviewRoute) {
+          if (!deps.reviewComments) throw new HttpError(503, "relecture indisponible");
+          const store = deps.reviewComments;
+          const conversationId = decodeURIComponent(reviewRoute[1]!);
+          if (!deps.conversations.get(conversationId)) throw new HttpError(404, "conversation inconnue");
+          const target = reviewRoute[2] ? decodeURIComponent(reviewRoute[2]) : null;
+          if (request.method === "GET" && target === null) return json(store.list(conversationId));
+          if (request.method === "POST" && target === "send") return json(store.markSent(conversationId));
+          if (request.method === "POST" && target === null) {
             const body = await readObject(request);
             const side = body.side === "old" ? "old" : "new";
             const startLine = Number(body.startLine);
@@ -4259,6 +4259,11 @@ export function createServer(deps: ServerDeps) {
     },
     websocket: {
       open(socket) {
+        if (socket.data.channel === "vscode-web") {
+          if (deps.vscodeWeb) openVscodeWebSocket(socket as ServerWebSocket<VscodeWebSocketData>, deps.vscodeWeb);
+          else socket.close();
+          return;
+        }
         if (socket.data.channel === "quotas") {
           quotaSockets.add(socket);
           // État courant à la connexion : pas d'attente du prochain event.
@@ -4269,11 +4274,6 @@ export function createServer(deps: ServerDeps) {
         }
         if (socket.data.channel === "fleet") {
           fleetSockets.add(socket);
-        if (socket.data.channel === "vscode-web") {
-          if (deps.vscodeWeb) openVscodeWebSocket(socket as ServerWebSocket<VscodeWebSocketData>, deps.vscodeWeb);
-          else socket.close();
-          return;
-        }
           const message = JSON.stringify(currentFleet());
           socket.send(message);
           fleetTimer ??= setInterval(broadcastFleet, 1_000);
@@ -4303,6 +4303,10 @@ export function createServer(deps: ServerDeps) {
         subscribers.add(socket);
       },
       close(socket) {
+        if (socket.data.channel === "vscode-web") {
+          closeVscodeWebSocket(socket as ServerWebSocket<VscodeWebSocketData>);
+          return;
+        }
         if (socket.data.channel === "quotas") {
           quotaSockets.delete(socket);
           return;
@@ -4313,10 +4317,6 @@ export function createServer(deps: ServerDeps) {
             clearInterval(fleetTimer);
             fleetTimer = null;
           }
-        if (socket.data.channel === "vscode-web") {
-          closeVscodeWebSocket(socket as ServerWebSocket<VscodeWebSocketData>);
-          return;
-        }
           return;
         }
         if (socket.data.channel === "tickets") {

@@ -508,12 +508,12 @@ export function sendReviewComments(conversationId: string): Promise<ReviewCommen
   return fetchJson(`/api/conversations/${routeId(conversationId)}/review-comments/send`, jsonPost({}))
 }
 
-export function getConversationChanges(conversationId: string, signal?: AbortSignal): Promise<ConversationChanges> {
-  return fetchJson(`/api/conversations/${routeId(conversationId)}/changes`, { signal })
 export function getVscodeWebUrl(conversationId: string): Promise<{ url: string }> {
   return fetchJson(`/api/conversations/${routeId(conversationId)}/vscode-web`)
 }
 
+export function getConversationChanges(conversationId: string, signal?: AbortSignal): Promise<ConversationChanges> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/changes`, { signal })
 }
 
 export function openConversationChangesInEditor(conversationId: string): Promise<{ changed: number; openedFiles: number }> {
