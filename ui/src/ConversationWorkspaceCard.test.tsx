@@ -9,6 +9,14 @@ const { cleanup, fireEvent, render, screen } = await import('@testing-library/re
 const { ConversationWorkspaceCard } = await import('./ConversationWorkspaceCard')
 const defaultFetch = globalThis.fetch
 
+globalThis.IntersectionObserver = class {
+  constructor(private callback: IntersectionObserverCallback) {}
+  observe(target: Element) { this.callback([{ isIntersecting: true, target } as IntersectionObserverEntry], this as unknown as IntersectionObserver) }
+  disconnect() {}
+  unobserve() {}
+  takeRecords() { return [] }
+} as unknown as typeof IntersectionObserver
+
 afterEach(() => {
   cleanup()
   globalThis.fetch = defaultFetch

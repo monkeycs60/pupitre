@@ -193,14 +193,20 @@
 
 .changes-diff {
   overflow-x: auto;
+  scrollbar-width: none;
   font-family: var(--font-mono);
   font-size: var(--text-code);
   line-height: 20px;
   background: var(--bg-workspace);
 }
 
+.changes-diff::-webkit-scrollbar {
+  display: none;
+}
+
 .changes-diff-line {
   display: flex;
+  height: 20px;
   min-width: max-content;
 }
 
@@ -213,7 +219,8 @@
 }
 
 .changes-diff-hunk {
-  padding: 2px 12px;
+  height: 20px;
+  padding: 0 12px;
   color: var(--text-faint);
   background: var(--neutral-soft);
   white-space: pre;

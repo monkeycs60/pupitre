@@ -9,6 +9,8 @@ import './styles/conversation-changes.css'
 
 const COLLAPSED_ABOVE_LINES = 400
 const HIGHLIGHT_BELOW_ROWS = 2_000
+const ROW_HEIGHT = 20
+const RENDER_MARGIN_PX = 1_500
 const STATUS_LABELS: Record<ChangedFileDiff['status'], string> = { added: 'A', deleted: 'D', renamed: 'R', modified: 'M' }
 const STATUS_TITLES: Record<ChangedFileDiff['status'], string> = { added: 'Ajouté', deleted: 'Supprimé', renamed: 'Renommé', modified: 'Modifié' }
 
@@ -26,20 +28,48 @@ function groupTitle(group: RepositoryChanges): string {
   return `${group.commits} commit${group.commits > 1 ? 's' : ''}`
 }
 
+function scrollParent(element: HTMLElement): HTMLElement | null {
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    if (/auto|scroll/.test(getComputedStyle(parent).overflowY)) return parent
+  }
+  return null
+}
+
+/**
+ * Vrai quand l'élément est à moins de RENDER_MARGIN_PX de la zone visible de
+ * son conteneur défilant. WebKitGTK saccade dès que des milliers de lignes de
+ * diff sont mises en page à la fois, même hors de l'écran.
+ */
+function useNearScreen<T extends HTMLElement>(): [(element: T | null) => void, boolean] {
+  const [element, setElement] = useState<T | null>(null)
+  const [near, setNear] = useState(typeof IntersectionObserver === 'undefined')
+  useEffect(() => {
+    if (!element || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      ([entry]) => setNear(entry?.isIntersecting ?? false),
+      { root: scrollParent(element), rootMargin: `${RENDER_MARGIN_PX}px 0px` },
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [element])
+  return [setElement, near]
+}
+
 function FileDiff({ file, collapsed, onToggle, id }: { file: ChangedFileDiff, collapsed: boolean, onToggle: () => void, id: string }) {
   const access = useContext(ToolFileContext)
+  const [bodyRef, near] = useNearScreen<HTMLDivElement>()
   const rows = useMemo(() => (collapsed ? [] : codeDiffRows(file.diff)), [collapsed, file.diff])
   const texts = useMemo(() => rows.map((row) => (isCodeLine(row) ? row.text.slice(1) : row.text)), [rows])
   const [highlighted, setHighlighted] = useState<{ source: string[], lines: string[] } | null>(null)
 
   useEffect(() => {
-    if (collapsed || texts.length === 0 || texts.length > HIGHLIGHT_BELOW_ROWS) return
+    if (collapsed || !near || texts.length === 0 || texts.length > HIGHLIGHT_BELOW_ROWS) return
     let cancelled = false
     highlightCode(`${texts.join('\n')}\n`, file.path)
       .then((lines) => { if (!cancelled) setHighlighted({ source: texts, lines }) })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [collapsed, texts, file.path])
+  }, [collapsed, near, texts, file.path])
 
   const html = highlighted?.source === texts && highlighted.lines.length === texts.length ? highlighted.lines : null
   const open = (line: number | null) => {
@@ -67,8 +97,8 @@ function FileDiff({ file, collapsed, onToggle, id }: { file: ChangedFileDiff, co
     {collapsed ? null : file.binary ? (
       <p className="changes-file-note">Fichier binaire : pas de diff texte.</p>
     ) : (
-      <div className="changes-diff" role="table" aria-label={`Diff de ${file.path}`}>
-        {rows.map((row, index) => {
+      <div className="changes-diff" role="table" aria-label={`Diff de ${file.path}`} ref={bodyRef} style={near ? undefined : { height: rows.length * ROW_HEIGHT }}>
+        {near ? rows.map((row, index) => {
           if (!isCodeLine(row)) {
             return <div key={index} className="changes-diff-hunk" role="row">{row.text}</div>
           }
@@ -81,10 +111,10 @@ function FileDiff({ file, collapsed, onToggle, id }: { file: ChangedFileDiff, co
             <span className="changes-diff-sign">{row.kind === 'addition' ? '+' : row.kind === 'deletion' ? '−' : ''}</span>
             <span className="changes-diff-text" dangerouslySetInnerHTML={{ __html: content || ' ' }} />
           </div>
-        })}
-        {file.truncated ? <p className="changes-file-note">Diff tronqué : la suite est visible dans VS Code.</p> : null}
+        }) : null}
       </div>
     )}
+    {!collapsed && file.truncated ? <p className="changes-file-note">Diff tronqué : la suite est visible dans VS Code.</p> : null}
   </section>
 }
 
