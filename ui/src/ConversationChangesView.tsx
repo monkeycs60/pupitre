@@ -133,7 +133,7 @@ function useNearScreen<T extends HTMLElement>(): [(element: T | null) => void, b
   return [setElement, near]
 }
 
-function FileDiff({ file, group, collapsed, onToggle, id }: { file: ChangedFileDiff, group: RepositoryChanges, collapsed: boolean, onToggle: () => void, id: string }) {
+function FileDiff({ file, group, collapsed, onToggle, id }: { file: ChangedFileDiff, group: Pick<RepositoryChanges, 'repositoryLabel' | 'worktreePath'>, collapsed: boolean, onToggle: () => void, id: string }) {
   const access = useContext(ToolFileContext)
   const review = useContext(ReviewContext)
   const [bodyRef, onScreen] = useNearScreen<HTMLDivElement>()
@@ -253,6 +253,28 @@ function FileDiff({ file, group, collapsed, onToggle, id }: { file: ChangedFileD
     )}
     {!collapsed && file.truncated ? <p className="changes-file-note">Diff tronqué : la suite est visible dans VS Code.</p> : null}
   </section>
+}
+
+/** Fichiers d'un diff dépliés à la suite, hors relecture : le diff d'un push, par exemple. */
+export function DiffFileList({ files, group, idPrefix }: { files: ChangedFileDiff[], group: Pick<RepositoryChanges, 'repositoryLabel' | 'worktreePath'>, idPrefix: string }) {
+  const [toggled, setToggled] = useState<Set<string>>(new Set())
+  return <div className="changes-view">
+    {files.map((file) => (
+      <FileDiff
+        key={file.path}
+        id={`${idPrefix}-${file.path}`.replace(/[^\w-]/g, '_')}
+        file={file}
+        group={group}
+        collapsed={collapsedByDefault(file) !== toggled.has(file.path)}
+        onToggle={() => setToggled((current) => {
+          const next = new Set(current)
+          if (next.has(file.path)) next.delete(file.path)
+          else next.add(file.path)
+          return next
+        })}
+      />
+    ))}
+  </div>
 }
 
 /** Tous les diffs du travail de la conversation à la suite, comme l'onglet « Changes » d'une merge request. */

@@ -118,7 +118,6 @@
 
 .changes-diff { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
 .changes-diff.is-scanning { opacity: .6; transition: opacity .3s ease; }
-.changes-main .diff-viewer { flex: 1; min-height: 0; overflow: auto; }
 
 /* --- Onglet Historique ----------------------------------------------------- */
 
