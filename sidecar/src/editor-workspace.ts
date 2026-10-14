@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { CodeSource } from "./code-explorer";
 import { readHead, repositoryOfWorktree, ticketKeyOf } from "./git-repositories";
 import type { Conversation } from "./stores/conversations";
@@ -158,11 +158,42 @@ function editorCommand(): string {
   return found;
 }
 
+export const REVISIONS_DIRECTORY = "editor-revisions";
+
 function writeWorkspace(plan: EditorWorkspacePlan, directory: string): string {
   if (!plan.workspace) return plan.folders[0]!.path;
   mkdirSync(directory, { recursive: true });
   const target = join(directory, plan.workspace.fileName);
-  writeFileSync(target, `${JSON.stringify(plan.workspace.content, null, 2)}\n`);
+  const settings = (plan.workspace.content.settings ?? {}) as Record<string, unknown>;
+  const content = {
+    ...plan.workspace.content,
+    settings: {
+      ...settings,
+      "files.readonlyInclude": {
+        ...(settings["files.readonlyInclude"] as Record<string, boolean> | undefined),
+        [`${join(directory, REVISIONS_DIRECTORY)}/**`]: true,
+      },
+    },
+  };
+  writeFileSync(target, `${JSON.stringify(content, null, 2)}\n`);
+  return target;
+}
+
+/**
+ * Dernière version d'un fichier supprimé, extraite de `commit^` dans un
+ * dossier à part et en lecture seule : VS Code l'ouvre comme une archive.
+ */
+export async function writeRevision(directory: string, repositoryPath: string, commit: string, path: string): Promise<string> {
+  if (!/^[0-9a-f]{7,64}$/i.test(commit) || path.split("/").includes("..") || isAbsolute(path)) {
+    throw new EditorWorkspaceError("révision invalide");
+  }
+  const content = await gitOutput(repositoryPath, ["show", `${commit}^:${path}`]);
+  if (!content) throw new EditorWorkspaceError(`version introuvable : ${path} avant ${commit}`);
+  const target = join(directory, REVISIONS_DIRECTORY, `${basename(repositoryPath)}@${commit}`, path);
+  mkdirSync(dirname(target), { recursive: true });
+  if (existsSync(target)) chmodSync(target, 0o644);
+  writeFileSync(target, content);
+  chmodSync(target, 0o444);
   return target;
 }
 
@@ -254,12 +285,18 @@ export function openEditorFiles(
 }
 
 export const MAX_CHANGED_FILES_OPENED = 10;
-const GENERATED_FILE = /(?:^|\/)(?:dist|build)\/|(?:\.lock|-lock\.json|\.snap)$/;
+export const GENERATED_FILE = /(?:^|\/)(?:dist|build)\/|(?:\.lock|-lock\.json|\.snap)$/;
 
-async function gitOutput(cwd: string, args: string[]): Promise<string> {
+export async function gitOutput(cwd: string, args: string[], acceptedExitCodes = [0]): Promise<string> {
   const child = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "ignore" });
   const output = await new Response(child.stdout).text();
-  return (await child.exited) === 0 ? output : "";
+  return acceptedExitCodes.includes(await child.exited) ? output : "";
+}
+
+/** Dossier de la fenêtre VS Code qui porte ce dépôt : son worktree pour la conversation. */
+export function folderOfRepository(plan: EditorWorkspacePlan, repositoryPath: string): EditorFolder | undefined {
+  return plan.folders.find((candidate) => candidate.location !== undefined && candidate.location !== null
+    && repositoryOfWorktree(candidate.path) === resolve(repositoryPath));
 }
 
 /** Fichier → première ligne modifiée, dans l'ordre du diff ; le premier diff qui cite un fichier l'emporte. */
@@ -312,8 +349,7 @@ export async function changedFiles(
 
   for (const { repositoryPath, shas } of commits) {
     if (shas.length === 0) continue;
-    const folder = plan.folders.find((candidate) => candidate.location !== undefined && candidate.location !== null
-      && repositoryOfWorktree(candidate.path) === resolve(repositoryPath));
+    const folder = folderOfRepository(plan, repositoryPath);
     if (!folder) continue;
     const lines = new Map<string, number | null>();
     firstChangedLines(await gitOutput(folder.path, ["show", "-U0", "--no-color", "--no-ext-diff", "-M", "--format=", ...shas]), lines);

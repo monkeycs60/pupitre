@@ -1,0 +1,258 @@
+.changes-view {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.changes-empty {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.changes-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: var(--text-sm);
+}
+
+.changes-summary strong {
+  color: var(--text-strong);
+}
+
+.changes-view .is-added { color: var(--ok); font-family: var(--font-mono); font-size: var(--text-xs); }
+.changes-view .is-removed { color: var(--danger); font-family: var(--font-mono); font-size: var(--text-xs); }
+
+.changes-truncated {
+  color: var(--warn);
+  font-size: var(--text-xs);
+}
+
+.changes-index {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+}
+
+.changes-index a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: var(--r-xs);
+  color: var(--text);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.changes-index a:hover {
+  background: var(--bg-hover);
+}
+
+.changes-index-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.changes-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.changes-group-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.changes-group-repository {
+  color: var(--text-strong);
+}
+
+.changes-group-branch {
+  color: var(--accent-bright);
+  font: 11px var(--font-mono);
+}
+
+.changes-group-scope {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.changes-file {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  scroll-margin-top: 12px;
+}
+
+.changes-file-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.changes-file-header > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.changes-file-toggle {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--r-xs);
+  color: var(--text-muted);
+  background: none;
+  cursor: pointer;
+}
+
+.changes-file-toggle:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+.changes-file-status {
+  flex: none;
+  width: 16px;
+  color: var(--text-muted);
+  font: 600 11px var(--font-mono);
+  text-align: center;
+}
+
+.changes-file-status.is-added { color: var(--ok); }
+.changes-file-status.is-deleted { color: var(--danger); }
+.changes-file-status.is-renamed { color: var(--warn); }
+
+.changes-file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font: 12px var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changes-file-previous {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.changes-file-stats {
+  flex: none;
+}
+
+.changes-file-open {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  color: var(--text-muted);
+  background: transparent;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.changes-file-open:hover {
+  color: var(--text-strong);
+  border-color: var(--accent-border);
+}
+
+.changes-file-note {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.changes-diff {
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: 20px;
+  background: var(--bg-workspace);
+}
+
+.changes-diff-line {
+  display: flex;
+  min-width: max-content;
+}
+
+.changes-diff-line.is-addition {
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.changes-diff-line.is-deletion {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.changes-diff-hunk {
+  padding: 2px 12px;
+  color: var(--text-faint);
+  background: var(--neutral-soft);
+  white-space: pre;
+}
+
+.changes-diff-number {
+  flex: none;
+  width: 46px;
+  padding: 0 10px 0 0;
+  border: 0;
+  color: var(--text-faint);
+  background: inherit;
+  font: inherit;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.changes-diff-number.is-link {
+  cursor: pointer;
+}
+
+.changes-diff-number.is-link:hover {
+  color: var(--accent-bright);
+  text-decoration: underline;
+}
+
+.changes-diff-sign {
+  flex: none;
+  width: 18px;
+  color: var(--text-faint);
+  text-align: center;
+  user-select: none;
+}
+
+.changes-diff-line.is-addition .changes-diff-sign { color: var(--ok); }
+.changes-diff-line.is-deletion .changes-diff-sign { color: var(--danger); }
+
+.changes-diff-text {
+  padding-right: 16px;
+  white-space: pre;
+}

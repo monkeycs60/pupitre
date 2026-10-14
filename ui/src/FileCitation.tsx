@@ -35,11 +35,10 @@ function useCitation(access: ToolFileAccess | null, text: string): CitationResol
 
 export function openFileTarget(access: ToolFileAccess, event: MouseEvent, path: string, line: number | null) {
   event.preventDefault()
-  if (event.ctrlKey || event.metaKey) void access.openInCode(path, line)
-  else void access.openInEditor([{ path, line }])
+  void access.openInEditor([{ path, line }])
 }
 
-const HINT = 'Ouvrir dans VS Code · Ctrl+clic : onglet Code'
+const HINT = 'Ouvrir dans VS Code'
 
 /** Code inline d'une réponse : un fichier retrouvé dans le worktree devient un lien vers VS Code. */
 /** Résolution d'un chemin cité, partagée avec les cartes `@code`. */
@@ -115,10 +114,19 @@ export function FileCitation({ text, children }: { text: string; children: React
     const what = resolution.change === 'renamed' && resolution.renamedTo
       ? `Renommé en ${resolution.renamedTo}`
       : 'Supprimé'
+    const gone = resolution
     return (
-      <span className="file-citation-gone" title={`${resolution.label}\n${what} le ${date} (${resolution.commit})`}>
+      <a
+        className="file-citation file-citation-gone"
+        href="#"
+        title={`${gone.label}\n${what} le ${date} (${gone.commit})\nOuvrir sa dernière version dans VS Code, en lecture seule`}
+        onClick={(event) => {
+          event.preventDefault()
+          void access.openRevisionInEditor({ repositoryPath: gone.repositoryPath, commit: gone.commit, path: gone.path, line: gone.line })
+        }}
+      >
         <code>{children}</code>
-      </span>
+      </a>
     )
   }
 

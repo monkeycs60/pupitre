@@ -5,9 +5,10 @@ import type { ProjectDevlogService } from "./project-devlog";
 import type { ProjectResumeService } from "./project-resume";
 import type { ProjectLaunchService } from "./project-launch";
 import { CodeExcerptError, readCodeExcerpt } from "./code-excerpts";
-import { conversationCwd, conversationWorktrees, projectCwd } from "./workspace";
-import { changedFiles, EditorWorkspaceError, MAX_CHANGED_FILES_OPENED, openEditorFiles, openEditorWorkspace, planEditorWorkspace } from "./editor-workspace";
+import { conversationCwd, projectCwd } from "./workspace";
+import { changedFiles, EditorWorkspaceError, MAX_CHANGED_FILES_OPENED, openEditorFiles, openEditorWorkspace, planEditorWorkspace, writeRevision } from "./editor-workspace";
 import { resolveCitations, touchedFiles } from "./file-citations";
+import { conversationChanges, conversationWork } from "./conversation-changes";
 import { tmpdir } from "node:os";
 import type { SharedFilesService } from "./shared-files";
 import { TodoError, type TodoService } from "./todos";
@@ -1708,6 +1709,18 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
+        const changesConversationId = routeId(pathname, /^\/api\/conversations\/([^/]+)\/changes$/);
+        if (request.method === "GET" && changesConversationId !== null) {
+          const conversation = deps.conversations.get(changesConversationId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const project = deps.projects.get(conversation.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const sources = deps.codeExplorer ? await deps.codeExplorer.sources(project.id).catch(() => []) : [];
+          const plan = planEditorWorkspace(project, conversation, sources);
+          const work = await conversationWork(deps.codeExplorer, project.id, conversation, plan, sources);
+          return json(await conversationChanges(plan, work.commits, work.owned));
+        }
+
         const editorRoute = pathname.match(/^\/api\/conversations\/([^/]+)\/editor(\/citations)?$/);
         if (request.method === "POST" && editorRoute) {
           const conversation = deps.conversations.get(decodeURIComponent(editorRoute[1]!));
@@ -1739,17 +1752,17 @@ export function createServer(deps: ServerDeps) {
             : [];
           const directory = join(deps.instance?.dataDir ?? tmpdir(), "editor-workspaces");
           try {
+            const revision = (body.revision ?? null) as { repositoryPath?: unknown; commit?: unknown; path?: unknown; line?: unknown } | null;
+            if (revision !== null) {
+              const repositoryPath = typeof revision.repositoryPath === "string" ? revision.repositoryPath : "";
+              if (!sources.some((source) => source.repositoryPath === repositoryPath)) throw new HttpError(400, "dépôt inconnu pour ce projet");
+              const file = await writeRevision(directory, repositoryPath, String(revision.commit ?? ""), String(revision.path ?? ""));
+              const line = typeof revision.line === "number" && revision.line > 0 ? Math.floor(revision.line) : null;
+              return json({ ...openEditorFiles(plan, [{ path: file, line }], directory), folders: plan.folders, path: file });
+            }
             if (body.changed === true) {
-              const work = deps.codeExplorer ? await deps.codeExplorer.conversationCommits(project.id, conversation.id).catch(() => null) : null;
-              const repositories = work && work.total > 0 ? work.repositories : work?.ticket?.repositories ?? [];
-              const owned = [
-                ...conversationWorktrees(conversation),
-                ...plan.folders.filter((folder) => folder.location && !sources.some((source) => source.main && source.path === folder.path)).map((folder) => folder.path),
-              ];
-              const changed = await changedFiles(plan, repositories.map((repository) => ({
-                repositoryPath: repository.repositoryPath,
-                shas: repository.commits.map((entry) => entry.sha),
-              })), owned);
+              const work = await conversationWork(deps.codeExplorer, project.id, conversation, plan, sources);
+              const changed = await changedFiles(plan, work.commits, work.owned);
               const opened = changed.length > 0 && changed.length <= MAX_CHANGED_FILES_OPENED
                 ? openEditorFiles(plan, changed, directory)
                 : openEditorWorkspace(plan, directory);

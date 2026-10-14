@@ -423,6 +423,50 @@ export function openConversationInEditor(conversationId: string, files: EditorFi
   return fetchJson(`/api/conversations/${routeId(conversationId)}/editor`, jsonPost({ files }))
 }
 
+export interface EditorRevision {
+  repositoryPath: string
+  commit: string
+  path: string
+  line: number | null
+}
+
+export function openRevisionInEditor(conversationId: string, revision: EditorRevision): Promise<{ path: string }> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/editor`, jsonPost({ revision }))
+}
+
+export interface ChangedFileDiff {
+  path: string
+  previousPath: string | null
+  status: 'added' | 'deleted' | 'renamed' | 'modified'
+  added: number
+  removed: number
+  binary: boolean
+  generated: boolean
+  diff: string
+  truncated: boolean
+  absolutePath: string | null
+  firstLine: number | null
+}
+
+export interface RepositoryChanges {
+  repositoryLabel: string
+  worktreePath: string
+  branch: string | null
+  kind: 'commits' | 'uncommitted'
+  commits: number
+  title: string | null
+  files: ChangedFileDiff[]
+}
+
+export interface ConversationChanges {
+  repositories: RepositoryChanges[]
+  truncated: boolean
+}
+
+export function getConversationChanges(conversationId: string, signal?: AbortSignal): Promise<ConversationChanges> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/changes`, { signal })
+}
+
 export function openConversationChangesInEditor(conversationId: string): Promise<{ changed: number; openedFiles: number }> {
   return fetchJson(`/api/conversations/${routeId(conversationId)}/editor`, jsonPost({ changed: true }))
 }
@@ -431,7 +475,17 @@ export type CitationResolution =
   | { status: 'resolved'; path: string; line: number | null; label: string }
   | { status: 'ambiguous'; line: number | null; candidates: Array<{ path: string; label: string }>; more: number }
   | { status: 'elsewhere'; path: string | null; line: number | null; label: string; branch: string | null }
-  | { status: 'gone'; label: string; change: 'deleted' | 'renamed'; renamedTo: string | null; commit: string; date: string }
+  | {
+    status: 'gone'
+    label: string
+    change: 'deleted' | 'renamed'
+    renamedTo: string | null
+    commit: string
+    date: string
+    repositoryPath: string
+    path: string
+    line: number | null
+  }
   | { status: 'missing' }
 
 export function resolveFileCitations(conversationId: string, texts: string[]): Promise<Record<string, CitationResolution>> {

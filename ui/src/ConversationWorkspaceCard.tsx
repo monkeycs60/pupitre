@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getCodeConversationCommits, openConversationChangesInEditor } from './api'
 import { pushToast } from './toasts'
+import { ConversationChangesView } from './ConversationChangesView'
 import { relativeCodeDate } from './codeFormat'
 import type { CodeConversationCommits, CodeConversationRepository } from './types'
 
@@ -9,7 +10,6 @@ const REFRESH_MS = 30_000
 interface ConversationWorkspaceCardProps {
   projectId: string
   conversationId: string
-  onOpenCode?: (conversationId: string, target: 'conversation' | 'ticket') => void
 }
 
 function repositoryName(label: string): string {
@@ -53,8 +53,9 @@ async function openChangesInEditor(conversationId: string) {
 }
 
 /** Ce que la conversation a commité, dépôt par dépôt ; à défaut, le travail du ticket qu'elle partage. */
-export function ConversationWorkspaceCard({ projectId, conversationId, onOpenCode }: ConversationWorkspaceCardProps) {
+export function ConversationWorkspaceCard({ projectId, conversationId }: ConversationWorkspaceCardProps) {
   const [data, setData] = useState<CodeConversationCommits | null>(null)
+  const [showChanges, setShowChanges] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -81,7 +82,6 @@ export function ConversationWorkspaceCard({ projectId, conversationId, onOpenCod
     ? `${plural(data.total, 'commit')} sur ${plural(repositories.length, 'dépôt')}`
     : ticketTitle(ticket!.key, Math.max(ticket!.branchCommits, ticket!.total), ticket!.total)
   const detail = own ? 'Travail de la conversation' : authorsLabel(ticket!.conversations.map((item) => item.title))
-  const target = own ? 'conversation' : 'ticket'
 
   return <article className="code-workspace-card" aria-label={own ? 'Travail de la conversation' : 'Travail du ticket'}>
     <div className="code-workspace-card-main">
@@ -100,9 +100,9 @@ export function ConversationWorkspaceCard({ projectId, conversationId, onOpenCod
       >
         Ouvrir dans VS Code
       </button>
-      {onOpenCode ? <button type="button" className="code-workspace-card-open" onClick={() => onOpenCode(conversationId, target)}>
-        {own ? 'Voir dans Code' : 'Voir le ticket dans Code'}
-      </button> : null}
+      <button type="button" className="code-workspace-card-open" onClick={() => setShowChanges(!showChanges)} aria-expanded={showChanges}>
+        {showChanges ? 'Masquer les changements' : 'Voir les changements'}
+      </button>
     </div>
     <ul className="code-workspace-card-repos">
       {repositories.map((repository: CodeConversationRepository, index) => {
@@ -115,5 +115,6 @@ export function ConversationWorkspaceCard({ projectId, conversationId, onOpenCod
         </li>
       })}
     </ul>
+    {showChanges ? <ConversationChangesView conversationId={conversationId} /> : null}
   </article>
 }

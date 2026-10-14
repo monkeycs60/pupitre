@@ -22,7 +22,18 @@ export type CitationResolution =
   | { status: "resolved"; path: string; line: number | null; label: string }
   | { status: "ambiguous"; line: number | null; candidates: Array<{ path: string; label: string }>; more: number }
   | { status: "elsewhere"; path: string | null; line: number | null; label: string; branch: string | null }
-  | { status: "gone"; label: string; change: "deleted" | "renamed"; renamedTo: string | null; commit: string; date: string }
+  | {
+    status: "gone";
+    label: string;
+    change: "deleted" | "renamed";
+    renamedTo: string | null;
+    commit: string;
+    date: string;
+    repositoryPath: string;
+    /** Chemin dans le dépôt avant la suppression, lisible à `commit^`. */
+    path: string;
+    line: number | null;
+  }
   | { status: "missing" };
 
 /** Worktree du projet hors du workspace de la conversation : une autre branche où chercher un fichier cité. */
@@ -216,6 +227,9 @@ export async function resolveCitations(
           renamedTo: hit.trace.renamedTo,
           commit: hit.trace.commit,
           date: hit.trace.date,
+          repositoryPath: hit.repository,
+          path: hit.trace.path,
+          line: pending.get(text)!.citation.line,
         };
     }
   }

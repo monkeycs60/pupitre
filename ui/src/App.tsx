@@ -580,14 +580,6 @@ function App() {
     openProjectSection('code')
   }
 
-  function openCodeForConversation(conversationId: string, target: 'conversation' | 'ticket' = 'conversation') {
-    if (selectedProject === null) return
-    writeCodeViewMemory(codeViewMemoryKey(selectedProject.id, conversationId), target === 'ticket'
-      ? { scopeId: null, conversationFilter: 'all', branchOnly: true, graphExpanded: false, detailView: 'changes' }
-      : { scopeId: null, conversationFilter: `conversation:${conversationId}`, branchOnly: false, graphExpanded: false, detailView: 'commit' })
-    openProjectSection('code')
-  }
-
   function closeProjectSurface() {
     setProjectSurface(null)
     if (inspector === 'dashboard') setInspector(null)
@@ -1314,7 +1306,6 @@ function App() {
               missionTitle={conversationSeed?.missionTitle}
               onHandoff={() => setShowHandoff(true)}
               onSwitchModel={() => setShowSwitchModel(true)}
-              onOpenCode={openCodeForConversation}
               todoSuggestions={selectedConversation ? todos.items.filter((item) => isSuggestion(item) && item.origin?.conversationId === selectedConversation.id) : undefined}
               ticketLinks={ticketLinks}
               onTodoSuggestionsChanged={todos.refresh}

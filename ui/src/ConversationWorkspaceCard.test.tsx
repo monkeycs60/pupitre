@@ -18,7 +18,7 @@ function commit(sha: string, subject: string) {
   return { sha: sha.repeat(40), parents: [], refs: [], author: 'Clément', authoredAt: '2026-09-12T10:00:00.000Z', subject, conversations: [], agent: null }
 }
 
-test('résume les commits de la conversation par dépôt et ouvre l’onglet Code', async () => {
+test('résume les commits de la conversation par dépôt et déplie leurs changements', async () => {
   const data: CodeConversationCommits = {
     conversationId: 'conversation-1',
     total: 3,
@@ -28,16 +28,28 @@ test('résume les commits de la conversation par dépôt et ouvre l’onglet Cod
     ],
     ticket: null,
   }
-  globalThis.fetch = mock(async () => Response.json(data)) as unknown as typeof fetch
-  const onOpenCode = mock(() => {})
+  const changes = {
+    truncated: false,
+    repositories: [{
+      repositoryLabel: 'hapigator', worktreePath: '/mono/apps/hapigator-t1', branch: 'feature/T-1', kind: 'commits', commits: 2, title: null,
+      files: [{
+        path: 'lib/gate.js', previousPath: null, status: 'modified', added: 1, removed: 1, binary: false, generated: false, truncated: false,
+        absolutePath: '/mono/apps/hapigator-t1/lib/gate.js', firstLine: 2,
+        diff: 'diff --git a/lib/gate.js b/lib/gate.js\n--- a/lib/gate.js\n+++ b/lib/gate.js\n@@ -1,2 +1,2 @@\n const a = 1\n-const b = 2\n+const b = 3',
+      }],
+    }],
+  }
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => Response.json(String(input).endsWith('/changes') ? changes : data)) as unknown as typeof fetch
 
-  render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'conversation-1', onOpenCode }))
+  render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'conversation-1' }))
 
   expect(await screen.findByText('3 commits sur 2 dépôts')).toBeTruthy()
   expect([...document.querySelectorAll('.code-workspace-card-repos .code-repo-badge')].map((badge) => badge.textContent)).toEqual(['hapigator', 'reactor'])
   expect(screen.getByText('gate adaptative')).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Voir dans Code' }))
-  expect(onOpenCode).toHaveBeenCalledWith('conversation-1', 'conversation')
+  fireEvent.click(screen.getByRole('button', { name: 'Voir les changements' }))
+  expect(await screen.findByText('1 fichier modifié')).toBeTruthy()
+  expect([...document.querySelectorAll('.changes-diff-line')].map((line) => line.className.replace('changes-diff-line is-', ''))).toEqual(['context', 'deletion', 'addition'])
+  expect(screen.getByText('feature/T-1')).toBeTruthy()
 })
 
 test('sans commit propre, montre le travail du ticket et qui l’a commité', async () => {
@@ -57,16 +69,14 @@ test('sans commit propre, montre le travail du ticket et qui l’a commité', as
     },
   }
   globalThis.fetch = mock(async () => Response.json(data)) as unknown as typeof fetch
-  const onOpenCode = mock(() => {})
 
-  render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'reader', onOpenCode }))
+  render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'reader' }))
 
   expect(await screen.findByText('TECH-24128 : 177 commits, dont 21 reliés à des conversations')).toBeTruthy()
   expect(screen.getByText('Commité par Script migration Match AI')).toBeTruthy()
   expect(screen.getByRole('article', { name: 'Travail du ticket' })).toBeTruthy()
   expect(document.querySelectorAll('.code-workspace-card-repos li')).toHaveLength(2)
-  fireEvent.click(screen.getByRole('button', { name: 'Voir le ticket dans Code' }))
-  expect(onOpenCode).toHaveBeenCalledWith('reader', 'ticket')
+  expect(screen.getByRole('button', { name: 'Voir les changements' })).toBeTruthy()
 })
 
 test('reste invisible tant que ni la conversation ni son ticket n’ont rien commité', async () => {

@@ -88,8 +88,6 @@ interface ChatProps {
   missionTitle?: string
   onHandoff: () => void
   onSwitchModel: () => void
-  /** Ouvre l'onglet Code filtré sur les commits de la conversation. */
-  onOpenCode?: (conversationId: string, target: 'conversation' | 'ticket') => void
 }
 
 interface LightboxImage {
@@ -206,7 +204,6 @@ export function Chat({
   missionTitle,
   onHandoff,
   onSwitchModel,
-  onOpenCode,
   todoSuggestions,
   ticketLinks,
   onTodoSuggestionsChanged,
@@ -600,7 +597,7 @@ export function Chat({
                     />
                     {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
                     {todoSuggestions?.length ? <TodoSuggestions items={todoSuggestions} ticketLinks={ticketLinks} onChanged={onTodoSuggestionsChanged ?? (() => {})} /> : null}
-                    {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onOpenCode={onOpenCode} /> : null}
+                    {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} /> : null}
                   </TaskSelectionContext.Provider>
                 </TaskToggleContext.Provider>
               )}

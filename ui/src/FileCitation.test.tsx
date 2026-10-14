@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
-import type { CitationResolution, EditorFileTarget } from './api'
+import type { CitationResolution, EditorFileTarget, EditorRevision } from './api'
 import type { ToolFileAccess } from './toolFiles'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
@@ -16,7 +16,10 @@ const RESOLUTIONS: Record<string, CitationResolution> = {
   'takeover.js:43': { status: 'resolved', path: '/w/hapigator/lib/takeover.js', line: 43, label: 'hapigator/lib/takeover.js' },
   'lib/rescan.js': { status: 'elsewhere', path: '/w/apps/hapigator-tech9/lib/rescan.js', line: 7, label: 'hapigator/lib/rescan.js', branch: 'feature/TECH-9' },
   'lib/mongo.ts': { status: 'elsewhere', path: null, line: null, label: 'hapigator/lib/mongo.ts', branch: 'origin/tmp/add-typescript' },
-  'lib/old.js': { status: 'gone', label: 'hapigator/lib/old.js', change: 'renamed', renamedTo: 'lib/new.js', commit: 'abc1234', date: '2026-10-01' },
+  'lib/old.js': {
+    status: 'gone', label: 'hapigator/lib/old.js', change: 'renamed', renamedTo: 'lib/new.js', commit: 'abc1234', date: '2026-10-01',
+    repositoryPath: '/w/apps/hapigator', path: 'lib/old.js', line: 12,
+  },
   'routes.js': {
     status: 'ambiguous', line: null, more: 3,
     candidates: [{ path: '/w/a/routes.js', label: 'a/routes.js' }, { path: '/w/b/routes.js', label: 'b/routes.js' }],
@@ -27,18 +30,20 @@ function access() {
   const editor: EditorFileTarget[][] = []
   const code: Array<[string, number | null]> = []
   const asked: string[] = []
+  const revisions: EditorRevision[] = []
   const value: ToolFileAccess = {
     readFile: async () => null,
     openInCode: async (path, line) => { code.push([path, line]); return true },
     resolveCitation: async (text) => { asked.push(text); return RESOLUTIONS[text] ?? { status: 'missing' } },
     openInEditor: async (files) => { editor.push(files) },
+    openRevisionInEditor: async (revision) => { revisions.push(revision) },
   }
-  return { value, editor, code, asked }
+  return { value, editor, code, asked, revisions }
 }
 
 const TEXT = 'Voir `lib/auth.js:132`, `takeover.js:43`, `routes.js` et `req.app.user`.\n\n```js\nconst a = `lib/auth.js`\n```'
 
-test('une citation retrouvée ouvre VS Code au clic et l’onglet Code au Ctrl+clic', async () => {
+test('une citation retrouvée ouvre VS Code, y compris au Ctrl+clic', async () => {
   const context = access()
   render(createElement(ToolFileContext.Provider, { value: context.value }, createElement(Markdown, null, TEXT)))
 
@@ -46,8 +51,8 @@ test('une citation retrouvée ouvre VS Code au clic et l’onglet Code au Ctrl+c
   fireEvent.click(link)
   fireEvent.click(link, { ctrlKey: true })
 
-  expect(context.editor).toEqual([[{ path: '/w/hapigator/lib/auth.js', line: 132 }]])
-  expect(context.code).toEqual([['/w/hapigator/lib/auth.js', 132]])
+  expect(context.editor).toEqual([[{ path: '/w/hapigator/lib/auth.js', line: 132 }], [{ path: '/w/hapigator/lib/auth.js', line: 132 }]])
+  expect(context.code).toEqual([])
   expect(context.asked).not.toContain('req.app.user')
   expect(document.querySelectorAll('a.file-citation')).toHaveLength(2)
   expect(document.querySelector('pre a')).toBeNull()
@@ -117,7 +122,7 @@ test('un extrait @code qui connaît son fichier ouvre ce chemin sans le résoudr
   expect(context.asked).toEqual([])
 })
 
-test('une citation sur une autre branche ou supprimée garde un style discret et son explication', async () => {
+test('une citation sur une autre branche ou supprimée garde un style discret et s’ouvre dans VS Code', async () => {
   const context = access()
   render(createElement(ToolFileContext.Provider, { value: context.value }, createElement(Markdown, null,
     'Voir `lib/rescan.js`, `lib/mongo.ts` et `lib/old.js`.')))
@@ -129,5 +134,6 @@ test('une citation sur une autre branche ou supprimée garde un style discret et
 
   const branchOnly = screen.getByTitle(/présent sur origin\/tmp\/add-typescript, qui n'a pas de worktree/)
   expect(branchOnly.tagName).toBe('SPAN')
-  expect(screen.getByTitle(/Renommé en lib\/new\.js le 01\/10\/2026 \(abc1234\)/).tagName).toBe('SPAN')
+  fireEvent.click(screen.getByTitle(/Renommé en lib\/new\.js le 01\/10\/2026 \(abc1234\)/))
+  expect(context.revisions).toEqual([{ repositoryPath: '/w/apps/hapigator', commit: 'abc1234', path: 'lib/old.js', line: 12 }])
 })

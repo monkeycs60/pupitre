@@ -1,6 +1,6 @@
 import { createContext } from 'react'
-import { getCodeFile, listCodeSources, openConversationInEditor, resolveFileCitations } from './api'
-import type { CitationResolution, EditorFileTarget } from './api'
+import { getCodeFile, listCodeSources, openConversationInEditor, openRevisionInEditor, resolveFileCitations } from './api'
+import type { CitationResolution, EditorFileTarget, EditorRevision } from './api'
 import { pushToast } from './toasts'
 import type { CodeSource } from './types'
 
@@ -9,6 +9,7 @@ export interface ToolFileAccess {
   openInCode: (path: string, line: number | null) => Promise<boolean>
   resolveCitation: (text: string) => Promise<CitationResolution>
   openInEditor: (files: EditorFileTarget[]) => Promise<void>
+  openRevisionInEditor: (revision: EditorRevision) => Promise<void>
 }
 
 export const ToolFileContext = createContext<ToolFileAccess | null>(null)
@@ -25,6 +26,14 @@ export function locateToolFile(sources: CodeSource[], path: string): ToolFileLoc
     if (!best || source.path.length > best.path.length) best = source
   }
   return best ? { source: best, relative: path.slice(best.path.length + 1) } : null
+}
+
+function editorFailed(error: unknown) {
+  pushToast({
+    tone: 'danger',
+    title: 'Ouverture dans VS Code impossible',
+    detail: error instanceof Error ? error.message : String(error),
+  })
 }
 
 export function createToolFileAccess(
@@ -82,15 +91,11 @@ export function createToolFileAccess(
     },
     async openInEditor(files) {
       if (conversationId === null || files.length === 0) return
-      try {
-        await openConversationInEditor(conversationId, files)
-      } catch (error) {
-        pushToast({
-          tone: 'danger',
-          title: 'Ouverture dans VS Code impossible',
-          detail: error instanceof Error ? error.message : String(error),
-        })
-      }
+      await openConversationInEditor(conversationId, files).catch(editorFailed)
+    },
+    async openRevisionInEditor(revision) {
+      if (conversationId === null) return
+      await openRevisionInEditor(conversationId, revision).catch(editorFailed)
     },
   }
 }
