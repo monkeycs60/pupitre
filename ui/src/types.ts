@@ -1116,3 +1116,18 @@ export interface PromotionMission {
 }
 
 export type DocumentArtifact = HtmlDocument
+
+export interface SidecarLifecycleEntry {
+  at: string
+  kind: 'start' | 'stop' | 'crash' | 'rejection' | 'unexplained'
+  detail: string
+}
+
+export interface SidecarJournal {
+  instances: Array<{
+    name: 'stable' | 'dev'
+    current: boolean
+    path: string
+    entries: SidecarLifecycleEntry[]
+  }>
+}

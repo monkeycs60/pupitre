@@ -2290,3 +2290,27 @@ test("une conversation liée à un ticket enregistre le message avant le context
     delete process.env.FAKE_CLAUDE_STDIN_FILE;
   }
 });
+
+test("le journal des sidecars expose les démarrages et arrêts de chaque instance", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const dataDir = mkdtempSync(join(tmpdir(), "pupitre-journal-"));
+  writeFileSync(join(dataDir, "sidecar.log"), [
+    "[2026-10-14T21:18:38.735Z] ERROR arrêt du sidecar : SIGTERM",
+    "[2026-10-14T21:18:40.000Z] démarrage du sidecar (pid 7)",
+    "[2026-10-14T21:18:41.000Z] pupitre sidecar prêt sur http://localhost:4821",
+    "",
+  ].join("\n"));
+  const server = createServer({ ...current.deps, port: 0, instance: { name: "dev", port: 0, dataDir } });
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.port}/api/sidecar-journal`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { instances: Array<{ name: string; current: boolean; entries: unknown[] }> };
+    expect(body.instances.map((item) => [item.name, item.current])).toEqual([["stable", false], ["dev", true]]);
+    expect(body.instances[1]!.entries).toEqual([
+      { at: "2026-10-14T21:18:41.000Z", kind: "start", detail: "pid 7" },
+      { at: "2026-10-14T21:18:38.735Z", kind: "stop", detail: "SIGTERM" },
+    ]);
+  } finally {
+    server.stop(true);
+  }
+});

@@ -444,3 +444,80 @@
 .settings-sidebar button:hover { color: var(--text-strong); background: var(--bg-hover); }
 .settings-sidebar button.is-selected { color: var(--text-strong); background: var(--bg-active); box-shadow: inset 2px 0 var(--accent); }
 .settings-shell-content { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow-y: auto; }
+
+.sidecar-journal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.sidecar-journal-instances {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-5);
+}
+
+.sidecar-journal-instances h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.sidecar-journal-current {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.sidecar-journal-list {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.sidecar-journal-list li {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 3px 0;
+  font-size: var(--text-xs);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sidecar-journal-list time {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.sidecar-journal-list strong {
+  color: var(--text-strong);
+  font-weight: 500;
+}
+
+.sidecar-journal-list span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidecar-journal-list .is-start strong {
+  color: var(--text-muted);
+}
+
+.sidecar-journal-list :is(.is-crash, .is-unexplained) strong {
+  color: var(--danger);
+}
+
+.sidecar-journal-list .is-rejection strong {
+  color: var(--warn);
+}

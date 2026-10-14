@@ -1,4 +1,5 @@
 import { ThemePicker } from './ThemePicker'
+import { SidecarJournalCard } from './SidecarJournalCard'
 import { useEffect, useState } from 'react'
 import {
   getPromotionMission,
@@ -357,6 +358,8 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
           ) : null}
         </div>
       ) : null}
+
+      <SidecarJournalCard />
 
       <div className="settings-card" id="settings-ticket-audit">
         <div>
