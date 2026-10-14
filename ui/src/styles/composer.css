@@ -1353,6 +1353,24 @@
   cursor: pointer;
 }
 
+.composer-toast .composer-toast-action {
+  flex: none;
+  width: auto;
+  height: auto;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.composer-toast .composer-toast-action:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
 @media (max-width: 900px) {
   .composer-area {
     padding-right: var(--space-4);

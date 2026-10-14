@@ -17,6 +17,7 @@ import {
   uploadMedia,
 } from './api'
 import { withSlowNotice } from './slowNotice'
+import { restartApp, sidecarResponds } from './appRestart'
 import { buildCreateConversationInput } from './conversationDraft'
 import { buildTodoInput } from './todoDraft'
 import { createTodo, updateTodo, type TodoFinish, type TodoItem } from './todos'
@@ -205,7 +206,7 @@ async function readClipboardImages(): Promise<File[]> {
   return readNativeClipboardImages()
 }
 
-const SLOW_CREATION_MESSAGE = 'Le sidecar n’a pas répondu après 10 s. La conversation s’ouvrira s’il finit par répondre ; sinon, relance Pupitre.'
+const SLOW_CREATION_MESSAGE = 'La création prend plus de 10 s, mais le sidecar répond : la conversation devrait s’ouvrir.'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Une erreur est survenue.'
@@ -263,6 +264,8 @@ export function Composer({
   const [finish, setFinish] = useState<TodoFinish>(initialFinish)
   const isTodoMode = isNewConversation && todoMode && onTodoModeChange !== undefined
   const [toast, setToast] = useState<string | null>(null)
+  const [sidecarStalled, setSidecarStalled] = useState<'stalled' | 'restarting' | null>(null)
+  const restartingSidecarRef = useRef(false)
   const [trigger, setTrigger] = useState<ComposerPaletteTrigger | null>(null)
   const [paletteIndex, setPaletteIndex] = useState(0)
   /** Échap sur un token : le popover reste fermé tant que ce `$`/`/` vit. */
@@ -517,7 +520,8 @@ export function Composer({
         setToast(null)
         onTodoCreated?.(todo)
       } else if (conversationId === null) {
-        const conversation = await withSlowNotice(createConversation(buildCreateConversationInput({
+        let settled = false
+        const creation = withSlowNotice(createConversation(buildCreateConversationInput({
           projectId: project.id,
           ...config,
           ticketId,
@@ -531,8 +535,14 @@ export function Composer({
           message: trimmedMessage,
           images: imageNames,
           attachments: attachmentInputs,
-        })), () => setToast(SLOW_CREATION_MESSAGE))
+        })), () => void sidecarResponds().then((responds) => {
+          if (settled) return
+          if (responds) setToast(SLOW_CREATION_MESSAGE)
+          else setSidecarStalled('stalled')
+        }))
+        const conversation = await creation.finally(() => { settled = true })
         setToast(null)
+        setSidecarStalled(null)
         onConversationCreated(conversation)
       } else {
         const sidequest = parseSidequestDirective(trimmedMessage)
@@ -552,6 +562,8 @@ export function Composer({
         setAttachments([])
       }
     } catch (error: unknown) {
+      if (restartingSidecarRef.current) return
+      setSidecarStalled(null)
       if (error instanceof ApiError && error.status === 409) {
         setToast('un tour est déjà en cours')
       } else {
@@ -623,8 +635,35 @@ export function Composer({
 
   const composerModel = isNewConversation ? null : providerLabel
 
+  async function handleSidecarRestart() {
+    setSidecarStalled('restarting')
+    restartingSidecarRef.current = true
+    try {
+      await restartApp()
+    } catch (error: unknown) {
+      restartingSidecarRef.current = false
+      setSidecarStalled('stalled')
+      setToast(errorMessage(error))
+    }
+  }
+
   return (
     <div className="composer-area">
+      {sidecarStalled !== null && toast === null ? (
+        <div className="composer-toast is-stalled" role="alert">
+          <span>
+            Le sidecar ne répond plus depuis 10 s. Le relancer interrompt les tours en cours.
+          </span>
+          <button
+            type="button"
+            className="composer-toast-action"
+            onClick={() => void handleSidecarRestart()}
+            disabled={sidecarStalled === 'restarting'}
+          >
+            {sidecarStalled === 'restarting' ? 'Relance…' : 'Relancer le sidecar'}
+          </button>
+        </div>
+      ) : null}
       {toast !== null ? (
         <div className="composer-toast" role="alert">
           <span>{toast}</span>

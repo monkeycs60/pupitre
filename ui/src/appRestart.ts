@@ -8,6 +8,18 @@ export function isAppRestartShortcut(event: Pick<KeyboardEvent, 'altKey' | 'ctrl
     && event.key.toLowerCase() === 'r'
 }
 
+export async function sidecarResponds(timeoutMs = 3_000): Promise<boolean> {
+  try {
+    const response = await fetch(httpUrl('/api/health'), {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
 async function waitForSidecar(): Promise<void> {
   await new Promise((resolve) => window.setTimeout(resolve, 700))
   for (let attempt = 0; attempt < 40; attempt += 1) {
