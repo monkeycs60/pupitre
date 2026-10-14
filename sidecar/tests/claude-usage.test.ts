@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { keychainService, readClaudeUsage, readCredentials, refreshClaudeSession } from "../src/adapters/claude-usage";
+import { ClaudeUsageRateLimitedError, keychainService, readClaudeUsage, readCredentials, refreshClaudeSession } from "../src/adapters/claude-usage";
 
 test("renouvelle réellement le jeton OAuth Claude et le persiste", async () => {
   let credentials = {
@@ -141,4 +141,14 @@ test("accepte une lecture asynchrone du jeton Claude", async () => {
   });
 
   expect(usage).toEqual({ seven_day: { utilization: 3 } });
+});
+
+test("un 429 du relevé Claude annonce l'heure du prochain essai permis", async () => {
+  const read = readClaudeUsage(undefined, {
+    readAccessToken: () => "token",
+    fetchUsage: async () => new Response("{}", { status: 429, headers: { "retry-after": "150" } }),
+    now: () => 1_000,
+  });
+  await expect(read).rejects.toBeInstanceOf(ClaudeUsageRateLimitedError);
+  await expect(read).rejects.toMatchObject({ retryAt: 151_000 });
 });

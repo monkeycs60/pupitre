@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
 import { QuotaTracker } from "../src/quotas";
-import { QuotaRefresher } from "../src/quota-refresh";
+import { QuotaRefresher, QuotaRefreshIncompleteError } from "../src/quota-refresh";
+import { ClaudeUsageRateLimitedError } from "../src/adapters/claude-usage";
 
 let quotas: QuotaTracker;
 let claudeReads: number;
@@ -202,4 +203,30 @@ test("le relevé crédits Grok donne le pourcentage hebdo", async () => {
       windowDurationMins: 10_080,
     },
   ]);
+});
+
+test("un relevé Claude limité est signalé, puis laissé en paix jusqu'au délai annoncé", async () => {
+  let now = 0;
+  let reads = 0;
+  const limited = new QuotaRefresher(quotas, {
+    readCodexRateLimits: async () => null,
+    readGrokUsage: async () => null,
+    readOpenCodeGoUsage: async () => null,
+    readClaudeUsage: async () => {
+      reads += 1;
+      if (reads === 1) throw new ClaudeUsageRateLimitedError(150_000);
+      return usagePayload();
+    },
+    now: () => now,
+  });
+
+  await expect(limited.refresh()).rejects.toThrow("nouvel essai automatique dans 3 min");
+  await expect(limited.refresh()).rejects.toBeInstanceOf(QuotaRefreshIncompleteError);
+  expect(reads).toBe(1);
+
+  now = 151_000;
+  const snapshot = await limited.refresh();
+  limited.stop();
+  expect(reads).toBe(2);
+  expect(snapshot.claude?.windows.find((window) => window.label === "five_hour")?.usedPercent).toBe(13);
 });

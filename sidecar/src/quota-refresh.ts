@@ -1,5 +1,5 @@
 import type { QuotaSnapshot, QuotaTracker } from "./quotas";
-import { readClaudeUsage } from "./adapters/claude-usage";
+import { ClaudeUsageRateLimitedError, readClaudeUsage } from "./adapters/claude-usage";
 import { readGrokUsage } from "./adapters/grok-usage";
 import { readOpenCodeGoUsage } from "./adapters/opencode-go-usage";
 import { codexAppServer } from "./adapters/codex-app-server";
@@ -19,11 +19,22 @@ interface QuotaRefreshDeps {
   readClaudeUsage?: () => Promise<unknown | null>;
   readGrokUsage?: () => Promise<unknown | null>;
   readOpenCodeGoUsage?: () => Promise<unknown | null>;
+  now?: () => number;
+}
+
+export class QuotaRefreshIncompleteError extends Error {}
+
+function minutesUntil(at: number, now: number): string {
+  const minutes = Math.max(1, Math.ceil((at - now) / 60_000));
+  return minutes === 1 ? "1 min" : `${minutes} min`;
 }
 
 export class QuotaRefresher {
   private inFlight: Promise<QuotaSnapshot> | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private claudeRetryAt: number | null = null;
+  private claudeRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private now: () => number;
   private readCodex: () => Promise<unknown>;
   private readClaude: () => Promise<unknown | null>;
   private readGrok: () => Promise<unknown | null>;
@@ -35,6 +46,7 @@ export class QuotaRefresher {
     this.readClaude = deps.readClaudeUsage ?? (() => readClaudeUsage());
     this.readGrok = deps.readGrokUsage ?? (() => readGrokUsage());
     this.readReasonix = deps.readOpenCodeGoUsage ?? (() => readOpenCodeGoUsage());
+    this.now = deps.now ?? Date.now;
   }
 
   refresh(): Promise<QuotaSnapshot> {
@@ -59,9 +71,34 @@ export class QuotaRefresher {
   }
 
   stop(): void {
+    if (this.claudeRetryTimer !== null) clearTimeout(this.claudeRetryTimer);
+    this.claudeRetryTimer = null;
     if (this.timer === null) return;
     clearInterval(this.timer);
     this.timer = null;
+  }
+
+  private async readClaudeRespectingLimit(): Promise<unknown | null> {
+    if (this.claudeRetryAt !== null && this.now() < this.claudeRetryAt) return null;
+    try {
+      const usage = await this.readClaude();
+      this.claudeRetryAt = null;
+      return usage;
+    } catch (error) {
+      if (!(error instanceof ClaudeUsageRateLimitedError)) throw error;
+      this.claudeRetryAt = error.retryAt;
+      this.scheduleClaudeRetry(error.retryAt);
+      return null;
+    }
+  }
+
+  private scheduleClaudeRetry(at: number): void {
+    if (this.claudeRetryTimer !== null) clearTimeout(this.claudeRetryTimer);
+    this.claudeRetryTimer = setTimeout(() => {
+      this.claudeRetryTimer = null;
+      void this.refresh().catch(() => {});
+    }, Math.max(0, at - this.now()) + 1_000);
+    this.claudeRetryTimer.unref?.();
   }
 
   private async run(): Promise<QuotaSnapshot> {
@@ -72,7 +109,7 @@ export class QuotaRefresher {
           if (rateLimits) this.quotas.ingestPayload("codex", rateLimits);
         })
         .catch(() => {}),
-      this.readClaude()
+      this.readClaudeRespectingLimit()
         .then((usage) => {
           if (usage) this.quotas.ingestPayload("claude", usage);
         })
@@ -88,6 +125,11 @@ export class QuotaRefresher {
         })
         .catch(() => {}),
     ]);
+    if (this.claudeRetryAt !== null && this.now() < this.claudeRetryAt) {
+      throw new QuotaRefreshIncompleteError(
+        `Claude limite la lecture de ses quotas : nouvel essai automatique dans ${minutesUntil(this.claudeRetryAt, this.now())}.`,
+      );
+    }
     return this.quotas.snapshot();
   }
 }

@@ -22,6 +22,19 @@ const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
 const CLAUDE_CODE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const TIMEOUT_MS = 8_000;
 
+export class ClaudeUsageRateLimitedError extends Error {
+  constructor(public readonly retryAt: number) {
+    super("relevé Claude limité");
+    this.name = "ClaudeUsageRateLimitedError";
+  }
+}
+
+/** `retry-after` en secondes ; 5 min quand l'en-tête manque ou est illisible. */
+function retryAtFrom(response: Response, now: number): number {
+  const seconds = Number(response.headers.get("retry-after"));
+  return now + (Number.isFinite(seconds) && seconds > 0 ? seconds : 300) * 1_000;
+}
+
 interface ClaudeOAuthCredentials {
   accessToken?: unknown;
   refreshToken?: unknown;
@@ -47,6 +60,7 @@ interface ClaudeUsageDeps {
   readAccessToken?: () => string | null | Promise<string | null>;
   fetchUsage?: (token: string, signal: AbortSignal) => Promise<Response>;
   refreshSession?: () => Promise<boolean>;
+  now?: () => number;
 }
 
 function configDir(): string {
@@ -208,21 +222,30 @@ export async function readClaudeUsage(
   const readToken = deps.readAccessToken ?? accessToken;
   const request = deps.fetchUsage ?? fetchUsage;
   const renew = deps.refreshSession ?? refreshSession;
+  const now = deps.now ?? Date.now;
   const requestSignal = () => signal ?? AbortSignal.timeout(TIMEOUT_MS);
   let token = await readToken();
   if (token === null) return null;
 
+  let response: Response;
   try {
-    let response = await request(token, requestSignal());
+    response = await request(token, requestSignal());
     if (response.status === 401 && await renew()) {
       token = await readToken();
       if (token === null) return null;
       response = await request(token, requestSignal());
     }
-    if (!response.ok) return null;
-    return await response.json();
   } catch {
     // Réseau coupé, jeton expiré, endpoint modifié : on garde l'état précédent.
+    return null;
+  }
+  // Le quota de lectures est partagé avec chaque Claude Code ouvert sur le même
+  // compte : quelques relevés rapprochés suffisent à l'épuiser pour minutes.
+  if (response.status === 429) throw new ClaudeUsageRateLimitedError(retryAtFrom(response, now()));
+  if (!response.ok) return null;
+  try {
+    return await response.json();
+  } catch {
     return null;
   }
 }

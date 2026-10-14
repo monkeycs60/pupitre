@@ -1,4 +1,6 @@
 const BASE_URL = "https://api.clickup.com/api/v2";
+const REQUEST_TIMEOUT_MS = 15_000;
+export const TASK_CONTEXT_TIMEOUT_MS = 8_000;
 
 export class ClickUpHttpError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -142,16 +144,19 @@ export class ClickUpClient {
       params.set("custom_task_ids", "true");
       params.set("team_id", teamId);
     }
-    const payload = await this.request<unknown>(`/task/${encodeURIComponent(taskId)}?${params}`, { signal: AbortSignal.timeout(15_000) });
+    const payload = await this.request<unknown>(`/task/${encodeURIComponent(taskId)}?${params}`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
     const task = parseClickUpTasks({ tasks: [payload] })[0];
     if (!task?.id || !task.key) throw new ClickUpHttpError(500, "Unexpected task response");
     return task;
   }
 
-  async taskContext(taskId: string): Promise<ClickUpTaskContext> {
+  async taskContext(
+    taskId: string,
+    signal: AbortSignal = AbortSignal.timeout(TASK_CONTEXT_TIMEOUT_MS),
+  ): Promise<ClickUpTaskContext> {
     const [task, comments] = await Promise.all([
-      this.request<{ description?: unknown; attachments?: unknown }>(`/task/${encodeURIComponent(taskId)}`),
-      this.request<{ comments?: unknown }>(`/task/${encodeURIComponent(taskId)}/comment`),
+      this.request<{ description?: unknown; attachments?: unknown }>(`/task/${encodeURIComponent(taskId)}`, { signal }),
+      this.request<{ comments?: unknown }>(`/task/${encodeURIComponent(taskId)}/comment`, { signal }),
     ]);
 
     const commentList = Array.isArray(comments.comments) ? comments.comments : [];
@@ -194,6 +199,7 @@ export class ClickUpClient {
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await this.fetchImpl(`${BASE_URL}${path}`, {
       ...init,
+      signal: init.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: {
         Authorization: this.token,
         accept: "application/json",

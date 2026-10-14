@@ -236,7 +236,7 @@ export function QuotaStatus({
 }) {
   const now = useNow()
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [refreshFailed, setRefreshFailed] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
   const [authenticating, setAuthenticating] = useState<Provider | null>(null)
   const [authenticationError, setAuthenticationError] = useState<Provider | null>(null)
 
@@ -256,11 +256,11 @@ export function QuotaStatus({
   async function handleRefresh() {
     if (isRefreshing) return
     setIsRefreshing(true)
-    setRefreshFailed(false)
+    setRefreshError(null)
     try {
       await onRefresh()
-    } catch {
-      setRefreshFailed(true)
+    } catch (error: unknown) {
+      setRefreshError(error instanceof Error && error.message ? error.message : 'Relève impossible.')
     } finally {
       setIsRefreshing(false)
     }
@@ -281,15 +281,18 @@ export function QuotaStatus({
         />
       ))}
       <div className="quota-status-actions">
+        {refreshError !== null && !isRefreshing && (
+          <span className="quota-refresh-error" role="status">{refreshError}</span>
+        )}
         <button
           type="button"
-          className={`quota-refresh-icon${isRefreshing ? ' is-running' : ''}${refreshFailed ? ' is-failed' : ''}`}
+          className={`quota-refresh-icon${isRefreshing ? ' is-running' : ''}${refreshError !== null ? ' is-failed' : ''}`}
           onClick={() => void handleRefresh()}
           disabled={isRefreshing}
           aria-label={isRefreshing
             ? 'Relève des quotas en cours'
-            : refreshFailed ? 'Relève impossible, réessayer' : 'Actualiser les quotas'}
-          title={refreshFailed ? 'Relève impossible. Cliquez pour réessayer.' : 'Actualiser les quotas'}
+            : refreshError !== null ? `${refreshError} Réessayer` : 'Actualiser les quotas'}
+          title={refreshError ?? 'Actualiser les quotas'}
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">

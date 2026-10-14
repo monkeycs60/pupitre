@@ -66,3 +66,13 @@ test('le panneau Quotas n’affiche que les providers retenus dans les réglages
   expect(names.some((name) => name.includes('Grok'))).toBe(false)
   expect(names.some((name) => name.includes('OpenCode'))).toBe(false)
 })
+
+test('affiche la raison d’une relève refusée à côté du bouton', async () => {
+  const reason = 'Claude limite la lecture de ses quotas : nouvel essai automatique dans 3 min.'
+  render(<QuotaStatus snapshot={staleSnapshot()} onRefresh={async () => { throw new Error(reason) }} />)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Actualiser les quotas' }))
+
+  expect((await screen.findByRole('status')).textContent).toBe(reason)
+  expect(screen.getByTitle(reason)).toBeTruthy()
+})

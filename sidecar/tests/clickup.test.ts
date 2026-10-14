@@ -71,6 +71,23 @@ test("taskContext conserve la description entière", async () => {
   expect(context.description).toBe("x".repeat(2500));
 });
 
+test("taskContext abandonne une requête ClickUp qui ne répond pas", async () => {
+  const client = new ClickUpClient("pk", (_input, init) => new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+  }));
+  await expect(client.taskContext("86caw5afd", AbortSignal.timeout(20))).rejects.toThrow();
+});
+
+test("toute requête ClickUp part avec un délai maximal", async () => {
+  let signal: AbortSignal | null | undefined;
+  const client = new ClickUpClient("pk", async (_input, init) => {
+    signal = init?.signal;
+    return Response.json({ user: { id: 1 } });
+  });
+  await client.me();
+  expect(signal).toBeInstanceOf(AbortSignal);
+});
+
 test("401 devient une ClickUpAuthError", async () => {
   const client = new ClickUpClient("bad", async () => new Response("{}", { status: 401 }));
   await expect(client.me()).rejects.toBeInstanceOf(ClickUpAuthError);
