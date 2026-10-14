@@ -96,3 +96,44 @@ test("`./chemin` se lit depuis le répertoire de travail de la conversation", as
   expect(results["./source/App.tsx"]).toMatchObject({ status: "resolved", path: join(reactor, "source/App.tsx") });
   expect(results["./auth.js"]).toMatchObject({ status: "resolved", path: join(reactor, "auth.js") });
 });
+
+test("signale un fichier présent sur une autre branche, ou supprimé et renommé depuis", async () => {
+  const repository = join(root, "history");
+  const run = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", "-c", "user.email=t@t", "-c", "user.name=t", ...args], { cwd: repository, stdout: "pipe", stderr: "pipe" });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+  };
+  mkdirSync(join(repository, "lib"), { recursive: true });
+  for (const file of ["lib/old.js", "lib/moved.js", "lib/kept.js"]) writeFileSync(join(repository, file), `${file}\n`);
+  run("init", "-q", "-b", "main");
+  run("add", ".");
+  run("commit", "-q", "-m", "init");
+  run("checkout", "-q", "-b", "feature/autre");
+  writeFileSync(join(repository, "lib/branche-seule.js"), "x\n");
+  run("add", ".");
+  run("commit", "-q", "-m", "branche");
+  run("checkout", "-q", "main");
+  run("rm", "-q", "lib/old.js");
+  run("mv", "lib/moved.js", "lib/renamed.js");
+  run("commit", "-q", "-m", "ménage");
+  const other = join(root, "other-worktree");
+  run("worktree", "add", "-q", "-b", "feature/TECH-9", other);
+  writeFileSync(join(other, "lib/sur-worktree.js"), "x\n");
+
+  const today = new Date().toISOString().slice(0, 10);
+  const context = { worktrees: [{ path: other, branch: "feature/TECH-9", repositoryPath: repository }], repositories: [repository], since: today };
+  const results = await resolveCitations(
+    ["lib/sur-worktree.js:4", "lib/branche-seule.js", "lib/old.js", "lib/moved.js", "package.json", "norm.py"],
+    [{ name: "history", path: repository, branch: "main" }], repository, [], touchedFiles([{ file_path: "/tmp/scripts/norm.py" }]), context,
+  );
+
+  expect(results["lib/sur-worktree.js:4"]).toEqual({ status: "elsewhere", path: join(other, "lib/sur-worktree.js"), line: 4, label: "history/lib/sur-worktree.js", branch: "feature/TECH-9" });
+  expect(results["lib/branche-seule.js"]).toMatchObject({ status: "elsewhere", path: null, branch: "feature/autre" });
+  expect(results["lib/old.js"]).toMatchObject({ status: "gone", change: "deleted", label: "history/lib/old.js", date: today });
+  expect(results["lib/moved.js"]).toMatchObject({ status: "gone", change: "renamed", renamedTo: "lib/renamed.js" });
+  expect(results["package.json"]).toEqual({ status: "missing" });
+  expect(results["norm.py"]).toEqual({ status: "missing" });
+
+  const earlier = await resolveCitations(["lib/old.js"], [{ name: "history", path: repository, branch: "main" }], repository, [], new Set(), { ...context, since: "2999-01-01" });
+  expect(earlier["lib/old.js"]).toEqual({ status: "missing" });
+});

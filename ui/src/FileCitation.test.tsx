@@ -14,6 +14,9 @@ afterEach(cleanup)
 const RESOLUTIONS: Record<string, CitationResolution> = {
   'lib/auth.js:132': { status: 'resolved', path: '/w/hapigator/lib/auth.js', line: 132, label: 'hapigator/lib/auth.js' },
   'takeover.js:43': { status: 'resolved', path: '/w/hapigator/lib/takeover.js', line: 43, label: 'hapigator/lib/takeover.js' },
+  'lib/rescan.js': { status: 'elsewhere', path: '/w/apps/hapigator-tech9/lib/rescan.js', line: 7, label: 'hapigator/lib/rescan.js', branch: 'feature/TECH-9' },
+  'lib/mongo.ts': { status: 'elsewhere', path: null, line: null, label: 'hapigator/lib/mongo.ts', branch: 'origin/tmp/add-typescript' },
+  'lib/old.js': { status: 'gone', label: 'hapigator/lib/old.js', change: 'renamed', renamedTo: 'lib/new.js', commit: 'abc1234', date: '2026-10-01' },
   'routes.js': {
     status: 'ambiguous', line: null, more: 3,
     candidates: [{ path: '/w/a/routes.js', label: 'a/routes.js' }, { path: '/w/b/routes.js', label: 'b/routes.js' }],
@@ -112,4 +115,19 @@ test('un extrait @code qui connaît son fichier ouvre ce chemin sans le résoudr
   fireEvent.click(await screen.findByTitle(/hapigator\/lib\/geo\.js:2/))
   expect(context.editor).toEqual([[{ path: '/w/apps/hapigator-tech1/lib/geo.js', line: 2 }]])
   expect(context.asked).toEqual([])
+})
+
+test('une citation sur une autre branche ou supprimée garde un style discret et son explication', async () => {
+  const context = access()
+  render(createElement(ToolFileContext.Provider, { value: context.value }, createElement(Markdown, null,
+    'Voir `lib/rescan.js`, `lib/mongo.ts` et `lib/old.js`.')))
+
+  const elsewhere = await screen.findByTitle(/Absent de ce worktree, présent sur feature\/TECH-9/)
+  expect(elsewhere.textContent).toBe('lib/rescan.jsfeature/TECH-9')
+  fireEvent.click(elsewhere)
+  expect(context.editor).toEqual([[{ path: '/w/apps/hapigator-tech9/lib/rescan.js', line: 7 }]])
+
+  const branchOnly = screen.getByTitle(/présent sur origin\/tmp\/add-typescript, qui n'a pas de worktree/)
+  expect(branchOnly.tagName).toBe('SPAN')
+  expect(screen.getByTitle(/Renommé en lib\/new\.js le 01\/10\/2026 \(abc1234\)/).tagName).toBe('SPAN')
 })

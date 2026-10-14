@@ -426,6 +426,8 @@ export function openConversationInEditor(conversationId: string, files: EditorFi
 export type CitationResolution =
   | { status: 'resolved'; path: string; line: number | null; label: string }
   | { status: 'ambiguous'; line: number | null; candidates: Array<{ path: string; label: string }>; more: number }
+  | { status: 'elsewhere'; path: string | null; line: number | null; label: string; branch: string | null }
+  | { status: 'gone'; label: string; change: 'deleted' | 'renamed'; renamedTo: string | null; commit: string; date: string }
   | { status: 'missing' }
 
 export function resolveFileCitations(conversationId: string, texts: string[]): Promise<Record<string, CitationResolution>> {

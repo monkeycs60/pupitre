@@ -1721,7 +1721,14 @@ export function createServer(deps: ServerDeps) {
             const texts = Array.isArray(body.texts) ? body.texts.filter((text): text is string => typeof text === "string").slice(0, 300) : [];
             const touched = touchedFiles(deps.conversations.listEvents(conversation.id)
               .flatMap((event) => event.type === "tool-start" ? [event.input] : []));
-            return json(await resolveCitations(texts, plan.folders, conversationCwd(project, conversation), [project.path], touched));
+            const planned = new Set(plan.folders.map((folder) => folder.path));
+            return json(await resolveCitations(texts, plan.folders, conversationCwd(project, conversation), [project.path], touched, {
+              worktrees: sources
+                .filter((source) => source.ref === null && !planned.has(source.path))
+                .map((source) => ({ path: source.path, branch: source.branch, repositoryPath: source.repositoryPath })),
+              repositories: [...new Set(sources.map((source) => source.repositoryPath))],
+              since: new Date(Date.parse(conversation.created_at) - 86_400_000).toISOString().slice(0, 10),
+            }));
           }
           const files = Array.isArray(body.files)
             ? body.files.flatMap((file) => {
@@ -1732,7 +1739,10 @@ export function createServer(deps: ServerDeps) {
             : [];
           const directory = join(deps.instance?.dataDir ?? tmpdir(), "editor-workspaces");
           try {
-            if (files.length > 0) return json({ ...openEditorFiles(plan, files, directory), folders: plan.folders });
+            if (files.length > 0) {
+              const worktrees = sources.filter((source) => source.ref === null).map((source) => source.path);
+              return json({ ...openEditorFiles(plan, files, directory, worktrees), folders: plan.folders });
+            }
             return json({ ...openEditorWorkspace(plan, directory), folders: plan.folders });
           } catch (error) {
             if (error instanceof EditorWorkspaceError) throw new HttpError(503, error.message);

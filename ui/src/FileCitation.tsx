@@ -88,6 +88,40 @@ export function FileCitation({ text, children }: { text: string; children: React
 
   if (access === null || resolution === null || resolution.status === 'missing') return <code>{children}</code>
 
+  if (resolution.status === 'elsewhere') {
+    const branch = resolution.branch ?? 'une autre branche'
+    if (resolution.path === null) {
+      return (
+        <span className="file-citation-elsewhere is-unopenable" title={`${resolution.label}\nAbsent de ce worktree : présent sur ${branch}, qui n'a pas de worktree`}>
+          <code>{children}</code><span className="file-citation-branch">{branch}</span>
+        </span>
+      )
+    }
+    const path = resolution.path
+    return (
+      <a
+        className="file-citation file-citation-elsewhere"
+        href="#"
+        title={`${resolution.label}${resolution.line ? `:${resolution.line}` : ''}\nAbsent de ce worktree, présent sur ${branch}\n${HINT}`}
+        onClick={(event) => openFileTarget(access, event, path, resolution.line)}
+      >
+        <code>{children}</code><span className="file-citation-branch">{branch}</span>
+      </a>
+    )
+  }
+
+  if (resolution.status === 'gone') {
+    const date = new Date(`${resolution.date}T12:00:00`).toLocaleDateString('fr-FR')
+    const what = resolution.change === 'renamed' && resolution.renamedTo
+      ? `Renommé en ${resolution.renamedTo}`
+      : 'Supprimé'
+    return (
+      <span className="file-citation-gone" title={`${resolution.label}\n${what} le ${date} (${resolution.commit})`}>
+        <code>{children}</code>
+      </span>
+    )
+  }
+
   if (resolution.status === 'resolved') {
     return (
       <a

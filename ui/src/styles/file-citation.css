@@ -89,3 +89,29 @@
   color: var(--text);
   border-color: var(--accent);
 }
+
+.file-citation-elsewhere > code {
+  text-decoration: underline dashed color-mix(in srgb, var(--warn) 75%, transparent);
+  text-underline-offset: 3px;
+}
+
+.file-citation-elsewhere.is-unopenable > code {
+  text-decoration-style: dotted;
+}
+
+.file-citation-branch {
+  margin-left: 2px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--warn) 85%, var(--text));
+  font: 10px var(--font-mono);
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+.file-citation-gone > code {
+  color: var(--text-muted);
+  text-decoration: line-through dotted color-mix(in srgb, var(--text-muted) 70%, transparent);
+  cursor: help;
+}

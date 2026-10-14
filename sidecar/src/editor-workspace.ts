@@ -213,11 +213,14 @@ export interface EditorFileTarget {
  * Une fenêtre VS Code par worktree : chaque fichier s'ouvre en onglet dans la
  * fenêtre de la conversation si elle est ouverte, sinon dans une fenêtre déjà
  * ouverte sur son worktree, sinon dans une nouvelle fenêtre de la conversation.
+ * Un fichier d'un worktree étranger à la conversation (`otherWorktrees`) ouvre
+ * la fenêtre de ce worktree.
  */
 export function openEditorFiles(
   plan: EditorWorkspacePlan,
   files: EditorFileTarget[],
   directory: string,
+  otherWorktrees: string[] = [],
   windows = openEditorWindows(),
 ): { targets: string[] } {
   const command = editorCommand();
@@ -226,14 +229,19 @@ export function openEditorFiles(
   for (const file of files) {
     const path = resolve(file.path);
     let target = conversationTarget;
-    if (!windows.has(conversationTarget)) {
+    const worktree = plan.folders
+      .filter((folder) => path.startsWith(`${folder.path}/`))
+      .sort((left, right) => right.path.length - left.path.length)[0]?.path
+      ?? otherWorktrees
+        .filter((other) => path.startsWith(`${other}/`))
+        .sort((left, right) => right.length - left.length)[0];
+    const foreign = worktree !== undefined && !plan.folders.some((folder) => folder.path === worktree);
+    if (foreign || !windows.has(conversationTarget)) {
       const owner = [...windows]
         .filter((opened) => path.startsWith(`${opened}/`))
         .sort((left, right) => right.length - left.length)[0];
-      const worktree = plan.folders
-        .filter((folder) => path.startsWith(`${folder.path}/`))
-        .sort((left, right) => right.path.length - left.path.length)[0];
-      if (owner && (!worktree || owner.length >= worktree.path.length)) target = owner;
+      if (owner && (!worktree || owner.length >= worktree.length)) target = owner;
+      else if (foreign) target = worktree;
     }
     const list = groups.get(target) ?? [];
     list.push(file.line ? `${path}:${file.line}` : path);
