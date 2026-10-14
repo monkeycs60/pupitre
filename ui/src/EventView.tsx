@@ -7,7 +7,8 @@ import type { Attachment } from './types'
 import { mediaUrl } from './transport'
 import { useNow } from './useNow'
 import { AttachmentPreview } from './AttachmentPreview'
-import { summarizeTurnError } from './turnError'
+import { INTERRUPTED_BY_RESTART, summarizeTurnError } from './turnError'
+import { sendMessage } from './api'
 import { toolPresentation } from './toolPresentation'
 import { toolDiff } from './toolDiff'
 import { ToolDiffView } from './ToolDiffView'
@@ -18,6 +19,8 @@ interface EventViewProps {
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
   turnFooterAction?: ReactNode
+  /** Conversation du dernier tour : seul lui peut être renvoyé. */
+  resendConversationId?: string
 }
 
 export function ImageGallery({
@@ -116,6 +119,7 @@ const ACTIVITY_LABELS = {
 
 const PROVIDER_PHASE_LABELS: Record<string, string> = {
   starting: 'démarrage',
+  ticket_context: 'chargement du contexte du ticket',
   planning: 'planification',
   implementing: 'implémentation',
   reading: 'lecture',
@@ -166,9 +170,37 @@ function ReasoningView({ block, live }: { block: Extract<EventBlock, { kind: 're
   )
 }
 
-function TurnFooter({ block, action }: {
+function ResendPrompt({ conversationId, prompt }: {
+  conversationId: string
+  prompt: NonNullable<Extract<EventBlock, { kind: 'turn-footer' }>['prompt']>
+}) {
+  const [state, setState] = useState<'idle' | 'sending' | 'error'>('idle')
+
+  async function resend() {
+    setState('sending')
+    try {
+      await sendMessage(conversationId, { message: prompt.text, images: prompt.images, attachments: prompt.attachments })
+    } catch {
+      setState('error')
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className="turn-error-resend"
+      onClick={() => void resend()}
+      disabled={state === 'sending'}
+    >
+      {state === 'sending' ? 'Renvoi…' : state === 'error' ? 'Renvoi impossible, réessayer' : 'Renvoyer ce message'}
+    </button>
+  )
+}
+
+function TurnFooter({ block, action, resendConversationId }: {
   block: Extract<EventBlock, { kind: 'turn-footer' }>
   action?: ReactNode
+  resendConversationId?: string
 }) {
   const isRunning = block.status?.state === 'running'
   const isDone = block.status?.state === 'done'
@@ -200,6 +232,9 @@ function TurnFooter({ block, action }: {
               <summary>Détails techniques</summary>
               <pre>{turnError.details}</pre>
             </details>
+          ) : null}
+          {resendConversationId && block.prompt && block.status?.error === INTERRUPTED_BY_RESTART ? (
+            <ResendPrompt conversationId={resendConversationId} prompt={block.prompt} />
           ) : null}
         </div>
       ) : null}
@@ -343,7 +378,7 @@ function backgroundTaskStatusLabel(status: string, plural: boolean): string {
  */
 export const EventView = memo(EventViewImpl)
 
-function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFooterAction }: EventViewProps) {
+function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFooterAction, resendConversationId }: EventViewProps) {
   switch (block.kind) {
     case 'user':
       return (
@@ -407,7 +442,7 @@ function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFoot
     }
 
     case 'turn-footer': {
-      return <TurnFooter block={block} action={turnFooterAction} />
+      return <TurnFooter block={block} action={turnFooterAction} resendConversationId={resendConversationId} />
     }
   }
 }

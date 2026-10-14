@@ -1,3 +1,5 @@
+export const INTERRUPTED_BY_RESTART = 'interrompu (sidecar redémarré)'
+
 const ANSI_SEQUENCE = new RegExp(
   `${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`,
   'g',

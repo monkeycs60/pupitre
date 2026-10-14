@@ -38,6 +38,7 @@ function EventStreamImpl({
   onSubtaskStatusChange,
   onDebriefQuestion,
   turnFooterAction,
+  conversationId,
 }: EventStreamProps) {
   const rendered: ReactNode[] = []
   const blocks = foldFinishedTurns(streamBlocks)
@@ -106,6 +107,7 @@ function EventStreamImpl({
             onImageOpen={onImageOpen}
             onImageLoad={onImageLoad}
             turnFooterAction={block.id === newestTurnFooterId ? turnFooterAction : undefined}
+            resendConversationId={block.id === newestTurnFooterId ? conversationId : undefined}
           />
       ),
     )

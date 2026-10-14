@@ -6,10 +6,10 @@ import { openDb } from "../src/db";
 import { ProjectStore } from "../src/stores/projects";
 import { ConversationStore } from "../src/stores/conversations";
 import { MediaStore } from "../src/media";
-import { ConversationRunner, sweepOrphanedRuns } from "../src/runner";
+import { ConversationRunner, PREAMBLE_PHASE_DELAY_MS, sweepOrphanedRuns } from "../src/runner";
 import { codexAppServer } from "../src/adapters/codex-app-server";
 import { QuotaTracker } from "../src/quotas";
-import type { AppEvent } from "../src/events";
+import { INTERRUPTED_BY_RESTART, type AppEvent } from "../src/events";
 import { GitProjectService } from "../src/git";
 import type { Database } from "bun:sqlite";
 import { SkillInventory } from "../src/skills";
@@ -548,6 +548,13 @@ test("abortAll annule tous les tours en vol et rend la main sans attendre", asyn
 
   expect(runner.isRunning(first.id)).toBe(false);
   expect(runner.isRunning(second.id)).toBe(false);
+  for (const conversation of [first, second]) {
+    expect(convs.listEvents(conversation.id).at(-1)).toMatchObject({
+      type: "status",
+      state: "error",
+      error: INTERRUPTED_BY_RESTART,
+    });
+  }
 });
 
 test("une réaction de Claude entre deux tours devient un tour autonome persisté", async () => {
@@ -611,4 +618,30 @@ test("annuler pendant l'attente du préambule clôt le tour sans lancer le provi
   expect(events.some((event) => event.type === "session")).toBe(false);
   expect(events.at(-1)).toMatchObject({ type: "status", state: "error", error: "annulé" });
   expect(runner.isRunning(c.id)).toBe(false);
+});
+
+test("un préambule lent affiche sa phase pendant l'attente, puis l'efface", async () => {
+  const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "salut" });
+  let deliver!: (preamble: string) => void;
+  const preamble = new Promise<string>((resolve) => { deliver = resolve; });
+
+  const turn = runner.runTurn(c.id, "salut", [], [], { preamble, preamblePhase: "ticket_context" });
+  await Bun.sleep(PREAMBLE_PHASE_DELAY_MS + 50);
+  const shown = broadcast.filter((event) => event.type === "turn-phase");
+  expect(shown).toHaveLength(1);
+  expect(shown[0]).toMatchObject({ type: "turn-phase", phase: "ticket_context" });
+
+  deliver("Contexte du ticket");
+  await turn;
+  expect(broadcast.filter((event) => event.type === "turn-phase").at(1))
+    .toMatchObject({ type: "turn-phase", phase: "" });
+});
+
+test("un préambule rapide n'affiche aucune phase", async () => {
+  const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "salut" });
+  await runner.runTurn(c.id, "salut", [], [], {
+    preamble: Promise.resolve("Contexte"),
+    preamblePhase: "ticket_context",
+  });
+  expect(broadcast.some((event) => event.type === "turn-phase" && event.phase === "ticket_context")).toBe(false);
 });

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { AppEvent, Provider, StoredEvent } from "./events";
+import { INTERRUPTED_BY_RESTART, type AppEvent, type Provider, type StoredEvent } from "./events";
 import type { ConversationStore } from "./stores/conversations";
 import type { Project, ProjectStore } from "./stores/projects";
 import type { QuotaTracker } from "./quotas";
@@ -360,7 +360,7 @@ export class SubtaskRunner {
       this.convs.appendEvent(subtask.id, {
         type: "status",
         state: "error",
-        error: "interrompu (sidecar redémarré)",
+        error: INTERRUPTED_BY_RESTART,
       });
       this.store.setStatus(subtask.id, "error");
     }

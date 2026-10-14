@@ -185,3 +185,5 @@ export function parseJsonlLine(line: string): Record<string, unknown> | null {
     return null;
   }
 }
+
+export const INTERRUPTED_BY_RESTART = "interrompu (sidecar redémarré)";

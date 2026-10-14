@@ -1,7 +1,7 @@
 import type { ConversationStore } from "./stores/conversations";
 import type { Project, ProjectStore } from "./stores/projects";
 import type { MediaStore } from "./media";
-import type { AppEvent, MediaAttachment, StoredEvent } from "./events";
+import { INTERRUPTED_BY_RESTART, type AppEvent, type MediaAttachment, type StoredEvent } from "./events";
 import { runProviderTurn } from "./adapters/run";
 import type { QuotaTracker } from "./quotas";
 import { ConversationActivity } from "./conversation-activity";
@@ -49,6 +49,8 @@ function attachmentPrompt(
     + "\nConsulte les fichiers joints avec les outils disponibles si nécessaire.";
 }
 
+export const PREAMBLE_PHASE_DELAY_MS = 300;
+
 export interface ActiveTurnSnapshot {
   conversationId: string;
   startedAt: string;
@@ -87,6 +89,7 @@ function selectedMcpServers(
 
 export class ConversationRunner {
   private active = new Map<string, ActiveTurn>();
+  private shuttingDown = false;
 
   constructor(
     private convs: ConversationStore,
@@ -132,6 +135,7 @@ export class ConversationRunner {
    * signaux partent quand même, `process.kill` étant synchrone.
    */
   abortAll(): number {
+    this.shuttingDown = true;
     const turns = [...this.active.values()];
     for (const turn of turns) turn.controller.abort();
     return turns.length;
@@ -198,7 +202,7 @@ export class ConversationRunner {
     prompt: string,
     imageNames: string[],
     attachments: MediaAttachment[] = [],
-    options: { preamble?: string | Promise<string | null> } = {},
+    options: { preamble?: string | Promise<string | null>; preamblePhase?: string } = {},
   ): Promise<TurnOutcome> {
     const conv = this.convs.get(conversationId);
     if (!conv) throw new Error("conversation inconnue");
@@ -249,7 +253,10 @@ export class ConversationRunner {
       cancelledByUser: false,
     });
 
-    const emit = (incoming: AppEvent) => {
+    const emit = (received: AppEvent) => {
+      const incoming: AppEvent = this.shuttingDown && received.type === "status" && received.state === "error"
+        ? { ...received, error: INTERRUPTED_BY_RESTART }
+        : received;
       const event = incoming.type === "tool-end" && incoming.inlineImages?.length
         ? (() => {
             const imported = importInlineImages(incoming.inlineImages, this.media);
@@ -326,10 +333,19 @@ export class ConversationRunner {
       const workspacePreamble = worktrees.length > 1
         ? `Espaces de travail Git de cette conversation :\n${worktrees.map((path) => `- ${path}`).join("\n")}\nTravaille dans chacun selon les besoins de la tâche ; ne modifie pas les checkouts sources du projet.`
         : null;
+      let preamblePhaseShown = false;
+      const preamblePhaseTimer = options.preamblePhase
+        ? setTimeout(() => {
+            preamblePhaseShown = true;
+            emit({ type: "turn-phase", phase: options.preamblePhase! });
+          }, PREAMBLE_PHASE_DELAY_MS)
+        : null;
       const requestedPreamble = await Promise.resolve(options.preamble).catch((error: unknown) => {
         console.error("Préambule du tour indisponible", error);
         return null;
       });
+      if (preamblePhaseTimer !== null) clearTimeout(preamblePhaseTimer);
+      if (preamblePhaseShown) emit({ type: "turn-phase", phase: "" });
       if (controller.signal.aborted) {
         emit({ type: "status", state: "error", error: "annulé" });
         return outcome;

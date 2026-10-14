@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { AppEvent, Provider, StoredEvent } from "../events";
+import { INTERRUPTED_BY_RESTART, type AppEvent, type Provider, type StoredEvent } from "../events";
 import { taskSummary, taskTitle } from "../conversation-title";
 import { messageCountIncrement } from "../message-count";
 import type { Preset, PresetPermissionMode, PresetStore } from "./presets";
@@ -624,13 +624,13 @@ export class ConversationStore {
       SET payload = json_set(
         payload,
         '$.state', 'error',
-        '$.error', 'interrompu (sidecar redémarré)'
+        '$.error', ?
       )
       WHERE id IN (SELECT id FROM last_events)
         AND json_valid(payload)
         AND json_extract(payload, '$.type') = 'status'
         AND json_extract(payload, '$.state') = 'running'
-    `).run();
+    `).run(INTERRUPTED_BY_RESTART);
     return result.changes;
   }
 

@@ -219,9 +219,14 @@ export function groupEvents(
   let turnFooter: Extract<EventBlock, { kind: 'turn-footer' }> | null = null
   let turnFooterId: string | null = null
   let turnFiles = new Map<string, { added: number; removed: number }>()
+  let turnPrompt: Extract<EventBlock, { kind: 'turn-footer' }>['prompt'] | null = null
 
   function ensureTurnFooter() {
-    turnFooter ??= { kind: 'turn-footer', id: turnFooterId ?? `turn-footer-${turnNumber}` }
+    turnFooter ??= {
+      kind: 'turn-footer',
+      id: turnFooterId ?? `turn-footer-${turnNumber}`,
+      ...(turnPrompt ? { prompt: turnPrompt } : {}),
+    }
     return turnFooter
   }
 
@@ -241,6 +246,7 @@ export function groupEvents(
           turnNumber += 1
           turnFooterId = null
           turnFiles = new Map()
+          turnPrompt = { text: event.text, images: event.images, attachments: event.attachments ?? [] }
         }
         assistant = null
         blocks.push({
@@ -462,6 +468,7 @@ export function groupEvents(
           assistant = null
           turnFooterId = `turn-footer-${turnNumber}-${eventKey}`
           turnFiles = new Map()
+          turnPrompt = null
           ensureTurnFooter().origin = 'agent'
         }
         const footer = ensureTurnFooter()

@@ -64,6 +64,8 @@ interface TurnFooterBlock {
   subtaskCount?: number
   /** Présent quand l'agent a ouvert le tour sans message de l'utilisateur. */
   origin?: 'agent' | 'background-task'
+  /** Message qui a ouvert le tour, de quoi le renvoyer à l'identique. */
+  prompt?: { text: string; images: string[]; attachments: Attachment[] }
 }
 
 export type EventBlock =

@@ -1821,6 +1821,29 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
   letter-spacing: 0.02em;
 }
 
+.turn-error-resend {
+  display: block;
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.turn-error-resend:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent-border);
+}
+
+.turn-error-resend:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
 .turn-error-details {
   margin-top: var(--space-2);
   color: var(--text-muted);
