@@ -36,6 +36,7 @@ test("les livrables de réflexion longs privilégient un HTML éphémère", () =
   expect(preamble).toContain("document HTML autonome et éphémère");
   expect(preamble).toContain("dans /tmp");
   expect(preamble).toContain("publish_document");
+  expect(preamble).toContain("chemin depuis la racine de son dépôt");
   expect(preamble).toContain("Un simple lien local ne constitue pas une livraison");
 });
 

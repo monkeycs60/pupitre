@@ -81,6 +81,8 @@ export function actionFormatPreamble(format: ActionFormat): string {
     "affiché inline et recensé parmi les pièces jointes. Publie de la même façon tout",
     "fichier livré (PDF, CSV, XLSX, DOCX, Markdown, texte ou JSON). Un simple lien local ne constitue pas une livraison.",
     "Garde le Markdown pour une réponse courte.",
+    "Cite un fichier par son chemin depuis la racine de son dépôt (`lib/auth.js:132`),",
+    "jamais par son nom seul : Pupitre en fait un lien qui l'ouvre dans VS Code.",
   ].join("\n");
 }
 
