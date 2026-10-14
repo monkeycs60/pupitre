@@ -1324,9 +1324,9 @@
 
 .composer-toast {
   position: absolute;
-  z-index: 10;
+  z-index: 40;
   right: var(--space-6);
-  bottom: calc(100% + var(--space-2));
+  bottom: calc(100% + var(--space-6));
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -1382,7 +1382,7 @@
 
 .context-gauge {
   position: absolute;
-  right: 18px;
+  right: 28px;
   bottom: 100%;
   z-index: 35;
   color: var(--accent);
@@ -1393,6 +1393,7 @@
 }
 
 .context-gauge-summary {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -1405,7 +1406,8 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
+  --gauge-edge: var(--border-strong);
+  border: 1px solid var(--gauge-edge);
   border-bottom: 0;
   border-radius: var(--r-md) var(--r-md) 0 0;
   outline: none;
@@ -1413,14 +1415,44 @@
   transition: border-color var(--dur-fast) var(--ease);
 }
 
+/* Congés concaves : la bordure du composer remonte en courbe dans l'onglet.
+   L'ombre portée peint le fond du composer dans l'angle extérieur de la
+   courbe ; elle doit rester exactement de la couleur de `.composer`. */
+.context-gauge-summary::before,
+.context-gauge-summary::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: var(--r-md);
+  height: var(--r-md);
+  border-style: solid;
+  border-color: var(--gauge-edge);
+  pointer-events: none;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.context-gauge-summary::before {
+  left: calc(-1 * var(--r-md) - 1px);
+  border-width: 0 1px 1px 0;
+  border-bottom-right-radius: var(--r-md);
+  box-shadow: 3px 3px 0 2px var(--bg-panel);
+}
+
+.context-gauge-summary::after {
+  right: calc(-1 * var(--r-md) - 1px);
+  border-width: 0 0 1px 1px;
+  border-bottom-left-radius: var(--r-md);
+  box-shadow: -3px 3px 0 2px var(--bg-panel);
+}
+
 .composer:focus-within .context-gauge-summary,
 .context-gauge:hover .context-gauge-summary,
 .context-gauge:focus-within .context-gauge-summary {
-  border-color: var(--accent-border);
+  --gauge-edge: var(--accent-border);
 }
 
 .context-gauge.is-near-limit .context-gauge-summary {
-  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  --gauge-edge: color-mix(in srgb, var(--warn) 45%, transparent);
 }
 
 .context-gauge-dial {
