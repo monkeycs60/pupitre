@@ -3,7 +3,7 @@ import type { CodeSource } from './types'
 export type CodeScopeKind = 'ticket' | 'mains' | 'source'
 
 /**
- * Ce que l'onglet Code affiche : un worktree, ou plusieurs quand un même
+ * Ce que Structure affiche : un worktree, ou plusieurs quand un même
  * ticket vit dans plusieurs dépôts (affilae-mono : hapigator + reactor).
  */
 export interface CodeScope {

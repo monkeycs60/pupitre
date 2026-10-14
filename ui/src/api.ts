@@ -10,17 +10,12 @@ import type {
   GitCommitResult,
   GitPushCommit,
   GitSnapshot,
-  CodeBlame,
   CodeBranchChanges,
   CodeConversationCommits,
-  CodeCommitDetail,
   CodeCommitSummary,
   CodeFile,
   CodeFileList,
-  CodeGraphPage,
-  CodeSearchResult,
   CodeSource,
-  CodeSyncStatus,
   FleetItem,
   IntegrationType,
   SearchResult,
@@ -1293,53 +1288,17 @@ export function getCodeFile(
   return fetchJson(codeUrl(projectId, 'file', { source, path }), { signal })
 }
 
-export function getCodeBlame(projectId: string, source: string, path: string, signal?: AbortSignal): Promise<CodeBlame> {
-  return fetchJson(codeUrl(projectId, 'blame', { source, path }), { signal })
-}
 
-export function getCodeHistory(
-  projectId: string,
-  source: string,
-  path: string,
-  signal?: AbortSignal,
-): Promise<CodeCommitSummary[]> {
-  return fetchJson(codeUrl(projectId, 'history', { source, path }), { signal })
-}
 
-export function getCodeGraph(projectId: string, source: string, skip: number, signal?: AbortSignal): Promise<CodeGraphPage> {
-  return fetchJson(codeUrl(projectId, 'graph', { source, skip }), { signal })
-}
 
-export function getCodeCommit(projectId: string, source: string, sha: string, signal?: AbortSignal): Promise<CodeCommitDetail> {
-  return fetchJson(codeUrl(projectId, 'commit', { source, sha }), { signal })
-}
 
-export function getCodeDiff(
-  projectId: string,
-  source: string,
-  sha: string | null,
-  path: string,
-  signal?: AbortSignal,
-  range: 'branch' | null = null,
-): Promise<{ diff: string }> {
-  return fetchJson(codeUrl(projectId, 'diff', { source, sha, path, range }), { signal })
-}
 
 export function getCodeChanges(projectId: string, source: string, signal?: AbortSignal): Promise<CodeBranchChanges> {
   return fetchJson(codeUrl(projectId, 'changes', { source }), { signal })
 }
 
-export function getCodeSync(projectId: string, source: string, fetch: boolean, signal?: AbortSignal): Promise<CodeSyncStatus> {
-  return fetchJson(codeUrl(projectId, 'sync', { source, fetch: fetch ? 1 : null }), { signal })
-}
 
-export function mergeCodeBase(projectId: string, source: string): Promise<CodeSyncStatus> {
-  return fetchJson(codeUrl(projectId, 'merge', {}), jsonPost({ source }))
-}
 
-export function resolveCodeConflicts(projectId: string, source: string): Promise<Conversation> {
-  return fetchJson(codeUrl(projectId, 'resolve', {}), jsonPost({ source }))
-}
 
 export function getCodeConversationCommits(
   projectId: string,
@@ -1349,9 +1308,6 @@ export function getCodeConversationCommits(
   return fetchJson(codeUrl(projectId, 'conversation', { conversationId }), { signal })
 }
 
-export function searchCode(projectId: string, source: string, q: string, signal?: AbortSignal): Promise<CodeSearchResult> {
-  return fetchJson(codeUrl(projectId, 'search', { source, q }), { signal })
-}
 
 interface PendingSubtaskRequest {
   id: string

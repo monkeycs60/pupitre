@@ -57,7 +57,6 @@ function DiffFile({ file: rawFile }: { file: ToolDiffFile }) {
   const access = useContext(ToolFileContext)
   const [full, setFull] = useState(false)
   const [located, setLocated] = useState<ToolDiffFile | null>(null)
-  const [unreachable, setUnreachable] = useState(false)
   const absolute = rawFile.path.startsWith('/')
 
   useEffect(() => {
@@ -109,21 +108,20 @@ function DiffFile({ file: rawFile }: { file: ToolDiffFile }) {
         {file.status !== 'modified' ? (
           <span className={`tool-diff-status is-${file.status}`}>{file.status === 'added' ? 'nouveau' : 'supprimé'}</span>
         ) : null}
-        {access && absolute ? (
+        {access && absolute && file.status !== 'deleted' ? (
           <button
             type="button"
             className="tool-diff-open"
-            disabled={unreachable}
-            title={unreachable ? 'Fichier hors des dépôts du projet' : 'Ouvrir dans l’onglet Code'}
+            title="Ouvrir dans VS Code"
             onClick={() => {
               const firstLine = file.lines.find((line) => (line.kind === 'added' || line.kind === 'removed') && line.line !== undefined)?.line ?? null
-              void access.openInCode(rawFile.path, firstLine).then((opened) => setUnreachable(!opened))
+              void access.openInEditor([{ path: rawFile.path, line: firstLine }])
             }}
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M6 4 2 8l4 4M10 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Ouvrir
+            VS Code
           </button>
         ) : null}
         <span className="tool-diff-stats">

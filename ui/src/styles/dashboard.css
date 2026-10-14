@@ -202,80 +202,6 @@
   font-weight: 600;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 .sentry-subtitle { margin: 4px 0 0; color: var(--text-faint); font-size: var(--text-xs); }
 .sentry-actions { display: flex; align-items: center; gap: var(--space-3); color: var(--text-muted); font-size: var(--text-sm); }
 .sentry-actions label { display: inline-flex; align-items: center; gap: var(--space-1); }
@@ -704,7 +630,5 @@
     flex-direction: column;
     align-items: flex-start;
   }
-
-
 
 }

@@ -96,10 +96,6 @@ test("liste les fichiers suivis et non suivis, avec leur état modifié", async 
 });
 
 test("repère l'agent co-auteur par trailer et sort les dépôts imbriqués de la liste des fichiers", async () => {
-  writeFileSync(join(repo, "agent.ts"), "a\nb\n");
-  git(repo, "add", "-A");
-  git(repo, "commit", "-qm", "ajoute agent\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>");
-  const agentSha = git(repo, "rev-parse", "HEAD");
   const web = join(repo, "apps", "web");
   initRepo(web);
   commit(web, "index.ts", "x\n", "web");
@@ -114,12 +110,7 @@ test("repère l'agent co-auteur par trailer et sort les dépôts imbriqués de l
   expect(files.paths.some((path) => path === "vendor" || path.startsWith("apps/web"))).toBe(false);
   expect(files.dirty.some((item) => item.path.startsWith("vendor") || item.path.startsWith("apps/web"))).toBe(false);
 
-  const expected = { provider: "claude" as const, name: "Claude Opus 5 (1M context)" };
-  const graph = await explorer.graph(projectId, repo);
-  expect(graph.commits.find((item) => item.sha === agentSha)?.agent).toEqual(expected);
-  expect(graph.commits.find((item) => item.subject === "socle")?.agent).toBeNull();
-  expect((await explorer.commit(projectId, repo, agentSha)).agent).toEqual(expected);
-  expect((await explorer.blame(projectId, repo, "agent.ts")).groups[0]?.agent).toEqual(expected);
+  expect(agentFromTrailers("Claude Opus 5 (1M context) <noreply@anthropic.com>")).toEqual({ provider: "claude", name: "Claude Opus 5 (1M context)" });
   expect(agentFromTrailers("Jane Doe <jane@example.test>\x1fCodex <codex@openai.com>")).toEqual({ provider: "codex", name: "Codex" });
   expect(agentFromTrailers("Jane Doe <jane@example.test>")).toBeNull();
 });
@@ -132,117 +123,6 @@ test("lit un fichier du worktree ou d'un commit, et signale un binaire", async (
   expect(await explorer.file(projectId, repo, "src/app.ts")).toMatchObject({ content: "v2\n", binary: false });
   expect(await explorer.file(projectId, repo, "src/app.ts", first)).toMatchObject({ content: "v1\n", ref: first });
   expect(await explorer.file(projectId, repo, "logo.bin")).toMatchObject({ content: null, binary: true });
-});
-
-test("regroupe le blame par commit, rattache la conversation et marque les lignes non commitées", async () => {
-  const base = commit(repo, "src/app.ts", "a\nb\n", "base");
-  const linked = commit(repo, "src/app.ts", "a\nb\nc\nd\n", "ajoute c et d");
-  db.query("INSERT INTO commit_links (commit_sha, project_id, conversation_id, created_at) VALUES (?, ?, ?, ?)")
-    .run(linked, projectId, conversationId, new Date().toISOString());
-  writeFileSync(join(repo, "src/app.ts"), "a\nb\nc\nd\ne\n");
-
-  const blame = await explorer.blame(projectId, repo, "src/app.ts");
-
-  expect(blame.lineCount).toBe(5);
-  expect(blame.groups.map((group) => [group.sha, group.start, group.count, group.uncommitted])).toEqual([
-    [base, 1, 2, false],
-    [linked, 3, 2, false],
-    ["0".repeat(40), 5, 1, true],
-  ]);
-  expect(blame.groups[1]).toMatchObject({
-    author: "Git Fixture",
-    summary: "ajoute c et d",
-    conversations: [{ id: conversationId, provider: "claude" }],
-  });
-});
-
-test("un fichier jamais commité se lit comme un seul bloc non commité", async () => {
-  writeFileSync(join(repo, "draft.ts"), "x\ny\n");
-
-  const blame = await explorer.blame(projectId, repo, "draft.ts");
-
-  expect(blame.groups).toHaveLength(1);
-  expect(blame.groups[0]).toMatchObject({ uncommitted: true, start: 1 });
-});
-
-test("suit l'historique d'un fichier à travers un renommage", async () => {
-  const created = commit(repo, "old.ts", "export const value = 1\n", "crée old");
-  renameSync(join(repo, "old.ts"), join(repo, "new.ts"));
-  const renamed = commit(repo, "new.ts", "export const value = 1\n", "renomme");
-
-  const history = await explorer.history(projectId, repo, "new.ts");
-
-  expect(history.map((item) => item.sha)).toEqual([renamed, created]);
-});
-
-test("pagine le graphe et isole les commits propres à la branche du worktree", async () => {
-  const worktree = join(root, "feature");
-  git(repo, "worktree", "add", "-q", "-b", "feature", worktree);
-  const own = commit(worktree, "feature.ts", "1\n", "feature");
-  commit(repo, "main.ts", "1\n", "main avance");
-  explorer = new CodeExplorerService(db, new ProjectStore(db));
-
-  const graph = await explorer.graph(projectId, worktree);
-
-  expect(graph).toMatchObject({ head: own, currentBranch: "feature", base: "main", focus: [own], skip: 0, hasMore: false });
-  expect(graph.focusCommits.map((item) => item.subject)).toEqual(["feature"]);
-  expect(graph.commits).toHaveLength(3);
-  expect(graph.commits.every((item) => item.parents.length <= 1)).toBe(true);
-  const next = await explorer.graph(projectId, worktree, 2);
-  expect(next.commits).toHaveLength(1);
-  expect(next.focus).toEqual([]);
-});
-
-test("détaille un commit avec ses fichiers, renommages compris, et son diff par fichier", async () => {
-  commit(repo, "src/a.ts", "export const a = 1\n".repeat(5), "base");
-  git(repo, "mv", "src/a.ts", "src/b.ts");
-  writeFileSync(join(repo, "src/c.ts"), "nouveau\n");
-  git(repo, "add", "-A");
-  git(repo, "commit", "-qm", "renomme a\n\nCorps du message.");
-  const sha = git(repo, "rev-parse", "HEAD");
-
-  const detail = await explorer.commit(projectId, repo, sha.slice(0, 10));
-
-  expect(detail).toMatchObject({ sha, subject: "renomme a", body: "Corps du message.", author: "Git Fixture" });
-  expect(detail.files).toEqual(expect.arrayContaining([
-    { path: "src/b.ts", previousPath: "src/a.ts", status: "R", added: 0, removed: 0 },
-    { path: "src/c.ts", previousPath: null, status: "A", added: 1, removed: 0 },
-  ]));
-  const { diff } = await explorer.diff(projectId, repo, sha, "src/c.ts");
-  expect(diff).toContain("+nouveau");
-});
-
-test("sans commit, le diff d'un fichier montre ses modifications non commitées, fichier non suivi compris", async () => {
-  commit(repo, "src/app.ts", "const a = 1\n", "app");
-  writeFileSync(join(repo, "src/app.ts"), "const a = 2\n");
-  writeFileSync(join(repo, "draft.ts"), "brouillon\n");
-
-  expect((await explorer.diff(projectId, repo, "", "src/app.ts")).diff).toContain("+const a = 2");
-  expect((await explorer.diff(projectId, repo, "", "draft.ts")).diff).toContain("+brouillon");
-  expect((await explorer.diff(projectId, repo, "", "README.md")).diff).toBe("");
-});
-
-test("détaille le commit racine", async () => {
-  const [first] = (await explorer.graph(projectId, repo)).commits.slice(-1);
-
-  const detail = await explorer.commit(projectId, repo, first!.sha);
-
-  expect(detail.parents).toEqual([]);
-  expect(detail.files.map((file) => file.path)).toEqual([".gitignore", "README.md"]);
-});
-
-test("cherche du texte dans les fichiers suivis et non suivis", async () => {
-  commit(repo, "src/app.ts", "const Needle = 1\nconst other = 2\n", "app");
-  writeFileSync(join(repo, "draft.ts"), "// needle ici\n");
-
-  const result = await explorer.search(projectId, repo, "needle");
-
-  expect(result.matches).toEqual(expect.arrayContaining([
-    { path: "src/app.ts", line: 1, text: "const Needle = 1" },
-    { path: "draft.ts", line: 1, text: "// needle ici" },
-  ]));
-  expect(result.truncated).toBe(false);
-  expect((await explorer.search(projectId, repo, "introuvable")).matches).toEqual([]);
 });
 
 test("expose les branches à clé de ticket sans worktree, en lecture seule, même fusionnées", async () => {
@@ -260,12 +140,7 @@ test("expose les branches à clé de ticket sans worktree, en lecture seule, mê
   expect(files.paths).toContain("ticket.ts");
   expect(files.dirty).toEqual([]);
   expect((await explorer.file(projectId, branch!.path, "ticket.ts")).content).toBe("export const ticket = 1\n");
-  const graph = await explorer.graph(projectId, branch!.path);
-  expect(graph.head).toBe(own);
-  expect(graph.focusCommits.map((item) => item.sha)).toEqual([own]);
-  expect((await explorer.search(projectId, branch!.path, "ticket = 1")).matches).toEqual([{ path: "ticket.ts", line: 1, text: "export const ticket = 1" }]);
-  expect((await explorer.blame(projectId, branch!.path, "ticket.ts")).groups[0]?.sha).toBe(own);
-  expect((await explorer.diff(projectId, branch!.path, "", "ticket.ts")).diff).toBe("");
+  expect(branch!.head).toBe(own);
 });
 
 test("rattrape la provenance des commits faits pendant un tour, dépôt imbriqué compris, sans ceux des collègues", async () => {
@@ -279,10 +154,11 @@ test("rattrape la provenance des commits faits pendant un tour, dépôt imbriqu�
   git(api, "-c", "user.email=collegue@example.test", "commit", "--allow-empty", "-qm", "collègue");
   const colleague = git(api, "rev-parse", "HEAD");
 
-  const graph = await explorer.graph(projectId, api);
+  const work = await explorer.conversationCommits(projectId, conversationId);
+  const shas = work.repositories.flatMap((repository) => repository.commits.map((entry) => entry.sha));
 
-  expect(graph.commits.find((item) => item.sha === mine)?.conversations).toEqual([{ id: conversationId, title: expect.any(String), provider: "claude" }]);
-  expect(graph.commits.find((item) => item.sha === colleague)?.conversations).toEqual([]);
+  expect(shas).toContain(mine);
+  expect(shas).not.toContain(colleague);
 });
 
 test("liste les fichiers changés par la branche et leur diff cumulé, branche fusionnée comprise", async () => {
@@ -298,7 +174,6 @@ test("liste les fichiers changés par la branche et leur diff cumulé, branche f
   const open = await explorer.changes(projectId, worktree);
   expect(open.base).toBe("main");
   expect(open.files.map((file) => [file.path, file.status, file.added])).toEqual([["a.ts", "A", 2], ["c.ts", "A", 1]]);
-  expect((await explorer.diff(projectId, worktree, "", "a.ts", "branch")).diff).toContain("+b");
 
   git(repo, "merge", "-q", "--no-ff", "-m", "Merge feature", "feature/TECH-777");
   const merged = await explorer.changes(projectId, worktree);
@@ -365,44 +240,5 @@ test("refuse un état du code hors du projet et un chemin qui sort du dépôt", 
 
   await expect(explorer.files(projectId, outside)).rejects.toThrow("état du code inconnu");
   await expect(explorer.file(projectId, repo, "../outside/x")).rejects.toThrow("chemin de fichier invalide");
-  await expect(explorer.commit(projectId, repo, "HEAD; rm")).rejects.toThrow("référence Git invalide");
 });
 
-test("mesure l'écart avec la base, prévoit les conflits et ne fusionne que sans conflit", async () => {
-  const origin = join(root, "origin.git");
-  git(root, "clone", "-q", "--bare", repo, origin);
-  git(repo, "remote", "add", "origin", origin);
-  git(repo, "fetch", "-q", "origin");
-  git(repo, "branch", "develop", "main");
-  new ProjectStore(db).setTrunkBranch(projectId, "develop");
-  git(repo, "push", "-q", "origin", "develop");
-  const worktree = join(root, "feature");
-  git(repo, "worktree", "add", "-q", "-b", "feature", worktree, "origin/develop");
-  commit(worktree, "src/shared.ts", "feature\n", "feature");
-  commit(worktree, "src/own.ts", "own\n", "own");
-
-  const upstream = join(root, "upstream");
-  git(root, "clone", "-q", "-b", "develop", origin, upstream);
-  git(upstream, "config", "user.email", "git@example.test");
-  git(upstream, "config", "user.name", "Git Fixture");
-  commit(upstream, "src/other.ts", "other\n", "autre travail");
-  git(upstream, "push", "-q", "origin", "develop");
-
-  const stale = await explorer.sync(projectId, worktree);
-  expect(stale).toMatchObject({ base: "origin/develop", branch: "feature", behind: 0, ahead: 2, mergeable: true });
-
-  const fetched = await explorer.sync(projectId, worktree, { fetch: true });
-  expect(fetched).toMatchObject({ behind: 1, ahead: 2, conflicts: [], fetchError: null });
-
-  const merged = await explorer.merge(projectId, worktree);
-  expect(merged).toMatchObject({ behind: 0, ahead: 3 });
-
-  commit(upstream, "src/shared.ts", "develop\n", "même fichier");
-  git(upstream, "push", "-q", "origin", "develop");
-  const conflicted = await explorer.sync(projectId, worktree, { fetch: true });
-  expect(conflicted.conflicts).toEqual(["src/shared.ts"]);
-  const before = git(worktree, "rev-parse", "HEAD");
-  await expect(explorer.merge(projectId, worktree)).rejects.toThrow("conflit");
-  expect(git(worktree, "rev-parse", "HEAD")).toBe(before);
-  expect(git(worktree, "status", "--porcelain")).toBe("");
-});

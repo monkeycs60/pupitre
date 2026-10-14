@@ -1,14 +1,7 @@
 import { expect, test } from 'bun:test'
-import { ancestorDirectories, buildCodeTree, flattenCodeTree, matchCodePaths } from './codeTree'
-import { codeGraphPaths, layoutCodeGraph, parseCodeRefs } from './codeGraphLayout'
 import { highlightCode, languageForPath, splitHighlightedHtml } from './codeHighlight'
 import { buildCodeScopes, codeScopeMatches, defaultCodeScope, fromScopePath, isStaleScope, ticketKeyOfSource, toScopePath } from './codeScopes'
-import { mergeCodeCommits } from './codeGraphLayout'
-import type { CodeCommitSummary, CodeSource } from './types'
-
-function commit(sha: string, parents: string[], authoredAt = '2026-09-13T10:00:00.000Z'): CodeCommitSummary {
-  return { sha, parents, refs: [], author: 'A', authoredAt, subject: sha, conversations: [], agent: null }
-}
+import type { CodeSource } from './types'
 
 function source(path: string, repositoryLabel: string, branch: string | null, main: boolean, conversationIds: string[] = []): CodeSource {
   return {
@@ -52,41 +45,6 @@ test('un ticket sans worktree se lit depuis ses branches ; les vieilles branches
   expect(defaultCodeScope(scopes, 'gone', '/deleted/feature-TECH-24128', 'main')).toBe('ticket:TECH-24128')
 })
 
-test("l'arbre range les dossiers avant les fichiers et fusionne les dossiers à enfant unique", () => {
-  const root = buildCodeTree(['README.md', 'apps/api/src/routes.js', 'apps/api/src/stats.js', 'apps/web/index.ts', 'a.ts'])
-
-  const collapsed = flattenCodeTree(root, new Set())
-  expect(collapsed.map((row) => row.label)).toEqual(['apps', 'a.ts', 'README.md'])
-
-  const expanded = flattenCodeTree(root, new Set(['apps', 'apps/api/src']))
-  expect(expanded.map((row) => [row.label, row.depth])).toEqual([
-    ['apps', 0], ['api/src', 1], ['routes.js', 2], ['stats.js', 2], ['web', 1], ['a.ts', 0], ['README.md', 0],
-  ])
-  expect(ancestorDirectories('apps/api/src/routes.js')).toEqual(['apps', 'apps/api', 'apps/api/src'])
-})
-
-test('la recherche floue favorise le nom de fichier et les suites contiguës', () => {
-  const matches = matchCodePaths(['src/router/tests.ts', 'apps/api/_routes/routes.js', 'docs/routing.md'], 'routes')
-
-  expect(matches.map((match) => match.path)).toEqual(['apps/api/_routes/routes.js', 'src/router/tests.ts'])
-  expect(matches[0]!.indices).toEqual([17, 18, 19, 20, 21, 22])
-  expect(matchCodePaths(['a.ts'], '   ')).toEqual([])
-})
-
-test('le graphe ouvre une lane pour une branche fusionnée puis la referme', () => {
-  const rows = layoutCodeGraph([
-    commit('m', ['a', 'b']),
-    commit('b', ['a']),
-    commit('a', []),
-  ])
-
-  expect(rows.map((row) => [row.commit.sha, row.lane, row.hasIncoming])).toEqual([
-    ['m', 0, false], ['b', 1, true], ['a', 0, true],
-  ])
-  expect(rows[0]!.segments).toEqual([{ from: 0, to: 0, kind: 'parent' }, { from: 0, to: 1, kind: 'parent' }])
-  expect(codeGraphPaths(rows[1]!, 28).map((path) => path.lane)).toEqual([1, 0, 0])
-})
-
 test('un ticket présent dans plusieurs dépôts se lit sur plusieurs dépôts', () => {
   const sources = [
     source('/mono', 'mono', 'main', true, ['c-root']),
@@ -122,24 +80,6 @@ test('un ticket présent dans plusieurs dépôts se lit sur plusieurs dépôts',
   expect(fromScopePath(scopes[0]!, 'web/src/App.tsx')).toEqual({ source: '/mono/apps/web-tech25008', path: 'src/App.tsx' })
   const single = scopes.find((scope) => scope.id === 'source:/mono')!
   expect(fromScopePath(single, 'apps/api')).toEqual({ source: '/mono', path: 'apps/api' })
-})
-
-test('la fusion des historiques alterne par date sans casser l’ordre de chaque dépôt', () => {
-  const merged = mergeCodeCommits([
-    { source: '/api', repoLabel: 'api', repoIndex: 0, commits: [commit('a2', ['a1'], '2026-09-10T10:00:00Z'), commit('a1', [], '2026-09-12T10:00:00Z')] },
-    { source: '/web', repoLabel: 'web', repoIndex: 1, commits: [commit('w1', [], '2026-09-11T10:00:00Z')] },
-  ])
-
-  expect(merged.map((item) => `${item.repoLabel}:${item.sha}`)).toEqual(['web:w1', 'api:a2', 'api:a1'])
-})
-
-test('les refs distinguent HEAD, branches locales, distantes et tags', () => {
-  expect(parseCodeRefs(['HEAD -> develop', 'origin/develop', 'origin/HEAD', 'tag: v4.1', 'feature/x'])).toEqual([
-    { label: 'develop', kind: 'head' },
-    { label: 'origin/develop', kind: 'remote' },
-    { label: 'v4.1', kind: 'tag' },
-    { label: 'feature/x', kind: 'local' },
-  ])
 })
 
 test('le découpage en lignes referme et rouvre les jetons multi-lignes', () => {

@@ -86,7 +86,7 @@ test('un signal estompe tout ce qui ne le concerne pas', async () => {
   expect(screen.getByRole('button', { name: /^src\// }).className).not.toContain('is-dimmed')
 })
 
-test('un clic sur un fichier l’ouvre dans Code', async () => {
+test('un clic sur un fichier l’ouvre dans VS Code', async () => {
   mockRepository()
   const onOpenFile = renderView()
 

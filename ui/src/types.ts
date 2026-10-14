@@ -824,20 +824,6 @@ export interface CodeSource {
   updatedAt: string | null
 }
 
-export interface CodeSyncStatus {
-  path: string
-  branch: string | null
-  base: string | null
-  head: string | null
-  ahead: number
-  behind: number
-  conflicts: string[]
-  dirty: boolean
-  mergeable: boolean
-  fetchedAt: string | null
-  fetchError: string | null
-}
-
 export type CodeDirtyStatus = 'M' | 'A' | 'D' | 'R' | '?'
 
 export interface CodeFileList {
@@ -856,24 +842,6 @@ export interface CodeFile {
   tooLarge: boolean
 }
 
-export interface CodeBlameGroup {
-  sha: string
-  start: number
-  count: number
-  author: string
-  authoredAt: string | null
-  summary: string
-  uncommitted: boolean
-  conversations: CodeConversationLink[]
-  agent: CodeAgent | null
-}
-
-export interface CodeBlame {
-  path: string
-  lineCount: number
-  groups: CodeBlameGroup[]
-}
-
 export interface CodeCommitSummary {
   sha: string
   parents: string[]
@@ -885,30 +853,12 @@ export interface CodeCommitSummary {
   agent: CodeAgent | null
 }
 
-export interface CodeGraphPage {
-  head: string | null
-  currentBranch: string | null
-  base: string | null
-  focus: string[]
-  focusCommits: CodeCommitSummary[]
-  commits: CodeCommitSummary[]
-  skip: number
-  hasMore: boolean
-}
-
 export interface CodeCommitFile {
   path: string
   previousPath: string | null
   status: string
   added: number | null
   removed: number | null
-}
-
-export interface CodeCommitDetail extends CodeCommitSummary {
-  email: string
-  body: string
-  files: CodeCommitFile[]
-  filesTruncated: boolean
 }
 
 export interface CodeConversationRepository {
@@ -944,18 +894,6 @@ export interface CodeBranchChanges {
   head: string | null
   files: CodeCommitFile[]
   filesTruncated: boolean
-}
-
-export interface CodeSearchMatch {
-  path: string
-  line: number
-  text: string
-}
-
-export interface CodeSearchResult {
-  query: string
-  matches: CodeSearchMatch[]
-  truncated: boolean
 }
 
 export type TestScopeStatus = 'pending' | 'running' | 'passed' | 'failed'

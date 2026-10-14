@@ -21,23 +21,6 @@
   min-height: 0;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 .events-view {
   flex: 1;
   min-height: 0;
@@ -46,12 +29,6 @@
   /* Chat.tsx ancre déjà la lecture en JS : l'ancrage natif de Chromium s'y ajouterait. */
   overflow-anchor: none;
   background: var(--bg-workspace);
-}
-
-@media (max-width: 900px) {
-
-
-
 }
 
 /* --- Recherche flottante dans le fil ------------------------------------- */

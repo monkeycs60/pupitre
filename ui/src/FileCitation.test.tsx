@@ -28,17 +28,15 @@ const RESOLUTIONS: Record<string, CitationResolution> = {
 
 function access() {
   const editor: EditorFileTarget[][] = []
-  const code: Array<[string, number | null]> = []
   const asked: string[] = []
   const revisions: EditorRevision[] = []
   const value: ToolFileAccess = {
     readFile: async () => null,
-    openInCode: async (path, line) => { code.push([path, line]); return true },
     resolveCitation: async (text) => { asked.push(text); return RESOLUTIONS[text] ?? { status: 'missing' } },
     openInEditor: async (files) => { editor.push(files) },
     openRevisionInEditor: async (revision) => { revisions.push(revision) },
   }
-  return { value, editor, code, asked, revisions }
+  return { value, editor, asked, revisions }
 }
 
 const TEXT = 'Voir `lib/auth.js:132`, `takeover.js:43`, `routes.js` et `req.app.user`.\n\n```js\nconst a = `lib/auth.js`\n```'
@@ -52,7 +50,6 @@ test('une citation retrouvée ouvre VS Code, y compris au Ctrl+clic', async () =
   fireEvent.click(link, { ctrlKey: true })
 
   expect(context.editor).toEqual([[{ path: '/w/hapigator/lib/auth.js', line: 132 }], [{ path: '/w/hapigator/lib/auth.js', line: 132 }]])
-  expect(context.code).toEqual([])
   expect(context.asked).not.toContain('req.app.user')
   expect(document.querySelectorAll('a.file-citation')).toHaveLength(2)
   expect(document.querySelector('pre a')).toBeNull()

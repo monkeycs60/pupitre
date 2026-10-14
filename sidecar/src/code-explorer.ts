@@ -9,17 +9,12 @@ const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_TREE_PATHS = 60_000;
 const MAX_COMMIT_FILES = 500;
-const GRAPH_PAGE_SIZE = 300;
-const HISTORY_LIMIT = 100;
-const SEARCH_LIMIT = 300;
-const SEARCH_OUTPUT_BYTES = 512 * 1024;
 const SOURCE_CACHE_MS = 5_000;
 const GIT_TIMEOUT_MS = 20_000;
 const SOURCE_CONVERSATION_LIMIT = 25;
 const BACKFILL_GRACE_MS = 2 * 60_000;
 const FULL_SHA = /^[0-9a-f]{40,64}$/i;
 const SHORT_SHA = /^[0-9a-f]{7,64}$/i;
-const UNCOMMITTED = /^0+$/;
 const SUBJECT_TICKET = /\b([A-Za-z]{2,10})-(\d{3,})\b/;
 const TRAILERS = "%(trailers:key=Co-Authored-By,valueonly,separator=%x1f)";
 const LOG_FORMAT = `--format=%H%x00%P%x00%D%x00%an%x00%aI%x00%s%x00${TRAILERS}`;
@@ -77,24 +72,6 @@ export interface CodeFile {
   tooLarge: boolean;
 }
 
-export interface CodeBlameGroup {
-  sha: string;
-  start: number;
-  count: number;
-  author: string;
-  authoredAt: string | null;
-  summary: string;
-  uncommitted: boolean;
-  conversations: CodeConversationLink[];
-  agent: CodeAgent | null;
-}
-
-export interface CodeBlame {
-  path: string;
-  lineCount: number;
-  groups: CodeBlameGroup[];
-}
-
 export interface CodeCommitSummary {
   sha: string;
   parents: string[];
@@ -106,43 +83,12 @@ export interface CodeCommitSummary {
   agent: CodeAgent | null;
 }
 
-export interface CodeGraphPage {
-  head: string | null;
-  currentBranch: string | null;
-  base: string | null;
-  focus: string[];
-  /** Commits propres à la branche (base..HEAD), même quand ils sortent de la page chargée. */
-  focusCommits: CodeCommitSummary[];
-  commits: CodeCommitSummary[];
-  skip: number;
-  hasMore: boolean;
-}
-
 export interface CodeCommitFile {
   path: string;
   previousPath: string | null;
   status: string;
   added: number | null;
   removed: number | null;
-}
-
-export interface CodeCommitDetail extends CodeCommitSummary {
-  email: string;
-  body: string;
-  files: CodeCommitFile[];
-  filesTruncated: boolean;
-}
-
-export interface CodeSearchMatch {
-  path: string;
-  line: number;
-  text: string;
-}
-
-export interface CodeSearchResult {
-  query: string;
-  matches: CodeSearchMatch[];
-  truncated: boolean;
 }
 
 interface ResolvedSource {
@@ -201,32 +147,6 @@ export interface CodeBranchChanges {
   head: string | null;
   files: CodeCommitFile[];
   filesTruncated: boolean;
-}
-
-export interface CodeSyncStatus {
-  path: string;
-  branch: string | null;
-  base: string | null;
-  head: string | null;
-  ahead: number;
-  behind: number;
-  conflicts: string[];
-  dirty: boolean;
-  /** Worktree sur une branche : une fusion peut y être écrite. */
-  mergeable: boolean;
-  fetchedAt: string | null;
-  fetchError: string | null;
-}
-
-export function conflictResolutionPrompt(branch: string, base: string, conflicts: string[]): string {
-  return `Mets la branche ${branch} à jour avec ${base} et résous les conflits de fusion.
-
-1. Vérifie que tu es sur ${branch} et que le worktree est propre. ${base} vient d'être récupérée : lance \`git merge ${base}\`, sans rebase.
-2. Conflits prévus : ${conflicts.map((path) => `\`${path}\``).join(", ")}. Pour chaque fichier, comprends l'intention des deux côtés (\`git log --oneline ${base} -- <fichier>\` et les commits de la branche) et combine-les. Ne sacrifie aucun des deux côtés sans le dire.
-3. Vérifie qu'aucun marqueur de conflit ne reste, puis lance les tests et vérifications des dépôts touchés.
-4. Committe la fusion. Ne pousse pas.
-
-Termine par un récapitulatif fichier par fichier des choix de résolution, et signale explicitement tout arbitrage incertain.`;
 }
 
 function parseDiffFiles(numstat: string, nameStatus: string): CodeCommitFile[] {
@@ -467,172 +387,6 @@ export class CodeExplorerService {
     return { path: safe, ref: wanted, content: binary ? null : stdout, size, binary, tooLarge: false };
   }
 
-  async blame(projectId: string, source: string | null, path: string): Promise<CodeBlame> {
-    const { cwd, sha: refSha } = await this.resolveSource(projectId, source);
-    const safe = this.safePath(cwd, path);
-    let output: string;
-    try {
-      output = (await runGit(cwd, ["blame", "--porcelain", ...(refSha ? [refSha] : []), "--", safe])).stdout;
-    } catch (error) {
-      const absolute = join(cwd, safe);
-      if (refSha || !existsSync(absolute)) throw error;
-      const lineCount = readFileSync(absolute, "utf8").split("\n").length;
-      return {
-        path: safe,
-        lineCount,
-        groups: [{
-          sha: "0".repeat(40),
-          start: 1,
-          count: lineCount,
-          author: "",
-          authoredAt: null,
-          summary: "",
-          uncommitted: true,
-          conversations: [],
-          agent: null,
-        }],
-      };
-    }
-
-    const meta = new Map<string, { author: string; authoredAt: string | null; summary: string }>();
-    const groups: CodeBlameGroup[] = [];
-    let sha = "";
-    let finalLine = 0;
-    let lineCount = 0;
-    for (const line of output.split("\n")) {
-      if (line.startsWith("\t")) {
-        lineCount += 1;
-        const last = groups.at(-1);
-        if (last && last.sha === sha && last.start + last.count === finalLine) {
-          last.count += 1;
-        } else {
-          groups.push({
-            sha,
-            start: finalLine,
-            count: 1,
-            author: "",
-            authoredAt: null,
-            summary: "",
-            uncommitted: UNCOMMITTED.test(sha),
-            conversations: [],
-            agent: null,
-          });
-        }
-        continue;
-      }
-      const header = line.match(/^([0-9a-f]{40,64}) \d+ (\d+)(?: \d+)?$/);
-      if (header) {
-        sha = header[1]!;
-        finalLine = Number(header[2]);
-        if (!meta.has(sha)) meta.set(sha, { author: "", authoredAt: null, summary: "" });
-        continue;
-      }
-      const info = meta.get(sha);
-      if (!info) continue;
-      if (line.startsWith("author ")) info.author = line.slice(7);
-      else if (line.startsWith("author-time ")) {
-        info.authoredAt = new Date(Number(line.slice(12)) * 1000).toISOString();
-      } else if (line.startsWith("summary ")) info.summary = line.slice(8);
-    }
-    for (const group of groups) {
-      const info = meta.get(group.sha);
-      if (info) Object.assign(group, info);
-    }
-    const links = this.links(projectId);
-    const committed = [...new Set(groups.filter((group) => !group.uncommitted).map((group) => group.sha))];
-    const agents = new Map<string, CodeAgent | null>();
-    if (committed.length > 0) {
-      const trailers = await optionalGit(cwd, ["log", "--no-walk=unsorted", "-z", `--format=%H%x00${TRAILERS}`, ...committed]);
-      const fields = (trailers ?? "").split("\0");
-      for (let index = 0; index + 1 < fields.length; index += 2) {
-        agents.set(fields[index]!.replace(/^\n/, ""), agentFromTrailers(fields[index + 1] ?? ""));
-      }
-    }
-    for (const group of groups) {
-      group.conversations = links.get(group.sha) ?? [];
-      group.agent = agents.get(group.sha) ?? null;
-    }
-    return { path: safe, lineCount, groups };
-  }
-
-  async history(projectId: string, source: string | null, path: string): Promise<CodeCommitSummary[]> {
-    const { cwd, sha } = await this.resolveSource(projectId, source);
-    const safe = this.safePath(cwd, path);
-    const { stdout } = await runGit(cwd, [
-      "log", "-z", "--follow", `--max-count=${HISTORY_LIMIT}`, LOG_FORMAT, ...(sha ? [sha] : []), "--", safe,
-    ]);
-    return this.withLinks(projectId, parseCommitRecords(stdout));
-  }
-
-  async graph(projectId: string, source: string | null, skip = 0): Promise<CodeGraphPage> {
-    const { cwd, sha: refSha, source: resolved } = await this.resolveSource(projectId, source);
-    const offset = Number.isInteger(skip) && skip > 0 ? skip : 0;
-    const [log, headOutput, branchOutput] = await Promise.all([
-      runGit(cwd, [
-        "log", "-z", "--topo-order", "--exclude=refs/stash", "--all",
-        `--skip=${offset}`, `--max-count=${GRAPH_PAGE_SIZE + 1}`, LOG_FORMAT,
-      ], { accept: [0, 128] }),
-      refSha ? Promise.resolve(refSha) : optionalGit(cwd, ["rev-parse", "--verify", "-q", "HEAD"]),
-      refSha ? Promise.resolve(resolved.branch) : optionalGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"]),
-    ]);
-    const records = parseCommitRecords(log.stdout);
-    const head = headOutput?.trim() || null;
-    const currentBranch = branchOutput?.trim() || null;
-    let base: string | null = null;
-    let focusCommits: CodeCommitSummary[] = [];
-    if (offset === 0 && head) {
-      base = await this.findBase(cwd, currentBranch, projectId);
-      const from = base ? await this.branchStart(cwd, head, base, resolved.main) : null;
-      const own = from ? await optionalGit(cwd, ["log", "-z", "--topo-order", "--max-count=500", LOG_FORMAT, `${from}..${head}`]) : null;
-      focusCommits = own ? this.withLinks(projectId, parseCommitRecords(own)) : [];
-    }
-    return {
-      head,
-      currentBranch,
-      base,
-      focus: focusCommits.map((commit) => commit.sha),
-      focusCommits,
-      commits: this.withLinks(projectId, records.slice(0, GRAPH_PAGE_SIZE)),
-      skip: offset,
-      hasMore: records.length > GRAPH_PAGE_SIZE,
-    };
-  }
-
-  async commit(projectId: string, source: string | null, sha: string): Promise<CodeCommitDetail> {
-    const { cwd } = await this.resolveSource(projectId, source);
-    if (!SHORT_SHA.test(sha)) throw new CodeExplorerError(`référence Git invalide : ${sha}`);
-    const { stdout } = await runGit(cwd, [
-      "show", "-s", "-z", `--format=%H%x00%P%x00%D%x00%an%x00%ae%x00%aI%x00%s%x00${TRAILERS}%x00%b`, sha,
-    ]);
-    const [full = "", rawParents = "", rawRefs = "", author = "", email = "", authoredAt = "", subject = "", trailers = "", body = ""] =
-      stdout.split("\0");
-    if (!FULL_SHA.test(full)) throw new CodeExplorerError(`commit introuvable : ${sha}`);
-    const parents = rawParents.split(" ").filter(Boolean);
-    const range = parents.length > 0 ? [parents[0]!, full] : ["--root", full];
-    const [numstat, nameStatus] = await Promise.all([
-      runGit(cwd, ["diff-tree", "-r", "-M", "-z", "--no-commit-id", "--numstat", ...range]),
-      runGit(cwd, ["diff-tree", "-r", "-M", "-z", "--no-commit-id", "--name-status", ...range]),
-    ]);
-    const files = parseDiffFiles(numstat.stdout, nameStatus.stdout);
-
-    const [summary] = this.withLinks(projectId, [{
-      sha: full,
-      parents,
-      refs: rawRefs.split(",").map((ref) => ref.trim()).filter(Boolean),
-      author,
-      authoredAt,
-      subject,
-      agent: agentFromTrailers(trailers),
-    }]);
-    return {
-      ...summary!,
-      email,
-      body: body.trim(),
-      files: files.slice(0, MAX_COMMIT_FILES),
-      filesTruncated: files.length > MAX_COMMIT_FILES,
-    };
-  }
-
   /** Fichiers modifiés par la branche de cet état du code, tous commits confondus. */
   async changes(projectId: string, source: string | null): Promise<CodeBranchChanges> {
     const resolved = await this.resolveSource(projectId, source);
@@ -645,71 +399,6 @@ export class CodeExplorerService {
     ]);
     const files = parseDiffFiles(numstat.stdout, nameStatus.stdout);
     return { base, from, head, files: files.slice(0, MAX_COMMIT_FILES), filesTruncated: files.length > MAX_COMMIT_FILES };
-  }
-
-  private fetches = new Map<string, Promise<string | null>>();
-
-  /** Écart de la branche avec sa base, et fichiers qu'une fusion de la base mettrait en conflit. */
-  async sync(projectId: string, source: string | null, options: { fetch?: boolean } = {}): Promise<CodeSyncStatus> {
-    const resolved = await this.resolveSource(projectId, source);
-    const { cwd, sha } = resolved;
-    const branch = sha ? resolved.source.branch : ((await optionalGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"]))?.trim() || null);
-    const base = await this.findBase(cwd, branch, projectId);
-    const fetched = options.fetch && base?.startsWith("origin/")
-      ? await this.fetchBase(resolved.source.repositoryPath, base)
-      : null;
-    const head = sha ?? ((await optionalGit(cwd, ["rev-parse", "--verify", "-q", "HEAD"]))?.trim() || null);
-    const status: CodeSyncStatus = {
-      path: resolved.source.path,
-      branch,
-      base,
-      head,
-      ahead: 0,
-      behind: 0,
-      conflicts: [],
-      dirty: false,
-      mergeable: !sha && branch !== null,
-      fetchedAt: fetched && fetched.error === null ? new Date(fetched.at).toISOString() : null,
-      fetchError: fetched?.error ?? null,
-    };
-    if (!base || !head) return status;
-    const [counts, dirty] = await Promise.all([
-      runGit(cwd, ["rev-list", "--left-right", "--count", `${base}...${head}`]),
-      sha ? Promise.resolve("") : optionalGit(cwd, ["status", "--porcelain", "--untracked-files=no"]),
-    ]);
-    const [behind = "0", ahead = "0"] = counts.stdout.trim().split(/\s+/);
-    status.behind = Number(behind) || 0;
-    status.ahead = Number(ahead) || 0;
-    status.dirty = Boolean(dirty?.trim());
-    if (status.behind > 0 && status.ahead > 0) {
-      const { stdout } = await runGit(cwd, ["merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", head, base], { accept: [0, 1] });
-      status.conflicts = [...new Set(stdout.split("\0").slice(1).filter(Boolean))];
-    }
-    return status;
-  }
-
-  /** Fusionne la base dans le worktree, seulement quand aucun conflit n'est prévu. */
-  async merge(projectId: string, source: string | null): Promise<CodeSyncStatus> {
-    const status = await this.sync(projectId, source);
-    if (!status.mergeable || !status.base) throw new CodeExplorerError("seul un worktree sur une branche peut être mis à jour");
-    if (status.behind === 0) return status;
-    if (status.dirty) throw new CodeExplorerError("le worktree a des modifications non commitées");
-    if (status.conflicts.length > 0) throw new CodeExplorerError(`fusion bloquée : ${status.conflicts.length} fichier(s) en conflit`);
-    await runGit(status.path, ["merge", "--no-edit", status.base], { timeoutMs: 60_000 });
-    return this.sync(projectId, source);
-  }
-
-  private async fetchBase(repositoryPath: string, base: string): Promise<{ at: number; error: string | null }> {
-    const key = `${repositoryPath}\n${base}`;
-    let pending = this.fetches.get(key);
-    if (!pending) {
-      pending = runGit(repositoryPath, ["fetch", "--quiet", "--no-tags", "origin", base.slice("origin/".length)], { timeoutMs: 60_000 })
-        .then(() => null, (error: unknown) => (error instanceof Error ? error.message : "fetch impossible"))
-        .finally(() => this.fetches.delete(key));
-      this.fetches.set(key, pending);
-    }
-    const error = await pending;
-    return { at: Date.now(), error };
   }
 
   /** Commits reliés à une conversation, regroupés par dépôt du projet, et ceux de son ticket. */
@@ -781,68 +470,6 @@ export class CodeExplorerService {
       });
     }
     return repositories;
-  }
-
-  async diff(projectId: string, source: string | null, sha: string, path: string, range: string | null = null): Promise<{ diff: string }> {
-    const resolved = await this.resolveSource(projectId, source);
-    const { cwd, sha: refSha } = resolved;
-    const safe = this.safePath(cwd, path);
-    if (range === "branch") {
-      const { from, head } = await this.branchRange(resolved, projectId);
-      if (!from || !head) return { diff: "" };
-      const { stdout } = await runGit(cwd, ["diff", "--no-ext-diff", "-M", `${from}...${head}`, "--", safe]);
-      return { diff: stdout };
-    }
-    if (!sha) {
-      if (refSha) return { diff: "" };
-      const tracked = await optionalGit(cwd, ["diff", "--no-ext-diff", "-M", "HEAD", "--", safe]);
-      if (tracked) return { diff: tracked };
-      const untracked = await optionalGit(cwd, ["ls-files", "--others", "--exclude-standard", "--", safe]);
-      if (!untracked?.trim()) return { diff: "" };
-      const added = await runGit(cwd, ["diff", "--no-index", "--no-ext-diff", "--", "/dev/null", safe], { accept: [0, 1] });
-      return { diff: added.stdout };
-    }
-    if (!SHORT_SHA.test(sha)) throw new CodeExplorerError(`référence Git invalide : ${sha}`);
-    const { stdout } = await runGit(cwd, [
-      "show", "--no-ext-diff", "--diff-merges=first-parent", "--root", "-M", "--format=", sha, "--", safe,
-    ]);
-    return { diff: stdout };
-  }
-
-  async search(projectId: string, source: string | null, query: string): Promise<CodeSearchResult> {
-    const { cwd, sha } = await this.resolveSource(projectId, source);
-    const needle = query.trim();
-    if (needle.length < 2 || needle.length > 200 || needle.includes("\0")) {
-      throw new CodeExplorerError("recherche entre 2 et 200 caractères");
-    }
-    const output = await runGit(cwd, [
-      "grep", "-n", "-I", "-z", ...(sha ? [] : ["--untracked"]), "-i", "-F", "--max-count=20", "-e", needle,
-      ...(sha ? [sha] : []), "--",
-    ], { accept: [0, 1], truncate: true, maxBytes: SEARCH_OUTPUT_BYTES });
-    const lines = output.stdout.split("\n");
-    if (output.truncated) lines.pop();
-    const treePrefix = sha ? `${sha}:` : "";
-    const matches: CodeSearchMatch[] = [];
-    for (const line of lines) {
-      const pathEnd = line.indexOf("\0");
-      if (pathEnd === -1) continue;
-      const lineEnd = line.indexOf("\0", pathEnd + 1);
-      if (lineEnd === -1) continue;
-      const number = Number(line.slice(pathEnd + 1, lineEnd));
-      if (!Number.isInteger(number)) continue;
-      const rawPath = line.slice(0, pathEnd);
-      matches.push({
-        path: treePrefix && rawPath.startsWith(treePrefix) ? rawPath.slice(treePrefix.length) : rawPath,
-        line: number,
-        text: line.slice(lineEnd + 1, lineEnd + 301),
-      });
-      if (matches.length > SEARCH_LIMIT) break;
-    }
-    return {
-      query: needle,
-      matches: matches.slice(0, SEARCH_LIMIT),
-      truncated: output.truncated || matches.length > SEARCH_LIMIT,
-    };
   }
 
   /**
@@ -1059,7 +686,7 @@ export class CodeExplorerService {
       .sort((left, right) => (right.updatedAt ?? "").localeCompare(left.updatedAt ?? ""));
   }
 
-  /** Même choix que l'état « chantier » de l'onglet Code : une source par dépôt, le worktree avant la branche. */
+  /** Une source par dépôt pour le chantier du ticket : le worktree avant la branche. */
   private async ticketBranchCommits(projectId: string, key: string): Promise<number> {
     const rank = (source: CodeSource) => source.ref === null
       ? (/-before$/i.test(source.path) ? 2 : source.branch === null ? 1 : 0)

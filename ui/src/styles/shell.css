@@ -656,7 +656,6 @@ button.titlebar-instance {
   opacity: 1;
 }
 
-
 @keyframes rail-live-spin {
   to { transform: rotate(360deg); }
 }
@@ -804,71 +803,6 @@ button.titlebar-instance {
   font-size: var(--text-xs);
   border: 1px solid var(--accent-border);
   border-radius: var(--r-sm);
-}
-
-.surface-switch {
-  position: relative;
-  display: flex;
-  flex: none;
-  margin-left: auto;
-  padding: 3px;
-  background: var(--bg-titlebar);
-  border: 1px solid var(--border-subtle);
-  border-radius: 9px;
-}
-
-.surface-switch-thumb {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  bottom: 3px;
-  left: calc(50% + 0px);
-  background: var(--bg-raised);
-  border: 1px solid var(--accent-border);
-  border-radius: 7px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
-  transition: left var(--dur-fast) var(--ease), right var(--dur-fast) var(--ease);
-}
-
-.surface-switch.is-conversation .surface-switch-thumb {
-  right: calc(50% + 0px);
-  left: 3px;
-}
-
-.surface-switch button {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 104px;
-  height: 26px;
-  padding: 0;
-  color: var(--text-faint);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-}
-
-.surface-switch button:hover {
-  color: var(--text);
-}
-
-.surface-switch button.is-active {
-  color: var(--text-strong);
-  font-weight: 600;
-}
-
-.surface-switch-badge {
-  padding: 0 5px;
-  color: var(--warn);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  background: var(--warn-soft);
-  border-radius: var(--r-xs);
 }
 
 .header-actions {

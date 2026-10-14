@@ -10,71 +10,7 @@
   background: var(--bg-workspace);
 }
 
-.code-header {
-  position: relative;
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-4);
-  height: 56px;
-  min-height: 56px;
-  padding: 0 var(--space-4);
-  box-sizing: border-box;
-  background: var(--bg-toolbar);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.code-header-title {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-}
-
-.code-header-title strong {
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: var(--text-base);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.code-header-title span {
-  overflow: hidden;
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.code-tabs {
-  display: flex;
-  flex: none;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  background: var(--bg-toolbar);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.code-tabs button {
-  padding: 6px var(--space-3);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  background: transparent;
-  border: 0;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-
-.code-tabs button:hover { color: var(--text-strong); background: var(--bg-hover); }
-.code-tabs button.is-active { color: var(--text-strong); font-weight: 600; background: var(--bg-active); }
-.code-tabs button span { margin-left: 6px; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--text-xs); }
-
-.code-error { margin: 0; padding: var(--space-2) var(--space-4); color: var(--danger); font-size: var(--text-sm); background: var(--danger-soft); }
-
-.changes-empty,
-.code-empty-panel { margin: auto; padding: var(--space-6); color: var(--text-faint); font-size: var(--text-sm); text-align: center; }
+.changes-empty { margin: auto; padding: var(--space-6); color: var(--text-faint); font-size: var(--text-sm); text-align: center; }
 
 /* --- Onglet Changements --------------------------------------------------- */
 
@@ -186,31 +122,12 @@
 
 /* --- Onglet Historique ----------------------------------------------------- */
 
-.history-tab { display: grid; grid-template-columns: 320px minmax(0, 1fr); flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
-
-.code-commit-list { min-width: 0; min-height: 0; overflow: auto; background: var(--bg-panel); border-right: 1px solid var(--border-subtle); }
-.code-commit-row { display: grid; grid-template-columns: 24px 66px minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; width: 100%; min-height: 42px; padding: 0 var(--space-3); color: var(--text-muted); text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--border-subtle); cursor: pointer; }
-.code-commit-row:hover,
-.code-commit-row.is-selected { color: var(--text); background: var(--bg-hover); }
-.code-commit-row.is-selected { box-shadow: inset 2px 0 var(--accent); }
-.code-commit-row > code,
-.code-commit-date { color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; }
-.code-commit-row > strong { overflow: hidden; color: var(--text); font-size: var(--text-sm); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.code-commit-action { color: var(--accent-hover); font-size: 10px; white-space: nowrap; }
-
-.history-detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
-.code-commit-detail-header { display: flex; align-items: center; gap: var(--space-3); flex: none; min-height: 42px; padding: 0 var(--space-4); color: var(--text-strong); background: var(--bg-raised); border-bottom: 1px solid var(--border-subtle); }
-.history-detail .diff-viewer { flex: 1; min-height: 0; overflow: auto; }
-
 @media (max-width: 980px) {
-  .changes-tab,
-  .history-tab { grid-template-columns: 220px minmax(0, 1fr); }
-  .code-commit-row { grid-template-columns: 24px 60px minmax(0, 1fr) auto; }
-  .code-commit-date { display: none; }
+  .changes-tab { grid-template-columns: 220px minmax(0, 1fr); }
+
 }
 
 @media (max-width: 760px) {
-  .changes-tab,
-  .history-tab { grid-template-columns: 180px minmax(0, 1fr); }
-  .code-header-title { display: none; }
+  .changes-tab { grid-template-columns: 180px minmax(0, 1fr); }
+
 }

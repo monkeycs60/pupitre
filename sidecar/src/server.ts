@@ -15,7 +15,7 @@ import { TodoError, type TodoService } from "./todos";
 import type { TodoInput } from "./stores/todos";
 import { ActivityBusyError, ActivityNotFoundError, type ActivityReportService } from "./activity-report";
 import type { ServerWebSocket } from "bun";
-import { basename, extname, isAbsolute, join, resolve as resolvePath } from "node:path";
+import { basename, extname, isAbsolute, join } from "node:path";
 import { detectProjectLogo, LOGO_MIME_TYPES } from "./project-logo";
 import { existsSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -52,7 +52,7 @@ import {
 } from "./debriefs";
 import { DESIGN_URL, isResumableDesignUrl, probeDesignReachability } from "./design";
 import { GitProjectError, type GitProjectService } from "./git";
-import { CodeExplorerError, conflictResolutionPrompt, type CodeExplorerService } from "./code-explorer";
+import { CodeExplorerError, type CodeExplorerService } from "./code-explorer";
 import {
   TesterBusyError,
   TestScopeAlreadyRunningError,
@@ -95,7 +95,6 @@ import { instructionsTokens } from "./context-profile";
 import type { McpServerWeight } from "./mcp-probe";
 import type { IntegrationsRefresher } from "./integrations/refresher";
 import { compileBranchPattern, DEFAULT_BRANCH_PATTERN, extractTicketKey } from "./ticket-key";
-import { DEFAULT_TICKET_AUDIT_CONFIG } from "./ticket-audits";
 import type { IntegrationStore, IntegrationType } from "./stores/integrations";
 import type { Ticket, TicketStore } from "./stores/tickets";
 import type { IntegrationSecretStore } from "./stores/integration-secrets";
@@ -1540,7 +1539,7 @@ export function createServer(deps: ServerDeps) {
         }
 
         const codeAction = pathname.match(
-          /^\/api\/projects\/[^/]+\/code\/(sources|files|file|blame|history|graph|commit|diff|search|changes|sync|conversation)$/,
+          /^\/api\/projects\/[^/]+\/code\/(sources|files|file|changes|conversation)$/,
         )?.[1];
         if (request.method === "GET" && codeAction !== undefined) {
           const codeProjectId = routeId(pathname, /^\/api\/projects\/([^/]+)\/code\/[a-z]+$/)!;
@@ -1549,80 +1548,18 @@ export function createServer(deps: ServerDeps) {
           const explorer = deps.codeExplorer;
           const source = url.searchParams.get("source");
           const path = url.searchParams.get("path") ?? "";
-          const sha = url.searchParams.get("sha") ?? "";
           try {
             switch (codeAction) {
               case "sources": return json(await explorer.sources(codeProjectId));
               case "files": return json(await explorer.files(codeProjectId, source));
               case "file": return json(await explorer.file(codeProjectId, source, path, url.searchParams.get("ref")));
-              case "blame": return json(await explorer.blame(codeProjectId, source, path));
-              case "history": return json(await explorer.history(codeProjectId, source, path));
-              case "graph": return json(await explorer.graph(codeProjectId, source, Number(url.searchParams.get("skip") ?? 0)));
-              case "commit": return json(await explorer.commit(codeProjectId, source, sha));
-              case "diff": return json(await explorer.diff(codeProjectId, source, sha, path, url.searchParams.get("range")));
               case "changes": return json(await explorer.changes(codeProjectId, source));
-              case "sync": return json(await explorer.sync(codeProjectId, source, { fetch: url.searchParams.get("fetch") === "1" }));
-              case "conversation": {
+              default: {
                 const conversationId = url.searchParams.get("conversationId");
                 if (!conversationId) throw new HttpError(400, "conversation manquante");
                 return json(await explorer.conversationCommits(codeProjectId, conversationId));
               }
-              default: return json(await explorer.search(codeProjectId, source, url.searchParams.get("q") ?? ""));
             }
-          } catch (error) {
-            if (error instanceof CodeExplorerError) throw new HttpError(400, error.message);
-            throw error;
-          }
-        }
-
-        const codeWrite = pathname.match(/^\/api\/projects\/([^/]+)\/code\/(merge|resolve)$/);
-        if (request.method === "POST" && codeWrite) {
-          const codeProjectId = decodeURIComponent(codeWrite[1]!);
-          const project = deps.projects.get(codeProjectId);
-          if (!project) throw new HttpError(404, "projet inconnu");
-          if (!deps.codeExplorer) throw new HttpError(503, "explorateur de code indisponible");
-          const explorer = deps.codeExplorer;
-          const body = await readObject(request);
-          const source = requiredString(body, "source");
-          try {
-            const status = await explorer.sync(codeProjectId, source);
-            const holders = deps.conversations.listByProject(codeProjectId)
-              .filter((item) => resolvePath(item.worktree_path ?? project.path) === resolvePath(status.path));
-            if (holders.some((item) => deps.runner.isRunning(item.id))) {
-              throw new HttpError(409, "un agent travaille dans ce worktree : attends la fin de son tour");
-            }
-            if (codeWrite[2] === "merge") return json(await explorer.merge(codeProjectId, source));
-
-            if (!status.mergeable || !status.base || !status.branch) throw new HttpError(400, "seul un worktree sur une branche peut être mis à jour");
-            if (status.conflicts.length === 0) throw new HttpError(409, "aucun conflit prévu : la fusion peut se faire directement");
-            const holder = holders[0] ?? null;
-            let ticket = holder?.ticket_id ? deps.tickets.get(holder.ticket_id) : null;
-            if (!ticket) {
-              const patternSource = deps.integrations.listByProject(codeProjectId)
-                .find((integration) => integration.branch_pattern)?.branch_pattern ?? null;
-              const key = extractTicketKey(status.branch, patternSource ? compileBranchPattern(patternSource) : null);
-              ticket = key ? deps.tickets.findByKey(codeProjectId, key) : null;
-            }
-            const config = holder ?? DEFAULT_TICKET_AUDIT_CONFIG;
-            const message = conflictResolutionPrompt(status.branch, status.base, status.conflicts);
-            const conversation = deps.conversations.create({
-              worktreePath: resolvePath(status.path) === resolvePath(project.path) ? null : status.path,
-              projectId: codeProjectId,
-              provider: config.provider as Provider,
-              model: config.model,
-              effort: config.effort,
-              speed: config.speed,
-              permissionMode: holder?.permission_mode ?? "bypassPermissions",
-              createdOnBranch: status.branch,
-              ticketId: ticket?.id ?? null,
-              ticketInstruction: ticket?.instruction ?? null,
-              firstMessage: message,
-            });
-            deps.conversations.rename(conversation.id, `Conflits ${status.base.replace(/^origin\//, "")} · ${ticket?.key ?? status.branch}`);
-            const preamble = ticket ? await ticketBriefFor(deps, ticket, conversation.id) : null;
-            void deps.runner.runTurn(conversation.id, message, [], [], preamble ? { preamble } : {})
-              .catch((error) => console.error("Échec du tour de résolution de conflits", error));
-            return json(deps.conversations.get(conversation.id) ?? conversation, 201);
           } catch (error) {
             if (error instanceof CodeExplorerError) throw new HttpError(400, error.message);
             throw error;

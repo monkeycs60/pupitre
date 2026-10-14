@@ -65,9 +65,7 @@ import { useUnreadConversations } from './useUnreadConversations'
 import { retryUntilAvailable } from './startupRetry'
 import { subscribeVisualFeedbackNavigation } from './visualFeedbackNavigation'
 import { ProjectSectionSwitch } from './ProjectSectionSwitch'
-import { codeViewMemoryKey, writeCodeViewMemory } from './codeViewMemory'
-import { ancestorDirectories } from './codeTree'
-import { createToolFileAccess, ToolFileContext, type ToolFileLocation } from './toolFiles'
+import { createToolFileAccess, ToolFileContext } from './toolFiles'
 import {
   PROJECT_SECTIONS,
   projectNavigationIndexForShortcut,
@@ -82,7 +80,6 @@ const SettingsShell = lazy(() => import('./SettingsShell').then((module) => ({ d
 const DesignView = lazy(() => import('./DesignView').then((module) => ({ default: module.DesignView })))
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
 const ActivityReportView = lazy(() => import('./ActivityReportView').then((module) => ({ default: module.ActivityReportView })))
-const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })))
 const StructureView = lazy(() => import('./StructureView').then((module) => ({ default: module.StructureView })))
 const ApplicationsView = lazy(() => import('./ApplicationsView').then((module) => ({ default: module.ApplicationsView })))
 
@@ -165,7 +162,6 @@ function App() {
   const [railReadVersion, setRailReadVersion] = useState(0)
   const readSyncKeyRef = useRef<string | null>(null)
   const navigationShortcutRef = useRef<(view: NavigationShortcutView) => void>(() => {})
-  const openToolFileRef = useRef<(location: ToolFileLocation, line: number | null) => void>(() => {})
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [showHandoff, setShowHandoff] = useState(false)
@@ -543,41 +539,21 @@ function App() {
   const toolFileAccess = useMemo(() => (
     selectedProjectId === null
       ? null
-      : createToolFileAccess(selectedProjectId, selectedConversation?.id ?? null, (location, line) => openToolFileRef.current(location, line))
+      : createToolFileAccess(selectedProjectId, selectedConversation?.id ?? null)
   ), [selectedProjectId, selectedConversation?.id])
 
-  function openToolFileInCode(location: ToolFileLocation, line: number | null) {
-    if (selectedProject === null) return
-    writeCodeViewMemory(codeViewMemoryKey(selectedProject.id, selectedConversation?.id ?? null), {
-      scopeId: `source:${location.source.path}`,
-      openFile: {
-        display: location.relative,
-        source: location.source.path,
-        path: location.relative,
-        line,
-        diffSha: null,
-        nonce: Date.now(),
-      },
-      readerScrollTop: undefined,
-      expandedDirectories: ancestorDirectories(location.relative),
-      selected: null,
-      graphExpanded: false,
-    })
-    openProjectSection('code')
-  }
-  openToolFileRef.current = openToolFileInCode
-
-  function openStructureFileInCode(source: string, path: string) {
-    if (selectedProject === null) return
-    writeCodeViewMemory(codeViewMemoryKey(selectedProject.id, selectedConversation?.id ?? null), {
-      scopeId: `source:${source}`,
-      openFile: { display: path, source, path, line: null, diffSha: null, branchDiff: true, nonce: Date.now() },
-      readerScrollTop: undefined,
-      expandedDirectories: ancestorDirectories(path),
-      selected: null,
-      graphExpanded: false,
-    })
-    openProjectSection('code')
+  function openStructureFileInEditor(source: string, path: string) {
+    if (toolFileAccess === null || selectedConversation === null || source.includes('#')) {
+      pushToast({
+        tone: 'info',
+        title: 'Ouverture dans VS Code impossible',
+        detail: source.includes('#')
+          ? 'Cette branche n’a pas de worktree sur le disque.'
+          : 'Ouvre une conversation du projet pour retrouver sa fenêtre VS Code.',
+      })
+      return
+    }
+    void toolFileAccess.openInEditor([{ path: `${source}/${path}`, line: null }])
   }
 
   function closeProjectSurface() {
@@ -1157,20 +1133,12 @@ function App() {
                 />
               </div>
             </header>
-            {projectSurface.section === 'code'
-              ? <CodeView
-                key={`code-${selectedProject.id}-${selectedConversation?.id ?? 'none'}`}
-                project={selectedProject}
-                conversation={selectedConversation}
-                ticketLinks={ticketLinks}
-                onOpenConversation={(conversationId) => void handleGitConversationSelect(conversationId)}
-              />
-              : projectSurface.section === 'structure'
+            {projectSurface.section === 'structure'
               ? <StructureView
                 key={`structure-${selectedProject.id}-${selectedConversation?.id ?? 'none'}`}
                 project={selectedProject}
                 conversation={selectedConversation}
-                onOpenFile={openStructureFileInCode}
+                onOpenFile={openStructureFileInEditor}
               />
               : renderProjectDashboard()}
           </>

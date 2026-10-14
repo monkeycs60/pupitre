@@ -6,7 +6,6 @@ import type { CodeSource } from './types'
 
 export interface ToolFileAccess {
   readFile: (path: string) => Promise<string | null>
-  openInCode: (path: string, line: number | null) => Promise<boolean>
   resolveCitation: (text: string) => Promise<CitationResolution>
   openInEditor: (files: EditorFileTarget[]) => Promise<void>
   openRevisionInEditor: (revision: EditorRevision) => Promise<void>
@@ -14,7 +13,7 @@ export interface ToolFileAccess {
 
 export const ToolFileContext = createContext<ToolFileAccess | null>(null)
 
-export interface ToolFileLocation {
+interface ToolFileLocation {
   source: CodeSource
   relative: string
 }
@@ -39,7 +38,6 @@ function editorFailed(error: unknown) {
 export function createToolFileAccess(
   projectId: string,
   conversationId: string | null,
-  open: (location: ToolFileLocation, line: number | null) => void,
 ): ToolFileAccess {
   const citations = new Map<string, Promise<CitationResolution>>()
   let batch: Map<string, (resolution: CitationResolution) => void> | null = null
@@ -67,11 +65,6 @@ export function createToolFileAccess(
       } catch {
         return null
       }
-    },
-    async openInCode(path, line) {
-      const location = await locate(path)
-      if (location) open(location, line)
-      return location !== null
     },
     resolveCitation(text) {
       const known = citations.get(text)

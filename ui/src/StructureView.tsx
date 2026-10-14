@@ -193,7 +193,7 @@ function FileRow({ node, context }: { node: StructureNode, context: TreeContext 
   return <li className="structure-node">
     {file.status === 'D'
       ? <div className={className} data-structure-id={node.id}>{content}</div>
-      : <button type="button" className={className} data-structure-id={node.id} title={`Ouvrir ${node.display} dans Code`} onClick={() => context.onOpenFile(file.source, file.path)}>{content}</button>}
+      : <button type="button" className={className} data-structure-id={node.id} title={`Ouvrir ${node.display} dans VS Code`} onClick={() => context.onOpenFile(file.source, file.path)}>{content}</button>}
   </li>
 }
 
