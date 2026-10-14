@@ -297,6 +297,9 @@ export const Rail = memo(function Rail({
             <span className="rail-avatar-slot">
               <ProjectAvatar project={project} />
               {liveCount > 0 ? <LiveRing count={liveCount} /> : null}
+              {unread > 0 ? (
+                <span className="rail-project-count" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>
+              ) : null}
             </span>
             <span className="rail-project-label">{project.name}</span>
           </button>
@@ -320,9 +323,6 @@ export const Rail = memo(function Rail({
             </svg>
           </button>
         )}
-        {unread > 0 && !renaming ? (
-          <span className="rail-project-count" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>
-        ) : null}
       </div>
     )
   }
