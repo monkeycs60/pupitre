@@ -64,3 +64,22 @@ test('un outil est une activité autonome sans JSON ni sortie brute', () => {
   expect(document.body.textContent).not.toContain('contenu technique')
   cleanup()
 })
+
+test('pendant le chargement du contexte du ticket, le tour se prépare au lieu de réfléchir', () => {
+  render(createElement(EventView, {
+    block: {
+      kind: 'turn-footer',
+      id: 'footer-ticket',
+      status: { type: 'status', state: 'running' },
+      phase: 'ticket_context',
+    },
+    onImageOpen: () => {},
+    onImageLoad: () => {},
+  }))
+
+  const indicator = screen.getByRole('status')
+  expect(indicator.textContent).toContain('prépare le tour…')
+  expect(indicator.textContent).toContain('chargement du contexte du ticket')
+  expect(indicator.textContent).not.toContain('réfléchit')
+  cleanup()
+})

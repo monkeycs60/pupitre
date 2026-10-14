@@ -216,7 +216,9 @@ function TurnFooter({ block, action, resendConversationId }: {
   const turnError = isError
     ? summarizeTurnError(block.status?.error ?? 'Une erreur est survenue.')
     : null
-  const runningLabel = ACTIVITY_LABELS[block.activity ?? 'thinking']
+  const runningLabel = block.phase === 'ticket_context'
+    ? 'prépare le tour…'
+    : ACTIVITY_LABELS[block.activity ?? 'thinking']
 
   return (
     <footer className="turn-footer">
