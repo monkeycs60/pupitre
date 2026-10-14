@@ -525,6 +525,30 @@
   margin: 0;
 }
 
+.conversation-mention {
+  display: inline;
+  padding: 0 4px;
+  color: var(--accent-bright);
+  font: inherit;
+  font-weight: 600;
+  white-space: normal;
+  background: var(--accent-soft);
+  border: 0;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+
+.conversation-mention:hover {
+  text-decoration: underline;
+}
+
+.conversation-mention.is-missing {
+  color: var(--text-muted);
+  background: var(--neutral-soft);
+  text-decoration: line-through;
+  cursor: default;
+}
+
 .message-steering-label {
   display: block;
   margin-bottom: 6px;

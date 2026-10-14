@@ -24,7 +24,7 @@ import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { ProviderMark } from './ProviderMark'
 import { ComposerPalette, conversationMention, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
 import type { ComposerAction, ComposerPaletteTrigger, ComposerToolItem } from './ComposerPalette'
-import type { Attachment, Conversation, ConversationReference, Project, Provider, QuotaSnapshot, SkillSummary } from './types'
+import type { Attachment, Conversation, ConversationContinuation, ConversationReference, Project, Provider, QuotaSnapshot, SkillSummary } from './types'
 import { PROVIDER_DEFAULTS, requiresLaunchConfirmation } from './modelOptions'
 import { LaunchConfirmModal } from './LaunchConfirmModal'
 import { mediaUrl } from './transport'
@@ -57,6 +57,7 @@ interface ComposerProps {
   initialConfig?: Partial<ConversationConfig>
   initialAttachments?: Attachment[]
   ticketId?: string | null
+  continuation?: ConversationContinuation | null
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
   problemPlanIndex?: number | null
@@ -226,6 +227,7 @@ export function Composer({
   initialConfig,
   initialAttachments = [],
   ticketId = null,
+  continuation = null,
   originType = null,
   originKey = null,
   problemPlanIndex = null,
@@ -516,6 +518,7 @@ export function Composer({
           projectId: project.id,
           ...config,
           ticketId,
+          continuedFrom: continuation?.id ?? null,
           originType,
           originKey,
           problemPlanIndex,
@@ -769,6 +772,7 @@ export function Composer({
                 includeNestedRepositories={!isTodoMode}
                 onConfigChange={setConfig}
                 onReady={setConfigReady}
+                inheritedBranch={continuation?.branchLabel ?? null}
               />
             ) : null}
             <input

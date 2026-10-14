@@ -1,6 +1,7 @@
 import { CitedFilesAction } from './FileCitation'
 import { memo, useState, type ReactNode } from 'react'
 import Markdown from './Markdown'
+import { ConversationMentionText } from './ConversationMentionText'
 import { eventIdOfBlock, type EventBlock } from './eventBlocks'
 import type { Attachment } from './types'
 import { mediaUrl } from './transport'
@@ -353,7 +354,7 @@ function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFoot
                 {block.queued ? 'En file : traité après l’étape en cours' : 'Ajouté au tour en cours'}
               </span>
             ) : null}
-            {block.text ? <p>{block.text}</p> : null}
+            {block.text ? <ConversationMentionText text={block.text} /> : null}
             <ImageGallery
               images={block.images}
               label="Image jointe"

@@ -148,3 +148,12 @@ test('@ propose les conversations de tous les projets et insère la mention par 
     globalThis.fetch = defaultFetch
   }
 })
+
+test('transmet la conversation source d’un handoff au contrat de création', () => {
+  const input = buildCreateConversationInput({
+    projectId: 'project-1', provider: 'claude', model: 'opus', effort: 'high', speed: 'standard',
+    continuedFrom: 'source-1', message: 'suite', images: [],
+  })
+  expect(input.continuedFrom).toBe('source-1')
+  expect(input.branch).toBeNull()
+})

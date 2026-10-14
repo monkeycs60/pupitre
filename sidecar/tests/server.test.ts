@@ -1477,20 +1477,47 @@ test("Résumé session reste court et le handoff expose un document réutilisabl
   expect(document.contentMd).toContain("# Handoff");
   expect(document.contentMd).toContain("## Débrief de passation");
 
-  const continuationResponse = await postJson(
-    `/api/conversations/${conversation.id}/handoff-conversation`,
-    {
-      provider: "claude",
-      model: "sonnet",
-      effort: "high",
-      speed: null,
-    },
-  );
-  expect(continuationResponse.status).toBe(201);
-  expect(await continuationResponse.json()).toEqual(expect.objectContaining({
-    continued_from: conversation.id,
-    handoff_pending: false,
+});
+
+test("une conversation créée depuis un handoff reprend le worktree de sa source et la cite", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const repo = mkdtempSync(join(tmpdir(), "pupitre-continuation-"));
+  cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
+  const git = (...args: string[]): void => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: repo });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+  };
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "git@example.test");
+  git("config", "user.name", "Git Fixture");
+  writeFileSync(join(repo, "README.md"), "base\n");
+  git("add", "README.md");
+  git("commit", "-qm", "socle");
+  const project = await createProject(repo);
+  const source = await (await postJson("/api/conversations", {
+    projectId: project.id, provider: "claude", model: "haiku", message: "source", branch: "feature/handoff",
+  })).json() as { id: string; worktree_path: string; created_on_branch: string | null };
+  await waitForRunnerIdle(source.id);
+
+  const inherited = await postJson("/api/conversations", {
+    projectId: project.id, provider: "claude", model: "haiku", message: "suite", continuedFrom: source.id,
+  });
+  expect(inherited.status).toBe(201);
+  const continuation = await inherited.json() as { id: string };
+  await waitForRunnerIdle(continuation.id);
+  expect(continuation).toEqual(expect.objectContaining({
+    continued_from: source.id,
+    worktree_path: source.worktree_path,
+    worktree_paths: [source.worktree_path],
+    created_on_branch: source.created_on_branch,
   }));
+
+  const elsewhere = await (await postJson("/api/conversations", {
+    projectId: project.id, provider: "claude", model: "haiku", message: "ailleurs", continuedFrom: source.id, branch: "autre",
+  })).json() as { id: string; continued_from: string; worktree_path: string };
+  await waitForRunnerIdle(elsewhere.id);
+  expect(elsewhere.continued_from).toBe(source.id);
+  expect(elsewhere.worktree_path).not.toBe(source.worktree_path);
 });
 
 test("le changelog projet se consulte et se déclenche sans créer de conversation", async () => {

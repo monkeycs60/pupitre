@@ -49,6 +49,8 @@ interface ConfigPanelProps {
   placement?: 'top' | 'bottom'
   /** Les tâches restent ancrées au dépôt racine ; les conversations savent choisir un dépôt applicatif. */
   includeNestedRepositories?: boolean
+  /** Branche du worktree hérité de la conversation source, montrée tant qu'aucune n'est choisie. */
+  inheritedBranch?: string | null
 }
 
 function keepBranch(next: ConversationConfig, current: ConversationConfig): ConversationConfig {
@@ -77,6 +79,7 @@ export function ConfigPanel({
   memoryKey = null,
   placement = 'top',
   includeNestedRepositories = true,
+  inheritedBranch = null,
 }: ConfigPanelProps) {
   const [branches, setBranches] = useState<GitBranchOption[]>([])
   const [currentBranch, setCurrentBranch] = useState<string | null>(null)
@@ -159,7 +162,7 @@ export function ConfigPanel({
           value={config.branch ?? ''}
           branches={branches}
           selected={config.workspaces ?? []}
-          currentBranch={currentBranch}
+          currentBranch={inheritedBranch ?? currentBranch}
           disabled={isLoading}
           placement={placement}
           onChange={(branch, repositoryPath) => onConfigChange({ ...config, branch, repositoryPath, workspaces: [] })}

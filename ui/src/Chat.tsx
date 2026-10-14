@@ -22,6 +22,7 @@ import type {
   AppEvent,
   Attachment,
   Conversation,
+  ConversationContinuation,
   Project,
   QuotaSnapshot,
   SubtaskStatus,
@@ -78,6 +79,7 @@ interface ChatProps {
   initialAttachments?: Attachment[]
   initialConfig?: Partial<ConversationConfig>
   ticketId?: string | null
+  continuation?: ConversationContinuation | null
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
   problemPlanIndex?: number | null
@@ -195,6 +197,7 @@ export function Chat({
   initialAttachments = [],
   initialConfig,
   ticketId = null,
+  continuation = null,
   originType = null,
   originKey = null,
   problemPlanIndex = null,
@@ -629,6 +632,7 @@ export function Chat({
             initialConfig={initialConfig}
             initialAttachments={initialAttachments}
             ticketId={ticketId}
+            continuation={continuation}
             originType={originType}
             originKey={originKey}
             problemPlanIndex={problemPlanIndex}

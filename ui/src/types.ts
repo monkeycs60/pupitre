@@ -201,6 +201,13 @@ export interface AttentionItem {
   updated_at: string
 }
 
+/** Nouvelle conversation qui prend la suite d'une autre (handoff). */
+export interface ConversationContinuation {
+  id: string
+  /** Branche affichée tant qu'aucune autre n'est choisie ; null = dépôt principal. */
+  branchLabel: string | null
+}
+
 export interface ConversationReference {
   id: string
   project_id: string

@@ -25,7 +25,7 @@ import { Titlebar, type TitlebarDestination } from './Titlebar'
 import { navigationShortcutLabel } from './navigationShortcuts'
 import { SwitchModelModal } from './SwitchModelModal'
 import { HandoffModal } from './HandoffModal'
-import type { Attachment, Conversation, Project, UnreadConversation } from './types'
+import type { Attachment, Conversation, ConversationContinuation, Project, UnreadConversation } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import {
@@ -156,6 +156,7 @@ function App() {
     missionTitle?: string
     /** Tâche ouverte « dans une conversation » : rattachée dès la création du fil. */
     todoId?: string
+    continuation?: ConversationContinuation
     config?: Partial<ConversationConfig>
   } | null>(null)
   const [newConversationDraft, setNewConversationDraft] = useState('')
@@ -803,6 +804,7 @@ function App() {
       ticketId: source.ticket_id,
       ticketKey: source.ticket_key ?? null,
       branch: null,
+      continuation: { id: source.id, branchLabel: branchOfWorktree(source.worktree_path) },
       config: {
         provider: source.provider,
         model: source.model,
@@ -1303,6 +1305,7 @@ function App() {
                 ? { branch: conversationSeed.branch, ticketKey: conversationSeed.ticketKey, ...conversationSeed.config }
                 : undefined}
               ticketId={conversationSeed?.ticketId ?? null}
+              continuation={conversationSeed?.continuation ?? null}
               originType={conversationSeed?.originType ?? null}
               originKey={conversationSeed?.originKey ?? null}
               problemPlanIndex={conversationSeed?.problemPlanIndex ?? null}

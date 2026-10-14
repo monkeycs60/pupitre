@@ -92,6 +92,8 @@ export interface CreateConversationInput {
   repositoryPath?: string | null
   workspaces?: Array<{ branch: string; repositoryPath: string }>
   ticketId?: string | null
+  /** Sans branche choisie, la conversation reprend le worktree de cette source. */
+  continuedFrom?: string | null
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
   problemPlanIndex?: number | null
@@ -982,16 +984,6 @@ export function handoffConversation(
 ): Promise<Conversation> {
   return fetchJson(
     `/api/conversations/${routeId(conversationId)}/handoff`,
-    jsonPost(input),
-  )
-}
-
-export function createHandoffConversation(
-  conversationId: string,
-  input: ModelConfigInput,
-): Promise<Conversation> {
-  return fetchJson(
-    `/api/conversations/${routeId(conversationId)}/handoff-conversation`,
     jsonPost(input),
   )
 }

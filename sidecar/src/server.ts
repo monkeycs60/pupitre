@@ -2924,6 +2924,12 @@ export function createServer(deps: ServerDeps) {
             }
           }
           const ticketId = optionalTrimmed(body, "ticketId");
+          const continuedFromId = optionalTrimmed(body, "continuedFrom");
+          const continuedFrom = continuedFromId ? deps.conversations.get(continuedFromId) : null;
+          if (continuedFromId && (!continuedFrom || continuedFrom.project_id !== projectId)) {
+            throw new HttpError(404, "conversation source inconnue");
+          }
+          const inheritsWorkspace = continuedFrom !== null && branch === null && requestedWorkspaces === null;
           let originType = optionalTrimmed(body, "originType");
           let originKey = optionalTrimmed(body, "originKey");
           if (originType !== null && originType !== "sentry" && originType !== "problem") {
@@ -3029,9 +3035,11 @@ export function createServer(deps: ServerDeps) {
               `Tout commit qui résout cette problématique doit inclure exactement [${problem.public_id}] dans son message.`,
             ].join("\n");
           }
-          let effectiveBranch = requestedWorkspaces?.[0]?.branch
-            ?? branch
-            ?? (ticket ? deps.tickets.branchesOf(ticket.id)[0] ?? null : null);
+          let effectiveBranch = inheritsWorkspace
+            ? null
+            : requestedWorkspaces?.[0]?.branch
+              ?? branch
+              ?? (ticket ? deps.tickets.branchesOf(ticket.id)[0] ?? null : null);
           if (!ticket && effectiveBranch) {
             const patternSource = deps.integrations.listByProject(projectId)
               .find((integration) => integration.branch_pattern)?.branch_pattern ?? null;
@@ -3039,8 +3047,10 @@ export function createServer(deps: ServerDeps) {
             const key = extractTicketKey(effectiveBranch, pattern);
             ticket = key ? deps.tickets.findByKey(projectId, key) : null;
           }
-          let worktreePath: string | null = null;
-          let worktreePaths: string[] = [];
+          let worktreePath: string | null = inheritsWorkspace ? continuedFrom.worktree_path : null;
+          let worktreePaths: string[] = inheritsWorkspace
+            ? continuedFrom.worktree_paths ?? (continuedFrom.worktree_path ? [continuedFrom.worktree_path] : [])
+            : [];
           let sentryStartPoint: string | null = null;
           if (requestedWorkspaces !== null) {
             try {
@@ -3092,7 +3102,10 @@ export function createServer(deps: ServerDeps) {
             effort,
             speed,
             permissionMode,
-            createdOnBranch: sentryStartPoint ?? snapshot.currentBranch,
+            createdOnBranch: inheritsWorkspace
+              ? continuedFrom.created_on_branch
+              : sentryStartPoint ?? snapshot.currentBranch,
+            continuedFrom: continuedFrom?.id ?? null,
             ticketId: ticket?.id ?? null,
             ticketInstruction: ticket?.instruction ?? null,
             originType: originType as "sentry" | "problem" | null,
@@ -3546,45 +3559,6 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(
               502,
               error instanceof Error ? error.message : "échec du débrief de passation",
-            );
-          }
-        }
-
-        const conversationHandoffConversationId = routeId(
-          pathname,
-          /^\/api\/conversations\/([^/]+)\/handoff-conversation$/,
-        );
-        if (request.method === "POST" && conversationHandoffConversationId !== null) {
-          const source = deps.conversations.get(conversationHandoffConversationId);
-          if (!source) throw new HttpError(404, "conversation inconnue");
-          if (deps.runner.activity.isBusy(source.id)) {
-            throw new HttpError(409, "un tour est déjà en cours");
-          }
-          const body = await readObject(request);
-          const provider = requiredString(body, "provider");
-          if (!isProvider(provider)) {
-            throw new HttpError(400, "provider invalide");
-          }
-          const model = requiredString(body, "model");
-          const effort = optionalEffort(body, provider);
-          const speed = optionalSpeed(body, provider);
-          try {
-            return await deps.debriefs.withHandoff(source.id, async (artifact) => json(
-              await createContinuationFromHandoff(
-                deps,
-                source,
-                { provider, model, effort, speed },
-                artifact,
-              ),
-              201,
-            ));
-          } catch (error) {
-            if (error instanceof DebriefAlreadyRunningError) {
-              throw new HttpError(409, error.message);
-            }
-            throw new HttpError(
-              502,
-              error instanceof Error ? error.message : "échec de la nouvelle conversation",
             );
           }
         }

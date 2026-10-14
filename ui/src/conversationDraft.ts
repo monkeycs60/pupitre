@@ -14,6 +14,7 @@ interface ConversationDraft {
   repositoryPath?: string | null
   workspaces?: GitWorkspaceSelection[]
   ticketId?: string | null
+  continuedFrom?: string | null
   originType?: 'sentry' | 'problem' | null
   originKey?: string | null
   problemPlanIndex?: number | null
@@ -62,6 +63,7 @@ export function buildCreateConversationInput(
       workspaces: draft.workspaces.map(({ branch, repositoryPath }) => ({ branch, repositoryPath })),
     } : {}),
     ticketId: draft.ticketId ?? null,
+    ...(draft.continuedFrom ? { continuedFrom: draft.continuedFrom } : {}),
     ...(draft.originType ? {
       originType: draft.originType,
       originKey: draft.originKey ?? null,
