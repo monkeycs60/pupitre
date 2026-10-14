@@ -13,11 +13,9 @@ import type {
   Conversation,
   InstanceHealth,
   Project,
-
   SearchResult,
   SkillSummary,
   Workflow,
-  WorkspaceView,
 } from './types'
 import { useDesignPanelSuspend } from './useDesignPanelSuspend'
 

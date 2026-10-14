@@ -12,7 +12,6 @@ import type {
   GitSnapshot,
   CodeBranchChanges,
   CodeConversationCommits,
-  CodeCommitSummary,
   CodeFile,
   CodeFileList,
   CodeSource,
