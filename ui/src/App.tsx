@@ -2,6 +2,7 @@ import { summarizeTurnError } from './turnError'
 import { FleetIsland } from './FleetIsland'
 import { ToastHost } from './ToastHost'
 import { pushToast } from './toasts'
+import { OpenInEditorButton } from './OpenInEditorButton'
 import { ReadingControls } from './ReadingControls'
 import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type InspectorView } from './WorkspaceInspector'
 import { InactiveProjectResume } from './ProjectResume'
@@ -1208,6 +1209,7 @@ function App() {
                     {(selectedConversation.worktree_paths?.length ?? 0) > 1 ? ` +${selectedConversation.worktree_paths!.length - 1}` : ''}
                   </span>
                 ) : null}
+                {selectedConversation !== null ? <OpenInEditorButton conversationId={selectedConversation.id} /> : null}
                 {threadTools !== null && threadTools.assetCount > 0 ? (
                   <button
                     type="button"

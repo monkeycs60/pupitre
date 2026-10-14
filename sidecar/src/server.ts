@@ -5,6 +5,8 @@ import type { ProjectDevlogService } from "./project-devlog";
 import type { ProjectResumeService } from "./project-resume";
 import type { ProjectLaunchService } from "./project-launch";
 import { projectCwd } from "./workspace";
+import { EditorWorkspaceError, openEditorWorkspace, planEditorWorkspace } from "./editor-workspace";
+import { tmpdir } from "node:os";
 import type { SharedFilesService } from "./shared-files";
 import { TodoError, type TodoService } from "./todos";
 import type { TodoInput } from "./stores/todos";
@@ -1699,6 +1701,23 @@ export function createServer(deps: ServerDeps) {
             ));
           } catch (error) {
             if (error instanceof GitProjectError) throw new HttpError(400, error.message);
+            throw error;
+          }
+        }
+
+        const editorConversationId = routeId(pathname, /^\/api\/conversations\/([^/]+)\/editor$/);
+        if (request.method === "POST" && editorConversationId !== null) {
+          const conversation = deps.conversations.get(editorConversationId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const project = deps.projects.get(conversation.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const sources = deps.codeExplorer ? await deps.codeExplorer.sources(project.id).catch(() => []) : [];
+          const plan = planEditorWorkspace(project, conversation, sources);
+          try {
+            const opened = openEditorWorkspace(plan, join(deps.instance?.dataDir ?? tmpdir(), "editor-workspaces"));
+            return json({ ...opened, folders: plan.folders });
+          } catch (error) {
+            if (error instanceof EditorWorkspaceError) throw new HttpError(503, error.message);
             throw error;
           }
         }

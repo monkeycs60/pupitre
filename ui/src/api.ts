@@ -405,6 +405,16 @@ export function exportDocument(id: string, path: string): Promise<{ path: string
   return fetchJson(`/api/documents/${routeId(id)}/export`, jsonPost({ path }))
 }
 
+export interface EditorFolder {
+  name: string
+  path: string
+  branch: string | null
+}
+
+export function openConversationInEditor(conversationId: string): Promise<{ target: string; folders: EditorFolder[] }> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/editor`, jsonPost({}))
+}
+
 export function openDocumentInSystem(id: string): Promise<{ ok: true }> {
   return fetchJson(`/api/documents/${routeId(id)}/open`, jsonPost({}))
 }
