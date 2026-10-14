@@ -72,6 +72,19 @@ export type AppEvent =
       createdAt: string;
     }
   | {
+      type: "code-excerpt";
+      excerptId: string;
+      path: string;
+      title: string;
+      explanation: string;
+      content: string;
+      startLine: number;
+      endLine: number;
+      highlights: Array<{ startLine: number; endLine: number }>;
+      sha256: string;
+      createdAt: string;
+    }
+  | {
       type: "html-document-ref";
       documentId: string;
       title: string;

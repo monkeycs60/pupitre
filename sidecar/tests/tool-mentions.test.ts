@@ -22,3 +22,16 @@ describe("withToolMentions", () => {
       .toBe("Ouvre la page avec @chrome");
   });
 });
+
+test("@code exige les artefacts et les explications, en complément de @browser", () => {
+  for (const provider of ["codex", "claude", "grok", "reasonix"] as const) {
+    const prompt = withToolMentions("@CODE, explique ce changement avec @browser", provider);
+    expect(prompt).toContain("publish_code");
+    expect(prompt).toContain("explanation");
+    expect(prompt).toContain("skill agent-browser");
+  }
+});
+
+test("@code ne capture ni adresse ni autre directive", () => {
+  for (const prompt of ["dev@code.fr", "@codex", "@code-review", "code"]) expect(withToolMentions(prompt, "codex")).toBe(prompt);
+});

@@ -53,6 +53,8 @@ export interface HtmlDocumentBlock {
   expiresAt: string | null
 }
 
+export type CodeExcerptBlock = Omit<Extract<AppEvent, { type: 'code-excerpt' }>, 'type'> & { kind: 'code-excerpt'; id: string }
+
 export type StreamBlock =
   | EventBlock
   | SubtaskBlock
@@ -60,6 +62,7 @@ export type StreamBlock =
   | SessionSummaryBlock
   | TestInventoryBlock
   | HtmlDocumentBlock
+  | CodeExcerptBlock
 
 function lineCount(text: string): number {
   return text.length === 0 ? 0 : text.split('\n').length
@@ -380,6 +383,12 @@ export function groupEvents(
           createdAt: event.createdAt,
         })
         break
+      case 'code-excerpt': {
+        assistant = null
+        const { type: _type, ...excerpt } = event
+        blocks.push({ ...excerpt, kind: 'code-excerpt', id: `code-excerpt-${eventKey}-${event.excerptId}` })
+        break
+      }
       case 'html-document-ref':
       case 'document-ref':
         assistant = null

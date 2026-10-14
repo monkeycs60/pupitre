@@ -87,7 +87,7 @@ const DESCRIPTION =
 export function createPupitreServer(): McpServer {
   const server = new McpServer(
     { name: "pupitre", version: "0.1.0" },
-    { instructions: "Publie les livrables HTML et PDF comme artefacts natifs de la conversation." },
+    { instructions: "Publie les documents et les passages de code expliqués comme artefacts natifs de la conversation." },
   );
   const inputSchema = {
     path: z.string().describe("Chemin absolu du fichier à publier."),
@@ -134,6 +134,36 @@ export function createPupitreServer(): McpServer {
     description: DESCRIPTION,
     inputSchema,
   }, publish);
+  server.registerTool("publish_code", {
+    title: "Citer et expliquer un passage de code",
+    description: "Publie un lecteur de code natif dans la conversation : fichier complet conservé, numéros de ligne, coloration syntaxique, passage ciblé et surligné. "
+      + "Lis le fichier et vérifie ses lignes avant de publier. Un appel par passage à expliquer. Cite le code qui charge les secrets, jamais leurs valeurs.",
+    inputSchema: {
+      path: z.string().min(1).describe("Chemin absolu ou relatif au workspace de la conversation."),
+      start_line: z.number().int().positive().describe("Première ligne du passage, inclusive, à partir de 1."),
+      end_line: z.number().int().positive().describe("Dernière ligne du passage, inclusive."),
+      title: z.string().min(1).max(160).describe("Titre court expliquant le rôle du passage."),
+      explanation: z.string().min(1).max(4000).describe("Explication du code et de son lien avec la demande ou les changements."),
+      highlights: z.array(z.object({ start_line: z.number().int().positive(), end_line: z.number().int().positive() }))
+        .min(1).max(30).optional().describe("Lignes clés à surligner dans le passage. Par défaut : tout le passage."),
+      conversation_id: z.string().optional(),
+    },
+  }, async (args) => {
+    try {
+      const response = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(conversationId(args.conversation_id))}/code-excerpts`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: args.path, title: args.title, explanation: args.explanation,
+          startLine: args.start_line, endLine: args.end_line,
+          highlights: args.highlights?.map((range) => ({ startLine: range.start_line, endLine: range.end_line })),
+        }),
+      });
+      if (response.status !== 201) throw new Error(await errorMessage(response));
+      const excerpt = await response.json() as { path: string; startLine: number; endLine: number };
+      return text(`Passage publié dans Pupitre : ${excerpt.path}, lignes ${excerpt.startLine}–${excerpt.endLine}.`);
+    } catch (error) {
+      return text(`Publication du code impossible : ${error instanceof Error ? error.message : String(error)}`, true);
+    }
+  });
   server.registerTool("launch_project_command", {
     description: "Lance une commande nommée du projet courant dans le répertoire de la conversation et renvoie son état : `url` (le front), `urls` (adresses relevées dans la sortie, front en tête, `live` si le port écoute), `running`, `already_running` et les derniers logs. Attend jusqu’à 15 s qu’une adresse écoute. Une commande déjà lancée n’est pas relancée : son état est renvoyé tel quel.",
     inputSchema: { name: z.string() },

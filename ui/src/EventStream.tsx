@@ -6,6 +6,7 @@ import { SessionSummaryCard } from './SessionSummaryCard'
 import type { DebriefBlock, StreamBlock } from './groupEvents'
 import type { SubtaskStatus } from './types'
 import { TestInventoryCard } from './TestInventoryCard'
+import { CodeExcerptCard } from './CodeExcerptCard'
 import { HtmlDocumentCard } from './HtmlDocumentCard'
 import { TurnWorkGroup } from './TurnWorkGroup'
 import { foldFinishedTurns } from './turnWork'
@@ -89,6 +90,8 @@ function EventStreamImpl({
             onImageOpen={onImageOpen}
             onImageLoad={onImageLoad}
           />
+        ) : block.kind === 'code-excerpt' ? (
+          <CodeExcerptCard key={block.id} block={block} />
         ) : block.kind === 'html-document' ? (
           <HtmlDocumentCard
             key={block.id}

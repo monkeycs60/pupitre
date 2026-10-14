@@ -2191,3 +2191,32 @@ test("projects can be renamed, recolored, given an icon and archived", async () 
     rmSync(other, { recursive: true, force: true });
   }
 });
+
+test("publie le code du worktree, diffuse les extraits et les conserve au replay", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const root = mkdtempSync(join(tmpdir(), "pupitre-code-api-"));
+  cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+  const repo = join(root, "repo");
+  const worktree = join(root, "worktree");
+  mkdirSync(repo);
+  mkdirSync(worktree);
+  writeFileSync(join(repo, "config.ts"), "const port = 4820;\n");
+  writeFileSync(join(worktree, "config.ts"), "const port = 4821;\nexport { port };\n");
+  const project = current.deps.projects.create({ name: "code-api", path: repo });
+  const conversation = current.deps.conversations.create({
+    projectId: project.id, provider: "codex", model: "test", firstMessage: "@code explique", worktreePath: worktree,
+  });
+  const ws = webSocketEventWaiter(`${current.baseUrl.replace("http", "ws")}/ws?conversation=${conversation.id}`, (event) => event.type === "code-excerpt");
+  await ws.opened;
+  const input = { path: "config.ts", title: "Port dev", explanation: "Le port du sidecar.", startLine: 1, endLine: 1 };
+  const response = await postJson(`/api/conversations/${conversation.id}/code-excerpts`, input);
+  expect(response.status).toBe(201);
+  expect(await ws.event).toMatchObject({ type: "code-excerpt", content: "const port = 4821;\nexport { port };\n" });
+  writeFileSync(join(worktree, "config.ts"), "changé\n");
+  const events = current.deps.conversations.listEvents(conversation.id);
+  expect(events.at(-1)).toMatchObject({ type: "code-excerpt", content: "const port = 4821;\nexport { port };\n" });
+  expect((await postJson(`/api/conversations/${conversation.id}/code-excerpts`, { ...input, endLine: 99 })).status).toBe(400);
+  expect((await postJson(`/api/conversations/${conversation.id}/code-excerpts`, { ...input, path: join(repo, "config.ts") })).status).toBe(400);
+  expect((await postJson('/api/conversations/missing/code-excerpts', input)).status).toBe(404);
+  expect(current.deps.conversations.listEvents(conversation.id)).toHaveLength(events.length);
+});

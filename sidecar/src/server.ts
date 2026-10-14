@@ -4,7 +4,8 @@ import type { PersonalEnvironments } from "./personal-environments";
 import type { ProjectDevlogService } from "./project-devlog";
 import type { ProjectResumeService } from "./project-resume";
 import type { ProjectLaunchService } from "./project-launch";
-import { projectCwd } from "./workspace";
+import { CodeExcerptError, readCodeExcerpt } from "./code-excerpts";
+import { conversationCwd, projectCwd } from "./workspace";
 import { EditorWorkspaceError, openEditorWorkspace, planEditorWorkspace } from "./editor-workspace";
 import { tmpdir } from "node:os";
 import type { SharedFilesService } from "./shared-files";
@@ -3768,6 +3769,24 @@ export function createServer(deps: ServerDeps) {
             throw error;
           }
           return json({ ok: true });
+        }
+
+        const codeExcerptConversationId = routeId(pathname, /^\/api\/conversations\/([^/]+)\/code-excerpts$/);
+        if (request.method === "POST" && codeExcerptConversationId !== null) {
+          const conversation = deps.conversations.get(codeExcerptConversationId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const project = deps.projects.get(conversation.project_id);
+          if (!project) throw new HttpError(404, "projet inconnu");
+          const input = await readObject(request);
+          try {
+            const excerpt = await readCodeExcerpt(conversationCwd(project, conversation), input);
+            const event = deps.conversations.appendStoredEvent(conversation.id, excerpt);
+            deps.events.broadcast(conversation.id, event);
+            return json({ excerptId: excerpt.excerptId, path: excerpt.path, startLine: excerpt.startLine, endLine: excerpt.endLine }, 201);
+          } catch (error) {
+            if (error instanceof CodeExcerptError) throw new HttpError(400, error.message);
+            throw error;
+          }
         }
 
         const conversationHtmlDocumentsId = routeId(

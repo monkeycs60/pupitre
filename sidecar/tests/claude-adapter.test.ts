@@ -171,7 +171,7 @@ test("conversation Pupitre : Claude autorise les outils MCP du brief et des docu
   });
 
   expect(readFileSync(argsFile, "utf8")).toContain(
-    "--allowedTools mcp__pupitre__publish_document,mcp__pupitre__publish_html_document,mcp__pupitre__read_sibling_conversation",
+    "--allowedTools mcp__pupitre__publish_code,mcp__pupitre__publish_document,mcp__pupitre__publish_html_document,mcp__pupitre__read_sibling_conversation",
   );
 });
 

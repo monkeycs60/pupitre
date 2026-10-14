@@ -75,6 +75,6 @@ export type EventBlock =
   | TurnFooterBlock
 
 export function eventIdOfBlock(id: string): number | undefined {
-  const match = /^(?:user|assistant|html-document)-(\d+)(?:-|$)/.exec(id)
+  const match = /^(?:user|assistant|html-document|code-excerpt)-(\d+)(?:-|$)/.exec(id)
   return match ? Number(match[1]) : undefined
 }
