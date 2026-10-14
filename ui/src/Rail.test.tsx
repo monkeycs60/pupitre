@@ -92,9 +92,9 @@ test('archiver un projet le range dans le groupe Archives, replié par défaut',
 
   fireEvent.click(await screen.findByRole('button', { name: 'Actions pour le projet pupitre' }))
   fireEvent.click(screen.getByRole('menuitem', { name: 'Archiver' }))
-  await waitFor(() => expect(screen.queryByRole('button', { name: 'pupitre' })).toBeNull())
+  const toggle = await screen.findByRole('button', { name: /Archives/ })
+  expect(screen.queryByRole('button', { name: 'pupitre' })).toBeNull()
   expect(patches).toEqual([{ archived: true }])
-  const toggle = screen.getByRole('button', { name: /Archives/ })
   expect(toggle.getAttribute('aria-expanded')).toBe('false')
   fireEvent.click(toggle)
   expect(screen.getByRole('button', { name: 'pupitre' })).toBeTruthy()
