@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import {
   cleanEnv,
   parseOptions,
+  promotionChecks,
   parseVersion,
   releaseDirectoryName,
   releasesToPrune,
@@ -67,4 +68,24 @@ test('attend 120 s par défaut que la stable redémarre, réglable avec --verify
   expect(parseOptions(['--verify-timeout', '300']).verifyTimeoutSeconds).toBe(300)
   expect(parseOptions(['--timeout', '60']).verifyTimeoutSeconds).toBe(120)
   expect(() => parseOptions(['--verify-timeout', '0'])).toThrow('--verify-timeout')
+})
+
+test('un arbre propre fait passer les deux suites de tests avant le build', () => {
+  expect(promotionChecks(false).map((check) => [check.label, check.directory, check.onHead])).toEqual([
+    ['tests du sidecar', 'sidecar', false],
+    ['tests de l’interface', 'ui', false],
+  ])
+})
+
+test('un arbre modifié vérifie aussi les types de HEAD, qui n’est pas ce qui sera construit', () => {
+  const onHead = promotionChecks(true).filter((check) => check.onHead)
+  expect(onHead.map((check) => [check.directory, check.command.join(' ')])).toEqual([
+    ['sidecar', 'bunx tsc --noEmit -p .'],
+    ['ui', 'bunx tsc -b'],
+  ])
+})
+
+test('--skip-checks est explicite', () => {
+  expect(parseOptions([]).skipChecks).toBe(false)
+  expect(parseOptions(['--skip-checks']).skipChecks).toBe(true)
 })

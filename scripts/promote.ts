@@ -3,6 +3,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
   readlinkSync,
@@ -12,7 +13,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { installMacLauncher, stageMacBundle } from './mac-install'
 
@@ -23,6 +24,7 @@ interface PromotionOptions {
   verifyTimeoutSeconds: number
   force: boolean
   skipBuild: boolean
+  skipChecks: boolean
   rollback: boolean
   stableOrigin: string
 }
@@ -95,12 +97,13 @@ export function parseOptions(args: string[]): PromotionOptions {
     verifyTimeoutSeconds: verifyTimeout,
     force: args.includes('--force'),
     skipBuild: args.includes('--skip-build'),
+    skipChecks: args.includes('--skip-checks'),
     rollback: args.includes('--rollback'),
     stableOrigin: valueAfter('--stable-origin') ?? 'http://127.0.0.1:4820',
   }
 }
 
-function reporter(json: boolean) {
+export function reporter(json: boolean) {
   return (step: string, status: 'running' | 'done' | 'failed', message: string, extra = {}) => {
     const event = { step, status, message, at: new Date().toISOString(), ...extra }
     console.log(json ? JSON.stringify(event) : `[${step}] ${message}`)
@@ -123,8 +126,8 @@ async function fetchJson<T>(url: string, timeout = 5_000): Promise<T | null> {
   }
 }
 
-async function runCommand(command: string[], step: string): Promise<void> {
-  const child = Bun.spawn(command, { cwd: root, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
+async function runCommand(command: string[], step: string, cwd = root): Promise<void> {
+  const child = Bun.spawn(command, { cwd, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
   const code = await child.exited
   if (code !== 0) throw new Error(`${step} a échoué (${code})`)
 }
@@ -361,6 +364,73 @@ function pruneReleases(current: string): void {
   }
 }
 
+/** Sortie gardée pour elle : seule la fin d'un échec remonte, pas des centaines de lignes de tests. */
+async function runQuiet(command: string[], step: string, cwd: string): Promise<void> {
+  const child = Bun.spawn(command, { cwd, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' })
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ])
+  if (code === 0) return
+  const tail = `${stdout}\n${stderr}`.split('\n').filter((line) => line.trim()).slice(-40).join('\n')
+  console.error(tail)
+  throw new Error(`${step} a échoué (${code})`)
+}
+
+export interface PromotionCheck {
+  label: string
+  command: string[]
+  directory: 'sidecar' | 'ui'
+  /** Vérifie HEAD dans un worktree propre plutôt que l'arbre qui sera construit. */
+  onHead: boolean
+}
+
+/**
+ * Le build construit l'arbre de travail et en vérifie déjà les types. Les
+ * tests en vérifient le comportement. Un arbre modifié n'est pas HEAD : les
+ * types de HEAD se vérifient alors à part, sinon un commit cassé passe sous
+ * une livraison saine.
+ */
+export function promotionChecks(dirty: boolean): PromotionCheck[] {
+  const checks: PromotionCheck[] = [
+    { label: 'tests du sidecar', command: ['bun', 'test'], directory: 'sidecar', onHead: false },
+    { label: 'tests de l’interface', command: ['bun', 'test'], directory: 'ui', onHead: false },
+  ]
+  if (dirty) {
+    checks.push(
+      { label: 'types du sidecar à HEAD', command: ['bunx', 'tsc', '--noEmit', '-p', '.'], directory: 'sidecar', onHead: true },
+      { label: 'types de l’interface à HEAD', command: ['bunx', 'tsc', '-b'], directory: 'ui', onHead: true },
+    )
+  }
+  return checks
+}
+
+export async function runPromotionChecks(
+  checks: PromotionCheck[],
+  report: ReturnType<typeof reporter>,
+  ref = 'HEAD',
+): Promise<void> {
+  let headTree: string | null = null
+  try {
+    for (const check of checks) {
+      if (check.onHead && headTree === null) {
+        headTree = mkdtempSync(join(tmpdir(), 'pupitre-promote-head-'))
+        gitOutput('worktree', 'add', '--detach', headTree, ref)
+        for (const directory of ['', 'sidecar', 'ui']) {
+          const modules = join(root, directory, 'node_modules')
+          if (existsSync(modules)) symlinkSync(modules, join(headTree, directory, 'node_modules'))
+        }
+      }
+      report('checks', 'running', check.label)
+      await runQuiet(check.command, check.label, join(check.onHead ? headTree! : root, check.directory))
+    }
+  } finally {
+    if (headTree !== null) gitOutput('worktree', 'remove', '--force', headTree)
+  }
+  report('checks', 'done', `${checks.length} vérifications passées`)
+}
+
 async function promote(options: PromotionOptions): Promise<void> {
   const report = reporter(options.json)
   if (process.env.PUPITRE_INSTANCE === 'stable') throw new Error('Une promotion ne peut pas partir de la stable.')
@@ -408,6 +478,9 @@ async function promote(options: PromotionOptions): Promise<void> {
   const dirty = gitOutput('status', '--porcelain').length > 0
   const version = { sha, dirty, builtAt: new Date().toISOString() }
   report('preflight', 'done', `${sha}${dirty ? ' (arbre modifié)' : ''}`, { sha })
+
+  if (options.skipChecks) report('checks', 'done', 'vérifications ignorées (--skip-checks)')
+  else await runPromotionChecks(promotionChecks(dirty), report)
 
   if (!options.skipBuild) {
     report('build', 'running', 'construction des binaires release')
