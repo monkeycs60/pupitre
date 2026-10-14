@@ -117,3 +117,65 @@ test('ouvre le worktree dans VS Code avec les fichiers modifiés', async () => {
   await new Promise((settle) => setTimeout(settle, 0))
   expect(posted).toEqual([{ url: expect.stringContaining('/api/conversations/conversation-1/editor'), body: { changed: true } }])
 })
+
+test('commente une ligne du diff puis dépose la relecture dans le composer', async () => {
+  const data: CodeConversationCommits = {
+    conversationId: 'conversation-1',
+    total: 1,
+    repositories: [{ repositoryPath: '/mono/apps/hapigator', repositoryLabel: 'apps/hapigator', commits: [commit('a', 'gate')] }],
+    ticket: null,
+  }
+  const changes = {
+    truncated: false,
+    repositories: [{
+      repositoryLabel: 'hapigator', worktreePath: '/w/hapigator-t1', branch: 'feature/T-1', kind: 'commits', commits: 1, title: null,
+      files: [{
+        path: 'lib/gate.js', previousPath: null, status: 'modified', added: 1, removed: 1, binary: false, generated: false, truncated: false,
+        absolutePath: '/w/hapigator-t1/lib/gate.js', firstLine: 2,
+        diff: 'diff --git a/lib/gate.js b/lib/gate.js\n--- a/lib/gate.js\n+++ b/lib/gate.js\n@@ -1,2 +1,2 @@\n const a = 1\n-const b = 2\n+const b = 3',
+      }],
+    }],
+  }
+  const stored: Array<Record<string, unknown>> = []
+  const calls: string[] = []
+  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    const method = init?.method ?? 'GET'
+    calls.push(`${method} ${url.replace(/^.*\/api/, '/api')}`)
+    if (url.endsWith('/review-comments/send')) return Response.json(stored.map((item) => ({ ...item, status: 'sent' })))
+    if (url.endsWith('/review-comments') && method === 'POST') {
+      const body = JSON.parse(String(init!.body))
+      const created = {
+        id: 'r1', conversation_id: 'conversation-1', repository_label: body.repositoryLabel, worktree_path: body.worktreePath, path: body.path,
+        side: body.side, start_line: body.startLine, end_line: body.endLine, line_text: body.lineText, body: body.body,
+        status: 'draft', created_at: '2026-10-14T20:00:00Z', sent_at: null,
+      }
+      stored.push(created)
+      return Response.json(created, { status: 201 })
+    }
+    if (url.endsWith('/review-comments')) return Response.json([])
+    if (url.endsWith('/changes')) return Response.json(changes)
+    return Response.json(data)
+  }) as unknown as typeof fetch
+  const sentToComposer: string[] = []
+
+  render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'conversation-1', onSendReview: (message: string) => sentToComposer.push(message) }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Voir les changements' }))
+  await screen.findByText('1 fichier modifié')
+  fireEvent.mouseOver(document.querySelector('.changes-diff-line[data-side="new"][data-line="2"]')!)
+  expect(document.querySelectorAll('.changes-diff-comment-add')).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Commenter la ligne 2' }))
+  const field = screen.getByRole('textbox', { name: 'Commentaire, ligne 2' })
+  fireEvent.change(field, { target: { value: 'Garde b à 2.' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Ajouter à la relecture' }))
+
+  expect(await screen.findByText('Garde b à 2.')).toBeTruthy()
+  expect(screen.getByText('Brouillon')).toBeTruthy()
+  expect(stored[0]).toMatchObject({ path: 'lib/gate.js', side: 'new', start_line: 2, end_line: 2, line_text: 'const b = 3' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Envoyer la relecture' }))
+  expect(await screen.findByText('Envoyé')).toBeTruthy()
+  expect(sentToComposer).toHaveLength(1)
+  expect(sentToComposer[0]).toContain('1. `lib/gate.js:2` (hapigator)\n   > const b = 3\n   Garde b à 2.')
+  expect(calls).toContain('POST /api/conversations/conversation-1/review-comments/send')
+})

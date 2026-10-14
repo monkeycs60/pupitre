@@ -106,6 +106,7 @@ import type { ProblemMissionStore } from "./stores/problem-missions";
 import type { ProblemAxisRunStore } from "./stores/problem-axis-runs";
 import type { AttentionItemStore } from "./stores/attention-items";
 import type { ConversationLinkStore } from "./stores/conversation-links";
+import type { ReviewCommentInput, ReviewCommentStore } from "./stores/review-comments";
 import type { ProblemService } from "./problems";
 import { buildInfo, readInstance, staleSourcesSince, type InstanceInfo } from "./instance";
 import { PromotionConflictError, type PromotionRunner } from "./promotion";
@@ -190,6 +191,7 @@ export interface ServerDeps {
   problemAxisRuns?: ProblemAxisRunStore;
   attention?: AttentionItemStore;
   conversationLinks?: ConversationLinkStore;
+  reviewComments?: ReviewCommentStore;
   problems?: ProblemService;
   integrationSecrets?: IntegrationSecretStore;
   sentry?: SentryStore;
@@ -1643,6 +1645,47 @@ export function createServer(deps: ServerDeps) {
           } catch (error) {
             if (error instanceof GitProjectError) throw new HttpError(400, error.message);
             throw error;
+          }
+        }
+
+        const reviewRoute = pathname.match(/^\/api\/conversations\/([^/]+)\/review-comments(?:\/(send|[^/]+))?$/);
+        if (reviewRoute) {
+          if (!deps.reviewComments) throw new HttpError(503, "relecture indisponible");
+          const store = deps.reviewComments;
+          const conversationId = decodeURIComponent(reviewRoute[1]!);
+          if (!deps.conversations.get(conversationId)) throw new HttpError(404, "conversation inconnue");
+          const target = reviewRoute[2] ? decodeURIComponent(reviewRoute[2]) : null;
+          if (request.method === "GET" && target === null) return json(store.list(conversationId));
+          if (request.method === "POST" && target === "send") return json(store.markSent(conversationId));
+          if (request.method === "POST" && target === null) {
+            const body = await readObject(request);
+            const side = body.side === "old" ? "old" : "new";
+            const startLine = Number(body.startLine);
+            const endLine = Number(body.endLine ?? body.startLine);
+            if (!Number.isInteger(startLine) || startLine < 1 || !Number.isInteger(endLine) || endLine < 1) {
+              throw new HttpError(400, "lignes invalides");
+            }
+            const input: ReviewCommentInput = {
+              repositoryLabel: requiredString(body, "repositoryLabel"),
+              worktreePath: requiredString(body, "worktreePath"),
+              path: requiredString(body, "path"),
+              side,
+              startLine,
+              endLine,
+              lineText: typeof body.lineText === "string" ? body.lineText.slice(0, 2_000) : "",
+              body: requiredString(body, "body").slice(0, 8_000),
+            };
+            return json(store.create(conversationId, input), 201);
+          }
+          const comment = target ? store.get(target) : null;
+          if (!comment || comment.conversation_id !== conversationId) throw new HttpError(404, "commentaire inconnu");
+          if (request.method === "PATCH") {
+            const body = await readObject(request);
+            return json(store.updateBody(comment.id, requiredString(body, "body").slice(0, 8_000)));
+          }
+          if (request.method === "DELETE") {
+            store.delete(comment.id);
+            return empty(204);
           }
         }
 
@@ -3125,7 +3168,7 @@ export function createServer(deps: ServerDeps) {
             message,
             images,
             attachments,
-            { preamble },
+            { preamble, ...(ticket ? { preamblePhase: "ticket_context" } : {}) },
           )
             .catch((error) => console.error("Échec du tour", error));
           return json(conversation, 201);

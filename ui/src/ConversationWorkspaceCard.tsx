@@ -10,6 +10,8 @@ const REFRESH_MS = 30_000
 interface ConversationWorkspaceCardProps {
   projectId: string
   conversationId: string
+  /** Dépose la consigne de relecture dans le composer de la conversation. */
+  onSendReview?: (message: string) => void
 }
 
 function repositoryName(label: string): string {
@@ -53,7 +55,7 @@ async function openChangesInEditor(conversationId: string) {
 }
 
 /** Ce que la conversation a commité, dépôt par dépôt ; à défaut, le travail du ticket qu'elle partage. */
-export function ConversationWorkspaceCard({ projectId, conversationId }: ConversationWorkspaceCardProps) {
+export function ConversationWorkspaceCard({ projectId, conversationId, onSendReview }: ConversationWorkspaceCardProps) {
   const [data, setData] = useState<CodeConversationCommits | null>(null)
   const [showChanges, setShowChanges] = useState(false)
 
@@ -115,6 +117,6 @@ export function ConversationWorkspaceCard({ projectId, conversationId }: Convers
         </li>
       })}
     </ul>
-    {showChanges ? <ConversationChangesView conversationId={conversationId} /> : null}
+    {showChanges ? <ConversationChangesView conversationId={conversationId} onSendReview={onSendReview} /> : null}
   </article>
 }

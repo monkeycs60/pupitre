@@ -375,6 +375,23 @@ export function openDb(dir: string = dataDir()): Database {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS review_comments (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      repository_label TEXT NOT NULL,
+      worktree_path TEXT NOT NULL,
+      path TEXT NOT NULL,
+      side TEXT NOT NULL CHECK (side IN ('new','old')),
+      start_line INTEGER NOT NULL,
+      end_line INTEGER NOT NULL,
+      line_text TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('draft','sent')),
+      created_at TEXT NOT NULL,
+      sent_at TEXT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_review_comments_conversation
+      ON review_comments(conversation_id, created_at);
     CREATE TABLE IF NOT EXISTS commit_links (
       commit_sha TEXT NOT NULL,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

@@ -59,6 +59,7 @@ import { ProblemMissionStore } from "./stores/problem-missions";
 import { ProblemAxisRunStore } from "./stores/problem-axis-runs";
 import { AttentionItemStore } from "./stores/attention-items";
 import { ConversationLinkStore } from "./stores/conversation-links";
+import { ReviewCommentStore } from "./stores/review-comments";
 import { ProblemService } from "./problems";
 import { backgroundJobsEnabled, readInstance } from "./instance";
 import { BACKGROUND_MODEL } from "./background-model";
@@ -113,6 +114,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const problemAxisRuns = new ProblemAxisRunStore(db);
   const attention = new AttentionItemStore(db);
   const conversationLinks = new ConversationLinkStore(db);
+  const reviewComments = new ReviewCommentStore(db);
   const problems = new ProblemService(
     problemStore,
     projects,
@@ -389,6 +391,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     problemAxisRuns,
     attention,
     conversationLinks,
+    reviewComments,
     problems,
     integrationSecrets,
     sentry,

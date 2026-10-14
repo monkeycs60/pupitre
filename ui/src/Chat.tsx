@@ -222,6 +222,11 @@ export function Chat({
   onConversationReadRef.current = onConversationRead
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null)
   const [message, setMessage] = useState(() => readDraft(draftStorageKey) ?? initialMessage)
+
+  function addReviewToComposer(review: string) {
+    setMessage((draft) => (draft.trim().length > 0 ? `${draft.trimEnd()}\n\n${review}` : review))
+    requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.composer-area textarea')?.focus())
+  }
   const [searchOpen, setSearchOpen] = useState(false)
   const [assetsOpen, setAssetsOpen] = useState(false)
   const [conversationDocuments, setConversationDocuments] = useState<import('./types').HtmlDocument[]>([])
@@ -597,7 +602,7 @@ export function Chat({
                     />
                     {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
                     {todoSuggestions?.length ? <TodoSuggestions items={todoSuggestions} ticketLinks={ticketLinks} onChanged={onTodoSuggestionsChanged ?? (() => {})} /> : null}
-                    {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} /> : null}
+                    {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onSendReview={addReviewToComposer} /> : null}
                   </TaskSelectionContext.Provider>
                 </TaskToggleContext.Provider>
               )}

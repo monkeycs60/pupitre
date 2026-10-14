@@ -458,6 +458,55 @@ export interface ConversationChanges {
   truncated: boolean
 }
 
+export interface ReviewComment {
+  id: string
+  conversation_id: string
+  repository_label: string
+  worktree_path: string
+  path: string
+  side: 'new' | 'old'
+  start_line: number
+  end_line: number
+  line_text: string
+  body: string
+  status: 'draft' | 'sent'
+  created_at: string
+  sent_at: string | null
+}
+
+export interface ReviewCommentInput {
+  repositoryLabel: string
+  worktreePath: string
+  path: string
+  side: 'new' | 'old'
+  startLine: number
+  endLine: number
+  lineText: string
+  body: string
+}
+
+export function listReviewComments(conversationId: string, signal?: AbortSignal): Promise<ReviewComment[]> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/review-comments`, { signal })
+}
+
+export function createReviewComment(conversationId: string, input: ReviewCommentInput): Promise<ReviewComment> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/review-comments`, jsonPost(input))
+}
+
+export function updateReviewComment(conversationId: string, id: string, body: string): Promise<ReviewComment> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/review-comments/${routeId(id)}`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body }),
+  })
+}
+
+export function deleteReviewComment(conversationId: string, id: string): Promise<void> {
+  return fetchVoid(`/api/conversations/${routeId(conversationId)}/review-comments/${routeId(id)}`, { method: 'DELETE' })
+}
+
+export function sendReviewComments(conversationId: string): Promise<ReviewComment[]> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/review-comments/send`, jsonPost({}))
+}
+
 export function getConversationChanges(conversationId: string, signal?: AbortSignal): Promise<ConversationChanges> {
   return fetchJson(`/api/conversations/${routeId(conversationId)}/changes`, { signal })
 }
