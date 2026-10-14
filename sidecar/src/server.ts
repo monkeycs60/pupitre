@@ -3116,15 +3116,16 @@ export function createServer(deps: ServerDeps) {
             }
           }
           const ticketPreamble = ticket
-            ? await ticketBriefFor(deps, ticket, conversation.id)
-            : null;
-          const preamble = [ticketPreamble, problemPreamble].filter(Boolean).join("\n\n---\n\n");
+            ? ticketBriefFor(deps, ticket, conversation.id)
+            : Promise.resolve(null);
+          const preamble = ticketPreamble.then((brief) =>
+            [brief, problemPreamble].filter(Boolean).join("\n\n---\n\n") || null);
           void deps.runner.runTurn(
             conversation.id,
             message,
             images,
             attachments,
-            preamble ? { preamble } : {},
+            { preamble },
           )
             .catch((error) => console.error("Échec du tour", error));
           return json(conversation, 201);

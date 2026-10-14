@@ -198,7 +198,7 @@ export class ConversationRunner {
     prompt: string,
     imageNames: string[],
     attachments: MediaAttachment[] = [],
-    options: { preamble?: string } = {},
+    options: { preamble?: string | Promise<string | null> } = {},
   ): Promise<TurnOutcome> {
     const conv = this.convs.get(conversationId);
     if (!conv) throw new Error("conversation inconnue");
@@ -326,7 +326,15 @@ export class ConversationRunner {
       const workspacePreamble = worktrees.length > 1
         ? `Espaces de travail Git de cette conversation :\n${worktrees.map((path) => `- ${path}`).join("\n")}\nTravaille dans chacun selon les besoins de la tâche ; ne modifie pas les checkouts sources du projet.`
         : null;
-      const preamble = [options.preamble, workspacePreamble].filter(Boolean).join("\n\n");
+      const requestedPreamble = await Promise.resolve(options.preamble).catch((error: unknown) => {
+        console.error("Préambule du tour indisponible", error);
+        return null;
+      });
+      if (controller.signal.aborted) {
+        emit({ type: "status", state: "error", error: "annulé" });
+        return outcome;
+      }
+      const preamble = [requestedPreamble, workspacePreamble].filter(Boolean).join("\n\n");
       const providerPrompt = (preamble
         ? `${preamble}\n\n---\n\n`
         : "")

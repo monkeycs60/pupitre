@@ -192,6 +192,7 @@ case "$initial" in
   *BLOQUE*) exec sleep 30 ;;
 esac
 if [ -n "$FAKE_CLAUDE_ARGS_FILE" ]; then printf '%s\n' "$*" >> "$FAKE_CLAUDE_ARGS_FILE"; fi
+if [ -n "$FAKE_CLAUDE_STDIN_FILE" ]; then printf '%s\n' "$initial" >> "$FAKE_CLAUDE_STDIN_FILE"; fi
 cat "${fixture}"
 `);
   chmodSync(fakeClaude, 0o755);
@@ -2246,4 +2247,46 @@ test("publie le code du worktree, diffuse les extraits et les conserve au replay
   expect((await postJson(`/api/conversations/${conversation.id}/code-excerpts`, { ...input, path: join(repo, "config.ts") })).status).toBe(400);
   expect((await postJson('/api/conversations/missing/code-excerpts', input)).status).toBe(404);
   expect(current.deps.conversations.listEvents(conversation.id)).toHaveLength(events.length);
+});
+
+test("une conversation liée à un ticket enregistre le message avant le contexte ClickUp, qui arrive ensuite au provider", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const ticket = current.deps.tickets.upsert(project.id, {
+    key: "TECH-1",
+    source: "clickup",
+    title: "Ticket lent",
+    status: "en cours",
+    externalUrl: null,
+  });
+  let releaseClickUp!: () => void;
+  const clickUpAnswered = new Promise<void>((resolve) => { releaseClickUp = resolve; });
+  const refresher = current.deps.integrationsRefresher;
+  const originalContext = refresher.clickUpContext.bind(refresher);
+  refresher.clickUpContext = async () => {
+    await clickUpAnswered;
+    return { description: "Description arrivée en retard", comments: [], attachments: [] };
+  };
+  const stdinFile = join(tmpdir(), `pupitre-ticket-stdin-${crypto.randomUUID()}`);
+  process.env.FAKE_CLAUDE_STDIN_FILE = stdinFile;
+  try {
+    const created = await postJson("/api/conversations", {
+      projectId: project.id,
+      provider: "claude",
+      model: "haiku",
+      ticketId: ticket.id,
+      message: "lance la stack",
+    });
+    expect(created.status).toBe(201);
+    const conversation = await created.json() as { id: string };
+    expect(current.deps.conversations.listEvents(conversation.id)[0])
+      .toMatchObject({ type: "user-message", text: "lance la stack" });
+
+    releaseClickUp();
+    await waitForRunnerIdle(conversation.id);
+    expect(readFileSync(stdinFile, "utf8")).toContain("Description arrivée en retard");
+  } finally {
+    refresher.clickUpContext = originalContext;
+    delete process.env.FAKE_CLAUDE_STDIN_FILE;
+  }
 });

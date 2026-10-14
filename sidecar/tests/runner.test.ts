@@ -582,3 +582,33 @@ test("une réaction de Claude entre deux tours devient un tour autonome persist�
     claudeSessions.shutdown();
   }
 });
+
+test("le message de l'utilisateur est enregistré avant que le préambule du tour n'arrive", async () => {
+  const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "salut" });
+  let deliver!: (preamble: string) => void;
+  const preamble = new Promise<string>((resolve) => { deliver = resolve; });
+
+  const turn = runner.runTurn(c.id, "salut", [], [], { preamble });
+  await Bun.sleep(10);
+  expect(convs.listEvents(c.id).map((event) => event.type)).toEqual(["user-message", "turn-timing"]);
+  expect(runner.isRunning(c.id)).toBe(true);
+
+  deliver("Contexte du ticket");
+  expect((await turn).state).toBe("done");
+});
+
+test("annuler pendant l'attente du préambule clôt le tour sans lancer le provider", async () => {
+  const c = convs.create({ projectId, provider: "claude", model: "haiku", firstMessage: "x" });
+  let deliver!: (preamble: string) => void;
+  const preamble = new Promise<string>((resolve) => { deliver = resolve; });
+
+  const turn = runner.runTurn(c.id, "x", [], [], { preamble });
+  const cancelled = runner.cancelTurn(c.id);
+  deliver("trop tard");
+  await Promise.all([turn, cancelled]);
+
+  const events = convs.listEvents(c.id);
+  expect(events.some((event) => event.type === "session")).toBe(false);
+  expect(events.at(-1)).toMatchObject({ type: "status", state: "error", error: "annulé" });
+  expect(runner.isRunning(c.id)).toBe(false);
+});
