@@ -43,6 +43,10 @@ reste permise depuis une conversation Pupitre.
   l'UI ; `cd ui && bun test` les exécute (happy-dom + testing-library).
 - Sur un composant, cherche la contradiction plutôt que la confirmation : le
   compte d'éléments attendu, l'absence de doublon, la continuité d'un tracé.
+- **Une vue lourde dans le fil se mesure dans WebKitGTK**, le moteur de l'app
+  Linux : `bun run measure:webkit --project <nom> --conversation <titre>`.
+  Chrome est resté fluide là où l'app tombait à 4 images/s. La commande
+  refuse un Vite qui sert une version figée des fichiers.
 
 ## Fin de tâche et Git
 
