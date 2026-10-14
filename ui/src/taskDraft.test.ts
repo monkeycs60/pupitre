@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { toggleAction } from './taskDraft'
+import { toggleAction, withTaskActions } from './taskDraft'
 import type { TaskAction } from './taskToggle'
 
 function action(scope: string, label: string): TaskAction {
@@ -13,5 +13,38 @@ describe('toggleAction', () => {
 
     expect(toggleAction([first], second, true)).toEqual([first, second])
     expect(toggleAction([first, second], second, false)).toEqual([first])
+  })
+})
+
+describe('withTaskActions', () => {
+  const first: TaskAction = { scope: 'm', index: 1, label: 'Relancer les tests', kind: 'do-this' }
+  const second: TaskAction = { scope: 'm', index: 2, label: 'Committer', kind: 'do-this' }
+  const idea: TaskAction = { scope: 'm', index: 1, label: 'Ajouter un raccourci', kind: 'follow-up' }
+
+  test('garde la note écrite après une action quand une autre case est cochée', () => {
+    const draft = `${withTaskActions('Intro', [first])} mais seulement l'UI\net la sidecar aussi`
+
+    expect(withTaskActions(draft, [first, second, idea])).toBe([
+      'Intro',
+      '',
+      'Exécute les actions 1 et 2 du bloc DO THIS :',
+      "1) Relancer les tests mais seulement l'UI",
+      'et la sidecar aussi',
+      '2) Committer',
+      '',
+      'Explore la piste 1 du bloc FOLLOW-UP :',
+      '1) Ajouter un raccourci',
+    ].join('\n'))
+  })
+
+  test('retire la note avec la case décochée', () => {
+    const draft = withTaskActions('', [first, second]).replace('2) Committer', '2) Committer en squash')
+
+    expect(withTaskActions(draft, [first])).toBe(
+      "Exécute l'action 1 du bloc DO THIS :\n1) Relancer les tests",
+    )
+    expect(withTaskActions(draft, [second])).toBe(
+      "Exécute l'action 2 du bloc DO THIS :\n2) Committer en squash",
+    )
   })
 })
