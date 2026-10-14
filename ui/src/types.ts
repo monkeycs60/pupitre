@@ -1046,6 +1046,7 @@ export type AppEvent =
       type: 'code-excerpt'
       excerptId: string
       path: string
+      absolutePath?: string
       title: string
       explanation: string
       content: string

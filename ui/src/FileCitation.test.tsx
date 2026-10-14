@@ -97,3 +97,19 @@ test('le nom de fichier d’un extrait @code ouvre VS Code à la première ligne
   fireEvent.click(await screen.findByTitle(/src\/config\.ts:3/))
   expect(context.editor).toEqual([[{ path: '/w/src/config.ts', line: 3 }]])
 })
+
+test('un extrait @code qui connaît son fichier ouvre ce chemin sans le résoudre', async () => {
+  const { CodeExcerptCard } = await import('./CodeExcerptCard')
+  const context = access()
+  render(createElement(ToolFileContext.Provider, { value: context.value }, createElement(CodeExcerptCard, {
+    block: {
+      kind: 'code-excerpt', id: 'e', excerptId: 'e', path: 'hapigator/lib/geo.js', absolutePath: '/w/apps/hapigator-tech1/lib/geo.js',
+      title: 'Geo', explanation: 'Le calcul.', content: 'a\nb\nc', startLine: 2, endLine: 3, highlights: [{ startLine: 2, endLine: 3 }],
+      sha256: 'a'.repeat(64), createdAt: '2026-10-14T10:00:00Z',
+    },
+  })))
+
+  fireEvent.click(await screen.findByTitle(/hapigator\/lib\/geo\.js:2/))
+  expect(context.editor).toEqual([[{ path: '/w/apps/hapigator-tech1/lib/geo.js', line: 2 }]])
+  expect(context.asked).toEqual([])
+})

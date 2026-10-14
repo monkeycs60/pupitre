@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readCodeExcerpt } from "../src/code-excerpts";
@@ -55,4 +55,20 @@ test("refuse les binaires, fichiers vides, UTF-8 invalide, dossiers et fichiers 
     await expect(readCodeExcerpt(root, input)).rejects.toThrow();
   }
   await expect(readCodeExcerpt(root, { ...input, path: "." })).rejects.toThrow();
+});
+
+test("accepte les worktrees de dépôts de la conversation, par chemin absolu ou par leur emplacement dans le monorepo", async () => {
+  const mono = fixture();
+  const hapigator = fixture();
+  mkdirSync(join(mono, "apps/hapigator"), { recursive: true });
+  mkdirSync(join(hapigator, "lib"));
+  writeFileSync(join(hapigator, "lib/geo.js"), "const a = 1;\nconst b = 2;\n");
+  const worktrees = [{ name: "hapigator", path: hapigator, location: "apps/hapigator" }];
+
+  for (const path of [join(hapigator, "lib/geo.js"), "apps/hapigator/lib/geo.js"]) {
+    const excerpt = await readCodeExcerpt(mono, { ...input, path }, worktrees);
+    expect([excerpt.path, excerpt.absolutePath]).toEqual(["hapigator/lib/geo.js", realpathSync(join(hapigator, "lib/geo.js"))]);
+  }
+  expect((await readCodeExcerpt(mono, input, worktrees)).path).toBe("config.ts");
+  await expect(readCodeExcerpt(mono, { ...input, path: join(fixture(), "config.ts") }, worktrees)).rejects.toThrow("workspace");
 });

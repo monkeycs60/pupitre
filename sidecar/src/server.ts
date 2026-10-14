@@ -3778,8 +3778,11 @@ export function createServer(deps: ServerDeps) {
           const project = deps.projects.get(conversation.project_id);
           if (!project) throw new HttpError(404, "projet inconnu");
           const input = await readObject(request);
+          const sources = deps.codeExplorer ? await deps.codeExplorer.sources(project.id).catch(() => []) : [];
+          const worktrees = planEditorWorkspace(project, conversation, sources).folders
+            .flatMap((folder) => folder.location === undefined || folder.location === null ? [] : [{ name: folder.name, path: folder.path, location: folder.location || null }]);
           try {
-            const excerpt = await readCodeExcerpt(conversationCwd(project, conversation), input);
+            const excerpt = await readCodeExcerpt(conversationCwd(project, conversation), input, worktrees);
             const event = deps.conversations.appendStoredEvent(conversation.id, excerpt);
             deps.events.broadcast(conversation.id, event);
             return json({ excerptId: excerpt.excerptId, path: excerpt.path, startLine: excerpt.startLine, endLine: excerpt.endLine }, 201);

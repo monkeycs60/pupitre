@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import type { CodeSource } from "./code-explorer";
 import { readHead, ticketKeyOf } from "./git-repositories";
 import type { Conversation } from "./stores/conversations";
@@ -13,6 +13,8 @@ export interface EditorFolder {
   name: string;
   path: string;
   branch: string | null;
+  /** Emplacement du dépôt dans le projet (`apps/reactor`, `""` pour la racine), nul pour un simple dossier. */
+  location?: string | null;
 }
 
 export interface EditorWorkspacePlan {
@@ -86,12 +88,18 @@ export function planEditorWorkspace(
     name: projectName,
     path: rootSource?.path ?? resolve(conversation.worktree_path ?? projectPath),
     branch: rootSource?.branch ?? branch,
+    location: "",
   };
   const nested = new Map<string, EditorFolder>();
   for (const repositoryPath of repositories) {
     if (repositoryPath === projectPath) continue;
     const chosen = choose(repositoryPath);
-    if (chosen) nested.set(repositoryPath, { name: basename(repositoryPath), path: chosen.path, branch: chosen.branch });
+    if (chosen) nested.set(repositoryPath, {
+      name: basename(repositoryPath),
+      path: chosen.path,
+      branch: chosen.branch,
+      location: relative(projectPath, repositoryPath).split(sep).join("/"),
+    });
   }
 
   const template = readTemplate(root.path, projectName) ?? readTemplate(projectPath, projectName);

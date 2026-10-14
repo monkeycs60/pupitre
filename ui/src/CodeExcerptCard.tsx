@@ -21,7 +21,11 @@ export function CodeExcerptCard({ block }: { block: CodeExcerptBlock }) {
   const pathParts = block.path.split('/')
   const name = pathParts.pop()
   const directory = pathParts.join('/')
-  const { access, resolution } = useFileCitation(`./${block.path}`)
+  const cited = useFileCitation(block.absolutePath ? '' : `./${block.path}`)
+  const { access } = cited
+  const resolution = block.absolutePath
+    ? { status: 'resolved' as const, path: block.absolutePath, line: null, label: block.path }
+    : cited.resolution
   const range = block.startLine === block.endLine ? `L${block.startLine}` : `L${block.startLine}–${block.endLine}`
 
   useEffect(() => {

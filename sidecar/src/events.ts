@@ -75,6 +75,8 @@ export type AppEvent =
       type: "code-excerpt";
       excerptId: string;
       path: string;
+      /** Fichier cité sur le disque ; absent des extraits publiés avant son ajout. */
+      absolutePath?: string;
       title: string;
       explanation: string;
       content: string;

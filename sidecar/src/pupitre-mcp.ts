@@ -141,7 +141,7 @@ export function createPupitreServer(): McpServer {
     description: "Publie un lecteur de code natif dans la conversation : fichier complet conservé, numéros de ligne, coloration syntaxique, passage ciblé et surligné. "
       + "Lis le fichier et vérifie ses lignes avant de publier. Un appel par passage à expliquer. Cite le code qui charge les secrets, jamais leurs valeurs.",
     inputSchema: {
-      path: z.string().min(1).describe("Chemin absolu ou relatif au workspace de la conversation."),
+      path: z.string().min(1).describe("Chemin absolu ou relatif au workspace de la conversation. Les worktrees de dépôts de la conversation sont acceptés, y compris via leur emplacement dans le monorepo (`apps/hapigator/...`)."),
       start_line: z.number().int().positive().describe("Première ligne du passage, inclusive, à partir de 1."),
       end_line: z.number().int().positive().describe("Dernière ligne du passage, inclusive."),
       title: z.string().min(1).max(160).describe("Titre court expliquant le rôle du passage."),
