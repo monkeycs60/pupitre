@@ -16,6 +16,7 @@ import {
   sendMessage,
   uploadMedia,
 } from './api'
+import { withSlowNotice } from './slowNotice'
 import { buildCreateConversationInput } from './conversationDraft'
 import { buildTodoInput } from './todoDraft'
 import { createTodo, updateTodo, type TodoFinish, type TodoItem } from './todos'
@@ -203,6 +204,8 @@ async function readClipboardImages(): Promise<File[]> {
 
   return readNativeClipboardImages()
 }
+
+const SLOW_CREATION_MESSAGE = 'Le sidecar n’a pas répondu après 10 s. La conversation s’ouvrira s’il finit par répondre ; sinon, relance Pupitre.'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Une erreur est survenue.'
@@ -514,7 +517,7 @@ export function Composer({
         setToast(null)
         onTodoCreated?.(todo)
       } else if (conversationId === null) {
-        const conversation = await createConversation(buildCreateConversationInput({
+        const conversation = await withSlowNotice(createConversation(buildCreateConversationInput({
           projectId: project.id,
           ...config,
           ticketId,
@@ -528,7 +531,8 @@ export function Composer({
           message: trimmedMessage,
           images: imageNames,
           attachments: attachmentInputs,
-        }))
+        })), () => setToast(SLOW_CREATION_MESSAGE))
+        setToast(null)
         onConversationCreated(conversation)
       } else {
         const sidequest = parseSidequestDirective(trimmedMessage)
