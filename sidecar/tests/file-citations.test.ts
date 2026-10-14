@@ -31,6 +31,8 @@ test("lit le chemin et la ligne d'une citation, et ignore les expressions", () =
   expect(parseCitation("lib/auth.js:132")).toEqual({ path: "lib/auth.js", line: 132 });
   expect(parseCitation("App.tsx:850-870")).toEqual({ path: "App.tsx", line: 850 });
   expect(parseCitation("req.app.user")).toBeNull();
+  expect(parseCitation(".ts")).toBeNull();
+  expect(parseCitation(".env.local")).toEqual({ path: ".env.local", line: null });
   expect(parseCitation("https://x.io/a.js")).toBeNull();
 });
 
@@ -79,6 +81,13 @@ test("relève les dossiers et workspaces des fenêtres VS Code ouvertes", () => 
 
 test("un nom seul présent à la racine d'un dossier reste comparé à ses homonymes", async () => {
   expect((await resolveCitations(["auth.js"], folders, reactor, [], new Set()))["auth.js"]).toMatchObject({ status: "ambiguous" });
+});
+
+test("un fichier ignoré par Git se retrouve par son nom seul à la racine d'un dossier", async () => {
+  writeFileSync(join(reactor, ".gitignore"), ".env\n");
+  writeFileSync(join(reactor, ".env"), "SECRET=x\n");
+
+  expect((await resolveCitations([".env"], folders, mono, [], new Set()))[".env"]).toMatchObject({ status: "resolved", path: join(reactor, ".env") });
 });
 
 test("`./chemin` se lit depuis le répertoire de travail de la conversation", async () => {

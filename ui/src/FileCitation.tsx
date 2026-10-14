@@ -8,7 +8,7 @@ import './styles/file-citation.css'
 
 const EXTENSIONS = 'js|jsx|ts|tsx|mjs|cjs|mts|cts|json|jsonc|md|mdx|css|scss|sass|less|html|vue|svelte|py|rb|go|rs|java|kt|swift|php|sql|sh|bash|zsh|ya?ml|toml|ini|env|lock|txt|xml|graphql|gql|proto|c|h|cpp|hpp|cs|dart|lua|twig|hbs|ejs'
 const CITATION = new RegExp(
-  `^(?:~|\\.{1,2})?/?(?:[\\w@.+\\-\\[\\]()]+/)*(?:[\\w@.+\\-\\[\\]()]*\\.(?:${EXTENSIONS})|Dockerfile|Makefile)(?:(?::|#L)\\d+(?:[-–]L?\\d+)?(?::\\d+)?)?$`,
+  `^(?:~|\\.{1,2})?/?(?:[\\w@.+\\-\\[\\]()]+/)*(?:[\\w@+\\-\\[\\]()][\\w@.+\\-\\[\\]()]*\\.(?:${EXTENSIONS})|\\.env(?:\\.[\\w-]+)?|Dockerfile|Makefile)(?:(?::|#L)\\d+(?:[-–]L?\\d+)?(?::\\d+)?)?$`,
   'i',
 )
 

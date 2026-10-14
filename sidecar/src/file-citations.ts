@@ -4,7 +4,7 @@ import type { EditorFolder } from "./editor-workspace";
 
 const EXTENSIONS = "js|jsx|ts|tsx|mjs|cjs|mts|cts|json|jsonc|md|mdx|css|scss|sass|less|html|vue|svelte|py|rb|go|rs|java|kt|swift|php|sql|sh|bash|zsh|ya?ml|toml|ini|env|lock|txt|xml|graphql|gql|proto|c|h|cpp|hpp|cs|dart|lua|twig|hbs|ejs";
 const CITATION = new RegExp(
-  `^((?:~|\\.{1,2})?/?(?:[\\w@.+\\-\\[\\]()]+/)*(?:[\\w@.+\\-\\[\\]()]*\\.(?:${EXTENSIONS})|Dockerfile|Makefile))(?:(?::|#L)(\\d+)(?:[-–]L?\\d+)?(?::\\d+)?)?$`,
+  `^((?:~|\\.{1,2})?/?(?:[\\w@.+\\-\\[\\]()]+/)*(?:[\\w@+\\-\\[\\]()][\\w@.+\\-\\[\\]()]*\\.(?:${EXTENSIONS})|\\.env(?:\\.[\\w-]+)?|Dockerfile|Makefile))(?:(?::|#L)(\\d+)(?:[-–]L?\\d+)?(?::\\d+)?)?$`,
   "i",
 );
 const MAX_CANDIDATES = 12;
@@ -106,13 +106,14 @@ export async function resolveCitations(
       const absolute = raw.startsWith("~/") ? join(process.env.HOME ?? "", raw.slice(2)) : raw;
       candidates = isFile(absolute) ? [resolve(absolute)] : [];
     } else {
-      candidates = raw.includes("/") ? [...new Set(roots.map((root) => resolve(root, raw)).filter(isFile))] : [];
+      const atRoots = [...new Set(roots.map((root) => resolve(root, raw)).filter(isFile))];
+      candidates = raw.includes("/") ? atRoots : [];
       if (candidates.length === 0) {
         const suffix = `/${raw.replace(/^(\.\.\/)+/, "")}`;
         const listed = await Promise.all(folders.map(async (folder) => (await listFiles(folder.path))
           .filter((file) => `/${file}`.endsWith(suffix))
           .map((file) => join(folder.path, file))));
-        candidates = [...new Set(listed.flat())];
+        candidates = [...new Set([...atRoots, ...listed.flat()])];
       }
     }
     pending.set(text, { citation, candidates });
