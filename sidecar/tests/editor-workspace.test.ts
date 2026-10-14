@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CodeSource } from "../src/code-explorer";
-import { planEditorWorkspace } from "../src/editor-workspace";
+import { changedFiles, planEditorWorkspace } from "../src/editor-workspace";
 import type { Conversation } from "../src/stores/conversations";
 import type { Project } from "../src/stores/projects";
 
@@ -81,4 +81,28 @@ test("sans worktree, un projet sans fichier workspace ouvre son dossier", () => 
 
   expect(plan.workspace).toBeNull();
   expect(plan.folders.map((folder) => folder.path)).toEqual([solo]);
+});
+
+test("liste les fichiers modifiés par la conversation à leur première ligne changée", async () => {
+  const worktree = join(mono, "apps/reactor-tech123");
+  const commit = (...args: string[]) => git(worktree, "-c", "user.email=t@t", "-c", "user.name=t", ...args);
+  mkdirSync(join(worktree, "src"), { recursive: true });
+  writeFileSync(join(worktree, "src/map.ts"), "a\nb\nc\n");
+  writeFileSync(join(worktree, "bun.lock"), "lock\n");
+  writeFileSync(join(worktree, "src/gone.ts"), "x\n");
+  commit("add", ".");
+  commit("commit", "-q", "-m", "carte");
+  writeFileSync(join(worktree, "src/map.ts"), "a\nB\nc\n");
+  commit("rm", "-q", "src/gone.ts");
+  commit("commit", "-q", "-am", "retouche");
+  const sha = (ref: string) => Bun.spawnSync(["git", "rev-parse", ref], { cwd: worktree, stdout: "pipe" }).stdout.toString().trim();
+  writeFileSync(join(worktree, "src/draft.ts"), "brouillon\n");
+
+  const plan = planEditorWorkspace(project, { id: "c", worktree_path: monoWorktree, worktree_paths: [monoWorktree] } as Conversation, sources);
+  const files = await changedFiles(plan, [{ repositoryPath: reactor, shas: [sha("HEAD"), sha("HEAD~1")] }], [monoWorktree, worktree]);
+
+  expect(files).toEqual([
+    { path: join(worktree, "src/draft.ts"), line: null },
+    { path: join(worktree, "src/map.ts"), line: 2 },
+  ]);
 });

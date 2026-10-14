@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { getCodeConversationCommits } from './api'
+import { getCodeConversationCommits, openConversationChangesInEditor } from './api'
+import { pushToast } from './toasts'
 import { relativeCodeDate } from './codeFormat'
 import type { CodeConversationCommits, CodeConversationRepository } from './types'
 
@@ -32,6 +33,23 @@ function authorsLabel(titles: string[]): string {
   if (others.length === 0) return `Commité par ${first}`
   const s = others.length > 1 ? 's' : ''
   return `Commité par ${first} et ${others.length} autre${s} conversation${s}`
+}
+
+async function openChangesInEditor(conversationId: string) {
+  try {
+    const { changed, openedFiles } = await openConversationChangesInEditor(conversationId)
+    pushToast({
+      tone: 'ok',
+      title: 'VS Code ouvert sur le worktree',
+      detail: openedFiles > 0
+        ? `${plural(openedFiles, 'fichier modifié')} ouvert${openedFiles > 1 ? 's' : ''}`
+        : changed > 0
+          ? `${plural(changed, 'fichier modifié')} : trop pour les ouvrir tous`
+          : 'Aucun fichier modifié à ouvrir',
+    })
+  } catch (error) {
+    pushToast({ tone: 'danger', title: 'Ouverture de VS Code impossible', detail: error instanceof Error ? error.message : String(error) })
+  }
 }
 
 /** Ce que la conversation a commité, dépôt par dépôt ; à défaut, le travail du ticket qu'elle partage. */
@@ -74,6 +92,14 @@ export function ConversationWorkspaceCard({ projectId, conversationId, onOpenCod
         <strong>{title}</strong>
         <small>{detail}</small>
       </span>
+      <button
+        type="button"
+        className="code-workspace-card-open is-secondary"
+        onClick={() => void openChangesInEditor(conversationId)}
+        title="Ouvrir le worktree dans VS Code, avec les fichiers modifiés s'ils sont 10 ou moins"
+      >
+        Ouvrir dans VS Code
+      </button>
       {onOpenCode ? <button type="button" className="code-workspace-card-open" onClick={() => onOpenCode(conversationId, target)}>
         {own ? 'Voir dans Code' : 'Voir le ticket dans Code'}
       </button> : null}

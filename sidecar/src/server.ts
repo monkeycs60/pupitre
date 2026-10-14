@@ -5,8 +5,8 @@ import type { ProjectDevlogService } from "./project-devlog";
 import type { ProjectResumeService } from "./project-resume";
 import type { ProjectLaunchService } from "./project-launch";
 import { CodeExcerptError, readCodeExcerpt } from "./code-excerpts";
-import { conversationCwd, projectCwd } from "./workspace";
-import { EditorWorkspaceError, openEditorFiles, openEditorWorkspace, planEditorWorkspace } from "./editor-workspace";
+import { conversationCwd, conversationWorktrees, projectCwd } from "./workspace";
+import { changedFiles, EditorWorkspaceError, MAX_CHANGED_FILES_OPENED, openEditorFiles, openEditorWorkspace, planEditorWorkspace } from "./editor-workspace";
 import { resolveCitations, touchedFiles } from "./file-citations";
 import { tmpdir } from "node:os";
 import type { SharedFilesService } from "./shared-files";
@@ -1739,6 +1739,22 @@ export function createServer(deps: ServerDeps) {
             : [];
           const directory = join(deps.instance?.dataDir ?? tmpdir(), "editor-workspaces");
           try {
+            if (body.changed === true) {
+              const work = deps.codeExplorer ? await deps.codeExplorer.conversationCommits(project.id, conversation.id).catch(() => null) : null;
+              const repositories = work && work.total > 0 ? work.repositories : work?.ticket?.repositories ?? [];
+              const owned = [
+                ...conversationWorktrees(conversation),
+                ...plan.folders.filter((folder) => folder.location && !sources.some((source) => source.main && source.path === folder.path)).map((folder) => folder.path),
+              ];
+              const changed = await changedFiles(plan, repositories.map((repository) => ({
+                repositoryPath: repository.repositoryPath,
+                shas: repository.commits.map((entry) => entry.sha),
+              })), owned);
+              const opened = changed.length > 0 && changed.length <= MAX_CHANGED_FILES_OPENED
+                ? openEditorFiles(plan, changed, directory)
+                : openEditorWorkspace(plan, directory);
+              return json({ ...opened, folders: plan.folders, changed: changed.length, openedFiles: changed.length <= MAX_CHANGED_FILES_OPENED ? changed.length : 0 });
+            }
             if (files.length > 0) {
               const worktrees = sources.filter((source) => source.ref === null).map((source) => source.path);
               return json({ ...openEditorFiles(plan, files, directory, worktrees), folders: plan.folders });

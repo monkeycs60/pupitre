@@ -423,6 +423,10 @@ export function openConversationInEditor(conversationId: string, files: EditorFi
   return fetchJson(`/api/conversations/${routeId(conversationId)}/editor`, jsonPost({ files }))
 }
 
+export function openConversationChangesInEditor(conversationId: string): Promise<{ changed: number; openedFiles: number }> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/editor`, jsonPost({ changed: true }))
+}
+
 export type CitationResolution =
   | { status: 'resolved'; path: string; line: number | null; label: string }
   | { status: 'ambiguous'; line: number | null; candidates: Array<{ path: string; label: string }>; more: number }

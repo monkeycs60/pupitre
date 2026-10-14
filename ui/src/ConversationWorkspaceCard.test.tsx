@@ -75,3 +75,27 @@ test('reste invisible tant que ni la conversation ni son ticket n’ont rien com
   await new Promise((resolve) => setTimeout(resolve, 20))
   expect(container.innerHTML).toBe('')
 })
+
+test('ouvre le worktree dans VS Code avec les fichiers modifiés', async () => {
+  const data: CodeConversationCommits = {
+    conversationId: 'conversation-1',
+    total: 1,
+    repositories: [{ repositoryPath: '/mono/apps/reactor', repositoryLabel: 'apps/reactor', commits: [commit('c', 'drawer')] }],
+    ticket: null,
+  }
+  const posted: Array<{ url: string; body: unknown }> = []
+  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (init?.method === 'POST') {
+      posted.push({ url, body: JSON.parse(String(init.body)) })
+      return Response.json({ changed: 3, openedFiles: 3, folders: [] })
+    }
+    return Response.json(data)
+  }) as unknown as typeof fetch
+
+  render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'conversation-1' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir dans VS Code' }))
+
+  await new Promise((settle) => setTimeout(settle, 0))
+  expect(posted).toEqual([{ url: expect.stringContaining('/api/conversations/conversation-1/editor'), body: { changed: true } }])
+})

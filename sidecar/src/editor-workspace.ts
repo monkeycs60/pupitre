@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
 import type { CodeSource } from "./code-explorer";
-import { readHead, ticketKeyOf } from "./git-repositories";
+import { readHead, repositoryOfWorktree, ticketKeyOf } from "./git-repositories";
 import type { Conversation } from "./stores/conversations";
 import type { Project } from "./stores/projects";
 import { conversationWorktrees } from "./workspace";
@@ -251,4 +251,73 @@ export function openEditorFiles(
     Bun.spawn([command, target, "--goto", ...paths], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
   }
   return { targets: [...groups.keys()] };
+}
+
+export const MAX_CHANGED_FILES_OPENED = 10;
+const GENERATED_FILE = /(?:^|\/)(?:dist|build)\/|(?:\.lock|-lock\.json|\.snap)$/;
+
+async function gitOutput(cwd: string, args: string[]): Promise<string> {
+  const child = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "ignore" });
+  const output = await new Response(child.stdout).text();
+  return (await child.exited) === 0 ? output : "";
+}
+
+/** Fichier → première ligne modifiée, dans l'ordre du diff ; le premier diff qui cite un fichier l'emporte. */
+function firstChangedLines(diff: string, into: Map<string, number | null>): void {
+  let current: string | null = null;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("diff --git ")) {
+      const path = line.match(/ b\/(.+)$/)?.[1] ?? null;
+      current = path !== null && !into.has(path) ? path : null;
+      if (current !== null) into.set(current, null);
+    } else if (current !== null && line.startsWith("@@ ")) {
+      const start = Number(line.match(/\+(\d+)/)?.[1] ?? 0);
+      into.set(current, Math.max(1, start));
+      current = null;
+    }
+  }
+}
+
+/**
+ * Fichiers modifiés par le travail d'une conversation, dans les dossiers de sa
+ * fenêtre VS Code : les changements non commités de ses propres worktrees,
+ * puis ceux de ses commits, du plus récent au plus ancien.
+ */
+export async function changedFiles(
+  plan: EditorWorkspacePlan,
+  commits: Array<{ repositoryPath: string; shas: string[] }>,
+  ownedWorktrees: string[],
+): Promise<EditorFileTarget[]> {
+  const owned = new Set(ownedWorktrees.map((path) => resolve(path)));
+  const found: EditorFileTarget[] = [];
+  const seen = new Set<string>();
+  const collect = (folder: string, lines: Map<string, number | null>) => {
+    for (const [path, line] of lines) {
+      const absolute = join(folder, path);
+      if (seen.has(absolute) || GENERATED_FILE.test(path) || !existsSync(absolute)) continue;
+      seen.add(absolute);
+      found.push({ path: absolute, line });
+    }
+  };
+
+  for (const folder of plan.folders) {
+    if (!owned.has(folder.path)) continue;
+    const lines = new Map<string, number | null>();
+    firstChangedLines(await gitOutput(folder.path, ["diff", "-U0", "--no-color", "--no-ext-diff", "HEAD"]), lines);
+    for (const path of (await gitOutput(folder.path, ["ls-files", "-o", "--exclude-standard"])).split("\n")) {
+      if (path && !lines.has(path)) lines.set(path, null);
+    }
+    collect(folder.path, lines);
+  }
+
+  for (const { repositoryPath, shas } of commits) {
+    if (shas.length === 0) continue;
+    const folder = plan.folders.find((candidate) => candidate.location !== undefined && candidate.location !== null
+      && repositoryOfWorktree(candidate.path) === resolve(repositoryPath));
+    if (!folder) continue;
+    const lines = new Map<string, number | null>();
+    firstChangedLines(await gitOutput(folder.path, ["show", "-U0", "--no-color", "--no-ext-diff", "-M", "--format=", ...shas]), lines);
+    collect(folder.path, lines);
+  }
+  return found;
 }

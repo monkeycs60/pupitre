@@ -1894,6 +1894,17 @@
   color: var(--text-strong);
 }
 
+.code-workspace-card-open.is-secondary {
+  color: var(--text-muted);
+  background: transparent;
+  border-color: var(--border);
+}
+
+.code-workspace-card-open.is-secondary:hover {
+  color: var(--text-strong);
+  border-color: var(--accent-border);
+}
+
 .code-workspace-card-repos {
   display: grid;
   gap: 4px;
