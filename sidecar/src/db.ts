@@ -612,6 +612,7 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "effort TEXT NULL");
   addColumn(db, "conversations", "speed TEXT NULL");
   addColumn(db, "conversations", "preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL");
+  addColumn(db, "review_comments", "head_at_send TEXT NULL");
   addColumn(db, "conversations", "permission_mode TEXT NULL");
   addColumn(db, "conversations", "summary TEXT NOT NULL DEFAULT ''");
   addColumn(db, "conversations", "archived INTEGER NOT NULL DEFAULT 0");

@@ -1,6 +1,6 @@
 import { createContext, Fragment, useContext, useEffect, useMemo, useState } from 'react'
 import { createReviewComment, deleteReviewComment, getConversationChanges, listReviewComments, sendReviewComments, updateReviewComment } from './api'
-import type { ChangedFileDiff, ConversationChanges, RepositoryChanges, ReviewComment } from './api'
+import type { ChangedFileDiff, ConversationChanges, RepositoryChanges, ReviewComment, ReviewProgress } from './api'
 import { reviewMessage } from './reviewMessage'
 import { pushToast } from './toasts'
 import { escapeHtml, highlightCode } from './codeHighlight'
@@ -52,6 +52,34 @@ interface ReviewState {
 
 const ReviewContext = createContext<ReviewState | null>(null)
 
+const REVIEW_REFRESH_MS = 30_000
+const PROGRESS_LABELS: Record<ReviewProgress, string> = { treated: 'Traité', 'file-changed': 'Fichier modifié', pending: 'En attente' }
+const PROGRESS_TITLES: Record<ReviewProgress, string> = {
+  treated: 'Les lignes commentées ont changé depuis l’envoi',
+  'file-changed': 'Le fichier a changé depuis l’envoi, mais pas les lignes commentées',
+  pending: 'Rien n’a changé dans ce fichier depuis l’envoi',
+}
+
+function noteState(comment: ReviewComment): { label: string, title: string | undefined, tone: string } {
+  if (comment.status === 'draft') return { label: 'Brouillon', title: undefined, tone: 'draft' }
+  if (!comment.progress) return { label: 'Envoyé', title: undefined, tone: 'sent' }
+  return { label: PROGRESS_LABELS[comment.progress], title: PROGRESS_TITLES[comment.progress], tone: comment.progress }
+}
+
+function progressSummary(comments: ReviewComment[]): string | null {
+  const counts = new Map<ReviewProgress, number>()
+  for (const comment of comments) if (comment.progress) counts.set(comment.progress, (counts.get(comment.progress) ?? 0) + 1)
+  if (counts.size === 0) return null
+  const parts: string[] = []
+  const treated = counts.get('treated') ?? 0
+  const changed = counts.get('file-changed') ?? 0
+  const pending = counts.get('pending') ?? 0
+  if (treated) parts.push(`${treated} traité${treated > 1 ? 's' : ''}`)
+  if (changed) parts.push(`${changed} à vérifier`)
+  if (pending) parts.push(`${pending} en attente`)
+  return parts.join(' · ')
+}
+
 function sameFile(comment: { worktree_path: string, path: string }, worktreePath: string, path: string): boolean {
   return comment.worktree_path === worktreePath && comment.path === path
 }
@@ -93,9 +121,10 @@ function ReviewNote({ comment, orphan = false }: { comment: ReviewComment, orpha
       <ReviewForm initial={comment.body} label={`Modifier le commentaire, ${lines}`} onCancel={() => setEditing(false)} onSave={async (body) => { await review.update(comment.id, body); setEditing(false) }} />
     </div>
   }
+  const state = noteState(comment)
   return <div className={`review-note is-${comment.status}`}>
     <div className="review-note-meta">
-      <span className="review-note-status">{comment.status === 'draft' ? 'Brouillon' : 'Envoyé'}</span>
+      <span className={`review-note-status is-${state.tone}`} title={state.title}>{state.label}</span>
       <span>{lines}{orphan ? ' · absente du diff actuel' : ''}</span>
       {comment.status === 'draft' ? <>
         <button type="button" onClick={() => setEditing(true)}>Modifier</button>
@@ -182,7 +211,13 @@ function FileDiff({ file, group, collapsed, onToggle, id }: { file: ChangedFileD
         {file.previousPath ? <><span className="changes-file-previous">{file.previousPath}</span> → </> : null}
         {file.path}
       </span>
-      {comments.length > 0 ? <span className="changes-file-comments">{comments.length} commentaire{comments.length > 1 ? 's' : ''}</span> : null}
+      {comments.length > 0 ? (() => {
+        const summary = progressSummary(comments)
+        const pending = comments.some((comment) => comment.progress === 'pending' || comment.progress === 'file-changed')
+        return summary
+          ? <span className={`changes-file-comments review-progress${pending ? ' is-open' : ' is-done'}`} title="Commentaires de relecture envoyés">{summary}</span>
+          : <span className="changes-file-comments">{comments.length} commentaire{comments.length > 1 ? 's' : ''}</span>
+      })() : null}
       <span className="changes-file-stats"><span className="is-added">+{file.added}</span> <span className="is-removed">−{file.removed}</span></span>
       {file.absolutePath !== null && access !== null ? (
         <button type="button" className="changes-file-open" onClick={() => open(file.firstLine)} title={`Ouvrir dans VS Code${file.firstLine ? `, ligne ${file.firstLine}` : ''}`}>
@@ -285,11 +320,22 @@ export function ConversationChangesView({ conversationId, onSendReview }: { conv
   const [comments, setComments] = useState<ReviewComment[]>([])
   const [editing, setEditing] = useState<ReviewDraft | null>(null)
 
+  const [reloads, setReloads] = useState(0)
+
   useEffect(() => {
     const controller = new AbortController()
-    listReviewComments(conversationId, controller.signal).then((list) => setComments(Array.isArray(list) ? list : [])).catch(() => {})
-    return () => controller.abort()
-  }, [conversationId])
+    const load = () => {
+      listReviewComments(conversationId, controller.signal).then((list) => setComments(Array.isArray(list) ? list : [])).catch(() => {})
+    }
+    load()
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') load()
+    }, REVIEW_REFRESH_MS)
+    return () => {
+      controller.abort()
+      window.clearInterval(timer)
+    }
+  }, [conversationId, reloads])
 
   const failed = (title: string) => (reason: unknown) => {
     pushToast({ tone: 'danger', title, detail: reason instanceof Error ? reason.message : String(reason) })
@@ -346,6 +392,7 @@ export function ConversationChangesView({ conversationId, onSendReview }: { conv
     try {
       const sent = new Set((await sendReviewComments(conversationId)).map((comment) => comment.id))
       setComments((current) => current.map((comment) => (sent.has(comment.id) ? { ...comment, status: 'sent' } : comment)))
+      setReloads((count) => count + 1)
       pushToast({ tone: 'ok', title: 'Relecture ajoutée au message', detail: `${drafts.length} commentaire${drafts.length > 1 ? 's' : ''} dans le composer, prêt${drafts.length > 1 ? 's' : ''} à envoyer` })
     } catch (reason) { failed('Relecture non marquée comme envoyée')(reason) }
   }

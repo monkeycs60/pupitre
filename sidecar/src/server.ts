@@ -107,6 +107,7 @@ import type { ProblemAxisRunStore } from "./stores/problem-axis-runs";
 import type { AttentionItemStore } from "./stores/attention-items";
 import type { ConversationLinkStore } from "./stores/conversation-links";
 import type { ReviewCommentInput, ReviewCommentStore } from "./stores/review-comments";
+import { reviewProgress, snapshotOf } from "./review-progress";
 import { VscodeWebError, type VscodeWebService } from "./vscode-web";
 import { closeVscodeWebSocket, isVscodeWebPath, openVscodeWebSocket, proxyVscodeWeb, relayToVscodeWeb, type VscodeWebSocketData } from "./vscode-web-proxy";
 import type { ProblemService } from "./problems";
@@ -1691,8 +1692,14 @@ export function createServer(deps: ServerDeps) {
           const conversationId = decodeURIComponent(reviewRoute[1]!);
           if (!deps.conversations.get(conversationId)) throw new HttpError(404, "conversation inconnue");
           const target = reviewRoute[2] ? decodeURIComponent(reviewRoute[2]) : null;
-          if (request.method === "GET" && target === null) return json(store.list(conversationId));
-          if (request.method === "POST" && target === "send") return json(store.markSent(conversationId));
+          if (request.method === "GET" && target === null) {
+            return json(await Promise.all(store.list(conversationId).map(async (comment) => ({ ...comment, progress: await reviewProgress(comment) }))));
+          }
+          if (request.method === "POST" && target === "send") {
+            const worktrees = [...new Set(store.list(conversationId).filter((comment) => comment.status === "draft").map((comment) => comment.worktree_path))];
+            const heads = new Map(await Promise.all(worktrees.map(async (path) => [path, await snapshotOf(path)] as const)));
+            return json(store.markSent(conversationId, heads));
+          }
           if (request.method === "POST" && target === null) {
             const body = await readObject(request);
             const side = body.side === "old" ? "old" : "new";

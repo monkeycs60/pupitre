@@ -179,3 +179,38 @@ test('commente une ligne du diff puis dépose la relecture dans le composer', as
   expect(sentToComposer[0]).toContain('1. `lib/gate.js:2` (hapigator)\n   > const b = 3\n   Garde b à 2.')
   expect(calls).toContain('POST /api/conversations/conversation-1/review-comments/send')
 })
+
+test('montre l’avancement des commentaires envoyés sous leurs lignes et dans l’en-tête du fichier', async () => {
+  const data: CodeConversationCommits = {
+    conversationId: 'conversation-1',
+    total: 1,
+    repositories: [{ repositoryPath: '/mono/apps/hapigator', repositoryLabel: 'apps/hapigator', commits: [commit('a', 'gate')] }],
+    ticket: null,
+  }
+  const diff = 'diff --git a/lib/gate.js b/lib/gate.js\n--- a/lib/gate.js\n+++ b/lib/gate.js\n@@ -1,3 +1,3 @@\n const a = 1\n-const b = 2\n+const b = 3\n const c = 4'
+  const changes = {
+    truncated: false,
+    repositories: [{
+      repositoryLabel: 'hapigator', worktreePath: '/w/hapigator-t1', branch: 'feature/T-1', kind: 'commits', commits: 1, title: null,
+      files: [{ path: 'lib/gate.js', previousPath: null, status: 'modified', added: 1, removed: 1, binary: false, generated: false, truncated: false, absolutePath: '/w/hapigator-t1/lib/gate.js', firstLine: 2, diff }],
+    }],
+  }
+  const comment = (id: string, line: number, progress: string) => ({
+    id, conversation_id: 'conversation-1', repository_label: 'hapigator', worktree_path: '/w/hapigator-t1', path: 'lib/gate.js', side: 'new',
+    start_line: line, end_line: line, line_text: '', body: `Commentaire ${id}`, status: 'sent', created_at: '2026-10-14T20:00:00Z', sent_at: '2026-10-14T20:05:00Z', progress,
+  })
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/review-comments')) return Response.json([comment('r1', 2, 'treated'), comment('r2', 3, 'pending')])
+    if (url.endsWith('/changes')) return Response.json(changes)
+    return Response.json(data)
+  }) as unknown as typeof fetch
+
+  render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'conversation-1', onSendReview: () => {} }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Voir les changements' }))
+
+  expect((await screen.findByText('1 traité · 1 en attente')).className).toContain('is-open')
+  expect([...document.querySelectorAll('.review-note-status')].map((status) => [status.textContent, status.className.split(' ').at(-1)])).toEqual([
+    ['Traité', 'is-treated'], ['En attente', 'is-pending'],
+  ])
+})

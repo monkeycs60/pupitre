@@ -17,6 +17,8 @@ export interface ReviewComment {
   status: ReviewCommentStatus;
   created_at: string;
   sent_at: string | null;
+  /** État du worktree au moment de l'envoi (commit ou stash), référence pour juger si le commentaire a été traité. */
+  head_at_send: string | null;
 }
 
 export interface ReviewCommentInput {
@@ -65,11 +67,15 @@ export class ReviewCommentStore {
     return this.db.query("DELETE FROM review_comments WHERE id = ?").run(id).changes > 0;
   }
 
-  /** Passe les brouillons de la conversation à « envoyé » et les renvoie dans l'ordre de création. */
-  markSent(conversationId: string): ReviewComment[] {
+  /**
+   * Passe les brouillons de la conversation à « envoyé » en retenant, par
+   * worktree, l'état donné par `snapshotOf`, et les renvoie dans l'ordre de création.
+   */
+  markSent(conversationId: string, heads: Map<string, string | null> = new Map()): ReviewComment[] {
     const drafts = this.list(conversationId).filter((comment) => comment.status === "draft");
-    this.db.query("UPDATE review_comments SET status = 'sent', sent_at = ? WHERE conversation_id = ? AND status = 'draft'")
-      .run(new Date().toISOString(), conversationId);
-    return drafts;
+    const now = new Date().toISOString();
+    const update = this.db.query("UPDATE review_comments SET status = 'sent', sent_at = ?, head_at_send = ? WHERE id = ?");
+    for (const draft of drafts) update.run(now, heads.get(draft.worktree_path) ?? null, draft.id);
+    return drafts.map((draft) => this.get(draft.id)!);
   }
 }

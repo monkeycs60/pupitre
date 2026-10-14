@@ -325,10 +325,6 @@
   font-weight: 600;
 }
 
-.review-note.is-sent .review-note-status {
-  color: var(--ok);
-}
-
 .review-note-meta button,
 .review-form-actions button {
   padding: 2px 8px;
@@ -414,4 +410,25 @@
 .review-bar button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.review-note-status.is-treated { color: var(--ok); }
+.review-note-status.is-file-changed { color: var(--warn); }
+.review-note-status.is-pending { color: var(--text-muted); }
+
+.review-progress {
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.review-progress.is-done {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+
+.review-progress.is-open {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
 }

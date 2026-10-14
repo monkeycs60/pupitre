@@ -473,7 +473,12 @@ export interface ReviewComment {
   status: 'draft' | 'sent'
   created_at: string
   sent_at: string | null
+  head_at_send?: string | null
+  /** Avancement d'un commentaire envoyé, d'après le code actuel ; nul pour un brouillon. */
+  progress?: ReviewProgress | null
 }
+
+export type ReviewProgress = 'treated' | 'file-changed' | 'pending'
 
 export interface ReviewCommentInput {
   repositoryLabel: string
