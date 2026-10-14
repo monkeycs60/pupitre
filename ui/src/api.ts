@@ -412,8 +412,22 @@ export interface EditorFolder {
   branch: string | null
 }
 
-export function openConversationInEditor(conversationId: string): Promise<{ target: string; folders: EditorFolder[] }> {
-  return fetchJson(`/api/conversations/${routeId(conversationId)}/editor`, jsonPost({}))
+export interface EditorFileTarget {
+  path: string
+  line: number | null
+}
+
+export function openConversationInEditor(conversationId: string, files: EditorFileTarget[] = []): Promise<{ folders: EditorFolder[] }> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/editor`, jsonPost({ files }))
+}
+
+export type CitationResolution =
+  | { status: 'resolved'; path: string; line: number | null; label: string }
+  | { status: 'ambiguous'; line: number | null; candidates: Array<{ path: string; label: string }>; more: number }
+  | { status: 'missing' }
+
+export function resolveFileCitations(conversationId: string, texts: string[]): Promise<Record<string, CitationResolution>> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/editor/citations`, jsonPost({ texts }))
 }
 
 export function openDocumentInSystem(id: string): Promise<{ ok: true }> {

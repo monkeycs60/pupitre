@@ -150,15 +150,89 @@ function editorCommand(): string {
   return found;
 }
 
+function writeWorkspace(plan: EditorWorkspacePlan, directory: string): string {
+  if (!plan.workspace) return plan.folders[0]!.path;
+  mkdirSync(directory, { recursive: true });
+  const target = join(directory, plan.workspace.fileName);
+  writeFileSync(target, `${JSON.stringify(plan.workspace.content, null, 2)}\n`);
+  return target;
+}
+
 /** Ouvre VS Code dans une nouvelle fenêtre ; les fenêtres déjà ouvertes ne bougent pas. */
 export function openEditorWorkspace(plan: EditorWorkspacePlan, directory: string): { target: string } {
   const command = editorCommand();
-  let target = plan.folders[0]!.path;
-  if (plan.workspace) {
-    mkdirSync(directory, { recursive: true });
-    target = join(directory, plan.workspace.fileName);
-    writeFileSync(target, `${JSON.stringify(plan.workspace.content, null, 2)}\n`);
-  }
+  const target = writeWorkspace(plan, directory);
   Bun.spawn([command, "--new-window", target], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
   return { target };
+}
+
+function vscodeStoragePath(): string {
+  if (process.platform === "darwin") return join(homedir(), "Library/Application Support/Code/User/globalStorage/storage.json");
+  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "Code/User/globalStorage/storage.json");
+}
+
+/** Dossiers et fichiers `.code-workspace` des fenêtres VS Code ouvertes, d'après l'état que VS Code tient à jour. */
+export function openEditorWindows(storagePath = vscodeStoragePath()): Set<string> {
+  const opened = new Set<string>();
+  let state: { windowsState?: { lastActiveWindow?: unknown; openedWindows?: unknown[] } };
+  try {
+    state = JSON.parse(readFileSync(storagePath, "utf8"));
+  } catch {
+    return opened;
+  }
+  const windows = [state.windowsState?.lastActiveWindow, ...(state.windowsState?.openedWindows ?? [])];
+  for (const window of windows) {
+    if (typeof window !== "object" || window === null) continue;
+    const { folder, workspaceIdentifier } = window as { folder?: unknown; workspaceIdentifier?: { configURIPath?: unknown } };
+    for (const uri of [folder, workspaceIdentifier?.configURIPath]) {
+      if (typeof uri !== "string" || !uri.startsWith("file://")) continue;
+      try {
+        opened.add(resolve(decodeURIComponent(new URL(uri).pathname)));
+      } catch {
+        // URI illisible : la fenêtre est ignorée.
+      }
+    }
+  }
+  return opened;
+}
+
+export interface EditorFileTarget {
+  path: string;
+  line: number | null;
+}
+
+/**
+ * Une fenêtre VS Code par worktree : chaque fichier s'ouvre en onglet dans la
+ * fenêtre de la conversation si elle est ouverte, sinon dans une fenêtre déjà
+ * ouverte sur son worktree, sinon dans une nouvelle fenêtre de la conversation.
+ */
+export function openEditorFiles(
+  plan: EditorWorkspacePlan,
+  files: EditorFileTarget[],
+  directory: string,
+  windows = openEditorWindows(),
+): { targets: string[] } {
+  const command = editorCommand();
+  const conversationTarget = writeWorkspace(plan, directory);
+  const groups = new Map<string, string[]>();
+  for (const file of files) {
+    const path = resolve(file.path);
+    let target = conversationTarget;
+    if (!windows.has(conversationTarget)) {
+      const owner = [...windows]
+        .filter((opened) => path.startsWith(`${opened}/`))
+        .sort((left, right) => right.length - left.length)[0];
+      const worktree = plan.folders
+        .filter((folder) => path.startsWith(`${folder.path}/`))
+        .sort((left, right) => right.path.length - left.path.length)[0];
+      if (owner && (!worktree || owner.length >= worktree.path.length)) target = owner;
+    }
+    const list = groups.get(target) ?? [];
+    list.push(file.line ? `${path}:${file.line}` : path);
+    groups.set(target, list);
+  }
+  for (const [target, paths] of groups) {
+    Bun.spawn([command, target, "--goto", ...paths], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
+  }
+  return { targets: [...groups.keys()] };
 }

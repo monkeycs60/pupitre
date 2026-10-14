@@ -1,3 +1,4 @@
+import { CitedFilesAction } from './FileCitation'
 import { memo, useState, type ReactNode } from 'react'
 import Markdown from './Markdown'
 import { eventIdOfBlock, type EventBlock } from './eventBlocks'
@@ -371,6 +372,7 @@ function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFoot
               suit le texte au caractère près au lieu de flotter dessous. */}
           <div className={`message-bubble assistant-message${block.streaming ? ' is-streaming' : ''}`}>
             <Markdown scope={block.id} onImageOpen={onImageOpen} onImageLoad={onImageLoad}>{block.text}</Markdown>
+            {block.streaming ? null : <CitedFilesAction text={block.text} />}
           </div>
         </article>
       )

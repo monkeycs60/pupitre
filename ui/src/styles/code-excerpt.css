@@ -17,7 +17,9 @@
 }
 .code-excerpt-file { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .code-excerpt-file > svg { flex: none; width: 20px; height: 20px; }
-.code-excerpt-file > div { display: grid; gap: 3px; min-width: 0; }
+.code-excerpt-file > div, .code-excerpt-file > a { display: grid; gap: 3px; min-width: 0; }
+.code-excerpt-open { color: inherit; text-decoration: none; }
+.code-excerpt-open:hover strong, .code-excerpt-open:focus-visible strong { color: var(--accent-bright); text-decoration: underline; text-underline-offset: 3px; }
 .code-excerpt-file strong { font: 600 13px var(--font-mono); color: var(--text); }
 .code-excerpt-file span { font: 11px var(--font-mono); color: var(--text-muted); }
 .code-excerpt-file strong, .code-excerpt-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

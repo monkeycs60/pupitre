@@ -8,6 +8,7 @@ import { ActionFormatContext, headingKind } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { mediaUrl } from './transport'
 import { ExternalLink, LocalFileLink, localFilePath } from './externalLink'
+import { FileCitation } from './FileCitation'
 
 /** GFM : tableaux, listes de tâches, barré, autolinks. */
 const REMARK_PLUGINS = [remarkGfm]
@@ -26,6 +27,7 @@ interface SectionRange {
 }
 
 const MARKDOWN_SCOPE = createContext('global')
+const INSIDE_PRE = createContext(false)
 const MARKDOWN_IMAGE_CONTEXT = createContext<{
   onOpen?: (src: string, alt: string) => void
   onLoad?: () => void
@@ -344,6 +346,12 @@ function CopyablePre({ node, children, ...props }: any) {
   )
 }
 
+function InlineCode({ node: _node, children, ...props }: any) {
+  const insidePre = useContext(INSIDE_PRE)
+  if (insidePre || typeof children !== 'string') return <code {...props}>{children}</code>
+  return <FileCitation text={children}>{children}</FileCitation>
+}
+
 const COMPONENTS = {
   img: MarkdownImage,
   a: ({ node: _node, href, children, ...props }: any) => {
@@ -379,8 +387,9 @@ const COMPONENTS = {
     if (chart !== null) return <Mermaid chart={chart} />
     const commit = fencedSource(node, 'commit')
     if (commit !== null) return <CommitBlock message={commit} />
-    return <CopyablePre node={node} {...props}>{children}</CopyablePre>
+    return <INSIDE_PRE.Provider value><CopyablePre node={node} {...props}>{children}</CopyablePre></INSIDE_PRE.Provider>
   },
+  code: InlineCode,
 }
 
 /** Rendu Markdown unique de l'app : tout passe par ici pour rester cohérent. */

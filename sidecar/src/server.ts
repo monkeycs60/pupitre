@@ -6,14 +6,15 @@ import type { ProjectResumeService } from "./project-resume";
 import type { ProjectLaunchService } from "./project-launch";
 import { CodeExcerptError, readCodeExcerpt } from "./code-excerpts";
 import { conversationCwd, projectCwd } from "./workspace";
-import { EditorWorkspaceError, openEditorWorkspace, planEditorWorkspace } from "./editor-workspace";
+import { EditorWorkspaceError, openEditorFiles, openEditorWorkspace, planEditorWorkspace } from "./editor-workspace";
+import { resolveCitations, touchedFiles } from "./file-citations";
 import { tmpdir } from "node:os";
 import type { SharedFilesService } from "./shared-files";
 import { TodoError, type TodoService } from "./todos";
 import type { TodoInput } from "./stores/todos";
 import { ActivityBusyError, ActivityNotFoundError, type ActivityReportService } from "./activity-report";
 import type { ServerWebSocket } from "bun";
-import { basename, extname, join, resolve as resolvePath } from "node:path";
+import { basename, extname, isAbsolute, join, resolve as resolvePath } from "node:path";
 import { detectProjectLogo, LOGO_MIME_TYPES } from "./project-logo";
 import { existsSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -1707,17 +1708,32 @@ export function createServer(deps: ServerDeps) {
           }
         }
 
-        const editorConversationId = routeId(pathname, /^\/api\/conversations\/([^/]+)\/editor$/);
-        if (request.method === "POST" && editorConversationId !== null) {
-          const conversation = deps.conversations.get(editorConversationId);
+        const editorRoute = pathname.match(/^\/api\/conversations\/([^/]+)\/editor(\/citations)?$/);
+        if (request.method === "POST" && editorRoute) {
+          const conversation = deps.conversations.get(decodeURIComponent(editorRoute[1]!));
           if (!conversation) throw new HttpError(404, "conversation inconnue");
           const project = deps.projects.get(conversation.project_id);
           if (!project) throw new HttpError(404, "projet inconnu");
+          const body = await readObject(request);
           const sources = deps.codeExplorer ? await deps.codeExplorer.sources(project.id).catch(() => []) : [];
           const plan = planEditorWorkspace(project, conversation, sources);
+          if (editorRoute[2]) {
+            const texts = Array.isArray(body.texts) ? body.texts.filter((text): text is string => typeof text === "string").slice(0, 300) : [];
+            const touched = touchedFiles(deps.conversations.listEvents(conversation.id)
+              .flatMap((event) => event.type === "tool-start" ? [event.input] : []));
+            return json(await resolveCitations(texts, plan.folders, conversationCwd(project, conversation), [project.path], touched));
+          }
+          const files = Array.isArray(body.files)
+            ? body.files.flatMap((file) => {
+              const { path, line } = (file ?? {}) as { path?: unknown; line?: unknown };
+              if (typeof path !== "string" || !isAbsolute(path) || !existsSync(path)) return [];
+              return [{ path, line: typeof line === "number" && line > 0 ? Math.floor(line) : null }];
+            })
+            : [];
+          const directory = join(deps.instance?.dataDir ?? tmpdir(), "editor-workspaces");
           try {
-            const opened = openEditorWorkspace(plan, join(deps.instance?.dataDir ?? tmpdir(), "editor-workspaces"));
-            return json({ ...opened, folders: plan.folders });
+            if (files.length > 0) return json({ ...openEditorFiles(plan, files, directory), folders: plan.folders });
+            return json({ ...openEditorWorkspace(plan, directory), folders: plan.folders });
           } catch (error) {
             if (error instanceof EditorWorkspaceError) throw new HttpError(503, error.message);
             throw error;

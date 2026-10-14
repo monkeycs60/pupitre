@@ -4,6 +4,7 @@ import { FileTypeIcon } from './FileTypeIcon'
 import { highlightCode, languageForPath, plainCodeLines, splitCodeLines } from './codeHighlight'
 import { useVirtualWindow } from './useVirtualWindow'
 import Markdown from './Markdown'
+import { FILE_CITATION_HINT, openFileTarget, useFileCitation } from './FileCitation'
 import './styles/code-excerpt.css'
 
 const LINE_HEIGHT = 22
@@ -20,6 +21,7 @@ export function CodeExcerptCard({ block }: { block: CodeExcerptBlock }) {
   const pathParts = block.path.split('/')
   const name = pathParts.pop()
   const directory = pathParts.join('/')
+  const { access, resolution } = useFileCitation(`./${block.path}`)
   const range = block.startLine === block.endLine ? `L${block.startLine}` : `L${block.startLine}–${block.endLine}`
 
   useEffect(() => {
@@ -55,7 +57,16 @@ export function CodeExcerptCard({ block }: { block: CodeExcerptBlock }) {
     <header className="code-excerpt-header">
       <div className="code-excerpt-file" title={block.path}>
         <FileTypeIcon path={block.path} />
-        <div><strong>{name}</strong>{directory && <span>{directory}/</span>}</div>
+        {access !== null && resolution?.status === 'resolved' ? (
+          <a
+            className="code-excerpt-open"
+            href="#"
+            title={`${resolution.label}:${block.startLine}\n${FILE_CITATION_HINT}`}
+            onClick={(event) => openFileTarget(access, event, resolution.path, block.startLine)}
+          >
+            <strong>{name}</strong>{directory && <span>{directory}/</span>}
+          </a>
+        ) : <div><strong>{name}</strong>{directory && <span>{directory}/</span>}</div>}
       </div>
       <div className="code-excerpt-actions">
         <button type="button" className="code-excerpt-focus" onClick={focusPassage} title="Revenir au passage cité">{range} <span aria-hidden="true">↗</span></button>
