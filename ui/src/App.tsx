@@ -10,7 +10,7 @@ import { TodoList } from './TodoList'
 import { WorkflowsView } from './WorkflowsView'
 import { isSuggestion, linkTodo, useTodos, type TodoItem } from './todos'
 import { ticketLinksOf } from './ticketLinks'
-import { newConversationDraftStorageKey } from './conversationDraft'
+import { handoffDraftMessage, newConversationDraftStorageKey } from './conversationDraft'
 import type { ConversationConfig } from './ConfigPanel'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type {
@@ -542,7 +542,7 @@ function App() {
   const toolFileAccess = useMemo(() => (
     selectedProjectId === null
       ? null
-      : createToolFileAccess(selectedProjectId, (location, line) => openToolFileRef.current(location, line))
+      : createToolFileAccess(selectedProjectId, selectedConversation?.id ?? null, (location, line) => openToolFileRef.current(location, line))
   ), [selectedProjectId, selectedConversation?.id])
 
   function openToolFileInCode(location: ToolFileLocation, line: number | null) {
@@ -790,6 +790,33 @@ function App() {
     setSelectedConversation(conversation)
     setShowSwitchModel(false)
     setConversationListVersion((current) => current + 1)
+  }
+
+  /** Handoff posé dans le composer d'une nouvelle conversation, sans envoi. */
+  function handleHandoffDraft(source: Conversation, handoffMd: string) {
+    if (!confirmLeaveMemory() || selectedProject === null) return
+    try { localStorage.removeItem(newConversationDraftStorageKey(selectedProject.id, source.ticket_id)) } catch { /* stockage indisponible */ }
+    setShowHandoff(false)
+    setSelectedConversation(null)
+    setEditingTodo(null)
+    setConversationSeed({
+      ticketId: source.ticket_id,
+      ticketKey: source.ticket_key ?? null,
+      branch: null,
+      config: {
+        provider: source.provider,
+        model: source.model,
+        effort: source.effort ?? 'high',
+        speed: source.speed ?? 'standard',
+        permissionMode: source.permission_mode ?? null,
+      },
+    })
+    setNewConversationDraft(handoffDraftMessage(source, handoffMd))
+    setNewConversationAttachments([])
+    setIsCreatingConversation(true)
+    setShowSwitchModel(false)
+    setTodoMode(false)
+    setWorkspaceView('conversations')
   }
 
   function handleConversationHandoff(conversation: Conversation) {
@@ -1306,8 +1333,9 @@ function App() {
               <HandoffModal
                 key={`handoff-${selectedConversation.id}`}
                 conversation={selectedConversation}
+                startWith="handoff"
                 onClose={() => setShowHandoff(false)}
-                onCreated={handleConversationHandoff}
+                onDraft={(handoffMd) => handleHandoffDraft(selectedConversation, handoffMd)}
               />
             ) : null}
           </>

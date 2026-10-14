@@ -497,15 +497,12 @@ export function Chat({
   // fil entier était reconstruit à chaque touche.
   const turnFooterAction = useMemo(() => (
     conversation !== null && !isRunning ? (
-      <>
-        <ContextGauge conversation={conversation} events={events} onHandoff={onHandoff} />
-        <SessionSummaryAction
-          conversationId={conversation.id}
-          unsummarized={unsummarized}
-        />
-      </>
+      <SessionSummaryAction
+        conversationId={conversation.id}
+        unsummarized={unsummarized}
+      />
     ) : undefined
-  ), [conversation, isRunning, events, unsummarized, onHandoff])
+  ), [conversation, isRunning, unsummarized])
 
   async function handleComposerAction(action: ComposerAction) {
     if (!conversation) return
@@ -640,6 +637,9 @@ export function Chat({
             missionTitle={missionTitle}
             onAction={(action) => void handleComposerAction(action)}
             onImageOpen={handleImageOpen}
+            contextGauge={conversation
+              ? <ContextGauge conversation={conversation} events={events} onHandoff={onHandoff} />
+              : null}
           />
         </div>
       </div>

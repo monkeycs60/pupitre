@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { listSkills } from './api'
-import type { SkillProvenance, SkillSummary } from './types'
+import { listConversationReferences, listSkills } from './api'
+import type { ConversationReference, SkillProvenance, SkillSummary } from './types'
 import { COMPOSER_DIRECTIVES } from './composerDirectives'
 
 /**
  * Popover unique du composer, trois déclencheurs : `$` liste les skills,
- * `@` les outils
+ * `@` les outils puis les conversations de tous les projets
  * (sélection = insertion de l'invocation dans le message), `/` en tête de
  * message liste les actions de la conversation (sélection = exécution).
  * La palette globale Ctrl K reste une surface distincte : ici on complète le
@@ -102,10 +102,18 @@ export function rankSkills(skills: SkillSummary[], projectId: string): SkillSumm
     })
 }
 
+/** Le sidecar résout `@[Titre]` en id de conversation au moment du tour. */
+export function conversationMention(title: string): string {
+  return `@[${title.replace(/[\]\n]/g, ' ').trim()}]`
+}
+
+const CONVERSATION_SUGGESTIONS = 8
+
 export interface ComposerPaletteItems {
   skills: SkillSummary[]
   actions: ComposerActionItem[]
   tools: ComposerToolItem[]
+  conversations: ConversationReference[]
   count: number
   totalSkills: number
 }
@@ -114,10 +122,26 @@ export interface ComposerPaletteItems {
 export function useComposerPaletteItems(
   trigger: ComposerPaletteTrigger | null,
   projectId: string,
-  hasConversation: boolean,
+  conversationId: string | null,
 ): ComposerPaletteItems {
+  const hasConversation = conversationId !== null
   const [skills, setSkills] = useState<SkillSummary[]>([])
+  const [conversations, setConversations] = useState<ConversationReference[]>([])
   const open = trigger !== null
+  const toolsOpen = trigger?.mode === 'tools'
+
+  useEffect(() => {
+    if (!toolsOpen) return
+    let ignore = false
+    const controller = new AbortController()
+    void listConversationReferences('', 500, controller.signal)
+      .then((loaded) => { if (!ignore) setConversations(loaded) })
+      .catch(() => {})
+    return () => {
+      ignore = true
+      controller.abort()
+    }
+  }, [toolsOpen])
 
   useEffect(() => {
     if (!open) return
@@ -153,13 +177,22 @@ export function useComposerPaletteItems(
       : [],
     [trigger?.mode, trigger?.query],
   )
+  const conversationItems = useMemo(
+    () => trigger?.mode === 'tools'
+      ? conversations
+        .filter((item) => item.id !== conversationId && matches(trigger.query, item.title, item.project_name))
+        .slice(0, CONVERSATION_SUGGESTIONS)
+      : [],
+    [conversations, conversationId, trigger?.mode, trigger?.query],
+  )
   return {
     skills: skillItems,
     actions: actionItems,
     tools: toolItems,
+    conversations: conversationItems,
     count: trigger?.mode === 'skills'
       ? skillItems.length
-      : trigger?.mode === 'tools' ? toolItems.length : actionItems.length,
+      : trigger?.mode === 'tools' ? toolItems.length + conversationItems.length : actionItems.length,
     totalSkills: ranked.length,
   }
 }
@@ -171,6 +204,7 @@ interface ComposerPaletteProps {
   onSelectedIndexChange: (index: number) => void
   onSkillPick: (skill: SkillSummary) => void
   onToolPick: (tool: ComposerToolItem) => void
+  onConversationPick: (conversation: ConversationReference) => void
   onAction: (action: ComposerAction) => void
   hasConversation: boolean
 }
@@ -182,6 +216,7 @@ export function ComposerPalette({
   onSelectedIndexChange,
   onSkillPick,
   onToolPick,
+  onConversationPick,
   onAction,
   hasConversation,
 }: ComposerPaletteProps) {
@@ -200,7 +235,7 @@ export function ComposerPalette({
           <p className="composer-palette-empty">
             {trigger.mode === 'skills'
               ? 'Aucun skill ne correspond.'
-              : trigger.mode === 'tools' ? 'Aucun outil ne correspond.'
+              : trigger.mode === 'tools' ? 'Aucun outil ni conversation ne correspond.'
               : hasConversation ? 'Aucune action ne correspond.' : 'Les actions demandent une conversation ouverte.'}
           </p>
         ) : null}
@@ -219,20 +254,44 @@ export function ComposerPalette({
             <span className="composer-palette-description">{skill.description || skill.name}</span>
             <span className="composer-palette-source">{PROVENANCE_LABELS[skill.provenance]}</span>
           </button>
-        )) : trigger.mode === 'tools' ? items.tools.map((tool, index) => (
-          <button
-            type="button"
-            key={tool.id}
-            className={`composer-palette-row${index === selectedIndex ? ' is-selected' : ''}`}
-            role="option"
-            aria-selected={index === selectedIndex}
-            onMouseEnter={() => onSelectedIndexChange(index)}
-            onMouseDown={(event) => { event.preventDefault(); onToolPick(tool) }}
-          >
-            <span className="composer-palette-invocation">@{tool.label}</span>
-            <span className="composer-palette-description">{tool.detail}</span>
-          </button>
-        )) : items.actions.map((action, index) => (
+        )) : trigger.mode === 'tools' ? (
+          <>
+            {items.tools.map((tool, index) => (
+              <button
+                type="button"
+                key={tool.id}
+                className={`composer-palette-row${index === selectedIndex ? ' is-selected' : ''}`}
+                role="option"
+                aria-selected={index === selectedIndex}
+                onMouseEnter={() => onSelectedIndexChange(index)}
+                onMouseDown={(event) => { event.preventDefault(); onToolPick(tool) }}
+              >
+                <span className="composer-palette-invocation">@{tool.label}</span>
+                <span className="composer-palette-description">{tool.detail}</span>
+              </button>
+            ))}
+            {items.conversations.length > 0 ? (
+              <p className="composer-palette-section" role="presentation">Conversations</p>
+            ) : null}
+            {items.conversations.map((conversation, offset) => {
+              const index = items.tools.length + offset
+              return (
+                <button
+                  type="button"
+                  key={conversation.id}
+                  className={`composer-palette-row is-conversation${index === selectedIndex ? ' is-selected' : ''}`}
+                  role="option"
+                  aria-selected={index === selectedIndex}
+                  onMouseEnter={() => onSelectedIndexChange(index)}
+                  onMouseDown={(event) => { event.preventDefault(); onConversationPick(conversation) }}
+                >
+                  <span className="composer-palette-description">{conversation.title}</span>
+                  <span className="composer-palette-source">{conversation.project_name}</span>
+                </button>
+              )
+            })}
+          </>
+        ) : items.actions.map((action, index) => (
           <button
             type="button"
             key={action.id}
@@ -254,7 +313,9 @@ export function ComposerPalette({
         <span className="composer-palette-count">
           {trigger.mode === 'skills'
             ? `${items.count} / ${items.totalSkills} skills`
-            : trigger.mode === 'tools' ? `${items.count} outil${items.count > 1 ? 's' : ''}` : `${items.count} action${items.count > 1 ? 's' : ''}`}
+            : trigger.mode === 'tools'
+              ? `${items.tools.length} outil${items.tools.length > 1 ? 's' : ''} · ${items.conversations.length} conversation${items.conversations.length > 1 ? 's' : ''}`
+              : `${items.count} action${items.count > 1 ? 's' : ''}`}
         </span>
       </footer>
     </div>

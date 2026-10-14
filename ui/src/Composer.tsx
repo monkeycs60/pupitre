@@ -5,6 +5,7 @@ import type {
   DragEvent,
   FormEvent,
   KeyboardEvent,
+  ReactNode,
 } from 'react'
 import {
   ApiError,
@@ -21,9 +22,9 @@ import { createTodo, updateTodo, type TodoFinish, type TodoItem } from './todos'
 import { TodoFinishMenu } from './TodoFinishMenu'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { ProviderMark } from './ProviderMark'
-import { ComposerPalette, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
+import { ComposerPalette, conversationMention, paletteTrigger, useComposerPaletteItems } from './ComposerPalette'
 import type { ComposerAction, ComposerPaletteTrigger, ComposerToolItem } from './ComposerPalette'
-import type { Attachment, Conversation, Project, Provider, QuotaSnapshot, SkillSummary } from './types'
+import type { Attachment, Conversation, ConversationReference, Project, Provider, QuotaSnapshot, SkillSummary } from './types'
 import { PROVIDER_DEFAULTS, requiresLaunchConfirmation } from './modelOptions'
 import { LaunchConfirmModal } from './LaunchConfirmModal'
 import { mediaUrl } from './transport'
@@ -66,6 +67,7 @@ interface ComposerProps {
    *  qui tient les callbacks de revue et d'ouverture du code. */
   onAction?: (action: ComposerAction) => void | Promise<void>
   onImageOpen?: (src: string, alt: string) => void
+  contextGauge?: ReactNode
 }
 
 interface UploadedAttachment {
@@ -232,6 +234,7 @@ export function Composer({
   missionTitle,
   onAction,
   onImageOpen,
+  contextGauge,
 }: ComposerProps) {
   const isNewConversation = conversationId === null
   const [config, setConfig] = useState<ConversationConfig>({
@@ -271,12 +274,19 @@ export function Composer({
     !isSubmitting &&
     (!isRunning || canSteer) &&
     configReady
-  const paletteItems = useComposerPaletteItems(trigger, project.id, conversationId !== null)
+  const paletteItems = useComposerPaletteItems(trigger, project.id, conversationId)
 
   useLayoutEffect(() => {
     const area = textareaRef.current
     if (area !== null) resizeComposerTextarea(area)
   }, [message])
+
+  useEffect(() => {
+    const area = textareaRef.current
+    if (area === null || document.activeElement !== area) return
+    area.setSelectionRange(area.value.length, area.value.length)
+    area.scrollTop = area.scrollHeight
+  }, [focusRequest])
 
   function syncPaletteTrigger(value: string, cursor: number) {
     const next = paletteTrigger(value, cursor)
@@ -318,9 +328,16 @@ export function Composer({
   }
 
   function handleToolPick(tool: ComposerToolItem) {
+    insertMention(`@${tool.label} `)
+  }
+
+  function handleConversationPick(conversation: ConversationReference) {
+    insertMention(`${conversationMention(conversation.title)} `)
+  }
+
+  function insertMention(inserted: string) {
     if (trigger === null) return
     const cursor = textareaRef.current?.selectionStart ?? message.length
-    const inserted = `@${tool.label} `
     onMessageChange(`${message.slice(0, trigger.anchor)}${inserted}${message.slice(cursor)}`)
     setTrigger(null)
     dismissedAnchorRef.current = null
@@ -567,7 +584,10 @@ export function Composer({
         event.preventDefault()
         const index = Math.min(paletteIndex, paletteItems.count - 1)
         if (trigger.mode === 'skills') handleSkillPick(paletteItems.skills[index]!)
-        else if (trigger.mode === 'tools') handleToolPick(paletteItems.tools[index]!)
+        else if (trigger.mode === 'tools') {
+          if (index < paletteItems.tools.length) handleToolPick(paletteItems.tools[index]!)
+          else handleConversationPick(paletteItems.conversations[index - paletteItems.tools.length]!)
+        }
         else handlePaletteAction(paletteItems.actions[index]!.id)
         return
       }
@@ -619,6 +639,7 @@ export function Composer({
         onDragLeave={handleDragLeave}
         onDrop={(event) => void handleDrop(event)}
       >
+        {contextGauge}
         {isNewConversation && onTodoModeChange ? (
           <div className="composer-topbar">
             {isTodoMode ? <TodoFinishMenu value={finish} onChange={setFinish} /> : null}
@@ -693,6 +714,7 @@ export function Composer({
               onSelectedIndexChange={setPaletteIndex}
               onSkillPick={handleSkillPick}
               onToolPick={handleToolPick}
+              onConversationPick={handleConversationPick}
               onAction={handlePaletteAction}
               hasConversation={conversationId !== null}
             />

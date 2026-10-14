@@ -77,3 +77,19 @@ export function buildCreateConversationInput(
     attachments: draft.attachments ?? [],
   }
 }
+
+export function handoffDraftMessage(
+  source: { id: string; title: string },
+  handoffMd: string,
+): string {
+  return [
+    `Reprise de la conversation Pupitre « ${source.title} » (id : ${source.id}).`,
+    'Le handoff ci-dessous est le point de départ ; `read_conversation` donne le détail si besoin.',
+    '',
+    handoffMd.trim(),
+    '',
+    '---',
+    '',
+    '',
+  ].join('\n')
+}

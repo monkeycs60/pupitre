@@ -125,13 +125,6 @@
 
 /* --- Champs ---------------------------------------------------------------- */
 
-.switch-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.switch-fields label,
 .review-dialog-form label {
   display: grid;
   gap: var(--space-1);
@@ -140,7 +133,6 @@
   font-weight: 500;
 }
 
-.switch-fields select,
 .review-dialog-form select,
 .review-dialog-form input:not([type="checkbox"]) {
   width: 100%;
@@ -155,20 +147,11 @@
   transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 
-.switch-fields select:focus-visible,
 .review-dialog-form select:focus-visible,
 .review-dialog-form input:not([type="checkbox"]):focus-visible {
   border-color: var(--accent-border);
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-/* Identifiants de modèle et de provider : monospace. */
-.field-mono,
-select.field-mono,
-input.field-mono {
-  font-family: var(--font-mono);
-  font-size: var(--text-code);
 }
 
 /* --- Notes et alertes ------------------------------------------------------ */
@@ -301,18 +284,6 @@ input.field-mono {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
-}
-
-.handoff-target-fields {
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.handoff-target-fields h3 {
-  margin: 0 0 var(--space-3);
-  color: var(--text-strong);
-  font-size: var(--text-sm);
-  font-weight: 600;
 }
 
 .handoff-modal-error {

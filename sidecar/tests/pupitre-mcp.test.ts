@@ -68,6 +68,7 @@ test("publish_html_document transmet un document au sidecar local", async () => 
     "publish_code",
     "launch_project_command",
     "read_sibling_conversation",
+    "read_conversation",
     "add_todo",
     "report_incident_triage",
     "report_sentry_triage",
@@ -138,6 +139,45 @@ test("read_sibling_conversation relaie le brief en texte", async () => {
   expect(result.content[0]?.text).toContain("# Reprise TECH-7");
   expect(result.content[0]?.text).toContain("Résumé utile");
   expect(result.content[0]?.text).toContain("Salut, voici le plan.");
+});
+
+test("read_conversation retrouve une conversation d'un autre projet par son titre", async () => {
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch(request) {
+      const url = new URL(request.url);
+      if (url.pathname === "/api/conversations/Refonte%20du%20checkout/brief") {
+        return Response.json({ error: "conversation inconnue" }, { status: 404 });
+      }
+      if (url.pathname === "/api/conversation-references") {
+        expect(url.searchParams.get("q")).toBe("Refonte du checkout");
+        return Response.json([
+          { id: "conv-affilae", title: "Refonte du checkout", project_name: "affilae-mono", updated_at: "2026-10-14" },
+          { id: "conv-old", title: "Refonte du checkout v1", project_name: "affilae-mono", updated_at: "2026-09-01" },
+        ]);
+      }
+      expect(url.pathname).toBe("/api/conversations/conv-affilae/brief");
+      expect(url.searchParams.get("source")).toBeNull();
+      return Response.json({ title: "Refonte du checkout", summary: "", debrief: null, exchanges: [{ role: "assistant", text: "Paiement branché." }] });
+    },
+  });
+  servers.push(server);
+  const client = new Client({ name: "test-pupitre", version: "0.0.0" });
+  clients.push(client);
+  await client.connect(new StdioClientTransport({
+    command: process.execPath,
+    args: [pupitreMcpPath()],
+    env: { PATH: process.env.PATH ?? "", PUPITRE_PORT: String(server.port), PUPITRE_CONVERSATION_ID: "pupitre-1" },
+  }));
+
+  const result = await client.callTool({
+    name: "read_conversation",
+    arguments: { conversation: "Refonte du checkout" },
+  }) as { content: Array<{ type: string; text?: string }>; isError?: boolean };
+
+  expect(result.isError).toBeFalsy();
+  expect(result.content[0]?.text).toContain("Paiement branché.");
 });
 
 test("le bridge ACP passe l'environnement sous forme de liste", () => {

@@ -201,6 +201,14 @@ export interface AttentionItem {
   updated_at: string
 }
 
+export interface ConversationReference {
+  id: string
+  project_id: string
+  project_name: string
+  title: string
+  updated_at: string
+}
+
 export interface UnreadConversation {
   id: string
   project_id: string

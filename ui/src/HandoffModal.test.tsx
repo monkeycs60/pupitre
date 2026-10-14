@@ -48,7 +48,7 @@ test('sépare la discussion fidèle du handoff généré', async () => {
   render(createElement(HandoffModal, {
     conversation,
     onClose: () => {},
-    onCreated: () => {},
+    onDraft: () => {},
   }))
 
   expect(await screen.findByLabelText('Aperçu de la discussion complète')).toBeTruthy()
@@ -64,9 +64,11 @@ test('sépare la discussion fidèle du handoff généré', async () => {
   expect(screen.getByText('Bonjour')).toBeTruthy()
 })
 
-test('changer de provider applique le réglage par défaut du provider', async () => {
+test('ouvert sur le handoff, le génère puis le confie au composer sans lancer de conversation', async () => {
+  const calls: string[] = []
   globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    calls.push(`${init?.method ?? 'GET'} ${url}`)
     if (url.endsWith('/discussion-document')) {
       return Response.json({ filename: 'discussion.md', contentMd: '# Discussion', createdAt: '2026-08-24T00:00:00.000Z' })
     }
@@ -74,36 +76,24 @@ test('changer de provider applique le réglage par défaut du provider', async (
       return Response.json({
         debriefId: 'debrief-1',
         filename: 'handoff.md',
-        contentMd: '# Handoff',
+        contentMd: '# Handoff\n\nSynthèse',
         createdAt: '2026-08-24T00:00:00.000Z',
       }, { status: 201 })
     }
     return Response.json({ error: 'route inattendue' }, { status: 404 })
   }) as typeof fetch
+  const drafts: string[] = []
 
   render(createElement(HandoffModal, {
     conversation,
+    startWith: 'handoff',
     onClose: () => {},
-    onCreated: () => {},
+    onDraft: (handoffMd: string) => { drafts.push(handoffMd) },
   }))
 
-  fireEvent.click(await screen.findByRole('tab', { name: 'Handoff généré' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Générer le handoff' }))
   await screen.findByLabelText('Aperçu du document de handoff')
-
-  // La grille reprend le réglage de la conversation ; à la bascule, le défaut
-  // du provider s'applique (modèle et effort ensemble), jamais son premier
-  // modèle de catalogue ni un « high » générique.
-  const cases: Array<{ provider: string; model: string; effort: string }> = [
-    { provider: 'claude', model: 'opus-5.5', effort: 'medium' },
-    { provider: 'grok', model: 'grok-4.6', effort: 'high' },
-    { provider: 'reasonix', model: 'go41', effort: 'high' },
-    { provider: 'codex', model: 'gpt-6.1-sol', effort: 'high' },
-  ]
-
-  for (const expected of cases) {
-    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: expected.provider } })
-    expect((screen.getByLabelText('Modèle') as HTMLSelectElement).value).toBe(expected.model)
-    expect((screen.getByLabelText('Effort') as HTMLSelectElement).value).toBe(expected.effort)
-  }
+  expect(calls.filter((call) => call.startsWith('POST')).length).toBe(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Préparer la nouvelle conversation' }))
+  expect(drafts).toEqual(['# Handoff\n\nSynthèse'])
+  expect(calls.some((call) => call.includes('handoff-conversation'))).toBe(false)
 })

@@ -15,6 +15,7 @@ import type { ActionFormat } from "./response-format";
 import { conversationCwd, conversationWorktrees } from "./workspace";
 import type { AutonomousTurnControls, EmitFn, SteerFn } from "./adapters/types";
 import { withToolMentions } from "./tool-mentions";
+import { withConversationMentions } from "./conversation-references";
 import {
   assistantImageRoots,
   importInlineImages,
@@ -164,7 +165,10 @@ export class ConversationRunner {
     const conv = this.convs.get(conversationId);
     const project = conv ? this.projects.get(conv.project_id) : null;
     if (!conv || !project) return false;
-    const toolPrompt = withToolMentions(prompt, conv.provider);
+    const toolPrompt = withConversationMentions(
+      withToolMentions(prompt, conv.provider),
+      () => this.convs.listReferences(),
+    );
     const augmented = this.skills?.augmentPrompt(toolPrompt, project.id, {
       cwd: conversationCwd(project, conv),
       projectPath: project.path,
@@ -315,7 +319,10 @@ export class ConversationRunner {
       const permissionMode = conv.permission_mode ?? project.permission_mode;
       const cwd = conversationCwd(project, conv)
       const worktrees = conversationWorktrees(conv)
-      const toolPrompt = withToolMentions(prompt, conv.provider);
+      const toolPrompt = withConversationMentions(
+      withToolMentions(prompt, conv.provider),
+      () => this.convs.listReferences(),
+    );
       const workspacePreamble = worktrees.length > 1
         ? `Espaces de travail Git de cette conversation :\n${worktrees.map((path) => `- ${path}`).join("\n")}\nTravaille dans chacun selon les besoins de la tâche ; ne modifie pas les checkouts sources du projet.`
         : null;

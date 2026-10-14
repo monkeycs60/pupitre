@@ -1,36 +1,20 @@
-import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  createHandoffConversation,
   createHandoffDocument,
   getDiscussionDocument,
   type DiscussionDocument,
   type HandoffDocument,
 } from './api'
-import { PROVIDER_DEFAULTS, PROVIDER_EFFORTS, PROVIDER_LABELS, PROVIDER_MODELS } from './modelOptions'
 import Markdown from './Markdown'
-import type { Conversation, ConversationSpeed, Provider } from './types'
+import { copyText } from './clipboard'
+import type { Conversation } from './types'
 
 interface HandoffModalProps {
   conversation: Conversation
+  /** `handoff` ouvre l'onglet du handoff et lance sa génération. */
+  startWith?: 'discussion' | 'handoff'
   onClose: () => void
-  onCreated: (conversation: Conversation) => void
-}
-
-async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
-  }
-  const input = document.createElement('textarea')
-  input.value = text
-  input.style.position = 'fixed'
-  input.style.opacity = '0'
-  document.body.appendChild(input)
-  input.select()
-  const copied = document.execCommand('copy')
-  input.remove()
-  if (!copied) throw new Error('copie refusée')
+  onDraft: (handoffMd: string) => void
 }
 
 function downloadDocument(artifact: Pick<HandoffDocument, 'contentMd' | 'filename'>): void {
@@ -47,17 +31,13 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Une erreur est survenue.'
 }
 
-export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalProps) {
-  const [activeDocument, setActiveDocument] = useState<'discussion' | 'handoff'>('discussion')
+export function HandoffModal({ conversation, startWith = 'discussion', onClose, onDraft }: HandoffModalProps) {
+  const [activeDocument, setActiveDocument] = useState<'discussion' | 'handoff'>(startWith)
   const [discussion, setDiscussion] = useState<DiscussionDocument | null>(null)
   const [discussionError, setDiscussionError] = useState<string | null>(null)
   const [handoff, setHandoff] = useState<HandoffDocument | null>(null)
-  const [provider, setProvider] = useState<Provider>(conversation.provider)
-  const [model, setModel] = useState(conversation.model)
-  const [effort, setEffort] = useState(conversation.effort ?? 'high')
-  const [speed, setSpeed] = useState<ConversationSpeed>(conversation.speed ?? 'standard')
   const [isGenerating, setIsGenerating] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
+  const autoStarted = useRef(false)
   const [copied, setCopied] = useState<'discussion' | 'handoff' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -69,8 +49,14 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
     return () => { ignore = true }
   }, [conversation.id])
 
+  useEffect(() => {
+    if (startWith !== 'handoff' || autoStarted.current) return
+    autoStarted.current = true
+    void handleGenerate()
+  })
+
   async function handleGenerate() {
-    if (isGenerating || isCreating) return
+    if (isGenerating) return
     setIsGenerating(true)
     setError(null)
     try {
@@ -101,38 +87,13 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
     }
   }
 
-  async function handleCreateConversation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (handoff === null || isCreating) return
-    setIsCreating(true)
-    setError(null)
-    try {
-      onCreated(await createHandoffConversation(conversation.id, {
-        provider,
-        model,
-        effort,
-        speed: provider === 'codex' ? speed : null,
-      }))
-    } catch (creationError: unknown) {
-      setError(errorMessage(creationError))
-      setIsCreating(false)
-    }
-  }
-
-  function handleProviderChange(nextProvider: Provider) {
-    setProvider(nextProvider)
-    setModel(PROVIDER_DEFAULTS[nextProvider].model)
-    setEffort(PROVIDER_DEFAULTS[nextProvider].effort)
-    setSpeed('standard')
-  }
-
   return (
     <div
       className="modal-backdrop"
       role="presentation"
-      onMouseDown={() => { if (!isGenerating && !isCreating) onClose() }}
+      onMouseDown={() => { if (!isGenerating) onClose() }}
       onKeyDown={(event) => {
-        if (event.key === 'Escape' && !isGenerating && !isCreating) onClose()
+        if (event.key === 'Escape' && !isGenerating) onClose()
       }}
     >
       <section
@@ -152,7 +113,7 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
             className="modal-close"
             onClick={onClose}
             aria-label="Fermer"
-            disabled={isGenerating || isCreating}
+            disabled={isGenerating}
           >
             ×
           </button>
@@ -197,7 +158,7 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
             {error !== null ? <p className="modal-error" role="alert">{error}</p> : null}
           </div>
         ) : (
-          <form className="handoff-modal-body" onSubmit={(event) => void handleCreateConversation(event)}>
+          <div className="handoff-modal-body">
             <div className="handoff-preview" aria-label="Aperçu du document de handoff">
               <Markdown>{handoff.contentMd}</Markdown>
             </div>
@@ -211,60 +172,19 @@ export function HandoffModal({ conversation, onClose, onCreated }: HandoffModalP
               </button>
             </div>
 
-            <div className="handoff-target-fields">
-              <h3>Créer une conversation à partir du handoff</h3>
-              <div className="switch-fields">
-                <label>
-                  <span>Provider</span>
-                  <select
-                    value={provider}
-                    onChange={(event) => handleProviderChange(event.target.value as Provider)}
-                  >
-                    <option value="claude">claude</option>
-                    <option value="codex">codex</option>
-                    <option value="grok">grok</option>
-                    <option value="reasonix">{PROVIDER_LABELS.reasonix}</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Modèle</span>
-                  <select className="field-mono" value={model} onChange={(event) => setModel(event.target.value)}>
-                    {PROVIDER_MODELS[provider].map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>Effort</span>
-                  <select value={effort} onChange={(event) => setEffort(event.target.value)}>
-                    {PROVIDER_EFFORTS[provider].map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </label>
-                {provider === 'codex' ? (
-                  <label>
-                    <span>Vitesse</span>
-                    <select value={speed} onChange={(event) => setSpeed(event.target.value as ConversationSpeed)}>
-                      <option value="standard">Standard</option>
-                      <option value="fast">Rapide 1,5×</option>
-                    </select>
-                  </label>
-                ) : null}
-              </div>
-            </div>
+            <p className="handoff-modal-note">Le handoff est posé dans le composer d’une nouvelle conversation, sans l’envoyer : ajoute tes consignes en dessous.</p>
 
             {error !== null ? <p className="modal-error" role="alert">{error}</p> : null}
 
             <footer className="handoff-modal-footer">
-              <button type="button" className="secondary-button" onClick={onClose} disabled={isCreating}>
+              <button type="button" className="secondary-button" onClick={onClose}>
                 Fermer
               </button>
-              <button type="submit" className="primary-button" disabled={isCreating}>
-                {isCreating ? 'Création…' : 'Créer la conversation'}
+              <button type="button" className="primary-button" onClick={() => onDraft(handoff.contentMd)}>
+                Préparer la nouvelle conversation
               </button>
             </footer>
-          </form>
+          </div>
         )}
 
       </section>

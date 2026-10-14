@@ -1,6 +1,6 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 import type { Project, QuotaSnapshot } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
@@ -114,4 +114,37 @@ test('ouvre l’aperçu d’une image jointe au clic sur sa vignette', () => {
   expect(opened).toHaveLength(1)
   expect(opened[0]?.alt).toBe('ma capture.png')
   expect(opened[0]?.src).toContain('/media/capture.png')
+})
+
+test('@ propose les conversations de tous les projets et insère la mention par titre', async () => {
+  const { fireEvent, waitFor } = await import('@testing-library/react')
+  const defaultFetch = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/api/conversation-references')) {
+      return Response.json([
+        { id: 'conversation-1', project_id: 'project-1', project_name: 'pupitre', title: 'Fil courant', updated_at: '2026-10-14' },
+        { id: 'conv-affilae', project_id: 'project-2', project_name: 'affilae-mono', title: 'Refonte du checkout', updated_at: '2026-10-13' },
+      ])
+    }
+    return Response.json([])
+  }) as typeof fetch
+  try {
+    function Harness() {
+      const [message, setMessage] = useState('')
+      return createElement(Composer, { ...composerProps(false), message, onMessageChange: setMessage })
+    }
+    render(createElement(Harness))
+    const area = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(area, { target: { value: '@checkout', selectionStart: 9 } })
+
+    const option = await screen.findByRole('option', { name: /Refonte du checkout/ })
+    expect(option.textContent).toContain('affilae-mono')
+    expect(screen.queryByRole('option', { name: /Fil courant/ })).toBeNull()
+
+    fireEvent.mouseDown(option)
+    await waitFor(() => expect(area.value).toBe('@[Refonte du checkout] '))
+  } finally {
+    globalThis.fetch = defaultFetch
+  }
 })

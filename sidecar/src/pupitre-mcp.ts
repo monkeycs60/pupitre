@@ -52,6 +52,8 @@ function renderConversationBrief(brief: ConversationBrief): string {
   return lines.join("\n").trim();
 }
 
+const FULL_DISCUSSION_MAX = 120_000;
+
 const run = promisify(execFile);
 
 async function git(repository: string, args: string[]): Promise<string> {
@@ -189,6 +191,57 @@ export function createPupitreServer(): McpServer {
       if (!response.ok) throw new Error(await errorMessage(response));
       const brief = await response.json() as ConversationBrief;
       return text(renderConversationBrief(brief));
+    } catch (error) {
+      return text(`Lecture impossible : ${error instanceof Error ? error.message : String(error)}`, true);
+    }
+  });
+  server.registerTool("read_conversation", {
+    title: "Lire une conversation Pupitre",
+    description: "Lit n’importe quelle conversation Pupitre, tous projets confondus, désignée par son id ou par son titre (celui de la barre latérale). "
+      + "Par défaut : titre, résumé, dernier débrief et derniers échanges. `full: true` rend la discussion complète. "
+      + "Utilise-le quand l’utilisateur cite une conversation (« @[Titre] », un id ou un nom).",
+    inputSchema: {
+      conversation: z.string().min(1).describe("Id ou titre de la conversation."),
+      full: z.boolean().optional().describe("Rendre la discussion complète plutôt que le brief."),
+    },
+  }, async (args: { conversation: string; full?: boolean }) => {
+    try {
+      const reference = args.conversation.trim();
+      let target = reference;
+      const direct = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(reference)}/brief`);
+      if (direct.status === 404) {
+        const url = new URL(`${baseUrl()}/api/conversation-references`);
+        url.searchParams.set("q", reference);
+        url.searchParams.set("limit", "8");
+        const search = await fetch(url);
+        if (!search.ok) throw new Error(await errorMessage(search));
+        const matches = await search.json() as Array<{ id: string; title: string; project_name: string; updated_at: string }>;
+        const exact = matches.filter((item) => item.title.trim().toLowerCase() === reference.toLowerCase());
+        const chosen = exact.length === 1 ? exact[0] : matches.length === 1 ? matches[0] : null;
+        if (!chosen) {
+          if (matches.length === 0) return text(`Aucune conversation Pupitre ne correspond à « ${reference} ».`, true);
+          return text([
+            `Plusieurs conversations correspondent à « ${reference} » ; relance avec l’id voulu :`,
+            ...matches.map((item) => `- ${item.id} · « ${item.title} » (projet ${item.project_name}, ${item.updated_at})`),
+          ].join("\n"));
+        }
+        target = chosen.id;
+      } else if (!direct.ok) {
+        throw new Error(await errorMessage(direct));
+      } else if (!args.full) {
+        return text(renderConversationBrief(await direct.json() as ConversationBrief));
+      }
+      if (args.full) {
+        const response = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(target)}/discussion-document`);
+        if (!response.ok) throw new Error(await errorMessage(response));
+        const { contentMd } = await response.json() as { contentMd: string };
+        return text(contentMd.length > FULL_DISCUSSION_MAX
+          ? `[Début tronqué : ${contentMd.length - FULL_DISCUSSION_MAX} caractères omis]\n\n${contentMd.slice(-FULL_DISCUSSION_MAX)}`
+          : contentMd);
+      }
+      const response = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(target)}/brief`);
+      if (!response.ok) throw new Error(await errorMessage(response));
+      return text(renderConversationBrief(await response.json() as ConversationBrief));
     } catch (error) {
       return text(`Lecture impossible : ${error instanceof Error ? error.message : String(error)}`, true);
     }

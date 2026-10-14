@@ -79,6 +79,7 @@ import { FILESYSTEM_SCOPES, type FilesystemScope } from "./access";
 import { actionFormat } from "./response-format";
 import { dashboardPayload } from "./dashboard";
 import { composeTicketBrief } from "./ticket-brief";
+import { searchConversationReferences } from "./conversation-references";
 import {
   claudeServerDefinitions,
   codexServerDefinitions,
@@ -2321,6 +2322,15 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "GET" && pathname === "/api/conversations/unread-counts") {
           return json(deps.conversations.unreadCountsByProject());
+        }
+
+        if (request.method === "GET" && pathname === "/api/conversation-references") {
+          const limit = Number(url.searchParams.get("limit") ?? 20);
+          return json(searchConversationReferences(
+            deps.conversations.listReferences(),
+            url.searchParams.get("q") ?? "",
+            Number.isInteger(limit) && limit > 0 ? Math.min(limit, 500) : 20,
+          ));
         }
 
         if (request.method === "GET" && pathname === "/api/conversations/unread") {

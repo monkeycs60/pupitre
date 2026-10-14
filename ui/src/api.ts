@@ -43,6 +43,7 @@ import type {
   AppNotification,
   AttentionItem,
   UnreadConversation,
+  ConversationReference,
   SkillDetail,
   SkillSummary,
   StoredEvent,
@@ -909,6 +910,15 @@ export function getUnreadConversationCounts(): Promise<Record<string, number>> {
 
 export function listUnreadConversations(signal?: AbortSignal): Promise<UnreadConversation[]> {
   return fetchJson('/api/conversations/unread', { signal })
+}
+
+export function listConversationReferences(
+  query: string,
+  limit: number,
+  signal?: AbortSignal,
+): Promise<ConversationReference[]> {
+  const params = new URLSearchParams({ q: query, limit: String(limit) })
+  return fetchJson(`/api/conversation-references?${params}`, { signal })
 }
 
 export function getProjectCosts(

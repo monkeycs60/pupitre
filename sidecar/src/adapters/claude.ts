@@ -78,7 +78,7 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   if (opts.pupitre) {
     args.push(
       "--allowedTools",
-      "mcp__pupitre__publish_code,mcp__pupitre__publish_document,mcp__pupitre__publish_html_document,mcp__pupitre__read_sibling_conversation",
+      "mcp__pupitre__publish_code,mcp__pupitre__publish_document,mcp__pupitre__publish_html_document,mcp__pupitre__read_sibling_conversation,mcp__pupitre__read_conversation",
     );
   }
   const line = (prompt: string, images: string[]) =>
