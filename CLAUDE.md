@@ -16,13 +16,13 @@ redémarrer la dev ne coupe aucun tour stable. Une modification backend se
 vérifie avec la dev et le front Vite sur `http://localhost:5173`.
 
 Plusieurs conversations partagent ce sidecar dev : le tuer coupe leurs
-vérifications en cours. Avant de le relancer, interroge
-`curl -sf 127.0.0.1:4821/api/health` et ne relance que s'il ne répond pas ou
-s'il sert un code périmé (`staleSources > 0`). Lance-le en ajoutant au journal,
-jamais en l'écrasant :
-`bun run dev:sidecar >> /tmp/pupitre-dev-sidecar.log 2>&1`. Chaque arrêt y
-écrit son heure et sa cause (signal, éviction, exception, promesse rejetée) ;
-un `>` efface celle du précédent.
+vérifications en cours. Relance-le avec `bun run dev:sidecar`, jamais en tuant
+le process du port : la commande ne fait rien quand un sidecar dev sain et à
+jour répond déjà, et remplace un sidecar absent ou périmé. `--force` le
+remplace quand même. Chaque instance tient son journal en ajout dans son
+dossier de données (`~/.local/share/pupitre-dev/sidecar.log`, et
+`~/.local/share/pupitre/sidecar.log` pour la stable) : heure et cause de
+chaque arrêt (signal, éviction, exception, promesse rejetée).
 
 Le sidecar dev lancé par Tauri n'a pas de watch automatique. `dev:sidecar`
 laisse choisir le moment du redémarrage ; `dev:sidecar:watch` relance à chaque

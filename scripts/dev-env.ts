@@ -31,3 +31,16 @@ export function devEnv(
     PUPITRE_DATA_DIR: join(home, '.local/share/pupitre-dev'),
   }
 }
+
+export interface SidecarHealth {
+  ok?: boolean
+  instance?: string
+  pid?: number
+  staleSources?: number
+}
+
+/** Message de refus quand un sidecar dev sain et à jour tient déjà le port, sinon null. */
+export function runningSidecarRefusal(health: SidecarHealth | null, force: boolean): string | null {
+  if (force || health?.ok !== true || health.instance !== 'dev' || health.staleSources !== 0) return null
+  return `Un sidecar dev sain et à jour répond déjà (pid ${health.pid}) : d'autres conversations s'en servent peut-être, rien à relancer. Ajoute --force pour le remplacer quand même.`
+}

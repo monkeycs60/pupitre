@@ -26,6 +26,7 @@ import { SubtaskRunner } from "./subtasks";
 import { claudeSessions } from "./adapters/claude-session";
 import { codexAppServer } from "./adapters/codex-app-server";
 import { runPupitreMcp } from "./pupitre-mcp";
+import { installProcessLog, processLogPath } from "./process-log";
 import { DebriefStore } from "./stores/debriefs";
 import { DebriefRunner, generateWithAdapters } from "./debriefs";
 import { GitProjectService } from "./git";
@@ -78,6 +79,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const instance = readInstance();
   const dir = instance.dataDir;
   const db = openDb(dir);
+  installProcessLog(processLogPath(dir));
   const projects = new ProjectStore(db);
   const presets = new PresetStore(db);
   const settings = new SettingsStore(db);
@@ -314,7 +316,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const shutdownGracefully = async (cause: "requested" | "signal", detail: string) => {
     if (stopping) return;
     stopping = true;
-    console.error(`[${new Date().toISOString()}] arrêt du sidecar : ${detail}`);
+    console.error(`arrêt du sidecar : ${detail}`);
     try {
       telegram.stop();
       await launches.close();
@@ -336,10 +338,10 @@ if (process.argv.includes("--pupitre-mcp")) {
   // Sous Bun, une promesse rejetée sans gestionnaire tue le process entier,
   // et avec lui tous les tours en cours.
   process.on("unhandledRejection", (reason) => {
-    console.error(`[${new Date().toISOString()}] promesse rejetée sans gestionnaire, le sidecar continue :`, reason);
+    console.error(`promesse rejetée sans gestionnaire, le sidecar continue :`, reason);
   });
   process.on("uncaughtException", (error) => {
-    console.error(`[${new Date().toISOString()}] exception non rattrapée, arrêt du sidecar :`, error);
+    console.error(`exception non rattrapée, arrêt du sidecar :`, error);
     process.exit(1);
   });
 
