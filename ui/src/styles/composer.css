@@ -1416,33 +1416,39 @@
 }
 
 /* Congés concaves : la bordure du composer remonte en courbe dans l'onglet.
-   L'ombre portée peint le fond du composer dans l'angle extérieur de la
-   courbe ; elle doit rester exactement de la couleur de `.composer`. */
+   Chaque congé déborde d'un pixel sur le bord de l'onglet et de deux sous
+   lui pour masquer ces bordures d'un fond opaque : la couleur du trait est
+   translucide, deux traits superposés feraient une marche plus claire. */
 .context-gauge-summary::before,
 .context-gauge-summary::after {
+  --fillet-arc:
+    transparent calc(var(--r-md) - 0.5px),
+    var(--gauge-edge) calc(var(--r-md) - 0.5px),
+    var(--gauge-edge) calc(var(--r-md) + 0.5px),
+    transparent calc(var(--r-md) + 0.5px);
+  --fillet-fill:
+    transparent calc(var(--r-md) - 0.5px),
+    var(--bg-panel) calc(var(--r-md) - 0.5px);
   content: "";
   position: absolute;
   bottom: 0;
-  width: var(--r-md);
-  height: var(--r-md);
-  border-style: solid;
-  border-color: var(--gauge-edge);
+  width: calc(var(--r-md) + 1px);
+  height: calc(var(--r-md) + 2px);
   pointer-events: none;
-  transition: border-color var(--dur-fast) var(--ease);
 }
 
 .context-gauge-summary::before {
   left: calc(-1 * var(--r-md) - 1px);
-  border-width: 0 1px 1px 0;
-  border-bottom-right-radius: var(--r-md);
-  box-shadow: 3px 3px 0 2px var(--bg-panel);
+  background:
+    radial-gradient(circle at 0.5px 0.5px, var(--fillet-arc)),
+    radial-gradient(circle at 0.5px 0.5px, var(--fillet-fill));
 }
 
 .context-gauge-summary::after {
   right: calc(-1 * var(--r-md) - 1px);
-  border-width: 0 0 1px 1px;
-  border-bottom-left-radius: var(--r-md);
-  box-shadow: -3px 3px 0 2px var(--bg-panel);
+  background:
+    radial-gradient(circle at calc(100% - 0.5px) 0.5px, var(--fillet-arc)),
+    radial-gradient(circle at calc(100% - 0.5px) 0.5px, var(--fillet-fill));
 }
 
 .composer:focus-within .context-gauge-summary,
