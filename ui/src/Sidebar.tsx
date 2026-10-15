@@ -162,6 +162,9 @@ export function ticketTitleWithoutKey(title: string, ticketKey: string): string 
 
 /** Horodatage compact aligné à droite de chaque conversation (now / 4 min /
  *  2 h / lun / 08/06), comme dans la maquette. */
+const WEEKDAY_FORMAT = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' })
+const DAY_MONTH_FORMAT = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit' })
+
 function shortConversationTime(value: string): string {
   const elapsed = Math.max(0, Date.now() - Date.parse(value))
   const minutes = Math.floor(elapsed / 60_000)
@@ -171,9 +174,9 @@ function shortConversationTime(value: string): string {
   if (hours < 24) return `${hours} h`
   const days = Math.floor(hours / 24)
   if (days < 7) {
-    return new Date(value).toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '')
+    return WEEKDAY_FORMAT.format(new Date(value)).replace('.', '')
   }
-  return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+  return DAY_MONTH_FORMAT.format(new Date(value))
 }
 
 type ConversationGroup = {

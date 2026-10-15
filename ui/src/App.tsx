@@ -1,4 +1,5 @@
 import { summarizeTurnError } from './turnError'
+import { useStableHandler } from './useStableHandler'
 import { FleetIsland } from './FleetIsland'
 import { ToastHost } from './ToastHost'
 import { pushToast } from './toasts'
@@ -634,6 +635,26 @@ function App() {
     return true
   }
 
+  const stableProjectSelect = useStableHandler(handleProjectSelect)
+  const stableConversationSelect = useStableHandler(handleConversationSelect)
+  const stableConversationCreate = useStableHandler(handleConversationCreate)
+  const stableStartFromContext = useStableHandler(handleStartFromContext)
+  const stableConversationClosed = useStableHandler(handleConversationClosed)
+  const handleSidebarRead = useStableHandler(() => setRailReadVersion((current) => current + 1))
+  const handleRailProjectUpdated = useStableHandler((project: Project) => {
+    setSelectedProject((current) => (current?.id === project.id ? project : current))
+  })
+  const handleRailProjectRemoved = useStableHandler((project: Project, remaining: Project[]) => {
+    setProjectListVersion((version) => version + 1)
+    if (selectedProject?.id !== project.id) return
+    setSelectedConversation(null)
+    setIsCreatingConversation(false)
+    setConversationSeed(null)
+    setInspector(null)
+    setSelectedProject(remaining[0] ?? null)
+    setWorkspaceView('conversations')
+  })
+
   function handleProjectSelect(project: Project) {
     if (!confirmLeaveMemory()) return
     setTodoPanelRequest(0)
@@ -1044,21 +1065,10 @@ function App() {
         selectedProject={selectedProject}
         projectListVersion={projectListVersion}
         conversationListVersion={conversationListVersion + railReadVersion}
-        onProjectSelect={handleProjectSelect}
-        onProjectCreated={handleProjectSelect}
-        onProjectUpdated={(project) => {
-          setSelectedProject((current) => (current?.id === project.id ? project : current))
-        }}
-        onProjectRemoved={(project, remaining) => {
-          setProjectListVersion((version) => version + 1)
-          if (selectedProject?.id !== project.id) return
-          setSelectedConversation(null)
-          setIsCreatingConversation(false)
-          setConversationSeed(null)
-          setInspector(null)
-          setSelectedProject(remaining[0] ?? null)
-          setWorkspaceView('conversations')
-        }}
+        onProjectSelect={stableProjectSelect}
+        onProjectCreated={stableProjectSelect}
+        onProjectUpdated={handleRailProjectUpdated}
+        onProjectRemoved={handleRailProjectRemoved}
         workspaceView={railView}
         liveConversationsByProject={liveConversationsByProject}
       />
@@ -1073,13 +1083,13 @@ function App() {
         timeMode={time.mode}
         onTimeModeToggle={time.toggleMode}
         agentRunning={fleet.items.length > 0}
-        onProjectSelect={handleProjectSelect}
-        onConversationSelect={handleConversationSelect}
-        onConversationCreate={handleConversationCreate}
-        onConversationCreateFromContext={handleStartFromContext}
-        onConversationClosed={handleConversationClosed}
+        onProjectSelect={stableProjectSelect}
+        onConversationSelect={stableConversationSelect}
+        onConversationCreate={stableConversationCreate}
+        onConversationCreateFromContext={stableStartFromContext}
+        onConversationClosed={stableConversationClosed}
         isCreatingConversation={isCreatingConversation}
-        onConversationRead={() => setRailReadVersion((current) => current + 1)}
+        onConversationRead={handleSidebarRead}
         conversationListVersion={conversationListVersion}
         runningSubtasks={runningSubtasks}
         liveConversationMessageCount={liveConversationMessageCount}
