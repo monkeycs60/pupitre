@@ -781,21 +781,7 @@ fn design_webview_url(app: tauri::AppHandle) -> Option<String> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-/// Sous Wayland, le rendu DMA-BUF de WebKitGTK compose la page en GL dans le
-/// processus de l'app : Mesa y plante (SIGSEGV dans `driBindContext`) quand la
-/// fenêtre passe d'un écran à l'autre.
-#[cfg(target_os = "linux")]
-fn configure_webkit_renderer() {
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn configure_webkit_renderer() {}
-
 pub fn run() {
-    configure_webkit_renderer();
     runtime_path::configure();
     let app = tauri::Builder::default()
         // Taille, position et état maximisé sont restaurés au démarrage et
