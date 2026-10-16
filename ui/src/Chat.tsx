@@ -1,4 +1,3 @@
-import type { TicketLinks } from './ticketLinks'
 import {
   type CSSProperties,
   useCallback,
@@ -52,7 +51,6 @@ export interface ThreadTools {
 
 interface ChatProps {
   /** Tâches suggérées par la récolte à partir de cette conversation. */
-  ticketLinks?: Map<string, TicketLinks>
   todoMode?: boolean
   onTodoModeChange?: (todoMode: boolean) => void
   onTodoCreated?: (todo: TodoItem) => void
@@ -201,7 +199,6 @@ export function Chat({
   missionTitle,
   onHandoff,
   onSwitchModel,
-  ticketLinks,
 }: ChatProps) {
   const draftStorageKey = conversation === null
     ? newConversationDraftStorageKey(project.id, ticketId, originType, originKey, problemPlanIndex, problemIds)

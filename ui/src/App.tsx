@@ -1286,7 +1286,6 @@ function App() {
               missionTitle={conversationSeed?.missionTitle}
               onHandoff={() => setShowHandoff(true)}
               onSwitchModel={() => setShowSwitchModel(true)}
-              ticketLinks={ticketLinks}
             />
             </ToolFileContext.Provider>
             {showSwitchModel && selectedConversation !== null ? (

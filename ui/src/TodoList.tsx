@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
-import { acceptTodo, completeTodo, deleteTodo, drainTodos, enqueueTodo, isStartable, reopenTodo, reorderTodos, setTodoQueue, startTodo, TODO_FINISH_LABELS, TODO_LABELS, type TodoItem, type TodoSnapshot } from './todos'
+import { completeTodo, deleteTodo, drainTodos, enqueueTodo, isStartable, reopenTodo, reorderTodos, setTodoQueue, startTodo, TODO_FINISH_LABELS, TODO_LABELS, type TodoItem, type TodoSnapshot } from './todos'
 import type { TicketLinks } from './ticketLinks'
 import { ExternalLink } from './externalLink'
 import './styles/project-todos.css'
