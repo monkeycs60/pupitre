@@ -1562,3 +1562,94 @@
 .composer-palette-row.is-conversation .composer-palette-description {
   color: var(--text);
 }
+
+.quick-todo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.quick-todo .composer-icon-button.is-confirmed {
+  color: var(--ok);
+}
+
+.quick-todo-added {
+  overflow: hidden;
+  max-width: 260px;
+  color: var(--ok);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: quick-todo-in var(--dur-fast) var(--ease);
+}
+
+.quick-todo-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  gap: 6px;
+  width: min(380px, 70vw);
+  padding: 8px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-popover);
+  animation: quick-todo-in var(--dur-fast) var(--ease);
+}
+
+.quick-todo-popover textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  outline: none;
+  resize: vertical;
+}
+
+.quick-todo-popover textarea:focus {
+  border-color: var(--accent-border);
+}
+
+.quick-todo-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.quick-todo-footer button {
+  padding: 3px 10px;
+  color: var(--text);
+  font-size: var(--text-xs);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.quick-todo-footer button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.quick-todo-error {
+  color: var(--danger);
+}
+
+@keyframes quick-todo-in {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-todo-popover, .quick-todo-added { animation: none; }
+}

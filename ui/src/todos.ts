@@ -77,12 +77,12 @@ export async function todoRequest<T>(path: string, method = 'GET', body?: unknow
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
 export const createTodo = (projectId: string, input: TodoInput) => todoRequest<TodoItem>(`/api/projects/${encodeURIComponent(projectId)}/todos`, 'POST', input)
+export const addConversationTodo = (conversationId: string, message: string) => todoRequest<{ id: string; title: string; project: string }>('/api/todo-inbox', 'POST', { conversationId, message })
 export const updateTodo = (id: string, input: Partial<TodoInput>) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}`, 'PATCH', input)
 export const completeTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/complete`, 'POST', {})
 export const reopenTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/reopen`, 'POST', {})
 export const enqueueTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}/enqueue`, 'POST', {})
 export const acceptTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/accept`, 'POST', {})
-export const isSuggestion = (item: TodoItem) => item.proposed === true && item.origin?.kind === 'harvest' && item.status === 'backlog'
 export const startTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}/start`, 'POST', {})
 export const linkTodo = (id: string, conversationId: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/link`, 'POST', { conversationId })
 export const deleteTodo = (id: string) => todoRequest(`/api/todos/${encodeURIComponent(id)}`, 'DELETE')

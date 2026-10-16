@@ -21,6 +21,7 @@ import { restartApp, sidecarResponds } from './appRestart'
 import { buildCreateConversationInput } from './conversationDraft'
 import { buildTodoInput } from './todoDraft'
 import { createTodo, updateTodo, type TodoFinish, type TodoItem } from './todos'
+import { QuickTodo } from './QuickTodo'
 import { TodoFinishMenu } from './TodoFinishMenu'
 import { ConfigPanel, type ConversationConfig } from './ConfigPanel'
 import { ProviderMark } from './ProviderMark'
@@ -845,6 +846,7 @@ export function Composer({
                 <path d="M9.5 4 5 8.5a2.1 2.1 0 0 0 3 3l4.5-4.5a3.5 3.5 0 0 0-5-5L3 6.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+            {conversationId !== null ? <QuickTodo conversationId={conversationId} /> : null}
             {composerModel && provider ? (
               <>
                 <span className="composer-tools-divider" aria-hidden="true" />
