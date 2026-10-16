@@ -50,7 +50,6 @@ export class NoNewDebriefEventsError extends Error {}
 export class NoNewSessionSummaryEventsError extends Error {}
 
 export class DebriefRunner {
-  onHarvest?: (id: string, content: string) => Promise<string>;
   private active = new Set<string>();
   private generator: DebriefGenerator;
 
@@ -165,14 +164,13 @@ export class DebriefRunner {
           ),
         }));
       }
-      let contentMd = partials.length === 1
+      const contentMd = partials.length === 1
         ? partials[0]!
         : await this.consolidateDebriefs(
             generation,
             partials,
             "SYNTHÈSES PARTIELLES",
           );
-      if (this.onHarvest) contentMd = await this.onHarvest(conversationId, contentMd);
       const created = this.store.createWithReference({
         conversationId,
         eventIdFrom: candidates[0]!.id,
@@ -221,10 +219,9 @@ export class DebriefRunner {
         ),
       }));
     }
-    let contentMd = partials.length === 1
+    const contentMd = partials.length === 1
       ? partials[0]!
       : await this.consolidateSessionSummaries(generation, partials);
-    if (this.onHarvest) contentMd = await this.onHarvest(conversationId, contentMd);
     const createdAt = new Date().toISOString();
     const summaryId = crypto.randomUUID();
     const event: AppEvent = {
@@ -501,7 +498,6 @@ function sessionSummaryPrompt(
     "Ne liste pas les appels d'outils, les détails de raisonnement ou les décisions sans effet pratique.",
     "N'invente aucun correctif, fichier, test ou TODO.",
     "Retourne uniquement du Markdown avec exactement le titre ## Implémenté et, uniquement s'il reste des éléments explicitement ouverts, le titre ## À terminer.",
-    'Ajoute un bloc ```json {"remaining":[{"title":"…","detail":"…","reason":"…","ticket":"same|none","branch":"trunk|conversation"}]} ``` pour au plus 3 chantiers découverts pendant la session mais hors de son cadre (bug voisin laissé, dette identifiée, gros chantier repoussé), jamais la suite normale de la tâche ni une action triviale ; reason = pourquoi il sort du cadre, ticket = same (même ticket) ou none, branch = trunk (branche principale) ou conversation (dépend de la branche de la conversation). Liste vide en cas de doute.',
     "Utilise 2 à 8 puces au total. Chaque puce doit être courte et actionnable. Cite [événement #N] seulement lorsque cela clarifie la preuve.",
     "",
     "SEGMENT À RÉSUMER",

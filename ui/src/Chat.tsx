@@ -1,5 +1,4 @@
 import type { TicketLinks } from './ticketLinks'
-import { TodoSuggestions } from './TodoSuggestions'
 import {
   type CSSProperties,
   useCallback,
@@ -53,9 +52,7 @@ export interface ThreadTools {
 
 interface ChatProps {
   /** Tâches suggérées par la récolte à partir de cette conversation. */
-  todoSuggestions?: TodoItem[]
   ticketLinks?: Map<string, TicketLinks>
-  onTodoSuggestionsChanged?: () => void
   todoMode?: boolean
   onTodoModeChange?: (todoMode: boolean) => void
   onTodoCreated?: (todo: TodoItem) => void
@@ -204,9 +201,7 @@ export function Chat({
   missionTitle,
   onHandoff,
   onSwitchModel,
-  todoSuggestions,
   ticketLinks,
-  onTodoSuggestionsChanged,
 }: ChatProps) {
   const draftStorageKey = conversation === null
     ? newConversationDraftStorageKey(project.id, ticketId, originType, originKey, problemPlanIndex, problemIds)
@@ -601,7 +596,6 @@ export function Chat({
                       conversationId={conversation?.id}
                     />
                     {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
-                    {todoSuggestions?.length ? <TodoSuggestions items={todoSuggestions} ticketLinks={ticketLinks} onChanged={onTodoSuggestionsChanged ?? (() => {})} /> : null}
                     {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onSendReview={addReviewToComposer} /> : null}
                   </TaskSelectionContext.Provider>
                 </TaskToggleContext.Provider>

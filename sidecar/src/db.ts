@@ -806,6 +806,7 @@ export function openDb(dir: string = dataDir()): Database {
   if (changelogColumns.some((column) => column.name === "domain_id")) db.exec("ALTER TABLE project_changelog_entries DROP COLUMN domain_id");
   db.exec("DROP TABLE IF EXISTS conversation_domains; DROP TABLE IF EXISTS domain_changes; DROP TABLE IF EXISTS domain_publications; DROP TABLE IF EXISTS domains;");
   removeChantiers(db);
+  db.exec("DELETE FROM project_todos WHERE json_extract(payload, '$.proposed') = 1 AND json_extract(payload, '$.origin.kind') = 'harvest' AND json_extract(payload, '$.status') = 'backlog'");
   db.exec("PRAGMA foreign_keys = ON");
   return db;
 }

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
-import { acceptTodo, completeTodo, deleteTodo, drainTodos, enqueueTodo, isStartable, isSuggestion, reopenTodo, reorderTodos, setTodoQueue, startTodo, TODO_FINISH_LABELS, TODO_LABELS, type TodoItem, type TodoSnapshot } from './todos'
+import { acceptTodo, completeTodo, deleteTodo, drainTodos, enqueueTodo, isStartable, reopenTodo, reorderTodos, setTodoQueue, startTodo, TODO_FINISH_LABELS, TODO_LABELS, type TodoItem, type TodoSnapshot } from './todos'
 import type { TicketLinks } from './ticketLinks'
 import { ExternalLink } from './externalLink'
 import './styles/project-todos.css'
@@ -31,14 +31,12 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
 
-  const suggestions = items.filter(isSuggestion)
-  const stack = items.filter((item) => !isSuggestion(item))
-  const open = stack.filter((item) => item.status !== 'done')
-  const done = stack.filter((item) => item.status === 'done')
+  const open = items.filter((item) => item.status !== 'done')
+  const done = items.filter((item) => item.status === 'done')
   const needle = query.trim().toLocaleLowerCase()
   const matches = (item: TodoItem) => needle === ''
     || `${item.title} ${item.message} ${ticketLinks?.get(item.ticket_id ?? '')?.ticketKey ?? ''}`.toLocaleLowerCase().includes(needle)
-  const visible = (tab === 'open' ? stack.filter((item) => item.status !== 'done' || leaving.includes(item.id)) : done).filter(matches).sort((a, b) => (a.ticket_id ?? '').localeCompare(b.ticket_id ?? ''))
+  const visible = (tab === 'open' ? items.filter((item) => item.status !== 'done' || leaving.includes(item.id)) : done).filter(matches).sort((a, b) => (a.ticket_id ?? '').localeCompare(b.ticket_id ?? ''))
   const startable = open.filter((item) => isStartable(item) && item.status !== 'blocked')
   const canDrag = tab === 'open' && needle === ''
 
@@ -111,18 +109,8 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
           </button>}
     </div> : null}
     {error || actionError ? <p className="todo-error" role="alert">{actionError ?? error}</p> : null}
-    {tab === 'open' && suggestions.length > 0 ? <section className="project-task-suggestions" aria-label="Suggestions de tâches">
-      <h3>Suggestions <span>{suggestions.length}</span></h3>
-      <ul>
-        {suggestions.map((item) => <li key={item.id}>
-          <button type="button" className="project-task-suggestion-text" title={item.message} onClick={() => onOpenConversation(item)}>{item.title}</button>
-          <button type="button" disabled={busy} onClick={() => void act(() => acceptTodo(item.id))}>Garder</button>
-          <button type="button" disabled={busy} onClick={() => void act(() => deleteTodo(item.id))}>Écarter</button>
-        </li>)}
-      </ul>
-    </section> : null}
     {loading ? <p className="list-empty">Chargement…</p>
-      : !stack.length && !suggestions.length ? <div className="project-task-empty"><strong>La pile est vide</strong><p>Passe le composer en mode <em>Tâche</em> pour empiler un bug, une idée ou une amélioration, puis dépile quand tu veux.</p></div>
+      : !items.length ? <div className="project-task-empty"><strong>La pile est vide</strong><p>Passe le composer en mode <em>Tâche</em> pour empiler un bug, une idée ou une amélioration, puis dépile quand tu veux.</p></div>
       : !visible.length ? <p className="list-empty">{needle ? 'Aucune tâche ne correspond.' : tab === 'done' ? 'Aucune tâche terminée.' : 'Tout est dépilé.'}</p>
       : null}
     <ol className="project-task-rows" aria-label={tab === 'open' ? 'Tâches ouvertes' : 'Tâches terminées'}>

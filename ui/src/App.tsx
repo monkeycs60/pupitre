@@ -9,7 +9,7 @@ import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type Inspec
 import { InactiveProjectResume } from './ProjectResume'
 import { TodoList } from './TodoList'
 import { WorkflowsView } from './WorkflowsView'
-import { isSuggestion, linkTodo, useTodos, type TodoItem } from './todos'
+import { linkTodo, useTodos, type TodoItem } from './todos'
 import { ticketLinksOf } from './ticketLinks'
 import { handoffDraftMessage, newConversationDraftStorageKey } from './conversationDraft'
 import type { ConversationConfig } from './ConfigPanel'
@@ -964,7 +964,7 @@ function App() {
       project={selectedProject}
       activeSection={projectSurface.section}
       onSectionChange={openProjectSection}
-      todoCount={todos.items.filter((item) => item.status !== 'done' && !isSuggestion(item)).length}
+      todoCount={todos.items.filter((item) => item.status !== 'done').length}
       todoPanelRequest={todoPanelRequest}
       onRefreshTodos={todos.refresh}
       onCreateTodoFromTicket={(ticket) => handleTodoCreate({ ticketId: ticket.id, ticketKey: ticket.key, branch: ticketLinksOf(ticket).branch ?? null })}
@@ -1139,7 +1139,7 @@ function App() {
                 <ProjectSectionSwitch
                   projectId={selectedProject.id}
                   activeSection={projectSurface.section}
-                  todoCount={todos.items.filter((item) => item.status !== 'done' && !isSuggestion(item)).length}
+                  todoCount={todos.items.filter((item) => item.status !== 'done').length}
                   onSelect={(section) => section === null ? closeProjectSurface() : openProjectSection(section)}
                 />
               </div>
@@ -1245,7 +1245,7 @@ function App() {
                 <ProjectSectionSwitch
                   projectId={selectedProject.id}
                   activeSection={projectSurface?.section ?? null}
-                  todoCount={todos.items.filter((item) => item.status !== 'done' && !isSuggestion(item)).length}
+                  todoCount={todos.items.filter((item) => item.status !== 'done').length}
                   onSelect={(section) => section === null ? closeProjectSurface() : openProjectSection(section)}
                 />
               </div>
@@ -1286,9 +1286,7 @@ function App() {
               missionTitle={conversationSeed?.missionTitle}
               onHandoff={() => setShowHandoff(true)}
               onSwitchModel={() => setShowSwitchModel(true)}
-              todoSuggestions={selectedConversation ? todos.items.filter((item) => isSuggestion(item) && item.origin?.conversationId === selectedConversation.id) : undefined}
               ticketLinks={ticketLinks}
-              onTodoSuggestionsChanged={todos.refresh}
             />
             </ToolFileContext.Provider>
             {showSwitchModel && selectedConversation !== null ? (

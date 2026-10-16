@@ -4,7 +4,7 @@ import { TelegramCapture } from "./telegram-capture";
 import { PersonalEnvironments } from "./personal-environments";
 import { ProjectDevlogService } from "./project-devlog";
 import { ProjectResumeService } from "./project-resume";
-import { BacklogHarvest, remainingItems } from "./backlog-harvest";
+import { BacklogCoverage } from "./backlog-coverage";
 import { ProjectLaunchService } from "./project-launch";
 import { SharedFilesService } from "./shared-files";
 import { TodoService } from "./todos";
@@ -226,8 +226,8 @@ if (process.argv.includes("--pupitre-mcp")) {
   const resume = new ProjectResumeService(db, projects, tickets, (prompt, cwd) => automaticCalls.run("reprise", () => generateWithAdapters({ cwd, ...BACKGROUND_MODEL, effort: "medium", prompt }, quotas)));
   const telegram = new TelegramCapture(db, projects, tickets, new TodoStore(db), (prompt, cwd) => automaticCalls.run("telegram", () => claudeJson("claude-haiku-5-5", prompt, cwd, "medium")), resume, instance.name, instance.dataDir);
   telegram.start();
-  const harvest = new BacklogHarvest(db, conversations, projects, new TodoStore(db), (prompt, cwd, kind) => automaticCalls.run(kind ?? "récolte", () => claudeJson("claude-haiku-5-5", prompt, cwd, "high")));
-  if (backgroundJobsEnabled()) setInterval(() => { void harvest.scan().catch(console.error); }, 300000).unref();
+  const coverage = new BacklogCoverage(db, projects, new TodoStore(db), (prompt, cwd, kind) => automaticCalls.run(kind ?? "couverture backlog", () => claudeJson("claude-haiku-5-5", prompt, cwd, "high")));
+  if (backgroundJobsEnabled()) setInterval(() => { void coverage.scan().catch(console.error); }, 300000).unref();
   const launches = new ProjectLaunchService(db, projects, instance.dataDir);
   applyPersonalProjectPresets(db, projects, launches, personalEnvironments);
   const todos = new TodoService(new TodoStore(db), projects, conversations, runner, git, tickets, quotas);
@@ -360,7 +360,6 @@ if (process.argv.includes("--pupitre-mcp")) {
     const config = projectLaunchConfig(project, "todo");
     new TodoStore(db).create(project.id, {title:summary?.title ?? `Échec : ${routine.name}`,message:summary?.detail ?? result.output,status:"backlog",provider:config.provider,model:config.model});
   };
-  debriefs.onHarvest = (id, content) => harvest.harvest(id, content).catch(error => { console.error("[backlog] récolte différée", error); return remainingItems(content).markdown; });
   server = await claimServer(() => createServer({
     port,
     instance,
