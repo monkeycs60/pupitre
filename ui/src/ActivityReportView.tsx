@@ -45,12 +45,21 @@ export function rankMotifs(motifs: ActivityMotif[]): { top: ActivityMotif[]; res
   return { top, reserve, triaged: true }
 }
 
-/** Motifs ouverts dont la note a monté au tri des derniers jours : la friction qui s'aggrave. */
+const gain = (motif: ActivityMotif) => motif.stars !== null && motif.stars_previous !== null ? motif.stars - motif.stars_previous : 0
+
+/** Apparu dans la fenêtre et noté 5 dès son premier tri : la date d'apparition, pas celle du tri, écarte les anciens motifs du premier tri. */
+export function isNewTopMotif(motif: ActivityMotif, since: string): boolean {
+  return motif.stars === 5 && motif.stars_previous === null && motif.first_seen_day >= since
+}
+
+/** Motifs ouverts dont la note a monté au tri des derniers jours, ou apparus directement à 5 étoiles : la friction qui s'aggrave. */
 export function risingMotifs(motifs: ActivityMotif[], today: string): ActivityMotif[] {
   const since = addDays(today, -RISING_DAYS)
   return motifs
-    .filter((motif) => motif.status === 'open' && motif.stars !== null && motif.stars_previous !== null && motif.stars > motif.stars_previous && (motif.stars_changed_day ?? '') >= since)
-    .sort((left, right) => (right.stars! - right.stars_previous!) - (left.stars! - left.stars_previous!) || right.stars! - left.stars!)
+    .filter((motif) => motif.status === 'open' && (
+      (gain(motif) > 0 && (motif.stars_changed_day ?? '') >= since) || isNewTopMotif(motif, since)
+    ))
+    .sort((left, right) => right.stars! - left.stars! || gain(right) - gain(left) || right.first_seen_day.localeCompare(left.first_seen_day))
     .slice(0, RISING_MAX)
 }
 
@@ -211,7 +220,8 @@ function MotifItem({ motif, position, projectName, busy, onAct, onOpenConversati
   onAct: (id: string, action: 'dismiss' | 'task') => void
   onOpenConversation: (projectId: string, conversationId: string) => void
 }) {
-  const rise = motif.stars !== null && motif.stars_previous !== null && motif.stars > motif.stars_previous
+  const rise = gain(motif) > 0
+  const fresh = isNewTopMotif(motif, addDays(localDay(new Date()), -RISING_DAYS))
   return (
     <li className="motif" data-motif-id={motif.id}>
       {position !== null ? <span className="motif-rank">{position}</span> : null}
@@ -234,7 +244,8 @@ function MotifItem({ motif, position, projectName, busy, onAct, onOpenConversati
       </details>
       <span className="motif-score">
         <Stars count={motif.stars} />
-        {rise ? <small className="motif-rise">+{motif.stars! - motif.stars_previous!} le {shortDay(motif.stars_changed_day!)}</small> : null}
+        {rise ? <small className="motif-rise">+{gain(motif)} le {shortDay(motif.stars_changed_day!)}</small> : null}
+        {fresh ? <small className="motif-rise">nouveau le {shortDay(motif.first_seen_day)}</small> : null}
       </span>
     </li>
   )
@@ -265,7 +276,7 @@ function Recul({ retro, busy, onAct, onTriage, onOpenConversation }: {
       {rising.length > 0 ? (
         <div className="recul-rising">
           <h2>En hausse</h2>
-          <p>Ces constats ont gagné des étoiles au dernier tri : la friction s’aggrave.</p>
+          <p>Constats qui ont gagné des étoiles cette semaine, ou qui sont apparus directement à cinq étoiles : la friction s’aggrave.</p>
           <ol className="motifs">
             {rising.map((motif) => <MotifItem key={motif.id} motif={motif} position={null} projectName={names.get(motif.project_id)} {...itemProps} />)}
           </ol>

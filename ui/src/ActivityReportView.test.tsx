@@ -35,7 +35,7 @@ test('le top suit le rang du tri, la réserve garde le reste, et sans tri la fra
   expect(fresh.top.map((item) => item.id)).toEqual(['neuf', 'vieux'])
 })
 
-test('en hausse : seulement les motifs ouverts dont la note a monté dans les sept derniers jours', () => {
+test('en hausse : les motifs ouverts dont la note a monté, ou apparus à cinq étoiles, dans les sept derniers jours', () => {
   const today = '2026-10-19'
   const rising = risingMotifs([
     motif('plus2', { stars: 5, stars_previous: 3, stars_changed_day: '2026-10-18' }),
@@ -44,8 +44,11 @@ test('en hausse : seulement les motifs ouverts dont la note a monté dans les se
     motif('ancien', { stars: 5, stars_previous: 2, stars_changed_day: '2026-10-01' }),
     motif('ecarte', { status: 'dismissed', stars: 5, stars_previous: 1, stars_changed_day: '2026-10-18' }),
     motif('premier', { stars: 5, stars_previous: null, stars_changed_day: null }),
+    motif('nouveau5', { stars: 5, stars_previous: null, first_seen_day: '2026-10-17', last_seen_day: '2026-10-18' }),
+    motif('nouveau4', { stars: 4, stars_previous: null, first_seen_day: '2026-10-17' }),
+    motif('nouveau-ecarte', { status: 'dismissed', stars: 5, stars_previous: null, first_seen_day: '2026-10-17' }),
   ], today)
-  expect(rising.map((item) => item.id)).toEqual(['plus2', 'plus1'])
+  expect(rising.map((item) => item.id)).toEqual(['plus2', 'nouveau5', 'plus1'])
 })
 
 test('le rapport ouvre l’agenda, puis le recul montre la hausse, les chips projet et dix constats au plus', async () => {
