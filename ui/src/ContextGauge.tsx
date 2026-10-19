@@ -114,6 +114,7 @@ export const ContextGauge = memo(function ContextGauge({
         aria-valuenow={estimate.percent}
         tabIndex={0}
       >
+        <span className="context-gauge-junction" aria-hidden="true" />
         <svg className="context-gauge-dial" width="26" height="15" viewBox="0 0 26 15" aria-hidden="true">
           <path d="M2.5 13.5a10.5 10.5 0 0 1 21 0" fill="none" stroke="var(--border)" strokeWidth="2.6" strokeLinecap="round" />
           <path

@@ -13,7 +13,7 @@ import { TodoList } from './TodoList'
 import { WorkflowsView } from './WorkflowsView'
 import { linkTodo, useTodos, type TodoItem } from './todos'
 import { ticketLinksOf } from './ticketLinks'
-import { conversationReferenceText, newConversationDraftStorageKey } from './conversationDraft'
+import { continueElsewhereDraft, newConversationDraftStorageKey } from './conversationDraft'
 import type { ConversationConfig } from './ConfigPanel'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type {
@@ -803,7 +803,7 @@ function App() {
         permissionMode: source.permission_mode ?? null,
       },
     })
-    setNewConversationDraft(`${conversationReferenceText(source)}\n\n`)
+    setNewConversationDraft(continueElsewhereDraft({ ...source, summary: digest?.summary ?? source.summary }))
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setShowSwitchModel(false)

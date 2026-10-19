@@ -1395,6 +1395,7 @@
   --gauge-edge: var(--accent-border);
 }
 
+.composer .context-gauge.is-near-limit,
 .context-gauge.is-near-limit {
   --gauge-edge: color-mix(in srgb, var(--warn) 45%, transparent);
   color: var(--warn);
@@ -1419,6 +1420,14 @@
   border-radius: var(--r-md) var(--r-md) 0 0;
   outline: none;
   cursor: default;
+  --fillet-arc:
+    transparent calc(var(--r-md) - 0.5px),
+    var(--gauge-edge) calc(var(--r-md) - 0.5px),
+    var(--gauge-edge) calc(var(--r-md) + 0.5px),
+    transparent calc(var(--r-md) + 0.5px);
+  --fillet-fill:
+    transparent calc(var(--r-md) - 0.5px),
+    var(--bg-panel) calc(var(--r-md) - 0.5px);
   transition:
     border-color var(--dur-fast) var(--ease),
     border-radius var(--dur-fast) var(--ease);
@@ -1430,14 +1439,6 @@
    translucide, deux traits superposés feraient une marche plus claire. */
 .context-gauge-summary::before,
 .context-gauge-summary::after {
-  --fillet-arc:
-    transparent calc(var(--r-md) - 0.5px),
-    var(--gauge-edge) calc(var(--r-md) - 0.5px),
-    var(--gauge-edge) calc(var(--r-md) + 0.5px),
-    transparent calc(var(--r-md) + 0.5px);
-  --fillet-fill:
-    transparent calc(var(--r-md) - 0.5px),
-    var(--bg-panel) calc(var(--r-md) - 0.5px);
   content: "";
   position: absolute;
   bottom: 0;
@@ -1458,6 +1459,28 @@
   background:
     radial-gradient(circle at calc(100% - 0.5px) 0.5px, var(--fillet-arc)),
     radial-gradient(circle at calc(100% - 0.5px) 0.5px, var(--fillet-fill));
+}
+
+/* Congé de la jonction : même tracé que les congés du bas, retourné, entre le
+   bord bas de la carte du menu et le flanc gauche de l'onglet. */
+.context-gauge-junction {
+  position: absolute;
+  top: -1px;
+  left: calc(-1 * var(--r-md) - 1px);
+  width: calc(var(--r-md) + 1px);
+  height: calc(var(--r-md) + 1px);
+  background:
+    radial-gradient(circle at 0.5px calc(100% - 0.5px), var(--fillet-arc)),
+    radial-gradient(circle at 0.5px calc(100% - 0.5px), var(--fillet-fill));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-in);
+}
+
+.context-gauge:hover .context-gauge-junction,
+.context-gauge:focus-within .context-gauge-junction {
+  opacity: 1;
+  transition: opacity var(--dur) var(--ease-out) 60ms;
 }
 
 /* Ouvert, l'onglet perd son bord haut et peint son fond sur le bord bas de la

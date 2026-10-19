@@ -8,7 +8,7 @@ if (typeof document === 'undefined') GlobalRegistrator.register()
 const { cleanup, fireEvent, render, screen } = await import('@testing-library/react')
 const { ContextGauge } = await import('./ContextGauge')
 const { formatContextWindow } = await import('./contextEstimate')
-const { conversationReferenceText } = await import('./conversationDraft')
+const { continueElsewhereDraft, conversationReferenceText } = await import('./conversationDraft')
 
 test('affiche le compteur, puis propose au survol les deux façons de passer la main', async () => {
   let opened = 0
@@ -66,6 +66,13 @@ test('la référence nomme la conversation et l’outil pour la relire', () => {
   const text = conversationReferenceText({ id: 'conv-1', title: 'Jauge de contexte' })
   expect(text).toContain('« Jauge de contexte » (id : conv-1)')
   expect(text).toContain('read_conversation')
+})
+
+test('le brouillon de reprise ajoute le résumé du fil, sauf s’il ne fait que répéter le titre', () => {
+  const draft = continueElsewhereDraft({ id: 'conv-1', title: 'Jauge', summary: 'La jauge avertit à 30 %.' })
+  expect(draft).toContain('(id : conv-1)')
+  expect(draft).toContain('Où elle en était : La jauge avertit à 30 %.')
+  expect(continueElsewhereDraft({ id: 'conv-1', title: 'Jauge', summary: 'Jauge' })).not.toContain('Où elle en était')
 })
 
 test('formate les tailles de fenêtre sans bruit', () => {

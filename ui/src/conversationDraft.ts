@@ -86,3 +86,11 @@ export function conversationReferenceText(conversation: { id: string; title: str
     `Lis-la avec l’outil Pupitre \`read_conversation\` (conversation : "${conversation.id}") avant de répondre.`,
   ].join('\n')
 }
+
+export function continueElsewhereDraft(source: { id: string; title: string; summary?: string | null }): string {
+  const summary = source.summary?.trim()
+  const reference = conversationReferenceText(source)
+  return summary && summary !== source.title.trim()
+    ? `${reference}\n\nOù elle en était : ${summary}\n\n`
+    : `${reference}\n\n`
+}
