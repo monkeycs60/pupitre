@@ -40,6 +40,7 @@ import {
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { useAppNotifications } from './useAppNotifications'
+import type { ReportTab } from './ActivityReportView'
 import { CommandPalette } from './CommandPalette'
 import { createSessionSummary, createTestInventory } from './api'
 import type { SkillSummary } from './types'
@@ -184,6 +185,7 @@ function App() {
   const [focusEventId, setFocusEventId] = useState<number | null>(null)
   const todos = useTodos(selectedProject?.id ?? null)
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('conversations')
+  const [reportRequest, setReportRequest] = useState<{ tab: ReportTab; nonce: number } | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const [threadTools, setThreadTools] = useState<ThreadTools | null>(null)
   const [locationRestored, setLocationRestored] = useState(false)
@@ -245,6 +247,16 @@ function App() {
     }
     window.addEventListener('pupitre:open-conversation', openConversation)
     return () => window.removeEventListener('pupitre:open-conversation', openConversation)
+  })
+
+  useEffect(() => {
+    const openReport = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: ReportTab }>).detail?.tab ?? 'agenda'
+      setReportRequest({ tab, nonce: Date.now() })
+      handleActivityReportSelect()
+    }
+    window.addEventListener('pupitre:open-activity-report', openReport)
+    return () => window.removeEventListener('pupitre:open-activity-report', openReport)
   })
 
   useEffect(() => {
@@ -1134,7 +1146,7 @@ function App() {
         {workspaceView === 'design' ? <DesignView />
         : workspaceView === 'applications' ? <ApplicationsView />
         : workspaceView === 'settings' ? <SettingsShell instance={instance} quotas={quotas.snapshot} helpSlug={helpSlug} />
-        : workspaceView === 'activity-report' ? <ActivityReportView onOpenConversation={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)} />
+        : workspaceView === 'activity-report' ? <ActivityReportView key={reportRequest?.nonce} initialTab={reportRequest?.tab} onOpenConversation={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)} />
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
         : projectSurface?.layout === 'full' ? (
           <>

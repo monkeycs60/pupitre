@@ -263,6 +263,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     undefined,
     undefined,
     async () => { await Promise.all(projects.list().map((project) => changelog.refreshNow(project.id))); },
+    (notification) => { notifications.create({ kind: "activity", conversation_id: null, ...notification }); },
   );
   const runScheduledActivityReport = () => {
     if (!backgroundJobsEnabled()) return;

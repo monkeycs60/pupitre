@@ -6,7 +6,7 @@ import type { ActivityMotif, ActivityReportIndex } from './api'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, waitFor } = await import('@testing-library/react')
-const { ActivityReportView, rankMotifs, risingMotifs } = await import('./ActivityReportView')
+const { ActivityReportView, rankMotifs, risingMotifs, risingTitle } = await import('./ActivityReportView')
 const { addDays, localDay } = await import('./ActivityAgenda')
 
 const defaultFetch = globalThis.fetch
@@ -72,6 +72,7 @@ test('le rapport ouvre l’agenda, puis le recul montre la hausse, les chips pro
 
   await waitFor(() => expect(view.container.querySelector('.report-tabs .is-active')!.textContent).toBe('Agenda'))
   expect(view.container.querySelector('.report-tab-badge')!.textContent).toBe('▲ 1')
+  expect(view.container.querySelector('.report-tab-badge')!.getAttribute('title')).toBe('1 en hausse')
   fireEvent.click(view.getByText('Recul'))
 
   expect(view.container.querySelectorAll('.recul-rising .motif')).toHaveLength(1)
@@ -86,4 +87,26 @@ test('le rapport ouvre l’agenda, puis le recul montre la hausse, les chips pro
 
   fireEvent.click(view.container.querySelectorAll('.recul-chips button')[1]!)
   expect(view.container.querySelectorAll('.recul > .motifs > .motif')).toHaveLength(1)
+})
+
+test('le titre de la pastille sépare les hausses des nouveaux à cinq étoiles', () => {
+  const today = '2026-10-19'
+  const rising = risingMotifs([
+    motif('h1', { stars: 4, stars_previous: 3, stars_changed_day: '2026-10-18' }),
+    motif('h2', { stars: 3, stars_previous: 1, stars_changed_day: '2026-10-18' }),
+    motif('n1', { stars: 5, first_seen_day: '2026-10-17' }),
+  ], today)
+  expect(risingTitle(rising, today)).toBe('2 en hausse · 1 nouveau à 5 étoiles')
+  expect(risingTitle(rising.filter((item) => item.id.startsWith('n')), today)).toBe('1 nouveau à 5 étoiles')
+  expect(risingTitle([...rising, { ...rising.find((item) => item.id === 'n1')!, id: 'n2' }].filter((item) => item.id.startsWith('n')), today)).toBe('2 nouveaux à 5 étoiles')
+})
+
+test('une notification du recul ouvre directement l’onglet Recul', async () => {
+  globalThis.fetch = mock(async (input) => String(input).endsWith('/api/activity-reports')
+    ? Response.json({ days: [], retro: { motifs: [motif('n1', { stars: 5, first_seen_day: localDay(new Date()) })], projects: [{ id: 'a', name: 'Pupitre', color: '#f06595' }] }, run: { running: false, runningDay: null } })
+    : Response.json({ error: 'rapport inconnu' }, { status: 404 })) as unknown as typeof fetch
+  const view = render(createElement(ActivityReportView, { initialTab: 'recul', onOpenConversation: () => {} }))
+  await waitFor(() => expect(view.container.querySelector('.report-tabs .is-active')!.textContent).toContain('Recul'))
+  expect(view.container.querySelector('.recul-rising .motif-rise')!.textContent).toMatch(/^nouveau le /)
+  expect(view.container.querySelector('.report-tab-badge')!.getAttribute('title')).toBe('1 nouveau à 5 étoiles')
 })

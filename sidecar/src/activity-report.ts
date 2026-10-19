@@ -35,7 +35,7 @@ import {
   retroPrompt,
   type RetroChanges,
 } from "./activity-retro";
-import { applyTriage, needsTriage, parseTriage, staleBefore, TRIAGE_MODEL, triagePrompt } from "./activity-triage";
+import { applyTriage, needsTriage, newTopMotifs, parseTriage, staleBefore, TRIAGE_MODEL, triagePrompt } from "./activity-triage";
 
 /** Bornes de la synthèse bon marché des sujets : jamais un vrai tour. */
 const TOPIC_USER_MESSAGE_MAX = 600;
@@ -592,6 +592,7 @@ export class ActivityReportService {
     private strongConfig: () => StrongModelConfig = () => DEFAULT_ACTIVITY_MODEL,
     private now: () => Date = () => new Date(),
     private prepare: () => Promise<void> = async () => {},
+    private notify: (notification: { title: string; body: string }) => void = () => {},
   ) {}
 
   runState(): ActivityRunState {
@@ -705,6 +706,7 @@ export class ActivityReportService {
   async triage(day: string): Promise<string[]> {
     const errors: string[] = [];
     const now = this.now().toISOString();
+    const fresh: string[] = [];
     for (const project of this.projects.list()) {
       const expired = this.store.expireStale(project.id, staleBefore(day), now);
       const open = this.store.listMotifs({ projectId: project.id, statuses: ["open"] });
@@ -712,9 +714,17 @@ export class ActivityReportService {
       try {
         const raw = await this.strong({ cwd: projectCwd(project), ...TRIAGE_MODEL, prompt: triagePrompt(project.name, day, open) });
         applyTriage(this.store, project.id, day, parseTriage(raw, open), this.now().toISOString());
+        const after = this.store.listMotifs({ projectId: project.id, statuses: ["open"] });
+        for (const motif of newTopMotifs(open, after, day)) fresh.push(`${project.name} · ${motif.title}`);
       } catch (error) {
         errors.push(`tri ${project.name} : ${error instanceof Error ? error.message : "tri impossible"}`);
       }
+    }
+    if (fresh.length > 0) {
+      this.notify({
+        title: fresh.length > 1 ? `Recul : ${fresh.length} nouveaux constats à 5 étoiles` : "Recul : un nouveau constat à 5 étoiles",
+        body: fresh.join("\n"),
+      });
     }
     return errors;
   }

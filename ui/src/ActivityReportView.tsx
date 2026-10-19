@@ -63,6 +63,17 @@ export function risingMotifs(motifs: ActivityMotif[], today: string): ActivityMo
     .slice(0, RISING_MAX)
 }
 
+/** « 2 en hausse · 1 nouveau à 5 étoiles » : ce que compte la pastille de l'onglet. */
+export function risingTitle(rising: ActivityMotif[], today: string): string {
+  const since = addDays(today, -RISING_DAYS)
+  const fresh = rising.filter((motif) => isNewTopMotif(motif, since)).length
+  const up = rising.length - fresh
+  return [
+    up > 0 ? `${up} en hausse` : null,
+    fresh > 0 ? `${fresh} nouveau${fresh > 1 ? 'x' : ''} à 5 étoiles` : null,
+  ].filter(Boolean).join(' · ')
+}
+
 function ClickUpMark() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -308,8 +319,11 @@ function Recul({ retro, busy, onAct, onTriage, onOpenConversation }: {
   )
 }
 
-export function ActivityReportView({ onOpenConversation }: { onOpenConversation: (projectId: string, conversationId: string) => void }) {
-  const [tab, setTab] = useState<ReportTab>('agenda')
+export function ActivityReportView({ initialTab = 'agenda', onOpenConversation }: {
+  initialTab?: ReportTab
+  onOpenConversation: (projectId: string, conversationId: string) => void
+}) {
+  const [tab, setTab] = useState<ReportTab>(initialTab)
   const [index, setIndex] = useState<ActivityReportIndex | null>(null)
   const [report, setReport] = useState<ActivityReport | null>(null)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
@@ -345,7 +359,8 @@ export function ActivityReportView({ onOpenConversation }: { onOpenConversation:
     try { action === 'dismiss' ? await dismissActivityMotif(id) : await createActivityMotifTask(id); await refresh(selectedDay ?? undefined) } finally { setBusy(false) }
   }
   if (!index) return <div className="empty-state"><p>{error ?? 'Chargement du rapport…'}</p></div>
-  const rising = risingMotifs(index.retro.motifs, today).length
+  const risingList = risingMotifs(index.retro.motifs, today)
+  const rising = risingList.length
 
   return (
     <section className="activity-report-view">
@@ -354,7 +369,7 @@ export function ActivityReportView({ onOpenConversation }: { onOpenConversation:
           {(['agenda', 'journal', 'recul'] as const).map((item) => (
             <button type="button" role="tab" key={item} aria-selected={tab === item} className={tab === item ? 'is-active' : ''} onClick={() => setTab(item)}>
               {item === 'agenda' ? 'Agenda' : item === 'journal' ? 'Journal' : 'Recul'}
-              {item === 'recul' && rising > 0 ? <span className="report-tab-badge" title={`${rising} constat${rising > 1 ? 's' : ''} en hausse`}>▲ {rising}</span> : null}
+              {item === 'recul' && rising > 0 ? <span className="report-tab-badge" title={risingTitle(risingList, today)}>▲ {rising}</span> : null}
             </button>
           ))}
         </div>

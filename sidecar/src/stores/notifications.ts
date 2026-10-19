@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 
 export interface AppNotification {
   id: number;
-  kind: "routine" | "long-task" | "external";
+  kind: "routine" | "long-task" | "external" | "activity";
   title: string;
   body: string;
   conversation_id: string | null;

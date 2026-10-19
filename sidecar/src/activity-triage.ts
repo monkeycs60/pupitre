@@ -19,6 +19,20 @@ export interface TriageResult {
   merges: Array<{ keep: string; absorb: string[] }>;
 }
 
+/** Fenêtre d'apparition d'un motif « nouveau », la même que l'encart « En hausse » de l'UI. */
+export const TRIAGE_NEW_DAYS = 7;
+
+/**
+ * Motifs notés 5 à leur tout premier tri et apparus dans la fenêtre : la
+ * première note n'arrive qu'une fois, donc chaque motif n'alerte qu'une fois.
+ */
+export function newTopMotifs(before: ActivityMotif[], after: ActivityMotif[], day: string): ActivityMotif[] {
+  const unrated = new Set(before.filter((motif) => motif.stars === null).map((motif) => motif.id));
+  const since = new Date(`${day}T12:00:00`);
+  since.setDate(since.getDate() - TRIAGE_NEW_DAYS);
+  return after.filter((motif) => unrated.has(motif.id) && motif.stars === 5 && motif.first_seen_day >= localDay(since));
+}
+
 /** Rien à retrier tant qu'aucun motif ouvert n'a bougé depuis le dernier tri. */
 export function needsTriage(open: ActivityMotif[]): boolean {
   return open.some((motif) => motif.ranked_at === null || motif.updated_at > motif.ranked_at);

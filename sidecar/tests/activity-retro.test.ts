@@ -69,6 +69,7 @@ function setup() {
   let strongReply: (input: DebriefGenerationInput) => string = () => JSON.stringify({ operations: [] });
   let cheapReply: unknown = null;
   const clock = { now: new Date(`${DAY}T18:00:00`) };
+  const notified: Array<{ title: string; body: string }> = [];
   const service = new ActivityReportService(
     store, journal, projects, problems, todos, conversations, presets, time, changelog,
     async () => cheapReply,
@@ -78,6 +79,8 @@ function setup() {
     },
     () => DEFAULT_ACTIVITY_MODEL,
     () => new Date(clock.now),
+    async () => {},
+    (notification) => { notified.push(notification); },
   );
   const insertEvent = (conversationId: string, payload: unknown, createdAt: string) => {
     db.query("INSERT INTO events (conversation_id, payload, created_at) VALUES (?, ?, ?)")
@@ -97,7 +100,7 @@ function setup() {
   return {
     db, dir, project, projects, conversations, changelog, tickets, todoStore, todos, presets, store, service, journal,
     strongCalls, setStrong: (reply: typeof strongReply) => { strongReply = reply; },
-    setCheap: (reply: unknown) => { cheapReply = reply; }, clock, insertEvent, seedDay,
+    setCheap: (reply: unknown) => { cheapReply = reply; }, clock, insertEvent, seedDay, notified,
   };
 }
 
@@ -368,6 +371,29 @@ test("le tri fusionne les doublons, note de 1 à 5, garde dix motifs et ne retri
   expect(strongCalls).toHaveLength(2);
   expect(store.motif(motifs[0]!.id)).toEqual(expect.objectContaining({ stars: 5, stars_previous: 4, stars_changed_day: "2026-08-25", rank: 1 }));
   expect(store.motif(motifs[5]!.id)).toEqual(expect.objectContaining({ stars: 5, rank: null }));
+  db.close();
+});
+
+test("le tri notifie une fois les motifs récents notés 5 dès leur premier tri", async () => {
+  const { db, project, store, service, setStrong, notified, clock } = setup();
+  const evidence = (ref: string) => [{ kind: "conversation" as const, ref: `${ref}-a`, label: "A" }, { kind: "conversation" as const, ref: `${ref}-b`, label: "B" }];
+  const fresh = store.createMotif({ projectId: project.id, kind: "recurrence", title: "Ports saturés", statement: "…", day: DAY, evidence: evidence("f") }, at(DAY, 10));
+  const old = store.createMotif({ projectId: project.id, kind: "practice", title: "Ancien", statement: "…", day: "2026-08-01", evidence: evidence("o") }, at("2026-08-01", 10));
+  const minor = store.createMotif({ projectId: project.id, kind: "idea", title: "Mineur", statement: "…", day: DAY, evidence: evidence("m") }, at(DAY, 10));
+  setStrong(() => JSON.stringify({ ranking: [
+    { id: fresh.id, stars: 5, reason: "r" }, { id: old.id, stars: 5, reason: "r" }, { id: minor.id, stars: 4, reason: "r" },
+  ] }));
+
+  await service.runTriage(DAY);
+  expect(notified).toEqual([{ title: "Recul : un nouveau constat à 5 étoiles", body: "Pupitre · Ports saturés" }]);
+
+  clock.now = new Date("2026-08-25T18:00:00");
+  store.addEvidence(minor.id, "2026-08-25", [{ kind: "conversation", ref: "neuve", label: "N" }], at("2026-08-25", 10));
+  setStrong(() => JSON.stringify({ ranking: [
+    { id: fresh.id, stars: 5, reason: "r" }, { id: minor.id, stars: 5, reason: "r" }, { id: old.id, stars: 5, reason: "r" },
+  ] }));
+  await service.runTriage("2026-08-25");
+  expect(notified).toHaveLength(1);
   db.close();
 });
 
