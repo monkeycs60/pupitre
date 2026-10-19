@@ -30,6 +30,14 @@
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
+.composer:has(.context-gauge.is-near-limit) {
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+}
+
+.composer:has(.context-gauge.is-near-limit):focus-within {
+  box-shadow: 0 0 0 2px var(--warn-soft);
+}
+
 .composer.is-drag-active {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);

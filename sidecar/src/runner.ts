@@ -8,7 +8,7 @@ import { ConversationActivity } from "./conversation-activity";
 import type { GitProjectService, GitTurnTracking } from "./git";
 import type { SkillInventory } from "./skills";
 import type { AppNotification } from "./stores/notifications";
-import { generateDigest, shouldRefreshDigest, type DigestSource } from "./conversation-digest";
+import { generateDigest, isContextSaturated, shouldRefreshDigest, type DigestSource } from "./conversation-digest";
 import { DEFAULT_ACTION_FORMAT, withActionFormat } from "./response-format";
 import { claudeServerDefinitions } from "./mcp-inventory";
 import type { ActionFormat } from "./response-format";
@@ -235,8 +235,10 @@ export class ConversationRunner {
     let firstResponseAt: string | undefined;
     const importedAssistantImages = new Map<string, string>();
     const pendingAssistantImages: string[] = [];
+    let lastUsage: Extract<AppEvent, { type: "usage" }> | null = null;
 
     const persist = (event: AppEvent) => {
+      if (event.type === "usage") lastUsage = event;
       // Les events de quota restent des events de conversation (replay intact)
       // ET alimentent le tracker global au passage.
       this.quotas.ingest(event);
@@ -432,7 +434,10 @@ export class ConversationRunner {
       releaseActivity();
       // Best effort et hors chemin critique : le tour est déjà rendu, le digest
       // arrive quand il arrive. Un échec ne laisse que l'ancien titre.
-      if (outcome.state === "done") void this.refreshDigest(conversationId, project.path, persist);
+      if (outcome.state === "done") {
+        const saturated = isContextSaturated(conv.provider, lastUsage);
+        void this.refreshDigest(conversationId, project.path, persist, saturated);
+      }
     }
     return outcome;
   }
@@ -516,12 +521,13 @@ export class ConversationRunner {
     conversationId: string,
     cwd: string,
     persist: (event: AppEvent) => void,
+    saturated = false,
   ): Promise<void> {
     try {
       const conv = this.convs.get(conversationId);
       if (!conv || conv.title_locked) return;
       const turn = this.convs.turnCount(conversationId);
-      if (!shouldRefreshDigest(turn, conv.digest_turn)) return;
+      if (!shouldRefreshDigest(turn, conv.digest_turn, saturated)) return;
       const source: DigestSource = this.convs.digestSource(conversationId);
       const digest = await generateDigest(source, cwd);
       if (!digest) return;

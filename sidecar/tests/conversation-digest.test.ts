@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDb } from "../src/db";
 import { ConversationStore } from "../src/stores/conversations";
 import { ProjectStore } from "../src/stores/projects";
-import { buildDigestPrompt, parseDigestPayload, shouldRefreshDigest } from "../src/conversation-digest";
+import { buildDigestPrompt, isContextSaturated, parseDigestPayload, shouldRefreshDigest } from "../src/conversation-digest";
 
 let conversations: ConversationStore;
 let projectId: string;
@@ -33,6 +33,17 @@ test("génère un digest au premier tour puis par paliers", () => {
   expect(shouldRefreshDigest(16, 13)).toBe(false);
   expect(shouldRefreshDigest(25, 13)).toBe(true);
   expect(shouldRefreshDigest(0, 0)).toBe(false);
+});
+
+test("au-delà du seuil de contexte, le digest suit chaque tour", () => {
+  expect(shouldRefreshDigest(16, 13, true)).toBe(true);
+  expect(shouldRefreshDigest(13, 13, true)).toBe(false);
+  expect(isContextSaturated("claude", { contextTokens: 300_000, contextWindowTokens: 1_000_000 })).toBe(true);
+  expect(isContextSaturated("claude", { contextTokens: 290_000, contextWindowTokens: 1_000_000 })).toBe(false);
+  expect(isContextSaturated("codex", { contextTokens: 260_000, contextWindowTokens: 400_000 })).toBe(false);
+  expect(isContextSaturated("codex", { contextTokens: 280_000, contextWindowTokens: 400_000 })).toBe(true);
+  expect(isContextSaturated("claude", { contextTokens: 300_000 })).toBe(false);
+  expect(isContextSaturated("claude", null)).toBe(false);
 });
 
 test("le digest remplace titre et résumé heuristiques", () => {

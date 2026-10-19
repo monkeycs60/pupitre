@@ -1,3 +1,4 @@
+import type { Provider } from "./events";
 import { killGroup, spawnGroup } from "./process-group";
 
 /** Le digest tourne à chaque palier de tours : effort bas pour rester bon marché. */
@@ -23,11 +24,32 @@ export interface DigestSource {
  * rafraîchit assez rarement pour que le coût reste négligeable tout en suivant
  * la dérive d'une conversation longue.
  */
-export function shouldRefreshDigest(turn: number, lastDigestTurn: number): boolean {
+export function shouldRefreshDigest(turn: number, lastDigestTurn: number, saturated = false): boolean {
   if (turn <= 0) return false;
   if (lastDigestTurn === 0) return true;
+  if (saturated) return turn > lastDigestTurn;
   const step = turn < 12 ? 4 : 10;
   return turn - lastDigestTurn >= step;
+}
+
+/** Mêmes seuils que la jauge de contexte de l'UI (ui/src/contextEstimate.ts). */
+const SATURATION_PERCENT: Record<Provider, number> = {
+  claude: 30,
+  codex: 70,
+  grok: 80,
+  reasonix: 80,
+};
+
+/**
+ * Au-delà du seuil, l'UI propose de continuer ailleurs avec ce résumé : il se
+ * rafraîchit alors à chaque tour. Sans fenêtre connue, rien n'est saturé.
+ */
+export function isContextSaturated(
+  provider: Provider,
+  usage: { contextTokens?: number; contextWindowTokens?: number } | null,
+): boolean {
+  if (!usage?.contextTokens || !usage.contextWindowTokens) return false;
+  return (usage.contextTokens / usage.contextWindowTokens) * 100 >= SATURATION_PERCENT[provider];
 }
 
 function clamp(text: string, max: number): string {
