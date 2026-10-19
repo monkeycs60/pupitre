@@ -411,8 +411,151 @@
   to { transform: scaleX(0); }
 }
 
+/* --- Veille des conversations ------------------------------------------- */
+
+.nudge-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.nudge {
+  --nudge-tone: var(--accent);
+  display: grid;
+  gap: var(--space-2);
+  width: 360px;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--nudge-tone) 35%, var(--border));
+  border-radius: var(--r-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+  pointer-events: auto;
+  animation: toast-in 480ms var(--spring) both;
+}
+
+.nudge.is-relaunch { --nudge-tone: var(--danger); }
+.nudge.is-review { --nudge-tone: var(--text-muted); }
+
+.nudge-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.nudge-source {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nudge-source span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nudge-source:hover { color: var(--text); }
+
+.nudge-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nudge-tone);
+}
+
+.nudge-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-faint);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nudge-close:hover { background: var(--bg-hover); color: var(--text); }
+
+.nudge-title {
+  color: var(--text-strong);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.nudge-body {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.nudge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.nudge-action {
+  padding: 4px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-hover);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.nudge-action:hover:not(:disabled) { border-color: var(--nudge-tone); }
+.nudge-action:disabled { opacity: 0.6; cursor: default; }
+
+.nudge-action.is-primary {
+  border-color: transparent;
+  background: var(--nudge-tone);
+  color: var(--on-accent);
+}
+
+.nudge-action.is-ghost {
+  background: none;
+  color: var(--text-muted);
+}
+
+.nudge-feedback {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.nudge-feedback.is-ok { color: var(--ok); }
+.nudge-feedback.is-danger { color: var(--danger); }
+
+.nudge-more {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  pointer-events: auto;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toast-life { animation-duration: var(--toast-life, 6s) !important; }
+  .nudge { animation: none; }
   .fleet-island-dot::after,
   .activity-board-dot::after { animation: none !important; }
 }

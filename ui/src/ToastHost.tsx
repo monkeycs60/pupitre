@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { dismissToast, removeToast, useToasts, type Toast } from './toasts'
 
 function ToneIcon({ tone }: { tone: Toast['tone'] }) {
@@ -23,12 +23,13 @@ function ToneIcon({ tone }: { tone: Toast['tone'] }) {
   )
 }
 
-export function ToastHost() {
+export function ToastHost({ children }: { children?: ReactNode }) {
   const toasts = useToasts()
-  if (toasts.length === 0) return null
+  if (toasts.length === 0 && !children) return null
 
   return (
     <div className="toast-host" role="region" aria-label="Notifications">
+      {children}
       {toasts.map((toast) => (
         <div
           key={toast.id}

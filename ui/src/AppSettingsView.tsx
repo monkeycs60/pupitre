@@ -75,6 +75,7 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
   const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
   const [longTaskThreshold, setLongTaskThreshold] = useState(120)
   const [activityReportHour, setActivityReportHour] = useState('18:00')
+  const [nudgeInterval, setNudgeInterval] = useState(10)
   const [visualFeedbackPaired, setVisualFeedbackPaired] = useState(false)
   const [quotaProviders, setQuotaProviders] = useState<Provider[]>(() => [...QUOTA_PROVIDERS])
   const [quotaOrder, setQuotaOrder] = useState<Provider[]>(() => [...QUOTA_PROVIDERS])
@@ -90,6 +91,7 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
         setScope(settings.filesystemScope ?? DEFAULT_SCOPE)
         setLongTaskThreshold(settings.longTaskThresholdSeconds ?? 120)
         setActivityReportHour(settings.activityReportHour ?? '18:00')
+        setNudgeInterval(settings.nudgeIntervalMinutes ?? 10)
         setVisualFeedbackPaired(settings.visualFeedbackPaired === true)
         setQuotaProviders(visibleQuotaProviders(settings.quotaVisibleProviders))
         setQuotaOrder(quotaProviderOrder(settings.quotaProviderOrder))
@@ -248,6 +250,15 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
     try {
       const settings = await updateSettings({ activityReportHour })
       setActivityReportHour(settings.activityReportHour ?? activityReportHour)
+      setSaved(true)
+    } catch (saveError: unknown) { setError(errorMessage(saveError)) } finally { setSaving(false) }
+  }
+
+  async function handleNudgeIntervalSave() {
+    setSaving(true); setError(null); setSaved(false)
+    try {
+      const settings = await updateSettings({ nudgeIntervalMinutes: nudgeInterval })
+      setNudgeInterval(settings.nudgeIntervalMinutes ?? nudgeInterval)
       setSaved(true)
     } catch (saveError: unknown) { setError(errorMessage(saveError)) } finally { setSaving(false) }
   }
@@ -441,6 +452,33 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
         <div><h2>Rapport d’activité quotidien</h2><p>La passe s’exécute une fois par jour après l’heure choisie. Une journée sans activité ne crée aucun rapport.</p><p className="settings-help">Prochaine passe : {nextActivityRun(activityReportHour)}.</p></div>
         <label className="settings-select-label" htmlFor="activity-report-hour">Heure de la passe<input id="activity-report-hour" type="time" value={activityReportHour} disabled={loading || saving} onChange={(event) => setActivityReportHour(event.target.value)} /></label>
         <button type="button" className="secondary-button" disabled={loading || saving} onClick={() => void handleActivityReportHourSave()}>Enregistrer l’heure</button>
+      </div>
+
+      <div className="settings-card">
+        <div>
+          <h2>Veille des conversations</h2>
+          <p>
+            Haiku relit les conversations qui viennent de finir et signale celles qui attendent un choix,
+            une validation ou une relance, avec des boutons qui répondent sans quitter la conversation
+            ouverte. Une réponse restée non lue une heure est aussi signalée.
+          </p>
+          <p className="settings-help">Un seul appel par passe, et aucun quand rien n’a changé. 0 coupe la veille.</p>
+        </div>
+        <label className="settings-select-label" htmlFor="app-nudge-interval">
+          Intervalle en minutes
+          <input
+            id="app-nudge-interval"
+            type="number"
+            min={0}
+            max={240}
+            value={nudgeInterval}
+            disabled={loading || saving}
+            onChange={(event) => setNudgeInterval(Number(event.target.value))}
+          />
+        </label>
+        <button type="button" className="secondary-button" disabled={loading || saving} onClick={() => void handleNudgeIntervalSave()}>
+          Enregistrer l’intervalle
+        </button>
       </div>
 
       <div className="settings-card">

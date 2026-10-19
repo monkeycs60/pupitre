@@ -2,6 +2,7 @@ import { summarizeTurnError } from './turnError'
 import { useStableHandler } from './useStableHandler'
 import { FleetIsland } from './FleetIsland'
 import { ToastHost } from './ToastHost'
+import { NudgeStack } from './NudgeStack'
 import { pushToast } from './toasts'
 import { OpenInEditorButton } from './OpenInEditorButton'
 import { ReadingControls } from './ReadingControls'
@@ -1060,7 +1061,12 @@ function App() {
           }}
         />}
       />
-      <ToastHost />
+      <ToastHost>
+        <NudgeStack
+          hiddenConversationId={workspaceView === 'conversations' ? selectedConversationId : null}
+          onOpen={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
+        />
+      </ToastHost>
       <Rail
         selectedProject={selectedProject}
         projectListVersion={projectListVersion}

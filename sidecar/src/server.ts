@@ -105,6 +105,7 @@ import type { Problem, ProblemStore } from "./stores/problems";
 import type { ProblemMissionStore } from "./stores/problem-missions";
 import type { ProblemAxisRunStore } from "./stores/problem-axis-runs";
 import type { AttentionItemStore } from "./stores/attention-items";
+import type { ConversationNudgeService } from "./conversation-nudges";
 import type { ConversationLinkStore } from "./stores/conversation-links";
 import type { ReviewCommentInput, ReviewCommentStore } from "./stores/review-comments";
 import { reviewProgress, snapshotOf } from "./review-progress";
@@ -194,6 +195,7 @@ export interface ServerDeps {
   problemMissions?: ProblemMissionStore;
   problemAxisRuns?: ProblemAxisRunStore;
   attention?: AttentionItemStore;
+  nudges?: ConversationNudgeService;
   conversationLinks?: ConversationLinkStore;
   reviewComments?: ReviewCommentStore;
   vscodeWeb?: VscodeWebService;
@@ -1954,6 +1956,22 @@ export function createServer(deps: ServerDeps) {
           return json(deps.attention.list(projectId));
         }
 
+        if (request.method === "GET" && pathname === "/api/nudges") {
+          return json(deps.nudges?.list() ?? []);
+        }
+
+        if (request.method === "POST" && pathname === "/api/nudges/scan") {
+          if (!deps.nudges) throw new HttpError(501, "veille non câblée");
+          return json({ created: await deps.nudges.scan() });
+        }
+
+        const closeNudgeId = routeId(pathname, /^\/api\/nudges\/([^/]+)\/close$/);
+        if (request.method === "POST" && closeNudgeId !== null) {
+          if (!deps.nudges) throw new HttpError(501, "veille non câblée");
+          if (!deps.nudges.close(closeNudgeId)) throw new HttpError(404, "notification inconnue");
+          return empty(204);
+        }
+
         const acknowledgeAttentionId = routeId(pathname, /^\/api\/attention\/([^/]+)\/acknowledge$/);
         if (request.method === "POST" && acknowledgeAttentionId !== null) {
           if (!deps.attention) throw new HttpError(501, "Inbox non câblée");
@@ -2816,6 +2834,14 @@ export function createServer(deps: ServerDeps) {
               || threshold > 86_400
             ) throw new HttpError(400, "seuil de tâche longue invalide");
             deps.settings.set("longTaskThresholdSeconds", threshold);
+            updated = true;
+          }
+          if ("nudgeIntervalMinutes" in body) {
+            const interval = body.nudgeIntervalMinutes;
+            if (typeof interval !== "number" || !Number.isInteger(interval) || interval < 0 || interval > 240) {
+              throw new HttpError(400, "intervalle de veille invalide");
+            }
+            deps.settings.set("nudgeIntervalMinutes", interval);
             updated = true;
           }
           if ("activityReportHour" in body) {

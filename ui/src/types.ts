@@ -183,6 +183,19 @@ export interface AppNotification {
   created_at: string
 }
 
+export interface ConversationNudge {
+  id: string
+  conversation_id: string
+  project_id: string
+  project_name: string
+  conversation_title: string
+  kind: 'choice' | 'validate' | 'relaunch' | 'review'
+  title: string
+  body: string
+  actions: Array<{ label: string; message: string }>
+  created_at: string
+}
+
 export type AttentionTarget =
   | { kind: 'conversation'; projectId: string; conversationId: string }
   | { kind: 'problem-axis'; projectId: string; problemId: string; planIndex: number }

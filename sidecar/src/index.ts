@@ -10,6 +10,7 @@ import { SharedFilesService } from "./shared-files";
 import { TodoService } from "./todos";
 import { TodoStore } from "./stores/todos";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { openDb } from "./db";
 import { MediaStore } from "./media";
 import { ConversationRunner } from "./runner";
@@ -59,6 +60,7 @@ import { ProblemStore } from "./stores/problems";
 import { ProblemMissionStore } from "./stores/problem-missions";
 import { ProblemAxisRunStore } from "./stores/problem-axis-runs";
 import { AttentionItemStore } from "./stores/attention-items";
+import { ConversationNudgeService, nudgePrompt, parseNudgeVerdicts } from "./conversation-nudges";
 import { ConversationLinkStore } from "./stores/conversation-links";
 import { ReviewCommentStore } from "./stores/review-comments";
 import { VscodeWebService } from "./vscode-web";
@@ -213,6 +215,15 @@ if (process.argv.includes("--pupitre-mcp")) {
     const match = raw.match(/\{[\s\S]*\}/); return match ? JSON.parse(match[0]) : null;
   };
   const cheapJson = (prompt: string, cwd: string) => claudeJson("claude-haiku-5-5", prompt, cwd);
+  const nudges = new ConversationNudgeService(
+    db,
+    async (candidates) => parseNudgeVerdicts(
+      await automaticCalls.run("veille des conversations", () => cheapJson(nudgePrompt(candidates), tmpdir())),
+    ),
+    () => settings.get<number>("nudgeIntervalMinutes") ?? 10,
+    (id) => runner.isRunning(id) || runner.activity.isBusy(id),
+    () => actionFormat(settings.get("actionFormat")).todoHeadings,
+  );
   const personalEnvironments = new PersonalEnvironments(db, projects, conversations);
   personalEnvironments.onTriage = (id, prompt) => { void runner.runTurn(id, prompt, []).catch(console.error); };
   if (backgroundJobsEnabled()) setInterval(() => { void personalEnvironments.scan().catch(console.error); }, 300000).unref();
@@ -325,6 +336,7 @@ if (process.argv.includes("--pupitre-mcp")) {
       quotaRefresher.stop();
       integrationsRefresher.stop();
       conversationTicketLinker.stop();
+      nudges.stop();
       changelog.stop();
       clearInterval(htmlDocumentSweepTimer);
       clearInterval(activityReportTimer);
@@ -404,6 +416,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     problemMissions,
     problemAxisRuns,
     attention,
+    nudges,
     conversationLinks,
     reviewComments,
     vscodeWeb,
@@ -421,6 +434,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   if (backgroundJobsEnabled() || instance.name === "stable") quotaRefresher.start();
   if (backgroundJobsEnabled()) {
     conversationTicketLinker.start();
+    nudges.start();
     routines.start();
     changelog.start();
     integrationsRefresher.start();

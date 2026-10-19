@@ -36,6 +36,7 @@ import type {
   ProjectChangelogState,
   AppNotification,
   AttentionItem,
+  ConversationNudge,
   UnreadConversation,
   ConversationReference,
   SkillDetail,
@@ -175,6 +176,8 @@ export interface Settings {
     speed: ConversationSpeed
   }
   activityReportHour?: string
+  /** Minutes entre deux passes de la veille Haiku ; 0 la coupe. */
+  nudgeIntervalMinutes?: number
 }
 
 export interface RunningApplication {
@@ -734,6 +737,14 @@ export function listAttentionItems(projectId?: string | null, signal?: AbortSign
 
 export function acknowledgeAttentionItem(id: string): Promise<AttentionItem> {
   return fetchJson(`/api/attention/${routeId(id)}/acknowledge`, jsonPost({}))
+}
+
+export function listConversationNudges(signal?: AbortSignal): Promise<ConversationNudge[]> {
+  return fetchJson('/api/nudges', { signal })
+}
+
+export function closeConversationNudge(id: string): Promise<void> {
+  return fetchVoid(`/api/nudges/${routeId(id)}/close`, jsonPost({}))
 }
 
 export function createProject(input: CreateProjectInput): Promise<Project> {
