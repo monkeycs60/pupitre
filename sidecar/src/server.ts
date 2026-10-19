@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import type { SharedFilesService } from "./shared-files";
 import { TodoError, type TodoService } from "./todos";
 import type { TodoInput } from "./stores/todos";
-import { ActivityBusyError, ActivityNotFoundError, type ActivityReportService } from "./activity-report";
+import { ActivityBusyError, ActivityNotFoundError, AGENDA_MAX_DAYS, type ActivityReportService } from "./activity-report";
 import type { ServerWebSocket } from "bun";
 import { basename, extname, isAbsolute, join } from "node:path";
 import { detectProjectLogo, LOGO_MIME_TYPES } from "./project-logo";
@@ -1208,7 +1208,31 @@ export function createServer(deps: ServerDeps) {
 
         if (request.method === "GET" && pathname === "/api/activity-reports") {
           if (!deps.activityReports) throw new HttpError(503, "Rapports d'activité indisponibles");
-          return json({ days: deps.activityReports.days(), calendar: deps.activityReports.calendar(), retro: deps.activityReports.retro(), run: deps.activityReports.runState() });
+          return json({ days: deps.activityReports.days(), retro: deps.activityReports.retro(), run: deps.activityReports.runState() });
+        }
+        if (request.method === "GET" && pathname === "/api/activity-reports/agenda") {
+          if (!deps.activityReports) throw new HttpError(503, "Rapports d'activité indisponibles");
+          const from = url.searchParams.get("from") ?? "";
+          const to = url.searchParams.get("to") ?? "";
+          const span = (Date.parse(`${to}T12:00:00`) - Date.parse(`${from}T12:00:00`)) / 86_400_000;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || !(span >= 0 && span < AGENDA_MAX_DAYS)) {
+            throw new HttpError(400, "plage d'agenda invalide");
+          }
+          return json(deps.activityReports.agenda(from, to));
+        }
+        if (request.method === "GET" && pathname === "/api/activity-reports/archive") {
+          if (!deps.activityReports) throw new HttpError(503, "Rapports d'activité indisponibles");
+          const year = Number(url.searchParams.get("year") ?? new Date().getFullYear());
+          if (!Number.isInteger(year) || year < 2000 || year > 2100) throw new HttpError(400, "année invalide");
+          return json(deps.activityReports.archive(year));
+        }
+        if (request.method === "POST" && pathname === "/api/activity-reports/triage") {
+          if (!deps.activityReports) throw new HttpError(503, "Rapports d'activité indisponibles");
+          try { return json({ errors: await deps.activityReports.runTriage(new Date().toLocaleDateString("en-CA")), retro: deps.activityReports.retro() }); }
+          catch (error) {
+            if (error instanceof ActivityBusyError) throw new HttpError(409, error.message);
+            throw error;
+          }
         }
         const activityReportRoute = pathname.match(/^\/api\/activity-reports\/(\d{4}-\d{2}-\d{2})$/);
         if (activityReportRoute && request.method === "GET") {

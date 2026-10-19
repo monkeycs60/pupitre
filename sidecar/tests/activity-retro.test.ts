@@ -204,12 +204,14 @@ test("la passe complète sauve le journal, crée les motifs prouvés et préserv
   const { db, project, store, service, strongCalls, setStrong, setCheap, seedDay, clock } = context;
   const { first, second } = seedDay();
   setCheap({ topics: [{ title: "Sidecar périmé", detail: "Deux relances.", conversationIds: [first.id, second.id] }] });
-  setStrong(() => JSON.stringify({ operations: [
-    { op: "create", kind: "recurrence", title: "Le sidecar périmé revient", statement: "Deux conversations relancent le sidecar.", evidence: [
-      { kind: "conversation", ref: first.id }, { kind: "conversation", ref: second.id },
-    ] },
-    { op: "create", kind: "idea", title: "Sans preuve", statement: "…", evidence: [{ kind: "conversation", ref: first.id }] },
-  ] }));
+  setStrong((input) => input.prompt.startsWith("Tu tries")
+    ? JSON.stringify({ ranking: store.listMotifs().map((item) => ({ id: item.id, stars: 4, reason: "Deux relances le même jour." })) })
+    : JSON.stringify({ operations: [
+      { op: "create", kind: "recurrence", title: "Le sidecar périmé revient", statement: "Deux conversations relancent le sidecar.", evidence: [
+        { kind: "conversation", ref: first.id }, { kind: "conversation", ref: second.id },
+      ] },
+      { op: "create", kind: "idea", title: "Sans preuve", statement: "…", evidence: [{ kind: "conversation", ref: first.id }] },
+    ] }));
 
   const report = await service.generate(DAY);
   expect(report).not.toBeNull();
@@ -217,13 +219,15 @@ test("la passe complète sauve le journal, crée les motifs prouvés et préserv
   expect(report!.projects[0]!.topicsSource).toBe("model");
   expect(report!.retro.created).toHaveLength(1);
   expect(report!.retro.error).toBeNull();
-  expect(strongCalls).toHaveLength(1);
+  expect(strongCalls).toHaveLength(2);
   expect(strongCalls[0]).toEqual(expect.objectContaining({ cwd: project.path, provider: "claude", model: "haiku-5.5", effort: "high" }));
   expect(strongCalls[0]!.prompt).toContain("Le sidecar ne répond plus");
+  expect(strongCalls[1]).toEqual(expect.objectContaining({ cwd: project.path, provider: "claude", model: "sonnet-5.5" }));
   expect(store.days().map((item) => item.day)).toEqual([DAY]);
   expect(store.state()).toEqual(expect.objectContaining({ first_day: DAY, last_day: DAY, last_error: null }));
   const [motif] = store.listMotifs();
   expect(motif!.evidence).toHaveLength(2);
+  expect(motif).toEqual(expect.objectContaining({ stars: 4, rank: 1, rank_reason: "Deux relances le même jour." }));
 
   service.dismiss(motif!.id);
   setStrong((input) => {
@@ -312,47 +316,75 @@ test("créer une tâche depuis un motif produit un backlog avec le constat et le
   db.close();
 });
 
-test("le bilan cumulé et les tendances viennent du suivi de temps et du changelog", async () => {
-  const { db, project, service, time, changelog } = (() => {
-    const context = setup();
-    return { ...context, time: context.journal["time"] as TimeTrackingService };
-  })();
-  for (let minute = 0; minute < 60; minute += 20) {
-    time.addPresence({ projectId: project.id, startedAt: at(DAY, 9, minute), endedAt: at(DAY, 9, minute + 20) });
-  }
-  changelog.import(project.id, [
-    { repositoryPath: ".", sha: SHA, branch: "master", subject: "a", committedAt: `${DAY}T12:00:00+02:00` },
-    { repositoryPath: ".", sha: OTHER_SHA, branch: "master", subject: "b", committedAt: "2026-01-10T12:00:00+01:00" },
-  ], at(DAY, 12));
-  changelog.setLineStats(project.id, [{ sha: SHA, added: 10, removed: 4 }, { sha: OTHER_SHA, added: 100, removed: 50 }]);
-  const retro = service.retro();
-  expect(retro.cumulative).toEqual(expect.objectContaining({ userMs: 3_600_000, commits: 2, linesAdded: 110, linesRemoved: 54, activeDays: 1, firstDay: DAY }));
-  expect(retro.trends.map((trend) => [trend.days, trend.userMs, trend.commits, trend.linesAdded])).toEqual([[7, 3_600_000, 1, 10], [30, 3_600_000, 1, 10]]);
+test("le journal relit ses heures dans le suivi de temps : la soirée après la passe compte", async () => {
+  const { db, project, service, journal, seedDay } = setup();
+  seedDay();
+  const time = journal["time"] as TimeTrackingService;
+  const presence = (hour: number, minutes: number) => {
+    for (let minute = 0; minute < minutes; minute += 15) {
+      time.addPresence({ projectId: project.id, startedAt: at(DAY, hour, minute), endedAt: at(DAY, hour, minute + 15) });
+    }
+  };
+  presence(9, 30);
+  await service.generate(DAY);
+  expect(service.report(DAY)!.totals.userMs).toBe(30 * 60_000);
+  presence(21, 45);
+  expect(service.report(DAY)!.projects[0]!.userMs).toBe(75 * 60_000);
+  expect(service.report(DAY)!.totals.userMs).toBe(75 * 60_000);
   db.close();
 });
 
-test("le calendrier couvre un an jusqu'à aujourd'hui, du lundi, avec commits, MR, présence et rapport par jour", () => {
-  const { db, project, changelog, service, seedDay, clock, tickets } = setup();
-  seedDay();
-  const integrations = new IntegrationStore(db);
-  const gitlab = integrations.upsert(project.id, "gitlab", { config: { host: "https://git", projects: [] } });
-  integrations.markOk(gitlab.id, { username: "clement.serizay" });
-  const ticket = tickets.upsert(project.id, { key: "TECH-1", source: "git", title: "MR", status: "", externalUrl: null });
-  tickets.upsertRef(ticket.id, { kind: "mr", ref: "reactor!1", payload: { iid: 1, project: "reactor", title: "MR", url: "https://git/1", state: "opened", author: "clement.serizay", createdAt: `${DAY}T09:00:00.000+02:00` } });
-  changelog.import(project.id, [
-    { repositoryPath: ".", sha: "9".repeat(40), branch: "master", subject: "cal", committedAt: `${DAY}T10:00:00+02:00` },
-  ], `${DAY}T12:00:00.000Z`);
-  changelog.setLineStats(project.id, [{ sha: "9".repeat(40), added: 12, removed: 3 }]);
-  clock.now = new Date(`${DAY}T18:00:00`);
-  const calendar = service.calendar();
-  expect(calendar.to).toBe(DAY);
-  expect(new Date(`${calendar.from}T12:00:00`).getDay()).toBe(1);
-  expect(calendar.days).toHaveLength(52 * 7 + ((new Date(`${DAY}T12:00:00`).getDay() + 6) % 7) + 1);
-  expect(calendar.days[calendar.days.length - 1]).toEqual(expect.objectContaining({
-    day: DAY, hasReport: false, linesAdded: 12, linesRemoved: 3, mergeRequests: 1,
-    projects: [expect.objectContaining({ projectName: "Pupitre", commits: 2, mergeRequests: 1 })],
+test("le tri fusionne les doublons, note de 1 à 5, garde dix motifs et ne retrie que ce qui a bougé", async () => {
+  const { db, project, store, service, strongCalls, setStrong, clock } = setup();
+  const evidence = (ref: string) => [{ kind: "conversation" as const, ref: `${ref}-a`, label: "A" }, { kind: "conversation" as const, ref: `${ref}-b`, label: "B" }];
+  const motifs = Array.from({ length: 12 }, (_, index) => store.createMotif({
+    projectId: project.id, kind: "practice", title: `Motif ${index}`, statement: "Constat.", day: DAY, evidence: evidence(`m${index}`),
+  }, at(DAY, 10)));
+  setStrong(() => JSON.stringify({
+    merges: [{ keep: motifs[0]!.id, absorb: [motifs[1]!.id, "inconnu"] }],
+    ranking: [
+      { id: motifs[1]!.id, stars: 5, reason: "absorbé" },
+      ...motifs.slice(2).map((motif, index) => ({ id: motif.id, stars: index === 3 ? 9 : 2, reason: `Raison ${index}` })),
+      { id: motifs[0]!.id, stars: 4, reason: "Gardé" },
+    ],
   }));
-  expect(calendar.days[calendar.days.length - 1]!.commits).toBe(2);
-  expect(calendar.days[0]!.commits).toBe(0);
+
+  expect(await service.runTriage(DAY)).toEqual([]);
+  expect(strongCalls[0]!.prompt).toContain(motifs[11]!.id);
+  expect(store.motif(motifs[1]!.id)).toBeNull();
+  expect(store.motif(motifs[0]!.id)!.evidence).toHaveLength(4);
+  const ranked = store.listMotifs({ statuses: ["open"] }).filter((motif) => motif.rank !== null).sort((a, b) => a.rank! - b.rank!);
+  expect(ranked).toHaveLength(10);
+  expect(ranked.slice(0, 2).map((motif) => [motif.id, motif.stars])).toEqual([[motifs[5]!.id, 5], [motifs[0]!.id, 4]]);
+  expect(store.listMotifs({ statuses: ["open"] }).filter((motif) => motif.rank === null)).toHaveLength(1);
+
+  await service.runTriage(DAY);
+  expect(strongCalls).toHaveLength(1);
+
+  clock.now = new Date(`2026-08-25T18:00:00`);
+  store.addEvidence(motifs[0]!.id, "2026-08-25", [{ kind: "conversation", ref: "nouvelle", label: "Nouvelle" }], at("2026-08-25", 10));
+  setStrong(() => JSON.stringify({ ranking: [{ id: motifs[0]!.id, stars: 5, reason: "Revient chaque jour." }] }));
+  await service.runTriage("2026-08-25");
+  expect(strongCalls).toHaveLength(2);
+  expect(store.motif(motifs[0]!.id)).toEqual(expect.objectContaining({ stars: 5, stars_previous: 4, stars_changed_day: "2026-08-25", rank: 1 }));
+  expect(store.motif(motifs[5]!.id)).toEqual(expect.objectContaining({ stars: 5, rank: null }));
+  db.close();
+});
+
+test("un motif ouvert sans preuve depuis trente jours est écarté, et une réponse illisible garde l'ordre", async () => {
+  const { db, project, store, service, setStrong } = setup();
+  const old = store.createMotif({
+    projectId: project.id, kind: "idea", title: "Ancien", statement: "…", day: "2026-07-01",
+    evidence: [{ kind: "conversation", ref: "a", label: "A" }, { kind: "conversation", ref: "b", label: "B" }],
+  }, at("2026-07-01", 10));
+  const fresh = store.createMotif({
+    projectId: project.id, kind: "idea", title: "Récent", statement: "…", day: DAY,
+    evidence: [{ kind: "conversation", ref: "c", label: "C" }, { kind: "conversation", ref: "d", label: "D" }],
+  }, at(DAY, 10));
+  setStrong(() => "pas de JSON");
+  expect(await service.runTriage(DAY)).toEqual(["tri Pupitre : réponse de tri illisible"]);
+  expect(store.motif(old.id)).toEqual(expect.objectContaining({ status: "dismissed", returned_at: null }));
+  expect(store.motif(fresh.id)).toEqual(expect.objectContaining({ status: "open", stars: null, rank: null }));
+  expect(service.retro().motifs.map((motif) => motif.id)).toEqual([fresh.id]);
   db.close();
 });

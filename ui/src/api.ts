@@ -198,12 +198,15 @@ export interface RunningApplication {
 export const getRunningApplications = (): Promise<RunningApplication[]> => fetchJson('/api/applications')
 
 export type ActivityEvidence = { motif_id: string; kind: 'conversation' | 'commit' | 'ticket' | 'problem'; ref: string; project_id: string; label: string; day: string }
-export type ActivityMotif = { id: string; project_id: string; kind: 'recurrence' | 'stabilize' | 'practice' | 'idea'; title: string; statement: string; status: 'open' | 'stabilized' | 'dismissed' | 'handled'; first_seen_day: string; last_seen_day: string; returned_at: string | null; todo_id: string | null; evidence: ActivityEvidence[] }
+export type ActivityMotif = { id: string; project_id: string; kind: 'recurrence' | 'stabilize' | 'practice' | 'idea'; title: string; statement: string; status: 'open' | 'stabilized' | 'dismissed' | 'handled'; first_seen_day: string; last_seen_day: string; returned_at: string | null; todo_id: string | null; stars: number | null; stars_previous: number | null; stars_changed_day: string | null; rank: number | null; rank_reason: string | null; evidence: ActivityEvidence[] }
 export interface ActivityReportTicket { id: string; key: string; title: string; externalUrl: string | null }
 export interface ActivityReportMergeRequest { ref: string; iid: number; project: string; title: string; url: string; state: string; ticketKey: string; createdAt: string }
 export interface ActivityReportTicketReady { ticketId: string; key: string; title: string; externalUrl: string | null; toStatus: string; changedAt: string }
 export interface ActivityReportCommit { sha: string; repositoryPath: string; branch: string; subject: string; productMessage: string | null; linesAdded: number | null; linesRemoved: number | null; committedAt: string; conversationId: string | null; isMerge: boolean }
-export interface ActivityCalendarDay { day: string; commits: number; linesAdded: number; linesRemoved: number; mergeRequests: number; userMs: number; hasReport: boolean; projects: Array<{ projectId: string; projectName: string; commits: number; linesAdded: number; linesRemoved: number; mergeRequests: number }> }
+export interface AgendaProject { id: string; name: string; color: string }
+export interface AgendaBlock { projectId: string; source: 'presence' | 'agent'; day: string; start: string; end: string; conversationId: string | null }
+export interface AgendaRange { from: string; to: string; blocks: AgendaBlock[]; totals: Record<string, Record<string, { totalMs: number; userMs: number; agentMs: number }>>; projects: AgendaProject[] }
+export interface AgendaArchive { year: number; years: number[]; weeks: Array<{ week: string; projects: Record<string, { totalMs: number; userMs: number }> }>; projects: AgendaProject[] }
 export interface ActivityReportProject {
   personal?: boolean;
   projectId: string; projectName: string; userMs: number; agentMs: number; linesAdded: number; linesRemoved: number; unlinkedCommitCount: number
@@ -221,11 +224,14 @@ export interface ActivityReport {
   projects: ActivityReportProject[]
   retro: { created: string[]; updated: string[]; stabilized: string[]; returned: string[]; error: string | null }
 }
-export interface ActivityReportIndex { days: Array<{ day: string; generated_at: string; projectCount: number; commits: number; mergeRequests: number; ticketsReady: number; userMs: number }>; calendar: { from: string; to: string; days: ActivityCalendarDay[] }; retro: { cumulative: { firstDay: string | null; activeDays: number; userMs: number; agentMs: number; commits: number; linesAdded: number; linesRemoved: number; projects: number }; trends: Array<{ days: number; userMs: number; agentMs: number; activeDays: number; commits: number; linesAdded: number; linesRemoved: number }>; motifs: ActivityMotif[] }; run: { running: boolean; runningDay: string | null } }
+export interface ActivityReportIndex { days: Array<{ day: string; generated_at: string; projectCount: number; commits: number; mergeRequests: number; ticketsReady: number; userMs: number }>; retro: { motifs: ActivityMotif[]; projects: AgendaProject[] }; run: { running: boolean; runningDay: string | null } }
 
 export const getSidecarJournal = (): Promise<SidecarJournal> => fetchJson('/api/sidecar-journal')
 export const getActivityReportIndex = (): Promise<ActivityReportIndex> => fetchJson('/api/activity-reports')
 export const getActivityReport = (day: string): Promise<ActivityReport> => fetchJson(`/api/activity-reports/${routeId(day)}`)
+export const getActivityAgenda = (from: string, to: string): Promise<AgendaRange> => fetchJson(`/api/activity-reports/agenda?from=${from}&to=${to}`)
+export const getActivityArchive = (year: number): Promise<AgendaArchive> => fetchJson(`/api/activity-reports/archive?year=${year}`)
+export const runActivityTriage = (): Promise<{ errors: string[]; retro: ActivityReportIndex['retro'] }> => fetchJson('/api/activity-reports/triage', jsonPost({}))
 export const runActivityReport = (day: string): Promise<ActivityReport | null> => fetchJson('/api/activity-reports/run', jsonPost({ day }))
 export const dismissActivityMotif = (id: string): Promise<ActivityMotif> => fetchJson(`/api/activity-motifs/${routeId(id)}/dismiss`, jsonPost({}))
 export const createActivityMotifTask = (id: string): Promise<{ motif: ActivityMotif }> => fetchJson(`/api/activity-motifs/${routeId(id)}/task`, jsonPost({}))

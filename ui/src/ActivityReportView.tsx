@@ -1,25 +1,58 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   createActivityMotifTask,
   dismissActivityMotif,
   getActivityReport,
   getActivityReportIndex,
   runActivityReport,
+  runActivityTriage,
+  type ActivityMotif,
   type ActivityReport,
   type ActivityReportIndex,
   type ActivityReportProject,
   type ActivityReportTicket,
 } from './api'
-import { ActivityCalendar } from './ActivityCalendar'
+import { ActivityAgenda, addDays, duration, localDay } from './ActivityAgenda'
 import { ExternalLink } from './externalLink'
 
-const hours = (ms: number) => ms < 60_000 ? '0 h' : `${(ms / 3_600_000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} h`
-const number = (value: number) => value.toLocaleString('fr-FR')
-const plural = (count: number, singular: string, pluralForm = `${singular}s`) => `${number(count)} ${count > 1 ? pluralForm : singular}`
+export type ReportTab = 'agenda' | 'journal' | 'recul'
+
+/** Motifs affichés par projet ; au-delà, la réserve. */
+export const TOP_MOTIFS = 10
+/** Fenêtre pendant laquelle une hausse d'étoiles reste signalée. */
+export const RISING_DAYS = 7
+const RISING_MAX = 5
+
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 const dayLabel = (day: string) => capitalize(new Date(`${day}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))
-const shortDayLabel = (day: string) => capitalize(new Date(`${day}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }))
+const shortDay = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
 const clock = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+const plural = (count: number, singular: string, pluralForm = `${singular}s`) => `${count.toLocaleString('fr-FR')} ${count > 1 ? pluralForm : singular}`
+const KIND_LABEL: Record<ActivityMotif['kind'], string> = { recurrence: 'récurrence', stabilize: 'à stabiliser', practice: 'pratique', idea: 'idée' }
+
+/** Ouverts uniquement : le top dans l'ordre du tri, la réserve ensuite ; sans tri, la fraîcheur décide. */
+export function rankMotifs(motifs: ActivityMotif[]): { top: ActivityMotif[]; reserve: ActivityMotif[]; triaged: boolean } {
+  const open = motifs.filter((motif) => motif.status === 'open')
+  const ranked = open.filter((motif) => motif.rank !== null).sort((left, right) => left.rank! - right.rank!)
+  if (ranked.length === 0) {
+    const fresh = [...open].sort((left, right) => right.last_seen_day.localeCompare(left.last_seen_day))
+    return { top: fresh.slice(0, TOP_MOTIFS), reserve: fresh.slice(TOP_MOTIFS), triaged: false }
+  }
+  const top = ranked.slice(0, TOP_MOTIFS)
+  const shown = new Set(top.map((motif) => motif.id))
+  const reserve = open.filter((motif) => !shown.has(motif.id))
+    .sort((left, right) => (right.stars ?? 0) - (left.stars ?? 0) || right.last_seen_day.localeCompare(left.last_seen_day))
+  return { top, reserve, triaged: true }
+}
+
+/** Motifs ouverts dont la note a monté au tri des derniers jours : la friction qui s'aggrave. */
+export function risingMotifs(motifs: ActivityMotif[], today: string): ActivityMotif[] {
+  const since = addDays(today, -RISING_DAYS)
+  return motifs
+    .filter((motif) => motif.status === 'open' && motif.stars !== null && motif.stars_previous !== null && motif.stars > motif.stars_previous && (motif.stars_changed_day ?? '') >= since)
+    .sort((left, right) => (right.stars! - right.stars_previous!) - (left.stars! - left.stars_previous!) || right.stars! - left.stars!)
+    .slice(0, RISING_MAX)
+}
 
 function ClickUpMark() {
   return (
@@ -52,35 +85,18 @@ function TicketChip({ ticket, compact = false }: { ticket: ActivityReportTicket;
   )
 }
 
-function Lines({ added, removed, muted = false }: { added: number; removed: number; muted?: boolean }) {
-  return <span className={`activity-lines${muted ? ' is-muted' : ''}`}><i>+{number(added)}</i><em>−{number(removed)}</em></span>
-}
-
-function ProjectCard({ project, onOpenConversation }: { project: ActivityReportProject; onOpenConversation: (projectId: string, conversationId: string) => void }) {
+function ProjectJournal({ project, onOpenConversation }: { project: ActivityReportProject; onOpenConversation: (projectId: string, conversationId: string) => void }) {
   const ticketById = useMemo(() => new Map(project.tickets.map((ticket) => [ticket.id, ticket])), [project.tickets])
   const conversationById = useMemo(() => new Map(project.conversations.map((conversation) => [conversation.id, conversation])), [project.conversations])
+  const outcomes = project.mergeRequests.length + project.ticketsReady.length
   return (
     <article className="activity-project">
       <header className="activity-project-header">
         <h3>{project.projectName}</h3>
-        <p>
-          <span>{hours(project.userMs)} de présence</span>
-          <span>{hours(project.agentMs)} d’agent</span>
-          <span>{plural(project.commits.length, 'commit')}</span>
-          <Lines added={project.linesAdded} removed={project.linesRemoved} />
-        </p>
+        <p><span>{duration(project.userMs)} de présence</span><span>{duration(project.agentMs)} d’agent</span></p>
       </header>
 
-      {project.tickets.length > 0 ? (
-        <div className="activity-project-tickets">
-          {project.tickets.map((ticket) => <TicketChip key={ticket.id} ticket={ticket} />)}
-        </div>
-      ) : null}
-
-      {project.personal && <div className="activity-outcomes">
-        {project.todosDone.length > 0 && <span className="activity-outcome">{project.todosDone.length} éléments de backlog terminés</span>}
-      </div>}
-      {!project.personal && (project.mergeRequests.length > 0 || project.ticketsReady.length > 0) ? (
+      {outcomes > 0 ? (
         <div className="activity-outcomes">
           {project.mergeRequests.map((mr) => (
             <ExternalLink key={mr.ref} className="activity-outcome is-mr" href={mr.url} title={`Ouvrir ${mr.ref} dans GitLab`} ariaLabel={`Ouvrir ${mr.ref} dans GitLab`}>
@@ -133,30 +149,6 @@ function ProjectCard({ project, onOpenConversation }: { project: ActivityReportP
         </ol>
       ) : null}
 
-      {project.commits.length > 0 ? (
-        <div className="activity-commits">
-          <div className="activity-commits-heading">
-            <h4>{plural(project.commits.length, 'commit')}</h4>
-            <span>{project.unlinkedCommitCount > 0 ? `${project.unlinkedCommitCount} hors conversation` : 'tous reliés à une conversation'}</span>
-          </div>
-          {project.commits.map((commit) => (
-            <div className={`activity-commit${commit.conversationId === null ? ' is-unlinked' : ''}${commit.isMerge ? ' is-merge' : ''}`} key={commit.sha}>
-              <span className="activity-commit-time">{clock(commit.committedAt)}</span>
-              <code>{commit.sha.slice(0, 7)}</code>
-              <p>
-                {commit.productMessage || commit.subject}
-                {commit.isMerge ? <span className="activity-merge">fusion</span> : null}
-                {commit.repositoryPath !== '.' ? <small>{commit.repositoryPath}</small> : null}
-              </p>
-              <Lines added={commit.linesAdded ?? 0} removed={commit.linesRemoved ?? 0} muted={commit.isMerge} />
-              {commit.conversationId
-                ? <button type="button" className="activity-read is-small" onClick={() => onOpenConversation(project.projectId, commit.conversationId!)}>Conversation</button>
-                : <span className="activity-unlinked">hors conversation</span>}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
       {project.todosDone.length > 0 ? (
         <div className="activity-done">
           <span>Tâches terminées</span>
@@ -167,113 +159,206 @@ function ProjectCard({ project, onOpenConversation }: { project: ActivityReportP
   )
 }
 
+function Journal({ index, day, report, onDay, onOpenConversation }: {
+  index: ActivityReportIndex
+  day: string
+  report: ActivityReport | null
+  onDay: (day: string) => void
+  onOpenConversation: (projectId: string, conversationId: string) => void
+}) {
+  const days = index.days.map((item) => item.day)
+  const older = days.find((item) => item < day) ?? null
+  const newer = [...days].reverse().find((item) => item > day) ?? null
+  const projects = report?.projects.filter((project) => project.topics.length > 0 || project.mergeRequests.length > 0 || project.ticketsReady.length > 0 || project.todosDone.length > 0) ?? []
+  const meta = report ? [
+    `${duration(report.totals.userMs)} de présence`,
+    `${duration(report.totals.agentMs)} d’agent`,
+    plural(report.totals.conversations, 'conversation'),
+    report.totals.mergeRequests > 0 ? plural(report.totals.mergeRequests, 'MR ouverte', 'MR ouvertes') : null,
+    report.totals.ticketsReady > 0 ? plural(report.totals.ticketsReady, 'ticket prêt pour la prod', 'tickets prêts pour la prod') : null,
+  ].filter(Boolean).join(' · ') : ''
+  return (
+    <section className="activity-journal-tab">
+      <div className="agenda-toolbar">
+        <div className="agenda-nav">
+          <button type="button" aria-label="Rapport précédent" disabled={!older} onClick={() => older && onDay(older)}>‹</button>
+          <button type="button" className="agenda-today" disabled={!days[0]} onClick={() => days[0] && onDay(days[0])}>Dernier</button>
+          <button type="button" aria-label="Rapport suivant" disabled={!newer} onClick={() => newer && onDay(newer)}>›</button>
+        </div>
+        <h2 className="agenda-period">{dayLabel(day)}</h2>
+      </div>
+      {!report ? <div className="empty-state"><p>Aucun rapport pour ce jour.</p></div> : <>
+        <p className={`activity-summary${report.summary ? '' : ' is-fallback'}`}>{report.summary ?? 'Résumé indisponible pour ce jour.'}</p>
+        <p className="activity-meta">{meta}</p>
+        <div className="activity-journal">
+          {projects.map((project) => <ProjectJournal key={project.projectId} project={project} onOpenConversation={onOpenConversation} />)}
+        </div>
+      </>}
+    </section>
+  )
+}
+
+function Stars({ count }: { count: number | null }) {
+  if (count === null) return null
+  return <span className="motif-stars" aria-label={`${count} étoile${count > 1 ? 's' : ''} sur 5`}>{'★'.repeat(count)}<i>{'★'.repeat(5 - count)}</i></span>
+}
+
+function MotifItem({ motif, position, projectName, busy, onAct, onOpenConversation }: {
+  motif: ActivityMotif
+  position: number | null
+  projectName?: string
+  busy: boolean
+  onAct: (id: string, action: 'dismiss' | 'task') => void
+  onOpenConversation: (projectId: string, conversationId: string) => void
+}) {
+  const rise = motif.stars !== null && motif.stars_previous !== null && motif.stars > motif.stars_previous
+  return (
+    <li className="motif" data-motif-id={motif.id}>
+      {position !== null ? <span className="motif-rank">{position}</span> : null}
+      <details>
+        <summary>
+          <span className="motif-title">{motif.title}</span>
+          <span className="motif-kind">{projectName ? `${projectName} · ` : ''}{KIND_LABEL[motif.kind]}{motif.returned_at ? ' · revenu' : ''}</span>
+          {motif.rank_reason ? <span className="motif-reason">{motif.rank_reason}</span> : null}
+        </summary>
+        <p>{motif.statement}</p>
+        <div className="activity-evidence">
+          {motif.evidence.map((evidence) => evidence.kind === 'conversation'
+            ? <button type="button" className="activity-read is-small" key={`${evidence.kind}-${evidence.ref}`} onClick={() => onOpenConversation(evidence.project_id, evidence.ref)}>{evidence.label}</button>
+            : <span key={`${evidence.kind}-${evidence.ref}`}>{evidence.label}</span>)}
+        </div>
+        <footer>
+          <button type="button" className="primary-button" disabled={busy} onClick={() => onAct(motif.id, 'task')}>Créer une tâche</button>
+          <button type="button" className="secondary-button" disabled={busy} onClick={() => onAct(motif.id, 'dismiss')}>Écarter</button>
+        </footer>
+      </details>
+      <span className="motif-score">
+        <Stars count={motif.stars} />
+        {rise ? <small className="motif-rise">+{motif.stars! - motif.stars_previous!} le {shortDay(motif.stars_changed_day!)}</small> : null}
+      </span>
+    </li>
+  )
+}
+
+function Recul({ retro, busy, onAct, onTriage, onOpenConversation }: {
+  retro: ActivityReportIndex['retro']
+  busy: boolean
+  onAct: (id: string, action: 'dismiss' | 'task') => void
+  onTriage: () => void
+  onOpenConversation: (projectId: string, conversationId: string) => void
+}) {
+  const names = useMemo(() => new Map(retro.projects.map((project) => [project.id, project.name])), [retro.projects])
+  const colors = useMemo(() => new Map(retro.projects.map((project) => [project.id, project.color])), [retro.projects])
+  const byProject = useMemo(() => {
+    const out = new Map<string, ActivityMotif[]>()
+    for (const motif of retro.motifs) if (motif.status === 'open') out.set(motif.project_id, [...(out.get(motif.project_id) ?? []), motif])
+    return [...out.entries()].sort((left, right) => right[1].length - left[1].length)
+  }, [retro.motifs])
+  const [selected, setSelected] = useState<string | null>(null)
+  const current = byProject.find(([id]) => id === selected) ?? byProject[0]
+  const rising = risingMotifs(retro.motifs, localDay(new Date()))
+  if (!current) return <div className="empty-state"><p>Aucun constat ouvert. La passe du soir en relèvera dès qu’une friction revient.</p></div>
+  const ranking = rankMotifs(current[1])
+  const itemProps = { busy, onAct, onOpenConversation }
+  return (
+    <section className="recul">
+      {rising.length > 0 ? (
+        <div className="recul-rising">
+          <h2>En hausse</h2>
+          <p>Ces constats ont gagné des étoiles au dernier tri : la friction s’aggrave.</p>
+          <ol className="motifs">
+            {rising.map((motif) => <MotifItem key={motif.id} motif={motif} position={null} projectName={names.get(motif.project_id)} {...itemProps} />)}
+          </ol>
+        </div>
+      ) : null}
+      <div className="recul-head">
+        <div className="recul-chips" role="tablist" aria-label="Projets">
+          {byProject.map(([id, motifs]) => (
+            <button type="button" role="tab" aria-selected={id === current[0]} key={id} className={id === current[0] ? 'is-active' : ''} style={{ '--project': colors.get(id) ?? '#94a3b8' } as CSSProperties} onClick={() => setSelected(id)}>
+              <i />{names.get(id) ?? id}<small>{Math.min(TOP_MOTIFS, motifs.length)}</small>
+            </button>
+          ))}
+        </div>
+        <button type="button" className="secondary-button" disabled={busy} onClick={onTriage}>{busy ? 'Tri en cours…' : 'Retrier'}</button>
+      </div>
+      {!ranking.triaged ? <p className="recul-note">Pas encore trié : les plus récents d’abord. Le tri du soir les notera sur cinq étoiles.</p> : null}
+      <ol className="motifs">
+        {ranking.top.map((motif, position) => <MotifItem key={motif.id} motif={motif} position={position + 1} {...itemProps} />)}
+      </ol>
+      {ranking.reserve.length > 0 ? (
+        <details className="recul-reserve">
+          <summary>{plural(ranking.reserve.length, 'autre constat', 'autres constats')} en réserve</summary>
+          <ol className="motifs">
+            {ranking.reserve.map((motif) => <MotifItem key={motif.id} motif={motif} position={null} {...itemProps} />)}
+          </ol>
+        </details>
+      ) : null}
+    </section>
+  )
+}
+
 export function ActivityReportView({ onOpenConversation }: { onOpenConversation: (projectId: string, conversationId: string) => void }) {
+  const [tab, setTab] = useState<ReportTab>('agenda')
   const [index, setIndex] = useState<ActivityReportIndex | null>(null)
   const [report, setReport] = useState<ActivityReport | null>(null)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const today = new Date().toLocaleDateString('en-CA')
+  const today = localDay(new Date())
 
+  async function loadDay(day: string) {
+    setSelectedDay(day)
+    setReport(await getActivityReport(day).catch(() => null))
+  }
   async function refresh(preferred?: string) {
     const next = await getActivityReportIndex()
     setIndex(next)
-    const day = preferred ?? selectedDay ?? next.days[0]?.day ?? null
-    setSelectedDay(day)
-    setReport(day ? await getActivityReport(day) : null)
+    const day = preferred ?? selectedDay ?? next.days[0]?.day ?? today
+    await loadDay(day)
   }
   useEffect(() => { void refresh().catch((cause) => setError(cause instanceof Error ? cause.message : 'Chargement impossible')) }, [])
-  async function select(day: string) { setSelectedDay(day); setReport(await getActivityReport(day)) }
   async function run() {
     setBusy(true); setError(null)
     try { await runActivityReport(today); await refresh(today) } catch (cause) { setError(cause instanceof Error ? cause.message : 'Passe impossible') } finally { setBusy(false) }
+  }
+  async function triage() {
+    setBusy(true); setError(null)
+    try {
+      const result = await runActivityTriage()
+      setIndex((current) => current ? { ...current, retro: result.retro } : current)
+      if (result.errors.length > 0) setError(result.errors.join(' · '))
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Tri impossible') } finally { setBusy(false) }
   }
   async function act(id: string, action: 'dismiss' | 'task') {
     setBusy(true)
     try { action === 'dismiss' ? await dismissActivityMotif(id) : await createActivityMotifTask(id); await refresh(selectedDay ?? undefined) } finally { setBusy(false) }
   }
-  const changed = useMemo(() => new Set(report ? [...report.retro.created, ...report.retro.updated, ...report.retro.returned] : []), [report])
-  const fallbackSummary = useMemo(() => {
-    if (!report) return ''
-    const names = report.projects.map((project) => project.projectName)
-    const projectsText = names.length === 1 ? `sur ${names[0]}` : `sur ${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}`
-    return `${hours(report.totals.userMs)} de présence ${projectsText}, ${plural(report.totals.commits, 'commit')}, ${plural(report.totals.conversations, 'conversation')}.`
-  }, [report])
   if (!index) return <div className="empty-state"><p>{error ?? 'Chargement du rapport…'}</p></div>
+  const rising = risingMotifs(index.retro.motifs, today).length
 
   return (
     <section className="activity-report-view">
       <header className="activity-report-header">
-        <h1>Rapport d’activité</h1>
-        <button type="button" className="primary-button" disabled={busy || index.run.running} onClick={() => void run()}>
-          {busy || index.run.running ? 'Passe en cours…' : 'Relancer aujourd’hui'}
-        </button>
+        <div className="report-tabs" role="tablist" aria-label="Rapport">
+          {(['agenda', 'journal', 'recul'] as const).map((item) => (
+            <button type="button" role="tab" key={item} aria-selected={tab === item} className={tab === item ? 'is-active' : ''} onClick={() => setTab(item)}>
+              {item === 'agenda' ? 'Agenda' : item === 'journal' ? 'Journal' : 'Recul'}
+              {item === 'recul' && rising > 0 ? <span className="report-tab-badge" title={`${rising} constat${rising > 1 ? 's' : ''} en hausse`}>▲ {rising}</span> : null}
+            </button>
+          ))}
+        </div>
+        {tab === 'journal' ? (
+          <button type="button" className="secondary-button" disabled={busy || index.run.running} onClick={() => void run()}>
+            {busy || index.run.running ? 'Passe en cours…' : 'Relancer aujourd’hui'}
+          </button>
+        ) : null}
       </header>
       {error ? <p className="modal-error" role="alert">{error}</p> : null}
-
-      <nav className="activity-days" aria-label="Jours du rapport">
-        {index.days.map((item) => (
-          <button type="button" key={item.day} className={item.day === selectedDay ? 'is-active' : ''} onClick={() => void select(item.day)}>
-            <strong>{shortDayLabel(item.day)}</strong>
-            <span>
-              {plural(item.commits, 'commit')}
-              {item.mergeRequests > 0 ? <b>{plural(item.mergeRequests, 'MR', 'MR')}</b> : null}
-              {item.ticketsReady > 0 ? <b className="is-ready">{plural(item.ticketsReady, 'prêt')}</b> : null}
-            </span>
-          </button>
-        ))}
-      </nav>
-
-      <ActivityCalendar calendar={index.calendar} selectedDay={selectedDay} onSelect={(day) => void select(day)} />
-
-      {!report ? <div className="empty-state"><p>Aucune activité n’a encore produit de rapport.</p></div> : <>
-        <section className="activity-day">
-          <h2>{dayLabel(report.day)}</h2>
-          <p className={`activity-summary${report.summary ? '' : ' is-fallback'}`}>{report.summary ?? fallbackSummary}</p>
-          <dl className="activity-totals" aria-label="Totaux du jour">
-            <div className={`is-outcome${report.totals.mergeRequests === 0 ? ' is-zero' : ''}`}><dd>{number(report.totals.mergeRequests)}</dd><dt>{report.totals.mergeRequests > 1 ? 'MR ouvertes' : 'MR ouverte'}</dt></div>
-            <div className={`is-outcome is-ready${report.totals.ticketsReady === 0 ? ' is-zero' : ''}`}><dd>{number(report.totals.ticketsReady)}</dd><dt>{report.totals.ticketsReady > 1 ? 'tickets prêts pour la prod' : 'ticket prêt pour la prod'}</dt></div>
-            <div><dd>{number(report.totals.commits)}</dd><dt>{report.totals.commits > 1 ? 'commits' : 'commit'}</dt></div>
-            <div><dd><Lines added={report.totals.linesAdded} removed={report.totals.linesRemoved} /></dd><dt>lignes</dt></div>
-            <div><dd>{hours(report.totals.userMs)}</dd><dt>de présence</dt></div>
-            <div><dd>{hours(report.totals.agentMs)}</dd><dt>d’agent</dt></div>
-          </dl>
-        </section>
-
-        <section className="activity-journal" aria-label="Journal par projet">
-          {report.projects.map((project) => <ProjectCard key={project.projectId} project={project} onOpenConversation={onOpenConversation} />)}
-        </section>
-
-        <section className="activity-retro">
-          <h2>Recul</h2>
-          <div className="activity-cumulative">
-            <p>Depuis {index.retro.cumulative.firstDay ? dayLabel(index.retro.cumulative.firstDay) : 'le début'} : <strong>{plural(index.retro.cumulative.activeDays, 'jour actif', 'jours actifs')}</strong>, {hours(index.retro.cumulative.userMs)} de présence, {plural(index.retro.cumulative.commits, 'commit')}, <Lines added={index.retro.cumulative.linesAdded} removed={index.retro.cumulative.linesRemoved} /> lignes.</p>
-            {index.retro.trends.map((trend) => <p key={trend.days}><strong>{trend.days} derniers jours</strong> : {plural(trend.activeDays, 'jour actif', 'jours actifs')}, {hours(trend.userMs)}, {plural(trend.commits, 'commit')}</p>)}
-          </div>
-          <div className="activity-motifs">
-            {index.retro.motifs.map((motif) => (
-              <article key={motif.id} className={changed.has(motif.id) ? 'is-changed' : ''}>
-                <header>
-                  <h3>{motif.title}</h3>
-                  <span>{motif.kind === 'idea' ? 'Idée' : motif.status === 'handled' ? 'Pris en charge' : motif.status === 'stabilized' ? 'Stabilisé' : 'Ouvert'}</span>
-                </header>
-                <p>{motif.statement}</p>
-                <div className="activity-evidence">
-                  {motif.evidence.map((evidence) => evidence.kind === 'conversation'
-                    ? <button type="button" className="activity-read is-small" key={`${evidence.kind}-${evidence.ref}`} onClick={() => onOpenConversation(evidence.project_id, evidence.ref)}>{evidence.label}</button>
-                    : <span key={`${evidence.kind}-${evidence.ref}`}>{evidence.label}</span>)}
-                </div>
-                {motif.status === 'open' ? (
-                  <footer>
-                    <button type="button" className="primary-button" disabled={busy} onClick={() => void act(motif.id, 'task')}>Créer une tâche</button>
-                    <button type="button" className="secondary-button" disabled={busy} onClick={() => void act(motif.id, 'dismiss')}>Écarter</button>
-                  </footer>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </section>
-      </>}
+      <div className="report-pane">
+        {tab === 'agenda' ? <ActivityAgenda onOpenConversation={onOpenConversation} onOpenDay={(day) => { setTab('journal'); void loadDay(day) }} /> : null}
+        {tab === 'journal' ? <Journal index={index} day={selectedDay ?? today} report={report} onDay={(day) => void loadDay(day)} onOpenConversation={onOpenConversation} /> : null}
+        {tab === 'recul' ? <Recul retro={index.retro} busy={busy} onAct={(id, action) => void act(id, action)} onTriage={() => void triage()} onOpenConversation={onOpenConversation} /> : null}
+      </div>
     </section>
   )
 }

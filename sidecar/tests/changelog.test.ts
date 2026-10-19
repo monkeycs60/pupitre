@@ -476,9 +476,6 @@ test("une fusion garde ses +/− mais sort des totaux de lignes", async () => {
     is_merge: 0, lines_added: 3, lines_removed: 1,
   }));
   expect(context.store.totals(context.project.id)).toEqual({ commits: 2, linesAdded: 3, linesRemoved: 1 });
-  expect(context.store.dailyTotals("2026-08-24", "2026-08-24")).toEqual([
-    { day: "2026-08-24", projectId: context.project.id, commits: 2, linesAdded: 3, linesRemoved: 1 },
-  ]);
   context.db.close();
 });
 

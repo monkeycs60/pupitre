@@ -610,6 +610,12 @@ export function openDb(dir: string = dataDir()): Database {
   dropEventsForeignKey(db);
   migrateDocuments(db);
   addColumn(db, "conversations", "effort TEXT NULL");
+  addColumn(db, "activity_motifs", "stars INTEGER NULL");
+  addColumn(db, "activity_motifs", "stars_previous INTEGER NULL");
+  addColumn(db, "activity_motifs", "stars_changed_day TEXT NULL");
+  addColumn(db, "activity_motifs", "rank INTEGER NULL");
+  addColumn(db, "activity_motifs", "rank_reason TEXT NULL");
+  addColumn(db, "activity_motifs", "ranked_at TEXT NULL");
   addColumn(db, "conversations", "speed TEXT NULL");
   addColumn(db, "conversations", "preset_id TEXT NULL REFERENCES presets(id) ON DELETE SET NULL");
   addColumn(db, "review_comments", "head_at_send TEXT NULL");

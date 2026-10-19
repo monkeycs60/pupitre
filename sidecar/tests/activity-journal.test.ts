@@ -294,28 +294,29 @@ test("une fusion reste dans la liste avec ses +/− et sort des totaux du jour",
 });
 
 
-test("les totaux quotidiens du changelog suivent le jour local du commit, et la présence quotidienne recolle les tranches", () => {
-  const { db, project, changelog, time } = setup();
-  changelog.import(project.id, [
-    { repositoryPath: ".", sha: "1".repeat(40), branch: "master", subject: "tard", committedAt: "2026-08-24T23:50:00+02:00" },
-    { repositoryPath: ".", sha: "2".repeat(40), branch: "master", subject: "tôt", committedAt: "2026-08-25T00:10:00+02:00" },
-    { repositoryPath: ".", sha: "3".repeat(40), branch: "master", subject: "hors", committedAt: "2026-08-20T12:00:00+02:00" },
-  ], at(DAY, 12));
-  changelog.setLineStats(project.id, [{ sha: "1".repeat(40), added: 5, removed: 1 }, { sha: "2".repeat(40), added: 7, removed: 0 }]);
-  expect(changelog.dailyTotals("2026-08-24", "2026-08-25")).toEqual([
-    { day: "2026-08-24", projectId: project.id, commits: 1, linesAdded: 5, linesRemoved: 1 },
-    { day: "2026-08-25", projectId: project.id, commits: 1, linesAdded: 7, linesRemoved: 0 },
+test("l'agenda recolle les petits trous, coupe à minuit et compte ses totaux sur les tranches brutes", () => {
+  const { db, project, conversations, time } = setup();
+  const conversation = conversations.create({ projectId: project.id, provider: "codex", model: "gpt-5.6-sol", firstMessage: "Nuit" });
+  time.addPresence({ projectId: project.id, startedAt: at(DAY, 9, 0), endedAt: at(DAY, 9, 5) });
+  time.addPresence({ projectId: project.id, startedAt: at(DAY, 9, 12), endedAt: at(DAY, 9, 15) });
+  time.addPresence({ projectId: project.id, startedAt: at(DAY, 11, 0), endedAt: at(DAY, 11, 1) });
+  db.query(`
+    INSERT INTO time_entries (source_key, project_id, conversation_id, source, started_at, ended_at, day, backfilled)
+    VALUES ('agent:nuit', ?, ?, 'agent', ?, ?, ?, 0)
+  `).run(project.id, conversation.id, at(DAY, 23, 50), at("2026-08-25", 0, 20), DAY);
+
+  const agenda = time.agenda(DAY, "2026-08-25");
+  expect(agenda.blocks.map((block) => [block.day, block.source, block.start, block.end, block.conversationId])).toEqual([
+    [DAY, "presence", at(DAY, 9, 0), at(DAY, 9, 15), null],
+    [DAY, "agent", at(DAY, 23, 50), at("2026-08-25", 0, 0), conversation.id],
+    ["2026-08-25", "agent", at("2026-08-25", 0, 0), at("2026-08-25", 0, 20), conversation.id],
   ]);
-  changelog.import(project.id, [
-    { repositoryPath: ".", sha: "4".repeat(40), branch: "feature/x", subject: "Merge origin/develop", committedAt: "2026-08-24T23:55:00+02:00", isMerge: true },
-  ], at(DAY, 12));
-  changelog.setLineStats(project.id, [{ sha: "4".repeat(40), added: 33_586, removed: 69_336 }]);
-  expect(changelog.dailyTotals("2026-08-24", "2026-08-24")).toEqual([
-    { day: "2026-08-24", projectId: project.id, commits: 2, linesAdded: 5, linesRemoved: 1 },
-  ]);
-  for (const minute of [0, 1, 30]) {
-    time.addPresence({ projectId: project.id, startedAt: at(DAY, 9, minute), endedAt: at(DAY, 9, minute + 1) });
-  }
-  expect(time.dailyPresence(DAY, DAY)).toEqual({ [DAY]: 3 * 60_000 });
+  expect(agenda.totals[DAY]![project.id]).toEqual({ totalMs: 19 * 60_000, userMs: 9 * 60_000, agentMs: 10 * 60_000 });
+  expect(agenda.totals["2026-08-25"]![project.id]).toEqual({ totalMs: 20 * 60_000, userMs: 0, agentMs: 20 * 60_000 });
+
+  const archive = time.archive(2026);
+  expect(archive.years).toEqual([2026]);
+  expect(archive.weeks).toEqual([{ week: "2026-08-24", projects: { [project.id]: { totalMs: 39 * 60_000, userMs: 9 * 60_000 } } }]);
+  expect(time.archive(2025).weeks).toEqual([]);
   db.close();
 });

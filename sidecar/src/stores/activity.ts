@@ -30,6 +30,15 @@ export interface ActivityMotif {
   returned_at: string | null;
   dismissed_at: string | null;
   todo_id: string | null;
+  /** Impact de 1 à 5 attribué par le tri quotidien ; null tant qu'aucun tri n'a vu le motif. */
+  stars: number | null;
+  /** Note du tri précédent, pour repérer un motif qui s'aggrave. */
+  stars_previous: number | null;
+  stars_changed_day: string | null;
+  /** Place dans le top du projet (1 = le plus urgent) ; null = en réserve. */
+  rank: number | null;
+  rank_reason: string | null;
+  ranked_at: string | null;
   created_at: string;
   updated_at: string;
   evidence: ActivityEvidence[];
@@ -330,6 +339,78 @@ export class ActivityStore {
     const motif = this.motif(id);
     if (!motif) throw new Error("motif inconnu");
     return motif;
+  }
+
+  /**
+   * Classement d'un projet par le tri : les motifs ouverts cités prennent leur
+   * note et leur rang, les autres passent en réserve. Ne touche pas
+   * `updated_at`, qui signale un changement de fond à retrier.
+   */
+  applyRanking(
+    projectId: string,
+    day: string,
+    ranking: Array<{ id: string; stars: number; reason: string }>,
+    now: string,
+  ): void {
+    const open = this.listMotifs({ projectId, statuses: ["open"] });
+    const byId = new Map(open.map((motif) => [motif.id, motif]));
+    const rank = this.db.query(`
+      UPDATE activity_motifs
+      SET stars = ?, stars_previous = ?, stars_changed_day = ?, rank = ?, rank_reason = ?, ranked_at = ?
+      WHERE id = ?
+    `);
+    const reserve = this.db.query("UPDATE activity_motifs SET rank = NULL, ranked_at = ? WHERE id = ?");
+    this.db.transaction(() => {
+      const ranked = new Set<string>();
+      ranking.forEach((item, index) => {
+        const motif = byId.get(item.id);
+        if (!motif) return;
+        ranked.add(motif.id);
+        const changed = motif.stars !== null && motif.stars !== item.stars;
+        rank.run(
+          item.stars,
+          changed ? motif.stars : motif.stars_previous,
+          changed ? day : motif.stars_changed_day,
+          index + 1,
+          item.reason.slice(0, 240),
+          now,
+          motif.id,
+        );
+      });
+      for (const motif of open) if (!ranked.has(motif.id)) reserve.run(now, motif.id);
+    })();
+  }
+
+  /** Verse les preuves des doublons dans le motif gardé, puis supprime les doublons. */
+  mergeMotifs(keepId: string, absorbedIds: string[], now: string): void {
+    const keep = this.motif(keepId);
+    if (!keep) throw new Error("motif inconnu");
+    this.db.transaction(() => {
+      for (const id of absorbedIds) {
+        if (id === keepId) continue;
+        const absorbed = this.motif(id);
+        if (!absorbed || absorbed.project_id !== keep.project_id) continue;
+        this.db.query("UPDATE OR IGNORE activity_motif_evidence SET motif_id = ? WHERE motif_id = ?").run(keepId, id);
+        this.db.query(`
+          UPDATE activity_motifs
+          SET first_seen_day = MIN(first_seen_day, ?), last_seen_day = MAX(last_seen_day, ?), updated_at = ?
+          WHERE id = ?
+        `).run(absorbed.first_seen_day, absorbed.last_seen_day, now, keepId);
+        this.db.query("DELETE FROM activity_motifs WHERE id = ?").run(id);
+      }
+    })();
+  }
+
+  /** Écarte les motifs ouverts sans nouvelle preuve depuis `beforeDay` ; une preuve future les fera revenir. */
+  expireStale(projectId: string, beforeDay: string, now: string): string[] {
+    const ids = (this.db.query(
+      "SELECT id FROM activity_motifs WHERE project_id = ? AND status = 'open' AND last_seen_day < ?",
+    ).all(projectId, beforeDay) as Array<{ id: string }>).map((row) => row.id);
+    for (const id of ids) {
+      this.db.query("UPDATE activity_motifs SET status = 'dismissed', dismissed_at = ?, returned_at = NULL, rank = NULL WHERE id = ?")
+        .run(now, id);
+    }
+    return ids;
   }
 
   private evidence(motifId: string): ActivityEvidence[] {

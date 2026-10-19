@@ -9,7 +9,7 @@ import type { ProjectStore } from "./stores/projects";
 import type { TicketStore } from "./stores/tickets";
 import type { TodoItem, TodoStore } from "./stores/todos";
 import type { TodoService } from "./todos";
-import { localDay, type TimeTrackingService } from "./time-tracking";
+import { localDay, type AgendaArchive, type AgendaRange, type DayTotals, type TimeTrackingService } from "./time-tracking";
 import { projectCwd } from "./workspace";
 import {
   ActivityStore,
@@ -26,7 +26,6 @@ import {
   type ActivityReportTicketReady,
   type ActivityReportTodo,
   type ActivityReportTopic,
-  type ActivityCalendarDay,
   type ActivityState,
 } from "./stores/activity";
 import {
@@ -36,6 +35,7 @@ import {
   retroPrompt,
   type RetroChanges,
 } from "./activity-retro";
+import { applyTriage, needsTriage, parseTriage, staleBefore, TRIAGE_MODEL, triagePrompt } from "./activity-triage";
 
 /** Bornes de la synthèse bon marché des sujets : jamais un vrai tour. */
 const TOPIC_USER_MESSAGE_MAX = 600;
@@ -45,8 +45,8 @@ const TOPIC_TITLE_MAX = 90;
 const TOPIC_DETAIL_MAX = 280;
 const TOPICS_MAX = 10;
 const SUMMARY_MAX = 600;
-/** Semaines complètes affichées par le calendrier, semaine en cours comprise. */
-export const CALENDAR_WEEKS = 53;
+/** Plus longue plage que l'agenda accepte en une requête. */
+export const AGENDA_MAX_DAYS = 62;
 
 /** Statuts ClickUp qui valent « prêt pour la production », comparés en minuscules. */
 export const READY_STATUS_PATTERN = /ready\s*(for|to)\s*prod/i;
@@ -511,15 +511,25 @@ export function assembleReport(
 }
 
 /**
+ * Les heures viennent du suivi de temps à la lecture quand `hours` est fourni :
+ * une passe de 18 h ignore la soirée, l'agenda voisin ne l'ignore pas.
  * Un rapport sauvé avant que le changelog ait relevé les +/− de ses commits
  * garde des lignes nulles : on les reprend du changelog à la lecture, ainsi que
  * les champs ajoutés après coup, sans réécrire le rapport. Les fusions restent
  * visibles ligne à ligne mais sortent des totaux.
  */
-export function hydrateReport(report: ActivityReport, changelog: ChangelogStore): ActivityReport {
+export function hydrateReport(report: ActivityReport, changelog: ChangelogStore, hours?: DayTotals): ActivityReport {
   const window = dayWindow(report.day);
   const projects = report.projects.map((project) => {
-    const base: ActivityReportProject = { ...project, mergeRequests: project.mergeRequests ?? [], ticketsReady: project.ticketsReady ?? [] };
+    const live = hours ? hours.projects[project.projectId] ?? { userMs: 0, agentMs: 0 } : project;
+    const base: ActivityReportProject = {
+      ...project,
+      userMs: live.userMs,
+      agentMs: live.agentMs,
+      conversations: project.conversations.map((conversation) => ({ ...conversation, ...(hours?.conversations[conversation.id] ?? {}) })),
+      mergeRequests: project.mergeRequests ?? [],
+      ticketsReady: project.ticketsReady ?? [],
+    };
     const stats = new Map(changelog.listBetween(base.projectId, window.startIso, window.endIso)
       .map((entry) => [entry.commit_sha, entry]));
     const commits = base.commits.map((commit) => {
@@ -554,18 +564,8 @@ export const DEFAULT_ACTIVITY_MODEL: StrongModelConfig = {
 
 export interface ActivityRetroPayload {
   state: ActivityState;
-  cumulative: {
-    firstDay: string | null;
-    activeDays: number;
-    userMs: number;
-    agentMs: number;
-    commits: number;
-    linesAdded: number;
-    linesRemoved: number;
-    projects: number;
-  };
-  trends: Array<{ days: number; userMs: number; agentMs: number; activeDays: number; commits: number; linesAdded: number; linesRemoved: number }>;
   motifs: ActivityMotif[];
+  projects: AgendaProject[];
 }
 
 export interface ActivityRunState {
@@ -604,62 +604,25 @@ export class ActivityReportService {
 
   report(day: string): ActivityReport | null {
     const stored = this.store.report(day);
-    return stored ? hydrateReport(stored, this.changelog) : null;
+    return stored ? hydrateReport(stored, this.changelog, this.time.dayTotals(day)) : null;
   }
 
-  /**
-   * Calendrier de chaleur : un jour par case du lundi d'il y a
-   * CALENDAR_WEEKS − 1 semaines jusqu'à aujourd'hui, commits, lignes et MR
-   * ouvertes par projet, présence depuis les entrées de temps.
-   */
-  calendar(): { from: string; to: string; days: ActivityCalendarDay[] } {
-    const today = new Date(this.now());
-    today.setHours(0, 0, 0, 0);
-    const start = new Date(today);
-    start.setDate(start.getDate() - ((start.getDay() + 6) % 7) - (CALENDAR_WEEKS - 1) * 7);
-    const from = localDay(start);
-    const to = localDay(today);
-    const names = new Map(this.projects.list().map((project) => [project.id, project.name]));
-    const commits = this.changelog.dailyTotals(from, to);
-    const presence = this.time.dailyPresence(from, to);
-    const reports = new Set(this.store.days().map((item) => item.day));
-    const endMs = today.getTime() + 86_400_000;
-    const mergeRequests = new Map<string, number>();
-    for (const projectId of names.keys()) {
-      for (const mr of this.journal.mergeRequestsBetween(projectId, start.getTime(), endMs)) {
-        const key = `${localDay(new Date(mr.createdAt))}:${projectId}`;
-        mergeRequests.set(key, (mergeRequests.get(key) ?? 0) + 1);
-      }
-    }
-    const days: ActivityCalendarDay[] = [];
-    for (const cursor = new Date(start); cursor <= today; cursor.setDate(cursor.getDate() + 1)) {
-      const day = localDay(cursor);
-      const rows = commits.filter((row) => row.day === day);
-      const projectIds = new Set(rows.map((row) => row.projectId));
-      for (const key of mergeRequests.keys()) if (key.startsWith(`${day}:`)) projectIds.add(key.slice(day.length + 1));
-      const projects = [...projectIds].map((projectId) => {
-        const row = rows.find((item) => item.projectId === projectId);
-        return {
-          projectId,
-          projectName: names.get(projectId) ?? projectId,
-          commits: row?.commits ?? 0,
-          linesAdded: row?.linesAdded ?? 0,
-          linesRemoved: row?.linesRemoved ?? 0,
-          mergeRequests: mergeRequests.get(`${day}:${projectId}`) ?? 0,
-        };
-      });
-      days.push({
-        day,
-        commits: projects.reduce((sum, row) => sum + row.commits, 0),
-        linesAdded: projects.reduce((sum, row) => sum + row.linesAdded, 0),
-        linesRemoved: projects.reduce((sum, row) => sum + row.linesRemoved, 0),
-        mergeRequests: projects.reduce((sum, row) => sum + row.mergeRequests, 0),
-        userMs: presence[day] ?? 0,
-        hasReport: reports.has(day),
-        projects,
-      });
-    }
-    return { from, to, days };
+  /** Agenda du temps projet, avec le nom et la couleur de chaque projet rencontré. */
+  agenda(fromDay: string, toDay: string): AgendaRange & { projects: AgendaProject[] } {
+    const range = this.time.agenda(fromDay, toDay);
+    return { ...range, projects: this.agendaProjects(range.blocks.map((block) => block.projectId)) };
+  }
+
+  archive(year: number): AgendaArchive & { projects: AgendaProject[] } {
+    const archive = this.time.archive(year);
+    return { ...archive, projects: this.agendaProjects(archive.weeks.flatMap((week) => Object.keys(week.projects))) };
+  }
+
+  private agendaProjects(ids: string[]): AgendaProject[] {
+    return [...new Set(ids)].flatMap((id) => {
+      const project = this.projects.get(id);
+      return project ? [{ id, name: project.name, color: project.color }] : [];
+    });
   }
 
   /**
@@ -701,6 +664,7 @@ export class ActivityReportService {
           errors.push(`${project.projectName} : ${error instanceof Error ? error.message : "recul impossible"}`);
         }
       }
+      errors.push(...await this.triage(day));
       retro.error = errors.length > 0 ? errors.join(" · ") : null;
       let summary: string | null = null;
       try {
@@ -722,6 +686,39 @@ export class ActivityReportService {
     }
   }
 
+  /** Tri seul, hors passe complète, avec la même exclusivité qu'une passe. */
+  async runTriage(day: string): Promise<string[]> {
+    if (this.runningDay !== null) throw new ActivityBusyError(`passe déjà en cours pour le ${this.runningDay}`);
+    this.runningDay = day;
+    try {
+      return await this.triage(day);
+    } finally {
+      this.runningDay = null;
+    }
+  }
+
+  /**
+   * Tri de tous les projets après le recul : écarte les motifs éteints, puis
+   * renote et reclasse ceux d'un projet dès qu'un de ses motifs ouverts a
+   * bougé. Renvoie les erreurs par projet ; un tri raté garde l'ancien ordre.
+   */
+  async triage(day: string): Promise<string[]> {
+    const errors: string[] = [];
+    const now = this.now().toISOString();
+    for (const project of this.projects.list()) {
+      const expired = this.store.expireStale(project.id, staleBefore(day), now);
+      const open = this.store.listMotifs({ projectId: project.id, statuses: ["open"] });
+      if (open.length === 0 || (expired.length === 0 && !needsTriage(open))) continue;
+      try {
+        const raw = await this.strong({ cwd: projectCwd(project), ...TRIAGE_MODEL, prompt: triagePrompt(project.name, day, open) });
+        applyTriage(this.store, project.id, day, parseTriage(raw, open), this.now().toISOString());
+      } catch (error) {
+        errors.push(`tri ${project.name} : ${error instanceof Error ? error.message : "tri impossible"}`);
+      }
+    }
+    return errors;
+  }
+
   private async retroPass(project: JournalProject, day: string): Promise<RetroChanges> {
     const motifs = this.store.listMotifs({ projectId: project.projectId });
     const problems = this.problems.listProject(project.projectId, "open").problems;
@@ -738,38 +735,9 @@ export class ActivityReportService {
     return applyRetroOperations(this.store, project.projectId, day, operations, this.now().toISOString());
   }
 
-  /** Bilan cumulé et tendances calculés par SQL à la lecture ; les motifs viennent de l'état entretenu. */
   retro(): ActivityRetroPayload {
-    const state = this.store.state();
-    const snapshot = this.time.snapshot();
-    const totals = this.changelog.totals();
-    const nowMs = this.now().getTime();
-    const trends = [7, 30].map((days) => {
-      const start = new Date(nowMs);
-      start.setHours(0, 0, 0, 0);
-      start.setDate(start.getDate() - (days - 1));
-      const end = new Date(start);
-      end.setDate(end.getDate() + days);
-      const range = this.time.rangeTotals(start.getTime(), end.getTime());
-      const commits = this.changelog.totals(undefined, start.toISOString(), end.toISOString());
-      return { days, ...range, ...commits };
-    });
-    const firstEntry = this.time.activeDays()[0] ?? null;
-    return {
-      state,
-      cumulative: {
-        firstDay: firstEntry && (state.first_day === null || firstEntry < state.first_day) ? firstEntry : state.first_day,
-        activeDays: snapshot.activeDays,
-        userMs: snapshot.user.ms,
-        agentMs: snapshot.agent.ms,
-        commits: totals.commits,
-        linesAdded: totals.linesAdded,
-        linesRemoved: totals.linesRemoved,
-        projects: snapshot.projectCount,
-      },
-      trends,
-      motifs: this.store.listMotifs().filter((motif) => motif.status !== "dismissed" || motif.returned_at !== null),
-    };
+    const motifs = this.store.listMotifs().filter((motif) => motif.status !== "dismissed" || motif.returned_at !== null);
+    return { state: this.store.state(), motifs, projects: this.agendaProjects(motifs.map((motif) => motif.project_id)) };
   }
 
   motif(id: string): ActivityMotif {
@@ -830,6 +798,12 @@ export class ActivityReportService {
     }
     return DEFAULT_ACTIVITY_MODEL;
   }
+}
+
+export interface AgendaProject {
+  id: string;
+  name: string;
+  color: string;
 }
 
 export class ActivityBusyError extends Error {}

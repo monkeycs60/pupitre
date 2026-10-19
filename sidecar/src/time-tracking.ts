@@ -24,6 +24,9 @@ const SUSPENSION_THRESHOLD_MS = 60_000;
 const HEARTBEAT_KEY = "time-tracking:heartbeat";
 const SYNC_WATERMARK_KEY = "time-tracking:last-event-id";
 const BACKFILL_KEY = TIME_BACKFILL_KEY;
+/** Trou en deçà duquel deux tranches d'agenda forment un seul bloc. */
+export const AGENDA_GAP_MS = 10 * 60_000;
+export const AGENDA_MIN_BLOCK_MS = 2 * 60_000;
 
 export interface Span {
   start: number;
@@ -90,6 +93,29 @@ export interface PresenceSlice {
   endedAt: string;
 }
 
+export interface AgendaBlock {
+  projectId: string;
+  source: "presence" | "agent";
+  day: string;
+  start: string;
+  end: string;
+  conversationId: string | null;
+}
+
+export interface AgendaRange {
+  from: string;
+  to: string;
+  blocks: AgendaBlock[];
+  /** Jour → projet → temps projet (union présence et agent), présence, agent. */
+  totals: Record<string, Record<string, { totalMs: number; userMs: number; agentMs: number }>>;
+}
+
+export interface AgendaArchive {
+  year: number;
+  years: number[];
+  weeks: Array<{ week: string; projects: Record<string, { totalMs: number; userMs: number }> }>;
+}
+
 interface EntryRow {
   project_id: string;
   conversation_id: string | null;
@@ -146,6 +172,41 @@ export function subtract(spans: Span[], holes: Span[]): Span[] {
     out = next;
   }
   return out;
+}
+
+/** Tranches rognées au jour puis recollées par-dessus les petits trous ; les miettes disparaissent. */
+export function agendaSpans(spans: Span[], window: Span): Span[] {
+  const out: Span[] = [];
+  for (const span of clip(spans, window)) {
+    const last = out[out.length - 1];
+    if (last && span.start - last.end <= AGENDA_GAP_MS) last.end = Math.max(last.end, span.end);
+    else out.push({ ...span });
+  }
+  return out.filter((span) => span.end - span.start >= AGENDA_MIN_BLOCK_MS);
+}
+
+function groupByProject(rows: EntryRow[]): Map<string, EntryRow[]> {
+  const out = new Map<string, EntryRow[]>();
+  for (const row of rows) {
+    const list = out.get(row.project_id) ?? [];
+    list.push(row);
+    out.set(row.project_id, list);
+  }
+  return out;
+}
+
+/** La conversation qui occupe le plus de temps dans le bloc : celle qu'ouvre un clic. */
+function dominantConversation(rows: EntryRow[], block: Span): string | null {
+  const byConversation = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.conversation_id) continue;
+    const overlap = total(intersect([toSpan(row)], [block]));
+    if (overlap > 0) byConversation.set(row.conversation_id, (byConversation.get(row.conversation_id) ?? 0) + overlap);
+  }
+  let best: string | null = null;
+  let bestMs = 0;
+  for (const [id, ms] of byConversation) if (ms > bestMs) { best = id; bestMs = ms; }
+  return best;
 }
 
 function total(spans: Span[]): number {
@@ -400,47 +461,84 @@ export class TimeTrackingService {
     return { day, projects, conversations, turnCount };
   }
 
-  /** Présence, agent et jours actifs sur une fenêtre [from, to) en ms. */
-  rangeTotals(from: number, to: number): { userMs: number; agentMs: number; activeDays: number } {
+  /**
+   * Blocs d'agenda et totaux par jour local sur [fromDay, toDay]. Les blocs
+   * recollent les tranches séparées de moins de AGENDA_GAP_MS pour rester
+   * lisibles ; les totaux, eux, se calculent sur les tranches brutes.
+   */
+  agenda(fromDay: string, toDay: string): AgendaRange {
     this.syncAgentSegments();
-    const rows = this.db.query(`
+    const first = dayWindow(new Date(`${fromDay}T00:00:00`));
+    const last = dayWindow(new Date(`${toDay}T00:00:00`));
+    const rows = this.entriesBetween(first.start, last.end);
+    const blocks: AgendaBlock[] = [];
+    const totals: AgendaRange["totals"] = {};
+    for (const cursor = new Date(first.start); cursor.getTime() < last.end; cursor.setDate(cursor.getDate() + 1)) {
+      const window = dayWindow(cursor);
+      const day = localDay(cursor);
+      for (const [projectId, entries] of groupByProject(rows)) {
+        const presence = entries.filter((row) => row.source === "presence").map(toSpan);
+        const agent = entries.filter((row) => row.source === "agent").map(toSpan);
+        const totalMs = total(clip(merge([...presence, ...agent]), window));
+        if (totalMs === 0) continue;
+        (totals[day] ??= {})[projectId] = {
+          totalMs,
+          userMs: total(clip(merge(presence), window)),
+          agentMs: total(clip(merge(agent), window)),
+        };
+        for (const source of ["presence", "agent"] as const) {
+          const own = entries.filter((row) => row.source === source);
+          for (const span of agendaSpans(own.map(toSpan), window)) {
+            blocks.push({
+              projectId,
+              source,
+              day,
+              start: new Date(span.start).toISOString(),
+              end: new Date(span.end).toISOString(),
+              conversationId: dominantConversation(own, span),
+            });
+          }
+        }
+      }
+    }
+    return { from: fromDay, to: toDay, blocks, totals };
+  }
+
+  /** Temps projet par semaine (du lundi) dont le lundi tombe dans l'année, et années disponibles. */
+  archive(year: number): AgendaArchive {
+    this.syncAgentSegments();
+    const start = new Date(year, 0, 1);
+    start.setDate(start.getDate() + ((8 - start.getDay()) % 7));
+    const end = new Date(year + 1, 0, 1);
+    end.setDate(end.getDate() + ((8 - end.getDay()) % 7) + 6);
+    const rows = this.entriesBetween(start.getTime(), end.getTime());
+    const byProject = groupByProject(rows);
+    const weeks: AgendaArchive["weeks"] = [];
+    for (const cursor = new Date(start); cursor.getFullYear() === year; cursor.setDate(cursor.getDate() + 7)) {
+      const next = new Date(cursor);
+      next.setDate(next.getDate() + 7);
+      const window = { start: cursor.getTime(), end: next.getTime() };
+      const projects: Record<string, { totalMs: number; userMs: number }> = {};
+      for (const [projectId, entries] of byProject) {
+        const totalMs = total(clip(merge(entries.map(toSpan)), window));
+        if (totalMs === 0) continue;
+        projects[projectId] = { totalMs, userMs: total(clip(merge(entries.filter((row) => row.source === "presence").map(toSpan)), window)) };
+      }
+      if (Object.keys(projects).length > 0) weeks.push({ week: localDay(cursor), projects });
+    }
+    const years = (this.db.query("SELECT DISTINCT substr(day, 1, 4) AS year FROM time_entries ORDER BY year DESC").all() as Array<{ year: string }>)
+      .map((row) => Number(row.year));
+    if (!years.includes(year)) years.unshift(year);
+    return { year, years: years.sort((a, b) => b - a), weeks };
+  }
+
+  private entriesBetween(from: number, to: number): EntryRow[] {
+    return this.db.query(`
       SELECT project_id, conversation_id, source, started_at, ended_at, day, backfilled
       FROM time_entries
       WHERE started_at < ? AND ended_at > ?
       ORDER BY started_at
     `).all(new Date(to).toISOString(), new Date(from).toISOString()) as EntryRow[];
-    const window = { start: from, end: to };
-    const user = clip(merge(rows.filter((row) => row.source === "presence").map(toSpan)), window);
-    const agent = clip(merge(rows.filter((row) => row.source === "agent").map(toSpan)), window);
-    const days = new Set<string>();
-    for (const span of [...user, ...agent]) days.add(localDay(new Date(span.start)));
-    return { userMs: total(user), agentMs: total(agent), activeDays: days.size };
-  }
-
-  /** Présence par jour local sur [fromDay, toDay], tranches recollées par projet. */
-  dailyPresence(fromDay: string, toDay: string): Record<string, number> {
-    const rows = this.db.query(`
-      SELECT project_id, conversation_id, source, started_at, ended_at, day, backfilled
-      FROM time_entries
-      WHERE source = 'presence' AND day BETWEEN ? AND ?
-      ORDER BY started_at
-    `).all(fromDay, toDay) as EntryRow[];
-    const byDay = new Map<string, EntryRow[]>();
-    for (const row of rows) {
-      const list = byDay.get(row.day) ?? [];
-      list.push(row);
-      byDay.set(row.day, list);
-    }
-    const out: Record<string, number> = {};
-    for (const [day, entries] of byDay) out[day] = total(merge(entries.map(toSpan)));
-    return out;
-  }
-
-  /** Jours locaux ayant au moins une tranche de présence ou un tour. */
-  activeDays(): string[] {
-    this.syncAgentSegments();
-    return (this.db.query("SELECT DISTINCT day FROM time_entries ORDER BY day").all() as Array<{ day: string }>)
-      .map((row) => row.day);
   }
 
   /**
