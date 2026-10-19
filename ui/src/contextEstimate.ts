@@ -35,11 +35,22 @@ const FALLBACK_CONTEXT_WINDOWS: Record<Provider, number> = {
   reasonix: 1_000_000,
 }
 
+const SATURATION_PERCENT: Record<Provider, number> = {
+  claude: 30,
+  codex: 70,
+  grok: 80,
+  reasonix: 80,
+}
+
 export interface ContextEstimate {
   usedTokens: number
   windowTokens: number
   percent: number
   nearSaturation: boolean
+}
+
+export function contextSaturationPercent(provider: Provider): number {
+  return SATURATION_PERCENT[provider]
 }
 
 export function contextWindowTokens(provider: Provider, model: string): number {
@@ -392,6 +403,6 @@ export function contextEstimate(
     usedTokens,
     windowTokens,
     percent,
-    nearSaturation: percent >= 80,
+    nearSaturation: percent >= contextSaturationPercent(provider),
   }
 }

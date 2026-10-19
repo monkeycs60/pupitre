@@ -1381,6 +1381,7 @@
 /* --- Jauge de contexte, onglet posé sur le bord haut du composer ---------- */
 
 .context-gauge {
+  --gauge-edge: var(--border-strong);
   position: absolute;
   right: 28px;
   bottom: 100%;
@@ -1388,7 +1389,14 @@
   color: var(--accent);
 }
 
+.composer:focus-within .context-gauge,
+.context-gauge:hover,
+.context-gauge:focus-within {
+  --gauge-edge: var(--accent-border);
+}
+
 .context-gauge.is-near-limit {
+  --gauge-edge: color-mix(in srgb, var(--warn) 45%, transparent);
   color: var(--warn);
 }
 
@@ -1406,13 +1414,14 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   background: var(--bg-panel);
-  --gauge-edge: var(--border-strong);
   border: 1px solid var(--gauge-edge);
   border-bottom: 0;
   border-radius: var(--r-md) var(--r-md) 0 0;
   outline: none;
   cursor: default;
-  transition: border-color var(--dur-fast) var(--ease);
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    border-radius var(--dur-fast) var(--ease);
 }
 
 /* Congés concaves : la bordure du composer remonte en courbe dans l'onglet.
@@ -1451,14 +1460,12 @@
     radial-gradient(circle at calc(100% - 0.5px) 0.5px, var(--fillet-fill));
 }
 
-.composer:focus-within .context-gauge-summary,
+/* Ouvert, l'onglet perd son bord haut et peint son fond sur le bord bas de la
+   carte, qui le chevauche d'un pixel : carte et onglet forment une seule pièce. */
 .context-gauge:hover .context-gauge-summary,
 .context-gauge:focus-within .context-gauge-summary {
-  --gauge-edge: var(--accent-border);
-}
-
-.context-gauge.is-near-limit .context-gauge-summary {
-  --gauge-edge: color-mix(in srgb, var(--warn) 45%, transparent);
+  border-top-color: transparent;
+  border-radius: 0;
 }
 
 .context-gauge-dial {
@@ -1479,12 +1486,10 @@
   font-weight: 500;
 }
 
-/* Le padding bas fait le pont entre l'onglet et la carte : le survol tient. */
 .context-gauge-menu {
   position: absolute;
   right: 0;
-  bottom: 100%;
-  padding-bottom: 6px;
+  bottom: calc(100% - 1px);
   pointer-events: none;
   visibility: hidden;
   transition: visibility 0s linear var(--dur);
@@ -1499,45 +1504,39 @@
 
 .context-gauge-menu-card {
   display: grid;
-  gap: 2px;
-  width: 280px;
-  padding: var(--space-1);
-  background: var(--bg-overlay);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-overlay);
-  opacity: 0;
-  transform: translateY(6px) scale(0.96);
-  transform-origin: bottom right;
-  filter: blur(2px);
-  transition:
-    opacity var(--dur-fast) var(--ease-in),
-    transform var(--dur-fast) var(--ease-in),
-    filter var(--dur-fast) var(--ease-in);
+  grid-template-columns: auto auto;
+  gap: 4px;
+  width: max-content;
+  padding: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--gauge-edge);
+  border-radius: var(--r-lg) var(--r-lg) 0 var(--r-lg);
+  box-shadow: var(--shadow-popover);
+  clip-path: inset(100% 0 0 calc(100% - 96px));
+  transition: clip-path var(--dur) var(--ease-in);
 }
 
 .context-gauge:hover .context-gauge-menu-card,
 .context-gauge:focus-within .context-gauge-menu-card {
-  opacity: 1;
-  transform: none;
-  filter: none;
-  transition:
-    opacity var(--dur) var(--ease-out),
-    transform var(--dur-slow) var(--spring),
-    filter var(--dur) var(--ease-out);
+  clip-path: inset(-40px -40px 0 -40px);
+  transition: clip-path var(--dur-slow) var(--ease-out);
 }
 
 .context-gauge-menu-card button {
   display: grid;
-  gap: 2px;
-  padding: 8px 10px;
+  grid-template-columns: auto 1fr;
+  align-content: center;
+  column-gap: 10px;
+  row-gap: 2px;
+  min-width: 0;
+  padding: 10px 12px 10px 10px;
   text-align: left;
   background: transparent;
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   cursor: pointer;
   opacity: 0;
-  transform: translateY(3px);
+  transform: translateY(4px);
   transition:
     background var(--dur-fast) var(--ease),
     opacity var(--dur-fast) var(--ease-in),
@@ -1550,18 +1549,18 @@
   transform: none;
   transition:
     background var(--dur-fast) var(--ease),
-    opacity var(--dur) var(--ease-out) 40ms,
-    transform var(--dur) var(--ease-out) 40ms;
+    opacity var(--dur) var(--ease-out) 90ms,
+    transform var(--dur-slow) var(--spring) 90ms;
 }
 
-.context-gauge:hover .context-gauge-menu-card button + button,
-.context-gauge:focus-within .context-gauge-menu-card button + button {
-  transition-delay: 0s, 80ms, 80ms;
+.context-gauge:hover .context-gauge-menu-card button:first-child,
+.context-gauge:focus-within .context-gauge-menu-card button:first-child {
+  transition-delay: 0s, 150ms, 150ms;
 }
 
 .context-gauge-menu-card button:hover,
 .context-gauge-menu-card button:focus-visible {
-  background: var(--accent-soft);
+  background: var(--bg-hover);
   outline: none;
 }
 
@@ -1569,30 +1568,161 @@
   cursor: progress;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .context-gauge-menu-card,
-  .context-gauge-menu-card button {
-    filter: none;
-    transform: none;
-  }
+.context-gauge-menu-icon {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--r-md);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.context-gauge-menu-card button:hover .context-gauge-menu-icon,
+.context-gauge-menu-card button:focus-visible .context-gauge-menu-icon {
+  color: var(--on-accent);
+  background: var(--accent);
 }
 
 .context-gauge-menu-label {
+  overflow: hidden;
   color: var(--text-strong);
   font-size: var(--text-sm);
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .context-gauge-menu-detail {
   color: var(--text-muted);
   font-size: var(--text-xs);
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .context-gauge-menu-error {
+  grid-column: 1 / -1;
   margin: 0;
-  padding: 4px 10px 6px;
+  padding: 2px 10px 4px;
   color: var(--danger);
   font-size: var(--text-xs);
+}
+
+.context-gauge-warning {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  padding: 8px 8px 8px 12px;
+  white-space: nowrap;
+  background: var(--bg-panel);
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-popover);
+  transform-origin: bottom right;
+  animation: context-gauge-warning-in var(--dur-slow) var(--spring) both;
+  transition: opacity var(--dur-fast) var(--ease), visibility 0s linear var(--dur-fast);
+}
+
+.context-gauge-warning::after {
+  content: "";
+  position: absolute;
+  right: 22px;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  background: var(--bg-panel);
+  border-right: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  transform: rotate(45deg);
+}
+
+.context-gauge:hover .context-gauge-warning,
+.context-gauge:focus-within .context-gauge-warning {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), visibility 0s;
+}
+
+.context-gauge-warning p {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+
+.context-gauge-warning strong {
+  color: var(--warn);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.context-gauge-warning span {
+  color: var(--text-muted);
+}
+
+.context-gauge-warning-action {
+  flex: none;
+  padding: 5px 10px;
+  color: var(--on-accent);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.context-gauge-warning-action:hover,
+.context-gauge-warning-action:focus-visible {
+  background: var(--accent-hover);
+  outline: none;
+}
+
+.context-gauge-warning-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-full);
+  cursor: pointer;
+}
+
+.context-gauge-warning-close:hover,
+.context-gauge-warning-close:focus-visible {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+  outline: none;
+}
+
+@keyframes context-gauge-warning-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.94);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-gauge-menu-card,
+  .context-gauge-menu-card button {
+    clip-path: none;
+    transform: none;
+  }
+
+  .context-gauge-warning {
+    animation: none;
+  }
 }
 
 .composer-palette-section {
