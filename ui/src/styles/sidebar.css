@@ -729,6 +729,7 @@
 
 .ai-search-error {
   color: var(--danger);
+  overflow-wrap: anywhere;
 }
 
 .ai-search-results {

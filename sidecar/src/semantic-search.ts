@@ -40,6 +40,12 @@ export interface SemanticSearchResponse {
 
 export class SemanticSearchUnavailable extends Error {}
 
+function databaseDown(error: unknown): boolean {
+  const { code, errno } = (error ?? {}) as { code?: unknown; errno?: unknown };
+  if (typeof code === "string" && code.startsWith("ERR_POSTGRES_CONNECTION")) return true;
+  return typeof errno === "string" && (errno.startsWith("08") || errno.startsWith("57P0"));
+}
+
 export interface ConversationText {
   title: string;
   summary: string;
@@ -110,6 +116,19 @@ export class SemanticSearch {
   ) {}
 
   async search(query: string, projectId: string): Promise<SemanticSearchResponse> {
+    try {
+      return await this.searchNow(query, projectId);
+    } catch (error) {
+      throw databaseDown(error) ? this.unreachable(error) : error;
+    }
+  }
+
+  private unreachable(error: unknown): SemanticSearchUnavailable {
+    console.error("[semantic-search] pgvector", error);
+    return new SemanticSearchUnavailable(`Base pgvector injoignable sur ${new URL(this.databaseUrl).host} : lance « bun run setup:semantic-db ».`);
+  }
+
+  private async searchNow(query: string, projectId: string): Promise<SemanticSearchResponse> {
     const keys = this.readKeys();
     if (!keys.openai) throw new SemanticSearchUnavailable("Clé OpenAI absente : renseigne-la dans Réglages › Tokens d’intégration.");
     const trimmed = query.trim().slice(0, 500);
@@ -404,8 +423,7 @@ export class SemanticSearch {
   private connection(): Promise<SQL> {
     this.ready ??= this.open().catch((error: unknown) => {
       this.ready = null;
-      if (error instanceof SemanticSearchUnavailable) throw error;
-      throw new SemanticSearchUnavailable(`Base pgvector injoignable (${this.databaseUrl.replace(/:[^:@/]+@/, ":***@")}) : lance « bun run setup:semantic-db ». ${error instanceof Error ? error.message : ""}`);
+      throw error instanceof SemanticSearchUnavailable ? error : this.unreachable(error);
     });
     return this.ready;
   }

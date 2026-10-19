@@ -130,4 +130,7 @@ test.skipIf(!pgvector)("indexe, retrouve par le sens, réindexe ce qui change et
   await search.sync(project.id);
   const afterTrash = await search.search("ornithorynque", project.id);
   expect(afterTrash.results.map((hit) => hit.conversation.id)).not.toContain(animals.id);
+
+  await search.close();
+  await expect(search.search("ornithorynque", project.id)).rejects.toThrow(`Base pgvector injoignable sur ${new URL(TEST_DATABASE_URL).host}`);
 });

@@ -78,6 +78,21 @@ bun run setup:browser
 
 Ce parcours n’effectue aucune promotion ni reconnexion des fournisseurs. Le binaire est conservé dans `~/.local/opt/pupitre-browser`, indépendamment du dépôt ; les skills sont accessibles via `~/.claude/skills`, `~/.codex/skills` et `~/.agents/skills` (les dossiers personnalisés Claude/Codex sont respectés si configurés au setup).
 
+## Recherche IA des conversations (optionnelle)
+
+Le bouton ✦ du champ « Filtrer les conversations » retrouve une conversation décrite en langage naturel. Cette fonction n'est pas installée par le setup et Pupitre fonctionne sans elle. Elle demande :
+
+| Prérequis | Rôle | Mise en place |
+| --- | --- | --- |
+| Docker | Héberge la base vectorielle | Installer Docker et le démarrer |
+| Conteneur `pupitre-pg` (`pgvector/pgvector:pg16`, `127.0.0.1:5435`) | Stocke les vecteurs des conversations ; les bases `pupitre` et `pupitre_dev` y sont créées par l'application | `bun run setup:semantic-db`, depuis le dépôt |
+| Clé OpenAI | Embeddings `text-embedding-3-small` | Réglages › Tokens d'intégration, ou `OPENAI_API_KEY` |
+| Clé Cerebras (facultative) | Tri et explication des résultats par `gpt-oss-120b` | Réglages › Tokens d'intégration, ou `CEREBRAS_API_KEY` |
+
+`bun run setup:semantic-db` crée le conteneur s'il manque, le redémarre s'il est arrêté et attend qu'il réponde. Le conteneur redémarre ensuite avec Docker. `PUPITRE_SEMANTIC_DB_URL` permet de pointer vers un autre Postgres doté de pgvector.
+
+Sans clé Cerebras, les résultats sont classés par proximité, sans tri ni explication. Si la base ne répond pas, la recherche affiche « Base pgvector injoignable » : relancez `bun run setup:semantic-db`. Le contenu des conversations est envoyé à OpenAI pour l'indexation, et des extraits à Cerebras pour le tri.
+
 ## Diagnostic et mise à jour
 
 ```bash
