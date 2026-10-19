@@ -89,7 +89,7 @@ Le bouton ✦ du champ « Filtrer les conversations » retrouve une conversation
 | Clé OpenAI | Embeddings `text-embedding-3-small` | Réglages › Tokens d'intégration, ou `OPENAI_API_KEY` |
 | Clé Cerebras (facultative) | Tri et explication des résultats par `gpt-oss-120b` | Réglages › Tokens d'intégration, ou `CEREBRAS_API_KEY` |
 
-`bun run setup:semantic-db` crée le conteneur s'il manque, le redémarre s'il est arrêté et attend qu'il réponde. Le conteneur redémarre ensuite avec Docker. `PUPITRE_SEMANTIC_DB_URL` permet de pointer vers un autre Postgres doté de pgvector.
+`bun run setup:semantic-db` crée le conteneur s'il manque, le redémarre s'il est arrêté et attend qu'il réponde. Le conteneur redémarre ensuite avec Docker. `bash scripts/setup.sh --check` indique son état sans compter son absence comme un échec. `PUPITRE_SEMANTIC_DB_URL` permet de pointer vers un autre Postgres doté de pgvector.
 
 Sans clé Cerebras, les résultats sont classés par proximité, sans tri ni explication. Si la base ne répond pas, la recherche affiche « Base pgvector injoignable » : relancez `bun run setup:semantic-db`. Le contenu des conversations est envoyé à OpenAI pour l'indexation, et des extraits à Cerebras pour le tri.
 

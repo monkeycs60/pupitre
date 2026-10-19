@@ -22,6 +22,17 @@ function authenticated(provider: 'claude' | 'codex'): boolean {
   } catch { return false }
 }
 
+function semanticDatabaseStatus(): string {
+  const container = process.env.PUPITRE_SEMANTIC_CONTAINER ?? 'pupitre-pg'
+  if (!Bun.which('docker')) return 'FACULTATIF — recherche IA : Docker absent'
+  try {
+    const ready = Bun.spawnSync(['docker', 'exec', container, 'pg_isready', '-U', 'postgres'],
+      { stdout: 'ignore', stderr: 'ignore', timeout: 15_000 }).exitCode === 0
+    if (ready) return `OK — recherche IA : ${container}`
+  } catch {}
+  return `FACULTATIF — recherche IA : ${container} arrêté ou absent (bun run setup:semantic-db)`
+}
+
 async function setup(args: string[]): Promise<void> {
   const check = args.includes('--check')
   const unknown = args.filter((arg) => !['--check', '--skip-auth'].includes(arg))
@@ -40,6 +51,7 @@ async function setup(args: string[]): Promise<void> {
       console.log(`${ready ? 'OK' : 'À CONNECTER'} — ${provider}`)
       if (!ready) missing = true
     }
+    console.log(semanticDatabaseStatus())
     process.exitCode = missing ? 1 : 0
     return
   }
