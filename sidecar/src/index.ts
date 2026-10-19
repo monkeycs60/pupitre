@@ -230,7 +230,10 @@ if (process.argv.includes("--pupitre-mcp")) {
     ),
     () => settings.get<number>("nudgeIntervalMinutes") ?? 10,
     (id) => runner.isRunning(id) || runner.activity.isBusy(id),
-    () => actionFormat(settings.get("actionFormat")).todoHeadings,
+    () => {
+      const format = actionFormat(settings.get("actionFormat"));
+      return [...format.todoHeadings, ...format.followUpHeadings];
+    },
   );
   const personalEnvironments = new PersonalEnvironments(db, projects, conversations);
   personalEnvironments.onTriage = (id, prompt) => { void runner.runTurn(id, prompt, []).catch(console.error); };

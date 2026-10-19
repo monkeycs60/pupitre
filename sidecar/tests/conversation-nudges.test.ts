@@ -174,3 +174,13 @@ test('ignore une réponse déjà lue et range la carte dès la lecture', async (
   expect(c.service.list()).toHaveLength(0);
   c.db.close();
 });
+
+test('un bloc TODO sans choix « A OU B » ne réveille pas Haiku', async () => {
+  const c = setup();
+  c.answered('Fini.\n\n*TODO*\n1. Confirmer le rendu dans le navigateur\n2. Attendre la CI avant de pousser\n\n*FOLLOW-UP*\n- Peux-tu relire le style ?');
+  const blocked = c.answered("Il me manque le jeton d'accès Sentry pour continuer.\n\n*TODO*\n1. Fournir le jeton Sentry");
+  c.advance(10);
+  await c.service.scan();
+  expect(c.calls.flat().map((candidate) => candidate.conversationId)).toEqual([blocked.id]);
+  c.db.close();
+});

@@ -80,7 +80,7 @@ export class ConversationNudgeService {
     private readonly judge: NudgeJudge,
     private readonly intervalMinutes: () => number,
     private readonly isRunning: (conversationId: string) => boolean,
-    private readonly todoHeadings: () => string[],
+    private readonly actionHeadings: () => string[],
     private readonly now: () => number = Date.now,
   ) {
     db.exec(`
@@ -150,7 +150,7 @@ export class ConversationNudgeService {
       "SELECT 1 FROM conversation_nudges WHERE conversation_id = ? AND source_event_id = ? AND kind != 'none'",
     );
     const event = this.db.query("SELECT payload, created_at FROM events WHERE id = ?");
-    const headings = this.todoHeadings().map((heading) => heading.toUpperCase());
+    const headings = this.actionHeadings().map((heading) => heading.toUpperCase());
     const result: NudgeCandidate[] = [];
     for (const row of rows) {
       const settledId = row.settled_id;
@@ -168,7 +168,7 @@ export class ConversationNudgeService {
       const unread = row.answered_turn > row.last_read_turn;
       if (!unread) continue;
       const stage: NudgeStage = minutes >= STALE_AFTER_MINUTES ? "stale" : "fresh";
-      const asksSomething = failed || hasActionBlock(text, headings);
+      const asksSomething = failed || asksForDecision(text, headings);
       if (stage === "fresh" && (!asksSomething || minutes < FRESH_DELAY_MINUTES)) continue;
       if (evaluated.get(row.id, settledId, stage)) continue;
       result.push({
@@ -277,14 +277,23 @@ const BLOCKER_PATTERN = new RegExp([
   "bloqué", "bloquant", "waiting for", "i need you", "can you", "could you", "please confirm",
 ].join("|"), "i");
 
-function hasActionBlock(text: string, headings: string[]): boolean {
+function asksForDecision(text: string, headings: string[]): boolean {
   if (text.includes(" OU ")) return true;
-  const ending = text.slice(-800);
-  if (BLOCKER_PATTERN.test(ending) || /\?\s*$/.test(ending.trim())) return true;
-  return text.split("\n").some((line) => {
-    const cleaned = line.replace(/[*_#`:>\s]/g, "").toUpperCase();
-    return headings.some((heading) => cleaned === heading.replace(/\s/g, ""));
-  });
+  const ending = withoutActionBlocks(text, headings).slice(-800);
+  return BLOCKER_PATTERN.test(ending) || /\?\s*$/.test(ending.trim());
+}
+
+function withoutActionBlocks(text: string, headings: string[]): string {
+  const markers = headings.map((heading) => heading.replace(/\s/g, ""));
+  let inBlock = false;
+  return text.split("\n").filter((line) => {
+    if (markers.includes(line.replace(/[*_#`:>\s]/g, "").toUpperCase())) {
+      inBlock = true;
+      return false;
+    }
+    if (inBlock && line.trim() && !/^\s*(\d+[.)]|[-*•])\s/.test(line)) inBlock = false;
+    return !inBlock;
+  }).join("\n");
 }
 
 function clip(value: unknown, max: number): string {
