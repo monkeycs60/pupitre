@@ -1,3 +1,4 @@
+import saturationPercent from "../../config/context-saturation.json";
 import type { Provider } from "./events";
 import { killGroup, spawnGroup } from "./process-group";
 
@@ -32,13 +33,7 @@ export function shouldRefreshDigest(turn: number, lastDigestTurn: number, satura
   return turn - lastDigestTurn >= step;
 }
 
-/** Mêmes seuils que la jauge de contexte de l'UI (ui/src/contextEstimate.ts). */
-const SATURATION_PERCENT: Record<Provider, number> = {
-  claude: 30,
-  codex: 70,
-  grok: 80,
-  reasonix: 80,
-};
+const SATURATION_PERCENT: Record<Provider, number> = saturationPercent;
 
 /**
  * Au-delà du seuil, l'UI propose de continuer ailleurs avec ce résumé : il se

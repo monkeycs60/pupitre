@@ -1,0 +1,6 @@
+{
+  "claude": 30,
+  "codex": 70,
+  "grok": 80,
+  "reasonix": 80
+}

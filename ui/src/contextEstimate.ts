@@ -1,3 +1,4 @@
+import saturationPercent from '../../config/context-saturation.json'
 import type { AppEvent, Provider } from './types'
 
 const MODEL_CONTEXT_WINDOWS: Partial<Record<Provider, Record<string, number>>> = {
@@ -35,12 +36,7 @@ const FALLBACK_CONTEXT_WINDOWS: Record<Provider, number> = {
   reasonix: 1_000_000,
 }
 
-const SATURATION_PERCENT: Record<Provider, number> = {
-  claude: 30,
-  codex: 70,
-  grok: 80,
-  reasonix: 80,
-}
+const SATURATION_PERCENT: Record<Provider, number> = saturationPercent
 
 export interface ContextEstimate {
   usedTokens: number
