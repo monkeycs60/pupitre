@@ -747,6 +747,14 @@ export function closeConversationNudge(id: string): Promise<void> {
   return fetchVoid(`/api/nudges/${routeId(id)}/close`, jsonPost({}))
 }
 
+export function snoozeConversationNudge(id: string, minutes: number): Promise<void> {
+  return fetchVoid(`/api/nudges/${routeId(id)}/snooze`, jsonPost({ minutes }))
+}
+
+export function restoreConversationNudge(id: string): Promise<void> {
+  return fetchVoid(`/api/nudges/${routeId(id)}/restore`, jsonPost({}))
+}
+
 export function createProject(input: CreateProjectInput): Promise<Project> {
   return fetchJson('/api/projects', jsonPost(input))
 }

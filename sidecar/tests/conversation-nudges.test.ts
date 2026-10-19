@@ -117,8 +117,44 @@ test('écarte les actions vides et les types inconnus', async () => {
   const [nudge] = c.service.list();
   expect(nudge!.actions).toEqual([{ label: 'Oui', message: 'Oui, committe.' }]);
   expect(c.service.close(nudge!.id)).toBe(true);
-  expect(c.service.list()).toHaveLength(0);
+  expect(c.service.list().map((item) => item.parked)).toEqual(['dismissed']);
   expect(parseNudgeVerdicts({ nudges: [{ kind: 'choice' }, { conversationId: 'a', kind: 'none' }] })).toHaveLength(1);
   expect(nudgePrompt([])).toContain('"nudges"');
+  c.db.close();
+});
+
+test('une carte rappelée plus tard revient seule, une carte ignorée revient à la demande', async () => {
+  const c = setup((candidates) => candidates.map((candidate) => ({
+    conversationId: candidate.conversationId, kind: 'choice', title: 'Qui committe ?', body: '',
+    actions: [{ label: 'Moi', message: 'Je committe.' }],
+  })));
+  c.answered(choice);
+  c.advance(5);
+  await c.service.scan();
+  const [nudge] = c.service.list();
+  expect(c.service.snooze(nudge!.id, 30)).toBe(true);
+  expect(c.service.list()[0]!.parked).toBe('snoozed');
+  c.advance(31);
+  expect(c.service.list()[0]!.parked).toBeNull();
+
+  c.service.close(nudge!.id);
+  c.advance(60);
+  await c.service.scan();
+  expect(c.calls).toHaveLength(1);
+  expect(c.service.list()).toHaveLength(1);
+  expect(c.service.restore(nudge!.id)).toBe(true);
+  expect(c.service.list()[0]!.parked).toBeNull();
+  c.db.close();
+});
+
+test('soumet à Haiku un bloqueur écrit en toutes lettres, sans bloc TODO', async () => {
+  const c = setup();
+  c.answered("J'ai préparé la migration. J'attends ton accès à la base de préprod pour la lancer.");
+  c.answered('La migration est passée, les tests sont verts.');
+  c.answered('Le schéma est prêt. Tu préfères garder la colonne legacy ?');
+  c.answered("La migration est prête, mais je dois attendre l'accès à la base de préprod.");
+  c.advance(5);
+  await c.service.scan();
+  expect(c.calls[0]!.map((candidate) => candidate.lastAnswer.slice(0, 16)).sort()).toEqual(["J'ai préparé la ", 'La migration est', 'Le schéma est pr']);
   c.db.close();
 });

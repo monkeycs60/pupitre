@@ -101,6 +101,7 @@
 
 .fleet-island-badge.is-running { background: var(--accent-soft); color: var(--accent-bright); }
 .fleet-island-badge.is-unread { background: var(--unread-soft); color: var(--unread); }
+.fleet-island-badge.is-pending { background: var(--warn); color: var(--on-accent); }
 
 .activity-board {
   position: fixed;
@@ -145,6 +146,7 @@
 
 .activity-board-dot.is-running { position: relative; background: var(--accent); }
 .activity-board-dot.is-unread { background: var(--unread); }
+.activity-board-dot.is-pending { flex: none; background: var(--warn); }
 
 .activity-board-count {
   margin-left: auto;
@@ -159,6 +161,7 @@
 
 .activity-board-count.is-running { background: var(--accent-soft); color: var(--accent-bright); }
 .activity-board-count.is-unread { background: var(--unread-soft); color: var(--unread); }
+.activity-board-count.is-pending { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
 
 .activity-board-row {
   display: flex;
@@ -435,6 +438,7 @@
 }
 
 .nudge.is-relaunch { --nudge-tone: var(--danger); }
+.nudge.is-blocked { --nudge-tone: var(--warn); }
 .nudge.is-review { --nudge-tone: var(--text-muted); }
 
 .nudge-head {

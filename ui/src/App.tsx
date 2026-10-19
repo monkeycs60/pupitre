@@ -3,6 +3,7 @@ import { useStableHandler } from './useStableHandler'
 import { FleetIsland } from './FleetIsland'
 import { ToastHost } from './ToastHost'
 import { NudgeStack } from './NudgeStack'
+import { useConversationNudges } from './useConversationNudges'
 import { pushToast } from './toasts'
 import { OpenInEditorButton } from './OpenInEditorButton'
 import { ReadingControls } from './ReadingControls'
@@ -216,6 +217,7 @@ function App() {
     return Object.fromEntries([...conversations].map(([projectId, ids]) => [projectId, ids.size]))
   }, [fleet.items])
   const attention = useUnreadConversations(railReadVersion)
+  const nudges = useConversationNudges()
   const instance = useInstance(fleet.connected)
   const ticketLinks = useTicketLinks(selectedProject?.id)
   const sentryLinks = useSentryLinks(selectedProject?.id)
@@ -1051,6 +1053,8 @@ function App() {
         island={<FleetIsland
           items={fleet.items}
           unread={attention.items}
+          pending={nudges.items}
+          onShowNudge={(nudge) => void nudges.restore(nudge.id)}
           open={activityOpen}
           onOpenChange={setActivityOpen}
           onOpenRunning={(item) => void handleRoutineConversationSelect(item.projectId, item.conversationId)}
@@ -1063,6 +1067,7 @@ function App() {
       />
       <ToastHost>
         <NudgeStack
+          nudges={nudges}
           hiddenConversationId={workspaceView === 'conversations' ? selectedConversationId : null}
           onOpen={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)}
         />

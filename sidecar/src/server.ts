@@ -1965,10 +1965,21 @@ export function createServer(deps: ServerDeps) {
           return json({ created: await deps.nudges.scan() });
         }
 
-        const closeNudgeId = routeId(pathname, /^\/api\/nudges\/([^/]+)\/close$/);
-        if (request.method === "POST" && closeNudgeId !== null) {
+        const nudgeMatch = pathname.match(/^\/api\/nudges\/([^/]+)\/(close|snooze|restore)$/);
+        if (request.method === "POST" && nudgeMatch) {
           if (!deps.nudges) throw new HttpError(501, "veille non câblée");
-          if (!deps.nudges.close(closeNudgeId)) throw new HttpError(404, "notification inconnue");
+          const nudgeId = decodeURIComponent(nudgeMatch[1]!);
+          let changed: boolean;
+          if (nudgeMatch[2] === "snooze") {
+            const minutes = (await readObject(request)).minutes;
+            if (typeof minutes !== "number" || !Number.isInteger(minutes) || minutes < 1 || minutes > 1_440) {
+              throw new HttpError(400, "durée de rappel invalide");
+            }
+            changed = deps.nudges.snooze(nudgeId, minutes);
+          } else {
+            changed = nudgeMatch[2] === "close" ? deps.nudges.close(nudgeId) : deps.nudges.restore(nudgeId);
+          }
+          if (!changed) throw new HttpError(404, "notification inconnue");
           return empty(204);
         }
 

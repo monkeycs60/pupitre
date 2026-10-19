@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 
-export type NudgeKind = "choice" | "validate" | "relaunch" | "review";
+export type NudgeKind = "choice" | "validate" | "blocked" | "relaunch" | "review";
 export type NudgeStage = "fresh" | "stale";
 
 export interface NudgeAction {
@@ -19,6 +19,8 @@ export interface ConversationNudge {
   body: string;
   actions: NudgeAction[];
   created_at: string;
+  parked: "dismissed" | "snoozed" | null;
+  snoozed_until: string | null;
 }
 
 export interface NudgeCandidate {
@@ -55,6 +57,8 @@ interface NudgeRow {
   actions_json: string;
   source_event_id: number;
   created_at: string;
+  closed_at: string | null;
+  snoozed_until: string | null;
   answered_turn: number;
   last_read_turn: number;
 }
@@ -96,6 +100,10 @@ export class ConversationNudgeService {
       CREATE INDEX IF NOT EXISTS idx_conversation_nudges_open
         ON conversation_nudges(closed_at, conversation_id);
     `);
+    const columns = db.query("PRAGMA table_info(conversation_nudges)").all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === "snoozed_until")) {
+      db.exec("ALTER TABLE conversation_nudges ADD COLUMN snoozed_until TEXT NULL");
+    }
   }
 
   start(): void {
@@ -138,8 +146,8 @@ export class ConversationNudgeService {
     const evaluated = this.db.query(
       "SELECT 1 FROM conversation_nudges WHERE conversation_id = ? AND source_event_id = ? AND stage = ?",
     );
-    const open = this.db.query(
-      "SELECT 1 FROM conversation_nudges WHERE conversation_id = ? AND closed_at IS NULL AND kind != 'none'",
+    const raised = this.db.query(
+      "SELECT 1 FROM conversation_nudges WHERE conversation_id = ? AND source_event_id = ? AND kind != 'none'",
     );
     const event = this.db.query("SELECT payload, created_at FROM events WHERE id = ?");
     const headings = this.todoHeadings().map((heading) => heading.toUpperCase());
@@ -147,7 +155,7 @@ export class ConversationNudgeService {
     for (const row of rows) {
       const settledId = row.settled_id;
       if (settledId === null || (row.question_id ?? 0) > settledId) continue;
-      if (this.isRunning(row.id) || open.get(row.id)) continue;
+      if (this.isRunning(row.id) || raised.get(row.id, settledId)) continue;
       const settled = event.get(settledId) as { payload: string; created_at: string } | null;
       if (!settled) continue;
       const minutes = Math.floor((now - Date.parse(settled.created_at)) / 60_000);
@@ -210,11 +218,12 @@ export class ConversationNudgeService {
     const rows = this.db.query(`
       SELECT n.id, n.conversation_id, c.project_id, p.name AS project_name, c.title AS conversation_title,
              n.kind, n.title, n.body, n.actions_json, n.source_event_id, n.created_at,
+             n.closed_at, n.snoozed_until,
              c.answered_turn, c.last_read_turn
       FROM conversation_nudges n
       JOIN conversations c ON c.id = n.conversation_id
       JOIN projects p ON p.id = c.project_id
-      WHERE n.closed_at IS NULL AND n.kind != 'none'
+      WHERE n.kind != 'none'
         AND c.deleted_at IS NULL AND c.archived = 0
         AND NOT EXISTS (
           SELECT 1 FROM events e WHERE e.conversation_id = n.conversation_id AND e.id > n.source_event_id
@@ -222,6 +231,7 @@ export class ConversationNudgeService {
         )
       ORDER BY n.created_at DESC
     `).all() as NudgeRow[];
+    const now = this.now();
     return rows
       .filter((row) => row.kind !== "review" || row.answered_turn > row.last_read_turn)
       .filter((row) => !this.isRunning(row.conversation_id))
@@ -236,19 +246,40 @@ export class ConversationNudgeService {
         body: row.body,
         actions: JSON.parse(row.actions_json) as NudgeAction[],
         created_at: row.created_at,
+        parked: row.closed_at ? "dismissed" as const
+          : row.snoozed_until && Date.parse(row.snoozed_until) > now ? "snoozed" as const : null,
+        snoozed_until: row.snoozed_until && Date.parse(row.snoozed_until) > now ? row.snoozed_until : null,
       }));
   }
 
   close(id: string): boolean {
-    const result = this.db.query(
-      "UPDATE conversation_nudges SET closed_at = ? WHERE id = ? AND closed_at IS NULL",
-    ).run(new Date(this.now()).toISOString(), id);
-    return result.changes > 0;
+    return this.update(id, "closed_at = ?", new Date(this.now()).toISOString());
+  }
+
+  snooze(id: string, minutes: number): boolean {
+    return this.update(id, "closed_at = NULL, snoozed_until = ?", new Date(this.now() + minutes * 60_000).toISOString());
+  }
+
+  restore(id: string): boolean {
+    return this.update(id, "closed_at = NULL, snoozed_until = ?", null);
+  }
+
+  private update(id: string, assignments: string, value: string | null): boolean {
+    return this.db.query(`UPDATE conversation_nudges SET ${assignments} WHERE id = ? AND kind != 'none'`)
+      .run(value, id).changes > 0;
   }
 }
 
+const BLOCKER_PATTERN = new RegExp([
+  "\\battend(re|s)?\\b", "en attente d[eu']", "j['’]ai besoin d", "il me faut", "il me manque",
+  "peux-tu", "pourrais-tu", "dis-moi", "confirme", "valides?-tu", "je ne peux pas", "impossible d['e]",
+  "bloqué", "bloquant", "waiting for", "i need you", "can you", "could you", "please confirm",
+].join("|"), "i");
+
 function hasActionBlock(text: string, headings: string[]): boolean {
   if (text.includes(" OU ")) return true;
+  const ending = text.slice(-800);
+  if (BLOCKER_PATTERN.test(ending) || /\?\s*$/.test(ending.trim())) return true;
   return text.split("\n").some((line) => {
     const cleaned = line.replace(/[*_#`:>\s]/g, "").toUpperCase();
     return headings.some((heading) => cleaned === heading.replace(/\s/g, ""));
@@ -260,7 +291,7 @@ function clip(value: unknown, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-const KINDS: Array<NudgeKind | "none"> = ["choice", "validate", "relaunch", "review", "none"];
+const KINDS: Array<NudgeKind | "none"> = ["choice", "validate", "blocked", "relaunch", "review", "none"];
 
 function sanitizeVerdict(verdict: NudgeVerdict | undefined, candidate: NudgeCandidate): NudgeVerdict {
   const kind = verdict && KINDS.includes(verdict.kind) ? verdict.kind : "none";
@@ -288,14 +319,15 @@ export function nudgePrompt(candidates: NudgeCandidate[]): string {
 Types :
 - "choice" : l'agent attend une décision simple entre options (souvent une ligne « question : A OU B » dans un bloc TODO). Une action par option.
 - "validate" : l'agent propose une suite évidente qu'il suffit d'autoriser (committer, lancer, appliquer). Une action « oui », éventuellement une action alternative.
+- "blocked" : l'agent s'est arrêté parce qu'il lui manque quelque chose que seul Clément peut fournir (un accès, un fichier, une information, une confirmation), même sans bloc TODO. Le titre dit précisément ce qui manque. Chaque solution de repli que la réponse propose elle-même (« je peux sinon tester en local », « continuer sans », « prendre la valeur par défaut ») devient une action qui demande à l'agent de la suivre ; sans repli proposé, aucune action.
 - "relaunch" : le tour s'est arrêté en erreur ou au milieu du travail ; une action relance.
 - "review" : rien à cliquer, mais une réponse importante attend depuis longtemps sans avoir été lue. Aucune action.
-- "none" : tout le reste, notamment une tâche terminée sans question, des TODO qui demandent un travail manuel de Clément hors de la conversation, ou un choix qui demande de lire le détail.
+- "none" : tout le reste, notamment une tâche terminée sans question, des TODO facultatifs que Clément fera hors de la conversation sans que l'agent l'attende, ou un choix qui demande de lire le détail.
 
 Chaque action contient "label" (2 à 5 mots, ce que Clément clique) et "message" (le texte exact envoyé à l'agent en son nom, à la première personne, court). Pour un choix, écris le message sous la forme « Réponse à « question » : option ». N'invente aucune option absente de la réponse.
 "title" résume en une phrase courte ce qui attend Clément ; "body" donne le contexte minimal pour décider sans ouvrir la conversation (une ou deux phrases). Rédige en français.
 
-Réponds uniquement en JSON : {"nudges":[{"conversationId":"…","kind":"choice|validate|relaunch|review|none","title":"…","body":"…","actions":[{"label":"…","message":"…"}]}]}
+Réponds uniquement en JSON : {"nudges":[{"conversationId":"…","kind":"choice|validate|blocked|relaunch|review|none","title":"…","body":"…","actions":[{"label":"…","message":"…"}]}]}
 
 ${blocks.join("\n\n")}`;
 }

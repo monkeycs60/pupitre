@@ -1,38 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
-import { closeConversationNudge, listConversationNudges, sendMessage } from './api'
+import { useState } from 'react'
+import { closeConversationNudge, sendMessage } from './api'
 import type { ConversationNudge } from './types'
+import { SNOOZE_MINUTES, type ConversationNudges } from './useConversationNudges'
 
-const POLL_MS = 20_000
 const VISIBLE_LIMIT = 3
 
 type CardState = { phase: 'idle' } | { phase: 'sending'; index: number } | { phase: 'sent'; label: string } | { phase: 'error'; message: string }
 
-export function NudgeStack({ hiddenConversationId, onOpen }: {
+export function NudgeStack({ nudges, hiddenConversationId, onOpen }: {
+  nudges: ConversationNudges
   hiddenConversationId?: string | null
   onOpen: (projectId: string, conversationId: string) => void
 }) {
-  const [nudges, setNudges] = useState<ConversationNudge[]>([])
   const [states, setStates] = useState<Record<string, CardState>>({})
-
-  const refresh = useCallback((signal?: AbortSignal) => listConversationNudges(signal)
-    .then(setNudges)
-    .catch(() => {}), [])
-
-  useEffect(() => {
-    const controller = new AbortController()
-    void refresh(controller.signal)
-    const timer = window.setInterval(() => void refresh(), POLL_MS)
-    const onFocus = () => void refresh()
-    window.addEventListener('focus', onFocus)
-    return () => { controller.abort(); window.clearInterval(timer); window.removeEventListener('focus', onFocus) }
-  }, [refresh])
-
-  const remove = (id: string) => setNudges((current) => current.filter((nudge) => nudge.id !== id))
-
-  async function close(nudge: ConversationNudge) {
-    remove(nudge.id)
-    await closeConversationNudge(nudge.id).catch(() => {})
-  }
+  const close = (nudge: ConversationNudge) => nudges.dismiss(nudge.id)
 
   async function act(nudge: ConversationNudge, index: number) {
     const action = nudge.actions[index]
@@ -42,14 +23,14 @@ export function NudgeStack({ hiddenConversationId, onOpen }: {
       await sendMessage(nudge.conversation_id, { message: action.message })
       await closeConversationNudge(nudge.id).catch(() => {})
       setStates((current) => ({ ...current, [nudge.id]: { phase: 'sent', label: action.label } }))
-      window.setTimeout(() => remove(nudge.id), 1_600)
+      window.setTimeout(() => nudges.remove(nudge.id), 1_600)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Envoi impossible'
       setStates((current) => ({ ...current, [nudge.id]: { phase: 'error', message } }))
     }
   }
 
-  const visible = nudges.filter((nudge) => nudge.conversation_id !== hiddenConversationId)
+  const visible = nudges.items.filter((nudge) => nudge.parked === null && nudge.conversation_id !== hiddenConversationId)
   if (visible.length === 0) return null
   const hidden = visible.length - VISIBLE_LIMIT
 
@@ -70,7 +51,7 @@ export function NudgeStack({ hiddenConversationId, onOpen }: {
                 <span className="nudge-dot" aria-hidden="true" />
                 <span>{nudge.project_name} · {nudge.conversation_title}</span>
               </button>
-              <button type="button" className="nudge-close" aria-label="Ignorer" title="Ignorer" onClick={() => void close(nudge)}>×</button>
+              <button type="button" className="nudge-close" aria-label="Ignorer" title="Ignorer (reste dans l’île de l’en-tête)" onClick={() => void close(nudge)}>×</button>
             </header>
             <strong className="nudge-title">{nudge.title}</strong>
             {nudge.body ? <p className="nudge-body">{nudge.body}</p> : null}
@@ -97,6 +78,15 @@ export function NudgeStack({ hiddenConversationId, onOpen }: {
                   onClick={() => { onOpen(nudge.project_id, nudge.conversation_id); void close(nudge) }}
                 >
                   Ouvrir
+                </button>
+                <button
+                  type="button"
+                  className="nudge-action is-ghost"
+                  disabled={busy}
+                  title={`La carte revient dans ${SNOOZE_MINUTES} minutes`}
+                  onClick={() => void nudges.snooze(nudge.id)}
+                >
+                  Dans {SNOOZE_MINUTES} min
                 </button>
               </div>
             )}

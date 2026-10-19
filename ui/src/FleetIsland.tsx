@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
-import type { FleetItem, UnreadConversation } from './types'
+import type { ConversationNudge, FleetItem, UnreadConversation } from './types'
 import { ProviderMark } from './ProviderMark'
 import { useNow } from './useNow'
 import { formatShortDuration } from './formatActiveDuration'
@@ -29,9 +29,16 @@ function toolLine(item: FleetItem): ToolPresentation | null {
   return toolPresentation({ kind: 'tool', id: item.id, toolId: item.id, toolName: item.lastTool.toolName, input: item.lastTool.input, images: [] })
 }
 
-export function FleetIsland({ items, unread, open, onOpenChange, onOpenRunning, onOpenUnread, onReadAll }: {
+const PARKED_LABELS: Record<NonNullable<ConversationNudge['parked']>, string> = {
+  dismissed: 'Ignorée',
+  snoozed: 'Rappel',
+}
+
+export function FleetIsland({ items, unread, pending = [], open, onOpenChange, onOpenRunning, onOpenUnread, onShowNudge, onReadAll }: {
   items: FleetItem[]
   unread: UnreadConversation[]
+  pending?: ConversationNudge[]
+  onShowNudge?: (nudge: ConversationNudge) => void
   open: boolean
   onOpenChange: (open: boolean) => void
   onOpenRunning: (item: FleetItem) => void
@@ -44,7 +51,7 @@ export function FleetIsland({ items, unread, open, onOpenChange, onOpenRunning, 
   const [position, setPosition] = useState<CSSProperties | null>(null)
   const now = useNow(1000)
   const lead = items[0]
-  const visible = items.length > 0 || unread.length > 0
+  const visible = items.length > 0 || unread.length > 0 || pending.length > 0
 
   useLayoutEffect(() => {
     if (!open || pillRef.current === null) return setPosition(null)
@@ -89,12 +96,42 @@ export function FleetIsland({ items, unread, open, onOpenChange, onOpenRunning, 
             <span className="fleet-island-title"><strong>{lead.projectName}</strong> · {lead.title}</span>
             <span className="fleet-island-time">{since(lead.startedAt, now)}</span>
           </>
-        ) : <span className="fleet-island-title">Réponses à lire</span>}
+        ) : <span className="fleet-island-title">{unread.length > 0 ? 'Réponses à lire' : 'À décider'}</span>}
+        {pending.length > 0 ? <span className="fleet-island-badge is-pending" title={`${pending.length} à décider`}>{pending.length}</span> : null}
         {items.length > 1 ? <span className="fleet-island-badge is-running" title={`${items.length} en cours`}>{items.length}</span> : null}
         {unread.length > 0 ? <span className="fleet-island-badge is-unread" title={`${unread.length} à lire`}>{unread.length}</span> : null}
       </button>
       {open && position ? (
         <div className="activity-board" role="dialog" aria-label="Activité" style={position}>
+          {pending.length > 0 ? (
+            <section className="activity-board-section">
+              <header>
+                <span className="activity-board-dot is-pending" aria-hidden="true" />
+                <h2>À décider</h2>
+                <span className="activity-board-count is-pending">{pending.length}</span>
+              </header>
+              {pending.map((nudge) => (
+                <button
+                  key={nudge.id}
+                  type="button"
+                  className="activity-board-row"
+                  title="Afficher la carte"
+                  onClick={() => { onOpenChange(false); onShowNudge?.(nudge) }}
+                >
+                  <span className="activity-board-dot is-pending" aria-hidden="true" />
+                  <span className="activity-board-text">
+                    <strong>{nudge.title}</strong>
+                    <span className="activity-board-meta">{nudge.project_name} · {nudge.conversation_title}</span>
+                  </span>
+                  <span className="activity-board-time">
+                    {nudge.parked === 'snoozed' && nudge.snoozed_until
+                      ? `${PARKED_LABELS.snoozed} ${formatShortDuration(Date.parse(nudge.snoozed_until) - now)}`
+                      : nudge.parked ? PARKED_LABELS[nudge.parked] : `il y a ${since(nudge.created_at, now)}`}
+                  </span>
+                </button>
+              ))}
+            </section>
+          ) : null}
           <section className="activity-board-section">
             <header>
               <span className="activity-board-dot is-running" aria-hidden="true" />

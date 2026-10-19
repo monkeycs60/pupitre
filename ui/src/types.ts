@@ -189,11 +189,14 @@ export interface ConversationNudge {
   project_id: string
   project_name: string
   conversation_title: string
-  kind: 'choice' | 'validate' | 'relaunch' | 'review'
+  kind: 'choice' | 'validate' | 'blocked' | 'relaunch' | 'review'
   title: string
   body: string
   actions: Array<{ label: string; message: string }>
   created_at: string
+  /** `dismissed` : ignorée d'un clic ; `snoozed` : rappelée plus tard. Dans les deux cas l'île la garde. */
+  parked: 'dismissed' | 'snoozed' | null
+  snoozed_until: string | null
 }
 
 export type AttentionTarget =
