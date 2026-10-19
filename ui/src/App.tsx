@@ -1061,8 +1061,6 @@ function App() {
         island={<FleetIsland
           items={fleet.items}
           unread={attention.items}
-          pending={nudges.items}
-          onShowNudge={(nudge) => void nudges.restore(nudge.id)}
           open={activityOpen}
           onOpenChange={setActivityOpen}
           onOpenRunning={(item) => void handleRoutineConversationSelect(item.projectId, item.conversationId)}

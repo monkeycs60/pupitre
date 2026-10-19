@@ -6,7 +6,6 @@ if (typeof document === 'undefined') GlobalRegistrator.register()
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { NudgeStack } = await import('./NudgeStack')
 const { useConversationNudges } = await import('./useConversationNudges')
-const { FleetIsland } = await import('./FleetIsland')
 
 function Stack({ hiddenConversationId }: { hiddenConversationId?: string }) {
   const nudges = useConversationNudges()
@@ -78,24 +77,18 @@ test('« Dans 30 min » range la carte et demande le rappel au sidecar', async (
   expect(calls.at(-1)).toEqual({ url: expect.stringContaining('/api/nudges/n1/snooze'), body: { minutes: 30 } })
 })
 
-test('l’île compte les choix en attente, rangés compris, et rend la carte au clic', () => {
-  const shown: string[] = []
-  const parked = { ...nudge('n1', 'c2'), parked: 'dismissed' as const }
-  render(
-    <FleetIsland
-      items={[]}
-      unread={[]}
-      pending={[parked, nudge('n2', 'c3')]}
-      open
-      onOpenChange={() => {}}
-      onOpenRunning={() => {}}
-      onOpenUnread={() => {}}
-      onShowNudge={(item) => shown.push(item.id)}
-      onReadAll={async () => {}}
-    />,
-  )
-  expect(document.querySelector('.fleet-island-badge.is-pending')?.textContent).toBe('2')
-  expect(screen.getByText('Ignorée')).toBeTruthy()
-  fireEvent.click(screen.getAllByTitle('Afficher la carte')[0]!)
-  expect(shown).toEqual(['n1'])
+test('la pile montre une seule carte, son épaisseur et passe à la suivante après ×', async () => {
+  globalThis.fetch = (async (url) => {
+    if (String(url).endsWith('/api/nudges')) return Response.json([nudge('n1', 'c1'), nudge('n2', 'c2'), nudge('n3', 'c3')])
+    return new Response(null, { status: 204 })
+  }) as typeof fetch
+  render(<Stack />)
+  await waitFor(() => expect(document.querySelector('.nudge')?.getAttribute('data-id')).toBe('n1'))
+  expect(document.querySelectorAll('.nudge')).toHaveLength(1)
+  expect(document.querySelectorAll('.nudge-layer')).toHaveLength(2)
+  expect(document.querySelector('.nudge-count')?.textContent).toBe('3')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Ignorer' }))
+  await waitFor(() => expect(document.querySelector('.nudge')?.getAttribute('data-id')).toBe('n2'))
+  expect(document.querySelectorAll('.nudge-layer')).toHaveLength(1)
 })

@@ -101,7 +101,6 @@
 
 .fleet-island-badge.is-running { background: var(--accent-soft); color: var(--accent-bright); }
 .fleet-island-badge.is-unread { background: var(--unread-soft); color: var(--unread); }
-.fleet-island-badge.is-pending { background: var(--warn); color: var(--on-accent); }
 
 .activity-board {
   position: fixed;
@@ -146,7 +145,6 @@
 
 .activity-board-dot.is-running { position: relative; background: var(--accent); }
 .activity-board-dot.is-unread { background: var(--unread); }
-.activity-board-dot.is-pending { flex: none; background: var(--warn); }
 
 .activity-board-count {
   margin-left: auto;
@@ -161,7 +159,6 @@
 
 .activity-board-count.is-running { background: var(--accent-soft); color: var(--accent-bright); }
 .activity-board-count.is-unread { background: var(--unread-soft); color: var(--unread); }
-.activity-board-count.is-pending { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
 
 .activity-board-row {
   display: flex;
@@ -416,15 +413,31 @@
 
 /* --- Veille des conversations ------------------------------------------- */
 
-.nudge-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-2);
+.nudge-deck {
+  --layer-step: 7px;
+  position: relative;
+  width: 360px;
+  padding-bottom: calc(var(--deck-layers, 0) * var(--layer-step));
+  isolation: isolate;
+}
+
+.nudge-layer {
+  position: absolute;
+  z-index: calc(-1 * var(--layer));
+  inset: 0 0 calc(var(--deck-layers, 0) * var(--layer-step)) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+  opacity: calc(1 - var(--layer) * 0.15);
+  transform: translateY(calc(var(--layer) * var(--layer-step))) scale(calc(1 - var(--layer) * 0.035));
+  transform-origin: bottom center;
+  transition: transform 260ms var(--spring);
 }
 
 .nudge {
   --nudge-tone: var(--accent);
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
@@ -435,7 +448,52 @@
   background: var(--bg-overlay);
   box-shadow: var(--shadow-overlay);
   pointer-events: auto;
+  touch-action: pan-y;
+  user-select: none;
+  cursor: grab;
+  transition: transform 260ms var(--spring);
   animation: toast-in 480ms var(--spring) both;
+}
+
+.nudge.is-dragging { cursor: grabbing; transition: none; }
+.nudge.is-leaving-left { animation: nudge-leave-left 260ms var(--ease-in) forwards; }
+.nudge.is-leaving-right { animation: nudge-leave-right 260ms var(--ease-in) forwards; }
+
+@keyframes nudge-leave-left {
+  to { opacity: 0; transform: translateX(-130%) rotate(-12deg); }
+}
+
+@keyframes nudge-leave-right {
+  to { opacity: 0; transform: translateX(130%) rotate(12deg); }
+}
+
+.nudge-hint {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  padding: 2px var(--space-2);
+  border-radius: var(--r-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.nudge-hint.is-later { background: var(--bg-hover); color: var(--text-muted); }
+.nudge-hint.is-open { background: var(--nudge-tone); color: var(--on-accent); }
+
+.nudge-count {
+  flex: none;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nudge-tone) 18%, transparent);
+  color: var(--nudge-tone);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-align: center;
 }
 
 .nudge.is-relaunch { --nudge-tone: var(--danger); }
@@ -551,16 +609,9 @@
 .nudge-feedback.is-ok { color: var(--ok); }
 .nudge-feedback.is-danger { color: var(--danger); }
 
-.nudge-more {
-  margin: 0;
-  color: var(--text-faint);
-  font-size: var(--text-sm);
-  pointer-events: auto;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .toast-life { animation-duration: var(--toast-life, 6s) !important; }
-  .nudge { animation: none; }
+  .nudge, .nudge.is-leaving-left, .nudge.is-leaving-right { animation: none; }
   .fleet-island-dot::after,
   .activity-board-dot::after { animation: none !important; }
 }
