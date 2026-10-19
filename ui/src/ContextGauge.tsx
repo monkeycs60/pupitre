@@ -4,50 +4,39 @@ import { copyText } from './clipboard'
 import { contextEstimate, formatContextWindow } from './contextEstimate'
 import type { AppEvent, Conversation } from './types'
 
-export function conversationReferenceText(conversation: Pick<Conversation, 'id' | 'title'>): string {
-  return [
-    `Conversation Pupitre « ${conversation.title} » (id : ${conversation.id}).`,
-    `Lis-la avec l’outil Pupitre \`read_conversation\` (conversation : "${conversation.id}") avant de répondre.`,
-  ].join('\n')
-}
-
-type CopyKind = 'discussion' | 'reference'
-
 // memo + useMemo : l'estimation parcourt tous les événements du fil, elle ne
 // doit tourner qu'à leur changement, pas à chaque re-render du parent.
 export const ContextGauge = memo(function ContextGauge({
   conversation,
   events,
-  onHandoff,
+  onContinueElsewhere,
 }: {
   conversation: Conversation
   events: AppEvent[]
-  onHandoff: () => void
+  onContinueElsewhere: () => void
 }) {
   const estimate = useMemo(
     () => contextEstimate(events, conversation.provider, conversation.model),
     [events, conversation.provider, conversation.model],
   )
-  const [copied, setCopied] = useState<CopyKind | null>(null)
-  const [copying, setCopying] = useState<CopyKind | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [copying, setCopying] = useState(false)
   const [copyError, setCopyError] = useState<string | null>(null)
   const formattedWindow = formatContextWindow(estimate.windowTokens)
   const percent = Math.max(0, Math.min(100, estimate.percent))
 
-  async function copy(kind: CopyKind) {
-    if (copying !== null) return
-    setCopying(kind)
+  async function copyDiscussion() {
+    if (copying) return
+    setCopying(true)
     setCopyError(null)
     try {
-      await copyText(kind === 'reference'
-        ? conversationReferenceText(conversation)
-        : (await getDiscussionDocument(conversation.id)).contentMd)
-      setCopied(kind)
-      window.setTimeout(() => setCopied((current) => current === kind ? null : current), 1_500)
+      await copyText((await getDiscussionDocument(conversation.id)).contentMd)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1_500)
     } catch (error: unknown) {
       setCopyError(error instanceof Error ? error.message : 'Copie impossible.')
     } finally {
-      setCopying(null)
+      setCopying(false)
     }
   }
 
@@ -55,21 +44,15 @@ export const ContextGauge = memo(function ContextGauge({
     <div className={`context-gauge${estimate.nearSaturation ? ' is-near-limit' : ''}`}>
       <div className="context-gauge-menu" role="group" aria-label="Passer la main">
         <div className="context-gauge-menu-card">
-          <button type="button" onClick={() => void copy('discussion')} disabled={copying !== null}>
+          <button type="button" onClick={() => void copyDiscussion()} disabled={copying}>
             <span className="context-gauge-menu-label">
-              {copied === 'discussion' ? 'Discussion copiée' : copying === 'discussion' ? 'Copie…' : 'Copier la discussion'}
+              {copied ? 'Discussion copiée' : copying ? 'Copie…' : 'Copier la discussion'}
             </span>
             <span className="context-gauge-menu-detail">Tout le fil en Markdown</span>
           </button>
-          <button type="button" onClick={onHandoff}>
-            <span className="context-gauge-menu-label">Préparer un handoff</span>
-            <span className="context-gauge-menu-detail">Résumé à compléter dans une nouvelle conversation</span>
-          </button>
-          <button type="button" onClick={() => void copy('reference')} disabled={copying !== null}>
-            <span className="context-gauge-menu-label">
-              {copied === 'reference' ? 'Référence copiée' : 'Copier la référence'}
-            </span>
-            <span className="context-gauge-menu-detail">Id et consigne pour une autre conversation</span>
+          <button type="button" onClick={onContinueElsewhere}>
+            <span className="context-gauge-menu-label">Continuer la conversation ailleurs</span>
+            <span className="context-gauge-menu-detail">Id et consigne dans une nouvelle conversation</span>
           </button>
           {copyError !== null ? <p className="context-gauge-menu-error" role="alert">{copyError}</p> : null}
         </div>

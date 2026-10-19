@@ -80,18 +80,9 @@ export function buildCreateConversationInput(
   }
 }
 
-export function handoffDraftMessage(
-  source: { id: string; title: string },
-  handoffMd: string,
-): string {
+export function conversationReferenceText(conversation: { id: string; title: string }): string {
   return [
-    `Reprise de la conversation Pupitre « ${source.title} » (id : ${source.id}).`,
-    'Le handoff ci-dessous est le point de départ ; `read_conversation` donne le détail si besoin.',
-    '',
-    handoffMd.trim(),
-    '',
-    '---',
-    '',
-    '',
+    `Conversation Pupitre « ${conversation.title} » (id : ${conversation.id}).`,
+    `Lis-la avec l’outil Pupitre \`read_conversation\` (conversation : "${conversation.id}") avant de répondre.`,
   ].join('\n')
 }

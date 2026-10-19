@@ -635,7 +635,7 @@ export function Chat({
             onAction={(action) => void handleComposerAction(action)}
             onImageOpen={handleImageOpen}
             contextGauge={conversation
-              ? <ContextGauge conversation={conversation} events={events} onHandoff={onHandoff} />
+              ? <ContextGauge conversation={conversation} events={events} onContinueElsewhere={onHandoff} />
               : null}
           />
         </div>

@@ -1154,13 +1154,6 @@ export function refreshProjectChangelog(projectId: string): Promise<ProjectChang
   return fetchJson(`/api/projects/${routeId(projectId)}/changelog/refresh`, jsonPost({}))
 }
 
-export interface HandoffDocument {
-  debriefId: string
-  filename: string
-  contentMd: string
-  createdAt: string
-}
-
 export interface DiscussionDocument {
   filename: string
   contentMd: string
@@ -1169,13 +1162,6 @@ export interface DiscussionDocument {
 
 export function getDiscussionDocument(conversationId: string): Promise<DiscussionDocument> {
   return fetchJson(`/api/conversations/${routeId(conversationId)}/discussion-document`)
-}
-
-export function createHandoffDocument(conversationId: string): Promise<HandoffDocument> {
-  return fetchJson(
-    `/api/conversations/${routeId(conversationId)}/handoff-document`,
-    jsonPost({}),
-  )
 }
 
 export function createTestInventory(conversationId: string): Promise<TestInventory> {

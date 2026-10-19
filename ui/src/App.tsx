@@ -13,7 +13,7 @@ import { TodoList } from './TodoList'
 import { WorkflowsView } from './WorkflowsView'
 import { linkTodo, useTodos, type TodoItem } from './todos'
 import { ticketLinksOf } from './ticketLinks'
-import { handoffDraftMessage, newConversationDraftStorageKey } from './conversationDraft'
+import { conversationReferenceText, newConversationDraftStorageKey } from './conversationDraft'
 import type { ConversationConfig } from './ConfigPanel'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type {
@@ -27,7 +27,6 @@ import { Rail } from './Rail'
 import { Titlebar, type TitlebarDestination } from './Titlebar'
 import { navigationShortcutLabel } from './navigationShortcuts'
 import { SwitchModelModal } from './SwitchModelModal'
-import { HandoffModal } from './HandoffModal'
 import type { Attachment, Conversation, ConversationContinuation, Project, UnreadConversation } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
@@ -168,7 +167,6 @@ function App() {
   const navigationShortcutRef = useRef<(view: NavigationShortcutView) => void>(() => {})
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
-  const [showHandoff, setShowHandoff] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
   const [memoryDirty, setMemoryDirty] = useState(false)
@@ -786,11 +784,10 @@ function App() {
     setConversationListVersion((current) => current + 1)
   }
 
-  /** Handoff posé dans le composer d'une nouvelle conversation, sans envoi. */
-  function handleHandoffDraft(source: Conversation, handoffMd: string) {
+  /** Référence de la conversation posée dans le composer d'une nouvelle conversation, sans envoi. */
+  function handleContinueElsewhere(source: Conversation) {
     if (!confirmLeaveMemory() || selectedProject === null) return
     try { localStorage.removeItem(newConversationDraftStorageKey(selectedProject.id, source.ticket_id)) } catch { /* stockage indisponible */ }
-    setShowHandoff(false)
     setSelectedConversation(null)
     setEditingTodo(null)
     setConversationSeed({
@@ -806,7 +803,7 @@ function App() {
         permissionMode: source.permission_mode ?? null,
       },
     })
-    setNewConversationDraft(handoffDraftMessage(source, handoffMd))
+    setNewConversationDraft(`${conversationReferenceText(source)}\n\n`)
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
@@ -818,7 +815,6 @@ function App() {
     setSelectedConversation(conversation)
     setIsCreatingConversation(false)
     setShowSwitchModel(false)
-    setShowHandoff(false)
     setConversationListVersion((current) => current + 1)
   }
 
@@ -1295,7 +1291,7 @@ function App() {
               problemIds={conversationSeed?.problemIds}
               problemPlanIndices={conversationSeed?.problemPlanIndices}
               missionTitle={conversationSeed?.missionTitle}
-              onHandoff={() => setShowHandoff(true)}
+              onHandoff={() => { if (selectedConversation !== null) handleContinueElsewhere(selectedConversation) }}
               onSwitchModel={() => setShowSwitchModel(true)}
             />
             </ToolFileContext.Provider>
@@ -1309,15 +1305,6 @@ function App() {
                 onClose={() => setShowSwitchModel(false)}
                 onSwitched={handleConversationSwitched}
                 onHandoff={handleConversationHandoff}
-              />
-            ) : null}
-            {showHandoff && selectedConversation !== null ? (
-              <HandoffModal
-                key={`handoff-${selectedConversation.id}`}
-                conversation={selectedConversation}
-                startWith="handoff"
-                onClose={() => setShowHandoff(false)}
-                onDraft={(handoffMd) => handleHandoffDraft(selectedConversation, handoffMd)}
               />
             ) : null}
           </>

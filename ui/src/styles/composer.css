@@ -1487,39 +1487,76 @@
   padding-bottom: 6px;
   pointer-events: none;
   visibility: hidden;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), visibility var(--dur-fast) var(--ease);
+  transition: visibility 0s linear var(--dur);
 }
 
 .context-gauge:hover .context-gauge-menu,
 .context-gauge:focus-within .context-gauge-menu {
   pointer-events: auto;
   visibility: visible;
-  opacity: 1;
-  transform: none;
+  transition-delay: 0s;
 }
 
 .context-gauge-menu-card {
   display: grid;
-  gap: 1px;
-  width: 300px;
+  gap: 2px;
+  width: 280px;
   padding: var(--space-1);
   background: var(--bg-overlay);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-overlay);
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  transform-origin: bottom right;
+  filter: blur(2px);
+  transition:
+    opacity var(--dur-fast) var(--ease-in),
+    transform var(--dur-fast) var(--ease-in),
+    filter var(--dur-fast) var(--ease-in);
+}
+
+.context-gauge:hover .context-gauge-menu-card,
+.context-gauge:focus-within .context-gauge-menu-card {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur-slow) var(--spring),
+    filter var(--dur) var(--ease-out);
 }
 
 .context-gauge-menu-card button {
   display: grid;
-  gap: 1px;
-  padding: 7px 10px;
+  gap: 2px;
+  padding: 8px 10px;
   text-align: left;
   background: transparent;
   border: 0;
   border-radius: var(--r-sm);
   cursor: pointer;
+  opacity: 0;
+  transform: translateY(3px);
+  transition:
+    background var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease-in),
+    transform var(--dur-fast) var(--ease-in);
+}
+
+.context-gauge:hover .context-gauge-menu-card button,
+.context-gauge:focus-within .context-gauge-menu-card button {
+  opacity: 1;
+  transform: none;
+  transition:
+    background var(--dur-fast) var(--ease),
+    opacity var(--dur) var(--ease-out) 40ms,
+    transform var(--dur) var(--ease-out) 40ms;
+}
+
+.context-gauge:hover .context-gauge-menu-card button + button,
+.context-gauge:focus-within .context-gauge-menu-card button + button {
+  transition-delay: 0s, 80ms, 80ms;
 }
 
 .context-gauge-menu-card button:hover,
@@ -1530,6 +1567,14 @@
 
 .context-gauge-menu-card button:disabled {
   cursor: progress;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-gauge-menu-card,
+  .context-gauge-menu-card button {
+    filter: none;
+    transform: none;
+  }
 }
 
 .context-gauge-menu-label {

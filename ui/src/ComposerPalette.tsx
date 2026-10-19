@@ -43,7 +43,7 @@ export const COMPOSER_TOOLS: ComposerToolItem[] = [
 export const COMPOSER_ACTIONS: ComposerActionItem[] = [
   { id: 'summary', label: 'Résumé de session', detail: 'Lister les changements et les éléments à terminer' },
   { id: 'switch-model', label: 'Changer de modèle', detail: 'Provider, modèle ou effort de la conversation' },
-  { id: 'handoff', label: 'Passation', detail: 'Transmettre le travail à une nouvelle conversation' },
+  { id: 'handoff', label: 'Continuer ailleurs', detail: 'Id et consigne dans une nouvelle conversation' },
   { id: 'test', label: 'Tester', detail: 'Proposer des vérifications ciblées' },
 ]
 
