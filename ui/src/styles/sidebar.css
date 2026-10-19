@@ -692,6 +692,120 @@
   background: var(--bg-hover);
 }
 
+.conversation-ai-toggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+
+.conversation-ai-toggle:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.conversation-ai-toggle[aria-pressed='true'] {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+}
+
+.conversation-filter-input.is-ai {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.ai-search-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ai-search-error {
+  color: var(--danger);
+}
+
+.ai-search-results {
+  display: grid;
+  gap: 2px;
+  padding: 0 var(--space-1);
+}
+
+.ai-search-results-heading {
+  padding: 2px 6px 4px;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.ai-search-result {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 7px 8px;
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.ai-search-result:hover {
+  background: var(--bg-hover);
+}
+
+.ai-search-result.is-selected {
+  background: var(--accent-soft);
+}
+
+.ai-search-result-line1 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ai-search-result-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-search-result-date {
+  flex: none;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.ai-search-result-reason {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.ai-search-result-badge {
+  justify-self: start;
+  padding: 0 5px;
+  color: var(--text-faint);
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+}
+
 .conversation-filter-input.has-scope {
   border-color: var(--accent-border);
 }

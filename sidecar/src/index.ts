@@ -40,6 +40,7 @@ import { WorkflowStore } from "./stores/workflows";
 import { NotificationStore } from "./stores/notifications";
 import { RoutineScheduler, RoutineStore } from "./routines";
 import { SearchIndex } from "./search";
+import { SemanticSearch, semanticDatabaseUrl } from "./semantic-search";
 import { CostStore } from "./costs";
 import { MemoryStore } from "./memory";
 import { TimeTrackingService, HEARTBEAT_MS, localDay } from "./time-tracking";
@@ -108,6 +109,13 @@ if (process.argv.includes("--pupitre-mcp")) {
   const notifications = new NotificationStore(db);
   const routineStore = new RoutineStore(db);
   const search = new SearchIndex(db);
+  const semanticSearch = new SemanticSearch(db, conversations, () => {
+    const tokens = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY) ?? {};
+    return {
+      openai: tokens.openai ?? process.env.OPENAI_API_KEY?.trim() ?? null,
+      cerebras: tokens.cerebras ?? process.env.CEREBRAS_API_KEY?.trim() ?? null,
+    };
+  }, semanticDatabaseUrl(instance.name));
   const costs = new CostStore(db);
   const memory = new MemoryStore();
   const integrations = new IntegrationStore(db);
@@ -407,6 +415,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     automaticCalls,
     notifications,
     search,
+    semanticSearch,
     costs,
     memory,
     integrations,
@@ -439,6 +448,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     changelog.start();
     integrationsRefresher.start();
     runScheduledActivityReport();
+    setInterval(() => { void semanticSearch.sync().catch(() => {}); }, 600_000).unref();
   } else {
     console.log("instance dev : tâches de fond désactivées (PUPITRE_BACKGROUND_JOBS=on pour les activer)");
   }

@@ -65,6 +65,7 @@ import type { NotificationStore } from "./stores/notifications";
 import type { RoutineInput, RoutineScheduler, RoutineStore } from "./routines";
 import { fleetSnapshot } from "./fleet";
 import type { SearchIndex } from "./search";
+import { SemanticSearchUnavailable, type SemanticSearch } from "./semantic-search";
 import type { CostStore } from "./costs";
 import {
   MemoryFileExistsError,
@@ -186,6 +187,7 @@ export interface ServerDeps {
   routines: RoutineScheduler;
   notifications: NotificationStore;
   search: SearchIndex;
+  semanticSearch?: SemanticSearch;
   costs: CostStore;
   memory: MemoryStore;
   integrations: IntegrationStore;
@@ -2427,6 +2429,21 @@ export function createServer(deps: ServerDeps) {
           return json(listed);
         }
 
+        const aiSearchProjectId = routeId(pathname, /^\/api\/projects\/([^/]+)\/conversations\/ai-search$/);
+        if (request.method === "POST" && aiSearchProjectId !== null) {
+          if (!deps.projects.get(aiSearchProjectId)) throw new HttpError(404, "projet inconnu");
+          if (!deps.semanticSearch) throw new HttpError(503, "recherche IA indisponible");
+          const body = await readObject(request);
+          const query = optionalTrimmed(body, "query");
+          if (query === null) throw new HttpError(400, "champ query requis");
+          try {
+            return json(await deps.semanticSearch.search(query, aiSearchProjectId));
+          } catch (error) {
+            if (error instanceof SemanticSearchUnavailable) throw new HttpError(503, error.message);
+            throw error;
+          }
+        }
+
         if (request.method === "GET" && pathname === "/api/conversations/unread-counts") {
           return json(deps.conversations.unreadCountsByProject());
         }
@@ -2919,7 +2936,7 @@ export function createServer(deps: ServerDeps) {
             }
             const currentTokens = deps.settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY) ?? {};
             for (const [name, value] of Object.entries(tokens as Record<string, unknown>)) {
-              if (name !== "clickup" && name !== "gitlab") {
+              if (name !== "clickup" && name !== "gitlab" && name !== "openai" && name !== "cerebras") {
                 throw new HttpError(400, `token ${name} inconnu`);
               }
               if (value === null || value === "") {

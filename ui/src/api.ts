@@ -1030,8 +1030,10 @@ export function updateTicketInstruction(ticketId: string, instruction: string): 
   )
 }
 
+export type IntegrationTokenName = 'clickup' | 'gitlab' | 'openai' | 'cerebras'
+
 export function updateIntegrationTokens(
-  tokens: Partial<Record<'clickup' | 'gitlab', string | null>>,
+  tokens: Partial<Record<IntegrationTokenName, string | null>>,
 ): Promise<Settings> {
   return fetchJson('/api/settings', jsonPut({ integrationTokens: tokens }))
 }
@@ -1044,6 +1046,15 @@ export function setConversationPermissionMode(
     `/api/conversations/${routeId(id)}/permission-mode`,
     jsonPut({ permission_mode: permissionMode }),
   )
+}
+
+export interface AiConversationSearch {
+  results: Array<{ conversation: Conversation; reason: string; match: 'strong' | 'partial' }>
+  reranked: boolean
+}
+
+export function searchConversationsWithAi(projectId: string, query: string, signal?: AbortSignal): Promise<AiConversationSearch> {
+  return fetchJson(`/api/projects/${routeId(projectId)}/conversations/ai-search`, { ...jsonPost({ query }), signal })
 }
 
 export function listProjectConversations(

@@ -15,6 +15,7 @@
     "setup": "bash scripts/setup.sh",
     "doctor": "bun run scripts/setup.ts --check",
     "setup:browser": "bun run scripts/setup-browser.ts",
+    "setup:semantic-db": "bash scripts/setup-semantic-db.sh",
     "measure:webkit": "bun run scripts/measure-webkit/measure-webkit.ts"
   },
   "devDependencies": {

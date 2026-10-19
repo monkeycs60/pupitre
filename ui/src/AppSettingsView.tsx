@@ -8,6 +8,7 @@ import {
   startPromotionMission,
   updateIntegrationTokens,
   updateSettings,
+  type IntegrationTokenName,
 } from './api'
 import type { FilesystemScope, InstanceHealth, PromotionMission, Provider, QuotaSnapshot } from './types'
 import {
@@ -45,6 +46,20 @@ function nextActivityRun(hour: string): string {
   return next.toLocaleString('fr-FR', { weekday: 'long', hour: '2-digit', minute: '2-digit' })
 }
 
+const AI_SEARCH_TOKENS: Array<{ name: 'openai' | 'cerebras'; label: string; help: string }> = [
+  { name: 'openai', label: 'OpenAI', help: 'Clé OpenAI (embeddings de la recherche IA)' },
+  { name: 'cerebras', label: 'Cerebras', help: 'Clé Cerebras (tri des résultats par gpt-oss-120b)' },
+]
+
+function tokenStatus(tokens: Record<string, boolean> | undefined): Record<IntegrationTokenName, boolean> {
+  return {
+    clickup: tokens?.clickup === true,
+    gitlab: tokens?.gitlab === true,
+    openai: tokens?.openai === true,
+    cerebras: tokens?.cerebras === true,
+  }
+}
+
 const EMPTY_QUOTAS: QuotaSnapshot = { claude: null, codex: null, grok: null, reasonix: null }
 
 export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
@@ -63,13 +78,12 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
   )
   const [tokenSaving, setTokenSaving] = useState(false)
   const [tokenSaved, setTokenSaved] = useState(false)
-  const [integrationTokens, setIntegrationTokens] = useState<Record<'clickup' | 'gitlab', boolean>>({
-    clickup: false,
-    gitlab: false,
-  })
-  const [tokenDrafts, setTokenDrafts] = useState<Record<'clickup' | 'gitlab', string>>({
+  const [integrationTokens, setIntegrationTokens] = useState<Record<IntegrationTokenName, boolean>>(() => tokenStatus(undefined))
+  const [tokenDrafts, setTokenDrafts] = useState<Record<IntegrationTokenName, string>>({
     clickup: '',
     gitlab: '',
+    openai: '',
+    cerebras: '',
   })
   const [promotionMission, setPromotionMission] = useState<PromotionMission | null>(null)
   const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
@@ -102,10 +116,7 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
         setFormat(stored)
         setTodoDraft(stored.todoHeadings.join(', '))
         setFollowUpDraft(stored.followUpHeadings.join(', '))
-        setIntegrationTokens({
-          clickup: settings.integrationTokens?.clickup === true,
-          gitlab: settings.integrationTokens?.gitlab === true,
-        })
+        setIntegrationTokens(tokenStatus(settings.integrationTokens))
       })
       .catch((loadError: unknown) => {
         if (!ignore) setError(errorMessage(loadError))
@@ -192,16 +203,13 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
     }
   }
 
-  async function handleTokenSave(name: 'clickup' | 'gitlab') {
+  async function handleTokenSave(name: IntegrationTokenName) {
     setTokenSaving(true)
     setTokenSaved(false)
     setError(null)
     try {
       const settings = await updateIntegrationTokens({ [name]: tokenDrafts[name].trim() || undefined })
-      setIntegrationTokens({
-        clickup: settings.integrationTokens?.clickup === true,
-        gitlab: settings.integrationTokens?.gitlab === true,
-      })
+      setIntegrationTokens(tokenStatus(settings.integrationTokens))
       setTokenDrafts((current) => ({ ...current, [name]: '' }))
       setTokenSaved(true)
     } catch (saveError: unknown) {
@@ -211,16 +219,13 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
     }
   }
 
-  async function handleTokenClear(name: 'clickup' | 'gitlab') {
+  async function handleTokenClear(name: IntegrationTokenName) {
     setTokenSaving(true)
     setTokenSaved(false)
     setError(null)
     try {
       const settings = await updateIntegrationTokens({ [name]: null })
-      setIntegrationTokens({
-        clickup: settings.integrationTokens?.clickup === true,
-        gitlab: settings.integrationTokens?.gitlab === true,
-      })
+      setIntegrationTokens(tokenStatus(settings.integrationTokens))
       setTokenDrafts((current) => ({ ...current, [name]: '' }))
       setTokenSaved(true)
     } catch (saveError: unknown) {
@@ -685,6 +690,47 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
               </button>
             </div>
           </div>
+          {AI_SEARCH_TOKENS.map(({ name, label, help }) => (
+            <div className="settings-token-row" key={name}>
+              <div className="settings-token-heading">
+                <strong>{label}</strong>
+                <span aria-label={`Statut token ${label}`}>
+                  {integrationTokens[name] ? 'défini' : 'non défini'}
+                </span>
+              </div>
+              <label className="settings-select-label" htmlFor={`app-${name}-token`}>
+                {help}
+                <input
+                  id={`app-${name}-token`}
+                  type="password"
+                  value={tokenDrafts[name]}
+                  disabled={loading || tokenSaving}
+                  onChange={(event) => setTokenDrafts((current) => ({
+                    ...current,
+                    [name]: event.target.value,
+                  }))}
+                />
+              </label>
+              <div className="settings-token-actions">
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={loading || tokenSaving}
+                  onClick={() => void handleTokenSave(name)}
+                >
+                  Enregistrer le token {label}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={loading || tokenSaving}
+                  onClick={() => void handleTokenClear(name)}
+                >
+                  Effacer le token {label}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
 
         {tokenSaved ? <p className="settings-success" role="status">Tokens enregistrés.</p> : null}

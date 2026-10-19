@@ -2,6 +2,7 @@ import { ProjectLaunch, ProjectLiveLaunches } from './ProjectLaunch'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
   listProjectConversations,
+  searchConversationsWithAi,
   markConversationRead,
   renameConversation,
   setConversationArchived,
@@ -13,6 +14,7 @@ import {
 import type { Conversation, FleetItem, Project, Provider, QuotaSnapshot, TimeMode, TimeSnapshot, WorkspaceView } from './types'
 import { QuotaStatus } from './QuotaBar'
 import { LevelCard } from './LevelCard'
+import { ConversationAiResults, type AiSearchState } from './ConversationAiResults'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { modelLabel } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
@@ -334,6 +336,9 @@ export const Sidebar = memo(function Sidebar({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [filterText, setFilterText] = useState('')
+  const [aiMode, setAiMode] = useState(false)
+  const [aiSearch, setAiSearch] = useState<AiSearchState>({ status: 'idle' })
+  const aiSearchControllerRef = useRef<AbortController | null>(null)
   const [openConversationMenu, setOpenConversationMenu] = useState<string | null>(null)
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
@@ -624,16 +629,54 @@ export const Sidebar = memo(function Sidebar({
     }
   }
 
+  function leaveAiMode() {
+    aiSearchControllerRef.current?.abort()
+    setAiMode(false)
+    setAiSearch({ status: 'idle' })
+    setFilterText('')
+  }
+
+  function toggleAiMode() {
+    if (aiMode) {
+      leaveAiMode()
+      return
+    }
+    setAiMode(true)
+    setAiSearch({ status: 'idle' })
+  }
+
+  function runAiSearch() {
+    const query = filterText.trim()
+    if (selectedProject === null || query === '') return
+    aiSearchControllerRef.current?.abort()
+    const controller = new AbortController()
+    aiSearchControllerRef.current = controller
+    setAiSearch({ status: 'loading', query })
+    searchConversationsWithAi(selectedProject.id, query, controller.signal)
+      .then((response) => {
+        if (!controller.signal.aborted) setAiSearch({ status: 'done', query, response })
+      })
+      .catch((searchError: unknown) => {
+        if (!controller.signal.aborted) setAiSearch({ status: 'error', query, message: errorMessage(searchError) })
+      })
+  }
+
+  useEffect(() => () => aiSearchControllerRef.current?.abort(), [])
+  useEffect(() => {
+    aiSearchControllerRef.current?.abort()
+    setAiSearch({ status: 'idle' })
+  }, [selectedProject?.id])
+
   const conversationGroups = useMemo(() => {
     const normalize = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    const terms = normalize(filterText).trim().split(/\s+/).filter(Boolean)
+    const terms = aiMode ? [] : normalize(filterText).trim().split(/\s+/).filter(Boolean)
     const filtered = conversations.filter((item) => (
       terms.every((term) => normalize([item.title, item.summary, item.ticket_key, item.ticket_title, item.created_on_branch, ...(item.worktree_paths ?? [])].filter(Boolean).join(' ')).includes(term))
     ))
     return conversationSortMode === 'recent'
       ? groupConversationsByLatest(filtered)
       : groupConversations(filtered)
-  }, [conversations, filterText, conversationSortMode])
+  }, [conversations, filterText, conversationSortMode, aiMode])
 
   // Ouvrir une conversation depuis ailleurs (rapport, motif, ticket) doit la
   // montrer dans la liste : on déplie son groupe puis on l'amène dans la vue,
@@ -705,7 +748,7 @@ export const Sidebar = memo(function Sidebar({
 
       <section className="sidebar-section conversations" aria-label="Conversations du projet" ref={conversationListRef}>
           <div id="sidebar-conversations-panel" aria-labelledby="sidebar-conversations-title">
-        <div className={`conversation-filter-input${conversationScope !== 'active' ? ' has-scope' : ''}`}>
+        <div className={`conversation-filter-input${conversationScope !== 'active' ? ' has-scope' : ''}${aiMode ? ' is-ai' : ''}`}>
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
               <circle cx="7" cy="7" r="4.2" />
@@ -716,9 +759,33 @@ export const Sidebar = memo(function Sidebar({
             type="text"
             value={filterText}
             onChange={(event) => setFilterText(event.target.value)}
-            placeholder={SCOPE_PLACEHOLDERS[conversationScope]}
-            aria-label="Filtrer les conversations"
+            onKeyDown={(event) => {
+              if (!aiMode) return
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                runAiSearch()
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                leaveAiMode()
+              }
+            }}
+            placeholder={aiMode ? 'Décris la conversation, puis Entrée…' : SCOPE_PLACEHOLDERS[conversationScope]}
+            aria-label={aiMode ? 'Rechercher une conversation avec l’IA' : 'Filtrer les conversations'}
           />
+          <button
+            type="button"
+            className="conversation-ai-toggle"
+            aria-pressed={aiMode}
+            aria-label="Recherche IA en langage naturel"
+            title={aiMode ? 'Revenir au filtre (Échap)' : 'Recherche IA : retrouver une conversation en la décrivant'}
+            disabled={selectedProject === null}
+            onClick={toggleAiMode}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M7 1.8 8.3 5.7 12.2 7 8.3 8.3 7 12.2 5.7 8.3 1.8 7 5.7 5.7Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+              <path d="M12.5 10.5 13 12l1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5Z" fill="currentColor" />
+            </svg>
+          </button>
           <button
             type="button"
             className="conversation-scope-toggle"
@@ -784,7 +851,13 @@ export const Sidebar = memo(function Sidebar({
         ) : null}
 
         <div className="navigation-list">
-          {selectedProject === null ? (
+          {aiMode && selectedProject !== null ? (
+            <ConversationAiResults
+              state={aiSearch}
+              selectedConversationId={selectedConversation?.id ?? null}
+              onSelect={handleConversationSelect}
+            />
+          ) : selectedProject === null ? (
             <p className="list-empty">Sélectionnez un projet</p>
           ) : conversations.length === 0 ? (
             <p className="list-empty">Aucune conversation</p>
