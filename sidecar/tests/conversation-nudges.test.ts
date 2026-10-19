@@ -158,3 +158,19 @@ test('soumet à Haiku un bloqueur écrit en toutes lettres, sans bloc TODO', asy
   expect(c.calls[0]!.map((candidate) => candidate.lastAnswer.slice(0, 16)).sort()).toEqual(["J'ai préparé la ", 'La migration est', 'Le schéma est pr']);
   c.db.close();
 });
+
+test('ignore une réponse déjà lue et range la carte dès la lecture', async () => {
+  const c = setup((candidates) => candidates.map((candidate) => ({
+    conversationId: candidate.conversationId, kind: 'choice', title: 'Qui committe ?', body: '', actions: [],
+  })));
+  const read = c.answered(choice);
+  c.conversations.markRead(read.id);
+  const unread = c.answered(choice);
+  c.advance(10);
+  expect(await c.service.scan()).toBe(1);
+  expect(c.calls[0]!.map((candidate) => candidate.conversationId)).toEqual([unread.id]);
+
+  c.conversations.markRead(unread.id);
+  expect(c.service.list()).toHaveLength(0);
+  c.db.close();
+});

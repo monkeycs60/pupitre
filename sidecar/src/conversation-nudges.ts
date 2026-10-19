@@ -166,7 +166,8 @@ export class ConversationNudgeService {
         : null;
       const text = answered ? String((JSON.parse(answered.payload) as { text?: string }).text ?? "") : "";
       const unread = row.answered_turn > row.last_read_turn;
-      const stage: NudgeStage = unread && minutes >= STALE_AFTER_MINUTES ? "stale" : "fresh";
+      if (!unread) continue;
+      const stage: NudgeStage = minutes >= STALE_AFTER_MINUTES ? "stale" : "fresh";
       const asksSomething = failed || hasActionBlock(text, headings);
       if (stage === "fresh" && (!asksSomething || minutes < FRESH_DELAY_MINUTES)) continue;
       if (evaluated.get(row.id, settledId, stage)) continue;
@@ -233,7 +234,7 @@ export class ConversationNudgeService {
     `).all() as NudgeRow[];
     const now = this.now();
     return rows
-      .filter((row) => row.kind !== "review" || row.answered_turn > row.last_read_turn)
+      .filter((row) => row.answered_turn > row.last_read_turn)
       .filter((row) => !this.isRunning(row.conversation_id))
       .map((row) => ({
         id: row.id,
