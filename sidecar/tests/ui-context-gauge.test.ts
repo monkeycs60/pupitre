@@ -19,7 +19,7 @@ test("utilise le dernier snapshot de contexte sans sommer les coûts", () => {
     usedTokens: 190_000,
     windowTokens: 258_400,
     percent: 74,
-    nearSaturation: false,
+    nearSaturation: true,
   });
 });
 
