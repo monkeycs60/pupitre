@@ -29,7 +29,7 @@ test("trois actions gardent une énumération lisible", () => {
 
 test("une piste FOLLOW-UP a son propre verbe", () => {
   expect(withTaskActions("", [F1])).toBe(
-    "Explore la piste 1 du bloc FOLLOW-UP :\n1) Bouton tout cocher",
+    "Réalise la piste 1 du bloc FOLLOW-UP :\n1) Bouton tout cocher",
   );
 });
 
@@ -39,7 +39,7 @@ test("les deux sections cohabitent, DO THIS en premier", () => {
       "Exécute l'action 2 du bloc DO THIS :",
       "2) Compile et vérifie",
       "",
-      "Explore les pistes 1 et 3 du bloc FOLLOW-UP :",
+      "Réalise les pistes 1 et 3 du bloc FOLLOW-UP :",
       "1) Bouton tout cocher",
       "3) Persister l'état en base",
     ].join("\n"),

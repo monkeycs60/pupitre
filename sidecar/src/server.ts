@@ -11,7 +11,7 @@ import { resolveCitations, touchedFiles } from "./file-citations";
 import { conversationChanges, conversationWork } from "./conversation-changes";
 import { tmpdir } from "node:os";
 import type { SharedFilesService } from "./shared-files";
-import { TodoError, type TodoService } from "./todos";
+import { TodoError, worktreeBranch, type TodoService } from "./todos";
 import type { TodoInput } from "./stores/todos";
 import { ActivityBusyError, ActivityNotFoundError, AGENDA_MAX_DAYS, type ActivityReportService } from "./activity-report";
 import type { ServerWebSocket } from "bun";
@@ -2696,16 +2696,29 @@ export function createServer(deps: ServerDeps) {
             : deps.projects.list().find((p) => path === p.path || path.startsWith(`${p.path}/`));
           if (!project) throw new HttpError(404, "projet Pupitre introuvable");
           const launch = projectLaunchConfig(project, "todo");
+          const full = conversation
+            ? `${message}\n\nOrigine : conversation « ${conversation.title} » (${conversation.id}). Lis-la avec l'outil Pupitre read_conversation si le contexte manque.`
+            : message;
+          const ticketKey = conversation?.ticket_id ? deps.tickets.get(conversation.ticket_id)?.key ?? null : null;
+          const existing = conversation
+            ? deps.todos.store.list(project.id).find((item) => item.status !== "done" && item.origin?.conversationId === conversation.id && item.message === full)
+            : undefined;
+          if (existing) return json({ id: existing.id, title: existing.title, project: project.name, ticketKey, branch: existing.target_branch, duplicate: true });
           const item = await deps.todos.create(project.id, {
             status: "backlog",
             title: typeof body.title === "string" ? body.title : undefined,
-            message,
+            message: full,
             provider: launch.provider,
             model: launch.model,
             effort: launch.effort,
             speed: launch.speed,
+            ...(conversation ? {
+              ticketId: conversation.ticket_id,
+              targetBranch: await worktreeBranch(conversation.worktree_path),
+              origin: { kind: body.origin === "follow-up" ? "follow-up" : "manual", conversationId: conversation.id },
+            } : {}),
           });
-          return json({ id: item.id, title: item.title, project: project.name }, 201);
+          return json({ id: item.id, title: item.title, project: project.name, ticketKey, branch: item.target_branch }, 201);
         }
 
         const todoProjectRoute = pathname.match(/^\/api\/projects\/([^/]+)\/todos(?:\/(queue|reorder|drain))?$/);

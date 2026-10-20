@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -30,9 +31,11 @@ import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
 import { appendDebriefQuestionPrompt } from './debriefQuestion'
 import type { DebriefBlock } from './groupEvents'
-import { TaskSelectionContext, TaskToggleContext } from './taskToggle'
-import type { TaskAction } from './taskToggle'
-import { toggleAction, withTaskActions } from './taskDraft'
+import { TaskSelectionContext, TaskStashContext, TaskToggleContext, stashKey } from './taskToggle'
+import type { StashState, TaskAction, TaskStash } from './taskToggle'
+import { ActionFormatContext } from './actionHeadings'
+import { addConversationTodo } from './todos'
+import { recommendedFollowUp, toggleAction, withTaskActions } from './taskDraft'
 import { newConversationDraftStorageKey } from './conversationDraft'
 import { ThreadSearch } from './ThreadSearch'
 import { PushTimeline } from './PushTimeline'
@@ -248,6 +251,9 @@ export function Chat({
   // Le premier rendu ne doit rien recomposer : il effacerait le bloc d'un
   // brouillon restauré depuis le stockage local.
   const actionsSynced = useRef(false)
+  const actionFormat = useContext(ActionFormatContext)
+  const [stashStates, setStashStates] = useState<Record<string, StashState>>({})
+  const prechecked = useRef(new Set<string>())
   const [subtaskStatuses, setSubtaskStatuses] = useState<
     Record<string, SubtaskStatus>
   >({})
@@ -484,6 +490,32 @@ export function Chat({
     onConversationReadRef.current?.()
   }, [])
 
+  const conversationId = conversation?.id ?? null
+  const handleStash = useCallback((action: TaskAction) => {
+    if (conversationId === null) return
+    const key = stashKey(action)
+    setStashStates((current) => ({ ...current, [key]: 'busy' }))
+    setSelectedActions((current) => toggleAction(current, action, false))
+    addConversationTodo(conversationId, action.label.replace(/^★\s*/u, ''), 'follow-up')
+      .then(() => setStashStates((current) => ({ ...current, [key]: 'done' })))
+      .catch((reason: unknown) => setStashStates((current) => ({
+        ...current,
+        [key]: { error: reason instanceof Error ? reason.message : 'Ajout impossible' },
+      })))
+  }, [conversationId])
+  const taskStash = useMemo<TaskStash | null>(() => (
+    conversationId === null ? null : { stash: handleStash, states: stashStates }
+  ), [conversationId, handleStash, stashStates])
+
+  const lastReply = useMemo(() => unansweredReply(blocks), [blocks])
+  useEffect(() => {
+    if (isRunning || lastReply === null || prechecked.current.has(lastReply.id)) return
+    prechecked.current.add(lastReply.id)
+    if (message.trim() || selectedActions.length > 0) return
+    const pick = recommendedFollowUp(lastReply.text, actionFormat)
+    if (pick) setSelectedActions([{ scope: lastReply.id, index: pick.index, label: pick.label, kind: 'follow-up' }])
+  }, [isRunning, lastReply, message, selectedActions.length, actionFormat])
+
   function handleMessageChange(next: string) {
     setMessage(next)
     if (next.length === 0) setSelectedActions([])
@@ -582,6 +614,7 @@ export function Chat({
                 </p>
               ) : (
                 <TaskToggleContext.Provider value={handleTaskToggle}>
+                  <TaskStashContext.Provider value={taskStash}>
                   <TaskSelectionContext.Provider value={selectedActions}>
                     <EventStream
                       blocks={blocks}
@@ -595,6 +628,7 @@ export function Chat({
                     {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
                     {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onSendReview={addReviewToComposer} /> : null}
                   </TaskSelectionContext.Provider>
+                  </TaskStashContext.Provider>
                 </TaskToggleContext.Provider>
               )}
             </div>
@@ -650,4 +684,16 @@ export function Chat({
       ) : null}
     </>
   )
+}
+
+/** Dernière réponse terminée de l'agent, tant qu'aucun message ne la suit. */
+function unansweredReply(blocks: readonly { kind: string }[]): { id: string; text: string } | null {
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index] as { kind: string; id?: string; text?: string; streaming?: boolean }
+    if (block.kind === 'user') return null
+    if (block.kind === 'assistant') {
+      return block.streaming || !block.id || !block.text ? null : { id: block.id, text: block.text }
+    }
+  }
+  return null
 }

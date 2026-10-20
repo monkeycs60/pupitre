@@ -1,4 +1,6 @@
 import type { SectionKind, TaskAction } from './taskToggle'
+import { headingKind } from './actionHeadings'
+import type { ActionFormat } from './actionHeadings'
 
 /**
  * Cases à cocher des blocs *DO THIS* et *FOLLOW-UP* : cocher compose une
@@ -14,8 +16,8 @@ const HEADERS: Record<SectionKind, { one: string; many: string; block: string }>
     block: 'DO THIS',
   },
   'follow-up': {
-    one: 'Explore la piste',
-    many: 'Explore les pistes',
+    one: 'Réalise la piste',
+    many: 'Réalise les pistes',
     block: 'FOLLOW-UP',
   },
 }
@@ -24,7 +26,7 @@ const HEADERS: Record<SectionKind, { one: string; many: string; block: string }>
 const SECTION_ORDER: SectionKind[] = ['do-this', 'follow-up']
 
 const HEADER_PATTERN =
-  '(?:Exécute l(?:\'action|es actions)|Explore l(?:a piste|es pistes)) [\\d,\\s]*\\d(?: et \\d+)? du bloc (DO THIS|FOLLOW-UP) :'
+  '(?:Exécute l(?:\'action|es actions)|(?:Explore|Réalise) l(?:a piste|es pistes)) [\\d,\\s]*\\d(?: et \\d+)? du bloc (DO THIS|FOLLOW-UP) :'
 
 const BLOCK_START = new RegExp(`(^|\\n)${HEADER_PATTERN}`, 'u')
 const HEADER_LINE = new RegExp(`^${HEADER_PATTERN}`, 'u')
@@ -140,4 +142,32 @@ export function toggleAction(
     ),
   )
   return checked ? [...others, action] : others
+}
+
+/** Piste ★ du bloc FOLLOW-UP, numérotée comme à l'affichage. */
+export function recommendedFollowUp(markdown: string, format: ActionFormat): { index: number; label: string } | null {
+  let inFollowUp = false
+  let position = 0
+  for (const line of markdown.split('\n')) {
+    const heading = headingKind(line, format)
+    if (heading) {
+      inFollowUp = heading === 'follow-up'
+      position = 0
+      continue
+    }
+    if (!inFollowUp) continue
+    if (/^#{1,6}\s/u.test(line.trim())) {
+      inFollowUp = false
+      continue
+    }
+    const item = line.match(/^[-*]\s+(?!\[[ xX]\])(.*)$/u)
+    if (item) {
+      position += 1
+      const label = item[1].trim()
+      if (label.startsWith('★')) return { index: position, label }
+    } else if (line.trim() && !/^\s/u.test(line)) {
+      position = 0
+    }
+  }
+  return null
 }

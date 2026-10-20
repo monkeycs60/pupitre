@@ -121,3 +121,38 @@ test('une activité dans la conversation la signale comme lue', async () => {
   fireEvent.keyDown(composer, { key: 'a' })
   expect(onConversationRead).toHaveBeenCalledTimes(2)
 })
+
+test('la piste ★ de la dernière réponse arrive pré-cochée dans un composer vide', async () => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/api/presets')) return Response.json([])
+    if (url.includes('/documents')) return Response.json([])
+    if (url.includes('/api/projects/project-1/git')) {
+      return Response.json({ branches: [], worktrees: [], commits: [], currentBranch: 'main' })
+    }
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+  const reply = 'Fait.\n\n*FOLLOW-UP*\n- Ajouter un export\n- ★ Mettre en cache le rendu'
+
+  render(createElement(Chat, {
+    events: [
+      { id: 1, type: 'user-message', text: 'Corrige le rendu', images: [] },
+      { id: 2, type: 'status', state: 'running' },
+      { id: 3, type: 'text-final', text: reply },
+      { id: 4, type: 'status', state: 'done' },
+    ],
+    connection: 'open',
+    retryAt: null,
+    conversation: { id: 'conv-star', project_id: 'project-1', title: 'Rendu', provider: 'claude', model: 'haiku' } as never,
+    project,
+    quotas,
+    onConversationCreated: () => undefined,
+    reviewStatus: null,
+    onOpenCode: () => undefined,
+  }))
+
+  const composer = await screen.findByLabelText('Message') as HTMLTextAreaElement
+  await waitFor(() => expect(composer.value).toBe('Réalise la piste 2 du bloc FOLLOW-UP :\n2) ★ Mettre en cache le rendu'))
+  const boxes = screen.getAllByRole('checkbox') as HTMLInputElement[]
+  expect(boxes.map((box) => box.checked)).toEqual([false, true])
+})

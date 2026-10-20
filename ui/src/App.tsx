@@ -981,7 +981,7 @@ function App() {
       onCreateTodoFromTicket={(ticket) => handleTodoCreate({ ticketId: ticket.id, ticketKey: ticket.key, branch: ticketLinksOf(ticket).branch ?? null })}
       todoPanel={() => <div className="project-todos">
         <header className="project-tasks-header"><h2>Tâches du projet</h2><button type="button" className="primary-button" onClick={() => handleTodoCreate()}>+ Nouvelle tâche</button></header>
-        <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={editingTodo?.id ?? conversationSeed?.todoId ?? null} ticketLinks={ticketLinks} onChanged={todos.refresh} onOpenConversation={handleTodoToConversation} onEdit={handleTodoEdit} />
+        <TodoList key={selectedProject.id} projectId={selectedProject.id} {...todos} selectedId={editingTodo?.id ?? conversationSeed?.todoId ?? null} ticketLinks={ticketLinks} onChanged={todos.refresh} onOpenConversation={handleTodoToConversation} onOpenOrigin={(conversationId) => void handleGitConversationSelect(conversationId)} onEdit={handleTodoEdit} />
       </div>}
       onConversationSelect={(conversationId) => void handleGitConversationSelect(conversationId)}
       onStartConversation={handleStartFromTicket}

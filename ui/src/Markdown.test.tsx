@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import Markdown, { taskChoices } from './Markdown'
-import { TaskSelectionContext, TaskToggleContext } from './taskToggle'
+import { TaskSelectionContext, TaskStashContext, TaskToggleContext } from './taskToggle'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 
 afterEach(cleanup)
@@ -100,6 +100,39 @@ describe('Markdown actions', () => {
       kind: 'do-this',
       label: 'Réponse à « Quel correctif » : ★ patch minimal 8/10',
     }, true)
+  })
+
+  test('met une piste dans la pile sans cocher la ligne, puis affiche qu\'elle y est', () => {
+    const toggle = mock(() => {})
+    const stash = mock(() => {})
+    const source = 'FOLLOW-UP\n\n- Ajouter un export\n- ★ Mettre en cache le rendu'
+    const view = (states: Record<string, 'done'>) => (
+      <TaskToggleContext.Provider value={toggle}>
+        <TaskStashContext.Provider value={{ stash, states }}>
+          <TaskSelectionContext.Provider value={[]}>
+            <Markdown scope="message-9">{source}</Markdown>
+          </TaskSelectionContext.Provider>
+        </TaskStashContext.Provider>
+      </TaskToggleContext.Provider>
+    )
+    const { rerender } = render(view({}))
+
+    expect(screen.getAllByRole('listitem').map((item) => item.classList.contains('is-recommended'))).toEqual([false, true])
+    fireEvent.click(screen.getByRole('button', { name: 'Mettre dans la pile : ★ Mettre en cache le rendu' }))
+    expect(stash).toHaveBeenCalledWith({ scope: 'message-9', index: 2, label: '★ Mettre en cache le rendu', kind: 'follow-up' })
+    expect(toggle).not.toHaveBeenCalled()
+
+    rerender(view({ 'message-9:follow-up:2': 'done' }))
+    expect((screen.getByRole('button', { name: 'Dans la pile : ★ Mettre en cache le rendu' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  test('ne propose pas la pile sur les actions du bloc TODO', () => {
+    render(
+      <TaskStashContext.Provider value={{ stash: () => {}, states: {} }}>
+        <Markdown scope="message-10">{'TODO\n\n1. Relancer les tests'}</Markdown>
+      </TaskStashContext.Provider>,
+    )
+    expect(screen.queryByRole('button', { name: /Mettre dans la pile/u })).toBeNull()
   })
 
   test('affiche les alternatives comme boutons et remonte le choix', () => {

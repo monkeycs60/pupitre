@@ -21,3 +21,16 @@ export const TaskToggleContext =
 
 /** Sélections du composeur, partagées avec chaque message du fil. */
 export const TaskSelectionContext = createContext<TaskAction[]>([])
+
+export type StashState = 'busy' | 'done' | { error: string }
+
+/** Mise en pile d'une piste : fourni par Chat quand la conversation existe. */
+export interface TaskStash {
+  stash: (action: TaskAction) => void
+  states: Record<string, StashState>
+}
+
+export const stashKey = (action: Pick<TaskAction, 'scope' | 'index' | 'kind'>) =>
+  `${action.scope}:${action.kind}:${action.index}`
+
+export const TaskStashContext = createContext<TaskStash | null>(null)

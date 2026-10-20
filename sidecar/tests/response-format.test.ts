@@ -44,6 +44,7 @@ test("une décision remontée arrive recommandée et notée", () => {
   const preamble = actionFormatPreamble(DEFAULT_ACTION_FORMAT);
   expect(preamble).toContain("ne remonte que les");
   expect(preamble).toContain("★ patch minimal 8/10 OU refonte du module 4/10");
+  expect(preamble).toContain("marquée ★");
 });
 
 test("la consigne précède la demande utilisateur", () => {

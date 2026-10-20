@@ -14,13 +14,14 @@ interface Props extends TodoSnapshot {
   /** Clic sur la ligne : conversation liée si elle existe, sinon nouvelle
    *  conversation préremplie avec la tâche. */
   onOpenConversation: (item: TodoItem) => void
+  onOpenOrigin?: (conversationId: string) => void
   /** Recharge la tâche dans le composer en mode Tâche ; l'envoi la remplace. */
   onEdit: (item: TodoItem) => void
 }
 
 const LEAVE_DELAY = 900
 
-export function TodoList({ projectId, items, queue, selectedId, loading, error, ticketLinks, onChanged, onOpenConversation, onEdit }: Props) {
+export function TodoList({ projectId, items, queue, selectedId, loading, error, ticketLinks, onChanged, onOpenConversation, onOpenOrigin, onEdit }: Props) {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -166,6 +167,9 @@ export function TodoList({ projectId, items, queue, selectedId, loading, error, 
             </>}
             {startableItem && !isDone ? <button type="button" disabled={busy || !!queue.activeTodoId} aria-label={`Lancer l’agent sur ${item.title}`} title="Lancer l’agent" onClick={() => void act(() => startTodo(item.id))}>
               <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M4.5 3v10L12.5 8z" /></svg>
+            </button> : null}
+            {item.origin?.conversationId && onOpenOrigin ? <button type="button" aria-label={`Ouvrir la conversation d’origine de ${item.title}`} title="Conversation d’origine" onClick={() => onOpenOrigin(item.origin!.conversationId!)}>
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6.5 4.5 3.5 7.5l3 3" /><path d="M3.5 7.5h6a3 3 0 0 1 3 3v1" /></svg>
             </button> : null}
             {item.conversation_id ? <span className="project-task-linked" aria-hidden="true" title="Conversation liée">
               <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" /><path d="M5.5 7h5" strokeLinecap="round" /></svg>

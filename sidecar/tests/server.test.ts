@@ -2177,6 +2177,45 @@ test("la boîte de tâches range un ajout manuel dans le backlog du projet du do
   }
 });
 
+test("une piste mise en tâche hérite du ticket, de la branche du worktree et garde sa conversation d'origine", async () => {
+  const { TodoStore } = await import("../src/stores/todos");
+  const { TodoService } = await import("../src/todos");
+  const root = mkdtempSync(join(tmpdir(), "pupitre-todo-follow-up-"));
+  const worktree = join(root, "feature-TECH-9");
+  try {
+    mkdirSync(worktree);
+    Bun.spawnSync(["git", "init", "-q", "-b", "feature/TECH-9"], { cwd: worktree });
+    const d = current!.deps;
+    d.todos = new TodoService(new TodoStore(current!.db), d.projects, d.conversations, d.runner, d.git, d.tickets, d.quotas);
+    const project = d.projects.create({ name: "suivi", path: root });
+    const ticket = d.tickets.upsert(project.id, { key: "TECH-9", source: "clickup", title: "Match AI", status: "en cours", externalUrl: null });
+    const conversation = d.conversations.create({
+      projectId: project.id, provider: "claude", model: "haiku", firstMessage: "Corrige la carte",
+      worktreePath: worktree, ticketId: ticket.id,
+    });
+    const body = { conversationId: conversation.id, message: "Ajouter un test de non-régression", origin: "follow-up" };
+    const created = await postJson("/api/todo-inbox", body);
+    expect(created.status).toBe(201);
+    expect(await created.json()).toEqual(expect.objectContaining({ ticketKey: "TECH-9", branch: "feature/TECH-9" }));
+    const [item] = d.todos.store.list(project.id);
+    expect(item).toEqual(expect.objectContaining({
+      status: "backlog",
+      title: "Ajouter un test de non-régression",
+      ticket_id: ticket.id,
+      target_branch: "feature/TECH-9",
+      origin: { kind: "follow-up", conversationId: conversation.id },
+    }));
+    expect(item!.message).toContain(`(${conversation.id})`);
+
+    const again = await postJson("/api/todo-inbox", body);
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual(expect.objectContaining({ id: item!.id, duplicate: true }));
+    expect(d.todos.store.list(project.id)).toHaveLength(1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("projects can be renamed, recolored, given an icon and archived", async () => {
   const root = mkdtempSync(join(tmpdir(), "pupitre-logo-"));
   mkdirSync(join(root, "public"));

@@ -5,6 +5,7 @@ export type TodoStatus =
   "backlog" | "queued" | "running" | "awaiting_validation" | "done" | "blocked";
 export type TodoFinish = "none" | "commit" | "commit_push";
 export const TODO_FINISHES: TodoFinish[] = ["none", "commit", "commit_push"];
+export interface TodoOrigin {kind: string; conversationId?: string; summaryId?: string; reason?: string}
 export interface TodoInput {
   status?: "backlog" | "queued";
   title?: string;
@@ -20,11 +21,12 @@ export interface TodoInput {
   permissionMode?: PresetPermissionMode | null;
   images?: string[];
   attachments?: MediaAttachment[];
+  origin?: TodoOrigin;
 }
 export interface TodoItem {
   proposed?: boolean;
   probably_done?: boolean;
-  origin?: {kind: string; conversationId?: string; summaryId?: string; reason?: string};
+  origin?: TodoOrigin;
   id: string;
   project_id: string;
   title: string;
@@ -147,6 +149,7 @@ export class TodoStore {
       permission_mode: input.permissionMode ?? null,
       images: input.images ?? [],
       attachments: input.attachments ?? [],
+      ...(input.origin ? { origin: input.origin } : {}),
     };
     this.db
       .query("INSERT INTO project_todos VALUES (?,?,?)")

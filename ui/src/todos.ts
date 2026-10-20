@@ -77,7 +77,7 @@ export async function todoRequest<T>(path: string, method = 'GET', body?: unknow
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
 export const createTodo = (projectId: string, input: TodoInput) => todoRequest<TodoItem>(`/api/projects/${encodeURIComponent(projectId)}/todos`, 'POST', input)
-export const addConversationTodo = (conversationId: string, message: string) => todoRequest<{ id: string; title: string; project: string }>('/api/todo-inbox', 'POST', { conversationId, message })
+export const addConversationTodo = (conversationId: string, message: string, origin?: 'follow-up') => todoRequest<{ id: string; title: string; project: string; ticketKey?: string | null; branch?: string }>('/api/todo-inbox', 'POST', { conversationId, message, origin })
 export const updateTodo = (id: string, input: Partial<TodoInput>) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}`, 'PATCH', input)
 export const completeTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/complete`, 'POST', {})
 export const reopenTodo = (id: string) => todoRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}/reopen`, 'POST', {})

@@ -1445,7 +1445,7 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
    passer en enfant direct d'un flex éclatait chaque mot en colonne. */
 .markdown-task-item {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: start;
   gap: var(--space-2);
   /* Ligne entière cliquable : le curseur doit l'annoncer partout. */
@@ -1466,6 +1466,56 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
   margin: 4px 0 0;
   accent-color: var(--accent);
   cursor: pointer;
+}
+
+.markdown-task-item.is-recommended .markdown-task-number {
+  color: var(--accent);
+}
+
+.markdown-task-stash {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--text-faint);
+  background: none;
+  font-size: 0.85em;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.markdown-task-stash > span {
+  display: none;
+}
+
+.markdown-task-item:hover .markdown-task-stash,
+.markdown-task-stash:focus-visible,
+.markdown-task-stash.is-done,
+.markdown-task-stash.is-error {
+  opacity: 1;
+}
+
+.markdown-task-item:hover .markdown-task-stash > span,
+.markdown-task-stash:focus-visible > span,
+.markdown-task-stash.is-done > span {
+  display: inline;
+}
+
+.markdown-task-stash:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--text-strong);
+  background: var(--bg-input);
+}
+
+.markdown-task-stash.is-done {
+  color: var(--accent);
+  cursor: default;
+}
+
+.markdown-task-stash.is-error {
+  color: var(--danger);
 }
 
 .markdown-task-choice {

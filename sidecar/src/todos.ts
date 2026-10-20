@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { trunkOf } from "./trunk";
 import type { ConversationRunner } from "./runner";
 import type { ConversationStore } from "./stores/conversations";
@@ -31,6 +32,11 @@ export async function todoGit(cwd: string, args: string[]): Promise<string> {
   return out.trim();
 }
 const EDITABLE = ["backlog", "queued", "blocked"];
+/** Branche courante d'un worktree de conversation ; vide hors worktree ou en HEAD détachée. */
+export async function worktreeBranch(path: string | null): Promise<string> {
+  if (!path || !existsSync(path)) return "";
+  return todoGit(path, ["symbolic-ref", "--short", "HEAD"]).catch(() => "");
+}
 /** Bloc \`\`\`commit … \`\`\` de la réponse finale : sujet puis corps facultatif. */
 export function commitMessageOf(text: string, fallback: string): string {
   const match = text.match(/```commit\s*\n([\s\S]*?)```/);
@@ -124,6 +130,7 @@ export class TodoService {
       "permissionMode",
       "images",
       "attachments",
+      "origin",
     ]);
     if (Object.keys(input).some((key) => !allowed.has(key)))
       throw new TodoError("Champ TODO inconnu");
@@ -171,6 +178,12 @@ export class TodoService {
         ))
     )
       throw new TodoError("Pièces jointes invalides");
+    if (
+      input.origin !== undefined &&
+      (!input.origin || typeof input.origin.kind !== "string" ||
+        (input.origin.conversationId !== undefined && typeof input.origin.conversationId !== "string"))
+    )
+      throw new TodoError("Origine invalide");
     if (
       input.ticketId &&
       this.tickets.get(input.ticketId)?.project_id !== projectId

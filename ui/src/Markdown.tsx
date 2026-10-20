@@ -2,8 +2,8 @@ import { Children, createContext, isValidElement, memo, useContext, useMemo, use
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import Mermaid from './Mermaid'
-import { TaskSelectionContext, TaskToggleContext } from './taskToggle'
-import type { SectionKind } from './taskToggle'
+import { TaskSelectionContext, TaskStashContext, TaskToggleContext, stashKey } from './taskToggle'
+import type { SectionKind, StashState } from './taskToggle'
 import { ActionFormatContext, headingKind } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { mediaUrl } from './transport'
@@ -142,7 +142,7 @@ export function taskChoices(label: string, kind: SectionKind): TaskChoiceGroup |
   return { prompt, choices }
 }
 
-export function choiceScore(choice: string): { text: string; score: string | null } {
+function choiceScore(choice: string): { text: string; score: string | null } {
   const match = choice.match(/^(.*\S)\s+\(?(\d{1,2}\/10)\)?$/u)
   return match ? { text: match[1], score: match[2] } : { text: choice, score: null }
 }
@@ -155,6 +155,7 @@ function MarkdownTaskItem({ node, children, props }: { node: any; children: any;
   const choiceGroup = taskChoices(label, kind)
   const input = node.children.find((child: any) => child.tagName === 'input')
   const onToggle = useContext(TaskToggleContext)
+  const stash = useContext(TaskStashContext)
   const selections = useContext(TaskSelectionContext)
   const selected = selections.find((action) => (
     action.scope === scope && action.kind === kind && action.index === index
@@ -206,7 +207,7 @@ function MarkdownTaskItem({ node, children, props }: { node: any; children: any;
     <TASK_CONTEXT.Provider value={{ checked, label, toggle }}>
       <li
         {...props}
-        className={`${props.className ?? ''} markdown-task-item`.trim()}
+        className={`${props.className ?? ''} markdown-task-item${kind === 'follow-up' && label.startsWith('★') ? ' is-recommended' : ''}`.trim()}
         // Toute la ligne est cliquable ; la case garde son propre onChange, d'où
         // le filtre sur la cible pour ne pas basculer deux fois.
         onClick={(event: any) => {
@@ -217,8 +218,29 @@ function MarkdownTaskItem({ node, children, props }: { node: any; children: any;
         {checkbox}
         <span className="markdown-task-number" aria-hidden="true">{index}</span>
         <span className="markdown-task-body">{body}</span>
+        {kind === 'follow-up' && stash ? <StashButton state={stash.states[stashKey({ scope, index, kind })]} label={label} onStash={() => stash.stash({ scope, index, label, kind })} /> : null}
       </li>
     </TASK_CONTEXT.Provider>
+  )
+}
+
+function StashButton({ state, label, onStash }: { state: StashState | undefined; label: string; onStash: () => void }) {
+  const done = state === 'done'
+  const error = typeof state === 'object' ? state.error : null
+  return (
+    <button
+      type="button"
+      className={`markdown-task-stash${done ? ' is-done' : ''}${error ? ' is-error' : ''}`}
+      disabled={state === 'busy' || done}
+      title={error ?? (done ? 'Dans la pile de tâches' : 'Garder pour plus tard dans la pile de tâches')}
+      aria-label={done ? `Dans la pile : ${label}` : `Mettre dans la pile : ${label}`}
+      onClick={onStash}
+    >
+      {done
+        ? <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        : <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m2.5 4 1.2 1.2L6 2.9M8 4h5.5M2.5 9.3l1.2 1.2L6 8.2M8 9.3h2.5M12.5 9v5M10 11.5h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+      <span>{done ? 'Dans la pile' : 'Plus tard'}</span>
+    </button>
   )
 }
 
