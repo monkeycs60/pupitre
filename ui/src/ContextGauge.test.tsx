@@ -37,18 +37,23 @@ test('avertit au-delà de 30 % sur Claude, et retient la fermeture pour la conve
 
   const warning = screen.getByRole('status')
   expect(warning.textContent).toContain('Contexte à 32 %')
-  fireEvent.click(screen.getAllByRole('button', { name: 'Continuer ailleurs' })[0]!)
-  expect(opened).toBe(1)
+  expect(document.querySelector('.context-gauge.has-warning')).toBeTruthy()
 
   fireEvent.click(screen.getByRole('button', { name: 'Masquer l’avertissement' }))
   expect(screen.queryByRole('status')).toBeNull()
+  expect(document.querySelector('.context-gauge.has-warning')).toBeNull()
   view.unmount()
   render(createElement(ContextGauge, props))
   expect(screen.queryByRole('status')).toBeNull()
 
   cleanup()
   render(createElement(ContextGauge, { ...props, conversation: { ...conversation, id: 'conv-3' } }))
-  expect(screen.getByRole('status')).toBeTruthy()
+  fireEvent.click(screen.getAllByRole('button', { name: 'Continuer ailleurs' })[0]!)
+  expect(opened).toBe(1)
+  expect(screen.queryByRole('status')).toBeNull()
+  cleanup()
+  render(createElement(ContextGauge, { ...props, conversation: { ...conversation, id: 'conv-3' } }))
+  expect(screen.queryByRole('status')).toBeNull()
   cleanup()
 })
 

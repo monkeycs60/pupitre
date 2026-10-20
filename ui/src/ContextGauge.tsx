@@ -39,10 +39,16 @@ export const ContextGauge = memo(function ContextGauge({
   }
   const formattedWindow = formatContextWindow(estimate.windowTokens)
   const percent = Math.max(0, Math.min(100, estimate.percent))
+  const showWarning = estimate.nearSaturation && !warning.dismissed
 
   function dismissWarning() {
     try { localStorage.setItem(warningStorageKey(conversation.id), '1') } catch { /* stockage indisponible */ }
     setWarning({ conversationId: conversation.id, dismissed: true })
+  }
+
+  function continueFromWarning() {
+    dismissWarning()
+    onContinueElsewhere()
   }
 
   async function copyDiscussion() {
@@ -61,14 +67,14 @@ export const ContextGauge = memo(function ContextGauge({
   }
 
   return (
-    <div className={`context-gauge${estimate.nearSaturation ? ' is-near-limit' : ''}`}>
-      {estimate.nearSaturation && !warning.dismissed ? (
+    <div className={`context-gauge${estimate.nearSaturation ? ' is-near-limit' : ''}${showWarning ? ' has-warning' : ''}`}>
+      {showWarning ? (
         <div className="context-gauge-warning" role="status">
           <p>
             <strong>Contexte à {estimate.percent} %</strong>
             <span>Au-delà de {contextSaturationPercent(conversation.provider)} %, un fil neuf répond mieux.</span>
           </p>
-          <button type="button" className="context-gauge-warning-action" onClick={onContinueElsewhere}>
+          <button type="button" className="context-gauge-warning-action" onClick={continueFromWarning}>
             Continuer ailleurs
           </button>
           <button type="button" className="context-gauge-warning-close" onClick={dismissWarning} aria-label="Masquer l’avertissement">

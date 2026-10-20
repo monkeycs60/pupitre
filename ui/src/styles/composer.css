@@ -1485,16 +1485,16 @@
   transition: opacity var(--dur-fast) var(--ease-in);
 }
 
-.context-gauge:hover .context-gauge-junction,
-.context-gauge:focus-within .context-gauge-junction {
+.context-gauge:not(.has-warning):hover .context-gauge-junction,
+.context-gauge:not(.has-warning):focus-within .context-gauge-junction {
   opacity: 1;
   transition: opacity var(--dur) var(--ease-out) 60ms;
 }
 
 /* Ouvert, l'onglet perd son bord haut et peint son fond sur le bord bas de la
    carte, qui le chevauche d'un pixel : carte et onglet forment une seule pièce. */
-.context-gauge:hover .context-gauge-summary,
-.context-gauge:focus-within .context-gauge-summary {
+.context-gauge:not(.has-warning):hover .context-gauge-summary,
+.context-gauge:not(.has-warning):focus-within .context-gauge-summary {
   border-top-color: transparent;
   border-radius: 0;
 }
@@ -1526,8 +1526,8 @@
   transition: visibility 0s linear var(--dur);
 }
 
-.context-gauge:hover .context-gauge-menu,
-.context-gauge:focus-within .context-gauge-menu {
+.context-gauge:not(.has-warning):hover .context-gauge-menu,
+.context-gauge:not(.has-warning):focus-within .context-gauge-menu {
   pointer-events: auto;
   visibility: visible;
   transition-delay: 0s;
@@ -1547,8 +1547,8 @@
   transition: clip-path var(--dur) var(--ease-in);
 }
 
-.context-gauge:hover .context-gauge-menu-card,
-.context-gauge:focus-within .context-gauge-menu-card {
+.context-gauge:not(.has-warning):hover .context-gauge-menu-card,
+.context-gauge:not(.has-warning):focus-within .context-gauge-menu-card {
   clip-path: inset(-40px -40px 0 -40px);
   transition: clip-path var(--dur-slow) var(--ease-out);
 }
@@ -1574,8 +1574,8 @@
     transform var(--dur-fast) var(--ease-in);
 }
 
-.context-gauge:hover .context-gauge-menu-card button,
-.context-gauge:focus-within .context-gauge-menu-card button {
+.context-gauge:not(.has-warning):hover .context-gauge-menu-card button,
+.context-gauge:not(.has-warning):focus-within .context-gauge-menu-card button {
   opacity: 1;
   transform: none;
   transition:
@@ -1584,8 +1584,8 @@
     transform var(--dur-slow) var(--spring) 90ms;
 }
 
-.context-gauge:hover .context-gauge-menu-card button:first-child,
-.context-gauge:focus-within .context-gauge-menu-card button:first-child {
+.context-gauge:not(.has-warning):hover .context-gauge-menu-card button:first-child,
+.context-gauge:not(.has-warning):focus-within .context-gauge-menu-card button:first-child {
   transition-delay: 0s, 150ms, 150ms;
 }
 
@@ -1657,7 +1657,6 @@
   box-shadow: var(--shadow-popover);
   transform-origin: bottom right;
   animation: context-gauge-warning-in var(--dur-slow) var(--spring) both;
-  transition: opacity var(--dur-fast) var(--ease), visibility 0s linear var(--dur-fast);
 }
 
 .context-gauge-warning::after {
@@ -1671,13 +1670,6 @@
   border-right: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
   transform: rotate(45deg);
-}
-
-.context-gauge:hover .context-gauge-warning,
-.context-gauge:focus-within .context-gauge-warning {
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease), visibility 0s;
 }
 
 .context-gauge-warning p {
