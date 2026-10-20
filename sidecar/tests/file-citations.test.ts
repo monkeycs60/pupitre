@@ -120,7 +120,7 @@ test("signale un fichier présent sur une autre branche, ou supprimé et renomm�
   run("worktree", "add", "-q", "-b", "feature/TECH-9", other);
   writeFileSync(join(other, "lib/sur-worktree.js"), "x\n");
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = Bun.spawnSync(["git", "log", "-1", "--format=%as"], { cwd: repository }).stdout.toString().trim();
   const context = { worktrees: [{ path: other, branch: "feature/TECH-9", repositoryPath: repository }], repositories: [repository], since: today };
   const results = await resolveCitations(
     ["lib/sur-worktree.js:4", "lib/branche-seule.js", "lib/old.js", "lib/moved.js", "package.json", "norm.py"],
