@@ -78,6 +78,30 @@ describe('Markdown actions', () => {
     })
   })
 
+  test('met en avant l\'option ★ et isole sa note sans la retirer du choix envoyé', () => {
+    const toggle = mock(() => {})
+    render(
+      <TaskToggleContext.Provider value={toggle}>
+        <TaskSelectionContext.Provider value={[]}>
+          <Markdown scope="message-7">{'TODO\n\n1. Quel correctif : ★ patch minimal 8/10 OU refonte du module 4/10'}</Markdown>
+        </TaskSelectionContext.Provider>
+      </TaskToggleContext.Provider>,
+    )
+
+    const recommended = screen.getByRole('button', { name: '★ patch minimal 8/10' })
+    const other = screen.getByRole('button', { name: 'refonte du module 4/10' })
+    expect(recommended.className).toBe('is-recommended')
+    expect(other.className).toBe('')
+    expect(recommended.querySelector('.markdown-task-choice-score')?.textContent).toBe('8/10')
+    fireEvent.click(recommended)
+    expect(toggle).toHaveBeenCalledWith({
+      scope: 'message-7',
+      index: 1,
+      kind: 'do-this',
+      label: 'Réponse à « Quel correctif » : ★ patch minimal 8/10',
+    }, true)
+  })
+
   test('affiche les alternatives comme boutons et remonte le choix', () => {
     const toggle = mock(() => {})
     render(

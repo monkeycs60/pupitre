@@ -142,6 +142,11 @@ export function taskChoices(label: string, kind: SectionKind): TaskChoiceGroup |
   return { prompt, choices }
 }
 
+export function choiceScore(choice: string): { text: string; score: string | null } {
+  const match = choice.match(/^(.*\S)\s+\(?(\d{1,2}\/10)\)?$/u)
+  return match ? { text: match[1], score: match[2] } : { text: choice, score: null }
+}
+
 function MarkdownTaskItem({ node, children, props }: { node: any; children: any; props: any }) {
   const scope = useContext(MARKDOWN_SCOPE)
   const index = useContext(TASK_INDEX)
@@ -174,15 +179,21 @@ function MarkdownTaskItem({ node, children, props }: { node: any; children: any;
                 ? `Réponse à « ${choiceGroup.prompt} » : ${choice}`
                 : `Réponse choisie : ${choice}`
               const isSelected = selected?.label === choiceLabel
+              const { text, score } = choiceScore(choice)
+              const className = [
+                choice.startsWith('★') ? 'is-recommended' : '',
+                isSelected ? 'is-selected' : '',
+              ].filter(Boolean).join(' ')
               return (
                 <button
                   key={choice}
                   type="button"
-                  className={isSelected ? 'is-selected' : ''}
+                  className={className}
                   aria-pressed={isSelected}
                   onClick={() => onToggle?.({ scope, index, label: choiceLabel, kind }, !isSelected)}
                 >
-                  {choice}
+                  {text}
+                  {score ? <>{' '}<span className="markdown-task-choice-score">{score}</span></> : null}
                 </button>
               )
             })}

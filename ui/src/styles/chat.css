@@ -1502,6 +1502,21 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
   background: var(--bg-hover);
 }
 
+.markdown-task-choice-options button.is-recommended {
+  border-color: var(--accent-border);
+  color: var(--accent-bright);
+}
+
+.markdown-task-choice-score {
+  margin-left: var(--space-1);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-task-choice-options button.is-recommended .markdown-task-choice-score {
+  color: var(--accent);
+}
+
 .markdown-task-choice-options button.is-selected {
   border-color: var(--accent);
   color: var(--text-strong);
