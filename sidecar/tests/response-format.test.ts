@@ -40,6 +40,12 @@ test("les livrables de réflexion longs privilégient un HTML éphémère", () =
   expect(preamble).toContain("Un simple lien local ne constitue pas une livraison");
 });
 
+test("une décision remontée arrive recommandée et notée", () => {
+  const preamble = actionFormatPreamble(DEFAULT_ACTION_FORMAT);
+  expect(preamble).toContain("ne remonte que les");
+  expect(preamble).toContain("★ patch minimal 8/10 OU refonte du module 4/10");
+});
+
 test("la consigne précède la demande utilisateur", () => {
   const prompt = withActionFormat("corrige le bug", DEFAULT_ACTION_FORMAT);
   expect(prompt.endsWith("\n\ncorrige le bug")).toBe(true);

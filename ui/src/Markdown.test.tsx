@@ -64,6 +64,13 @@ describe('Markdown actions', () => {
     expect(taskChoices('Piste A OU piste B', 'follow-up')).toBeNull()
   })
 
+  test('garde la recommandation et les notes dans le libellé des boutons', () => {
+    expect(taskChoices('Quel correctif : ★ patch minimal 8/10 OU refonte du module 4/10', 'do-this')).toEqual({
+      prompt: 'Quel correctif',
+      choices: ['★ patch minimal 8/10', 'refonte du module 4/10'],
+    })
+  })
+
   test('nettoie le préfixe Choisis des anciennes réponses sans question séparée', () => {
     expect(taskChoices('Choisis Section A OU Section B', 'do-this')).toEqual({
       prompt: null,
