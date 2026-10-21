@@ -329,10 +329,6 @@
   overflow: visible;
 }
 
-.navigation-row.is-selected {
-  box-shadow: inset 0 0 0 1px var(--accent-border);
-}
-
 .navigation-row.conv-row-state-read {
   background: transparent;
 }
@@ -348,6 +344,12 @@
 .navigation-row.conv-row-state-unread:hover,
 .navigation-row.conv-row-state-live:hover {
   background: var(--bg-hover);
+}
+
+.navigation-row.is-selected,
+.navigation-row.is-selected:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px var(--accent-border);
 }
 
 .navigation-main {

@@ -163,7 +163,15 @@ export class ConversationStore {
       now,
       now,
     );
+    if (input.continuedFrom && !input.handoffPending) this.transferPin(input.continuedFrom, id);
     return this.get(id)!;
+  }
+
+  private transferPin(sourceId: string, targetId: string): void {
+    const unpinned = this.db.query(
+      "UPDATE conversations SET pinned = 0 WHERE id = ? AND pinned = 1",
+    ).run(sourceId).changes;
+    if (unpinned === 1) this.setPinned(targetId, true);
   }
 
   setPermissionMode(id: string, mode: PresetPermissionMode | null): Conversation | null {
@@ -444,11 +452,18 @@ export class ConversationStore {
   }
 
   completeHandoff(id: string): boolean {
-    return this.db.query(`
-      UPDATE conversations
-      SET handoff_pending = 0, updated_at = ?
-      WHERE id = ? AND handoff_pending = 1
-    `).run(new Date().toISOString(), id).changes === 1;
+    const complete = this.db.transaction(() => {
+      const row = this.db.query(`
+        UPDATE conversations
+        SET handoff_pending = 0, updated_at = ?
+        WHERE id = ? AND handoff_pending = 1
+        RETURNING continued_from
+      `).get(new Date().toISOString(), id) as { continued_from: string | null } | null;
+      if (!row) return false;
+      if (row.continued_from) this.transferPin(row.continued_from, id);
+      return true;
+    });
+    return complete();
   }
 
   /** Finalise les tours réussis, puis nettoie les continuations interrompues. */

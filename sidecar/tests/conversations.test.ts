@@ -126,6 +126,37 @@ test("lie une conversation de passation à sa source", () => {
   ]));
 });
 
+test("une passation reprend l'épingle de sa source", () => {
+  const pinned = convs.create({ projectId, provider: "claude", model: "sonnet", firstMessage: "Épinglée" });
+  convs.setPinned(pinned.id, true);
+  const unpinned = convs.create({ projectId, provider: "claude", model: "sonnet", firstMessage: "Libre" });
+
+  const fromPinned = convs.create({
+    projectId, provider: "claude", model: "sonnet", continuedFrom: pinned.id, firstMessage: "Suite épinglée",
+  });
+  const fromUnpinned = convs.create({
+    projectId, provider: "claude", model: "sonnet", continuedFrom: unpinned.id, firstMessage: "Suite libre",
+  });
+
+  expect(convs.get(pinned.id)!.pinned).toBe(false);
+  expect(fromPinned.pinned).toBe(true);
+  expect(fromUnpinned.pinned).toBe(false);
+});
+
+test("une passation en attente ne reprend l'épingle qu'une fois finalisée", () => {
+  const source = convs.create({ projectId, provider: "claude", model: "sonnet", firstMessage: "Source" });
+  convs.setPinned(source.id, true);
+  const continuation = convs.create({
+    projectId, provider: "codex", model: "gpt-5.6-sol", continuedFrom: source.id, handoffPending: true, firstMessage: "Suite",
+  });
+
+  expect(convs.get(source.id)!.pinned).toBe(true);
+  expect(continuation.pinned).toBe(false);
+  expect(convs.completeHandoff(continuation.id)).toBe(true);
+  expect(convs.get(source.id)!.pinned).toBe(false);
+  expect(convs.get(continuation.id)!.pinned).toBe(true);
+});
+
 test("supprime une continuation ratée avec ses sous-tâches et tous leurs événements", () => {
   const source = convs.create({
     projectId,
