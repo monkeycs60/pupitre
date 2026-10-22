@@ -204,7 +204,7 @@ export interface ActivityReportTicket { id: string; key: string; title: string; 
 export interface ActivityReportMergeRequest { ref: string; iid: number; project: string; title: string; url: string; state: string; ticketKey: string; createdAt: string }
 export interface ActivityReportTicketReady { ticketId: string; key: string; title: string; externalUrl: string | null; toStatus: string; changedAt: string }
 export interface ActivityReportCommit { sha: string; repositoryPath: string; branch: string; subject: string; productMessage: string | null; linesAdded: number | null; linesRemoved: number | null; committedAt: string; conversationId: string | null; isMerge: boolean }
-export interface AgendaProject { id: string; name: string; color: string }
+export interface AgendaProject { id: string; name: string; color: string; group?: { id: string; name: string; color: string } | null }
 export interface AgendaBlock { projectId: string; source: 'presence' | 'agent'; day: string; start: string; end: string; conversationId: string | null }
 export interface AgendaRange { from: string; to: string; blocks: AgendaBlock[]; totals: Record<string, Record<string, { totalMs: number; userMs: number; agentMs: number }>>; projects: AgendaProject[] }
 export interface AgendaArchive { year: number; years: number[]; weeks: Array<{ week: string; projects: Record<string, { totalMs: number; userMs: number }> }>; projects: AgendaProject[] }

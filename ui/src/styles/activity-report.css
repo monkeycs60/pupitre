@@ -176,3 +176,7 @@ a.activity-outcome:focus-visible { outline: 2px solid var(--accent); outline-off
   .activity-report-view { padding: 16px 20px; }
   .activity-project-header p { flex-wrap: wrap; white-space: normal; }
 }
+.agenda-projects li.is-group strong, .agenda-projects li.is-group .agenda-project-name { font-weight: 600; color: var(--text-strong); }
+.agenda-projects li.is-member { padding-left: 18px; font-size: 12px; }
+.agenda-projects li.is-member .agenda-dot { width: 8px; height: 8px; border-radius: 50%; }
+.agenda-projects li.is-member strong { font-weight: 500; color: var(--text-muted); }

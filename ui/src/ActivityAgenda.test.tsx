@@ -6,7 +6,7 @@ import type { AgendaArchive, AgendaBlock, AgendaRange, CalendarRange } from './a
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, waitFor } = await import('@testing-library/react')
-const { ActivityAgenda, addDays, agendaCsv, hourOf, layoutDay, localDay, meetingsOf, mondayOf } = await import('./ActivityAgenda')
+const { ActivityAgenda, addDays, agendaCsv, groupTotals, hourOf, layoutDay, localDay, meetingsOf, mondayOf } = await import('./ActivityAgenda')
 
 const defaultFetch = globalThis.fetch
 afterEach(() => {
@@ -172,4 +172,21 @@ test('sans adresse iCal, l\'agenda explique où la coller', async () => {
     : Response.json({ from: '', to: '', blocks: [], totals: {}, projects: [] })) as unknown as typeof fetch
   const view = render(createElement(ActivityAgenda, { onOpenConversation: () => {}, onOpenDay: () => {} }))
   await waitFor(() => expect(view.container.querySelector('.agenda-calendar-note')?.textContent).toContain('Tokens d’intégration'))
+})
+
+test('les projets d’une étude se totalisent sous son groupe, classé parmi les projets seuls', () => {
+  const mmvd = { id: 'g1', name: 'MMVD', color: '#4f8cff' }
+  const entries = groupTotals([
+    { projectId: 'corelab', totalMs: 10_000_000, userMs: 0 },
+    { projectId: 'eacvi', totalMs: 8_280_000, userMs: 3_600_000 },
+    { projectId: 'rebuttal', totalMs: 3_960_000, userMs: 0 },
+    { projectId: 'larib', totalMs: 1_020_000, userMs: 0 },
+  ], [
+    { id: 'corelab', name: 'Corelab_DICOMs', color: '#ff922b', group: null },
+    { id: 'eacvi', name: 'EACVI_MMVD', color: '#51cf66', group: mmvd },
+    { id: 'rebuttal', name: '2026_MMVD_REBUTTAL', color: '#8b7cff', group: mmvd },
+    { id: 'larib', name: 'larib-portal', color: '#94a3b8' },
+  ])
+  expect(entries.map((entry) => entry.kind === 'group' ? [entry.group.name, entry.totalMs, entry.userMs, entry.rows.map((row) => row.projectId)] : entry.row.projectId))
+    .toEqual([['MMVD', 12_240_000, 3_600_000, ['eacvi', 'rebuttal']], 'corelab', 'larib'])
 })

@@ -121,26 +121,61 @@ function download(name: string, content: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function ProjectTotals({ rows, colors, names }: {
-  rows: Array<{ projectId: string; totalMs: number; userMs: number }>
+type TotalRow = { projectId: string; totalMs: number; userMs: number }
+export type TotalEntry = { kind: 'project'; row: TotalRow } | { kind: 'group'; group: NonNullable<AgendaProject['group']>; totalMs: number; userMs: number; rows: TotalRow[] }
+
+/** Les projets d'un même groupe se totalisent sous lui ; groupes et projets seuls se classent ensemble par durée. */
+export function groupTotals(rows: TotalRow[], projects: AgendaProject[]): TotalEntry[] {
+  const groupOf = new Map(projects.flatMap((project) => project.group ? [[project.id, project.group] as const] : []))
+  const groups = new Map<string, Extract<TotalEntry, { kind: 'group' }>>()
+  const entries: TotalEntry[] = []
+  for (const row of rows) {
+    const group = groupOf.get(row.projectId)
+    if (!group) { entries.push({ kind: 'project', row }); continue }
+    let entry = groups.get(group.id)
+    if (!entry) {
+      entry = { kind: 'group', group, totalMs: 0, userMs: 0, rows: [] }
+      groups.set(group.id, entry)
+      entries.push(entry)
+    }
+    entry.totalMs += row.totalMs
+    entry.userMs += row.userMs
+    entry.rows.push(row)
+  }
+  const total = (entry: TotalEntry) => entry.kind === 'group' ? entry.totalMs : entry.row.totalMs
+  return entries.sort((left, right) => total(right) - total(left))
+}
+
+function TotalLine({ color, name, totalMs, userMs, className }: { color: string; name: string; totalMs: number; userMs: number; className?: string }) {
+  const share = totalMs > 0 ? Math.min(100, (userMs / totalMs) * 100) : 0
+  return (
+    <li className={className} style={{ '--project': color } as CSSProperties}>
+      <span className="agenda-dot" />
+      <span className="agenda-project-name">{name}</span>
+      <strong>{duration(totalMs)}</strong>
+      <span className="agenda-split" title={`${duration(userMs)} de présence`}><i style={{ width: `${share}%` }} /></span>
+    </li>
+  )
+}
+
+function ProjectTotals({ rows, colors, names, projects }: {
+  rows: TotalRow[]
   colors: Map<string, string>
   names: Map<string, string>
+  projects: AgendaProject[]
 }) {
   if (rows.length === 0) return <p className="agenda-side-empty">Aucune activité</p>
+  const line = (row: TotalRow, className?: string) => (
+    <TotalLine key={row.projectId} className={className} color={colors.get(row.projectId) ?? FALLBACK_COLOR} name={names.get(row.projectId) ?? row.projectId} totalMs={row.totalMs} userMs={row.userMs} />
+  )
   return (
     <ul className="agenda-projects">
-      {rows.map((row) => {
-        const color = colors.get(row.projectId) ?? FALLBACK_COLOR
-        const share = row.totalMs > 0 ? Math.min(100, (row.userMs / row.totalMs) * 100) : 0
-        return (
-          <li key={row.projectId} style={{ '--project': color } as CSSProperties}>
-            <span className="agenda-dot" />
-            <span className="agenda-project-name">{names.get(row.projectId) ?? row.projectId}</span>
-            <strong>{duration(row.totalMs)}</strong>
-            <span className="agenda-split" title={`${duration(row.userMs)} de présence`}><i style={{ width: `${share}%` }} /></span>
-          </li>
-        )
-      })}
+      {groupTotals(rows, projects).flatMap((entry) => entry.kind === 'project'
+        ? [line(entry.row)]
+        : [
+          <TotalLine key={`group-${entry.group.id}`} className="is-group" color={entry.group.color} name={entry.group.name} totalMs={entry.totalMs} userMs={entry.userMs} />,
+          ...entry.rows.map((row) => line(row, 'is-member')),
+        ])}
     </ul>
   )
 }
@@ -285,7 +320,7 @@ function Calendar({ range, meetings, days, view, today, onOpenConversation, onOp
           <strong>{duration(totalMs)}</strong>
           <small>dont {duration(userMs)} de présence</small>
         </div>
-        <ProjectTotals rows={rows} colors={colors} names={names} />
+        <ProjectTotals rows={rows} colors={colors} names={names} projects={range.projects} />
         <button type="button" className="secondary-button" disabled={range.blocks.length === 0} onClick={() => download(`pupitre-temps-${days[0]}${days.length > 1 ? `-${days[days.length - 1]}` : ''}.csv`, agendaCsv(range))}>
           Exporter en CSV
         </button>
@@ -346,7 +381,7 @@ function Archive({ archive, onOpenWeek, onYear }: { archive: AgendaArchive; onOp
           <strong>{duration(rows.reduce((sum, row) => sum + row.totalMs, 0))}</strong>
           <small>{weeks.length} semaine{weeks.length > 1 ? 's' : ''} active{weeks.length > 1 ? 's' : ''}</small>
         </div>
-        <ProjectTotals rows={rows} colors={colors} names={names} />
+        <ProjectTotals rows={rows} colors={colors} names={names} projects={archive.projects} />
         <button type="button" className="secondary-button" disabled={weeks.length === 0} onClick={() => download(`pupitre-temps-${archive.year}.csv`, archiveCsv(archive))}>
           Exporter l’année en CSV
         </button>

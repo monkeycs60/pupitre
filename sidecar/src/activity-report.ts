@@ -622,7 +622,9 @@ export class ActivityReportService {
   private agendaProjects(ids: string[]): AgendaProject[] {
     return [...new Set(ids)].flatMap((id) => {
       const project = this.projects.get(id);
-      return project ? [{ id, name: project.name, color: project.color }] : [];
+      if (!project) return [];
+      const group = project.group_id ? this.projects.group(project.group_id) : null;
+      return [{ id, name: project.name, color: project.color, group: group ? { id: group.id, name: group.name, color: group.color } : null }];
     });
   }
 
@@ -814,6 +816,7 @@ export interface AgendaProject {
   id: string;
   name: string;
   color: string;
+  group: { id: string; name: string; color: string } | null;
 }
 
 export class ActivityBusyError extends Error {}
