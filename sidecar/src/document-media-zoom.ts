@@ -2,21 +2,42 @@ export const MEDIA_ZOOM_MESSAGE = "pupitre:media-zoom";
 
 const script = `(() => {
   if (window.parent === window) return;
-  const send = (kind, element) => {
+  const sourceOf = (element, kind) => {
     const src = element.currentSrc || element.getAttribute("src") || "";
-    if (!src.startsWith("data:" + kind + "/")) return false;
-    if (kind === "video") element.pause();
-    window.parent.postMessage({
-      type: "${MEDIA_ZOOM_MESSAGE}",
-      kind,
-      src,
-      alt: element.getAttribute("alt") || element.getAttribute("title") || "",
-      time: kind === "video" ? element.currentTime : 0,
-    }, "*");
+    if (src.startsWith("data:" + kind + "/")) return src;
+    if (kind !== "image" || !src.startsWith("blob:") || !element.complete) return null;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = element.naturalWidth;
+      canvas.height = element.naturalHeight;
+      canvas.getContext("2d").drawImage(element, 0, 0);
+      return canvas.toDataURL("image/png");
+    } catch { return null; }
+  };
+  const itemOf = (element) => {
+    const kind = element.tagName === "VIDEO" ? "video" : "image";
+    if (kind === "image" && (element.closest("a, button") || element.naturalWidth < 48)) return null;
+    const src = sourceOf(element, kind);
+    if (!src) return null;
+    const alt = element.getAttribute("alt") || element.getAttribute("title") || "";
+    return { kind, src, alt, time: kind === "video" ? element.currentTime : 0 };
+  };
+  const send = (element) => {
+    const items = [];
+    let index = -1;
+    for (const candidate of document.querySelectorAll("img, video")) {
+      const item = itemOf(candidate);
+      if (!item) continue;
+      if (candidate === element) index = items.length;
+      items.push(item);
+    }
+    if (index === -1) return false;
+    if (element.tagName === "VIDEO") element.pause();
+    window.parent.postMessage({ type: "${MEDIA_ZOOM_MESSAGE}", items, index }, "*");
     return true;
   };
   const style = document.createElement("style");
-  style.textContent = "img[src^='data:image/']:not(a img){cursor:zoom-in}"
+  style.textContent = "img:is([src^='data:image/'],[src^='blob:']):not(a img){cursor:zoom-in}"
     + ".pupitre-media-zoom{position:fixed;z-index:2147483647;display:none;padding:4px 10px;"
     + "border:0;border-radius:6px;background:rgb(0 0 0/72%);color:#fff;font:600 12px/1.4 system-ui,sans-serif;cursor:pointer}";
   const button = document.createElement("button");
@@ -43,15 +64,14 @@ const script = `(() => {
     if (video) showOver(video); else hide();
   });
   window.addEventListener("scroll", hide, true);
-  button.addEventListener("click", () => { if (hovered && send("video", hovered)) hide(); });
+  button.addEventListener("click", () => { if (hovered && send(hovered)) hide(); });
   document.addEventListener("dblclick", (event) => {
     const video = event.target.closest && event.target.closest("video");
-    if (video && send("video", video)) event.preventDefault();
+    if (video && send(video)) event.preventDefault();
   });
   document.addEventListener("click", (event) => {
     const image = event.target.closest && event.target.closest("img");
-    if (!image || image.closest("a, button") || image.naturalWidth < 48) return;
-    if (send("image", image)) event.preventDefault();
+    if (image && send(image)) event.preventDefault();
   });
 })();`;
 

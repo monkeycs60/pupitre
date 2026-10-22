@@ -146,25 +146,38 @@ test('agrandit une image envoyée par l’aperçu et se ferme avec Échap', asyn
   expect(iframe.getAttribute('src')).toContain('&embed=1')
 
   const src = 'data:image/png;base64,iVBORw0KGgo='
-  window.dispatchEvent(new MessageEvent('message', {
-    data: { type: 'pupitre:media-zoom', kind: 'image', src: 'https://exemple.test/a.png', alt: '' },
-    source: iframe.contentWindow,
-  }))
-  window.dispatchEvent(new MessageEvent('message', {
-    data: { type: 'pupitre:media-zoom', kind: 'image', src, alt: 'Capture après' },
-    source: window,
-  }))
+  const video = 'data:video/webm;base64,GkXfow=='
+  const send = (data: unknown, source: MessageEventSource | null) => {
+    window.dispatchEvent(new MessageEvent('message', { data, source }))
+  }
+  send({ type: 'pupitre:media-zoom', index: 0, items: [{ kind: 'image', src: 'https://exemple.test/a.png' }] }, iframe.contentWindow)
+  send({ type: 'pupitre:media-zoom', index: 0, items: [{ kind: 'image', src, alt: 'Capture avant' }] }, window)
   await new Promise((resolve) => setTimeout(resolve, 20))
   expect(screen.queryByRole('dialog', { name: 'Image agrandie' })).toBeNull()
 
-  window.dispatchEvent(new MessageEvent('message', {
-    data: { type: 'pupitre:media-zoom', kind: 'image', src, alt: 'Capture après' },
-    source: iframe.contentWindow,
-  }))
-  const dialog = await screen.findByRole('dialog', { name: 'Image agrandie' })
+  send({
+    type: 'pupitre:media-zoom',
+    index: 2,
+    items: [
+      { kind: 'image', src, alt: 'Capture avant' },
+      { kind: 'image', src: 'https://exemple.test/b.png', alt: 'Distante' },
+      { kind: 'image', src, alt: 'Capture après' },
+      { kind: 'video', src: video, alt: 'Parcours', time: 3 },
+    ],
+  }, iframe.contentWindow)
+  await screen.findByRole('dialog', { name: 'Image agrandie' })
   expect(screen.getByAltText('Capture après').getAttribute('src')).toBe(src)
-  expect(dialog).toBeTruthy()
+  expect(screen.getByText('2 / 3')).toBeTruthy()
+
+  fireEvent.keyDown(window, { key: 'ArrowRight' })
+  expect(await screen.findByRole('dialog', { name: 'Vidéo agrandie' })).toBeTruthy()
+  expect(screen.getByText('3 / 3')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Média suivant' }))
+  expect(screen.getByAltText('Capture avant')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Média précédent' }))
+  expect(screen.getByText('3 / 3')).toBeTruthy()
 
   fireEvent.keyDown(window, { key: 'Escape' })
-  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Image agrandie' })).toBeNull())
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Vidéo agrandie' })).toBeNull())
+  expect(screen.getByTitle('Aperçu de Audit plateforme')).toBeTruthy()
 }, 60_000)

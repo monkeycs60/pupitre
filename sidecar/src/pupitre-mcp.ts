@@ -84,7 +84,10 @@ const DESCRIPTION =
   + "respecter une limite de 2 Mio pour les formats texte et 10 Mio pour PDF/Office, et être situé dans le projet courant ou dans le dossier "
   + "temporaire de l’OS. Pupitre l’affiche dans un aperçu "
   + "sandboxé, l’indexe, génère sa miniature et le conserve jusqu’à suppression explicite. "
-  + "Passe delete_source=true pour supprimer l’original uniquement s’il est temporaire.";
+  + "Passe delete_source=true pour supprimer l’original uniquement s’il est temporaire. "
+  + "Dans un HTML, intègre chaque capture ou vidéo en data: URI base64 dans une balise <img> ou <video> : "
+  + "Pupitre l’agrandit au clic et fait défiler tous les médias du document. L’aperçu bloque les médias chargés depuis une URL ; "
+  + "une vidéo blob: ou un dessin dans un <canvas> ne s’agrandit pas.";
 
 export function createPupitreServer(): McpServer {
   const server = new McpServer(

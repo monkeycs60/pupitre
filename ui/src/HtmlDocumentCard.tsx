@@ -426,7 +426,7 @@ export function HtmlDocumentCard({
           ) : <p>Préparation de l’aperçu…</p>}
         </div>
       ) : null}
-      {mediaZoom.media ? <MediaLightbox media={mediaZoom.media} onClose={mediaZoom.close} /> : null}
+      {mediaZoom.gallery ? <MediaLightbox gallery={mediaZoom.gallery} onClose={mediaZoom.close} /> : null}
       </section>
   )
 

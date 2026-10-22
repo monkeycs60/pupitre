@@ -274,7 +274,7 @@ export function ConversationAssetsDrawer({
                 />
               ) : previewError === null ? <p>Préparation de l’aperçu…</p> : null}
             </div>
-            {mediaZoom.media ? <MediaLightbox media={mediaZoom.media} onClose={mediaZoom.close} /> : null}
+            {mediaZoom.gallery ? <MediaLightbox gallery={mediaZoom.gallery} onClose={mediaZoom.close} /> : null}
           </section>
         </>,
         window.document.body,
