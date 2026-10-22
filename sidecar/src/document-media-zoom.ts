@@ -19,13 +19,27 @@ const script = `(() => {
     if (kind === "image" && (element.closest("a, button") || element.naturalWidth < 48)) return null;
     const src = sourceOf(element, kind);
     if (!src) return null;
-    const alt = element.getAttribute("alt") || element.getAttribute("title") || "";
+    const caption = element.closest("figure")?.querySelector("figcaption")?.textContent || "";
+    const alt = element.getAttribute("alt") || element.getAttribute("title") || caption.trim();
     return { kind, src, alt, time: kind === "video" ? element.currentTime : 0 };
+  };
+  const readingOrder = (elements) => {
+    const boxes = elements
+      .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.width > 0 && rect.height > 0)
+      .sort((a, b) => a.rect.top - b.rect.top);
+    const rows = [];
+    for (const box of boxes) {
+      const row = rows[rows.length - 1];
+      const near = row && box.rect.top - row[0].rect.top < Math.min(row[0].rect.height, box.rect.height) / 2;
+      if (near) row.push(box); else rows.push([box]);
+    }
+    return rows.flatMap((row) => row.sort((a, b) => a.rect.left - b.rect.left).map(({ element }) => element));
   };
   const send = (element) => {
     const items = [];
     let index = -1;
-    for (const candidate of document.querySelectorAll("img, video")) {
+    for (const candidate of readingOrder([...document.querySelectorAll("img, video")])) {
       const item = itemOf(candidate);
       if (!item) continue;
       if (candidate === element) index = items.length;
@@ -64,7 +78,10 @@ const script = `(() => {
     if (video) showOver(video); else hide();
   });
   window.addEventListener("scroll", hide, true);
-  button.addEventListener("click", () => { if (hovered && send(hovered)) hide(); });
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    if (hovered && send(hovered)) hide();
+  });
   document.addEventListener("dblclick", (event) => {
     const video = event.target.closest && event.target.closest("video");
     if (video && send(video)) event.preventDefault();
