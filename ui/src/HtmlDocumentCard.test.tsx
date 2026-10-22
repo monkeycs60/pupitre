@@ -181,3 +181,50 @@ test('agrandit une image envoyée par l’aperçu et se ferme avec Échap', asyn
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Vidéo agrandie' })).toBeNull())
   expect(screen.getByTitle('Aperçu de Audit plateforme')).toBeTruthy()
 }, 60_000)
+
+test('compare côte à côte la vidéo avant et la vidéo après', async () => {
+  globalThis.fetch = mock((input: string | URL | Request) => {
+    const url = String(input)
+    if (url.includes('/view-token')) {
+      return Promise.resolve(Response.json({ token: 'token-compare', expiresAt: '2099-08-11T10:01:00.000Z' }, { status: 201 }))
+    }
+    return Promise.resolve(Response.json({
+      id: 'document-1',
+      conversationId: 'conversation-1',
+      title: 'Audit plateforme',
+      sizeBytes: 12_480,
+      sha256: 'hash',
+      createdAt: block.createdAt,
+      expiresAt: null,
+      state: 'retained',
+    }))
+  }) as typeof fetch
+
+  render(createElement(HtmlDocumentCard, { block, defaultOpen: true }))
+  const iframe = await screen.findByTitle('Aperçu de Audit plateforme') as HTMLIFrameElement
+  const video = 'data:video/mp4;base64,AAAAIGZ0eXA='
+  window.dispatchEvent(new MessageEvent('message', {
+    source: iframe.contentWindow,
+    data: {
+      type: 'pupitre:media-zoom',
+      index: 1,
+      items: [
+        { kind: 'video', src: video, alt: 'avant · parcours' },
+        { kind: 'video', src: video, alt: 'après · parcours' },
+        { kind: 'image', src: 'data:image/png;base64,iVBORw0KGgo=', alt: 'capture' },
+      ],
+    },
+  }))
+  await screen.findByRole('dialog', { name: 'Vidéo agrandie' })
+
+  fireEvent.click(screen.getByRole('button', { name: '⇆ Côte à côte' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Vidéos côte à côte' })
+  expect(dialog.querySelectorAll('video')).toHaveLength(2)
+  expect([...dialog.querySelectorAll('figcaption')].map((caption) => caption.textContent)).toEqual(['avant · parcours', 'après · parcours'])
+  expect(screen.getByText('1–2 / 3')).toBeTruthy()
+  expect(screen.getByRole('slider', { name: 'Position dans les deux vidéos' })).toBeTruthy()
+
+  fireEvent.keyDown(window, { key: 'ArrowRight' })
+  expect(await screen.findByRole('dialog', { name: 'Image agrandie' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: '⇆ Côte à côte' })).toBeNull()
+}, 60_000)

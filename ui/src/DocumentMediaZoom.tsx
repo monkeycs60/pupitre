@@ -86,8 +86,123 @@ function zoomAt(view: View, nextScale: number, image: HTMLImageElement, clientX:
   return { scale, x: cursorX - (cursorX - view.x) * ratio, y: cursorY - (cursorY - view.y) * ratio }
 }
 
+export function comparedPair(items: ZoomedMedia[], index: number): [number, number] | null {
+  if (items[index]?.kind !== 'video') return null
+  if (items[index + 1]?.kind === 'video') return [index, index + 1]
+  if (items[index - 1]?.kind === 'video') return [index - 1, index]
+  return null
+}
+
+function clock(seconds: number): string {
+  const whole = Math.floor(seconds)
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
+}
+
+const DRIFT_SECONDS = 0.25
+
+function MediaCompare({ left, right }: { left: ZoomedMedia; right: ZoomedMedia }) {
+  const leftRef = useRef<HTMLVideoElement>(null)
+  const rightRef = useRef<HTMLVideoElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [time, setTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+
+  const videos = useCallback(
+    () => [leftRef.current, rightRef.current].filter((video): video is HTMLVideoElement => video !== null),
+    [],
+  )
+
+  const play = useCallback(() => {
+    const all = videos()
+    if (all.every((video) => video.ended)) for (const video of all) video.currentTime = 0
+    for (const video of all) if (!video.ended) void video.play().catch(() => {})
+    setPlaying(true)
+  }, [videos])
+
+  const pause = useCallback(() => {
+    for (const video of videos()) video.pause()
+    setPlaying(false)
+  }, [videos])
+
+  const seek = useCallback((seconds: number) => {
+    for (const video of videos()) video.currentTime = Math.min(seconds, video.duration || seconds)
+    setTime(seconds)
+  }, [videos])
+
+  useEffect(() => {
+    play()
+    const toggle = (event: KeyboardEvent) => {
+      if (event.key !== ' ') return
+      event.preventDefault()
+      event.stopPropagation()
+      if (videos().some((video) => !video.paused)) pause()
+      else play()
+    }
+    window.addEventListener('keydown', toggle, true)
+    return () => window.removeEventListener('keydown', toggle, true)
+  }, [pause, play, videos])
+
+  const follow = () => {
+    const all = videos()
+    const leader = all.find((video) => !video.ended)
+    if (!leader) {
+      setPlaying(false)
+      setTime(Math.max(...all.map((video) => video.currentTime)))
+      return
+    }
+    for (const video of all) {
+      if (video === leader || video.ended || leader.currentTime > video.duration) continue
+      if (Math.abs(video.currentTime - leader.currentTime) > DRIFT_SECONDS) video.currentTime = leader.currentTime
+    }
+    setTime(Math.max(...all.map((video) => video.currentTime)))
+  }
+
+  const sides: [ZoomedMedia, RefObject<HTMLVideoElement | null>][] = [[left, leftRef], [right, rightRef]]
+  return (
+    <div className="media-compare">
+      <div className="media-compare-videos">
+        {sides.map(([media, ref], side) => (
+          <figure key={side}>
+            <figcaption>{media.alt || (side === 0 ? 'Gauche' : 'Droite')}</figcaption>
+            <video
+              ref={ref}
+              src={media.src}
+              muted
+              playsInline
+              onTimeUpdate={follow}
+              onEnded={follow}
+              onLoadedMetadata={(event) => {
+                const loaded = event.currentTarget.duration
+                if (Number.isFinite(loaded)) setDuration((current) => Math.max(current, loaded))
+              }}
+              onClick={() => (playing ? pause() : play())}
+            />
+          </figure>
+        ))}
+      </div>
+      <div className="media-compare-controls">
+        <button type="button" onClick={() => (playing ? pause() : play())}>
+          {playing ? 'Pause' : 'Lire les deux'}
+        </button>
+        <button type="button" onClick={() => { seek(0); play() }}>Revoir</button>
+        <input
+          type="range"
+          aria-label="Position dans les deux vidéos"
+          min={0}
+          max={duration || 0}
+          step={0.05}
+          value={Math.min(time, duration || 0)}
+          onChange={(event) => seek(Number(event.currentTarget.value))}
+        />
+        <span>{clock(time)} / {clock(duration)}</span>
+      </div>
+    </div>
+  )
+}
+
 export function MediaLightbox({ gallery, onClose }: { gallery: MediaGallery; onClose: () => void }) {
   const [index, setIndex] = useState(gallery.index)
+  const [compare, setCompare] = useState(false)
   const [view, setView] = useState<View>(FIT)
   const overlayRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
@@ -99,6 +214,7 @@ export function MediaLightbox({ gallery, onClose }: { gallery: MediaGallery; onC
     if (count < 2) return
     setIndex((current) => (current + step + count) % count)
     setView(FIT)
+    setCompare(false)
   }, [count])
 
   useEffect(() => {
@@ -132,6 +248,8 @@ export function MediaLightbox({ gallery, onClose }: { gallery: MediaGallery; onC
 
   if (!media) return null
   const zoomed = view.scale > MIN_SCALE
+  const pair = comparedPair(gallery.items, index)
+  const comparing = compare && pair !== null
 
   return createPortal(
     <div
@@ -139,7 +257,7 @@ export function MediaLightbox({ gallery, onClose }: { gallery: MediaGallery; onC
       className="media-lightbox"
       role="dialog"
       aria-modal="true"
-      aria-label={media.kind === 'image' ? 'Image agrandie' : 'Vidéo agrandie'}
+      aria-label={comparing ? 'Vidéos côte à côte' : media.kind === 'image' ? 'Image agrandie' : 'Vidéo agrandie'}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -147,7 +265,14 @@ export function MediaLightbox({ gallery, onClose }: { gallery: MediaGallery; onC
       <button type="button" className="media-lightbox-close" onClick={onClose} autoFocus>
         Fermer
       </button>
-      {media.kind === 'image' ? (
+      {pair ? (
+        <button type="button" className="media-lightbox-mode" aria-pressed={comparing} onClick={() => setCompare((current) => !current)}>
+          {comparing ? 'Vue simple' : '⇆ Côte à côte'}
+        </button>
+      ) : null}
+      {comparing ? (
+        <MediaCompare left={gallery.items[pair[0]]!} right={gallery.items[pair[1]]!} />
+      ) : media.kind === 'image' ? (
         <img
           key={index}
           ref={imageRef}
@@ -201,9 +326,9 @@ export function MediaLightbox({ gallery, onClose }: { gallery: MediaGallery; onC
         </>
       ) : null}
       <p className="media-lightbox-caption">
-        {count > 1 ? <span>{index + 1} / {count}</span> : null}
+        {count > 1 ? <span>{comparing ? `${pair[0] + 1}–${pair[1] + 1}` : index + 1} / {count}</span> : null}
         {zoomed ? <span>{Math.round(view.scale * 100)} %</span> : null}
-        {media.alt ? <span>{media.alt}</span> : null}
+        {media.alt && !comparing ? <span>{media.alt}</span> : null}
       </p>
     </div>,
     window.document.body,

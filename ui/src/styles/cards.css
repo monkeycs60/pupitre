@@ -953,6 +953,85 @@
 .media-lightbox-caption:empty { display: none; }
 .media-lightbox-caption span:last-child { overflow: hidden; text-overflow: ellipsis; }
 
+.media-lightbox-mode {
+  position: fixed;
+  top: var(--space-4);
+  left: var(--space-4);
+  z-index: 1;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-overlay);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.media-lightbox-mode[aria-pressed='true'] { border-color: var(--accent); }
+
+.media-compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-height: 100%;
+}
+
+.media-compare-videos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  min-height: 0;
+}
+
+.media-compare figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+}
+
+.media-compare figcaption {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.media-lightbox .media-compare video {
+  width: 100%;
+  max-height: calc(100vh - 180px);
+  cursor: pointer;
+}
+
+.media-compare-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  align-self: center;
+  width: min(720px, 100%);
+  padding: 6px 12px;
+  border-radius: var(--r-md);
+  background: var(--bg-overlay);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.media-compare-controls button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.media-compare-controls input { flex: 1; accent-color: var(--accent); }
+
 .media-lightbox-close {
   position: fixed;
   top: var(--space-4);
