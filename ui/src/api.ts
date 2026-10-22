@@ -230,6 +230,9 @@ export const getSidecarJournal = (): Promise<SidecarJournal> => fetchJson('/api/
 export const getActivityReportIndex = (): Promise<ActivityReportIndex> => fetchJson('/api/activity-reports')
 export const getActivityReport = (day: string): Promise<ActivityReport> => fetchJson(`/api/activity-reports/${routeId(day)}`)
 export const getActivityAgenda = (from: string, to: string): Promise<AgendaRange> => fetchJson(`/api/activity-reports/agenda?from=${from}&to=${to}`)
+export interface CalendarEvent { id: string; title: string; start: string; end: string; allDay: boolean }
+export interface CalendarRange { configured: boolean; events: CalendarEvent[]; error: string | null }
+export const getCalendarEvents = (from: string, to: string): Promise<CalendarRange> => fetchJson(`/api/activity-reports/calendar?from=${from}&to=${to}`)
 export const getActivityArchive = (year: number): Promise<AgendaArchive> => fetchJson(`/api/activity-reports/archive?year=${year}`)
 export const runActivityTriage = (): Promise<{ errors: string[]; retro: ActivityReportIndex['retro'] }> => fetchJson('/api/activity-reports/triage', jsonPost({}))
 export const runActivityReport = (day: string): Promise<ActivityReport | null> => fetchJson('/api/activity-reports/run', jsonPost({ day }))
@@ -1036,7 +1039,7 @@ export function updateTicketInstruction(ticketId: string, instruction: string): 
   )
 }
 
-export type IntegrationTokenName = 'clickup' | 'gitlab' | 'openai' | 'cerebras'
+export type IntegrationTokenName = 'clickup' | 'gitlab' | 'openai' | 'cerebras' | 'googleCalendar'
 
 export function updateIntegrationTokens(
   tokens: Partial<Record<IntegrationTokenName, string | null>>,

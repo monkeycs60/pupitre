@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { getActivityAgenda, getActivityArchive, type AgendaArchive, type AgendaBlock, type AgendaProject, type AgendaRange } from './api'
+import { getActivityAgenda, getActivityArchive, getCalendarEvents, type AgendaArchive, type AgendaBlock, type AgendaProject, type AgendaRange, type CalendarEvent, type CalendarRange } from './api'
 
 export type AgendaView = 'day' | 'week' | 'archive'
 
@@ -8,6 +8,7 @@ export const DAY_START_HOUR = 8
 const NIGHT_BAND_PX = 30
 const HOUR_PX: Record<'day' | 'week', number> = { day: 52, week: 38 }
 const FALLBACK_COLOR = '#94a3b8'
+const CALENDAR_VISIBLE_KEY = 'pupitre:agenda-google'
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 const noon = (day: string) => new Date(`${day}T12:00:00`)
@@ -24,6 +25,16 @@ export function hourOf(iso: string, day: string, isEnd = false): number {
 }
 
 export interface PlacedBlock { block: AgendaBlock; column: number; columns: number }
+
+/** Rendez-vous qui touchent le jour : les horaires par chevauchement, les journées entières par leurs bornes (fin exclue). */
+export function meetingsOf(events: CalendarEvent[], day: string): { timed: CalendarEvent[]; allDay: CalendarEvent[] } {
+  const dayStart = Date.parse(`${day}T00:00:00`)
+  const dayEnd = Date.parse(`${addDays(day, 1)}T00:00:00`)
+  return {
+    timed: events.filter((event) => !event.allDay && Date.parse(event.start) < dayEnd && Date.parse(event.end) > dayStart),
+    allDay: events.filter((event) => event.allDay && event.start <= day && event.end > day),
+  }
+}
 
 /**
  * Colonnes à la Google Agenda : un projet occupe une enveloppe (ses blocs
@@ -134,9 +145,10 @@ function ProjectTotals({ rows, colors, names }: {
   )
 }
 
-function DayColumn({ day, blocks, hourPx, today, nowHour, colors, names, onOpenConversation }: {
+function DayColumn({ day, blocks, meetings, hourPx, today, nowHour, colors, names, onOpenConversation }: {
   day: string
   blocks: AgendaBlock[]
+  meetings: CalendarEvent[]
   hourPx: number
   today: boolean
   nowHour: number
@@ -160,6 +172,22 @@ function DayColumn({ day, blocks, hourPx, today, nowHour, colors, names, onOpenC
     }
     return out
   })
+  const meetingPieces = meetings.flatMap((event) => {
+    const start = Math.max(0, hourOf(event.start, day))
+    const end = Math.min(24, hourOf(event.end, day))
+    const out: Array<{ event: CalendarEvent; night: boolean; top: number; size: number }> = []
+    if (start < DAY_START_HOUR) out.push({ event, night: true, top: (start / DAY_START_HOUR) * NIGHT_BAND_PX, size: Math.max(2, ((Math.min(end, DAY_START_HOUR) - start) / DAY_START_HOUR) * NIGHT_BAND_PX) })
+    if (end > DAY_START_HOUR) {
+      const dayStart = Math.max(start, DAY_START_HOUR)
+      out.push({ event, night: false, top: (dayStart - DAY_START_HOUR) * hourPx, size: Math.max(3, (end - dayStart) * hourPx) })
+    }
+    return out
+  })
+  const renderMeetings = (night: boolean) => meetingPieces.filter((piece) => piece.night === night).map(({ event, top, size }) => (
+    <div key={`${event.id}-${night}`} className="agenda-meeting" style={{ top: `${top}px`, height: `${size}px` }} title={`${event.title} · ${clock(event.start)} → ${clock(event.end)}`}>
+      {!night && size >= 14 ? <span>{event.title}</span> : null}
+    </div>
+  ))
   const render = (night: boolean) => pieces.filter((piece) => piece.night === night).map((piece) => {
     const { block } = piece
     const color = colors.get(block.projectId) ?? FALLBACK_COLOR
@@ -181,9 +209,10 @@ function DayColumn({ day, blocks, hourPx, today, nowHour, colors, names, onOpenC
   })
   return (
     <div className={`agenda-column${today ? ' is-today' : ''}`} data-day={day}>
-      <div className="agenda-night" style={{ height: `${NIGHT_BAND_PX}px` }}>{render(true)}</div>
+      <div className="agenda-night" style={{ height: `${NIGHT_BAND_PX}px` }}>{renderMeetings(true)}{render(true)}</div>
       <div className="agenda-hours-area" style={{ height: `${height}px` }}>
         {Array.from({ length: 24 - DAY_START_HOUR }, (_, index) => <i key={index} className="agenda-hour-line" style={{ top: `${index * hourPx}px` }} />)}
+        {renderMeetings(false)}
         {render(false)}
         {today && nowHour >= DAY_START_HOUR ? <i className="agenda-now" style={{ top: `${(nowHour - DAY_START_HOUR) * hourPx}px` }} /> : null}
       </div>
@@ -191,8 +220,9 @@ function DayColumn({ day, blocks, hourPx, today, nowHour, colors, names, onOpenC
   )
 }
 
-function Calendar({ range, days, view, today, onOpenConversation, onOpenDay }: {
+function Calendar({ range, meetings, days, view, today, onOpenConversation, onOpenDay }: {
   range: AgendaRange
+  meetings: CalendarEvent[]
   days: string[]
   view: 'day' | 'week'
   today: string
@@ -229,11 +259,13 @@ function Calendar({ range, days, view, today, onOpenConversation, onOpenDay }: {
         <div className="agenda-corner" />
         {days.map((day) => {
           const ms = dayTotal(day)
+          const allDay = meetingsOf(meetings, day).allDay.map((event) => event.title).join(' · ')
           return (
             <button type="button" key={day} className={`agenda-day-head${day === today ? ' is-today' : ''}`} onClick={() => onOpenDay(day)} title="Lire le journal de ce jour">
               <span>{capitalize(noon(day).toLocaleDateString('fr-FR', { weekday: view === 'day' ? 'long' : 'short' }))}</span>
               <strong>{noon(day).getDate()}</strong>
               <small>{ms >= 60_000 ? duration(ms) : '—'}</small>
+              {allDay ? <em className="agenda-allday" title={allDay}>{allDay}</em> : null}
             </button>
           )
         })}
@@ -244,7 +276,7 @@ function Calendar({ range, days, view, today, onOpenConversation, onOpenDay }: {
           </div>
         </div>
         {days.map((day) => (
-          <DayColumn key={day} day={day} blocks={byDay.get(day) ?? []} hourPx={hourPx} today={day === today} nowHour={nowHour} colors={colors} names={names} onOpenConversation={onOpenConversation} />
+          <DayColumn key={day} day={day} blocks={byDay.get(day) ?? []} meetings={meetingsOf(meetings, day).timed} hourPx={hourPx} today={day === today} nowHour={nowHour} colors={colors} names={names} onOpenConversation={onOpenConversation} />
         ))}
       </div>
       <aside className="agenda-side">
@@ -334,6 +366,8 @@ export function ActivityAgenda({ onOpenConversation, onOpenDay }: {
   const [range, setRange] = useState<AgendaRange | null>(null)
   const [archive, setArchive] = useState<AgendaArchive | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showCalendar, setShowCalendar] = useState(() => window.localStorage.getItem(CALENDAR_VISIBLE_KEY) !== '0')
+  const [calendar, setCalendar] = useState<(CalendarRange & { from: string; to: string }) | null>(null)
   const days = view === 'day' ? [anchor] : Array.from({ length: 7 }, (_, index) => addDays(mondayOf(anchor), index))
   const from = days[0]!
   const to = days[days.length - 1]!
@@ -346,6 +380,14 @@ export function ActivityAgenda({ onOpenConversation, onOpenDay }: {
       .catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Agenda indisponible') })
     return () => { cancelled = true }
   }, [view, from, to])
+  useEffect(() => {
+    if (view === 'archive' || !showCalendar) return
+    let cancelled = false
+    getCalendarEvents(from, to)
+      .then((next) => { if (!cancelled) setCalendar({ ...next, from, to }) })
+      .catch(() => { if (!cancelled) setCalendar({ configured: true, events: [], error: 'Google Agenda indisponible', from, to }) })
+    return () => { cancelled = true }
+  }, [view, from, to, showCalendar])
   useEffect(() => {
     if (view !== 'archive') return
     let cancelled = false
@@ -362,6 +404,11 @@ export function ActivityAgenda({ onOpenConversation, onOpenDay }: {
       ? capitalize(noon(anchor).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))
       : `Semaine du ${noon(from).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} au ${noon(to).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
   const loaded = view === 'archive' ? archive?.year === year : range?.from === from && range.to === to
+  const shownCalendar = showCalendar && calendar?.from === from && calendar.to === to ? calendar : null
+  const toggleCalendar = () => {
+    window.localStorage.setItem(CALENDAR_VISIBLE_KEY, showCalendar ? '0' : '1')
+    setShowCalendar(!showCalendar)
+  }
 
   return (
     <section className="agenda" aria-label="Agenda du temps projet">
@@ -382,14 +429,23 @@ export function ActivityAgenda({ onOpenConversation, onOpenDay }: {
         )}
         <h2 className="agenda-period">{period}</h2>
         {view === 'archive' ? null : (
-          <span className="agenda-legend"><i className="is-presence" />présence <i className="is-agent" />agent</span>
+          <span className="agenda-legend">
+            <i className="is-presence" />présence <i className="is-agent" />agent
+            <button type="button" className="agenda-calendar-toggle" aria-pressed={showCalendar} onClick={toggleCalendar} title={showCalendar ? 'Cacher les rendez-vous Google Agenda' : 'Afficher les rendez-vous Google Agenda'}>
+              <i className="is-meeting" />Google Agenda
+            </button>
+          </span>
         )}
       </div>
       {error ? <p className="modal-error" role="alert">{error}</p> : null}
+      {view !== 'archive' && shownCalendar && !shownCalendar.configured ? (
+        <p className="agenda-calendar-note">Pour voir vos rendez-vous, collez l’adresse secrète au format iCal de votre Google Agenda dans Réglages, rubrique Tokens d’intégration.</p>
+      ) : null}
+      {view !== 'archive' && shownCalendar?.error ? <p className="agenda-calendar-note">Google Agenda : {shownCalendar.error}</p> : null}
       {!loaded ? <div className="empty-state"><p>Chargement de l’agenda…</p></div>
         : view === 'archive'
           ? <Archive archive={archive!} onYear={setYear} onOpenWeek={(week) => { setAnchor(week); setView('week') }} />
-          : <Calendar range={range!} days={days} view={view} today={today} onOpenConversation={onOpenConversation} onOpenDay={onOpenDay} />}
+          : <Calendar range={range!} meetings={shownCalendar?.events ?? []} days={days} view={view} today={today} onOpenConversation={onOpenConversation} onOpenDay={onOpenDay} />}
     </section>
   )
 }

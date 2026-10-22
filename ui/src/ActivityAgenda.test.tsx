@@ -1,16 +1,17 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
-import type { AgendaArchive, AgendaBlock, AgendaRange } from './api'
+import type { AgendaArchive, AgendaBlock, AgendaRange, CalendarRange } from './api'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, waitFor } = await import('@testing-library/react')
-const { ActivityAgenda, addDays, agendaCsv, hourOf, layoutDay, localDay, mondayOf } = await import('./ActivityAgenda')
+const { ActivityAgenda, addDays, agendaCsv, hourOf, layoutDay, localDay, meetingsOf, mondayOf } = await import('./ActivityAgenda')
 
 const defaultFetch = globalThis.fetch
 afterEach(() => {
   cleanup()
+  window.localStorage.clear()
   globalThis.fetch = defaultFetch
 })
 
@@ -72,6 +73,7 @@ test('la semaine part du lundi, replie la nuit et ouvre la conversation ou le jo
   const requests: string[] = []
   globalThis.fetch = mock(async (input) => {
     requests.push(String(input))
+    if (String(input).includes('/calendar')) return Response.json({ configured: false, events: [], error: null })
     return Response.json(String(input).includes('/archive') ? archive : range)
   }) as unknown as typeof fetch
   const onOpenConversation = mock(() => {})
@@ -104,4 +106,70 @@ test('la semaine part du lundi, replie la nuit et ouvre la conversation ou le jo
   expect(view.container.querySelector('.agenda-week strong')!.textContent).toBe('4,5 h')
   fireEvent.click(view.container.querySelectorAll('.agenda-week')[1]!)
   await waitFor(() => expect(requests.at(-1)).toContain(`from=${addDays(monday, -7)}`))
+})
+
+test('un rendez-vous de nuit ou à cheval sur minuit touche chacun de ses jours', () => {
+  const day = '2026-10-14'
+  const late = { id: 'l', title: 'Garde', start: iso(day, 22), end: iso(addDays(day, 1), 2), allDay: false }
+  const allDay = { id: 'd', title: 'Congrès', start: day, end: addDays(day, 2), allDay: true }
+  expect(meetingsOf([late, allDay], day)).toEqual({ timed: [late], allDay: [allDay] })
+  expect(meetingsOf([late, allDay], addDays(day, 1))).toEqual({ timed: [late], allDay: [allDay] })
+  expect(meetingsOf([late, allDay], addDays(day, 2))).toEqual({ timed: [], allDay: [] })
+})
+
+test('les rendez-vous Google couvrent toute la colonne sous les blocs et se cachent', async () => {
+  const monday = mondayOf(localDay(new Date()))
+  const tuesday = addDays(monday, 1)
+  const range: AgendaRange = {
+    from: monday,
+    to: addDays(monday, 6),
+    blocks: [block(tuesday, 'a', [10, 0], [10, 30], 'presence', 'c1')],
+    totals: { [tuesday]: { a: { totalMs: 1_800_000, userMs: 1_800_000, agentMs: 0 } } },
+    projects: [{ id: 'a', name: 'Pupitre', color: '#f06595' }],
+  }
+  const calendar: CalendarRange = {
+    configured: true,
+    error: null,
+    events: [
+      { id: 'r', title: 'Alfred - Point stage', start: iso(tuesday, 10), end: iso(tuesday, 11), allDay: false },
+      { id: 'd', title: 'Congrès', start: tuesday, end: addDays(tuesday, 1), allDay: true },
+    ],
+  }
+  const requests: string[] = []
+  globalThis.fetch = mock(async (input) => {
+    requests.push(String(input))
+    return Response.json(String(input).includes('/calendar') ? calendar : range)
+  }) as unknown as typeof fetch
+  const view = render(createElement(ActivityAgenda, { onOpenConversation: () => {}, onOpenDay: () => {} }))
+
+  const column = () => view.container.querySelector(`.agenda-column[data-day="${tuesday}"]`)!
+  await waitFor(() => expect(column().querySelectorAll('.agenda-meeting')).toHaveLength(1))
+  const meeting = column().querySelector<HTMLElement>('.agenda-hours-area .agenda-meeting')!
+  expect(meeting.textContent).toBe('Alfred - Point stage')
+  expect(meeting.style.top).toBe('76px')
+  expect(meeting.style.height).toBe('38px')
+  const area = column().querySelector('.agenda-hours-area')!
+  expect([...area.children].indexOf(meeting)).toBeLessThan([...area.children].indexOf(area.querySelector('.agenda-block')!))
+  expect(view.container.querySelectorAll('.agenda-meeting')).toHaveLength(1)
+  expect(view.container.querySelectorAll('.agenda-allday')).toHaveLength(1)
+  expect(view.container.querySelector('.agenda-allday')!.textContent).toBe('Congrès')
+
+  const toggle = view.getByRole('button', { name: /Google Agenda/ })
+  expect(toggle.getAttribute('aria-pressed')).toBe('true')
+  fireEvent.click(toggle)
+  expect(view.container.querySelectorAll('.agenda-meeting, .agenda-allday')).toHaveLength(0)
+  expect(column().querySelectorAll('.agenda-block')).toHaveLength(1)
+  expect(window.localStorage.getItem('pupitre:agenda-google')).toBe('0')
+  const calendarCalls = requests.filter((url) => url.includes('/calendar')).length
+  fireEvent.click(view.getByRole('button', { name: 'Période suivante' }))
+  await waitFor(() => expect(requests.at(-1)).toContain(`from=${addDays(monday, 7)}`))
+  expect(requests.filter((url) => url.includes('/calendar'))).toHaveLength(calendarCalls)
+})
+
+test('sans adresse iCal, l\'agenda explique où la coller', async () => {
+  globalThis.fetch = mock(async (input) => String(input).includes('/calendar')
+    ? Response.json({ configured: false, events: [], error: null })
+    : Response.json({ from: '', to: '', blocks: [], totals: {}, projects: [] })) as unknown as typeof fetch
+  const view = render(createElement(ActivityAgenda, { onOpenConversation: () => {}, onOpenDay: () => {} }))
+  await waitFor(() => expect(view.container.querySelector('.agenda-calendar-note')?.textContent).toContain('Tokens d’intégration'))
 })

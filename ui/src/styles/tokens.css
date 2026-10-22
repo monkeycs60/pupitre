@@ -50,6 +50,10 @@
   --ok-soft: rgba(78, 201, 165, 0.12);
   --streak: #f0b64a;
   --streak-soft: rgba(240, 182, 74, 0.12);
+  /* Rendez-vous Google Agenda dans l'agenda des rapports */
+  --meeting: #38bdf8;
+  --meeting-bg: rgba(56, 189, 248, 0.24);
+  --meeting-text: #bae6fd;
   /* Non-lu : une seule teinte pour les trois échelles (projet, vue, groupe).
      Le point ambre, la barre ambre et le compteur ambre sont le même signal. */
   --unread: #f0b64a;
@@ -307,6 +311,9 @@ pre {
   --ok-soft: rgba(15, 132, 102, 0.1);
   --streak: #b2740f;
   --streak-soft: rgba(178, 116, 15, 0.12);
+  --meeting: #0ea5e9;
+  --meeting-bg: #c4eefb;
+  --meeting-text: #0c4a6e;
   --unread: #b8760a;
   --unread-soft: rgba(184, 118, 10, 0.13);
   --prov-codex: #0f8466;

@@ -46,9 +46,10 @@ function nextActivityRun(hour: string): string {
   return next.toLocaleString('fr-FR', { weekday: 'long', hour: '2-digit', minute: '2-digit' })
 }
 
-const AI_SEARCH_TOKENS: Array<{ name: 'openai' | 'cerebras'; label: string; help: string }> = [
+const OTHER_TOKENS: Array<{ name: 'openai' | 'cerebras' | 'googleCalendar'; label: string; help: string }> = [
   { name: 'openai', label: 'OpenAI', help: 'Clé OpenAI (embeddings de la recherche IA)' },
   { name: 'cerebras', label: 'Cerebras', help: 'Clé Cerebras (tri des résultats par gpt-oss-120b)' },
+  { name: 'googleCalendar', label: 'Google Agenda', help: 'Adresse secrète au format iCal (Google Agenda › Paramètres de l’agenda › Intégrer l’agenda), affichée dans l’agenda des rapports' },
 ]
 
 function tokenStatus(tokens: Record<string, boolean> | undefined): Record<IntegrationTokenName, boolean> {
@@ -57,6 +58,7 @@ function tokenStatus(tokens: Record<string, boolean> | undefined): Record<Integr
     gitlab: tokens?.gitlab === true,
     openai: tokens?.openai === true,
     cerebras: tokens?.cerebras === true,
+    googleCalendar: tokens?.googleCalendar === true,
   }
 }
 
@@ -84,6 +86,7 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
     gitlab: '',
     openai: '',
     cerebras: '',
+    googleCalendar: '',
   })
   const [promotionMission, setPromotionMission] = useState<PromotionMission | null>(null)
   const [stableHealth, setStableHealth] = useState<InstanceHealth | null>(null)
@@ -690,7 +693,7 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
               </button>
             </div>
           </div>
-          {AI_SEARCH_TOKENS.map(({ name, label, help }) => (
+          {OTHER_TOKENS.map(({ name, label, help }) => (
             <div className="settings-token-row" key={name}>
               <div className="settings-token-heading">
                 <strong>{label}</strong>

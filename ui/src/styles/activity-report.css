@@ -24,6 +24,12 @@
 .agenda-legend i { display: inline-block; width: 14px; height: 9px; margin-left: 8px; border-radius: 2px; }
 .agenda-legend i.is-presence { background: var(--accent); }
 .agenda-legend i.is-agent { background: color-mix(in srgb, var(--accent) 22%, transparent); border: 1px dashed var(--accent); }
+.agenda-legend i.is-meeting { background: var(--meeting-bg); border-left: 2px solid var(--meeting); }
+.agenda-calendar-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 3px 8px 3px 0; font-size: 11px; color: var(--text-faint); background: none; border: 1px solid transparent; border-radius: var(--r-sm); cursor: pointer; }
+.agenda-calendar-toggle:hover { color: var(--text); border-color: var(--border-subtle); }
+.agenda-calendar-toggle[aria-pressed="false"] { text-decoration: line-through; }
+.agenda-calendar-toggle[aria-pressed="false"] i { opacity: 0.35; }
+.agenda-calendar-note { margin: -6px 0 12px; font-size: 12px; color: var(--text-faint); }
 
 .agenda-body { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; align-items: start; }
 .agenda-grid { display: grid; grid-template-columns: 44px repeat(var(--columns), minmax(0, 1fr)); background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
@@ -43,6 +49,9 @@
 .agenda-night { position: relative; background: var(--neutral-soft); border-bottom: 1px solid var(--border); overflow: hidden; }
 .agenda-hours-area { position: relative; }
 .agenda-hour-line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border-subtle); }
+.agenda-meeting { position: absolute; left: 0; right: 0; overflow: hidden; background: var(--meeting-bg); border-left: 3px solid var(--meeting); border-radius: 2px; }
+.agenda-meeting span { position: absolute; top: 1px; left: 5px; right: 3px; overflow: hidden; font-size: 10px; font-weight: 500; color: var(--meeting-text); white-space: nowrap; text-overflow: ellipsis; }
+.agenda-allday { max-width: 100%; margin-top: 3px; padding: 1px 5px; overflow: hidden; font-size: 10px; font-style: normal; color: var(--meeting-text); white-space: nowrap; text-overflow: ellipsis; background: var(--meeting-bg); border-radius: 3px; }
 .agenda-now { position: absolute; left: 0; right: 0; z-index: 4; border-top: 2px solid var(--danger); }
 .agenda-block { position: absolute; display: block; padding: 0; overflow: hidden; border: 0; border-radius: 3px; text-align: left; background: var(--project); }
 .agenda-block.is-agent { background: color-mix(in srgb, var(--project) 26%, transparent); border: 1px dashed color-mix(in srgb, var(--project) 80%, transparent); }
