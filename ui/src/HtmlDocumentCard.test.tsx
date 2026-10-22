@@ -122,3 +122,49 @@ test('affiche un document CSV sous forme de tableau', async () => {
   expect(screen.getByText('2 lignes')).toBeTruthy()
   expect(screen.queryByTitle('Aperçu de Contacts')).toBeNull()
 })
+
+test('agrandit une image envoyée par l’aperçu et se ferme avec Échap', async () => {
+  globalThis.fetch = mock((input: string | URL | Request) => {
+    const url = String(input)
+    if (url.includes('/view-token')) {
+      return Promise.resolve(Response.json({ token: 'token-zoom', expiresAt: '2099-08-11T10:01:00.000Z' }, { status: 201 }))
+    }
+    return Promise.resolve(Response.json({
+      id: 'document-1',
+      conversationId: 'conversation-1',
+      title: 'Audit plateforme',
+      sizeBytes: 12_480,
+      sha256: 'hash',
+      createdAt: block.createdAt,
+      expiresAt: null,
+      state: 'retained',
+    }))
+  }) as typeof fetch
+
+  render(createElement(HtmlDocumentCard, { block, defaultOpen: true }))
+  const iframe = await screen.findByTitle('Aperçu de Audit plateforme') as HTMLIFrameElement
+  expect(iframe.getAttribute('src')).toContain('&embed=1')
+
+  const src = 'data:image/png;base64,iVBORw0KGgo='
+  window.dispatchEvent(new MessageEvent('message', {
+    data: { type: 'pupitre:media-zoom', kind: 'image', src: 'https://exemple.test/a.png', alt: '' },
+    source: iframe.contentWindow,
+  }))
+  window.dispatchEvent(new MessageEvent('message', {
+    data: { type: 'pupitre:media-zoom', kind: 'image', src, alt: 'Capture après' },
+    source: window,
+  }))
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  expect(screen.queryByRole('dialog', { name: 'Image agrandie' })).toBeNull()
+
+  window.dispatchEvent(new MessageEvent('message', {
+    data: { type: 'pupitre:media-zoom', kind: 'image', src, alt: 'Capture après' },
+    source: iframe.contentWindow,
+  }))
+  const dialog = await screen.findByRole('dialog', { name: 'Image agrandie' })
+  expect(screen.getByAltText('Capture après').getAttribute('src')).toBe(src)
+  expect(dialog).toBeTruthy()
+
+  fireEvent.keyDown(window, { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Image agrandie' })).toBeNull())
+}, 60_000)

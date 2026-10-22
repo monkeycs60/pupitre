@@ -1849,7 +1849,13 @@ test("publie, isole, conserve puis supprime un document HTML via l'API", async (
   expect(content.headers.get("content-security-policy")).toContain(
     "sandbox allow-scripts allow-modals",
   );
-  expect(await content.text()).toContain("dataset.ready");
+  const raw = await content.text();
+  expect(raw).toContain("dataset.ready");
+  expect(raw).not.toContain("pupitre:media-zoom");
+  const embedded = await fetch(
+    `${current.baseUrl}/api/html-documents/${published.id}/content?token=${grant.token}&embed=1`,
+  );
+  expect(await embedded.text()).toContain("pupitre:media-zoom");
 
   const search = await fetch(`${current.baseUrl}/api/documents?q=Audit`);
   expect(await search.json()).toEqual([

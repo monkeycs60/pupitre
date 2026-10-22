@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AttachmentPreview } from './AttachmentPreview'
 import type { ConversationAsset } from './conversationAssets'
@@ -6,6 +6,7 @@ import { documentDownloadUrl, documentThumbnailUrl, htmlDocumentContentUrl, medi
 import { createHtmlDocumentViewToken } from './api'
 import { DownloadLink } from './externalLink'
 import { DelimitedTable } from './DelimitedTable'
+import { embeddedPreviewUrl, MediaLightbox, useDocumentMediaZoom } from './DocumentMediaZoom'
 
 function imageSource(reference: string): string {
   if (reference.startsWith('/media/')) {
@@ -78,6 +79,8 @@ export function ConversationAssetsDrawer({
   const [documentPreviewUrl, setDocumentPreviewUrl] = useState<string | null>(null)
   const [delimitedSource, setDelimitedSource] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const previewFrameRef = useRef<HTMLIFrameElement>(null)
+  const mediaZoom = useDocumentMediaZoom(previewFrameRef)
 
   useEffect(() => {
     if (previewedDocument === null) return
@@ -263,13 +266,15 @@ export function ConversationAssetsDrawer({
                 <DelimitedTable content={delimitedSource} kind={previewedDocument.documentKind === 'tsv' ? 'tsv' : 'csv'} />
               ) : documentPreviewUrl !== null && previewedDocument.documentKind !== 'csv' && previewedDocument.documentKind !== 'tsv' ? (
                 <iframe
-                  src={documentPreviewUrl}
+                  ref={previewFrameRef}
+                  src={previewedDocument.documentKind === 'html' ? embeddedPreviewUrl(documentPreviewUrl) : documentPreviewUrl}
                   title={`Contenu de ${previewedDocument.label}`}
                   sandbox={previewedDocument.documentKind === 'html' ? 'allow-scripts allow-modals' : undefined}
                   referrerPolicy="no-referrer"
                 />
               ) : previewError === null ? <p>Préparation de l’aperçu…</p> : null}
             </div>
+            {mediaZoom.media ? <MediaLightbox media={mediaZoom.media} onClose={mediaZoom.close} /> : null}
           </section>
         </>,
         window.document.body,

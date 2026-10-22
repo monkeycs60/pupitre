@@ -6,10 +6,10 @@ import { join } from 'node:path'
  * Une couleur littérale hors de tokens.css ne change pas avec le thème : en
  * Clair, un blanc translucide de survol devient invisible. Les littéraux
  * restants sont des identités (couleurs de projet, aperçus de documents
- * blancs, diff Git) ; ce plafond par feuille empêche d'en ajouter.
+ * blancs, fond noir de la visionneuse de médias, diff Git) ; ce plafond par feuille empêche d'en ajouter.
  */
 const LITERAL_COLORS_CEILING: Record<string, number> = {
-  'cards.css': 20,
+  'cards.css': 21,
   'chat.css': 6,
   'code.css': 11,
   'composer.css': 3,

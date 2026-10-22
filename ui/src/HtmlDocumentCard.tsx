@@ -1,5 +1,5 @@
 import { eventIdOfBlock } from './eventBlocks'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import {
@@ -15,6 +15,7 @@ import type { HtmlDocument, HtmlDocumentState } from './types'
 import { documentDownloadUrl, htmlDocumentContentUrl, htmlDocumentExternalUrl, hasTauriRuntime } from './transport'
 import { useNow } from './useNow'
 import { DelimitedTable } from './DelimitedTable'
+import { embeddedPreviewUrl, MediaLightbox, useDocumentMediaZoom } from './DocumentMediaZoom'
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} o`
@@ -107,6 +108,8 @@ export function HtmlDocumentCard({
   const [isEditing, setIsEditing] = useState(false)
   const [delimitedSource, setDelimitedSource] = useState<string | null>(null)
   const now = useNow()
+  const previewFrameRef = useRef<HTMLIFrameElement>(null)
+  const mediaZoom = useDocumentMediaZoom(previewFrameRef)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -333,7 +336,7 @@ export function HtmlDocumentCard({
         role={isExpanded ? 'dialog' : undefined}
         aria-modal={isExpanded ? true : undefined}
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && isExpanded) {
+          if (event.key === 'Escape' && isExpanded && !event.defaultPrevented) {
             event.preventDefault()
             void changeExpandedState(false)
           }
@@ -414,7 +417,8 @@ export function HtmlDocumentCard({
             <DelimitedTable content={delimitedSource} kind={documentKind} />
           ) : previewUrl && !isDelimited ? (
             <iframe
-              src={previewUrl}
+              ref={previewFrameRef}
+              src={documentKind === 'html' ? embeddedPreviewUrl(previewUrl) : previewUrl}
               title={`Aperçu de ${document.title}`}
               sandbox={documentKind === 'html' ? 'allow-scripts allow-modals' : undefined}
               referrerPolicy="no-referrer"
@@ -422,6 +426,7 @@ export function HtmlDocumentCard({
           ) : <p>Préparation de l’aperçu…</p>}
         </div>
       ) : null}
+      {mediaZoom.media ? <MediaLightbox media={mediaZoom.media} onClose={mediaZoom.close} /> : null}
       </section>
   )
 

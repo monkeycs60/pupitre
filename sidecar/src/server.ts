@@ -82,6 +82,7 @@ import {
 import { FILESYSTEM_SCOPES, type FilesystemScope } from "./access";
 import { actionFormat } from "./response-format";
 import { dashboardPayload } from "./dashboard";
+import { withMediaZoom } from "./document-media-zoom";
 import { composeTicketBrief } from "./ticket-brief";
 import { searchConversationReferences } from "./conversation-references";
 import {
@@ -4133,7 +4134,8 @@ export function createServer(deps: ServerDeps) {
             );
             const file = Bun.file(content.path);
             if (!(await file.exists())) throw new HttpError(410, "contenu indisponible");
-            return new Response(file, {
+            const embedded = content.kind === "html" && url.searchParams.get("embed") === "1";
+            return new Response(embedded ? withMediaZoom(await file.text()) : file, {
               headers: {
                 ...TAURI_CORS_HEADERS,
                 "content-type": content.kind === "html" ? "text/html; charset=utf-8" : content.mimeType,
