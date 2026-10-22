@@ -913,6 +913,29 @@ test("sauvegarder un token relance immédiatement le refresh des intégrations",
   expect(refreshCalls).toBe(1);
 });
 
+test("les groupes de projets se créent, rattachent un projet et se dissolvent par l'API", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const first = await createProject(mkdtempSync(join(tmpdir(), "pupitre-group-a-")));
+  const second = await createProject(mkdtempSync(join(tmpdir(), "pupitre-group-b-")));
+  const created = await postJson("/api/project-groups", { name: "MMVD", projectIds: [first.id] });
+  expect(created.status).toBe(201);
+  const group = await created.json() as { id: string; name: string };
+  expect(group.name).toBe("MMVD");
+
+  const joined = await fetch(`${current.baseUrl}/api/projects/${second.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ groupId: group.id }) });
+  expect(await joined.json()).toMatchObject({ group_id: group.id });
+  const unknown = await fetch(`${current.baseUrl}/api/projects/${second.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ groupId: "inconnu" }) });
+  expect(unknown.status).toBe(404);
+
+  const renamed = await fetch(`${current.baseUrl}/api/project-groups/${group.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Étude MMVD" }) });
+  expect(await renamed.json()).toMatchObject({ name: "Étude MMVD" });
+  expect(await (await fetch(`${current.baseUrl}/api/project-groups`)).json()).toEqual([expect.objectContaining({ id: group.id })]);
+
+  expect((await fetch(`${current.baseUrl}/api/project-groups/${group.id}`, { method: "DELETE" })).status).toBe(200);
+  const projects = await (await fetch(`${current.baseUrl}/api/projects`)).json() as Array<{ id: string; group_id: string | null }>;
+  expect(projects.filter((project) => project.id === first.id || project.id === second.id).map((project) => project.group_id)).toEqual([null, null]);
+});
+
 test("l'adresse Google Agenda s'enregistre en HTTPS et n'est jamais renvoyée", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   current.deps.integrationsRefresher.refreshAll = async () => {};

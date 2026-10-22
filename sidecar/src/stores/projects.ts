@@ -73,6 +73,7 @@ export interface Project {
   color: string;
   icon: ProjectIconMode;
   archived_at: string | null;
+  group_id: string | null;
   /** Change à chaque modification d'apparence : sert à invalider l'image en cache. */
   appearance_version: number;
 }
@@ -119,6 +120,7 @@ function hydrate(row: any): Project {
     color: typeof row.color === "string" && HEX_COLOR.test(row.color) ? row.color : hashColor(row.id),
     icon: iconMode(row.icon),
     archived_at: row.archived_at ?? null,
+    group_id: row.group_id ?? null,
     appearance_version: row.appearance_version ?? 0,
     detected_trunk: trunkOf(row.path, row.trunk_branch),
     pinned: !!row.pinned,
@@ -135,6 +137,14 @@ function hydrate(row: any): Project {
 export function projectLaunchConfig(project: Project, slot: ProjectLaunchSlot): ProjectLaunchConfig {
   const own = slot === "scout" ? project.scout_launch_config : slot === "todo" ? project.todo_launch_config : null;
   return own ?? project.default_launch_config ?? FALLBACK_PROJECT_LAUNCH_CONFIG;
+}
+
+export interface ProjectGroup { id: string; name: string; color: string; created_at: string }
+
+function groupName(raw: string): string {
+  const name = raw.trim();
+  if (!name || name.length > 60) throw new Error("nom de groupe invalide");
+  return name;
 }
 
 export class ProjectStore {
@@ -165,8 +175,8 @@ export class ProjectStore {
     return rows.map(hydrate);
   }
 
-  private leastUsedColor(): string {
-    const rows = this.db.query("SELECT color FROM projects WHERE removed_at IS NULL").all() as { color: string | null }[];
+  private leastUsedColor(table: "projects" | "project_groups" = "projects"): string {
+    const rows = this.db.query(table === "projects" ? "SELECT color FROM projects WHERE removed_at IS NULL" : "SELECT color FROM project_groups").all() as { color: string | null }[];
     const usage = new Map<string, number>(PROJECT_COLORS.map((color) => [color, 0]));
     for (const row of rows) if (row.color && usage.has(row.color)) usage.set(row.color, usage.get(row.color)! + 1);
     let best: string = PROJECT_COLORS[0];
@@ -218,6 +228,47 @@ export class ProjectStore {
     this.db.transaction(() => {
       ids.forEach((id, index) => this.db.query("UPDATE projects SET sort_order = ? WHERE id = ?").run(index, id));
     })();
+  }
+
+  groups(): ProjectGroup[] {
+    return this.db.query("SELECT id, name, color, created_at FROM project_groups ORDER BY created_at ASC").all() as ProjectGroup[];
+  }
+
+  group(id: string): ProjectGroup | null {
+    return this.db.query("SELECT id, name, color, created_at FROM project_groups WHERE id = ?").get(id) as ProjectGroup | null;
+  }
+
+  /** Lève une `Error` dont le message est destiné à l'utilisateur. */
+  createGroup(name: string, projectIds: string[] = []): ProjectGroup {
+    const id = crypto.randomUUID();
+    this.db.transaction(() => {
+      this.db.query("INSERT INTO project_groups (id, name, color, created_at) VALUES (?, ?, ?, ?)")
+        .run(id, groupName(name), this.leastUsedColor("project_groups"), new Date().toISOString());
+      for (const projectId of projectIds) this.setGroup(projectId, id);
+    })();
+    return this.group(id)!;
+  }
+
+  /** Lève une `Error` dont le message est destiné à l'utilisateur. */
+  updateGroup(id: string, input: { name?: string; color?: string }): void {
+    if (input.name !== undefined) this.db.query("UPDATE project_groups SET name = ? WHERE id = ?").run(groupName(input.name), id);
+    if (input.color !== undefined) {
+      if (!HEX_COLOR.test(input.color)) throw new Error("couleur invalide");
+      this.db.query("UPDATE project_groups SET color = ? WHERE id = ?").run(input.color.toLowerCase(), id);
+    }
+  }
+
+  /** Les projets du groupe restent, simplement hors groupe. */
+  removeGroup(id: string): void {
+    this.db.transaction(() => {
+      this.db.query("UPDATE projects SET group_id = NULL WHERE group_id = ?").run(id);
+      this.db.query("DELETE FROM project_groups WHERE id = ?").run(id);
+    })();
+  }
+
+  setGroup(id: string, groupId: string | null): void {
+    if (groupId !== null && !this.group(groupId)) throw new Error("groupe inconnu");
+    this.db.query("UPDATE projects SET group_id = ? WHERE id = ?").run(groupId, id);
   }
 
   setTrunkBranch(id: string, branch: string | null): void {

@@ -648,6 +648,10 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "projects", "archived_at TEXT NULL");
   addColumn(db, "projects", "appearance_version INTEGER NOT NULL DEFAULT 0");
   if (addColumn(db, "projects", "color TEXT NULL")) assignMissingProjectColors(db);
+  db.exec(`CREATE TABLE IF NOT EXISTS project_groups (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, created_at TEXT NOT NULL
+  )`);
+  addColumn(db, "projects", "group_id TEXT NULL REFERENCES project_groups(id) ON DELETE SET NULL");
   addColumn(db, "conversations", "title_locked INTEGER NOT NULL DEFAULT 0");
   // Nombre de tours au moment du dernier digest (0 = jamais généré).
   addColumn(db, "conversations", "digest_turn INTEGER NOT NULL DEFAULT 0");

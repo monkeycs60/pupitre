@@ -2407,9 +2407,44 @@ export function createServer(deps: ServerDeps) {
             if (typeof body.archived !== "boolean") throw new HttpError(400, "archivage invalide");
             input.archived = body.archived;
           }
-          try { deps.projects.updateAppearance(appearanceProjectId, input); }
+          if (body.groupId !== undefined) {
+            if (body.groupId !== null && typeof body.groupId !== "string") throw new HttpError(400, "groupe invalide");
+            if (body.groupId !== null && !deps.projects.group(body.groupId)) throw new HttpError(404, "groupe inconnu");
+          }
+          try {
+            deps.projects.updateAppearance(appearanceProjectId, input);
+            if (body.groupId !== undefined) deps.projects.setGroup(appearanceProjectId, body.groupId as string | null);
+          }
           catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "modification invalide"); }
           return json(deps.projects.get(appearanceProjectId));
+        }
+
+        if (request.method === "GET" && pathname === "/api/project-groups") {
+          return json(deps.projects.groups());
+        }
+        if (request.method === "POST" && pathname === "/api/project-groups") {
+          const body = await readObject(request);
+          const projectIds = body.projectIds ?? [];
+          if (typeof body.name !== "string") throw new HttpError(400, "nom de groupe invalide");
+          if (!Array.isArray(projectIds) || projectIds.some((id) => typeof id !== "string" || !deps.projects.get(id))) {
+            throw new HttpError(400, "projets du groupe invalides");
+          }
+          try { return json(deps.projects.createGroup(body.name, projectIds as string[]), 201); }
+          catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "groupe invalide"); }
+        }
+        const projectGroupId = routeId(pathname, /^\/api\/project-groups\/([^/]+)$/);
+        if (projectGroupId !== null && (request.method === "PATCH" || request.method === "DELETE")) {
+          if (!deps.projects.group(projectGroupId)) throw new HttpError(404, "groupe inconnu");
+          if (request.method === "DELETE") {
+            deps.projects.removeGroup(projectGroupId);
+            return json({ ok: true });
+          }
+          const body = await readObject(request);
+          if (body.name !== undefined && typeof body.name !== "string") throw new HttpError(400, "nom de groupe invalide");
+          if (body.color !== undefined && typeof body.color !== "string") throw new HttpError(400, "couleur invalide");
+          try { deps.projects.updateGroup(projectGroupId, { name: body.name as string | undefined, color: body.color as string | undefined }); }
+          catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "groupe invalide"); }
+          return json(deps.projects.group(projectGroupId));
         }
 
         const projectIconId = routeId(pathname, /^\/api\/projects\/([^/]+)\/icon$/);

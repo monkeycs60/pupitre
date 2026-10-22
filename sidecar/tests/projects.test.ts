@@ -87,3 +87,31 @@ test("la migration copie les presets de projet dans ses réglages et rétablit l
   expect(migrated.default_preset_id).toBeNull();
   expect(new PresetStore(reopened).get("builtin-speed")).toEqual(expect.objectContaining({ name: "Vitesse", model: "gpt-6-luna", effort: "xhigh", speed: "fast" }));
 });
+
+test("un groupe réunit des projets, se renomme et se dissout sans les perdre", () => {
+  const p15 = store.create({ name: "P15", path: "/tmp/p15" });
+  const rebuttal = store.create({ name: "2026_MMVD_REBUTTAL", path: "/tmp/rebuttal" });
+  const other = store.create({ name: "larib-portal", path: "/tmp/larib" });
+  const group = store.createGroup("  MMVD ", [p15.id, rebuttal.id]);
+  expect(group.name).toBe("MMVD");
+  expect(group.color).toMatch(/^#[0-9a-f]{6}$/);
+  expect(store.list().map((project) => [project.name, project.group_id])).toEqual(expect.arrayContaining([
+    ["P15", group.id], ["2026_MMVD_REBUTTAL", group.id], ["larib-portal", null],
+  ]));
+
+  store.updateGroup(group.id, { name: "Étude MMVD", color: "#4F8CFF" });
+  expect(store.group(group.id)).toMatchObject({ name: "Étude MMVD", color: "#4f8cff" });
+  expect(() => store.updateGroup(group.id, { name: "  " })).toThrow("nom de groupe invalide");
+  expect(() => store.setGroup(other.id, "inconnu")).toThrow("groupe inconnu");
+
+  store.removeGroup(group.id);
+  expect(store.groups()).toEqual([]);
+  expect(store.list()).toHaveLength(3);
+  expect(store.list().every((project) => project.group_id === null)).toBe(true);
+});
+
+test("deux groupes reçoivent des couleurs différentes", () => {
+  const first = store.createGroup("MMVD");
+  const second = store.createGroup("INFLAME");
+  expect(first.color).not.toBe(second.color);
+});
