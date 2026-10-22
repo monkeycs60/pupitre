@@ -268,8 +268,11 @@ export interface Project {
   /** `auto` : logo du dépôt s'il existe, sinon initiales. */
   icon?: 'auto' | 'initials' | 'custom'
   archived_at?: string | null
+  group_id?: string | null
   appearance_version?: number
 }
+
+export interface ProjectGroup { id: string; name: string; color: string; created_at: string }
 
 export type ProjectLaunchSlot = 'default' | 'scout' | 'todo'
 

@@ -19,6 +19,7 @@ import type {
   IntegrationType,
   SearchResult,
   Project,
+  ProjectGroup,
   ProjectLaunchConfig,
   ProjectLaunchSlot,
   ProjectIntegration,
@@ -1505,7 +1506,17 @@ export interface ProjectAppearancePatch {
   /** `auto`, `initials` ou une image en data URL. */
   icon?: string
   archived?: boolean
+  groupId?: string | null
 }
+
+export const listProjectGroups = (): Promise<ProjectGroup[]> => fetchJson('/api/project-groups')
+export const createProjectGroup = (name: string, projectIds: string[]): Promise<ProjectGroup> => fetchJson('/api/project-groups', jsonPost({ name, projectIds }))
+export const updateProjectGroup = (id: string, patch: { name?: string; color?: string }): Promise<ProjectGroup> => fetchJson(`/api/project-groups/${routeId(id)}`, {
+  method: 'PATCH',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(patch),
+})
+export const deleteProjectGroup = (id: string): Promise<{ ok: true }> => fetchJson(`/api/project-groups/${routeId(id)}`, { method: 'DELETE' })
 
 export function updateProject(projectId: string, patch: ProjectAppearancePatch): Promise<Project> {
   return fetchJson(`/api/projects/${routeId(projectId)}`, {

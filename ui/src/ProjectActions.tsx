@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { createPortal } from 'react-dom'
 import { projectIconUrl } from './api'
 import { PROJECT_COLORS, ProjectAvatar } from './ProjectAvatar'
-import type { Project } from './types'
+import type { Project, ProjectGroup } from './types'
 
 const POPOVER_MARGIN = 8
 
@@ -52,9 +52,12 @@ interface ProjectMenuProps {
   onAppearance: () => void
   onToggleArchive: () => void
   onRemove: () => void
+  groups?: ProjectGroup[]
+  onGroup?: (groupId: string | null) => void
+  onNewGroup?: () => void
 }
 
-export function ProjectMenu({ project, anchor, live, onClose, onRename, onAppearance, onToggleArchive, onRemove }: ProjectMenuProps) {
+export function ProjectMenu({ project, anchor, live, onClose, onRename, onAppearance, onToggleArchive, onRemove, groups = [], onGroup, onNewGroup }: ProjectMenuProps) {
   const pick = (action: () => void) => () => {
     onClose()
     action()
@@ -62,7 +65,7 @@ export function ProjectMenu({ project, anchor, live, onClose, onRename, onAppear
   return (
     <Popover
       anchor={anchor}
-      estimatedHeight={150}
+      estimatedHeight={230 + groups.length * 30}
       onClose={onClose}
       className="conversation-actions-menu rail-project-menu"
       role="menu"
@@ -70,6 +73,16 @@ export function ProjectMenu({ project, anchor, live, onClose, onRename, onAppear
     >
       <button type="button" role="menuitem" autoFocus onClick={pick(onRename)}>Renommer</button>
       <button type="button" role="menuitem" onClick={pick(onAppearance)}>Couleur et icône…</button>
+      {onGroup && onNewGroup && !project.archived_at ? <>
+        <span className="rail-project-menu-label" role="presentation">Ranger dans un groupe</span>
+        {groups.filter((group) => group.id !== project.group_id).map((group) => (
+          <button type="button" role="menuitem" key={group.id} className="rail-menu-group" style={{ '--group-color': group.color } as CSSProperties} onClick={pick(() => onGroup(group.id))}>
+            <i aria-hidden="true" />{group.name}
+          </button>
+        ))}
+        <button type="button" role="menuitem" onClick={pick(onNewGroup)}>Nouveau groupe…</button>
+        {project.group_id ? <button type="button" role="menuitem" onClick={pick(() => onGroup(null))}>Sortir du groupe</button> : null}
+      </> : null}
       <button type="button" role="menuitem" onClick={pick(onToggleArchive)}>
         {project.archived_at ? 'Désarchiver' : 'Archiver'}
       </button>
@@ -215,6 +228,37 @@ export function ProjectAppearancePanel({ project, anchor, onClose, onChange }: P
         />
       </div>
       {error ? <p role="alert" className="rail-error">{error}</p> : null}
+    </Popover>
+  )
+}
+
+export function ProjectGroupMenu({ group, anchor, onClose, onRename, onColor, onDissolve }: {
+  group: ProjectGroup
+  anchor: DOMRect
+  onClose: () => void
+  onRename: () => void
+  onColor: (color: string) => void
+  onDissolve: () => void
+}) {
+  return (
+    <Popover anchor={anchor} estimatedHeight={170} onClose={onClose} className="conversation-actions-menu rail-project-menu" role="menu" label={`Actions pour le groupe ${group.name}`}>
+      <button type="button" role="menuitem" autoFocus onClick={() => { onClose(); onRename() }}>Renommer le groupe</button>
+      <span className="rail-project-menu-label" role="presentation">Couleur</span>
+      <div className="rail-appearance-swatches rail-group-swatches" role="radiogroup" aria-label="Couleur du groupe">
+        {PROJECT_COLORS.map((swatch) => (
+          <button
+            key={swatch}
+            type="button"
+            role="radio"
+            aria-checked={group.color === swatch}
+            aria-label={swatch}
+            className="rail-appearance-swatch"
+            style={{ '--swatch': swatch } as CSSProperties}
+            onClick={() => onColor(swatch)}
+          />
+        ))}
+      </div>
+      <button type="button" role="menuitem" className="is-danger" onClick={() => { onClose(); onDissolve() }}>Dissoudre le groupe</button>
     </Popover>
   )
 }

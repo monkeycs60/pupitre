@@ -266,9 +266,16 @@ export class ProjectStore {
     })();
   }
 
+  /** Le groupe quitté disparaît s'il ne lui reste aucun projet. */
   setGroup(id: string, groupId: string | null): void {
     if (groupId !== null && !this.group(groupId)) throw new Error("groupe inconnu");
-    this.db.query("UPDATE projects SET group_id = ? WHERE id = ?").run(groupId, id);
+    const previous = (this.db.query("SELECT group_id FROM projects WHERE id = ?").get(id) as { group_id: string | null } | null)?.group_id ?? null;
+    this.db.transaction(() => {
+      this.db.query("UPDATE projects SET group_id = ? WHERE id = ?").run(groupId, id);
+      if (previous && previous !== groupId) {
+        this.db.query("DELETE FROM project_groups WHERE id = ? AND NOT EXISTS (SELECT 1 FROM projects WHERE group_id = ? AND removed_at IS NULL)").run(previous, previous);
+      }
+    })();
   }
 
   setTrunkBranch(id: string, branch: string | null): void {

@@ -115,3 +115,13 @@ test("deux groupes reçoivent des couleurs différentes", () => {
   const second = store.createGroup("INFLAME");
   expect(first.color).not.toBe(second.color);
 });
+
+test("un groupe vidé de son dernier projet disparaît", () => {
+  const p15 = store.create({ name: "P15", path: "/tmp/p15" });
+  const rebuttal = store.create({ name: "REBUTTAL", path: "/tmp/rebuttal" });
+  const group = store.createGroup("MMVD", [p15.id, rebuttal.id]);
+  store.setGroup(p15.id, null);
+  expect(store.group(group.id)).not.toBeNull();
+  store.setGroup(rebuttal.id, null);
+  expect(store.group(group.id)).toBeNull();
+});

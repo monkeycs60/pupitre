@@ -3,6 +3,7 @@
 
 @import './tokens.css';
 @import './shell.css';
+@import './rail-groups.css';
 @import './sidebar.css';
 @import './chat.css';
 @import './composer.css';
