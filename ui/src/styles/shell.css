@@ -415,7 +415,7 @@ button.titlebar-instance {
 
 .rail-avatar {
   display: grid;
-  grid-template-columns: 38px minmax(0, 0fr);
+  grid-template-columns: 36px minmax(0, 0fr);
   place-items: center;
   width: 38px;
   height: 38px;
@@ -520,12 +520,15 @@ button.titlebar-instance {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
+/* La bordure de 1 px de .rail-avatar ne laisse que 36 px d'intérieur, d'où sa
+   colonne de 36 px : la marge négative recentre ces 38 px sur la tuile. */
 .rail-avatar-slot {
   position: relative;
   display: grid;
   place-items: center;
   width: 38px;
   height: 38px;
+  margin: -1px;
 }
 
 .rail-live-ring {
@@ -626,7 +629,7 @@ button.titlebar-instance {
 }
 
 .rail.is-label-expanded .rail-avatar {
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
   justify-items: stretch;
   justify-content: start;
   gap: 8px;
