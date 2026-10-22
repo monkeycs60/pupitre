@@ -16,13 +16,13 @@ import { QuotaStatus } from './QuotaBar'
 import { LevelCard } from './LevelCard'
 import { ConversationAiResults, type AiSearchState } from './ConversationAiResults'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
-import { modelLabel } from './modelOptions'
 import { ProviderMark } from './ProviderMark'
 import { shortenHomePath } from './projectInitials'
 import { ProjectAvatar } from './ProjectAvatar'
 import { useNow } from './useNow'
 import { branchOfWorktree } from './conversationBranch'
 import { BranchIcon } from './BranchIcon'
+import { PinIcon } from './PinIcon'
 import { SentryLinkIcon, TicketLinkIcons } from './TicketLinkIcons'
 import type { TicketLinks } from './ticketLinks'
 
@@ -138,17 +138,6 @@ function elapsedConversationTime(startedAt: string | undefined, now: number): st
   if (!startedAt) return '0 min 00'
   const elapsedSeconds = Math.max(0, Math.floor((now - Date.parse(startedAt)) / 1_000))
   return `${Math.floor(elapsedSeconds / 60)} min ${String(elapsedSeconds % 60).padStart(2, '0')}`
-}
-
-function relativeConversationTime(value: string): string {
-  const elapsed = Math.max(0, Date.now() - Date.parse(value))
-  const minutes = Math.floor(elapsed / 60_000)
-  if (minutes < 1) return 'à l’instant'
-  if (minutes < 60) return `il y a ${minutes} min`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `il y a ${hours} h`
-  const days = Math.floor(hours / 24)
-  return days < 7 ? `il y a ${days} j` : new Date(value).toLocaleDateString('fr-FR')
 }
 
 /** « TECH-25064 » → « 25064 » : à côté du titre du ticket, le préfixe du projet n'apprend rien. */
@@ -955,7 +944,7 @@ export const Sidebar = memo(function Sidebar({
                 const shownBranch = state === 'live' ? null : workBranchLabel(conversation, branch, selectedProject?.detected_trunk)
                 return (
               <div
-                className={`navigation-row conv-row-state-${state}${conversation.origin_type === 'sentry' ? ' conv-row-sentry' : ''} ${isSelected ? 'is-selected' : ''}`}
+                className={`navigation-row conv-row-state-${state}${conversation.origin_type === 'sentry' ? ' conv-row-sentry' : ''}${conversation.pinned ? ' is-pinned' : ''} ${isSelected ? 'is-selected' : ''}`}
                 key={conversation.id}
                 data-conversation-id={conversation.id}
               >
@@ -965,15 +954,14 @@ export const Sidebar = memo(function Sidebar({
                   type="button"
                   className="navigation-main"
                   onClick={() => handleConversationSelect(conversation)}
-                  aria-describedby={`conversation-preview-${conversation.id}`}
                 >
                   <span className="conv-row-line1">
                     <span className={`conv-row-dot is-${state}`} aria-hidden="true" />
                     {conversation.origin_type === 'sentry' ? (
                       <ProviderMark provider="sentry" className="conv-row-mark" />
                     ) : <ProviderMark provider={conversation.provider} className="conv-row-mark" />}
+                    {conversation.pinned ? <span className="conv-row-pin" title="Épinglée"><PinIcon /></span> : null}
                     <span className="conv-row-title">{conversation.title}</span>
-                    {conversation.pinned ? <span className="conv-row-pin" aria-hidden="true">◆</span> : null}
                     <span className="conv-row-time">
                       {state === 'live'
                         ? elapsedConversationTime(activeItem?.startedAt, now)
@@ -1019,7 +1007,7 @@ export const Sidebar = memo(function Sidebar({
                     aria-pressed={conversation.pinned}
                     title={conversation.pinned ? 'Désépingler' : 'Épingler'}
                   >
-                    <span aria-hidden="true">{conversation.pinned ? '◆' : '◇'}</span>
+                    <PinIcon />
                   </button>
                   <button
                     type="button"
@@ -1063,19 +1051,6 @@ export const Sidebar = memo(function Sidebar({
                     <button type="submit">OK</button>
                   </form>
                 ) : null}
-                <div
-                  className="conversation-hover-preview"
-                  role="tooltip"
-                  id={`conversation-preview-${conversation.id}`}
-                >
-                  <strong>{conversation.title}</strong>
-                  <p>{conversation.summary || conversation.title}</p>
-                  <span>{conversation.provider} · {modelLabel(conversation.model)} · {relativeConversationTime(conversation.updated_at)}</span>
-                  <span className="conversation-hover-preview-config">
-                    effort: {conversation.effort ?? 'default'}
-                    {conversation.speed === 'fast' ? ' · vitesse: 1.5x' : ''}
-                  </span>
-                </div>
               </div>
                 )
                 })}

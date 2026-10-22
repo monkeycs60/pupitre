@@ -815,7 +815,9 @@ function App() {
         permissionMode: source.permission_mode ?? null,
       },
     })
-    setNewConversationDraft(continueElsewhereDraft({ ...source, summary: digest?.summary ?? source.summary }))
+    let pendingMessage: string | null = null
+    try { pendingMessage = localStorage.getItem(`pupitre:draft:${source.id}`) } catch { /* stockage indisponible */ }
+    setNewConversationDraft(continueElsewhereDraft({ ...source, summary: digest?.summary ?? source.summary }, pendingMessage))
     setNewConversationAttachments([])
     setIsCreatingConversation(true)
     setShowSwitchModel(false)
