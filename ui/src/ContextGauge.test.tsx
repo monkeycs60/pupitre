@@ -80,6 +80,12 @@ test('le brouillon de reprise ajoute le résumé du fil, sauf s’il ne fait que
   expect(continueElsewhereDraft({ id: 'conv-1', title: 'Jauge', summary: 'Jauge' })).not.toContain('Où elle en était')
 })
 
+test('le brouillon de reprise garde sous le contexte le texte déjà saisi', () => {
+  const draft = continueElsewhereDraft({ id: 'conv-1', title: 'Jauge', summary: 'Résumé.' }, '  Ajoute un test.\n')
+  expect(draft.endsWith('Où elle en était : Résumé.\n\nAjoute un test.')).toBe(true)
+  expect(continueElsewhereDraft({ id: 'conv-1', title: 'Jauge' }, '   ')).toMatch(/\n\n$/)
+})
+
 test('formate les tailles de fenêtre sans bruit', () => {
   expect(formatContextWindow(256_000)).toBe('256k')
   expect(formatContextWindow(1_000_000)).toBe('1M')

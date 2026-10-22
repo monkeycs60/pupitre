@@ -87,10 +87,15 @@ export function conversationReferenceText(conversation: { id: string; title: str
   ].join('\n')
 }
 
-export function continueElsewhereDraft(source: { id: string; title: string; summary?: string | null }): string {
+export function continueElsewhereDraft(
+  source: { id: string; title: string; summary?: string | null },
+  pendingMessage?: string | null,
+): string {
   const summary = source.summary?.trim()
   const reference = conversationReferenceText(source)
-  return summary && summary !== source.title.trim()
+  const context = summary && summary !== source.title.trim()
     ? `${reference}\n\nOù elle en était : ${summary}\n\n`
     : `${reference}\n\n`
+  const pending = pendingMessage?.trim()
+  return pending ? `${context}${pending}` : context
 }
