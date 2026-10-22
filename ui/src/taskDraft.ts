@@ -1,6 +1,4 @@
 import type { SectionKind, TaskAction } from './taskToggle'
-import { headingKind } from './actionHeadings'
-import type { ActionFormat } from './actionHeadings'
 
 /**
  * Cases à cocher des blocs *DO THIS* et *FOLLOW-UP* : cocher compose une

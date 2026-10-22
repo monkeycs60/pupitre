@@ -1,7 +1,6 @@
 import {
   type CSSProperties,
   useCallback,
-  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -33,7 +32,6 @@ import { appendDebriefQuestionPrompt } from './debriefQuestion'
 import type { DebriefBlock } from './groupEvents'
 import { TaskSelectionContext, TaskStashContext, TaskToggleContext, stashKey } from './taskToggle'
 import type { StashState, TaskAction, TaskStash } from './taskToggle'
-import { ActionFormatContext } from './actionHeadings'
 import { addConversationTodo } from './todos'
 import { toggleAction, withTaskActions } from './taskDraft'
 import { newConversationDraftStorageKey } from './conversationDraft'
@@ -251,7 +249,6 @@ export function Chat({
   // Le premier rendu ne doit rien recomposer : il effacerait le bloc d'un
   // brouillon restauré depuis le stockage local.
   const actionsSynced = useRef(false)
-  const actionFormat = useContext(ActionFormatContext)
   const [stashStates, setStashStates] = useState<Record<string, StashState>>({})
   const [subtaskStatuses, setSubtaskStatuses] = useState<
     Record<string, SubtaskStatus>
