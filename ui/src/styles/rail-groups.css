@@ -15,6 +15,9 @@
 
 .rail-group .rail-project { width: 100%; }
 
+/* Le trait du projet actif s'aligne sur le bord du rail, hors du cadre : 4 px de marge et 1 px de bordure. */
+.rail-group .rail-project-bar { left: -5px; }
+
 .rail-group-head {
   position: relative;
   display: flex;
@@ -97,9 +100,11 @@
 }
 
 .rail.is-label-expanded .rail-group .rail-avatar {
-  width: calc(100% - 4px);
-  margin: 0 2px;
+  width: calc(100% - 10px);
+  margin: 0 5px;
 }
+
+.rail.is-label-expanded .rail-group .rail-project-bar { left: -7px; }
 
 .rail.is-label-expanded .rail-group-toggle {
   flex-direction: row;
