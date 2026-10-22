@@ -122,7 +122,7 @@ test('une activité dans la conversation la signale comme lue', async () => {
   expect(onConversationRead).toHaveBeenCalledTimes(2)
 })
 
-test('la piste ★ de la dernière réponse arrive pré-cochée dans un composer vide', async () => {
+test('la piste ★ de la dernière réponse laisse le composer vide et décoché', async () => {
   globalThis.fetch = mock(async (input: RequestInfo | URL) => {
     const url = String(input)
     if (url.endsWith('/api/presets')) return Response.json([])
@@ -152,7 +152,7 @@ test('la piste ★ de la dernière réponse arrive pré-cochée dans un composer
   }))
 
   const composer = await screen.findByLabelText('Message') as HTMLTextAreaElement
-  await waitFor(() => expect(composer.value).toBe('Réalise la piste 2 du bloc FOLLOW-UP :\n2) ★ Mettre en cache le rendu'))
-  const boxes = screen.getAllByRole('checkbox') as HTMLInputElement[]
-  expect(boxes.map((box) => box.checked)).toEqual([false, true])
+  const boxes = await screen.findAllByRole('checkbox') as HTMLInputElement[]
+  expect(boxes.map((box) => box.checked)).toEqual([false, false])
+  expect(composer.value).toBe('')
 })

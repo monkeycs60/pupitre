@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { recommendedFollowUp, toggleAction, withTaskActions } from './taskDraft'
+import { toggleAction, withTaskActions } from './taskDraft'
 import { DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { TaskAction } from './taskToggle'
 
@@ -55,18 +55,5 @@ describe('withTaskActions', () => {
     expect(withTaskActions(restored, [idea])).toBe(
       'Note\n\nRéalise la piste 1 du bloc FOLLOW-UP :\n1) Ajouter un raccourci en priorité',
     )
-  })
-})
-
-describe('recommendedFollowUp', () => {
-  test('repère la piste ★ avec son numéro affiché', () => {
-    const reply = 'Fait.\n\n*TODO*\n1. ★ Promouvoir 8/10 OU attendre 4/10\n\n*FOLLOW-UP*\n- Ajouter un export\n- ★ Mettre en cache le rendu, gain net\n- Revoir les libellés'
-
-    expect(recommendedFollowUp(reply, DEFAULT_ACTION_FORMAT)).toEqual({ index: 2, label: '★ Mettre en cache le rendu, gain net' })
-  })
-
-  test('ne pré-coche rien sans piste ★ ni ★ hors du bloc FOLLOW-UP', () => {
-    expect(recommendedFollowUp('*TODO*\n1. ★ Promouvoir\n\n*FOLLOW-UP*\n- Ajouter un export', DEFAULT_ACTION_FORMAT)).toBeNull()
-    expect(recommendedFollowUp('- ★ Une liste ordinaire', DEFAULT_ACTION_FORMAT)).toBeNull()
   })
 })

@@ -35,7 +35,7 @@ import { TaskSelectionContext, TaskStashContext, TaskToggleContext, stashKey } f
 import type { StashState, TaskAction, TaskStash } from './taskToggle'
 import { ActionFormatContext } from './actionHeadings'
 import { addConversationTodo } from './todos'
-import { recommendedFollowUp, toggleAction, withTaskActions } from './taskDraft'
+import { toggleAction, withTaskActions } from './taskDraft'
 import { newConversationDraftStorageKey } from './conversationDraft'
 import { ThreadSearch } from './ThreadSearch'
 import { PushTimeline } from './PushTimeline'
@@ -253,7 +253,6 @@ export function Chat({
   const actionsSynced = useRef(false)
   const actionFormat = useContext(ActionFormatContext)
   const [stashStates, setStashStates] = useState<Record<string, StashState>>({})
-  const prechecked = useRef(new Set<string>())
   const [subtaskStatuses, setSubtaskStatuses] = useState<
     Record<string, SubtaskStatus>
   >({})
@@ -507,15 +506,6 @@ export function Chat({
     conversationId === null ? null : { stash: handleStash, states: stashStates }
   ), [conversationId, handleStash, stashStates])
 
-  const lastReply = useMemo(() => unansweredReply(blocks), [blocks])
-  useEffect(() => {
-    if (isRunning || lastReply === null || prechecked.current.has(lastReply.id)) return
-    prechecked.current.add(lastReply.id)
-    if (message.trim() || selectedActions.length > 0) return
-    const pick = recommendedFollowUp(lastReply.text, actionFormat)
-    if (pick) setSelectedActions([{ scope: lastReply.id, index: pick.index, label: pick.label, kind: 'follow-up' }])
-  }, [isRunning, lastReply, message, selectedActions.length, actionFormat])
-
   function handleMessageChange(next: string) {
     setMessage(next)
     if (next.length === 0) setSelectedActions([])
@@ -684,16 +674,4 @@ export function Chat({
       ) : null}
     </>
   )
-}
-
-/** Dernière réponse terminée de l'agent, tant qu'aucun message ne la suit. */
-function unansweredReply(blocks: readonly { kind: string }[]): { id: string; text: string } | null {
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index] as { kind: string; id?: string; text?: string; streaming?: boolean }
-    if (block.kind === 'user') return null
-    if (block.kind === 'assistant') {
-      return block.streaming || !block.id || !block.text ? null : { id: block.id, text: block.text }
-    }
-  }
-  return null
 }
