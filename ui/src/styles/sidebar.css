@@ -525,54 +525,6 @@
   color: var(--danger);
 }
 
-.conversation-hover-preview {
-  position: absolute;
-  top: calc(100% - 2px);
-  right: var(--space-2);
-  left: var(--space-2);
-  z-index: 35;
-  display: grid;
-  gap: 3px;
-  padding: var(--space-2);
-  pointer-events: none;
-  visibility: hidden;
-  background: var(--bg-overlay);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow-popover);
-  opacity: 0;
-  transform: translateY(-2px);
-  transition: opacity var(--dur-fast) var(--ease), visibility var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
-}
-
-.navigation-row:hover .conversation-hover-preview,
-.navigation-row:focus-within .conversation-hover-preview {
-  visibility: visible;
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.conversation-hover-preview strong {
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.conversation-hover-preview p,
-.conversation-hover-preview span {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  line-height: 1.4;
-}
-
-.conversation-hover-preview span {
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-}
-
 .conversation-rename-form {
   position: absolute;
   right: 30px;
@@ -2084,10 +2036,46 @@
   padding-right: 50px;
 }
 
+.navigation-row.is-pinned {
+  --pin: var(--warn);
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--pin) 13%, transparent), transparent 70%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pin) 22%, transparent);
+}
+
+.navigation-row.is-pinned::after {
+  position: absolute;
+  top: 0;
+  right: 10px;
+  z-index: 2;
+  width: 7px;
+  height: 8px;
+  content: '';
+  pointer-events: none;
+  background: var(--pin);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 70%, 0 100%);
+}
+
+.navigation-row.is-pinned.is-selected,
+.navigation-row.is-pinned.is-selected:hover {
+  box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px color-mix(in srgb, var(--pin) 45%, var(--accent-border));
+}
+
 .conv-row-pin {
+  display: inline-flex !important;
   flex: none;
-  color: var(--text-faint);
-  font-size: 9px;
+  align-items: center;
+  color: var(--pin);
+  transform: rotate(-12deg);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--pin) 45%, transparent));
+}
+
+.pin-button svg {
+  display: block;
+  margin: auto;
+}
+
+.pin-button.is-pinned {
+  color: var(--warn);
 }
 
 /* --- Commandes de lancement en cours -------------------------------------- */

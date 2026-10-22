@@ -218,7 +218,7 @@ test('formate les durées actives longues en heures et minutes', () => {
   expect(formatActiveDuration(68 * 60_000)).toBe('1 h 08')
 })
 
-test('affiche le loading state et les réglages dans le détail d’une conversation', async () => {
+test('affiche le loading state sans infobulle de détail sur la conversation', async () => {
   const conversation: Conversation = {
     ...startedConversation,
     id: 'conversation-live',
@@ -245,7 +245,8 @@ test('affiche le loading state et les réglages dans le détail d’une conversa
   expect(await screen.findByText('écrit la réponse')).toBeTruthy()
   expect(document.querySelectorAll('.conv-row-dots i')).toHaveLength(3)
   expect(screen.queryByText('appelle un outil')).toBeNull()
-  expect(screen.getByText('effort: high · vitesse: 1.5x')).toBeTruthy()
+  expect(screen.queryByRole('tooltip')).toBeNull()
+  expect(screen.queryByText('Aperçu de la conversation')).toBeNull()
 })
 
 test('marque comme lue la conversation ouverte quand la sidebar recharge sa liste', async () => {
