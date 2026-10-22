@@ -86,7 +86,8 @@ function csvCell(value: string | number): string {
 
 export function agendaCsv(range: AgendaRange): string {
   const names = new Map(range.projects.map((project) => [project.id, project.name]))
-  const rows = [['jour', 'projet', 'source', 'debut', 'fin', 'minutes', 'conversation']]
+  const groups = new Map(range.projects.map((project) => [project.id, project.group?.name ?? '']))
+  const rows = [['jour', 'projet', 'source', 'debut', 'fin', 'minutes', 'conversation', 'groupe']]
   for (const block of [...range.blocks].sort((left, right) => left.start.localeCompare(right.start))) {
     rows.push([
       block.day,
@@ -96,6 +97,7 @@ export function agendaCsv(range: AgendaRange): string {
       hourOf(block.end, block.day, true) === 24 ? '24:00' : clock(block.end),
       String(Math.round((Date.parse(block.end) - Date.parse(block.start)) / 60_000)),
       block.conversationId ?? '',
+      groups.get(block.projectId) ?? '',
     ])
   }
   return rows.map((row) => row.map(csvCell).join(',')).join('\n')
@@ -103,10 +105,11 @@ export function agendaCsv(range: AgendaRange): string {
 
 export function archiveCsv(archive: AgendaArchive): string {
   const names = new Map(archive.projects.map((project) => [project.id, project.name]))
-  const rows = [['semaine', 'projet', 'heures', 'heures_presence']]
+  const groups = new Map(archive.projects.map((project) => [project.id, project.group?.name ?? '']))
+  const rows = [['semaine', 'projet', 'heures', 'heures_presence', 'groupe']]
   for (const week of archive.weeks) {
     for (const [projectId, figures] of Object.entries(week.projects)) {
-      rows.push([week.week, names.get(projectId) ?? projectId, (figures.totalMs / 3_600_000).toFixed(2), (figures.userMs / 3_600_000).toFixed(2)])
+      rows.push([week.week, names.get(projectId) ?? projectId, (figures.totalMs / 3_600_000).toFixed(2), (figures.userMs / 3_600_000).toFixed(2), groups.get(projectId) ?? ''])
     }
   }
   return rows.map((row) => row.map(csvCell).join(',')).join('\n')

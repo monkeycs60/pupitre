@@ -6,7 +6,7 @@ import type { AgendaArchive, AgendaBlock, AgendaRange, CalendarRange } from './a
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, waitFor } = await import('@testing-library/react')
-const { ActivityAgenda, addDays, agendaCsv, groupTotals, hourOf, layoutDay, localDay, meetingsOf, mondayOf } = await import('./ActivityAgenda')
+const { ActivityAgenda, addDays, agendaCsv, archiveCsv, groupTotals, hourOf, layoutDay, localDay, meetingsOf, mondayOf } = await import('./ActivityAgenda')
 
 const defaultFetch = globalThis.fetch
 afterEach(() => {
@@ -46,7 +46,17 @@ test('minuit en fin de bloc vaut 24 h, et le CSV écrit 24:00', () => {
   expect(hourOf(late.end, day, true)).toBe(24)
   expect(hourOf(late.start, day)).toBe(23.5)
   const csv = agendaCsv({ from: day, to: day, blocks: [late], totals: {}, projects: [{ id: 'a', name: 'Pupitre, dev', color: '#f06595' }] })
-  expect(csv.split('\n')).toEqual(['jour,projet,source,debut,fin,minutes,conversation', `${day},"Pupitre, dev",agent,23:30,24:00,30,c1`])
+  expect(csv.split('\n')).toEqual(['jour,projet,source,debut,fin,minutes,conversation,groupe', `${day},"Pupitre, dev",agent,23:30,24:00,30,c1,`])
+})
+
+test('les deux CSV nomment le groupe de chaque projet et laissent la case vide hors groupe', () => {
+  const day = '2026-10-14'
+  const mmvd = { id: 'g1', name: 'MMVD', color: '#7c3aed' }
+  const projects = [{ id: 'p15', name: 'P15', color: '#f06595', group: mmvd }, { id: 'r', name: 'Projet_R_missing', color: '#ff922b', group: mmvd }, { id: 'solo', name: 'Pupitre', color: '#94a3b8', group: null }]
+  const agenda = agendaCsv({ from: day, to: day, blocks: [block(day, 'p15', [9, 0], [10, 0]), block(day, 'solo', [11, 0], [11, 30], 'agent')], totals: {}, projects })
+  expect(agenda.split('\n').slice(1)).toEqual([`${day},P15,presence,09:00,10:00,60,,MMVD`, `${day},Pupitre,agent,11:00,11:30,30,,`])
+  const archive = archiveCsv({ year: 2026, years: [2026], weeks: [{ week: '2026-10-12', projects: { r: { totalMs: 5_400_000, userMs: 1_800_000 }, solo: { totalMs: 3_600_000, userMs: 0 } } }], projects })
+  expect(archive.split('\n')).toEqual(['semaine,projet,heures,heures_presence,groupe', '2026-10-12,Projet_R_missing,1.50,0.50,MMVD', '2026-10-12,Pupitre,1.00,0.00,'])
 })
 
 test('la semaine part du lundi, replie la nuit et ouvre la conversation ou le journal du jour', async () => {
