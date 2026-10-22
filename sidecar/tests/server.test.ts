@@ -913,6 +913,23 @@ test("sauvegarder un token relance immédiatement le refresh des intégrations",
   expect(refreshCalls).toBe(1);
 });
 
+test("l'adresse Google Agenda s'enregistre en HTTPS et n'est jamais renvoyée", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  current.deps.integrationsRefresher.refreshAll = async () => {};
+  const refused = await putJson("/api/settings", { integrationTokens: { googleCalendar: "pas une adresse" } });
+  expect(refused.status).toBe(400);
+
+  const saved = await putJson("/api/settings", {
+    integrationTokens: { googleCalendar: "webcal://calendar.google.com/calendar/ical/x/private-y/basic.ics" },
+  });
+  expect(saved.status).toBe(200);
+  expect((await saved.json() as { integrationTokens: Record<string, unknown> }).integrationTokens.googleCalendar).toBe(true);
+  expect(current.deps.settings.get<Record<string, string>>("integrationTokens")?.googleCalendar)
+    .toBe("https://calendar.google.com/calendar/ical/x/private-y/basic.ics");
+
+  await putJson("/api/settings", { integrationTokens: { googleCalendar: null } });
+});
+
 test("CRUD et exécution immédiate d'une routine avec notification", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());

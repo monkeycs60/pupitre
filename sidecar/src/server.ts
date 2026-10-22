@@ -40,6 +40,7 @@ import type {
 } from "./stores/presets";
 import { normalizePresetPermissionMode } from "./stores/presets";
 import { INTEGRATION_TOKENS_KEY, type SettingsStore } from "./stores/settings";
+import { calendarFeedUrl, GOOGLE_CALENDAR_TOKEN, type GoogleCalendarService } from "./google-calendar";
 import type { QuotaTracker } from "./quotas";
 import type { QuotaRefresher } from "./quota-refresh";
 import { SubtaskLimitError, type SubtaskRunner } from "./subtasks";
@@ -208,6 +209,7 @@ export interface ServerDeps {
   time?: TimeTrackingService;
   htmlDocuments?: HtmlDocumentService;
   activityReports?: ActivityReportService;
+  googleCalendar?: GoogleCalendarService;
   sharedFiles?: SharedFilesService;
   visualFeedback?: VisualFeedbackService;
   runningApplications?: (contexts: ApplicationContext[]) => RunningApplication[];
@@ -1219,6 +1221,16 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(400, "plage d'agenda invalide");
           }
           return json(deps.activityReports.agenda(from, to));
+        }
+        if (request.method === "GET" && pathname === "/api/activity-reports/calendar") {
+          const from = url.searchParams.get("from") ?? "";
+          const to = url.searchParams.get("to") ?? "";
+          const span = (Date.parse(`${to}T12:00:00`) - Date.parse(`${from}T12:00:00`)) / 86_400_000;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || !(span >= 0 && span < AGENDA_MAX_DAYS)) {
+            throw new HttpError(400, "plage d'agenda invalide");
+          }
+          if (!deps.googleCalendar) return json({ configured: false, events: [], error: null });
+          return json(await deps.googleCalendar.range(from, to));
         }
         if (request.method === "GET" && pathname === "/api/activity-reports/archive") {
           if (!deps.activityReports) throw new HttpError(503, "Rapports d'activité indisponibles");
@@ -2973,11 +2985,15 @@ export function createServer(deps: ServerDeps) {
             }
             const currentTokens = deps.settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY) ?? {};
             for (const [name, value] of Object.entries(tokens as Record<string, unknown>)) {
-              if (name !== "clickup" && name !== "gitlab" && name !== "openai" && name !== "cerebras") {
+              if (name !== "clickup" && name !== "gitlab" && name !== "openai" && name !== "cerebras" && name !== GOOGLE_CALENDAR_TOKEN) {
                 throw new HttpError(400, `token ${name} inconnu`);
               }
               if (value === null || value === "") {
                 delete currentTokens[name];
+              } else if (name === GOOGLE_CALENDAR_TOKEN) {
+                const feed = typeof value === "string" ? calendarFeedUrl(value) : null;
+                if (!feed) throw new HttpError(400, "adresse iCal Google Agenda invalide");
+                currentTokens[name] = feed;
               } else if (typeof value === "string") {
                 currentTokens[name] = value;
               } else {

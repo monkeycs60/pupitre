@@ -50,6 +50,7 @@ import { GitLabClient, readGlabToken } from "./integrations/gitlab";
 import { IntegrationsRefresher } from "./integrations/refresher";
 import { IntegrationStore } from "./stores/integrations";
 import { INTEGRATION_TOKENS_KEY } from "./stores/settings";
+import { GOOGLE_CALENDAR_TOKEN, GoogleCalendarService } from "./google-calendar";
 import { ConversationTicketLinker } from "./conversation-ticket-linker";
 import { TicketStore } from "./stores/tickets";
 import { ChangelogStore } from "./stores/changelog";
@@ -440,6 +441,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     time,
     htmlDocuments,
     activityReports,
+    googleCalendar: new GoogleCalendarService(() => settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY)?.[GOOGLE_CALENDAR_TOKEN] ?? null),
     sharedFiles: new SharedFilesService(db, media, htmlDocuments),
     visualFeedback,
   }), port);
