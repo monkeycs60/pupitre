@@ -8,6 +8,10 @@ if [ -n "${AB_RELAY:-}" ]; then
 else
   args+=(--auto-connect)
 fi
+case "${1:-} ${2:-}" in
+    "record start"|"record restart") [[ " $* " == *" --cursor "* ]] || set -- "$@" --cursor ;;
+esac
+
 if [ "${1:-}" = close ]; then
   if [ "$#" -ne 1 ]; then
     echo 'ab : utilisez ab close pour fermer uniquement votre onglet.' >&2
