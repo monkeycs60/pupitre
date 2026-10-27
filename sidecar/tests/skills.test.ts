@@ -143,7 +143,7 @@ description: Avant modification.
 `);
   const inventory = new SkillInventory(db, projects, {
     homeDir: home,
-    watchDebounceMs: 20,
+    pollMs: 20,
   });
   cleanups.push(() => inventory.stop());
   inventory.start();
@@ -162,12 +162,36 @@ description: Après modification.
   expect(inventory.list()[0]?.description).toBe("Après modification.");
 });
 
+test("le watcher indexe un skill ajouté après le démarrage", async () => {
+  const { db, home, projects } = fixture();
+  mkdirSync(join(home, ".claude/skills"), { recursive: true });
+  const inventory = new SkillInventory(db, projects, {
+    homeDir: home,
+    pollMs: 20,
+  });
+  cleanups.push(() => inventory.stop());
+  inventory.start();
+
+  write(join(home, ".claude/skills/nouveau/SKILL.md"), `---
+name: nouveau
+description: Ajouté à chaud.
+---
+# Nouveau
+`);
+  const deadline = Date.now() + 1_000;
+  while (Date.now() < deadline) {
+    if (inventory.list()[0]?.name === "nouveau") return;
+    await Bun.sleep(20);
+  }
+  expect(inventory.list()[0]?.name).toBe("nouveau");
+});
+
 test("le watcher ignore les liens cassés à la racine du dossier personnel", async () => {
   const { db, home, projects } = fixture();
   symlinkSync(join(home, "cible-absente"), join(home, ".lien-casse"));
   const inventory = new SkillInventory(db, projects, {
     homeDir: home,
-    watchDebounceMs: 20,
+    pollMs: 20,
   });
   cleanups.push(() => inventory.stop());
 

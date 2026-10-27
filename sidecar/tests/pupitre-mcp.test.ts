@@ -215,3 +215,34 @@ test("git_commit committe les fichiers listés et laisse les autres changements"
     rmSync(repository, { recursive: true, force: true });
   }
 });
+
+test("publish_code abandonne un sidecar muet et demande de ne pas relancer", async () => {
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch: () => new Promise<Response>(() => {}),
+  });
+  servers.push(server);
+  const client = new Client({ name: "test-pupitre", version: "0.0.0" });
+  clients.push(client);
+  await client.connect(new StdioClientTransport({
+    command: process.execPath,
+    args: [pupitreMcpPath()],
+    env: {
+      PATH: process.env.PATH ?? "",
+      PUPITRE_PORT: String(server.port),
+      PUPITRE_CONVERSATION_ID: "conversation-1",
+      PUPITRE_PUBLISH_CODE_TIMEOUT_MS: "200",
+    },
+  }));
+
+  const started = Date.now();
+  const result = await client.callTool({
+    name: "publish_code",
+    arguments: { path: "src/a.ts", start_line: 1, end_line: 2, title: "Titre", explanation: "Explication" },
+  }) as { content: Array<{ type: string; text?: string }>; isError?: boolean };
+
+  expect(Date.now() - started).toBeLessThan(5_000);
+  expect(result.isError).toBe(true);
+  expect(result.content[0]?.text).toContain("Ne relance pas l’outil");
+});

@@ -4,8 +4,6 @@ import {
   readFileSync,
   readdirSync,
   statSync,
-  watch,
-  type FSWatcher,
 } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -69,7 +67,7 @@ interface SkillRow {
 
 export interface SkillInventoryOptions {
   homeDir?: string;
-  watchDebounceMs?: number;
+  pollMs?: number;
 }
 
 const MAX_FILE_BYTES = 1_000_000;
@@ -254,10 +252,10 @@ function rowToSummary(row: SkillRow): SkillSummary {
 
 export class SkillInventory {
   private readonly homeDir: string;
-  private readonly debounceMs: number;
-  private watchers: FSWatcher[] = [];
-  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
-  private started = false;
+  private readonly pollMs: number;
+  private watchedPaths: string[] = [];
+  private signature = "";
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly db: Database,
@@ -265,7 +263,7 @@ export class SkillInventory {
     options: SkillInventoryOptions = {},
   ) {
     this.homeDir = options.homeDir ?? homedir();
-    this.debounceMs = options.watchDebounceMs ?? 250;
+    this.pollMs = options.pollMs ?? 3_000;
   }
 
   refresh(): number {
@@ -311,21 +309,21 @@ export class SkillInventory {
         if (!paths.has(row.path)) remove.run(row.path);
       }
     })();
-    if (this.started) this.resetWatchers();
+    this.watchedPaths = [...this.watchRoots(), ...paths];
+    this.signature = this.currentSignature();
     return scanned.length;
   }
 
   start(): void {
-    this.started = true;
     this.refresh();
+    this.pollTimer ??= setInterval(() => {
+      if (this.currentSignature() !== this.signature) this.refresh();
+    }, this.pollMs);
   }
 
   stop(): void {
-    this.started = false;
-    if (this.refreshTimer) clearTimeout(this.refreshTimer);
-    this.refreshTimer = null;
-    for (const watcher of this.watchers) watcher.close();
-    this.watchers = [];
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.pollTimer = null;
   }
 
   list(filters: {
@@ -480,17 +478,23 @@ export class SkillInventory {
     return [...byPath.values()];
   }
 
-  private scheduleRefresh = (): void => {
-    if (this.refreshTimer) clearTimeout(this.refreshTimer);
-    this.refreshTimer = setTimeout(() => {
-      this.refreshTimer = null;
-      this.refresh();
-    }, this.debounceMs);
-  };
+  private currentSignature(): string {
+    return this.watchedPaths.map((path) => {
+      try {
+        const info = statSync(path);
+        return `${info.mtimeMs}:${info.size}:${info.nlink}`;
+      } catch {
+        return "-";
+      }
+    }).join("|");
+  }
 
-  private resetWatchers(): void {
-    for (const watcher of this.watchers) watcher.close();
-    this.watchers = [];
+  /**
+   * Dossiers dont la date de modification signale un skill ajouté, renommé ou supprimé.
+   * `fs.watch` de Bun garde ouvert un descripteur par fichier du dossier surveillé, même après
+   * `close()` ; un projet comme `~/Downloads` en retient des milliers.
+   */
+  private watchRoots(): string[] {
     const roots = new Set<string>();
     const addRootAndChildren = (root: string, childDepth = 1) => {
       if (!existsSync(root)) return;
@@ -516,15 +520,7 @@ export class SkillInventory {
       addRootAndChildren(join(project.path, ".claude/skills"), 1);
       addRootAndChildren(join(project.path, ".grok/skills"), 1);
     }
-    for (const root of roots) {
-      try {
-        const watcher = watch(root, this.scheduleRefresh);
-        watcher.on("error", () => watcher.close());
-        this.watchers.push(watcher);
-      } catch {
-        // Un dossier optionnel peut disparaître entre existsSync et fs.watch.
-      }
-    }
+    return [...roots];
   }
 }
 

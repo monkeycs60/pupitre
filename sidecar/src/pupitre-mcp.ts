@@ -155,9 +155,11 @@ export function createPupitreServer(): McpServer {
       conversation_id: z.string().optional(),
     },
   }, async (args) => {
+    const timeoutMs = numberFromEnv("PUPITRE_PUBLISH_CODE_TIMEOUT_MS", 45_000);
     try {
       const response = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(conversationId(args.conversation_id))}/code-excerpts`, {
         method: "POST", headers: { "content-type": "application/json" },
+        signal: AbortSignal.timeout(timeoutMs),
         body: JSON.stringify({ path: args.path, title: args.title, explanation: args.explanation,
           startLine: args.start_line, endLine: args.end_line,
           highlights: args.highlights?.map((range) => ({ startLine: range.start_line, endLine: range.end_line })),
@@ -167,6 +169,10 @@ export function createPupitreServer(): McpServer {
       const excerpt = await response.json() as { path: string; startLine: number; endLine: number };
       return text(`Passage publié dans Pupitre : ${excerpt.path}, lignes ${excerpt.startLine}–${excerpt.endLine}.`);
     } catch (error) {
+      if (error instanceof DOMException && error.name === "TimeoutError") {
+        return text(`Publication du code impossible : Pupitre n’a pas répondu en ${Math.round(timeoutMs / 1000)} s. Ne relance pas l’outil : `
+          + "cite le passage directement dans ta réponse (chemin, lignes et extrait en bloc de code) et signale que la publication a échoué.", true);
+      }
       return text(`Publication du code impossible : ${error instanceof Error ? error.message : String(error)}`, true);
     }
   });
