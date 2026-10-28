@@ -6,9 +6,12 @@ import {
   finalizeAnswer,
   jarvisPrompt,
   parseModelJson,
+  parseRouterVerdict,
+  routerPrompt,
   sanitizeDraft,
   type JarvisAnswer,
   type JarvisDraft,
+  type RouterVerdict,
   earlyEscalation,
 } from "./jarvis-answer";
 import {
@@ -29,6 +32,7 @@ export type { JarvisAction, JarvisAnswer, JarvisResult } from "./jarvis-answer";
 
 export type JarvisMode = "auto" | "fast" | "orchestrate";
 export type JarvisModel = "haiku-5.5" | "opus-5.5";
+export type JarvisEffort = "low" | "high";
 
 export interface JarvisAskInput {
   question: string;
@@ -52,6 +56,8 @@ export interface JarvisRoute {
   label: string;
   reason: string;
   escalated: boolean;
+  /** Qui a choisi le modèle : le mode imposé, Haiku 5.5 en lisant les données, ou le routeur express. */
+  by: "mode" | "haiku" | "router";
 }
 
 export interface JarvisJob {
@@ -67,6 +73,7 @@ export interface JarvisJob {
 
 export interface JarvisGenerationInput {
   model: JarvisModel;
+  effort?: JarvisEffort;
   prompt: string;
   cwd: string;
   signal: AbortSignal;
@@ -77,8 +84,8 @@ export type JarvisGenerator = (input: JarvisGenerationInput) => Promise<string>;
 
 export interface JarvisDeps extends Omit<JarvisContextDeps, "runningApplications"> {
   generate: JarvisGenerator;
-  /** Lance d'avance le process du modèle qui répondra en premier. */
-  prewarm?: (input: { model: JarvisModel; cwd: string }) => void;
+  /** Lance d'avance le process d'un modèle qui répondra en premier. */
+  prewarm?: (input: { model: JarvisModel; effort: JarvisEffort; cwd: string }) => void;
   semanticSearch?: Pick<SemanticSearch, "search">;
   runningApplications?: (contexts: ApplicationContext[]) => RunningApplication[];
   now?: () => number;
@@ -96,6 +103,7 @@ const MAX_HISTORY_CHARS = 4_000;
 const JOB_TTL_MS = 30 * 60_000;
 const MAX_JOBS = 50;
 const SEMANTIC_TIMEOUT_MS = 4_000;
+const ROUTER_TIMEOUT_MS = 20_000;
 
 const MODELS: Record<JarvisModel, { name: string; label: string; timeoutMs: number }> = {
   "haiku-5.5": { name: "Haiku 5.5", label: "Haiku 5.5 · rapide", timeoutMs: 90_000 },
@@ -108,11 +116,11 @@ const MODELS: Record<JarvisModel, { name: string; label: string; timeoutMs: numb
  * le champ manquait.
  */
 export function claudeJarvisGenerator(quotas: QuotaTracker): JarvisGenerator {
-  return ({ model, prompt, cwd, signal, onText }) => generateWithAdapters({
+  return ({ model, effort = "high", prompt, cwd, signal, onText }) => generateWithAdapters({
     cwd,
     provider: "claude",
     model,
-    effort: "high",
+    effort,
     prompt,
     signal,
     mcpServers: {},
@@ -122,11 +130,11 @@ export function claudeJarvisGenerator(quotas: QuotaTracker): JarvisGenerator {
 }
 
 export function claudeJarvisPrewarm(): NonNullable<JarvisDeps["prewarm"]> {
-  return ({ model, cwd }) => prewarmWithAdapters({ cwd, provider: "claude", model, effort: "high", mcpServers: {}, oneShot: true });
+  return ({ model, effort, cwd }) => prewarmWithAdapters({ cwd, provider: "claude", model, effort, mcpServers: {}, oneShot: true });
 }
 
-function route(model: JarvisModel, reason: string, escalated = false): JarvisRoute {
-  return { model, effort: "high", label: MODELS[model].label, reason, escalated };
+function route(model: JarvisModel, reason: string, by: JarvisRoute["by"], escalated = false): JarvisRoute {
+  return { model, effort: "high", label: MODELS[model].label, reason, escalated, by };
 }
 
 function optionalId(record: Record<string, unknown>, field: string): string | null {
@@ -211,6 +219,17 @@ interface StepHandle {
   fail(detail: string): void;
 }
 
+interface RouterOutcome {
+  verdict: RouterVerdict | null;
+  ms: number;
+}
+
+interface RouterRun {
+  settled: Promise<RouterOutcome>;
+  outcome: RouterOutcome | null;
+  stop: AbortController;
+}
+
 export class JarvisService {
   private readonly jobs = new Map<string, JobRecord>();
   private readonly now: () => number;
@@ -259,11 +278,12 @@ export class JarvisService {
     for (const record of this.jobs.values()) this.abort(record);
   }
 
-  /** Préchauffe le modèle que le mode choisi appellera en premier, dans le dossier du projet ouvert. */
+  /** Préchauffe ce que le mode choisi appellera en premier : le modèle qui répond, dans le dossier du projet ouvert, et le routeur en mode auto. */
   warm(projectId: string | null, mode: JarvisAskInput["mode"]): void {
     if (!this.deps.prewarm) return;
     const project = projectId ? this.deps.projects.get(projectId) : null;
-    this.deps.prewarm({ model: mode === "orchestrate" ? "opus-5.5" : "haiku-5.5", cwd: project ? projectCwd(project) : homedir() });
+    this.deps.prewarm({ model: mode === "orchestrate" ? "opus-5.5" : "haiku-5.5", effort: "high", cwd: project ? projectCwd(project) : homedir() });
+    if (mode === "auto") this.deps.prewarm({ model: "haiku-5.5", effort: "low", cwd: homedir() });
   }
 
   async handle(request: Request, pathname: string): Promise<Response | null> {
@@ -365,7 +385,9 @@ export class JarvisService {
   }
 
   private async run(record: JobRecord, input: JarvisAskInput): Promise<void> {
+    let router: RouterRun | null = null;
     try {
+      router = input.mode === "auto" ? this.startRouter(record, input) : null;
       const project = input.projectId ? this.deps.projects.get(input.projectId) : null;
       const builder = new JarvisContextBuilder(
         { ...this.deps, runningApplications: this.deps.runningApplications ?? listRunningApplications },
@@ -406,13 +428,14 @@ export class JarvisService {
       const context = builder.assemble({ live, text, candidates, semantic: hits, servers });
       const cwd = project ? projectCwd(project) : homedir();
 
-      step = this.step(record, "Choisir le modèle");
+      step = this.step(record, "Choisir le modèle", router ? "Le routeur (Haiku 5.5, effort low) lit ta demande : réponse simple ou plan ?" : null);
       record.job.route = input.mode === "fast"
-        ? route("haiku-5.5", "Mode rapide demandé : Haiku 5.5 répond seul.")
+        ? route("haiku-5.5", "Mode rapide demandé : Haiku 5.5 répond seul.", "mode")
         : input.mode === "orchestrate"
-          ? route("opus-5.5", "Mode orchestration demandé : Opus 5.5 prépare le plan.")
-          : route("haiku-5.5", "Haiku 5.5 répond d'abord ; Opus 5.5 reprend si la demande appelle un plan.");
-      step.done(record.job.route.reason);
+          ? route("opus-5.5", "Mode orchestration demandé : Opus 5.5 prépare le plan.", "mode")
+          : route("haiku-5.5", "Haiku 5.5 répond ; Opus 5.5 reprend si le routeur ou Haiku 5.5 voient un plan.", "haiku");
+      if (!router) step.done(record.job.route.reason);
+      const choosing = step;
 
       let draft: JarvisDraft | null = null;
       if (input.mode === "orchestrate") {
@@ -420,23 +443,52 @@ export class JarvisService {
       } else {
         const handoff = new AbortController();
         let handoffReason: string | null = null;
+        let handoffBy: "router" | "haiku" = "haiku";
+        let haikuSettled = false;
+        const escalate = (reason: string, by: "router" | "haiku") => {
+          if (handoffReason !== null || haikuSettled) return;
+          handoffReason = reason;
+          handoffBy = by;
+          handoff.abort();
+        };
+        const applyVerdict = ({ verdict, ms }: RouterOutcome) => {
+          if (haikuSettled) return;
+          if (verdict === null) {
+            choosing.skip("Le routeur n'a pas tranché : Haiku 5.5 répond et passera la main si la demande appelle un plan.");
+          } else if (verdict.plan) {
+            choosing.done(`Plan demandé : Opus 5.5 prend la main · routeur en ${seconds(ms)}`);
+            escalate(verdict.reason ?? "Le routeur juge que la demande appelle un plan.", "router");
+          } else {
+            choosing.done(`Réponse simple : Haiku 5.5 répond · routeur en ${seconds(ms)}`);
+          }
+        };
+        if (router?.outcome) applyVerdict(router.outcome);
+        else void router?.settled.then(applyVerdict);
         const watch = input.mode === "auto"
           ? (text: string) => {
-              if (handoffReason !== null) return;
-              handoffReason = earlyEscalation(text);
-              if (handoffReason !== null) handoff.abort();
+              const reason = earlyEscalation(text);
+              if (reason !== null) escalate(reason, "haiku");
             }
           : undefined;
         let haiku: JarvisDraft | null = null;
-        try {
-          haiku = await this.draft(record, "haiku-5.5", jarvisPrompt(context, { orchestrate: false, handoff: input.mode === "auto" }), context, cwd, null, { signal: handoff.signal, onText: watch });
-        } catch (error) {
-          if (!(error instanceof JarvisHandoff)) throw error;
+        if (handoffReason === null) {
+          try {
+            haiku = await this.draft(record, "haiku-5.5", jarvisPrompt(context, { orchestrate: false, handoff: input.mode === "auto" }), context, cwd, null, {
+              signal: handoff.signal,
+              onText: watch,
+              handoffDetail: () => handoffBy === "router" ? "interrompu : le routeur demande un plan" : "passe la main à Opus 5.5 dès ses premiers mots",
+            });
+          } catch (error) {
+            if (!(error instanceof JarvisHandoff)) throw error;
+          }
         }
+        haikuSettled = true;
+        router?.stop.abort();
+        if (haiku !== null) choosing.skip("Haiku 5.5 a répondu avant le routeur.");
         const reason = haiku === null ? handoffReason : input.mode === "auto" ? escalationReason(haiku) : null;
         if (haiku !== null) draft = haiku;
         if (reason) {
-          record.job.route = route("opus-5.5", reason, true);
+          record.job.route = route("opus-5.5", reason, haiku === null ? handoffBy : "haiku", true);
           try {
             draft = await this.draft(
               record,
@@ -450,10 +502,10 @@ export class JarvisService {
             );
           } catch (error) {
             if (error instanceof JarvisStopped || haiku === null) throw error;
-            record.job.route = route("haiku-5.5", "Opus 5.5 n'a pas abouti : la réponse de Haiku 5.5 est conservée.");
+            record.job.route = route("haiku-5.5", "Opus 5.5 n'a pas abouti : la réponse de Haiku 5.5 est conservée.", "haiku");
           }
         } else if (input.mode === "auto") {
-          record.job.route = route("haiku-5.5", "Question simple : Haiku 5.5 a suffi.");
+          record.job.route = route("haiku-5.5", "Question simple : Haiku 5.5 a suffi.", "haiku");
         }
       }
 
@@ -465,7 +517,26 @@ export class JarvisService {
       if (error instanceof JarvisStopped || record.job.status !== "running") return;
       if (!(error instanceof JarvisModelError)) console.error("[jarvis] demande impossible", error);
       this.settle(record, "error", messageOf(error));
+    } finally {
+      router?.stop.abort();
     }
+  }
+
+  private startRouter(record: JobRecord, input: JarvisAskInput): RouterRun {
+    const stop = new AbortController();
+    const started = this.now();
+    const run: RouterRun = { settled: Promise.resolve({ verdict: null, ms: 0 }), outcome: null, stop };
+    run.settled = Promise.resolve()
+      .then(() => this.deps.generate({
+        model: "haiku-5.5",
+        effort: "low",
+        prompt: routerPrompt(input.question, input.history),
+        cwd: homedir(),
+        signal: AbortSignal.any([record.controller.signal, stop.signal, AbortSignal.timeout(ROUTER_TIMEOUT_MS)]),
+      }))
+      .then((raw) => parseRouterVerdict(raw), () => null)
+      .then((verdict) => (run.outcome = { verdict, ms: this.now() - started }));
+    return run;
   }
 
   private async draft(
@@ -475,7 +546,7 @@ export class JarvisService {
     context: JarvisContext,
     cwd: string,
     detail: string | null = null,
-    extra: { signal?: AbortSignal; onText?: (text: string) => void } = {},
+    extra: { signal?: AbortSignal; onText?: (text: string) => void; handoffDetail?: () => string } = {},
   ): Promise<JarvisDraft> {
     const { name, timeoutMs } = MODELS[model];
     const step = this.step(record, model === "opus-5.5" ? `${name} prépare le plan` : `${name} rédige la réponse`, detail);
@@ -488,7 +559,7 @@ export class JarvisService {
     } catch (error) {
       this.ensureRunning(record);
       if (extra.signal?.aborted) {
-        step.done(`${seconds(this.now() - started)} · passe la main à Opus 5.5 dès ses premiers mots`);
+        step.done(`${seconds(this.now() - started)} · ${extra.handoffDetail?.() ?? "passe la main à Opus 5.5 dès ses premiers mots"}`);
         throw new JarvisHandoff();
       }
       const cause = timeout.aborted ? `pas de réponse en ${Math.round(timeoutMs / 1_000)} s` : messageOf(error);

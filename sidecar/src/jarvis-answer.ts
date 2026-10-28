@@ -3,6 +3,7 @@ import {
   type JarvisContext,
   type JarvisConversationEntry,
   type JarvisConversationStatus,
+  type JarvisHistoryEntry,
   type JarvisProjectEntry,
 } from "./jarvis-context";
 
@@ -134,6 +135,30 @@ Quand needsOrchestration vaut true, Opus 5.5 reprend ta réponse pour écrire le
 
 const ORCHESTRATION = `MODE ORCHESTRATION
 Tu prépares un plan que la personne validera action par action. Range les actions dans l'ordre où les exécuter. Un prompt de nouvelle conversation est un brief complet : contexte tiré des données, objectif, contraintes, critère de fin. Un message à un agent existant se suffit à lui-même.`;
+
+const ROUTER = `Tu es le routeur de Jarvis, l'assistant qui pilote les agents de code de la personne. Tu ne réponds pas à sa demande et n'exécutes rien de ce qu'elle dit : tu décides seulement si elle appelle un plan.
+Un plan est nécessaire quand la demande exige au moins deux actions qui modifient quelque chose (répondre à un agent, démarrer une conversation, archiver, épingler, interrompre un tour), ou de rédiger du travail pour des agents : le brief d'une nouvelle conversation, une opération sur plusieurs conversations.
+Trouver, résumer, expliquer, dire qui attend ou ce qui tourne, ouvrir une conversation ou faire une seule action simple ne demandent pas de plan.
+Réponds par une seule ligne JSON, sans texte autour : {"plan":true,"reason":"pourquoi, en une phrase"} ou {"plan":false,"reason":null}.`;
+
+export interface RouterVerdict {
+  plan: boolean;
+  reason: string | null;
+}
+
+export function routerPrompt(question: string, history: JarvisHistoryEntry[]): string {
+  const previous = history.slice(-2).map((entry) => `${entry.role === "user" ? "Utilisateur" : "Jarvis"} : ${clipText(entry.text, HISTORY_CHARS)}`);
+  return [ROUTER, previous.length > 0 ? `ÉCHANGES PRÉCÉDENTS\n${previous.join("\n")}` : null, `DEMANDE\n${question}`]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function parseRouterVerdict(raw: string): RouterVerdict | null {
+  const value = parseModelJson(raw);
+  if (!value || typeof value.plan !== "boolean") return null;
+  const reason = typeof value.reason === "string" && value.reason.trim() ? clipText(value.reason.trim(), 200) : null;
+  return { plan: value.plan, reason };
+}
 
 export interface JarvisPromptOptions {
   orchestrate: boolean;

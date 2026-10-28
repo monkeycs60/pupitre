@@ -1169,6 +1169,7 @@ export interface JarvisRoute {
   label: string
   reason: string
   escalated: boolean
+  by: 'mode' | 'haiku' | 'router'
 }
 
 export interface JarvisResult {
