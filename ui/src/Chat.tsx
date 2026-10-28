@@ -42,6 +42,7 @@ import { collectConversationAssets } from './conversationAssets'
 import type { TodoFinish, TodoItem } from './todos'
 import { ConversationAssetsDrawer } from './ConversationAssetsDrawer'
 import { readingZoomShortcut, setReadingZoom, stepReadingZoom, useReadingPrefs } from './readingPrefs'
+import { Icon } from './Icon'
 
 /** Outils du fil pilotés depuis le head : pièces jointes et recherche. */
 export interface ThreadTools {
@@ -59,6 +60,9 @@ interface ChatProps {
   initialFinish?: TodoFinish
   /** Événement à faire défiler et surligner à l’ouverture (retour depuis un fichier partagé). */
   focusEventId?: number | null
+  /** Passages trouvés par Jarvis : surlignés jusqu'à ce que l'utilisateur ferme la barre. */
+  highlightEventIds?: number[] | null
+  onClearHighlight?: () => void
   events: AppEvent[]
   connection: ConnectionState
   retryAt: number | null
@@ -179,6 +183,8 @@ export function Chat({
   quotas,
   onConversationCreated,
   focusEventId = null,
+  highlightEventIds = null,
+  onClearHighlight,
   todoMode = false,
   onTodoModeChange,
   onTodoCreated,
@@ -243,6 +249,49 @@ export function Chat({
     target.classList.add('is-located')
     window.setTimeout(() => target.classList.remove('is-located'), 2500)
   }, [focusEventId, blocks])
+  const [hitIndex, setHitIndex] = useState(0)
+  const [hitCount, setHitCount] = useState(0)
+  const hitKey = highlightEventIds?.join(',') ?? ''
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (viewport === null) return
+    const marked = [...viewport.querySelectorAll('.is-jarvis-hit')]
+    marked.forEach((element) => element.classList.remove('is-jarvis-hit', 'is-jarvis-current'))
+    if (!highlightEventIds || highlightEventIds.length === 0) {
+      setHitCount(0)
+      return
+    }
+    const rows = [...viewport.querySelectorAll<HTMLElement>('[data-event-id]')]
+      .map((element) => ({ element, id: Number(element.dataset.eventId) }))
+      .filter((row) => Number.isFinite(row.id))
+      .sort((left, right) => left.id - right.id)
+    const targets = new Set<HTMLElement>()
+    for (const id of highlightEventIds) {
+      const owner = [...rows].reverse().find((row) => row.id <= id) ?? rows.find((row) => row.id >= id)
+      if (owner) targets.add(owner.element)
+    }
+    const ordered = rows.filter((row) => targets.has(row.element)).map((row) => row.element)
+    ordered.forEach((element) => element.classList.add('is-jarvis-hit'))
+    setHitCount(ordered.length)
+    setHitIndex(0)
+    const first = ordered[0]
+    if (first) {
+      followsBottomRef.current = false
+      first.classList.add('is-jarvis-current')
+      first.scrollIntoView({ block: 'center' })
+    }
+  }, [hitKey, blocks])
+
+  function moveHit(direction: 1 | -1) {
+    const viewport = viewportRef.current
+    if (viewport === null || hitCount === 0) return
+    const hits = [...viewport.querySelectorAll<HTMLElement>('.is-jarvis-hit')]
+    const next = (hitIndex + direction + hits.length) % hits.length
+    hits.forEach((element, index) => element.classList.toggle('is-jarvis-current', index === next))
+    followsBottomRef.current = false
+    hits[next]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    setHitIndex(next)
+  }
   const [focusRequest, setFocusRequest] = useState(0)
   /** Actions *DO THIS* cochées dans le fil, source de la consigne composée. */
   const [selectedActions, setSelectedActions] = useState<TaskAction[]>([])
@@ -592,6 +641,14 @@ export function Chat({
               }
             }}
           >
+            {hitCount > 0 ? (
+              <div className="jarvis-hits-bar" role="status">
+                <span>Jarvis · {hitIndex + 1} / {hitCount} passage{hitCount > 1 ? 's' : ''}</span>
+                <button type="button" onClick={() => moveHit(-1)} aria-label="Passage précédent"><Icon name="chevron-up" size={14} /></button>
+                <button type="button" onClick={() => moveHit(1)} aria-label="Passage suivant"><Icon name="chevron-down" size={14} /></button>
+                <button type="button" onClick={() => onClearHighlight?.()} aria-label="Retirer le surlignage"><Icon name="close" size={13} /></button>
+              </div>
+            ) : null}
             <div className="events-list" aria-live="polite">
               {blocks.length === 0 ? (
                 <p className="events-empty">

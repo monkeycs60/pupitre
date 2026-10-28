@@ -58,6 +58,8 @@ import type {
   PromotionState,
   PromotionMission,
   SidecarJournal,
+  JarvisAskInput,
+  JarvisJob,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -1523,4 +1525,16 @@ export function setProjectTrunk(projectId: string, branch: string | null): Promi
 
 export function launchRequest<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   return fetchJson(path, { method, ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) })
+}
+
+export function askJarvis(input: JarvisAskInput): Promise<{ jobId: string }> {
+  return fetchJson('/api/jarvis/ask', jsonPost(input))
+}
+
+export function getJarvisJob(jobId: string, signal?: AbortSignal): Promise<JarvisJob> {
+  return fetchJson(`/api/jarvis/jobs/${routeId(jobId)}`, { signal })
+}
+
+export function cancelJarvisJob(jobId: string): Promise<void> {
+  return fetchVoid(`/api/jarvis/jobs/${routeId(jobId)}/cancel`, jsonPost({}))
 }

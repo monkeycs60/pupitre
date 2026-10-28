@@ -1,0 +1,733 @@
+/* --- Jarvis : pastille et panneau en bas à droite ----------------------- */
+
+.jarvis-pill {
+  position: fixed;
+  z-index: 60;
+  right: 20px;
+  bottom: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px 0 13px;
+  color: var(--bg-workspace);
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 500;
+  background: var(--text-strong);
+  border: 0;
+  border-radius: var(--r-full);
+  box-shadow: var(--shadow-popover);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.jarvis-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-overlay);
+}
+
+.jarvis-pill kbd {
+  padding: 0 5px;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-xs);
+  line-height: 18px;
+  opacity: 0.65;
+  border: 1px solid currentColor;
+  border-radius: var(--r-sm);
+}
+
+.jarvis-pill .conv-row-dots {
+  margin-left: 2px;
+}
+
+.jarvis-spark {
+  color: var(--accent-bright);
+}
+
+.jarvis-pill .jarvis-spark {
+  color: var(--accent-soft);
+}
+
+.jarvis-pill-dot {
+  width: 8px;
+  height: 8px;
+  margin: 0 4px;
+  background: var(--unread);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--unread-soft);
+}
+
+.jarvis-panel {
+  position: fixed;
+  z-index: 70;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(78vh, 760px);
+  overflow: hidden;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-overlay);
+  transform-origin: bottom right;
+  animation: pop-in var(--dur) var(--ease-out);
+}
+
+.jarvis-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px 10px 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.jarvis-top strong {
+  color: var(--text-strong);
+  font-size: var(--text-base);
+}
+
+.jarvis-modes {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+  padding: 2px;
+  background: var(--bg-hover);
+  border-radius: var(--r-md);
+}
+
+.jarvis-modes button {
+  padding: 2px 8px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--r-md) - 2px);
+  cursor: pointer;
+}
+
+.jarvis-modes button.is-on {
+  color: var(--text-strong);
+  font-weight: 600;
+  background: var(--bg-raised);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text-strong) 14%, transparent);
+}
+
+.jarvis-close {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  place-items: center;
+  cursor: pointer;
+}
+
+.jarvis-close:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+.jarvis-scroll {
+  flex: 1;
+  min-height: 120px;
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  overflow-y: auto;
+}
+
+.jarvis-empty p {
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.jarvis-empty strong {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.jarvis-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.jarvis-suggestions button {
+  padding: 4px 10px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  background: var(--bg-hover);
+  border: 0;
+  border-radius: var(--r-full);
+  cursor: pointer;
+}
+
+.jarvis-suggestions button:hover {
+  color: var(--text-strong);
+  background: var(--bg-active);
+}
+
+.jarvis-exchange {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.jarvis-question {
+  justify-self: end;
+  max-width: 88%;
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--text);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  background: var(--user-bubble);
+  border-radius: 12px 12px 4px 12px;
+}
+
+.jarvis-route {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.jarvis-route strong {
+  flex: none;
+  padding: 1px 6px;
+  font-weight: 600;
+  border-radius: var(--r-sm);
+}
+
+.jarvis-route.is-haiku strong {
+  color: var(--live);
+  background: var(--live-soft);
+}
+
+.jarvis-route.is-opus strong {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.jarvis-route span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-trace-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.jarvis-trace-toggle:hover {
+  color: var(--text);
+}
+
+.jarvis-steps {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  list-style: none;
+  background: var(--bg-hover);
+  border-radius: var(--r-md);
+}
+
+.jarvis-steps li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: 6px;
+  align-items: start;
+  font-size: var(--text-sm);
+  animation: jarvis-step-in var(--dur) var(--ease-out);
+}
+
+.jarvis-step-mark {
+  display: grid;
+  height: 18px;
+  color: var(--ok);
+  place-items: center;
+}
+
+.jarvis-steps li.is-error .jarvis-step-mark {
+  color: var(--danger);
+}
+
+.jarvis-steps li.is-skipped .jarvis-step-mark {
+  color: var(--text-faint);
+}
+
+.jarvis-step-label {
+  color: var(--text);
+}
+
+.jarvis-steps li.is-running .jarvis-step-label {
+  color: var(--text-strong);
+  font-weight: 500;
+}
+
+.jarvis-step-detail {
+  grid-column: 2;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.jarvis-spinner {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: jarvis-spin 700ms linear infinite;
+}
+
+.jarvis-waiting,
+.jarvis-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.jarvis-error {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--danger);
+  font-size: var(--text-sm);
+  background: var(--danger-soft);
+  border-radius: var(--r-md);
+}
+
+.jarvis-answer {
+  margin: 2px 0 0;
+  color: var(--text-strong);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.jarvis-result {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 12px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.jarvis-result:hover,
+.jarvis-result:focus-visible {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.jarvis-result-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.jarvis-result-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: var(--text-base);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-status {
+  flex: none;
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 18px;
+  background: var(--bg-hover);
+  border-radius: var(--r-sm);
+}
+
+.jarvis-status.is-waiting,
+.jarvis-status.is-unread {
+  color: var(--unread);
+  background: var(--unread-soft);
+}
+
+.jarvis-status.is-running {
+  color: var(--live);
+  background: var(--live-soft);
+}
+
+.jarvis-result-meta,
+.jarvis-result-reason {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.jarvis-result-reason {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.jarvis-hit {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 6px;
+  padding: 4px 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.jarvis-hit time {
+  color: var(--unread);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  padding-top: 1px;
+}
+
+.jarvis-hit span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.jarvis-result-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.jarvis-actions {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.jarvis-actions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.jarvis-runall {
+  padding: 2px 9px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+
+.jarvis-runall.is-armed {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.jarvis-action {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+}
+
+.jarvis-action.is-confirm {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.jarvis-action.is-done {
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+
+.jarvis-action.is-skipped {
+  opacity: 0.6;
+}
+
+.jarvis-action-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jarvis-action-head strong {
+  color: var(--text-strong);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.jarvis-action-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--r-md);
+  place-items: center;
+}
+
+.jarvis-action-why {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.jarvis-action-text {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  resize: vertical;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.jarvis-action-text:focus {
+  border-color: var(--accent-border);
+  outline: none;
+}
+
+.jarvis-action-effect {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.jarvis-action-effect .icon {
+  margin-top: 1px;
+}
+
+.jarvis-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.jarvis-primary {
+  padding: 4px 12px;
+  color: var(--on-accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+
+.jarvis-primary:hover {
+  background: var(--accent-hover);
+}
+
+.jarvis-ghost {
+  justify-self: start;
+  padding: 4px 10px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+
+.jarvis-ghost:hover {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.jarvis-action-done,
+.jarvis-action-running,
+.jarvis-action-skipped {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+}
+
+.jarvis-action-done {
+  color: var(--ok);
+  font-weight: 500;
+}
+
+.jarvis-action-running,
+.jarvis-action-skipped {
+  color: var(--text-faint);
+}
+
+.jarvis-action-error {
+  flex-basis: 100%;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.jarvis-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.jarvis-input textarea {
+  flex: 1;
+  min-height: 36px;
+  max-height: 140px;
+  padding: 8px 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-base);
+  line-height: 1.45;
+  resize: none;
+  field-sizing: content;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.jarvis-input textarea:focus {
+  border-color: var(--accent-border);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.jarvis-send {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  padding: 0;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0;
+  border-radius: 10px;
+  place-items: center;
+  cursor: pointer;
+}
+
+.jarvis-send:disabled {
+  color: var(--text-faint);
+  background: var(--bg-hover);
+  cursor: default;
+}
+
+/* Passages trouvés par Jarvis, surlignés dans le fil. */
+.jarvis-hits-bar {
+  position: sticky;
+  z-index: 6;
+  top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin: 0 auto 8px;
+  padding: 4px 6px 4px 12px;
+  color: var(--text);
+  font-size: var(--text-sm);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  box-shadow: var(--shadow-popover);
+}
+
+.jarvis-hits-bar button {
+  display: grid;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-full);
+  place-items: center;
+  cursor: pointer;
+}
+
+.jarvis-hits-bar button:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+.is-jarvis-hit {
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--unread) 10%, transparent);
+  box-shadow: inset 3px 0 0 var(--unread);
+  transition: background-color var(--dur) var(--ease);
+}
+
+.is-jarvis-hit.is-jarvis-current {
+  background: color-mix(in srgb, var(--unread) 18%, transparent);
+}
+
+@keyframes jarvis-step-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes jarvis-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-spinner { animation: none; }
+  .jarvis-panel { animation: none; }
+}

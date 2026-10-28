@@ -1150,3 +1150,72 @@ export interface SidecarJournal {
     entries: SidecarLifecycleEntry[]
   }>
 }
+
+/* --- Jarvis : contrat de /api/jarvis ------------------------------------ */
+
+export type JarvisMode = 'auto' | 'fast' | 'orchestrate'
+
+export interface JarvisStep {
+  id: string
+  label: string
+  detail: string | null
+  state: 'running' | 'done' | 'skipped' | 'error'
+  at: string
+}
+
+export interface JarvisRoute {
+  model: 'haiku-5.5' | 'opus-5.5'
+  effort: 'high'
+  label: string
+  reason: string
+  escalated: boolean
+}
+
+export interface JarvisResult {
+  conversationId: string
+  projectId: string
+  projectName: string
+  title: string
+  status: 'waiting' | 'running' | 'unread' | 'idle' | 'archived'
+  ticketKey: string | null
+  branch: string | null
+  updatedAt: string
+  reason: string
+  events: Array<{ id: number; at: string; excerpt: string }>
+}
+
+export type JarvisAction = { id: string; label: string; why: string } & (
+  | { kind: 'open'; conversationId: string; projectId: string; eventIds: number[] }
+  | { kind: 'send-message'; conversationId: string; projectId: string; message: string }
+  | { kind: 'new-conversation'; projectId: string; prompt: string; title: string | null; ticketKey: string | null }
+  | { kind: 'archive'; conversationIds: string[] }
+  | { kind: 'pin'; conversationId: string; pinned: boolean }
+  | { kind: 'stop'; conversationId: string }
+  | { kind: 'open-url'; url: string }
+)
+
+export interface JarvisAnswer {
+  text: string
+  results: JarvisResult[]
+  actions: JarvisAction[]
+  durationMs: number
+}
+
+export interface JarvisJob {
+  id: string
+  status: 'running' | 'done' | 'error' | 'cancelled'
+  steps: JarvisStep[]
+  route: JarvisRoute | null
+  answer: JarvisAnswer | null
+  error: string | null
+  startedAt: string
+  finishedAt: string | null
+}
+
+export interface JarvisAskInput {
+  question: string
+  projectId: string | null
+  conversationId: string | null
+  history: Array<{ role: 'user' | 'jarvis'; text: string }>
+  mode: JarvisMode
+}

@@ -47,6 +47,8 @@ import { useFleet, type FleetHistoryItem } from './useFleet'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { branchOfWorktree } from './conversationBranch'
 import { ConversationHeader } from './ConversationHeader'
+import { Jarvis } from './Jarvis'
+import type { JarvisActionContext } from './jarvis'
 import { LevelCard } from './LevelCard'
 import { useSentryLinks, useTicketLinks } from './ticketLinks'
 import { isAppRestartShortcut, restartApp } from './appRestart'
@@ -165,6 +167,8 @@ function App() {
   const [inspector, setInspector] = useState<InspectorView | null>(null)
   const [inspectorWidth, setInspectorWidth] = useState(storedInspectorWidth)
   const [activityOpen, setActivityOpen] = useState(false)
+  const [jarvisOpen, setJarvisOpen] = useState(false)
+  const [jarvisHighlight, setJarvisHighlight] = useState<{ conversationId: string; eventIds: number[] } | null>(null)
   const [projectSurface, setProjectSurface] = useState<{
     section: ProjectSection
     layout: 'full' | 'docked'
@@ -272,6 +276,16 @@ function App() {
     }
     window.addEventListener('keydown', handleNavigationShortcut)
     return () => window.removeEventListener('keydown', handleNavigationShortcut)
+  }, [])
+
+  useEffect(() => {
+    function handleJarvisShortcut(event: KeyboardEvent) {
+      if (!event.ctrlKey || event.shiftKey || event.altKey || event.metaKey || event.code !== 'KeyJ') return
+      event.preventDefault()
+      setJarvisOpen((open) => !open)
+    }
+    window.addEventListener('keydown', handleJarvisShortcut)
+    return () => window.removeEventListener('keydown', handleJarvisShortcut)
   }, [])
 
   useEffect(() => {
@@ -992,6 +1006,14 @@ function App() {
     ? 'routines'
     : inspector ?? workspaceView
 
+  const jarvisContext: JarvisActionContext = {
+    openConversation: async (projectId, conversationId, eventIds) => {
+      const opened = await handleRoutineConversationSelect(projectId, conversationId, eventIds[0])
+      if (opened) setJarvisHighlight(eventIds.length > 0 ? { conversationId, eventIds } : null)
+    },
+    refreshConversations: () => setConversationListVersion((current) => current + 1),
+  }
+
   const destinations: TitlebarDestination[] = [
     { icon: 'chart', label: 'Rapport', view: 'activity-report', onClick: handleActivityReportSelect },
     { icon: 'settings', label: 'Réglages', view: 'settings', onClick: handleSettingsSelect },
@@ -1161,6 +1183,8 @@ function App() {
               quotas={quotas.snapshot}
               onConversationCreated={handleConversationCreated}
               focusEventId={focusEventId}
+              highlightEventIds={jarvisHighlight !== null && jarvisHighlight.conversationId === selectedConversation?.id ? jarvisHighlight.eventIds : null}
+              onClearHighlight={() => setJarvisHighlight(null)}
               todoMode={todoMode}
               onTodoModeChange={(mode) => { setTodoMode(mode); if (!mode) setEditingTodo(null) }}
               onTodoCreated={handleTodoCreated}
@@ -1238,6 +1262,13 @@ function App() {
         </div>
         </div>
       </section>
+      <Jarvis
+        open={jarvisOpen}
+        onOpenChange={setJarvisOpen}
+        projectId={selectedProject?.id ?? null}
+        conversationId={selectedConversation?.id ?? null}
+        context={jarvisContext}
+      />
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
