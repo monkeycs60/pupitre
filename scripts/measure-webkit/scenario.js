@@ -39,9 +39,11 @@ window.__probe = { step: 'start' };
     if (!conversation) throw new Error(`conversation introuvable : ${params.conversation}`);
     step('conversation');
     conversation.click();
-    const scroller = await until(() => document.querySelector('.events-view'));
-    await until(() => scroller.querySelector('.assistant-message'));
+    await until(() => document.querySelector('.events-view .assistant-message'));
     await sleep(2_000);
+    // Le fil remplace son conteneur pendant le chargement : une référence prise
+    // plus tôt pointe vers un élément détaché, de hauteur nulle.
+    let scroller = document.querySelector('.events-view');
 
     let rendered = { renderMs: null, nodes: null };
     let region = { top: 0, height: scroller.scrollHeight };
@@ -59,36 +61,58 @@ window.__probe = { step: 'start' };
       region = { top: scroller.scrollTop + view.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 100, height: view.getBoundingClientRect().height };
     }
 
-    step('scroll');
-    const measured = () => (params.scenario === 'changes' ? document.querySelector('.changes-view').getBoundingClientRect().height : null);
-    const heightBefore = measured();
-    scroller.scrollTop = params.scenario === 'changes' ? region.top : 0;
-    await frame();
-    const end = params.scenario === 'changes' ? region.top + region.height : scroller.scrollHeight;
-    const durations = [];
-    let last = performance.now();
-    while (scroller.scrollTop + scroller.clientHeight < end && durations.length < params.frames) {
-      const before = scroller.scrollTop;
-      scroller.scrollTop += params.stepPx;
+    const scrollPass = async () => {
+      scroller = document.querySelector('.events-view');
+      const measured = () => (params.scenario === 'changes' ? document.querySelector('.changes-view').getBoundingClientRect().height : null);
+      const heightBefore = measured();
+      scroller.scrollTop = params.scenario === 'changes' ? region.top : 0;
       await frame();
-      const now = performance.now();
-      durations.push(now - last);
-      last = now;
-      if (scroller.scrollTop === before) break;
-    }
-    const sorted = [...durations].sort((a, b) => a - b);
-    const percentile = (p) => Math.round(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ?? 0);
-    const heightAfter = measured();
-    window.__probe = {
-      step: 'done',
-      ...rendered,
-      frames: durations.length,
-      p50: percentile(0.5),
-      p95: percentile(0.95),
-      max: Math.round(sorted.at(-1) ?? 0),
-      fps: durations.length ? Math.round(1000 * durations.length / durations.reduce((sum, value) => sum + value, 0)) : 0,
-      heightShift: heightBefore === null ? 0 : Math.round(heightAfter - heightBefore),
+      const end = params.scenario === 'changes' ? region.top + region.height : scroller.scrollHeight;
+      const durations = [];
+      let last = performance.now();
+      while (scroller.scrollTop + scroller.clientHeight < end && durations.length < params.frames) {
+        const before = scroller.scrollTop;
+        scroller.scrollTop += params.stepPx;
+        await frame();
+        const now = performance.now();
+        durations.push(now - last);
+        last = now;
+        if (scroller.scrollTop === before) break;
+      }
+      const sorted = [...durations].sort((a, b) => a - b);
+      const percentile = (p) => Math.round(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ?? 0);
+      const heightAfter = measured();
+      return {
+        frames: durations.length,
+        p50: percentile(0.5),
+        p95: percentile(0.95),
+        max: Math.round(sorted.at(-1) ?? 0),
+        fps: durations.length ? Math.round(1000 * durations.length / durations.reduce((sum, value) => sum + value, 0)) : 0,
+        heightShift: heightBefore === null ? 0 : Math.round(heightAfter - heightBefore),
+      };
     };
+
+    if (params.scenario === 'live') {
+      // La fenêtre de mesure n'a jamais le focus : sans ce leurre, l'orbe et
+      // les boucles CSS restent figées comme dans une app en arrière-plan.
+      document.hasFocus = () => true;
+      window.dispatchEvent(new Event('focus'));
+      step('live');
+      const line = await until(() => document.querySelector('.turn-work.is-live canvas'), 90_000);
+      if (!line) throw new Error('aucun tour en cours dans cette conversation');
+      await sleep(params.settleMs);
+      const live = { ...(await scrollPass()), canvases: document.querySelectorAll('.turn-work.is-live canvas').length };
+      if (live.canvases === 0) throw new Error('le tour s’est terminé pendant la mesure : relance un tour plus long');
+      step('fin du tour');
+      const ended = await until(() => !document.querySelector('.turn-work.is-live'), 240_000);
+      if (!ended) throw new Error('le tour ne s’est pas terminé');
+      await sleep(params.settleMs);
+      window.__probe = { step: 'done', ...(await scrollPass()), live };
+      return;
+    }
+
+    step('scroll');
+    window.__probe = { step: 'done', ...rendered, ...(await scrollPass()) };
   } catch (error) {
     window.__probe = { step: 'error', message: String(error && error.message ? error.message : error) };
   }

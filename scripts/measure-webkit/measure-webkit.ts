@@ -7,6 +7,8 @@
  *
  * Joue d'abord le témoin (défilement du fil seul), puis le scénario, chacun
  * `--runs` fois, et échoue si le 95e centile du scénario dépasse `--budget`.
+ * `--scenario live` attend un tour en cours dans la conversation, mesure le
+ * défilement pendant que l'orbe tourne, puis une fois le tour terminé.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,6 +29,7 @@ export interface ProbeResult {
   max?: number;
   fps?: number;
   heightShift?: number;
+  live?: Omit<ProbeResult, "step" | "live"> & { canvases?: number };
 }
 
 export function median(values: number[]): number {
@@ -111,7 +114,7 @@ async function main() {
     },
   });
   if (!values.project || !values.conversation) {
-    console.error("Usage : bun run measure:webkit --project <nom> --conversation <début du titre> [--scenario changes|thread] [--url http://localhost:5173] [--runs 2] [--budget 80]");
+    console.error("Usage : bun run measure:webkit --project <nom> --conversation <début du titre> [--scenario changes|thread|live] [--url http://localhost:5173] [--runs 2] [--budget 80]");
     process.exit(2);
   }
   const url = values.url!.replace(/\/$/, "");
@@ -134,6 +137,27 @@ async function main() {
     }
     return summarize(results);
   };
+
+  if (values.scenario === "live") {
+    const result = await probe(url, { ...base, scenario: "live" }, 420);
+    if (result.step !== "done" || !result.live) {
+      console.error(`live : ${result.step}${result.message ? ` — ${result.message}` : ""}`);
+      process.exit(2);
+    }
+    const live = summarize([{ ...result.live, step: "done" }]);
+    const idle = summarize([result]);
+    const budget = Number(values.budget);
+    const failed = live.p95 > budget;
+    if (values.json) {
+      console.log(JSON.stringify({ live, idle, canvases: result.live.canvases, budget, failed }));
+    } else {
+      console.log(`WebKitGTK · ${values.project} · ${values.conversation} · tour en cours puis terminé`);
+      console.log(row("orbe", live) + `   ${result.live.canvases ?? 0} canvas`);
+      console.log(row("sans orbe", idle));
+      console.log(failed ? `ÉCHEC : p95 ${live.p95} ms au-dessus du budget de ${budget} ms.` : `OK : p95 ${live.p95} ms dans le budget de ${budget} ms.`);
+    }
+    process.exit(failed ? 1 : 0);
+  }
 
   const baseline = await collect("thread");
   const measured = values.scenario === "thread" ? baseline : await collect(values.scenario!);
