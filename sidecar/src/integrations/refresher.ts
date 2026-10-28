@@ -363,8 +363,8 @@ export class IntegrationsRefresher {
       }
     }
     const resolved = new Set<string>();
-    for (const issue of store.listProject(item.project_id)) {
-      if (issue.integration_id !== item.id || seen.has(issue.sentry_issue_id)) continue;
+    for (const issue of staleIssueBatch(store.listProject(item.project_id).filter((candidate) =>
+      candidate.integration_id === item.id && !seen.has(candidate.sentry_issue_id)))) {
       try {
         const detail = await client.issueDetail(config.org, issue.sentry_issue_id);
         if (isResolvedSentryIssue(detail)) resolved.add(issue.sentry_issue_id);
@@ -721,4 +721,16 @@ function defaultBranchOfWorktree(path: string): string | null {
   } catch {
     return null;
   }
+}
+
+const STALE_DETAIL_BATCH = 25;
+const STALE_DETAIL_ROTATION_MS = 900_000;
+
+/** Issues absentes de la liste des 24 h : on n'en revérifie qu'un lot par relève,
+ *  en tournant, pour ne pas refaire des centaines d'appels détail toutes les 15 min. */
+export function staleIssueBatch<T extends { sentry_issue_id: string }>(stale: T[], now = Date.now()): T[] {
+  if (stale.length <= STALE_DETAIL_BATCH) return stale;
+  const ordered = [...stale].sort((left, right) => left.sentry_issue_id.localeCompare(right.sentry_issue_id));
+  const offset = (Math.floor(now / STALE_DETAIL_ROTATION_MS) * STALE_DETAIL_BATCH) % ordered.length;
+  return [...ordered, ...ordered].slice(offset, offset + STALE_DETAIL_BATCH);
 }
