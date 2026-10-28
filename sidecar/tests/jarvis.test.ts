@@ -8,6 +8,7 @@ import { openDb } from "../src/db";
 import type { ConversationNudge } from "../src/conversation-nudges";
 import type { FleetItem } from "../src/fleet";
 import {
+  earlyEscalation,
   finalizeAnswer,
   jarvisPrompt,
   parseModelJson,
@@ -701,3 +702,50 @@ test("l'appel réel passe par le CLI Claude en mode plan, sans MCP ni outil, et 
     else process.env.PUPITRE_CLAUDE_BIN = previousBin;
   }
 }, 15_000);
+
+test("auto : Haiku annonce un plan dès ses premiers mots, il est coupé et Opus démarre aussitôt", async () => {
+  const f = fixture();
+  const calls: JarvisGenerationInput[] = [];
+  const generate: JarvisGenerator = async (input) => {
+    calls.push(input);
+    if (input.model === "haiku-5.5") {
+      const stopped = new Promise((_, reject) => input.signal.addEventListener("abort", () => reject(new Error("coupé"))));
+      input.onText?.('{"needsOrchestration":true,');
+      input.onText?.('{"needsOrchestration":true,"orchestrationReason":"Deux agents à briefer.","text":"');
+      await stopped;
+    }
+    return JSON.stringify({ text: "Voici le plan.", results: [], actions: [] });
+  };
+  const jarvis = service(f, generate);
+  const job = await settled(jarvis, await startJob(jarvis, { question: "lance deux agents sur la pagination" }));
+
+  expect(calls.map((call) => call.model)).toEqual(["haiku-5.5", "opus-5.5"]);
+  expect(calls[1]!.prompt).not.toContain("BROUILLON DU PREMIER PASSAGE");
+  expect(job.status).toBe("done");
+  expect(job.route).toMatchObject({ model: "opus-5.5", reason: "Deux agents à briefer.", escalated: true });
+  expect(job.steps.find((step) => step.label === "Haiku 5.5 rédige la réponse")?.detail).toContain("passe la main à Opus 5.5");
+  expect(job.answer?.text).toBe("Voici le plan.");
+});
+
+test("la raison d'escalade se lit dès qu'elle est complète, pas avant", () => {
+  expect(earlyEscalation('{"needsOrchestration":true,"orchestrationReason":"Deux agents')).toBeNull();
+  expect(earlyEscalation('```json\n{"needsOrchestration":true,"orchestrationReason":"Deux agents.",')).toBe("Deux agents.");
+  expect(earlyEscalation('{"needsOrchestration":true,"orchestrationReason":null,')).toBe("Haiku 5.5 juge que la demande appelle un plan.");
+  expect(earlyEscalation('{"needsOrchestration":false,"orchestrationReason":null,')).toBeNull();
+});
+
+test("la préchauffe lance le modèle du mode choisi dans le dossier du projet", async () => {
+  const f = fixture();
+  const warmed: Array<{ model: string; cwd: string }> = [];
+  const jarvis = service(f, recording(() => ({ text: "", results: [], actions: [] })).generate, { prewarm: (input) => warmed.push(input) });
+  const warm = (body: unknown) => jarvis.handle(new Request("http://localhost/api/jarvis/warm", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }), "/api/jarvis/warm");
+
+  expect((await warm({ projectId: f.affilae.id, mode: "auto" }))!.status).toBe(204);
+  expect((await warm({ projectId: null, mode: "orchestrate" }))!.status).toBe(204);
+  expect(warmed[0]).toEqual({ model: "haiku-5.5", cwd: f.affilae.path });
+  expect(warmed[1]!.model).toBe("opus-5.5");
+});

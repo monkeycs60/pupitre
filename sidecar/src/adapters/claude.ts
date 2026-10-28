@@ -32,6 +32,48 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
       }],
     },
   });
+  const args = claudeTurnArgs(opts);
+  const line = (prompt: string, images: string[]) =>
+    JSON.stringify(userMessage(prompt, images));
+
+  if (persistenceEnabled()) {
+    // `-r` reste hors des args : il ne sert qu'au démarrage d'un process neuf,
+    // et le pool le rajoute lui-même quand il en ouvre un.
+    return claudeSessions.runTurn({
+      bin,
+      args,
+      cwd: opts.cwd,
+      cliSessionId: opts.cliSessionId,
+      line: line(opts.prompt, opts.images),
+      steerLine: line,
+      emit,
+      signal: opts.signal,
+      registerSteer: opts.registerSteer,
+      openAutonomousTurn: opts.openAutonomousTurn,
+      oneShot: opts.oneShot,
+    });
+  }
+
+  if (opts.cliSessionId) args.push("-r", opts.cliSessionId);
+
+  return spawnJsonl({
+    bin,
+    args,
+    cwd: opts.cwd,
+    parseLine: createClaudeLineParser(),
+    emit,
+    signal: opts.signal,
+    streamingInput: {
+      initialLine: line(opts.prompt, opts.images),
+      registerWrite: (writeLine) => opts.registerSteer?.(async (input) => writeLine(
+        line(input.prompt, input.images),
+      )),
+    },
+  });
+}
+
+/** Arguments du CLI pour un tour : un process préchauffé doit être lancé avec exactement les mêmes. */
+function claudeTurnArgs(opts: TurnOptions): string[] {
   const permissionMode = opts.permissionMode;
   const model = CLAUDE_MODEL_IDS[opts.model] ?? opts.model;
   const accessDirs = opts.filesystemScope === "full-system"
@@ -87,41 +129,11 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
       "mcp__pupitre__publish_code,mcp__pupitre__publish_document,mcp__pupitre__publish_html_document,mcp__pupitre__read_sibling_conversation,mcp__pupitre__read_conversation",
     );
   }
-  const line = (prompt: string, images: string[]) =>
-    JSON.stringify(userMessage(prompt, images));
+  return args;
+}
 
-  if (persistenceEnabled()) {
-    // `-r` reste hors des args : il ne sert qu'au démarrage d'un process neuf,
-    // et le pool le rajoute lui-même quand il en ouvre un.
-    return claudeSessions.runTurn({
-      bin,
-      args,
-      cwd: opts.cwd,
-      cliSessionId: opts.cliSessionId,
-      line: line(opts.prompt, opts.images),
-      steerLine: line,
-      emit,
-      signal: opts.signal,
-      registerSteer: opts.registerSteer,
-      openAutonomousTurn: opts.openAutonomousTurn,
-      oneShot: opts.oneShot,
-    });
-  }
-
-  if (opts.cliSessionId) args.push("-r", opts.cliSessionId);
-
-  return spawnJsonl({
-    bin,
-    args,
-    cwd: opts.cwd,
-    parseLine: createClaudeLineParser(),
-    emit,
-    signal: opts.signal,
-    streamingInput: {
-      initialLine: line(opts.prompt, opts.images),
-      registerWrite: (writeLine) => opts.registerSteer?.(async (input) => writeLine(
-        line(input.prompt, input.images),
-      )),
-    },
-  });
+/** Lance d'avance le process d'un premier tour sans reprise ; le tour suivant de même forme le reprend. */
+export function prewarmClaudeTurn(opts: TurnOptions): void {
+  if (!persistenceEnabled() || opts.cliSessionId) return;
+  claudeSessions.warm({ bin: process.env.PUPITRE_CLAUDE_BIN ?? "claude", args: claudeTurnArgs(opts), cwd: opts.cwd });
 }

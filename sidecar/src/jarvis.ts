@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { generateWithAdapters } from "./debriefs";
+import { generateWithAdapters, prewarmWithAdapters } from "./debriefs";
 import {
   draftJson,
   escalationReason,
@@ -9,6 +9,7 @@ import {
   sanitizeDraft,
   type JarvisAnswer,
   type JarvisDraft,
+  earlyEscalation,
 } from "./jarvis-answer";
 import {
   clipText,
@@ -68,12 +69,15 @@ export interface JarvisGenerationInput {
   prompt: string;
   cwd: string;
   signal: AbortSignal;
+  onText?: (text: string) => void;
 }
 
 export type JarvisGenerator = (input: JarvisGenerationInput) => Promise<string>;
 
 export interface JarvisDeps extends Omit<JarvisContextDeps, "runningApplications"> {
   generate: JarvisGenerator;
+  /** Lance d'avance le process du modèle qui répondra en premier. */
+  prewarm?: (input: { model: JarvisModel; cwd: string }) => void;
   semanticSearch?: Pick<SemanticSearch, "search">;
   runningApplications?: (contexts: ApplicationContext[]) => RunningApplication[];
   now?: () => number;
@@ -81,6 +85,9 @@ export interface JarvisDeps extends Omit<JarvisContextDeps, "runningApplications
 }
 
 export class JarvisInputError extends Error {}
+
+/** Haiku a annoncé en tête de réponse qu'il fallait un plan : on l'arrête pour lancer Opus aussitôt. */
+class JarvisHandoff extends Error {}
 
 export const MAX_QUESTION_CHARS = 2_000;
 const MAX_HISTORY_ENTRIES = 6;
@@ -100,7 +107,7 @@ const MODELS: Record<JarvisModel, { name: string; label: string; timeoutMs: numb
  * le champ manquait.
  */
 export function claudeJarvisGenerator(quotas: QuotaTracker): JarvisGenerator {
-  return ({ model, prompt, cwd, signal }) => generateWithAdapters({
+  return ({ model, prompt, cwd, signal, onText }) => generateWithAdapters({
     cwd,
     provider: "claude",
     model,
@@ -109,7 +116,12 @@ export function claudeJarvisGenerator(quotas: QuotaTracker): JarvisGenerator {
     signal,
     mcpServers: {},
     oneShot: true,
+    onText,
   }, quotas);
+}
+
+export function claudeJarvisPrewarm(): NonNullable<JarvisDeps["prewarm"]> {
+  return ({ model, cwd }) => prewarmWithAdapters({ cwd, provider: "claude", model, effort: "high", mcpServers: {}, oneShot: true });
 }
 
 function route(model: JarvisModel, reason: string, escalated = false): JarvisRoute {
@@ -246,7 +258,21 @@ export class JarvisService {
     for (const record of this.jobs.values()) this.abort(record);
   }
 
+  /** Préchauffe le modèle que le mode choisi appellera en premier, dans le dossier du projet ouvert. */
+  warm(projectId: string | null, mode: JarvisAskInput["mode"]): void {
+    if (!this.deps.prewarm) return;
+    const project = projectId ? this.deps.projects.get(projectId) : null;
+    this.deps.prewarm({ model: mode === "orchestrate" ? "opus-5.5" : "haiku-5.5", cwd: project ? projectCwd(project) : homedir() });
+  }
+
   async handle(request: Request, pathname: string): Promise<Response | null> {
+    if (pathname === "/api/jarvis/warm") {
+      if (request.method !== "POST") return null;
+      const body = await request.json().catch(() => null) as { projectId?: unknown; mode?: unknown } | null;
+      const mode = body?.mode === "fast" || body?.mode === "orchestrate" ? body.mode : "auto";
+      this.warm(typeof body?.projectId === "string" ? body.projectId : null, mode);
+      return new Response(null, { status: 204 });
+    }
     if (pathname === "/api/jarvis/ask") {
       if (request.method !== "POST") return null;
       let body: unknown;
@@ -387,25 +413,42 @@ export class JarvisService {
           : route("haiku-5.5", "Haiku 5.5 répond d'abord ; Opus 5.5 reprend si la demande appelle un plan.");
       step.done(record.job.route.reason);
 
-      let draft: JarvisDraft;
+      let draft: JarvisDraft | null = null;
       if (input.mode === "orchestrate") {
         draft = await this.draft(record, "opus-5.5", jarvisPrompt(context, { orchestrate: true }), context, cwd);
       } else {
-        draft = await this.draft(record, "haiku-5.5", jarvisPrompt(context, { orchestrate: false, handoff: input.mode === "auto" }), context, cwd);
-        const reason = input.mode === "auto" ? escalationReason(draft) : null;
+        const handoff = new AbortController();
+        let handoffReason: string | null = null;
+        const watch = input.mode === "auto"
+          ? (text: string) => {
+              if (handoffReason !== null) return;
+              handoffReason = earlyEscalation(text);
+              if (handoffReason !== null) handoff.abort();
+            }
+          : undefined;
+        let haiku: JarvisDraft | null = null;
+        try {
+          haiku = await this.draft(record, "haiku-5.5", jarvisPrompt(context, { orchestrate: false, handoff: input.mode === "auto" }), context, cwd, null, { signal: handoff.signal, onText: watch });
+        } catch (error) {
+          if (!(error instanceof JarvisHandoff)) throw error;
+        }
+        const reason = haiku === null ? handoffReason : input.mode === "auto" ? escalationReason(haiku) : null;
+        if (haiku !== null) draft = haiku;
         if (reason) {
           record.job.route = route("opus-5.5", reason, true);
           try {
             draft = await this.draft(
               record,
               "opus-5.5",
-              jarvisPrompt(context, { orchestrate: true, draft: { json: draftJson(draft), reason } }),
+              jarvisPrompt(context, haiku === null
+                ? { orchestrate: true }
+                : { orchestrate: true, draft: { json: draftJson(haiku), reason } }),
               context,
               cwd,
               reason,
             );
           } catch (error) {
-            if (error instanceof JarvisStopped) throw error;
+            if (error instanceof JarvisStopped || haiku === null) throw error;
             record.job.route = route("haiku-5.5", "Opus 5.5 n'a pas abouti : la réponse de Haiku 5.5 est conservée.");
           }
         } else if (input.mode === "auto") {
@@ -413,6 +456,7 @@ export class JarvisService {
         }
       }
 
+      if (draft === null) throw new JarvisModelError("Haiku 5.5 a passé la main sans qu'Opus 5.5 réponde.");
       step = this.step(record, "Vérifier la réponse");
       step.done(verifyDetail(draft));
       this.settle(record, "done", null, finalizeAnswer(draft, context, this.now() - record.startedMs));
@@ -430,16 +474,22 @@ export class JarvisService {
     context: JarvisContext,
     cwd: string,
     detail: string | null = null,
+    extra: { signal?: AbortSignal; onText?: (text: string) => void } = {},
   ): Promise<JarvisDraft> {
     const { name, timeoutMs } = MODELS[model];
     const step = this.step(record, model === "opus-5.5" ? `${name} prépare le plan` : `${name} rédige la réponse`, detail);
     const started = this.now();
     const timeout = AbortSignal.timeout(timeoutMs);
+    const signals = [record.controller.signal, timeout, ...(extra.signal ? [extra.signal] : [])];
     let raw: string;
     try {
-      raw = await this.deps.generate({ model, prompt, cwd, signal: AbortSignal.any([record.controller.signal, timeout]) });
+      raw = await this.deps.generate({ model, prompt, cwd, signal: AbortSignal.any(signals), onText: extra.onText });
     } catch (error) {
       this.ensureRunning(record);
+      if (extra.signal?.aborted) {
+        step.done(`${seconds(this.now() - started)} · passe la main à Opus 5.5 dès ses premiers mots`);
+        throw new JarvisHandoff();
+      }
       const cause = timeout.aborted ? `pas de réponse en ${Math.round(timeoutMs / 1_000)} s` : messageOf(error);
       step.fail(cause);
       throw new JarvisModelError(`${name} : ${cause}`);

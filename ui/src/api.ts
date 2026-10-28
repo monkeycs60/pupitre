@@ -60,6 +60,7 @@ import type {
   SidecarJournal,
   JarvisAskInput,
   JarvisJob,
+  JarvisMode,
 } from './types'
 import type { QuotaThresholds } from './quotaSignals'
 import { httpUrl } from './transport'
@@ -1545,6 +1546,11 @@ export function askJarvis(input: JarvisAskInput): Promise<{ jobId: string }> {
 
 export function getJarvisJob(jobId: string, signal?: AbortSignal): Promise<JarvisJob> {
   return fetchJson(`/api/jarvis/jobs/${routeId(jobId)}`, { signal })
+}
+
+/** Lance d'avance le process du modèle qui répondra : la question suivante gagne son démarrage. */
+export function warmJarvis(projectId: string | null, mode: JarvisMode): Promise<void> {
+  return fetchVoid('/api/jarvis/warm', jsonPost({ projectId, mode }))
 }
 
 export function cancelJarvisJob(jobId: string): Promise<void> {

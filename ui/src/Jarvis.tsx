@@ -8,6 +8,7 @@ import {
   cancelJarvisJob,
   executeJarvisAction,
   getJarvisJob,
+  warmJarvis,
   type JarvisActionContext,
 } from './jarvis'
 import type { JarvisAction, JarvisJob, JarvisMode, JarvisResult } from './types'
@@ -95,6 +96,9 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
 
   const lastExchange = exchanges.at(-1)
   const lastSettled = lastExchange?.job?.status !== undefined && lastExchange.job.status !== 'running'
+  useEffect(() => {
+    if (open && (exchanges.length === 0 || lastSettled)) void warmJarvis(projectId, mode).catch(() => {})
+  }, [open, projectId, mode, lastSettled, exchanges.length])
   useEffect(() => {
     const container = scrollRef.current
     const last = container?.querySelector<HTMLElement>('.jarvis-exchange:last-of-type')

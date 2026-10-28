@@ -76,7 +76,7 @@ import { VisualFeedbackService } from "./visual-feedback";
 import { TicketAuditService } from "./ticket-audits";
 import { ActivityJournal, ActivityReportService, ActivityStore, DEFAULT_ACTIVITY_MODEL } from "./activity-report";
 import { fleetSnapshot } from "./fleet";
-import { claudeJarvisGenerator, JarvisService } from "./jarvis";
+import { claudeJarvisGenerator, claudeJarvisPrewarm, JarvisService } from "./jarvis";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -335,6 +335,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     attention: () => attention.list(),
     actionHeadings,
     generate: claudeJarvisGenerator(quotas),
+    prewarm: claudeJarvisPrewarm(),
   });
   // Arrêt propre partagé : éviction par un sidecar plus récent (POST
   // /api/shutdown), SIGTERM de Tauri à la fermeture de l'app, Ctrl-C en dev.

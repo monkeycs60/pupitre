@@ -10,7 +10,7 @@ import { openExternal } from './externalLink'
 import { PROVIDER_DEFAULTS } from './modelOptions'
 import type { JarvisAction } from './types'
 
-export { askJarvis, cancelJarvisJob, getJarvisJob } from './api'
+export { askJarvis, cancelJarvisJob, getJarvisJob, warmJarvis } from './api'
 
 /** Ce qui change concrètement si l'action est exécutée : affiché avant la confirmation. */
 export function actionEffect(action: JarvisAction): string {

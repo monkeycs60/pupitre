@@ -1,4 +1,5 @@
 import { runProviderTurn } from "./adapters/run";
+import { prewarmClaudeTurn } from "./adapters/claude";
 import type { AppEvent, Provider, StoredEvent } from "./events";
 import type { QuotaTracker } from "./quotas";
 import type { ConversationStore } from "./stores/conversations";
@@ -30,6 +31,8 @@ export interface DebriefGenerationInput {
   signal?: AbortSignal;
   mcpServers?: Record<string, unknown>;
   oneShot?: boolean;
+  /** Texte reçu jusqu'ici, à chaque fragment : de quoi couper un modèle dès qu'on sait la suite inutile. */
+  onText?: (text: string) => void;
 }
 
 export interface HandoffDebriefArtifact {
@@ -578,15 +581,28 @@ export async function generateWithAdapters(
   const parts: string[] = [];
   let final = "";
   let providerError: string | null = null;
+  let received = "";
   const emit = (event: AppEvent) => {
     quotas.ingest(event);
-    if (event.type === "text-delta") parts.push(event.text);
+    if (event.type === "text-delta") {
+      parts.push(event.text);
+      if (input.onText) {
+        received += event.text;
+        input.onText(received);
+      }
+    }
     if (event.type === "text-final") final = event.text;
     if (event.type === "status" && event.state === "error") {
       providerError = event.error ?? "échec du modèle";
     }
   };
-  const options = {
+  await runProviderTurn(input.provider, generationTurnOptions(input), emit);
+  if (providerError !== null) throw new Error(providerError);
+  return final || parts.join("");
+}
+
+function generationTurnOptions(input: DebriefGenerationInput) {
+  return {
     cwd: input.cwd,
     provider: input.provider,
     model: input.model,
@@ -601,7 +617,10 @@ export async function generateWithAdapters(
     mcpServers: input.mcpServers,
     oneShot: input.oneShot,
   };
-  await runProviderTurn(input.provider, options, emit);
-  if (providerError !== null) throw new Error(providerError);
-  return final || parts.join("");
+}
+
+/** Prépare le process d'une génération à venir : seul Claude a un pool à préchauffer. */
+export function prewarmWithAdapters(input: Omit<DebriefGenerationInput, "prompt" | "signal" | "onText">): void {
+  if (input.provider !== "claude") return;
+  prewarmClaudeTurn(generationTurnOptions({ ...input, prompt: "" }));
 }

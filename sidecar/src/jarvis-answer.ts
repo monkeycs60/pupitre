@@ -506,6 +506,21 @@ export function sanitizeDraft(
   };
 }
 
+const EARLY_ESCALATION = /^\s*(?:```(?:json)?\s*)?\{\s*"needsOrchestration"\s*:\s*true\s*,\s*"orchestrationReason"\s*:\s*("(?:[^"\\]|\\.)*"|null)/;
+
+/** Raison d'escalade lisible dès le début du JSON de Haiku, avant la fin de sa réponse ; null tant qu'elle n'y est pas. */
+export function earlyEscalation(text: string): string | null {
+  const match = EARLY_ESCALATION.exec(text);
+  if (!match) return null;
+  if (match[1] === "null") return "Haiku 5.5 juge que la demande appelle un plan.";
+  try {
+    const reason = JSON.parse(match[1]!) as unknown;
+    return typeof reason === "string" && reason.trim() ? clipText(reason.trim(), 200) : "Haiku 5.5 juge que la demande appelle un plan.";
+  } catch {
+    return null;
+  }
+}
+
 /** Pourquoi le brouillon de Haiku doit passer à Opus, ou null s'il se suffit. */
 export function escalationReason(draft: JarvisDraft): string | null {
   if (draft.needsOrchestration) return draft.orchestrationReason ?? "Haiku 5.5 juge que la demande appelle un plan.";

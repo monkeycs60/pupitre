@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runClaudeTurn } from "../src/adapters/claude";
+import { prewarmClaudeTurn, runClaudeTurn } from "../src/adapters/claude";
 import { claudeSessions } from "../src/adapters/claude-session";
 import type { AppEvent } from "../src/events";
 import type { TurnOptions } from "../src/adapters/types";
@@ -269,4 +269,25 @@ test("sans tâche de fond, le process part après le délai d'inactivité", asyn
   } finally {
     delete process.env.PUPITRE_CLAUDE_IDLE_MS;
   }
+}, 10_000);
+
+test("un process préchauffé sert le premier tour de même forme, sans second lancement", async () => {
+  prewarmClaudeTurn(options({ oneShot: true }));
+  await attendre(() => lancements() === 1, 3_000);
+  expect(claudeSessions.size()).toBe(1);
+
+  const events = await tour({ oneShot: true });
+  expect(etat(events)).toEqual({ type: "status", state: "done" });
+  expect(lancements()).toBe(1);
+  expect(claudeSessions.size()).toBe(0);
+}, 10_000);
+
+test("un tour d'une autre forme ignore le process préchauffé", async () => {
+  prewarmClaudeTurn(options({ oneShot: true, model: "sonnet" }));
+  await attendre(() => lancements() === 1, 3_000);
+
+  const events = await tour({ oneShot: true });
+  expect(etat(events)).toEqual({ type: "status", state: "done" });
+  expect(lancements()).toBe(2);
+  expect(claudeSessions.size()).toBe(1);
 }, 10_000);

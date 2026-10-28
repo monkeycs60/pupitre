@@ -63,7 +63,7 @@ interface ActiveTurn {
 }
 
 /** Ce qui ne peut pas changer sans relancer le process. */
-function shapeOf(request: ClaudeTurnRequest): string {
+function shapeOf(request: Pick<ClaudeTurnRequest, "bin" | "args" | "cwd">): string {
   return JSON.stringify([request.bin, request.cwd, request.args]);
 }
 
@@ -282,10 +282,49 @@ class ClaudeSession {
   }
 }
 
+const SPARE_TTL_MS = 120_000;
+
 class ClaudeSessionPool {
   private byCliSession = new Map<string, ClaudeSession>();
   /** Session dont l'id n'est pas encore connu : le premier tour est en cours. */
   private pendingId = new Set<ClaudeSession>();
+  /** Process lancés d'avance, par forme, en attente de leur premier tour. */
+  private spares = new Map<string, { session: ClaudeSession; timer: ReturnType<typeof setTimeout> }>();
+
+  warm(request: Pick<ClaudeTurnRequest, "bin" | "args" | "cwd">, ttlMs = SPARE_TTL_MS): void {
+    const shape = shapeOf(request);
+    const existing = this.spares.get(shape);
+    if (existing?.session.alive) {
+      clearTimeout(existing.timer);
+      existing.timer = setTimeout(() => this.dropSpare(shape), ttlMs);
+      existing.timer.unref?.();
+      return;
+    }
+    const child = spawnGroup(request.bin, request.args, { cwd: request.cwd, stdio: ["pipe", "pipe", "pipe"] });
+    const session = new ClaudeSession(shape, child, (gone) => {
+      this.forget(gone);
+      if (this.spares.get(shape)?.session === gone) this.dropSpare(shape);
+    });
+    const timer = setTimeout(() => this.dropSpare(shape), ttlMs);
+    timer.unref?.();
+    this.spares.set(shape, { session, timer });
+  }
+
+  private dropSpare(shape: string): void {
+    const spare = this.spares.get(shape);
+    if (!spare) return;
+    this.spares.delete(shape);
+    clearTimeout(spare.timer);
+    if (spare.session.alive) spare.session.destroy();
+  }
+
+  private takeSpare(shape: string): ClaudeSession | null {
+    const spare = this.spares.get(shape);
+    if (!spare) return null;
+    this.spares.delete(shape);
+    clearTimeout(spare.timer);
+    return spare.session.alive ? spare.session : null;
+  }
 
   async runTurn(request: ClaudeTurnRequest): Promise<void> {
     const session = this.acquire(request);
@@ -305,6 +344,11 @@ class ClaudeSessionPool {
     // Modèle, mode de permission ou sélection MCP changés : le process en
     // place porte les anciens et ne peut pas les rejouer.
     if (reusable) reusable.destroy();
+    const spare = id === null ? this.takeSpare(shape) : null;
+    if (spare) {
+      this.pendingId.add(spare);
+      return spare;
+    }
 
     const args = id === null ? request.args : [...request.args, "-r", id];
     const child = spawnGroup(request.bin, args, {
@@ -337,13 +381,14 @@ class ClaudeSessionPool {
     for (const session of [...this.byCliSession.values(), ...this.pendingId]) {
       session.destroy();
     }
+    for (const shape of [...this.spares.keys()]) this.dropSpare(shape);
     this.byCliSession.clear();
     this.pendingId.clear();
   }
 
   /** Nombre de process vivants, pour les tests et le diagnostic. */
   size(): number {
-    return this.byCliSession.size + this.pendingId.size;
+    return this.byCliSession.size + this.pendingId.size + this.spares.size;
   }
 }
 
