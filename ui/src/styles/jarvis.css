@@ -708,14 +708,14 @@
 }
 
 .is-jarvis-hit {
-  border-radius: var(--r-lg);
-  background: color-mix(in srgb, var(--unread) 10%, transparent);
-  box-shadow: inset 3px 0 0 var(--unread);
-  transition: background-color var(--dur) var(--ease);
+  --hit-wash: color-mix(in srgb, var(--unread) 10%, var(--bg-workspace));
+  background: var(--hit-wash);
+  box-shadow: -14px 0 0 0 var(--hit-wash), 14px 0 0 0 var(--hit-wash), -17px 0 0 0 var(--unread);
+  transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 
 .is-jarvis-hit.is-jarvis-current {
-  background: color-mix(in srgb, var(--unread) 18%, transparent);
+  --hit-wash: color-mix(in srgb, var(--unread) 18%, var(--bg-workspace));
 }
 
 @keyframes jarvis-step-in {

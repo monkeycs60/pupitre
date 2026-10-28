@@ -154,6 +154,7 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
   async function run(exchange: Exchange, action: JarvisAction) {
     patch(exchange.id, (current) => ({ ...current, actions: { ...current.actions, [action.id]: { status: 'running' } } }))
     try {
+      if (action.kind === 'open') onOpenChange(false)
       const message = await executeJarvisAction(action, exchange.edits[action.id] ?? {}, context)
       track('jarvis.action', { kind: action.kind, result: 'fait' }, projectId)
       patch(exchange.id, (current) => ({ ...current, actions: { ...current.actions, [action.id]: { status: 'done', message } } }))
@@ -238,6 +239,7 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
             onCancel={() => void cancel(exchange)}
             onOpenResult={(result) => {
               track('jarvis.action', { kind: 'open', result: 'fait' }, result.projectId)
+              onOpenChange(false)
               void context.openConversation(result.projectId, result.conversationId, result.events.map((event) => event.id))
             }}
             onRun={(action) => void run(exchange, action)}
