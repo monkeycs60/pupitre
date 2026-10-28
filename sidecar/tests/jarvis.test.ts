@@ -307,6 +307,19 @@ test("le prompt pose les règles, les données et la question, avec des repères
   expect(prompt).not.toContain("MODE ORCHESTRATION");
 });
 
+test("l'état du prompt donne les vrais totaux, même quand la liste des conversations est tronquée", () => {
+  const f = fixture();
+  const context = buildContext(f, "qui m'attend ?");
+  const listed = context.conversations.filter((item) => item.status === "unread").length;
+  expect(context.totals).toEqual({ running: 1, waiting: 2, unread: listed });
+
+  const prompt = jarvisPrompt({ ...context, totals: { ...context.totals, unread: listed + 21 } }, { orchestrate: false });
+  const unreadLine = prompt.split("\n").find((line) => line.startsWith("- Non lues"))!;
+  expect(unreadLine).toStartWith(`- Non lues (${listed + 21}) : `);
+  expect(unreadLine).toEndWith(", plus 21 autres hors de la liste CONVERSATIONS");
+  expect(prompt).toContain("- T'attendent (2) : ");
+});
+
 test("la sortie du modèle est lue malgré les clôtures et le texte autour", () => {
   expect(parseModelJson("```json\n{\"text\":\"ok\",\"actions\":[]}\n```")).toEqual({ text: "ok", actions: [] });
   expect(parseModelJson("Voici {la réponse} : {\"text\":\"accolade } dans une chaîne\"} fin")).toEqual({ text: "accolade } dans une chaîne" });
@@ -460,7 +473,7 @@ test("auto : Haiku suffit pour une question simple", async () => {
     "Vérifier la réponse",
   ]);
   expect(job.steps.every((step) => step.state === "done")).toBe(true);
-  expect(job.steps[0]!.detail).toBe("1 en cours, 2 t'attendent, 3 non lues");
+  expect(job.steps[0]!.detail).toBe("1 en cours, 2 t'attendent, 1 non lue");
   expect(job.steps[1]!.detail).toMatch(/^6 conversations, aucun mot-clé à chercher$/);
   expect(job.steps[2]!.detail).toBe("1 serveur actif");
 });

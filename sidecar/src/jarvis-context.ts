@@ -103,12 +103,21 @@ export interface JarvisContext {
   conversations: JarvisConversationEntry[];
   servers: JarvisServerEntry[];
   tickets: JarvisTicketEntry[];
+  totals: { running: number; waiting: number; unread: number };
 }
 
 export interface JarvisLiveState {
   running: Map<string, { since: string; activity: string }>;
   waiting: Map<string, { question: string; options: NudgeAction[] }>;
   unread: string[];
+}
+
+export function liveTotals(live: JarvisLiveState): JarvisContext["totals"] {
+  return {
+    running: live.running.size,
+    waiting: live.waiting.size,
+    unread: live.unread.filter((id) => !live.running.has(id) && !live.waiting.has(id)).length,
+  };
 }
 
 export interface JarvisTextSearch {
@@ -530,6 +539,7 @@ export class JarvisContextBuilder {
       conversations,
       servers,
       tickets,
+      totals: liveTotals(parts.live),
     };
   }
 

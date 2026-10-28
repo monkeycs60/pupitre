@@ -8,8 +8,9 @@ La pastille **Demander à Jarvis** en bas à droite l'ouvre, comme **Ctrl J**.
 
 - **Le modèle choisi et pourquoi.** En mode **Auto**, Haiku 5.5 (effort high)
   répond ; s'il juge que la demande exige un plan de plusieurs actions, il passe
-  la main à Opus 5.5 (effort high) et la raison s'affiche. **Rapide** force
-  Haiku, **Orchestrer** force Opus.
+  la main à Opus 5.5 (effort high) dès qu'il l'annonce, sans finir sa propre
+  réponse, et la raison s'affiche. **Rapide** force Haiku, **Orchestrer** force
+  Opus.
 - **Ce qu'il a fait**, étape par étape : état des agents, recherche dans les
   conversations, serveurs, choix du modèle. La trace se replie une fois la
   réponse prête.
@@ -27,4 +28,5 @@ message envoyé à un agent ou le premier message d'une nouvelle conversation
 reste modifiable jusque-là. **Tout exécuter** demande aussi une confirmation.
 
 Une réponse prend de 10 à 20 secondes avec Haiku, autour d'une minute quand
-Opus reprend la main. **Arrêter** interrompt la recherche en cours.
+Opus reprend la main. Ouvrir le panneau lance le modèle d'avance, ce qui retire
+son démarrage de l'attente. **Arrêter** interrompt la recherche en cours.

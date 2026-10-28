@@ -178,6 +178,11 @@ function aliases(entries: JarvisConversationEntry[]): string {
   return entries.length > 0 ? entries.map((entry) => entry.alias).join(", ") : "aucune";
 }
 
+function stateLine(label: string, entries: JarvisConversationEntry[], total: number): string {
+  const unlisted = total - entries.length;
+  return `- ${label} (${total}) : ${aliases(entries)}${unlisted > 0 ? `, plus ${unlisted} autre${unlisted > 1 ? "s" : ""} hors de la liste CONVERSATIONS` : ""}`;
+}
+
 export function jarvisPrompt(context: JarvisContext, options: JarvisPromptOptions): string {
   const projects = new Map(context.projects.map((project) => [project.id, project]));
   const byStatus = (status: JarvisConversationStatus) => context.conversations.filter((entry) => entry.status === status);
@@ -196,9 +201,9 @@ export function jarvisPrompt(context: JarvisContext, options: JarvisPromptOption
     `PROJETS\n${context.projects.map((project) => `${project.alias} ${project.name}${project.current ? " (ouvert)" : ""}`).join(" · ") || "aucun"}`,
     [
       "ÉTAT",
-      `- Agents en cours : ${aliases(byStatus("running"))}`,
-      `- T'attendent : ${aliases(byStatus("waiting"))}`,
-      `- Non lues : ${aliases(byStatus("unread"))}`,
+      stateLine("Agents en cours", byStatus("running"), context.totals.running),
+      stateLine("T'attendent", byStatus("waiting"), context.totals.waiting),
+      stateLine("Non lues", byStatus("unread"), context.totals.unread),
     ].join("\n"),
     `SERVEURS\n${context.servers.length > 0
       ? context.servers.map((server) => [

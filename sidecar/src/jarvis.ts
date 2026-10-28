@@ -18,6 +18,7 @@ import {
   type JarvisContextDeps,
   type JarvisHistoryEntry,
   type JarvisLiveState,
+  liveTotals,
 } from "./jarvis-context";
 import type { QuotaTracker } from "./quotas";
 import { listRunningApplications, type ApplicationContext, type RunningApplication } from "./running-applications";
@@ -169,11 +170,11 @@ function count(value: number, singular: string, plural: string, none: string): s
 }
 
 function liveDetail(live: JarvisLiveState): string {
-  const waiting = live.waiting.size;
+  const { running, waiting, unread } = liveTotals(live);
   return [
-    live.running.size === 0 ? "aucun agent en cours" : `${live.running.size} en cours`,
+    running === 0 ? "aucun agent en cours" : `${running} en cours`,
     waiting === 0 ? "personne ne t'attend" : waiting === 1 ? "1 t'attend" : `${waiting} t'attendent`,
-    live.unread.length > 0 ? count(live.unread.length, "non lue", "non lues", "") : null,
+    unread > 0 ? count(unread, "non lue", "non lues", "") : null,
   ].filter(Boolean).join(", ");
 }
 
