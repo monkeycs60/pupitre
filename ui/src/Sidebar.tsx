@@ -287,6 +287,17 @@ export function compactGroupItems(items: Conversation[], alwaysVisible: Set<stri
   return items.filter((conversation) => visible.has(conversation.id) || alwaysVisible.has(conversation.id))
 }
 
+const WAITING_UNREAD_LIMIT = 5
+
+export function compactWaitingItems(items: Conversation[], asking: ReadonlySet<string>, selectedId: string | null): Conversation[] {
+  const recentUnread = new Set(items
+    .filter((conversation) => !asking.has(conversation.id))
+    .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))
+    .slice(0, WAITING_UNREAD_LIMIT)
+    .map((conversation) => conversation.id))
+  return items.filter((conversation) => asking.has(conversation.id) || recentUnread.has(conversation.id) || conversation.id === selectedId)
+}
+
 const PLAIN_GROUP_LIMIT = 8
 const PLAIN_GROUP_WINDOW_MS = 7 * 86_400_000
 export const TIDY_AFTER_MS = 7 * 86_400_000
@@ -307,9 +318,11 @@ export function groupConversationsByStatus(
   items: Conversation[],
   waitingSince: Map<string, number>,
   liveSince: Map<string, number>,
+  asking: ReadonlySet<string> = new Set(),
 ): ConversationGroup[] {
   const waiting = items.filter((conversation) => !liveSince.has(conversation.id) && waitingSince.has(conversation.id))
-    .sort((left, right) => waitingSince.get(left.id)! - waitingSince.get(right.id)!)
+    .sort((left, right) => Number(asking.has(right.id)) - Number(asking.has(left.id))
+      || waitingSince.get(left.id)! - waitingSince.get(right.id)!)
   const live = items.filter((conversation) => liveSince.has(conversation.id))
     .sort((left, right) => liveSince.get(left.id)! - liveSince.get(right.id)!)
   const rest = items.filter((conversation) => !liveSince.has(conversation.id) && !waitingSince.has(conversation.id))
@@ -432,6 +445,7 @@ export const Sidebar = memo(function Sidebar({
     }
     return byConversation
   }, [nudges])
+  const askingConversationIds = useMemo(() => new Set(nudgeByConversation.keys()), [nudgeByConversation])
   const waitingSince = useMemo(() => {
     const since = new Map<string, number>()
     for (const conversation of conversations) {
@@ -720,8 +734,8 @@ export const Sidebar = memo(function Sidebar({
     ))
     return conversationSortMode === 'recent'
       ? groupConversationsByLatest(filtered)
-      : groupConversationsByStatus(filtered, waitingSince, liveSince)
-  }, [conversations, filterText, conversationSortMode, aiMode, waitingSince, liveSince])
+      : groupConversationsByStatus(filtered, waitingSince, liveSince, askingConversationIds)
+  }, [conversations, filterText, conversationSortMode, aiMode, waitingSince, liveSince, askingConversationIds])
 
   const tidyCandidates = useMemo(() => {
     if (conversationScope !== 'active' || filterText.trim() !== '' || aiMode) return []
@@ -975,8 +989,13 @@ export const Sidebar = memo(function Sidebar({
               const compactItems = filterText.trim() !== '' ? group.items
                 : isContextual ? compactGroupItems(group.items, alwaysVisibleConversationIds)
                 : group.kind === 'plain' ? compactPlainItems(group.items, alwaysVisibleConversationIds)
+                : group.kind === 'waiting' ? compactWaitingItems(group.items, askingConversationIds, selectedConversation?.id ?? null)
                 : group.items
               const hiddenCount = group.items.length - compactItems.length
+              const plural = hiddenCount > 1 ? 's' : ''
+              const moreLabel = group.kind === 'plain' ? `plus ancienne${plural}`
+                : group.kind === 'waiting' ? `autre${plural} non lue${plural}`
+                : `autre${plural}`
               const shownItems = isExpanded ? group.items : compactItems
               const repeatsTicket = group.ticketKey != null
               return (
@@ -1159,7 +1178,7 @@ export const Sidebar = memo(function Sidebar({
                     onClick={() => toggleGroupExpanded(group.key)}
                   >
                     <Icon name={isExpanded ? 'chevron-up' : 'chevron-down'} size={13} />
-                    {isExpanded ? 'Réduire' : `${hiddenCount} ${group.kind === 'plain' ? 'plus ancienne' : 'autre'}${hiddenCount > 1 ? 's' : ''}`}
+                    {isExpanded ? 'Réduire' : `${hiddenCount} ${moreLabel}`}
                   </button>
                 ) : null}
               </div>

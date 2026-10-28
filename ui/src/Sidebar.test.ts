@@ -7,7 +7,7 @@ import { formatActiveDuration } from './formatActiveDuration'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
-const { Sidebar, compactGroupItems, workBranchLabel } = await import('./Sidebar')
+const { Sidebar, compactGroupItems, compactWaitingItems, groupConversationsByStatus, workBranchLabel } = await import('./Sidebar')
 const { WorkflowsView } = await import('./WorkflowsView')
 
 const project: Project = {
@@ -572,6 +572,25 @@ test('un groupe de ticket replié montre au plus deux conversations de moins de 
   expect(ids(compactGroupItems([at('a', 1), at('b', 30), at('c', 50)], new Set(), now))).toEqual(['a'])
   expect(ids(compactGroupItems([at('a', 30), at('b', 50)], new Set(), now))).toEqual(['a'])
   expect(ids(compactGroupItems(busy, new Set(['e']), now))).toEqual(['a', 'b', 'e'])
+})
+
+test('« À toi » garde chaque question d’agent et les cinq non-lues les plus récentes', () => {
+  const now = Date.parse('2026-10-02T12:00:00.000Z')
+  const at = (id: string, hoursAgo: number): Conversation => ({
+    ...startedConversation,
+    id,
+    updated_at: new Date(now - hoursAgo * 3_600_000).toISOString(),
+  })
+  const ids = (items: Conversation[]) => items.map((item) => item.id)
+  const waiting = [at('q-old', 90), at('u1', 80), at('u2', 70), at('u3', 9), at('u4', 8), at('u5', 7), at('u6', 6), at('u7', 5), at('q-new', 1)]
+  const asking = new Set(['q-old', 'q-new'])
+  expect(ids(compactWaitingItems(waiting, asking, null))).toEqual(['q-old', 'u3', 'u4', 'u5', 'u6', 'u7', 'q-new'])
+  expect(ids(compactWaitingItems(waiting, asking, 'u1'))).toEqual(['q-old', 'u1', 'u3', 'u4', 'u5', 'u6', 'u7', 'q-new'])
+  expect(ids(compactWaitingItems(waiting.slice(0, 4), new Set(), null))).toEqual(['q-old', 'u1', 'u2', 'u3'])
+
+  const since = new Map(waiting.map((item) => [item.id, Date.parse(item.updated_at)]))
+  const [toYou] = groupConversationsByStatus(waiting, since, new Map(), asking)
+  expect(ids(toYou!.items)).toEqual(['q-old', 'q-new', 'u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7'])
 })
 
 test('une conversation non lue ancienne remonte dans « À toi » au-dessus de son ticket', async () => {
