@@ -35,6 +35,7 @@ import { TicketStore } from "../src/stores/tickets";
 import { ChangelogStore } from "../src/stores/changelog";
 import { ChangelogService } from "../src/changelog";
 import type { InstanceInfo } from "../src/instance";
+import { UiEventStore } from "../src/stores/ui-events";
 
 interface TestServer {
   baseUrl: string;
@@ -345,6 +346,7 @@ cat "${fixture}"
     tickets,
     changelog,
     integrationsRefresher,
+    uiEvents: new UiEventStore(db),
     shutdown: () => {
       shutdownCount += 1;
     },
@@ -384,6 +386,57 @@ test("POST /api/shutdown répond puis déclenche l'arrêt câblé", async () => 
   expect(await response.json()).toEqual({ ok: true });
   // L'arrêt est différé pour laisser partir la réponse HTTP.
   expect(await waitFor(() => current!.shutdownCalls() === 1)).toBe(true);
+});
+
+test("POST /api/ui-events enregistre les événements valides en 204, puis GET /api/usage les compte", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const at = new Date().toISOString();
+  const posted = await postJson("/api/ui-events", {
+    events: [
+      { at, name: "composer.send", projectId: "p1" },
+      { at, name: "project.tab", props: { tab: "tickets" } },
+      { at, name: "Nom Invalide" },
+    ],
+  });
+  expect(posted.status).toBe(204);
+  expect(await posted.text()).toBe("");
+  expect(current.db.query("SELECT name, project_id, props FROM ui_events ORDER BY id").all()).toEqual([
+    { name: "composer.send", project_id: "p1", props: null },
+    { name: "project.tab", project_id: null, props: '{"tab":"tickets"}' },
+  ]);
+
+  const response = await fetch(`${current.baseUrl}/api/usage?days=7`);
+  expect(response.status).toBe(200);
+  const report = await response.json() as {
+    since: string;
+    until: string;
+    catalog: Array<{ feature: string; area: string; count: number; lastAt: string | null }>;
+    events: Array<{ name: string; count: number; lastAt: string }>;
+    daily: Array<{ day: string; count: number }>;
+    background: unknown[];
+  };
+  expect(Date.parse(report.since)).toBeLessThan(Date.parse(report.until));
+  expect(report.daily).toHaveLength(7);
+  expect(report.daily.reduce((sum, day) => sum + day.count, 0)).toBe(2);
+  expect(report.catalog.find((entry) => entry.feature === "project.tab.tickets"))
+    .toMatchObject({ area: "Projet", count: 1, lastAt: at });
+  expect(report.events).toEqual([
+    { name: "composer.send", count: 1, lastAt: at },
+    { name: "project.tab", count: 1, lastAt: at },
+  ]);
+  expect(report.background).toEqual([]);
+});
+
+test("les routes d'usage refusent un lot qui n'est pas une liste et une période hors de 1 à 180 jours", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  expect((await postJson("/api/ui-events", { events: "nav.home" })).status).toBe(400);
+  expect((await postJson("/api/ui-events", {})).status).toBe(400);
+  for (const days of ["0", "181", "7.5", "sept"]) {
+    expect((await fetch(`${current.baseUrl}/api/usage?days=${days}`)).status).toBe(400);
+  }
+  const fallback = await fetch(`${current.baseUrl}/api/usage`);
+  expect(fallback.status).toBe(200);
+  expect(((await fallback.json()) as { daily: unknown[] }).daily).toHaveLength(30);
 });
 
 test("claimServer évince un sidecar périmé qui tient le port", async () => {

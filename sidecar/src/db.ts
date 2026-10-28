@@ -605,6 +605,14 @@ export function openDb(dir: string = dataDir()): Database {
     CREATE TABLE IF NOT EXISTS activity_state (
       key TEXT PRIMARY KEY, value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS ui_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at TEXT NOT NULL,
+      name TEXT NOT NULL,
+      project_id TEXT NULL,
+      props TEXT NULL CHECK (props IS NULL OR json_valid(props))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ui_events_name_at ON ui_events(name, at);
   `);
   migrateProjectChangelogEntries(db);
   dropEventsForeignKey(db);

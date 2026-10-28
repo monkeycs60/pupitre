@@ -9,6 +9,7 @@ import { ProjectLaunchService } from "./project-launch";
 import { SharedFilesService } from "./shared-files";
 import { TodoService } from "./todos";
 import { TodoStore } from "./stores/todos";
+import { UiEventStore } from "./stores/ui-events";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { openDb } from "./db";
@@ -335,6 +336,17 @@ if (process.argv.includes("--pupitre-mcp")) {
     15 * 60_000,
   );
   htmlDocumentSweepTimer.unref?.();
+  const uiEvents = new UiEventStore(db);
+  const purgeUiEvents = () => {
+    try {
+      uiEvents.purge();
+    } catch (error) {
+      console.error("[usage] purge des événements d'interface impossible", error);
+    }
+  };
+  purgeUiEvents();
+  const uiEventPurgeTimer = setInterval(purgeUiEvents, 24 * 60 * 60_000);
+  uiEventPurgeTimer.unref?.();
   // Le code de sortie porte la cause de l'arrêt, parce que le superviseur Tauri
   // en dépend : un 0 signifie « cède la place, ne me relance pas » (éviction par
   // une instance plus récente), tout le reste vaut « je suis mort sans l'avoir
@@ -353,6 +365,7 @@ if (process.argv.includes("--pupitre-mcp")) {
       nudges.stop();
       changelog.stop();
       clearInterval(htmlDocumentSweepTimer);
+      clearInterval(uiEventPurgeTimer);
       clearInterval(activityReportTimer);
       runner.abortAll();
       claudeSessions.shutdown();
@@ -442,6 +455,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     sentry,
     integrationsRefresher,
     time,
+    uiEvents,
     htmlDocuments,
     activityReports,
     googleCalendar: new GoogleCalendarService(() => settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY)?.[GOOGLE_CALENDAR_TOKEN] ?? null),

@@ -136,6 +136,7 @@ import {
   type RunningApplication,
 } from "./running-applications";
 import type { McpHub } from "./mcp-hub";
+import { UI_EVENT_RETENTION_DAYS, validUiEvents, type UiEventStore } from "./stores/ui-events";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -210,6 +211,7 @@ export interface ServerDeps {
   sentry?: SentryStore;
   integrationsRefresher: IntegrationsRefresher;
   time?: TimeTrackingService;
+  uiEvents?: UiEventStore;
   htmlDocuments?: HtmlDocumentService;
   activityReports?: ActivityReportService;
   googleCalendar?: GoogleCalendarService;
@@ -1367,6 +1369,23 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(400, error instanceof Error ? error.message : "tranche invalide");
           }
           return json({ ok: true });
+        }
+
+        if (request.method === "POST" && pathname === "/api/ui-events") {
+          if (!deps.uiEvents) throw new HttpError(501, "mesure d'usage non câblée");
+          const body = await readObject(request, 1024 * 1024);
+          if (!Array.isArray(body.events)) throw new HttpError(400, "champ events invalide");
+          deps.uiEvents.record(validUiEvents(body.events));
+          return empty(204);
+        }
+
+        if (request.method === "GET" && pathname === "/api/usage") {
+          if (!deps.uiEvents) throw new HttpError(501, "mesure d'usage non câblée");
+          const days = Number(url.searchParams.get("days") ?? 30);
+          if (!Number.isInteger(days) || days < 1 || days > UI_EVENT_RETENTION_DAYS) {
+            throw new HttpError(400, "période invalide");
+          }
+          return json(deps.uiEvents.usage(days));
         }
 
         if (request.method === "POST" && pathname === "/api/shutdown") {
