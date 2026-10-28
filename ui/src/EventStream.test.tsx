@@ -225,3 +225,24 @@ test('une modification se déplie en diff, et une lecture d’image en image san
   expect(container.textContent).not.toContain('"type":"image"')
   cleanup()
 })
+
+test('la ligne vivante propose d’orienter l’agent, et seulement pendant le tour', async () => {
+  const { fireEvent } = await import('@testing-library/react')
+  const user = { kind: 'user' as const, id: 'u', text: 'go', images: [], attachments: [] }
+  const answer = { kind: 'assistant' as const, id: 'r', text: 'fini', streaming: false }
+  const timing = { startedAt: '2026-10-28T10:00:00.000Z', completedAt: '2026-10-28T10:00:04.000Z' }
+  let steered = 0
+  const onSteer = () => { steered += 1 }
+  const { rerender } = render(<EventStream {...callbacks} onSteer={onSteer} blocks={[
+    user, { kind: 'turn-footer', id: 'f', status: { type: 'status', state: 'running' }, timing },
+  ]} />)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Orienter' }))
+  expect(steered).toBe(1)
+
+  rerender(<EventStream {...callbacks} onSteer={onSteer} blocks={[
+    user, answer, { kind: 'turn-footer', id: 'f', status: { type: 'status', state: 'done' }, timing },
+  ]} />)
+  expect(screen.queryByRole('button', { name: 'Orienter' })).toBeNull()
+  cleanup()
+})

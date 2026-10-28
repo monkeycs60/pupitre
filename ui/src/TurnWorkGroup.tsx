@@ -95,10 +95,11 @@ function LiveMeta({ live, toolsDone }: { live: Live; toolsDone: number }) {
   return parts.length > 0 ? <span className="turn-live-meta">{parts.join(' · ')}</span> : null
 }
 
-export function TurnWorkGroup({ work, onImageOpen, onImageLoad }: {
+export function TurnWorkGroup({ work, onImageOpen, onImageLoad, onSteer }: {
   work: TurnWorkBlock
   onImageOpen: (src: string, alt: string) => void
   onImageLoad: () => void
+  onSteer?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -138,23 +139,30 @@ export function TurnWorkGroup({ work, onImageOpen, onImageLoad }: {
 
   return (
     <div className={`tool-activity-group turn-work${open ? ' is-open' : ''}${live ? ' is-live' : ''}`}>
-      {expandable ? (
-        <button
-          type="button"
-          className="tool-activity-summary turn-work-summary"
-          aria-expanded={open}
-          onClick={() => {
-            setMounted(true)
-            setOpen(!open)
-          }}
-        >
-          {summary}
-          <span className="tool-activity-chevron" aria-hidden="true" />
-          {failedCount > 0 ? <span className="tool-activity-failed">{failedCount} en échec</span> : null}
-        </button>
-      ) : (
-        <div className="tool-activity-summary turn-work-summary">{summary}</div>
-      )}
+      <div className="turn-work-row">
+        {expandable ? (
+          <button
+            type="button"
+            className="tool-activity-summary turn-work-summary"
+            aria-expanded={open}
+            onClick={() => {
+              setMounted(true)
+              setOpen(!open)
+            }}
+          >
+            {summary}
+            <span className="tool-activity-chevron" aria-hidden="true" />
+            {failedCount > 0 ? <span className="tool-activity-failed">{failedCount} en échec</span> : null}
+          </button>
+        ) : (
+          <div className="tool-activity-summary turn-work-summary">{summary}</div>
+        )}
+        {live && onSteer ? (
+          <button type="button" className="turn-live-steer" onClick={onSteer} title="Glisser une consigne sans arrêter l’agent">
+            Orienter
+          </button>
+        ) : null}
+      </div>
       {live ? <div className="turn-live-narration" role="status">{note ? `« ${note} »` : null}</div> : null}
       {expandable ? (
         <div className="tool-activity-body" inert={!open}>

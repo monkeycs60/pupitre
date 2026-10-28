@@ -57,8 +57,10 @@ function renderComposer(isRunning: boolean) {
 test('ne superpose pas le faux placeholder avec celui du tour orientable', () => {
   renderComposer(true)
 
-  expect(screen.getByPlaceholderText('Ajoute une précision au tour en cours…')).toBeTruthy()
-  expect(screen.queryByText('Écris ton message, ou')).toBeNull()
+  const placeholders = document.querySelectorAll('.composer-placeholder')
+  expect(placeholders).toHaveLength(1)
+  expect(placeholders[0].textContent).toContain('Oriente-le sans l’arrêter')
+  expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('')
 })
 
 test('affiche le faux placeholder quand aucun tour ne court', () => {

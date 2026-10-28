@@ -12,7 +12,7 @@ import { track } from './analytics'
 import { useGroupedEvents } from './useGroupedEvents'
 import { retryCountdownSeconds } from './backoff'
 import { Lightbox } from './Lightbox'
-import { Composer } from './Composer'
+import { Composer, providerCanSteer } from './Composer'
 import type { ConversationConfig } from './ConfigPanel'
 import { modelLabel } from './modelOptions'
 import { createSessionSummary, createTestInventory, listDocuments } from './api'
@@ -521,6 +521,8 @@ export function Chat({
     setFocusRequest((current) => current + 1)
   }, [])
 
+  const handleSteer = useCallback(() => setFocusRequest((current) => current + 1), [])
+
   function jumpToBottom() {
     followsBottomRef.current = true
     setAtBottom(true)
@@ -670,6 +672,7 @@ export function Chat({
                       onDebriefQuestion={handleDebriefQuestion}
                       turnFooterAction={turnFooterAction}
                       conversationId={conversation?.id}
+                      onSteer={providerCanSteer(conversation?.provider) ? handleSteer : undefined}
                     />
                     {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
                     {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onSendReview={addReviewToComposer} /> : null}

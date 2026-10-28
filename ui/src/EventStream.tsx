@@ -22,6 +22,8 @@ interface EventStreamProps {
   onDebriefQuestion?: (block: DebriefBlock) => void
   turnFooterAction?: ReactNode
   conversationId?: string
+  /** Présent quand l'agent accepte une consigne en cours de tour. */
+  onSteer?: () => void
 }
 
 /**
@@ -39,6 +41,7 @@ function EventStreamImpl({
   onDebriefQuestion,
   turnFooterAction,
   conversationId,
+  onSteer,
 }: EventStreamProps) {
   const rendered: ReactNode[] = []
   const blocks = foldTurns(streamBlocks)
@@ -57,7 +60,7 @@ function EventStreamImpl({
     const block = blocks[index]
     if (block.kind === 'turn-work') {
       turnFolded = true
-      rendered.push(<TurnWorkGroup key={block.id} work={block} onImageOpen={onImageOpen} onImageLoad={onImageLoad} />)
+      rendered.push(<TurnWorkGroup key={block.id} work={block} onImageOpen={onImageOpen} onImageLoad={onImageLoad} onSteer={onSteer} />)
       index += 1
       continue
     }

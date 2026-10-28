@@ -817,7 +817,34 @@
   margin-bottom: var(--space-4);
 }
 
+.turn-work-row {
+  display: flex;
+  min-width: 0;
+  gap: var(--space-3);
+  align-items: center;
+}
+
 .turn-work-summary { min-height: 24px; }
+.turn-work.is-open .turn-work-summary .tool-activity-chevron {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.turn-live-steer {
+  flex: none;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.turn-live-steer:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
 div.turn-work-summary { cursor: default; }
 
 .turn-done-check { flex: none; color: var(--ok); }

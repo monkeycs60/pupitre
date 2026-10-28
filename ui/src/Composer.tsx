@@ -215,6 +215,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Une erreur est survenue.'
 }
 
+export function providerCanSteer(provider: Provider | null | undefined): boolean {
+  return provider === 'codex' || provider === 'claude' || provider === 'reasonix'
+}
+
 export function Composer({
   conversationId,
   project,
@@ -276,9 +280,7 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importPathsRef = useRef<(paths: string[]) => void>(() => {})
-  const canSteer = conversationId !== null
-    && isRunning
-    && (provider === 'codex' || provider === 'claude' || provider === 'reasonix')
+  const canSteer = conversationId !== null && isRunning && providerCanSteer(provider)
   const canSubmit =
     (message.trim().length > 0 || attachments.length > 0) &&
     pendingUploads === 0 &&
@@ -789,12 +791,17 @@ export function Composer({
             onClick={handleCaretSync}
             onBlur={() => setTrigger(null)}
             onPaste={(event) => void handlePaste(event)}
-            placeholder={isRunning ? (canSteer ? 'Ajoute une précision au tour en cours…' : 'tour en cours…') : ''}
+            placeholder={isRunning && !canSteer ? 'tour en cours…' : ''}
             aria-label="Message"
             rows={2}
             disabled={isRunning && !canSteer}
             autoFocus={isNewConversation || focusRequest > 0}
           />
+          {message === '' && canSteer ? (
+            <div className="composer-placeholder" aria-hidden="true">
+              L’agent travaille. <span className="composer-ph-key">Oriente-le</span> sans l’arrêter : ta consigne lui arrive à sa prochaine étape.
+            </div>
+          ) : null}
           {message === '' && !isRunning ? (
             <div className="composer-placeholder" aria-hidden="true">
               {isTodoMode ? <>{editingTodoId ? 'Modifie la tâche : la première ligne sert de titre' : 'Décris la tâche à empiler : la première ligne sert de titre'}</> : <>
