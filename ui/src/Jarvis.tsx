@@ -189,7 +189,7 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
     return (
       <button type="button" className={`jarvis-pill${running ? ' is-running' : ''}`} onClick={() => onOpenChange(true)} title="Demander à Jarvis · Ctrl J">
         <Icon name="spark" size={14} className="jarvis-spark" />
-        {running ? <>Jarvis cherche<span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span></> : 'Demander à Jarvis'}
+        {running ? <>Jarvis cherche<span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span></> : 'Jarvis'}
         {unseen ? <span className="jarvis-pill-dot" aria-label="Réponse prête" /> : <kbd>Ctrl J</kbd>}
       </button>
     )

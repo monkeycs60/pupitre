@@ -27,6 +27,16 @@
   box-shadow: var(--shadow-overlay);
 }
 
+@media (max-width: 1760px) {
+  .jarvis-pill {
+    bottom: 132px;
+  }
+
+  .toast-host {
+    bottom: 180px;
+  }
+}
+
 .jarvis-pill kbd {
   padding: 0 5px;
   color: inherit;
