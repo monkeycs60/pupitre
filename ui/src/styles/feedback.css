@@ -296,7 +296,7 @@
   position: fixed;
   z-index: 200;
   right: var(--space-5);
-  bottom: 68px;
+  bottom: calc(var(--jarvis-pill-bottom, 20px) + 48px);
   display: flex;
   flex-direction: column;
   align-items: flex-end;

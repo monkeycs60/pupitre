@@ -1,5 +1,5 @@
 import { track } from './analytics'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { Icon, type IconName } from './Icon'
 import {
   actionEffect,
@@ -8,6 +8,7 @@ import {
   cancelJarvisJob,
   executeJarvisAction,
   getJarvisJob,
+  pillClearance,
   warmJarvis,
   type JarvisActionContext,
 } from './jarvis'
@@ -66,6 +67,40 @@ interface JarvisProps {
   context: JarvisActionContext
 }
 
+function usePillClearance(pillRef: RefObject<HTMLButtonElement | null>) {
+  useEffect(() => {
+    const root = document.documentElement
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => place())
+    let composer: Element | null = null
+    let applied: number | null = null
+    function place() {
+      const pill = pillRef.current
+      if (!pill) return
+      const current = document.querySelector('.composer-area .composer')
+      if (current !== composer) {
+        if (composer) resize?.unobserve(composer)
+        if (current) resize?.observe(current)
+        composer = current
+      }
+      const boxes = composer ? [composer, ...composer.querySelectorAll('.context-gauge')].map((element) => element.getBoundingClientRect()) : []
+      const bottom = pillClearance(boxes, pill.getBoundingClientRect(), window.innerHeight)
+      if (bottom === applied) return
+      applied = bottom
+      if (bottom === null) root.style.removeProperty('--jarvis-pill-bottom')
+      else root.style.setProperty('--jarvis-pill-bottom', `${bottom}px`)
+    }
+    place()
+    const timer = window.setInterval(place, 1000)
+    window.addEventListener('resize', place)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('resize', place)
+      resize?.disconnect()
+      root.style.removeProperty('--jarvis-pill-bottom')
+    }
+  }, [pillRef])
+}
+
 function formatTime(value: string): string {
   return new Date(value).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 }
@@ -81,6 +116,8 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
   const [unseen, setUnseen] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const pillRef = useRef<HTMLButtonElement>(null)
+  usePillClearance(pillRef)
   const running = exchanges.some((exchange) => exchange.job === null ? exchange.error === null : exchange.job.status === 'running')
 
   function patch(id: string, update: (exchange: Exchange) => Exchange) {
@@ -191,7 +228,7 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
 
   if (!open) {
     return (
-      <button type="button" className={`jarvis-pill${running ? ' is-running' : ''}`} onClick={() => onOpenChange(true)} title="Demander à Jarvis · Ctrl J">
+      <button ref={pillRef} type="button" className={`jarvis-pill${running ? ' is-running' : ''}`} onClick={() => onOpenChange(true)} title="Demander à Jarvis · Ctrl J">
         <Icon name="spark" size={14} className="jarvis-spark" />
         {running ? <>Jarvis cherche<span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span></> : 'Jarvis'}
         {unseen ? <span className="jarvis-pill-dot" aria-label="Réponse prête" /> : <kbd>Ctrl J</kbd>}

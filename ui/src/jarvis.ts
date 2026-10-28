@@ -94,3 +94,13 @@ export async function executeJarvisAction(
       return 'Ouvert dans le navigateur'
   }
 }
+
+const PILL_GAP = 12
+
+type Box = Pick<DOMRect, 'top' | 'right' | 'left'>
+
+export function pillClearance(composer: Box[], pill: Box, viewportHeight: number): number | null {
+  const [box] = composer
+  if (!box || box.right <= pill.left - PILL_GAP) return null
+  return Math.round(viewportHeight - Math.min(...composer.map((part) => part.top)) + PILL_GAP)
+}
