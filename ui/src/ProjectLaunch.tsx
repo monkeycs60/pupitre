@@ -56,8 +56,12 @@ function normalizedOrigin(value: string | null | undefined): string {
   return (value ?? '').replace(/^(?:refs\/heads\/|origin\/)/, '').replace(/\//g, '-').toLowerCase()
 }
 
+const TRUNK_ORIGINS = new Set(['main', 'master', 'develop', 'dev', 'staging', 'preprod', 'production'])
+
+/** Le tronc est partagé par toutes les conversations : il n'en désigne aucune. */
 function conversationsForGroup(conversations: Conversation[], ticketKey: string | null, origin: string): Conversation[] {
   const branch = normalizedOrigin(origin)
+  if (ticketKey === null && TRUNK_ORIGINS.has(branch)) return []
   return conversations
     .filter((conversation) => (ticketKey !== null && conversation.ticket_key === ticketKey)
       || normalizedOrigin(branchOfWorktree(conversation.worktree_path) ?? conversation.created_on_branch) === branch)

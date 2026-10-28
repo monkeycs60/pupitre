@@ -57,7 +57,7 @@
 }
 
 .jarvis-pill .jarvis-spark {
-  color: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 60%, var(--bg-workspace));
 }
 
 .jarvis-pill-dot {
