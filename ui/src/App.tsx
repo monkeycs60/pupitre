@@ -1021,6 +1021,10 @@ function App() {
       if (opened) setJarvisHighlight(eventIds.length > 0 ? { conversationId, eventIds } : null)
     },
     refreshConversations: () => setConversationListVersion((current) => current + 1),
+    resolveTicketId: async (projectId, ticketKey) => {
+      const conversations = await listProjectConversations(projectId)
+      return conversations.find((conversation) => conversation.ticket_key === ticketKey)?.ticket_id ?? null
+    },
   }
 
   const destinations: TitlebarDestination[] = [

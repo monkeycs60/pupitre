@@ -35,6 +35,8 @@ export function actionIsHarmless(action: JarvisAction): boolean {
 export interface JarvisActionContext {
   openConversation: (projectId: string, conversationId: string, eventIds: number[]) => Promise<void>
   refreshConversations: () => void
+  /** La route de création attend l'identifiant du ticket, Jarvis n'en connaît que la clé. */
+  resolveTicketId: (projectId: string, ticketKey: string) => Promise<string | null>
 }
 
 /** Exécute une action confirmée par l'utilisateur ; renvoie un compte rendu court. */
@@ -58,8 +60,10 @@ export async function executeJarvisAction(
       const prompt = (edits.prompt ?? action.prompt).trim()
       if (prompt === '') throw new Error('Le premier message est vide.')
       const remembered = readLaunchConfig(action.projectId)
+      const ticketId = action.ticketKey ? await context.resolveTicketId(action.projectId, action.ticketKey) : null
       const conversation = await createConversation({
         projectId: action.projectId,
+        ticketId,
         presetId: remembered?.presetId ?? null,
         provider: remembered?.provider ?? 'claude',
         model: remembered?.model ?? PROVIDER_DEFAULTS.claude.model,

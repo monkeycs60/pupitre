@@ -171,11 +171,11 @@ a.activity-outcome:focus-visible { outline: 2px solid var(--accent); outline-off
 .usage-unused h2 small, .usage-section small { margin-left: 6px; font-size: var(--text-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
 .usage-unused > p { margin: 2px 0 0; font-size: var(--text-sm); color: var(--text-muted); }
 .usage-areas { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px 24px; margin-top: 12px; }
-.usage-areas h3 { margin: 0 0 4px; font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.usage-areas h3 { margin: 0 0 4px; font-size: var(--text-sm); font-weight: 600; color: var(--text-muted); }
 .usage-areas ul { margin: 0; padding: 0; list-style: none; }
 .usage-areas li { padding: 2px 0; font-size: var(--text-base); color: var(--text-strong); }
-.usage-section { margin: 0 0 6px; font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
-.usage-section small { color: var(--text-muted); letter-spacing: 0; }
+.usage-section { margin: 0 0 6px; font-size: var(--text-md); font-weight: 600; letter-spacing: -0.01em; color: var(--text-strong); }
+.usage-section small { margin-left: 4px; color: var(--text-faint); font-size: var(--text-sm); font-weight: 400; letter-spacing: 0; }
 .usage-table { width: 100%; margin-bottom: 26px; border-collapse: collapse; font-size: var(--text-base); }
 .usage-table th { padding: 6px 10px; font-size: var(--text-xs); font-weight: 500; text-align: left; color: var(--text-faint); border-bottom: 1px solid var(--border); }
 .usage-table td { padding: 6px 10px; color: var(--text); border-bottom: 1px solid var(--border-subtle); }

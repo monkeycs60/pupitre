@@ -93,9 +93,14 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
     }
   }, [open])
 
+  const lastExchange = exchanges.at(-1)
+  const lastSettled = lastExchange?.job?.status !== undefined && lastExchange.job.status !== 'running'
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
-  }, [exchanges])
+    const container = scrollRef.current
+    const last = container?.querySelector<HTMLElement>('.jarvis-exchange:last-of-type')
+    if (!container || !last) return
+    container.scrollTo({ top: last.offsetTop - container.offsetTop - 8, behavior: 'smooth' })
+  }, [exchanges.length, lastSettled])
 
   useEffect(() => {
     const pending = exchanges.filter((exchange) => exchange.jobId !== null && (exchange.job === null || exchange.job.status === 'running'))
@@ -231,7 +236,10 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
             key={exchange.id}
             exchange={exchange}
             onCancel={() => void cancel(exchange)}
-            onOpenResult={(result) => void context.openConversation(result.projectId, result.conversationId, result.events.map((event) => event.id))}
+            onOpenResult={(result) => {
+              track('jarvis.action', { kind: 'open', result: 'fait' }, result.projectId)
+              void context.openConversation(result.projectId, result.conversationId, result.events.map((event) => event.id))
+            }}
             onRun={(action) => void run(exchange, action)}
             onState={(actionId, state) => setActionState(exchange, actionId, state)}
             onEdit={(actionId, edit) => editAction(exchange, actionId, edit)}
