@@ -129,7 +129,7 @@ function installApi(
 function renderSidebar(
   activeFleet: FleetItem[] = [],
   selectedConversation: Conversation | null = null,
-  liveConversationMessageCount?: number,
+  _unused?: number,
   onConversationCreateFromContext?: (seed: { branch: string | null; originType?: 'sentry' | null; originKey?: string | null }) => void,
   ticketLinks?: Map<string, { ticketKey: string; externalUrl: string | null; mergeRequestUrl: string | null; branch: string | null }>,
 ) {
@@ -143,7 +143,6 @@ function renderSidebar(
     onConversationCreateFromContext,
     conversationListVersion: 0,
     runningSubtasks: 0,
-    liveConversationMessageCount,
     activeFleet,
     workspaceView: 'conversations',
     ticketLinks,
@@ -266,7 +265,7 @@ test('marque comme lue la conversation ouverte quand la sidebar recharge sa list
   await waitFor(() => expect(api.getReadRequestCount()).toBe(1))
 })
 
-test('affiche le compteur live de la conversation sélectionnée', async () => {
+test('une conversation en cours passe dans « En cours » avec son action du moment', async () => {
   const conversation: Conversation = {
     ...startedConversation,
     id: 'conversation-live-count',
@@ -286,10 +285,12 @@ test('affiche le compteur live de la conversation sélectionnée', async () => {
     lastEvent: 'outil · lecture',
   }
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [conversation])
-  renderSidebar([activeItem], conversation, 4)
+  renderSidebar([activeItem], conversation)
 
   await waitFor(() => expect(document.querySelector('.navigation-main')).not.toBeNull())
-  expect(document.querySelector('.conv-row-count')?.textContent).toBe('4')
+  expect(document.querySelector('.conv-group-key')?.textContent).toBe('En cours')
+  expect(document.querySelector('.conv-group-count.is-live')?.textContent).toBe('1')
+  expect(document.querySelector('.conv-row-line2.is-live .conv-row-activity-label')?.textContent).toBe('écrit la réponse')
 })
 
 test('place les groupes ticket et Sentry selon leur dernière activité', async () => {
@@ -344,22 +345,18 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
 
   await waitFor(() => expect(document.querySelectorAll('.conv-group-header').length).toBe(3))
   const headers = [...document.querySelectorAll('.conv-group-key')].map((element) => element.textContent)
-  expect(headers[0]).toBe('Sentry · REACTOR-B4S')
-  expect(headers[1]).toBe("Aujourd'hui")
-  expect(headers[2]).toBe('1')
-  expect(document.querySelectorAll('.conv-group-key')[2]?.getAttribute('title')).toBe('TECH-1')
+  expect(headers).toEqual(['Sentry · REACTOR-B4S', 'TECH-1', 'Sans ticket'])
   const ticketTitle = document.querySelector('.conv-group-ticket-title')
   expect(ticketTitle?.textContent).toBe('Corriger les pipelines de déploiement')
   expect(ticketTitle?.getAttribute('title')).toBe('Corriger les pipelines de déploiement')
-  const ticketIcons = document.querySelector('.ticket-link-icons')
-  expect(ticketIcons?.compareDocumentPosition(ticketTitle!) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-  const ticketGroup = () => document.querySelectorAll('.conv-group')[2]!
+  const ticketIcons = document.querySelector('.conv-group.is-context .ticket-link-icons')
+  expect(ticketTitle?.compareDocumentPosition(ticketIcons!) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+  const ticketGroup = () => document.querySelectorAll('.conv-group')[1]!
   expect(ticketGroup().querySelectorAll('.navigation-row')).toHaveLength(1)
-  expect(document.querySelector('.conv-group-more')).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Afficher les 2 conversations de TECH-1' }))
+  fireEvent.click(screen.getByRole('button', { name: '1 autre' }))
   expect(ticketGroup().querySelectorAll('.navigation-row')).toHaveLength(2)
-  expect(ticketGroup().querySelectorAll('.conv-row-ticket, .conv-row-ticket-title')).toHaveLength(0)
-  expect(screen.getByRole('button', { name: 'Réduire TECH-1' }).getAttribute('aria-expanded')).toBe('true')
+  expect(ticketGroup().querySelectorAll('.conv-row-ticket')).toHaveLength(0)
+  expect(screen.getByRole('button', { name: 'Réduire' }).getAttribute('aria-expanded')).toBe('true')
   expect(document.querySelector('.conv-row-sentry .provider-mark.is-sentry')).not.toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /Nouvelle conversation dans Sentry/ }))
   expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
@@ -401,10 +398,9 @@ test('affiche toutes les conversations dans un flux strictement récent', async 
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [oldest, newestTicket, middleSentry])
   renderSidebar()
 
-  const toggle = await screen.findByRole('button', { name: 'Récentes' })
-  fireEvent.click(toggle)
+  fireEvent.click(await screen.findByRole('button', { name: /Périmètre et tri/ }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Par activité récente' }))
 
-  expect(toggle.getAttribute('aria-pressed')).toBe('true')
   expect([...document.querySelectorAll('.conv-group-key')].map((element) => element.textContent)).toEqual(['Récentes'])
   expect([...document.querySelectorAll('.conv-row-title')].map((element) => element.textContent)).toEqual([
     'Dernière sur ticket',
@@ -460,7 +456,8 @@ test('un tour qui quitte le flottant fait apparaître la conversation à lire', 
   await waitFor(() => {
     expect(document.querySelector('.navigation-row')?.className).toContain('conv-row-state-unread')
   })
-  expect(screen.getByText('1 à lire')).toBeTruthy()
+  expect(document.querySelector('.conv-group-key')?.textContent).toBe('À toi')
+  expect(document.querySelector('.conv-row-line2.is-unread')?.textContent).toContain('Réponse à lire')
 })
 
 test('revenir sur un projet rouvre sa dernière conversation', async () => {
@@ -491,7 +488,7 @@ test('aucune reprise quand la dernière conversation a quitté la liste active',
   expect(onConversationSelect).toHaveBeenCalledTimes(0)
 })
 
-test('replier un groupe cache ses conversations et garde le compte des non-lues', async () => {
+test('une réponse non lue passe dans « À toi » et replier le groupe garde son compte', async () => {
   const unreadTicket: Conversation = {
     ...startedConversation,
     id: 'conversation-unread-ticket',
@@ -505,11 +502,12 @@ test('replier un groupe cache ses conversations et garde le compte des non-lues'
   renderSidebar()
 
   await waitFor(() => expect(document.querySelector('.navigation-row')).not.toBeNull())
-  expect(screen.getByText('1 à lire')).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Replier TECH-1' }))
+  expect(document.querySelector('.conv-group-key')?.textContent).toBe('À toi')
+  expect(document.querySelector('.conv-row-line2.is-unread')?.textContent).toBe('Réponse à lireTECH-1')
+  fireEvent.click(screen.getByRole('button', { name: 'Replier À toi' }))
   expect(document.querySelector('.navigation-row')).toBeNull()
-  expect(screen.getByText('1 à lire')).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Déplier TECH-1' }))
+  expect(document.querySelector('.conv-group-count.is-waiting')?.textContent).toBe('1')
+  fireEvent.click(screen.getByRole('button', { name: 'Déplier À toi' }))
   expect(document.querySelector('.navigation-row')).not.toBeNull()
 })
 
@@ -518,7 +516,7 @@ test('le menu du filtre bascule vers les archives', async () => {
   renderSidebar()
 
   await waitFor(() => expect(document.querySelector('.navigation-row')).not.toBeNull())
-  fireEvent.click(screen.getByRole('button', { name: /Choisir le périmètre/ }))
+  fireEvent.click(screen.getByRole('button', { name: /Périmètre et tri/ }))
   expect(screen.getByRole('menuitemradio', { name: 'Actives' }).getAttribute('aria-checked')).toBe('true')
   expect(screen.getByRole('menuitemradio', { name: 'Corbeille' })).toBeTruthy()
 })
@@ -547,19 +545,21 @@ test('ouvrir une conversation depuis ailleurs déplie son groupe et l’amène d
   }
 })
 
-test('les conversations récentes gardent le nom du ticket et la recherche accepte sa clé et son titre', async () => {
-  const linked: Conversation = { ...startedConversation, id: 'ticket-search', title: 'Travail en cours', ticket_key: 'TECH-25267', ticket_title: 'Ciblage géographique', created_on_branch: 'feature/TECH-25267' }
-  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [linked, { ...startedConversation, id: 'general', title: 'Autre travail' }])
+test('les conversations récentes gardent la clé du ticket et la recherche accepte sa clé et son titre', async () => {
+  const now = new Date().toISOString()
+  const linked: Conversation = { ...startedConversation, id: 'ticket-search', title: 'Travail en cours', ticket_key: 'TECH-25267', ticket_title: 'Ciblage géographique', created_on_branch: 'feature/TECH-25267', updated_at: now }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [linked, { ...startedConversation, id: 'general', title: 'Autre travail', updated_at: now }])
   renderSidebar()
   await waitFor(() => expect(document.querySelectorAll('.navigation-row').length).toBe(2))
-  fireEvent.click(screen.getByRole('button', { name: 'Récentes' }))
-  expect(document.querySelector('.conv-row-ticket-title')?.textContent).toBe('Ciblage géographique')
+  fireEvent.click(screen.getByRole('button', { name: /Périmètre et tri/ }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Par activité récente' }))
+  expect(document.querySelector('.conv-row-ticket')?.textContent).toBe('TECH-25267')
   expect(document.querySelector('.conv-row-branch')?.textContent).toContain('feature/TECH-25267')
-  fireEvent.change(screen.getByRole('textbox', { name: 'Filtrer les conversations' }), { target: { value: 'tech 25267 geographique' } })
+  fireEvent.change(screen.getByRole('textbox', { name: /Filtrer les conversations/ }), { target: { value: 'tech 25267 geographique' } })
   expect([...document.querySelectorAll('.conv-row-title')].map((item) => item.textContent)).toEqual(['Travail en cours'])
 })
 
-test('un groupe de ticket replié montre au plus trois conversations de moins de 24 h', () => {
+test('un groupe de ticket replié montre au plus deux conversations de moins de 24 h', () => {
   const now = Date.parse('2026-10-02T12:00:00.000Z')
   const at = (id: string, hoursAgo: number): Conversation => ({
     ...startedConversation,
@@ -568,13 +568,13 @@ test('un groupe de ticket replié montre au plus trois conversations de moins de
   })
   const ids = (items: Conversation[]) => items.map((item) => item.id)
   const busy = [at('a', 1), at('b', 2), at('c', 3), at('d', 4), at('e', 30)]
-  expect(ids(compactGroupItems(busy, new Set(), now))).toEqual(['a', 'b', 'c'])
+  expect(ids(compactGroupItems(busy, new Set(), now))).toEqual(['a', 'b'])
   expect(ids(compactGroupItems([at('a', 1), at('b', 30), at('c', 50)], new Set(), now))).toEqual(['a'])
   expect(ids(compactGroupItems([at('a', 30), at('b', 50)], new Set(), now))).toEqual(['a'])
-  expect(ids(compactGroupItems(busy, new Set(['e']), now))).toEqual(['a', 'b', 'c', 'e'])
+  expect(ids(compactGroupItems(busy, new Set(['e']), now))).toEqual(['a', 'b', 'e'])
 })
 
-test('un groupe de ticket replié garde visible une conversation non lue de plus de 24 h', async () => {
+test('une conversation non lue ancienne remonte dans « À toi » au-dessus de son ticket', async () => {
   const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString()
   const ticket = { ...startedConversation, ticket_id: 'ticket-9', ticket_key: 'TECH-9' }
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [
@@ -585,8 +585,9 @@ test('un groupe de ticket replié garde visible une conversation non lue de plus
   renderSidebar()
 
   await waitFor(() => expect(document.querySelectorAll('.conv-row-title')).toHaveLength(2))
-  expect([...document.querySelectorAll('.conv-row-title')].map((element) => element.textContent)).toEqual(['Récente lue', 'Ancienne non lue'])
-  expect(screen.getByRole('button', { name: 'Afficher les 3 conversations de TECH-9' }).getAttribute('title')).toBe('Afficher 1 de plus')
+  expect([...document.querySelectorAll('.conv-group-key')].map((element) => element.textContent)).toEqual(['À toi', 'TECH-9'])
+  expect([...document.querySelectorAll('.conv-row-title')].map((element) => element.textContent)).toEqual(['Ancienne non lue', 'Récente lue'])
+  expect(screen.getByRole('button', { name: '1 autre' })).toBeTruthy()
 })
 
 test('raccourcit une clé de ticket à son numéro, sans toucher aux autres libellés', async () => {
@@ -607,9 +608,10 @@ test('le tronc n’est jamais affiché comme branche de travail, une branche de 
 })
 
 test('le provider s’affiche sur la première ligne et la seconde n’existe que pour une branche de travail', async () => {
+  const now = new Date().toISOString()
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [
-    { ...startedConversation, id: 'trunk', title: 'Sur le tronc', created_on_branch: 'main', worktree_path: null },
-    { ...startedConversation, id: 'work', title: 'Sur une branche', created_on_branch: 'feature/agenda', worktree_path: null },
+    { ...startedConversation, id: 'trunk', title: 'Sur le tronc', created_on_branch: 'main', worktree_path: null, updated_at: now },
+    { ...startedConversation, id: 'work', title: 'Sur une branche', created_on_branch: 'feature/agenda', worktree_path: null, updated_at: now },
   ])
   renderSidebar()
   await waitFor(() => expect(document.querySelectorAll('.conv-row-title')).toHaveLength(2))

@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { getCurrentWindow, type Window } from '@tauri-apps/api/window'
 import type { InstanceHealth } from './types'
 import { InstanceBadge } from './InstanceBadge'
-import { NavIcon, type NavName } from './NavIcon'
+import { Icon, type IconName } from './Icon'
 import type { WorkspaceView } from './types'
 
 type ResizeDirection = Parameters<Window['startResizeDragging']>[0]
@@ -12,25 +12,21 @@ type ResizeDirection = Parameters<Window['startResizeDragging']>[0]
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
 export interface TitlebarDestination {
-  name: NavName
+  icon: IconName
   label: string
   view: WorkspaceView
   onClick: () => void
   shortcut?: string | null
-  badge?: number
-  needsProject?: boolean
 }
 
 interface TitlebarProps {
-  /** Fil d'Ariane discret (projet · vue) ; les entrées vides sont ignorées. */
+  /** Vue courante quand elle remplace les conversations (Rapport, Réglages…). */
   crumbs?: Array<string | null | undefined>
   instance?: InstanceHealth | null
   onRestart?: () => Promise<void>
-  /** Destinations globales : elles remplacent la navigation de l'ancien rail. */
   destinations?: TitlebarDestination[]
   workspaceView?: WorkspaceView
-  hasProject?: boolean
-  /** Exécutions en cours, au centre de la barre. */
+  /** Exécutions en cours et réponses à lire, au centre de la barre. */
   island?: ReactNode
 }
 
@@ -51,97 +47,51 @@ export function Titlebar({
   onRestart,
   destinations = [],
   workspaceView,
-  hasProject = true,
   island,
 }: TitlebarProps) {
   const visibleCrumbs = (crumbs ?? []).filter(
     (crumb): crumb is string => typeof crumb === 'string' && crumb.length > 0,
   )
   const drag = IS_TAURI ? { 'data-tauri-drag-region': true } : {}
-  const navRef = useRef<HTMLElement>(null)
-  const [indicator, setIndicator] = useState<{ left: number; top: number; width: number; height: number; animate: boolean } | null>(null)
-
-  useLayoutEffect(() => {
-    const nav = navRef.current
-    if (nav === null) return
-    function measure(animate: boolean) {
-      const active = nav?.querySelector<HTMLElement>('.titlebar-nav-button.is-active')
-      if (!nav || !active) {
-        setIndicator(null)
-        return
-      }
-      const next = { left: active.offsetLeft, top: active.offsetTop, width: active.offsetWidth, height: active.offsetHeight }
-      setIndicator((current) => current !== null
-        && current.left === next.left && current.width === next.width && current.top === next.top && current.height === next.height
-        ? current
-        : { ...next, animate: animate && current !== null })
-    }
-    measure(true)
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(() => measure(false))
-    observer.observe(nav)
-    return () => observer.disconnect()
-  }, [workspaceView, destinations.length])
+  const showInstance = onRestart !== undefined && instance != null
+    && (instance.instance !== 'stable' || instance.staleSources > 0)
 
   return (
     <header className="titlebar">
       <div className="titlebar-drag" {...drag}>
         <span className="titlebar-app" {...drag}>
+          <span className="titlebar-logo" aria-hidden="true"><i /></span>
           Pupitre
         </span>
-        {visibleCrumbs.length > 0 ? (
-          <span className="titlebar-crumbs" {...drag}>
-            {visibleCrumbs.map((crumb, index) => (
-              <span className="titlebar-crumbs" key={`${index}-${crumb}`} {...drag}>
-                <span aria-hidden="true" {...drag}>
-                  /
-                </span>
-                <span className="titlebar-crumb" {...drag}>
-                  {crumb}
-                </span>
-              </span>
-            ))}
-          </span>
-        ) : null}
-        {island}
+        {visibleCrumbs.map((crumb, index) => (
+          <span className="titlebar-crumb" key={`${index}-${crumb}`} {...drag}>{crumb}</span>
+        ))}
       </div>
 
-      {destinations.length > 0 ? (
-        <nav className="titlebar-nav" aria-label="Navigation" ref={navRef}>
-          {indicator !== null ? (
-            <span
-              className={`titlebar-nav-indicator${indicator.animate ? ' is-moving' : ''}`}
-              aria-hidden="true"
-              style={{ transform: `translate(${indicator.left}px, ${indicator.top}px)`, width: indicator.width, height: indicator.height }}
-            />
-          ) : null}
-          {destinations.map((destination) => (
-            <button
-              key={destination.name}
-              type="button"
-              className={`titlebar-nav-button${workspaceView === destination.view ? ' is-active' : ''}`}
-              onClick={destination.onClick}
-              disabled={destination.needsProject && !hasProject}
-              title={destination.shortcut ? `${destination.label} · ${destination.shortcut}` : destination.label}
-              aria-current={workspaceView === destination.view ? 'true' : undefined}
-              aria-label={destination.badge
-                ? `${destination.label}, ${destination.badge} à lire`
-                : destination.label}
-            >
-              <NavIcon name={destination.name} />
-              <span>{destination.label}</span>
-              {destination.badge && destination.badge > 0 ? (
-                <span className="titlebar-nav-badge" aria-hidden="true">
-                  {destination.badge > 99 ? '99+' : destination.badge}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </nav>
-      ) : null}
+      <div className="titlebar-center" {...drag}>{island}</div>
 
       <div className="titlebar-right">
-        {onRestart ? <InstanceBadge health={instance ?? null} onRestart={onRestart} /> : null}
+        {destinations.length > 0 ? (
+          <nav className="titlebar-nav" aria-label="Navigation">
+            {destinations.map((destination) => {
+              const active = workspaceView === destination.view
+              return (
+                <button
+                  key={destination.view}
+                  type="button"
+                  className={`titlebar-icon-button${active ? ' is-active' : ''}`}
+                  onClick={destination.onClick}
+                  title={destination.shortcut ? `${destination.label} · ${destination.shortcut}` : destination.label}
+                  aria-label={destination.label}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  <Icon name={destination.icon} />
+                </button>
+              )
+            })}
+          </nav>
+        ) : null}
+        {showInstance ? <InstanceBadge health={instance} onRestart={onRestart} /> : null}
         {IS_TAURI ? (
           <div className="titlebar-controls">
             <button
@@ -150,9 +100,7 @@ export function Titlebar({
               aria-label="Réduire la fenêtre"
               onClick={() => void getCurrentWindow().minimize()}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                <path d="M1 5.5h8" fill="none" stroke="currentColor" strokeWidth="1.1" />
-              </svg>
+              <Icon name="minimize" size={14} />
             </button>
             <MaximizeButton />
             <button
@@ -161,9 +109,7 @@ export function Titlebar({
               aria-label="Fermer la fenêtre"
               onClick={() => void getCurrentWindow().close()}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" fill="none" stroke="currentColor" strokeWidth="1.1" />
-              </svg>
+              <Icon name="close" size={14} />
             </button>
           </div>
         ) : null}
@@ -200,16 +146,7 @@ function MaximizeButton() {
       aria-label={isMaximized ? 'Restaurer la fenêtre' : 'Agrandir la fenêtre'}
       onClick={() => void getCurrentWindow().toggleMaximize()}
     >
-      {isMaximized ? (
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-          <path d="M3 3V1.5h5.5V7H7" fill="none" stroke="currentColor" strokeWidth="1.1" />
-          <rect x="1.5" y="3" width="5.5" height="5.5" fill="none" stroke="currentColor" strokeWidth="1.1" />
-        </svg>
-      ) : (
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-          <rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.1" />
-        </svg>
-      )}
+      <Icon name={isMaximized ? 'restore' : 'maximize'} size={14} />
     </button>
   )
 }

@@ -1,13 +1,9 @@
-export type ProjectSection = 'todos' | 'tickets' | 'sentry' | 'changelog' | 'environments' | 'structure' | 'vscode'
+export type ProjectSection = 'todos' | 'tickets' | 'sentry'
 
 export const PROJECT_SECTIONS: ReadonlyArray<{ id: ProjectSection; label: string }> = [
   { id: 'tickets', label: 'Tickets' },
-  { id: 'sentry', label: 'Sentry' },
-  { id: 'changelog', label: 'Changelog' },
-  { id: 'environments', label: 'Environnements' },
   { id: 'todos', label: 'Tâches' },
-  { id: 'structure', label: 'Structure' },
-  { id: 'vscode', label: 'VS Code' },
+  { id: 'sentry', label: 'Sentry' },
 ]
 
 export function projectSectionStorageKey(projectId: string): string {
@@ -21,6 +17,7 @@ export function storedProjectSection(projectId: string): ProjectSection {
 
 export function projectNavigationIndexForShortcut(event: Pick<KeyboardEvent, 'altKey' | 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey'>): number | null {
   if (!event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return null
-  const match = /^(?:Digit|Numpad)([1-8])$/.exec(event.code)
-  return match ? Number(match[1]) - 1 : null
+  const match = /^(?:Digit|Numpad)([1-9])$/.exec(event.code)
+  const index = match ? Number(match[1]) - 1 : null
+  return index !== null && index <= PROJECT_SECTIONS.length ? index : null
 }

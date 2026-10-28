@@ -9,32 +9,41 @@ const { Titlebar } = await import('./Titlebar')
 
 afterEach(cleanup)
 
-test('affiche les destinations globales et marque la vue courante', () => {
-  render(createElement(Titlebar, {
-    crumbs: ['affilae-mono'],
-    workspaceView: 'attention' as const,
-    hasProject: true,
-    destinations: [
-      { name: 'conversations' as const, label: 'Conversations', view: 'conversations' as const, onClick: () => {} },
-      { name: 'attention' as const, label: 'Activité', view: 'attention' as const, onClick: () => {}, badge: 3 },
-      { name: 'settings' as const, label: 'Réglages', view: 'settings' as const, onClick: () => {} },
-    ],
-  }))
-
-  const buttons = [...document.querySelectorAll('.titlebar-nav-button')]
-  expect(buttons).toHaveLength(3)
-  expect(buttons.filter((button) => button.classList.contains('is-active'))).toHaveLength(1)
-  expect(screen.getByRole('button', { name: 'Activité, 3 à lire' })).toBeTruthy()
-  expect(document.querySelector('.titlebar-nav-badge')?.textContent).toBe('3')
+const health = (instance: 'dev' | 'stable', staleSources = 0) => ({
+  ok: true,
+  instance,
+  port: instance === 'dev' ? 4821 : 4820,
+  pid: 1,
+  appPid: 1,
+  startedAt: '2026-10-28T10:00:00.000Z',
+  build: { sha: 'abc1234', dirty: false, source: 'git' as const },
+  staleSources,
 })
 
-test('désactive les destinations qui exigent un projet quand il n’y en a pas', () => {
+test('rend les destinations en icônes nommées et marque la vue courante', () => {
   render(createElement(Titlebar, {
-    hasProject: false,
+    workspaceView: 'settings' as const,
     destinations: [
-      { name: 'dashboard' as const, label: 'Projet', view: 'dashboard' as const, onClick: () => {}, needsProject: true },
+      { icon: 'chart' as const, label: 'Rapport', view: 'activity-report' as const, onClick: () => {} },
+      { icon: 'settings' as const, label: 'Réglages', view: 'settings' as const, onClick: () => {} },
     ],
   }))
 
-  expect(screen.getByRole('button', { name: 'Projet' }).hasAttribute('disabled')).toBe(true)
+  const buttons = [...document.querySelectorAll('.titlebar-icon-button')]
+  expect(buttons).toHaveLength(2)
+  expect(buttons.filter((button) => button.classList.contains('is-active'))).toHaveLength(1)
+  expect(screen.getByRole('button', { name: 'Réglages' }).getAttribute('aria-current')).toBe('page')
+  expect(screen.getByRole('button', { name: 'Rapport' }).getAttribute('aria-current')).toBeNull()
+})
+
+test('montre le badge d’instance en dev et le cache en stable tant que les sources sont à jour', () => {
+  const restart = async () => {}
+  const { rerender } = render(createElement(Titlebar, { instance: health('dev'), onRestart: restart }))
+  expect(document.querySelector('.titlebar-instance')?.textContent).toContain('dev')
+
+  rerender(createElement(Titlebar, { instance: health('stable'), onRestart: restart }))
+  expect(document.querySelector('.titlebar-instance')).toBeNull()
+
+  rerender(createElement(Titlebar, { instance: health('stable', 2), onRestart: restart }))
+  expect(document.querySelector('.titlebar-instance')).not.toBeNull()
 })

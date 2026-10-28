@@ -10,7 +10,7 @@
 .project-task-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border: 0; border-radius: var(--r-full); background: transparent; color: var(--text-faint); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
 .project-task-tabs button:hover { color: var(--text); }
 .project-task-tabs button[aria-selected='true'] { color: var(--text-strong); background: var(--bg-raised); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
-.project-task-tabs button span { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); }
+.project-task-tabs button span { font-variant-numeric: tabular-nums; font-size: 10px; color: var(--text-faint); }
 .project-task-tabs button[aria-selected='true'] span { color: var(--text-muted); }
 .project-task-search { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-full); color: var(--text-faint); transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), width var(--dur-fast) var(--ease); }
 .project-task-search:hover, .project-task-search:focus-within, .project-task-search.has-value { border-color: var(--border-subtle); background: var(--bg-input); color: var(--text-muted); }
@@ -62,7 +62,7 @@
 .project-task-state.is-awaiting_validation { color: var(--accent-bright); background: var(--accent-soft); }
 .project-task-state.is-blocked { color: var(--warn); background: var(--warn-soft); }
 .project-task-state.is-queued { color: var(--text-muted); }
-.project-task-ticket { font-family: var(--font-mono); font-size: 10px; }
+.project-task-ticket { font-variant-numeric: tabular-nums; font-size: 10px; }
 .project-task-link { color: var(--accent-bright); text-decoration: none; }
 .project-task-link:hover { text-decoration: underline; }
 .project-task-error { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--warn); }
@@ -82,7 +82,7 @@
 .project-task-empty p { color: var(--text-muted); font-size: 12px; line-height: 1.7; max-width: 330px; }
 .project-task-empty em { font-style: normal; color: var(--accent-bright); }
 .conversation-list-heading > span { color: var(--text-muted); font-size: 12px; display: flex; align-items: baseline; gap: 6px; }
-.conversation-list-heading > span > span { color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; }
+.conversation-list-heading > span > span { color: var(--text-faint); font-variant-numeric: tabular-nums; font-size: 10px; }
 .project-sections-list button { border-radius: var(--r-sm); }
 @media (prefers-reduced-motion: reduce) { .project-task-check, .project-task-row, .project-task-pulse, .project-task-spinner { transition: none; animation: none; } }
 

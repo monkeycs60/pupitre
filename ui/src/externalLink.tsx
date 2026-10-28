@@ -1,5 +1,5 @@
 import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener'
-import type { MouseEvent, ReactNode } from 'react'
+import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import { getMediaPath } from './api'
 import { absoluteSidecarUrl, hasTauriRuntime } from './transport'
 
@@ -88,6 +88,7 @@ export function ExternalLink({
   title,
   ariaLabel,
   onClick,
+  style,
   children,
 }: {
   href: string
@@ -95,6 +96,7 @@ export function ExternalLink({
   title?: string
   ariaLabel?: string
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void
+  style?: CSSProperties
   children: ReactNode
 }) {
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -118,6 +120,7 @@ export function ExternalLink({
       title={title}
       aria-label={ariaLabel}
       onClick={handleClick}
+      style={style}
     >
       {children}
     </a>

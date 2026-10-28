@@ -337,7 +337,7 @@
 
 .project-mcp-name {
   color: var(--text);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
 }
 
@@ -356,7 +356,7 @@
 .project-mcp-cost {
   margin-left: auto;
   color: var(--text-faint);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   white-space: nowrap;
 }

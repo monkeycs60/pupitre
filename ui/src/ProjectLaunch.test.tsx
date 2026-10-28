@@ -20,7 +20,7 @@ afterEach(() => {
 
 const project = { id: 'p1', name: 'coworker-malin', path: '/code/cm' } as never
 
-test('affiche les adresses d’une commande en cours, le front en premier et en vert', async () => {
+test('résume les serveurs, puis détaille une commande de Pupitre avec relance, logs et arrêt', async () => {
   globalThis.fetch = mock(async () => Response.json([
     {
       id: 'dev', project_id: 'p1', name: 'Développement', command: 'bun run dev', cwd_relative: '.', port: null, kind: 'run', running: true,
@@ -33,12 +33,18 @@ test('affiche les adresses d’une commande en cours, le front en premier et en 
     { id: 'test', project_id: 'p1', name: 'Tests', command: 'bun test', cwd_relative: '.', port: null, kind: 'run', running: false, urls: [] },
   ])) as unknown as typeof fetch
   render(<ProjectLiveLaunches project={project} />)
-  const front = await screen.findByRole('link', { name: /localhost:5174\/app/ })
+  const summary = await screen.findByRole('button', { name: /2 serveurs/ })
+  expect(summary.getAttribute('aria-expanded')).toBe('false')
+  expect(summary.textContent).toContain('sur 1 branche')
+  fireEvent.click(summary)
+  const front = screen.getByRole('link', { name: /localhost:5174\/app/ })
   expect(front.getAttribute('href')).toBe('http://localhost:5174/app/')
-  expect(front.className).toContain('is-live')
-  expect(front.className).toContain('is-primary')
+  expect(front.className).not.toContain('is-pending')
   expect(screen.getByRole('link', { name: /localhost:3000/ }).className).toContain('is-pending')
   expect(screen.queryByText('Tests')).toBeNull()
+  expect(screen.getByText('lancé par Pupitre')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Relancer Développement' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Logs de Développement' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Arrêter Développement' })).toBeTruthy()
 })
 
@@ -47,10 +53,10 @@ test('ne montre rien quand aucune commande ne tourne', async () => {
   globalThis.fetch = fetchMock as unknown as typeof fetch
   const { container } = render(<ProjectLiveLaunches project={{ ...(project as object), id: 'p2' } as never} />)
   await waitFor(() => expect(fetchMock).toHaveBeenCalled())
-  expect(container.querySelector('.launch-live-strip')).toBeNull()
+  expect(container.querySelector('.servers-block')).toBeNull()
 })
 
-test('montre en gris les serveurs du projet lancés ailleurs, sans doubler ceux de Pupitre', async () => {
+test('range les serveurs lancés ailleurs par branche, sans doubler ceux de Pupitre', async () => {
   globalThis.fetch = mock(async (input: RequestInfo | URL) => {
     if (String(input).includes('/api/applications')) {
       const base = { projectName: 'coworker-malin', workspace: 'app', branch: 'master', cwd: '/code/cm', process: 'node' }
@@ -70,18 +76,17 @@ test('montre en gris les serveurs du projet lancés ailleurs, sans doubler ceux 
     ])
   }) as unknown as typeof fetch
   render(<ProjectLiveLaunches project={{ ...(project as object), id: 'p3' } as never} />)
-  const api = await screen.findByRole('link', { name: /localhost:3000/ })
-  expect(api.className).toContain('is-external')
-  expect(screen.getByText('Lancé ailleurs')).toBeTruthy()
+  const summary = await screen.findByRole('button', { name: /4 serveurs/ })
+  expect(summary.textContent).toContain('sur 3 branches')
+  fireEvent.click(summary)
   expect(screen.getAllByRole('link', { name: /localhost:5174/ })).toHaveLength(1)
   expect(screen.queryByRole('link', { name: /8080/ })).toBeNull()
-  expect(document.querySelectorAll('.launch-external-group')).toHaveLength(1)
-  const toggle = screen.getByRole('button', { name: /\+1/ })
-  expect(toggle.getAttribute('aria-expanded')).toBe('false')
-  fireEvent.click(toggle)
-  const groups = document.querySelectorAll('.launch-external-group')
-  expect(groups).toHaveLength(2)
-  expect(groups[0]!.querySelector('.launch-external-origin')!.textContent).toBe('master')
-  expect(groups[1]!.querySelector('.launch-external-origin')!.textContent).toBe('TECH-1 Match AI')
-  expect(groups[1]!.querySelectorAll('.launch-link')).toHaveLength(2)
+  const rows = [...document.querySelectorAll('.servers-row')]
+  expect(rows).toHaveLength(3)
+  expect(rows[1]!.querySelector('.servers-row-who strong')!.textContent).toBe('master')
+  expect(rows[2]!.querySelector('.servers-row-who')!.textContent).toContain('TECH-1')
+  expect(rows[2]!.querySelector('.servers-row-who')!.textContent).toContain('Match AI')
+  expect(rows[2]!.querySelectorAll('.port-chip')).toHaveLength(2)
+  expect(rows[2]!.textContent).toContain('api')
+  expect(rows[2]!.textContent).toContain('4219')
 })

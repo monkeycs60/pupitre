@@ -10,10 +10,8 @@ import type {
   GitCommitResult,
   GitPushCommit,
   GitSnapshot,
-  CodeBranchChanges,
   CodeConversationCommits,
   CodeFile,
-  CodeFileList,
   CodeSource,
   FleetItem,
   IntegrationType,
@@ -33,8 +31,6 @@ import type {
   Routine,
   RoutineRun,
   SessionSummary,
-  ProjectChangelogPayload,
-  ProjectChangelogState,
   AppNotification,
   AttentionItem,
   ConversationNudge,
@@ -526,9 +522,6 @@ export function sendReviewComments(conversationId: string): Promise<ReviewCommen
   return fetchJson(`/api/conversations/${routeId(conversationId)}/review-comments/send`, jsonPost({}))
 }
 
-export function getVscodeWebUrl(conversationId: string): Promise<{ url: string }> {
-  return fetchJson(`/api/conversations/${routeId(conversationId)}/vscode-web`)
-}
 
 export function getConversationChanges(conversationId: string, signal?: AbortSignal): Promise<ConversationChanges> {
   return fetchJson(`/api/conversations/${routeId(conversationId)}/changes`, { signal })
@@ -1156,13 +1149,7 @@ export function createSessionSummary(conversationId: string): Promise<SessionSum
   )
 }
 
-export function listProjectChangelog(projectId: string): Promise<ProjectChangelogPayload> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/changelog`)
-}
 
-export function refreshProjectChangelog(projectId: string): Promise<ProjectChangelogState> {
-  return fetchJson(`/api/projects/${routeId(projectId)}/changelog/refresh`, jsonPost({}))
-}
 
 export interface DiscussionDocument {
   filename: string
@@ -1360,9 +1347,6 @@ export function listCodeSources(projectId: string, signal?: AbortSignal): Promis
   return fetchJson(codeUrl(projectId, 'sources', {}), { signal })
 }
 
-export function listCodeFiles(projectId: string, source: string, signal?: AbortSignal): Promise<CodeFileList> {
-  return fetchJson(codeUrl(projectId, 'files', { source }), { signal })
-}
 
 export function getCodeFile(
   projectId: string,
@@ -1378,9 +1362,6 @@ export function getCodeFile(
 
 
 
-export function getCodeChanges(projectId: string, source: string, signal?: AbortSignal): Promise<CodeBranchChanges> {
-  return fetchJson(codeUrl(projectId, 'changes', { source }), { signal })
-}
 
 
 

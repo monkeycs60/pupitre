@@ -58,6 +58,17 @@
      Le point ambre, la barre ambre et le compteur ambre sont le même signal. */
   --unread: #f0b64a;
   --unread-soft: rgba(240, 182, 74, 0.13);
+  --vscode: #3b8eea;
+  /* En cours : un tour d'agent tourne. */
+  --live: #6ea2ff;
+  --live-soft: rgba(110, 162, 255, 0.14);
+  /* Pastille de couleur par application dans les ports des serveurs. */
+  --app-1: #9d8cff;
+  --app-2: #5d9cf5;
+  --app-3: #3fbf9f;
+  --app-4: #e0a640;
+  --app-5: #e07aa5;
+  --app-6: #9ba1ad;
   /* Providers */
   --prov-codex: #4ec9a5;
   --prov-codex-soft: rgba(78, 201, 165, 0.12);
@@ -68,6 +79,7 @@
   --prov-reasonix: #71b7a8;
   --prov-reasonix-soft: rgba(113, 183, 168, 0.14);
   --sentry-gold: #d6ad55;
+  --user-bubble: rgba(255, 255, 255, 0.06);
   --neutral-soft: rgba(255, 255, 255, 0.05);
 
   /* Palette catégorielle des graphiques, validée pour fond sombre sur la liste
@@ -105,9 +117,9 @@
 
   /* Rayons */
   --r-xs: 3px;
-  --r-sm: 5px;
-  --r-md: 8px;
-  --r-lg: 12px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
   --r-full: 999px;
 
   /* Espacement */
@@ -140,14 +152,16 @@
   /* Ombres — réservées aux éléments réellement flottants */
   --shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.2), 0 12px 32px -18px rgba(0, 0, 0, 0.6);
 
   /* Typographie */
-  --font-sans: ui-sans-serif, -apple-system, "Inter", "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
-  --text-xs: 11px;
-  --text-sm: 12px;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "JetBrains Mono", monospace;
+  --text-xs: 11.5px;
+  --text-sm: 12.5px;
   --text-base: 13px;
   --text-md: 15px;
+  --text-reading: 14.5px;
   --text-lg: 17px;
   --text-code: 12.5px;
 
@@ -208,6 +222,11 @@ pre {
 
 ::selection {
   background: var(--accent-soft);
+}
+
+.icon {
+  flex: none;
+  vertical-align: middle;
 }
 
 /* --- Scrollbars fines --------------------------------------------------- */
@@ -273,29 +292,29 @@ pre {
   color-scheme: light;
   --tint: #000;
 
-  --bg-app: #ebe8e2;
-  --bg-workspace: #f9f8f6;
+  --bg-app: #f0efea;
+  --bg-workspace: #fdfcfa;
   --bg-panel: #ffffff;
-  --bg-sidebar: #f2f0eb;
-  --bg-rail: #e2ded5;
-  --bg-sidebar-header: #f2f0eb;
-  --bg-titlebar: #e2ded5;
-  --bg-toolbar: #ffffff;
+  --bg-sidebar: #f7f6f2;
+  --bg-rail: #f0efea;
+  --bg-sidebar-header: #f7f6f2;
+  --bg-titlebar: #f0efea;
+  --bg-toolbar: #fdfcfa;
   --bg-raised: #ffffff;
   --bg-overlay: #ffffff;
   --bg-input: #ffffff;
-  --bg-hover: rgba(24, 20, 40, 0.055);
-  --bg-active: rgba(91, 74, 230, 0.1);
+  --bg-hover: rgba(23, 22, 28, 0.045);
+  --bg-active: rgba(91, 74, 230, 0.09);
   --scrim: rgba(36, 32, 48, 0.34);
 
-  --border-subtle: rgba(24, 20, 40, 0.1);
-  --border: rgba(24, 20, 40, 0.16);
-  --border-strong: rgba(24, 20, 40, 0.26);
+  --border-subtle: rgba(23, 22, 28, 0.08);
+  --border: rgba(23, 22, 28, 0.13);
+  --border-strong: rgba(23, 22, 28, 0.22);
 
-  --text: #24222b;
-  --text-strong: #0f0e14;
-  --text-muted: #46424e;
-  --text-faint: #625e6a;
+  --text: #1f1d26;
+  --text-strong: #17161c;
+  --text-muted: #4a4752;
+  --text-faint: #6b6773;
 
   --accent: #5b4ae6;
   --accent-hover: #4b3ad8;
@@ -314,8 +333,17 @@ pre {
   --meeting: #0ea5e9;
   --meeting-bg: #c4eefb;
   --meeting-text: #0c4a6e;
-  --unread: #b8760a;
-  --unread-soft: rgba(184, 118, 10, 0.13);
+  --unread: #a8690a;
+  --unread-soft: rgba(184, 118, 10, 0.12);
+  --live: #2563d6;
+  --live-soft: rgba(37, 99, 214, 0.1);
+  --vscode: #1f7bd1;
+  --app-1: #6d5ce8;
+  --app-2: #2f74d6;
+  --app-3: #149b7f;
+  --app-4: #c98500;
+  --app-5: #c2477a;
+  --app-6: #6b7280;
   --prov-codex: #0f8466;
   --prov-codex-soft: rgba(15, 132, 102, 0.1);
   --prov-claude: #c05a37;
@@ -325,6 +353,7 @@ pre {
   --prov-reasonix: #2b8573;
   --prov-reasonix-soft: rgba(43, 133, 115, 0.12);
   --sentry-gold: #9f7514;
+  --user-bubble: #efeee9;
   --neutral-soft: rgba(24, 20, 40, 0.08);
 
   --code-keyword: #5a3ccf;
@@ -344,6 +373,7 @@ pre {
 
   --shadow-overlay: 0 18px 48px rgba(30, 26, 48, 0.16), 0 2px 8px rgba(30, 26, 48, 0.08);
   --shadow-popover: 0 8px 24px rgba(30, 26, 48, 0.13);
+  --shadow-composer: 0 1px 2px rgba(23, 22, 28, 0.04), 0 10px 28px -18px rgba(23, 22, 28, 0.35);
 }
 
 :root[data-theme="light"] ::highlight(pupitre-search) {

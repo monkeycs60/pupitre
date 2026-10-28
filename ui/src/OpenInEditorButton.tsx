@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { openConversationInEditor } from './api'
 import { pushToast } from './toasts'
+import { VscodeGlyph } from './Icon'
 
 export function OpenInEditorButton({ conversationId }: { conversationId: string }) {
   const [opening, setOpening] = useState(false)
@@ -31,15 +32,14 @@ export function OpenInEditorButton({ conversationId }: { conversationId: string 
   return (
     <button
       type="button"
-      className="header-action header-action-icon"
+      className="vscode-button"
       onClick={() => void open()}
       disabled={opening}
       title="Ouvrir le worktree de la conversation dans une nouvelle fenêtre VS Code"
       aria-label="Ouvrir dans VS Code"
     >
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5M9 3 7 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <VscodeGlyph />
+      VS Code
     </button>
   )
 }

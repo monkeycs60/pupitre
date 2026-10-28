@@ -10,7 +10,7 @@
 .memory-list > button { display: grid; width: 100%; min-height: 52px; padding: var(--space-2) var(--space-3); text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--border-subtle); cursor: pointer; }
 .memory-list > button:hover { background: var(--bg-hover); }
 .memory-list > button.is-selected { background: var(--bg-active); box-shadow: inset 2px 0 var(--accent); }
-.memory-list span { overflow: hidden; color: var(--text-strong); font-family: var(--font-mono); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
+.memory-list span { overflow: hidden; color: var(--text-strong); font-variant-numeric: tabular-nums; font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
 .memory-list small { color: var(--text-faint); font-size: var(--text-xs); }
 .memory-editor textarea { width: 100%; height: 100%; padding: var(--space-4); resize: none; color: var(--text); font-family: var(--font-mono); font-size: var(--text-code); line-height: 1.6; background: var(--bg-app); border: 0; outline: none; }
 .memory-editor textarea:focus { box-shadow: inset 2px 0 var(--accent); }

@@ -33,7 +33,7 @@ test('aucune classe CSS déclarée n’est devenue inatteignable', () => {
 
   const declared = new Set<string>()
   for (const sheet of readdirSync(STYLES).filter((name) => name.endsWith('.css'))) {
-    const css = readFileSync(join(STYLES, sheet), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const css = readFileSync(join(STYLES, sheet), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/url\([^)]*\)/g, '')
     for (const match of css.matchAll(/\.([a-z][a-z0-9-]{2,})/g)) declared.add(match[1]!)
   }
 

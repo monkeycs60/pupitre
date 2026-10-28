@@ -111,15 +111,13 @@ export function DesignView() {
     void openPanel(resume)
   }, [openPanel, resume])
 
-  // Le panneau ne survit pas à la sortie de la vue : il se dessine au-dessus du
-  // DOM, donc le laisser visible le poserait sur la vue suivante. On le masque
-  // plutôt que de le fermer, ce qui garde la page chargée et rend le retour
-  // instantané.
+  // Le panneau se dessine au-dessus du DOM : à la sortie de la vue, on le ferme,
+  // ce qui libère son processus WebKit. Le retour recharge la page.
   useEffect(() => {
     if (!hasTauriRuntime()) return
     return () => {
       sentBounds.current = null
-      void invoke('set_design_panel_visible', { visible: false }).catch(() => {})
+      void invoke('close_design_panel').catch(() => {})
     }
   }, [])
 

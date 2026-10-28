@@ -1,14 +1,11 @@
-import { PersonalEnvironments } from './PersonalEnvironments'
 import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { BranchIcon } from './BranchIcon'
 import { TicketLinkIcons } from './TicketLinkIcons'
 import { gitlabContextOf, ticketLinksOf } from './ticketLinks'
-import { getSentryInbox, listProjectChangelog, refreshProjectChangelog, refreshProjectDashboard, updateTicketInstruction } from './api'
+import { getSentryInbox, refreshProjectDashboard, updateTicketInstruction } from './api'
 import type {
   DashboardIntegration,
   Project,
-  ProjectChangelogEntry,
-  ProjectChangelogState,
   ReviewRequest,
   TicketConversationSummary,
   TicketRef,
@@ -17,7 +14,6 @@ import type {
 import { useDashboard } from './useDashboard'
 import { SentryInbox } from './SentryInbox'
 import { ExternalLink } from './externalLink'
-import { useNow } from './useNow'
 import { PROJECT_SECTIONS, projectSectionStorageKey, storedProjectSection, type ProjectSection } from './projectSections'
 
 interface DashboardViewProps {
@@ -43,20 +39,14 @@ const DASHBOARD_TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
   { id: 'todos', label: 'Tâches' },
   { id: 'tickets', label: 'Mes tickets' },
   { id: 'sentry', label: 'Issues Sentry' },
-  { id: 'changelog', label: 'Changelog' },
-  { id: 'environments', label: 'Environnements' },
 ]
 
-const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { todos: 'Tâches', tickets: 'Tickets', sentry: 'Sentry', changelog: 'Changelog', environments: 'Environnements', structure: 'Structure', vscode: 'VS Code' }
+const PROJECT_PANEL_LABELS: Record<DashboardTab, string> = { todos: 'Tâches', tickets: 'Tickets', sentry: 'Sentry' }
 
 const PROJECT_SECTION_ICONS: Record<DashboardTab, ReactNode> = {
   todos: <path d="m2.5 4 1.2 1.2L6 2.9M8 4h5M2.5 8h3M8 8h5M2.5 12h3M8 12h5" />,
   tickets: <><rect x="2" y="4" width="12" height="8" rx="1.5" /><path d="M2 7h12" /></>,
   sentry: <path d="M8 2.5 13.5 12H10a2 2 0 0 0-2-2 2 2 0 0 0-2 2H2.5Z" />,
-  changelog: <><path d="M4 4.2A5 5 0 1 1 3 9" /><path d="M4 1.8v2.8H1.2M8 5v3l2 1.2" /></>,
-  environments: <><circle cx="8" cy="3" r="1.5" /><circle cx="3.5" cy="12" r="1.5" /><circle cx="12.5" cy="12" r="1.5" /><path d="M8 4.5v3M3.5 10.5V8h9v2.5" /></>,
-  structure: <><path d="M2 12.5 8 15l6-2.5M2 12.5v-4L8 6l6 2.5v4M8 15v-4" /><path d="M5.5 7V3.5L8 2.5l2.5 1V7" /></>,
-  vscode: <path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5" />,
 }
 
 function dashboardTabStorageKey(projectId: string): string {
@@ -185,20 +175,6 @@ function bannerTone(integration: DashboardIntegration): string {
   return ' is-warn'
 }
 
-function changelogTiming(state: ProjectChangelogState | null, now: number): string {
-  if (state?.status === 'running') return 'Actualisation en cours'
-  if (!state?.next_refresh_at) return 'Jamais actualisé'
-  const remaining = Date.parse(state.next_refresh_at) - now
-  if (remaining <= 0) return 'Actualisation imminente'
-  const minutes = Math.ceil(remaining / 60_000)
-  const delay = minutes < 60
-    ? `${minutes} min`
-    : `${Math.floor(minutes / 60)} h ${minutes % 60} min`
-  return state.status === 'error'
-    ? `Dernière actualisation en échec · prochain essai dans ${delay}`
-    : `Prochaine actualisation dans ${delay}`
-}
-
 export function DashboardView({
   project,
   onConversationSelect,
@@ -222,9 +198,6 @@ export function DashboardView({
   const [instructionSaving, setInstructionSaving] = useState(false)
   const [instructionError, setInstructionError] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: TicketSortKey; direction: 'asc' | 'desc' }>({ key: 'ticket', direction: 'asc' })
-  const [changelog, setChangelog] = useState<ProjectChangelogEntry[]>([])
-  const [changelogState, setChangelogState] = useState<ProjectChangelogState | null>(null)
-  const [changelogMenuOpen, setChangelogMenuOpen] = useState(false)
   /* Le compteur du rail : l'inbox Sentry n'est pas dans le payload du
      tableau de bord, et la section ne se monte qu'une fois ouverte. */
   const [sentryCount, setSentryCount] = useState(0)
@@ -240,7 +213,6 @@ export function DashboardView({
       tab: tabSelection.request !== todoPanelRequest ? 'todos' : storedDashboardTab(project.id),
     })
   }
-  const now = useNow(30_000)
   const hasGitlab = data?.integrations.some((integration) => integration.type === 'gitlab') ?? false
   const hasSentry = data?.integrations.some((integration) => integration.type === 'sentry') ?? false
   const hasTicketIntegration = data?.integrations.some((integration) => ['clickup', 'notion', 'gitlab'].includes(integration.type)) ?? false
@@ -251,7 +223,6 @@ export function DashboardView({
     () => `dashboard-table${hasGitlab ? ' dashboard-table--with-gitlab' : ''}`,
     [hasGitlab],
   )
-  const changelogHasMultipleRepositories = new Set(changelog.map((item) => item.repository_path)).size > 1
   const sortedTickets = useMemo(() => {
     const byKey = (left: TicketRow, right: TicketRow) => left.key.localeCompare(right.key, 'fr', { numeric: true })
     return [...(data?.tickets ?? [])].sort((left, right) => {
@@ -265,17 +236,6 @@ export function DashboardView({
   }, [data?.tickets, sort])
 
   useEffect(() => {
-    let cancelled = false
-    void listProjectChangelog(project.id).then((payload) => {
-      if (!cancelled && Array.isArray(payload.entries)) {
-        setChangelog(payload.entries)
-        setChangelogState(payload.state)
-      }
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [project.id])
-
-  useEffect(() => {
     if (!embedded || !hasSentry) return
     const controller = new AbortController()
     void getSentryInbox(project.id, controller.signal)
@@ -284,36 +244,10 @@ export function DashboardView({
     return () => controller.abort()
   }, [project.id, embedded, hasSentry])
 
-  useEffect(() => {
-    let cancelled = false
-    const delay = changelogState?.status === 'running' ? 2_000 : 30_000
-    const timer = setInterval(() => {
-      void listProjectChangelog(project.id).then((payload) => {
-        if (!cancelled && Array.isArray(payload.entries)) {
-          setChangelog(payload.entries)
-          setChangelogState(payload.state)
-        }
-      }).catch(() => {})
-    }, delay)
-    return () => { cancelled = true; clearInterval(timer) }
-  }, [project.id, changelogState?.status])
-
   async function handleRefresh() {
     try {
       await refreshProjectDashboard(project.id)
     } catch {}
-  }
-
-  async function handleChangelogRefresh() {
-    setChangelogMenuOpen(false)
-    try {
-      setChangelogState(await refreshProjectChangelog(project.id))
-    } catch {}
-  }
-
-  function showChangelog() {
-    setChangelogMenuOpen(false)
-    selectTab('changelog')
   }
 
   function selectTab(tab: DashboardTab) {
@@ -373,7 +307,6 @@ export function DashboardView({
 
   function refreshActiveTab() {
     if (activeTab === 'todos') onRefreshTodos?.()
-    else if (activeTab === 'changelog') void handleChangelogRefresh()
     else void handleRefresh()
   }
 
@@ -434,32 +367,6 @@ export function DashboardView({
             <span className={`dashboard-connection ${connected ? 'is-live' : ''}`}>
               <i aria-hidden="true" /> {connected ? 'temps réel' : 'reconnexion'}
             </span>
-            <div
-              className="dashboard-changelog-menu"
-              onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChangelogMenuOpen(false)
-              }}
-            >
-              <button
-                type="button"
-                className="secondary-button"
-                aria-haspopup="menu"
-                aria-expanded={changelogMenuOpen}
-                title={changelogTiming(changelogState, now)}
-                onClick={() => setChangelogMenuOpen((open) => !open)}
-              >
-                Changelog <span aria-hidden="true">⌄</span>
-              </button>
-              {changelogMenuOpen ? (
-                <div className="dashboard-changelog-dropdown" role="menu">
-                  <button type="button" role="menuitem" onClick={showChangelog}>Voir le changelog</button>
-                  <button type="button" role="menuitem" disabled={changelogState?.status === 'running'} onClick={() => void handleChangelogRefresh()}>
-                    {changelogState?.status === 'running' ? 'Actualisation en cours…' : 'Actualiser le changelog'}
-                  </button>
-                  <small>{changelogTiming(changelogState, now)}</small>
-                </div>
-              ) : null}
-            </div>
             <button type="button" className="secondary-button" onClick={refreshActiveTab}>
               Rafraîchir
             </button>
@@ -761,57 +668,6 @@ export function DashboardView({
           </div>
         ) : null}
 
-        {activeTab === 'changelog' ? (
-        <section id="dashboard-panel-changelog" role="tabpanel" aria-label={sectionOnly ? 'Changelog' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-changelog' : 'dashboard-tab-changelog'} className="dashboard-section dashboard-changelog">
-          <div className="dashboard-section-head">
-            <div><h2 className="dashboard-section-title">Changelog</h2><p>{changelogTiming(changelogState, now)}</p></div>
-          </div>
-          {changelog.length === 0 ? <div className="dashboard-empty"><strong>Aucun commit importé</strong><p>Le premier passage reprendra automatiquement l’historique depuis le 1er janvier 2026.</p></div> : <ol className="dashboard-changelog-list">{changelog.slice(0, 100).map((item) => <li key={`${item.repository_path}:${item.commit_sha}`}><div>{changelogHasMultipleRepositories ? <span className="dashboard-repository-label">{item.repository_path === '.' ? project.name : item.repository_path.split('/').at(-1)}</span> : null}<span className="dashboard-branch-label"><BranchIcon />{item.branch}</span><code>{item.commit_sha.slice(0, 7)}</code>{item.is_merge ? <span className="dashboard-merge-label">fusion</span> : null}{item.lines_added !== null ? <span className={`dashboard-line-stats${item.is_merge ? ' is-muted' : ''}`} aria-label={`${item.lines_added} lignes ajoutées, ${item.lines_removed ?? 0} supprimées`}><ins>+{item.lines_added}</ins><del>−{item.lines_removed ?? 0}</del></span> : null}<time>{new Date(item.committed_at).toLocaleDateString('fr-FR')}</time></div><strong>{item.product_message ?? item.subject}</strong>{item.product_message ? <small>{item.subject}</small> : <small>Enrichissement en attente</small>}</li>)}</ol>}
-        </section>
-        ) : null}
-
-        {activeTab === 'environments' ? (
-          <section id="dashboard-panel-environments" role="tabpanel" aria-label={sectionOnly ? 'Environnements' : undefined} aria-labelledby={sectionOnly ? undefined : embedded ? 'project-section-environments' : 'dashboard-tab-environments'} className="dashboard-section">
-            <div className="dashboard-section-head">
-              <h2 className="dashboard-section-title">Environnements</h2>
-              <PersonalEnvironments projectId={project.id} onConversation={onConversationSelect} />
-            </div>
-            {data === null ? null : data.environments.length === 0 ? (
-              <div className="dashboard-empty"><strong>Aucun environnement détecté</strong><p>Les derniers déploiements apparaîtront ici.</p></div>
-            ) : <div className="dashboard-envs" role="region" aria-label="Environnements">
-              <div className="dashboard-env-row dashboard-head">
-                <span>Environnement</span>
-                <span>Branche</span>
-                <span>Par</span>
-                <span>Depuis</span>
-              </div>
-              {data.environments.map((environment) => (
-                <div className="dashboard-env-row" key={`${environment.project}:${environment.name}`}>
-                  <span>
-                    <small>{environment.project}</small>
-                    {' '}
-                    <strong>{environment.name}</strong>
-                  </span>
-                  <span className="dashboard-branch">
-                    {environment.missing ? (
-                      'introuvable'
-                    ) : environment.branch ? (
-                      <>
-                        <BranchIcon />
-                        <span>{environment.branch}</span>
-                        {environment.key ? <small> · {environment.key}</small> : null}
-                      </>
-                    ) : (
-                      '—'
-                    )}
-                  </span>
-                  <span>{environment.user ?? '—'}</span>
-                  <span>{relative(environment.deployedAt)}</span>
-                </div>
-              ))}
-            </div>}
-          </section>
-        ) : null}
 
         {activeTab === 'tickets' && data && data.toReview.length > 0 ? (
           <section className="dashboard-section">

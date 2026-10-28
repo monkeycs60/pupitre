@@ -96,7 +96,7 @@
   height: 14px;
   padding: 0 3px;
   color: var(--bg-workspace);
-  font: 700 9px/14px var(--font-mono);
+  font: 700 9px/14px var(--font-sans);
   text-align: center;
   background: var(--text-muted);
   border-radius: var(--r-full);
@@ -243,7 +243,7 @@
   bottom: 5px;
   padding: 2px 4px;
   color: var(--text-strong);
-  font: 700 9px/1.2 var(--font-mono);
+  font: 700 9px/1.2 var(--font-sans);
   background: var(--bg-overlay);
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -267,7 +267,7 @@
 
 .thread-asset-meta span,
 .thread-asset-source { color: var(--text-faint); font-size: var(--text-xs); }
-.thread-asset-meta time { color: var(--text-faint); font: var(--text-xs)/1.4 var(--font-mono); }
+.thread-asset-meta time { color: var(--text-faint); font: var(--text-xs)/1.4 var(--font-sans); }
 .thread-asset-download {
   align-self: flex-start;
   padding: 3px 7px;
@@ -280,7 +280,7 @@
 }
 .thread-asset-download:hover { color: var(--text-strong); border-color: var(--border-strong); }
 .thread-asset-source { display: flex; flex-direction: column; gap: 2px; padding: 5px 2px 0; }
-.thread-asset-source time { font: var(--text-xs)/1.4 var(--font-mono); }
+.thread-asset-source time { font: var(--text-xs)/1.4 var(--font-sans); }
 
 .asset-document-preview {
   position: fixed;
@@ -314,7 +314,7 @@
   gap: var(--space-2);
 }
 
-.asset-document-preview > header span { color: var(--accent); font: 700 var(--text-xs)/1 var(--font-mono); }
+.asset-document-preview > header span { color: var(--accent); font: 700 var(--text-xs)/1 var(--font-sans); }
 .asset-document-preview > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset-document-preview .html-document-preview { flex: 1; height: auto; min-height: 0; border-top: 0; }
 
@@ -359,7 +359,7 @@
 .thread-search-count {
   flex: none;
   color: var(--text-faint);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
@@ -480,20 +480,18 @@
 
 .message-bubble {
   min-width: 0;
-  font-size: var(--text-md);
+  font-size: var(--text-reading);
   overflow-wrap: anywhere;
 }
 
 .user-message {
   max-width: 82%;
   padding: var(--space-3) var(--space-4);
-  color: var(--text-strong);
+  color: var(--text);
   white-space: pre-wrap;
-  line-height: 1.62;
-  /* Voile accent : la voix de l'utilisateur se distingue des cartes outil,
-     toutes posées sur le même gris relevé. */
-  background: color-mix(in srgb, var(--accent) 7%, var(--bg-raised));
-  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
+  line-height: 1.6;
+  background: var(--user-bubble);
+  border: 0;
   /* Coin cassé côté message : signature visuelle des bulles utilisateur. */
   border-radius: 12px 12px 4px 12px;
 }
@@ -1149,7 +1147,7 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
   flex: none;
   margin-left: auto;
   color: var(--text-faint);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   animation: rise-in var(--dur) var(--ease-out);
@@ -1181,7 +1179,7 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
   background: color-mix(in srgb, var(--bg-overlay) 92%, transparent);
   box-shadow: var(--shadow-popover);
   color: var(--text-strong);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
@@ -1269,7 +1267,7 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
 .event-attachment-kind {
   flex: none;
   color: var(--text-faint);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
 }
 
@@ -1435,10 +1433,13 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
 .assistant-message ul:has(> .markdown-task-item),
 .assistant-message ol:has(> .markdown-task-item) {
   display: grid;
-  gap: 1px;
-  margin: var(--space-2) 0 var(--space-3);
-  padding: 0;
+  gap: 0;
+  margin: var(--space-2) 0 var(--space-4);
+  padding: 3px;
   list-style: none;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
 }
 
 /* Grille à 3 colonnes : case, numéro, texte. Le texte reste UN SEUL bloc — le
@@ -1450,8 +1451,8 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
   gap: var(--space-2);
   /* Ligne entière cliquable : le curseur doit l'annoncer partout. */
   margin: 0;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--r-sm);
+  padding: 7px var(--space-3);
+  border-radius: var(--r-md);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease);
 }
@@ -1581,7 +1582,7 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
 .markdown-task-number {
   min-width: 16px;
   color: var(--text-faint);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   line-height: 1.6;
@@ -1678,7 +1679,7 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
   gap: var(--space-3);
   min-height: 18px;
   color: var(--text-faint);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
@@ -1687,7 +1688,7 @@ button.tool-activity.is-done.is-open .tool-activity-state::before { transform: r
    avoir délégué. Discret, mais présent dès qu'il y a eu délégation. */
 .turn-subtasks {
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .turn-origin {

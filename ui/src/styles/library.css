@@ -221,7 +221,7 @@
 .skill-row-name {
   overflow: hidden;
   color: var(--text);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-code);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -295,7 +295,7 @@
 
 .skill-detail-name {
   color: var(--text-strong);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -361,7 +361,7 @@
   margin-top: 5px;
   overflow: hidden;
   color: var(--text);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-md);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -390,7 +390,7 @@
 .skill-triggers span {
   padding: 4px var(--space-2);
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);

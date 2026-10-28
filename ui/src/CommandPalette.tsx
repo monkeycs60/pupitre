@@ -21,6 +21,8 @@ import { useDesignPanelSuspend } from './useDesignPanelSuspend'
 
 type PaletteAction = 'test' | 'summary'
 
+export type PaletteView = 'dashboard' | 'fleet' | 'routines' | 'library' | 'memory' | 'help' | 'report' | 'settings' | 'design'
+
 interface CommandPaletteProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -29,7 +31,7 @@ interface CommandPaletteProps {
   onProjectSelect: (project: Project) => void
   onConversationSelect: (projectId: string, conversationId: string) => void | Promise<void>
   onSkillLaunch: (skill: SkillSummary) => void
-  onViewSelect: (view: 'dashboard' | 'fleet' | 'routines' | 'library' | 'memory' | 'help') => void
+  onViewSelect: (view: PaletteView) => void
   onAction: (action: PaletteAction) => void | Promise<void>
   instance?: InstanceHealth | null
   onPromotionSelect?: () => void
@@ -162,14 +164,17 @@ export function CommandPalette({
         run: onPromotionSelect,
       })
     }
-    const views = [
-      ['dashboard', 'Projet', 'Tickets, Sentry, changelog, environnements'],
+    const views: Array<readonly [PaletteView, string, string]> = [
+      ['dashboard', 'Projet', 'Tickets, tâches, Sentry'],
+      ['report', 'Rapport', 'Rapport d’activité, usage des fonctions'],
+      ['settings', 'Réglages', 'Apparence, taille du texte, modèles, intégrations'],
+      ...(window.__TAURI__ ? [['design', 'Claude Design', 'claude.ai/design dans la fenêtre'] as const] : []),
       ['fleet', 'Activité', 'En cours et à lire, tous projets'],
       ['routines', 'Automatisations', 'Planifiées et à la demande'],
       ['library', 'Skills', 'Compétences et prompts disponibles'],
       ['memory', 'Mémoire', 'Fichiers de mémoire persistante Claude'],
       ['help', 'Aide', 'Comprendre les concepts de Pupitre'],
-    ] as const
+    ]
     for (const [view, label, detail] of views) {
       if (matches(query, label, detail)) add({ id: `view-${view}`, group: 'Aller à', label, detail, run: () => onViewSelect(view) })
     }

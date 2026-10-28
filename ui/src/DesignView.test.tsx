@@ -228,7 +228,7 @@ test('replace le panneau après un masquage, la zone ayant pu bouger', async () 
   await waitFor(() => expect(callsOf('set_design_panel_bounds').length).toBeGreaterThan(1))
 })
 
-test('masque le panneau en quittant la vue', async () => {
+test('ferme le panneau en quittant la vue', async () => {
   ;(window as Record<string, unknown>).__TAURI_INTERNALS__ = {}
   stubReachability(reachable)
   stubSlotRect({ left: 352, top: 38, right: 1280, bottom: 760 })
@@ -238,12 +238,9 @@ test('masque le panneau en quittant la vue', async () => {
 
   view.unmount()
 
-  // Sans cela, le panneau resterait posé par-dessus la vue suivante.
-  await waitFor(() =>
-    expect(callsOf('set_design_panel_visible').some((call) => call.args?.visible === false)).toBe(
-      true,
-    ),
-  )
+  // Sans cela, le panneau resterait posé par-dessus la vue suivante, et son
+  // processus WebKit vivrait jusqu'à la fermeture de l'app.
+  await waitFor(() => expect(commandsUsed()).toContain('close_design_panel'))
 })
 
 test('avertit qu’il faut se reconnecter quand le panneau atterrit sur la page marketing', async () => {

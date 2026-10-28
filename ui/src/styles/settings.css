@@ -493,7 +493,7 @@
 
 .sidecar-journal-list time {
   color: var(--text-faint);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
 }
 

@@ -1,5 +1,5 @@
 import { ProjectLaunch, ProjectLiveLaunches } from './ProjectLaunch'
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   listProjectConversations,
   searchConversationsWithAi,
@@ -11,9 +11,8 @@ import {
   setConversationPinned,
   setConversationPermissionMode,
 } from './api'
-import type { Conversation, FleetItem, Project, Provider, QuotaSnapshot, TimeMode, TimeSnapshot, WorkspaceView } from './types'
+import type { Conversation, ConversationNudge, FleetItem, Project, Provider, QuotaSnapshot, WorkspaceView } from './types'
 import { QuotaStatus } from './QuotaBar'
-import { LevelCard } from './LevelCard'
 import { ConversationAiResults, type AiSearchState } from './ConversationAiResults'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { ProviderMark } from './ProviderMark'
@@ -21,8 +20,13 @@ import { shortenHomePath } from './projectInitials'
 import { ProjectAvatar } from './ProjectAvatar'
 import { useNow } from './useNow'
 import { branchOfWorktree } from './conversationBranch'
-import { BranchIcon } from './BranchIcon'
-import { PinIcon } from './PinIcon'
+import { Icon } from './Icon'
+import { applicationsForConversation, PortChip } from './PortChip'
+import { ProjectSectionSwitch } from './ProjectSectionSwitch'
+import type { ProjectSection } from './projectSections'
+import { useRunningApplications } from './runningApplicationsStore'
+import { pushToast } from './toasts'
+import { toolPresentation } from './toolPresentation'
 import { SentryLinkIcon, TicketLinkIcons } from './TicketLinkIcons'
 import type { TicketLinks } from './ticketLinks'
 
@@ -35,10 +39,11 @@ declare global {
 interface SidebarProps {
   quotas?: QuotaSnapshot
   quotaProviders?: Provider[]
-  time?: TimeSnapshot | null
-  timeMode?: TimeMode
-  onTimeModeToggle?: () => void
-  agentRunning?: boolean
+  /** Questions et choix que des agents attendent ; leurs conversations passent dans « À toi ». */
+  nudges?: ConversationNudge[]
+  activeSection?: ProjectSection | null
+  onSectionSelect?: (section: ProjectSection | null) => void
+  todoCount?: number
   selectedProject: Project | null
   selectedConversation: Conversation | null
   onProjectSelect: (project: Project) => void
@@ -53,8 +58,6 @@ interface SidebarProps {
   conversationListVersion: number
   /** Sous-tâches en cours dans la conversation ouverte (cf. App). */
   runningSubtasks: number
-  /** Compteur recalculé depuis le replay/flux live de la conversation ouverte. */
-  liveConversationMessageCount?: number
   /** Snapshot Fleet global, nécessaire pour marquer les conversations non ouvertes comme live. */
   activeFleet?: FleetItem[]
   workspaceView: WorkspaceView
@@ -130,10 +133,6 @@ function conversationRowState(
   return (conversation.answered_turn ?? 0) > (conversation.last_read_turn ?? 0) ? 'unread' : 'read'
 }
 
-function conversationMessageCount(conversation: Conversation, liveCount?: number): number {
-  return Math.max(0, liveCount ?? conversation.message_count ?? conversation.digest_turn)
-}
-
 function elapsedConversationTime(startedAt: string | undefined, now: number): string {
   if (!startedAt) return '0 min 00'
   const elapsedSeconds = Math.max(0, Math.floor((now - Date.parse(startedAt)) / 1_000))
@@ -170,7 +169,10 @@ function shortConversationTime(value: string): string {
   return DAY_MONTH_FORMAT.format(new Date(value))
 }
 
+type ConversationGroupKind = 'waiting' | 'live' | 'pinned' | 'context' | 'plain'
+
 type ConversationGroup = {
+  kind?: ConversationGroupKind
   key: string
   label: string
   items: Conversation[]
@@ -268,7 +270,7 @@ export function workBranchLabel(conversation: Conversation, worktreeBranch: stri
   return { label: conversation.created_on_branch, title: 'Branche à la création' }
 }
 
-const COMPACT_GROUP_LIMIT = 3
+const COMPACT_GROUP_LIMIT = 2
 const COMPACT_GROUP_WINDOW_MS = 24 * 3_600_000
 
 /** Conversations montrées par un groupe de ticket replié : les trois plus
@@ -284,6 +286,53 @@ export function compactGroupItems(items: Conversation[], alwaysVisible: Set<stri
   return items.filter((conversation) => visible.has(conversation.id) || alwaysVisible.has(conversation.id))
 }
 
+const PLAIN_GROUP_LIMIT = 8
+const PLAIN_GROUP_WINDOW_MS = 7 * 86_400_000
+export const TIDY_AFTER_MS = 7 * 86_400_000
+
+/** « Sans ticket » montre la semaine en cours, huit au plus, plus les lignes à ne jamais masquer. */
+export function compactPlainItems(items: Conversation[], alwaysVisible: Set<string>, now = Date.now()): Conversation[] {
+  const recent = new Set(items
+    .filter((conversation) => now - Date.parse(conversation.updated_at) < PLAIN_GROUP_WINDOW_MS)
+    .slice(0, PLAIN_GROUP_LIMIT)
+    .map((conversation) => conversation.id))
+  if (recent.size === 0 && items[0]) recent.add(items[0].id)
+  return items.filter((conversation) => recent.has(conversation.id) || alwaysVisible.has(conversation.id))
+}
+
+/** Statut d'abord : ce qui attend l'utilisateur, ce qui tourne, puis le reste par ticket.
+ *  Les deux tables donnent le début de l'attente ou du tour, en millisecondes. */
+export function groupConversationsByStatus(
+  items: Conversation[],
+  waitingSince: Map<string, number>,
+  liveSince: Map<string, number>,
+): ConversationGroup[] {
+  const waiting = items.filter((conversation) => !liveSince.has(conversation.id) && waitingSince.has(conversation.id))
+    .sort((left, right) => waitingSince.get(left.id)! - waitingSince.get(right.id)!)
+  const live = items.filter((conversation) => liveSince.has(conversation.id))
+    .sort((left, right) => liveSince.get(left.id)! - liveSince.get(right.id)!)
+  const rest = items.filter((conversation) => !liveSince.has(conversation.id) && !waitingSince.has(conversation.id))
+  const groups: ConversationGroup[] = []
+  if (waiting.length > 0) groups.push({ kind: 'waiting', key: 'waiting', label: 'À toi', items: waiting })
+  if (live.length > 0) groups.push({ kind: 'live', key: 'live', label: 'En cours', items: live })
+  const pinned = rest.filter((conversation) => conversation.pinned)
+  if (pinned.length > 0) groups.push({ kind: 'pinned', key: 'pinned', label: 'Épinglées', items: pinned })
+  const others = rest.filter((conversation) => !conversation.pinned)
+  const contextual = groupConversations(others).filter((group) => group.ticketKey || group.sentryKey)
+  const plain = others
+    .filter((conversation) => !contextual.some((group) => group.items.includes(conversation)))
+    .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))
+  groups.push(...contextual.map((group) => ({ ...group, kind: 'context' as const })))
+  if (plain.length > 0) groups.push({ kind: 'plain', key: 'plain', label: 'Sans ticket', items: plain })
+  return groups
+}
+
+function activityLabel(item: FleetItem | undefined): string {
+  if (!item?.lastTool) return 'écrit la réponse'
+  const tool = toolPresentation({ kind: 'tool', id: item.id, toolId: item.id, toolName: item.lastTool.toolName, input: item.lastTool.input, images: [] })
+  return tool.detail ? `${tool.label} · ${tool.detail}` : tool.label
+}
+
 function groupConversationsByLatest(items: Conversation[]): ConversationGroup[] {
   if (items.length === 0) return []
   return [{
@@ -297,10 +346,10 @@ export const Sidebar = memo(function Sidebar({
   selectedProject,
   quotas,
   quotaProviders,
-  time = null,
-  timeMode = 'user',
-  onTimeModeToggle = () => {},
-  agentRunning = false,
+  nudges = [],
+  activeSection = null,
+  onSectionSelect,
+  todoCount = 0,
   selectedConversation,
   onProjectSelect,
   onConversationSelect,
@@ -311,7 +360,6 @@ export const Sidebar = memo(function Sidebar({
   onConversationRead,
   conversationListVersion,
   runningSubtasks,
-  liveConversationMessageCount,
   activeFleet = [],
   workspaceView,
   ticketLinks,
@@ -332,6 +380,8 @@ export const Sidebar = memo(function Sidebar({
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null)
+  const [tidying, setTidying] = useState(false)
+  const applications = useRunningApplications(15_000).items
   const selectedConversationRef = useRef(selectedConversation)
   selectedConversationRef.current = selectedConversation
   const workspaceViewRef = useRef(workspaceView)
@@ -374,12 +424,30 @@ export const Sidebar = memo(function Sidebar({
     }
     return ids
   }, [conversations, displayedActiveConversationIds, selectedConversation])
-  const unreadConversationCount = useMemo(
-    () => conversations.filter(
-      (conversation) => conversationRowState(conversation, displayedActiveConversationIds) === 'unread',
-    ).length,
-    [conversations, displayedActiveConversationIds],
-  )
+  const nudgeByConversation = useMemo(() => {
+    const byConversation = new Map<string, ConversationNudge>()
+    for (const nudge of nudges) {
+      if (nudge.parked === null && !byConversation.has(nudge.conversation_id)) byConversation.set(nudge.conversation_id, nudge)
+    }
+    return byConversation
+  }, [nudges])
+  const waitingSince = useMemo(() => {
+    const since = new Map<string, number>()
+    for (const conversation of conversations) {
+      const nudge = nudgeByConversation.get(conversation.id)
+      if (nudge) since.set(conversation.id, Date.parse(nudge.created_at))
+      else if (conversationRowState(conversation, displayedActiveConversationIds) === 'unread') since.set(conversation.id, Date.parse(conversation.updated_at))
+    }
+    return since
+  }, [conversations, nudgeByConversation, displayedActiveConversationIds])
+  const liveSince = useMemo(() => {
+    const since = new Map<string, number>()
+    for (const id of displayedActiveConversationIds) {
+      const startedAt = activeByConversation.get(id)?.startedAt
+      since.set(id, startedAt ? Date.parse(startedAt) : Date.now())
+    }
+    return since
+  }, [displayedActiveConversationIds, activeByConversation])
   useEffect(() => {
     let ignore = false
     if (selectedProject === null) return
@@ -481,14 +549,6 @@ export const Sidebar = memo(function Sidebar({
       }
       return next
     })
-  }
-
-  function toggleConversationSortMode() {
-    const nextMode = conversationSortMode === 'recent' ? 'context' : 'recent'
-    setConversationSortMode(nextMode)
-    try {
-      localStorage.setItem(CONVERSATION_SORT_KEY, nextMode)
-    } catch {}
   }
 
   function handleProjectSettings(project: Project) {
@@ -625,15 +685,6 @@ export const Sidebar = memo(function Sidebar({
     setFilterText('')
   }
 
-  function toggleAiMode() {
-    if (aiMode) {
-      leaveAiMode()
-      return
-    }
-    setAiMode(true)
-    setAiSearch({ status: 'idle' })
-  }
-
   function runAiSearch() {
     const query = filterText.trim()
     if (selectedProject === null || query === '') return
@@ -664,8 +715,51 @@ export const Sidebar = memo(function Sidebar({
     ))
     return conversationSortMode === 'recent'
       ? groupConversationsByLatest(filtered)
-      : groupConversations(filtered)
-  }, [conversations, filterText, conversationSortMode, aiMode])
+      : groupConversationsByStatus(filtered, waitingSince, liveSince)
+  }, [conversations, filterText, conversationSortMode, aiMode, waitingSince, liveSince])
+
+  const tidyCandidates = useMemo(() => {
+    if (conversationScope !== 'active' || filterText.trim() !== '' || aiMode) return []
+    const limit = Date.now() - TIDY_AFTER_MS
+    return conversations.filter((conversation) => !conversation.pinned
+      && !conversation.archived
+      && !liveSince.has(conversation.id)
+      && !waitingSince.has(conversation.id)
+      && conversation.id !== selectedConversation?.id
+      && Date.parse(conversation.updated_at) < limit)
+  }, [conversations, conversationScope, filterText, aiMode, liveSince, waitingSince, selectedConversation?.id])
+
+  async function handleTidy() {
+    if (tidying || tidyCandidates.length === 0) return
+    setTidying(true)
+    setError(null)
+    const ids = new Set<string>()
+    for (const conversation of tidyCandidates) {
+      try {
+        await setConversationArchived(conversation.id, true)
+        ids.add(conversation.id)
+      } catch (tidyError: unknown) {
+        setError(errorMessage(tidyError))
+        break
+      }
+    }
+    setConversations((current) => current.filter((item) => !ids.has(item.id)))
+    setTidying(false)
+    if (ids.size > 0) {
+      pushToast({
+        tone: 'ok',
+        title: `${ids.size} conversation${ids.size > 1 ? 's' : ''} rangée${ids.size > 1 ? 's' : ''}`,
+        detail: 'Elles restent cherchables dans le périmètre Archives.',
+      })
+    }
+  }
+
+  function selectConversationSortMode(mode: ConversationSortMode) {
+    setConversationSortMode(mode)
+    try {
+      localStorage.setItem(CONVERSATION_SORT_KEY, mode)
+    } catch {}
+  }
 
   // Ouvrir une conversation depuis ailleurs (rapport, motif, ticket) doit la
   // montrer dans la liste : on déplie son groupe puis on l'amène dans la vue,
@@ -697,13 +791,11 @@ export const Sidebar = memo(function Sidebar({
         ) : (
           <span className="conv-sidebar-avatar" aria-hidden="true">··</span>
         )}
-        <div className="conv-sidebar-project">
+        <div className="conv-sidebar-project" title={selectedProject ? shortenHomePath(selectedProject.path) : undefined}>
           <div className="conv-sidebar-name">
             {selectedProject ? selectedProject.name : 'Aucun projet'}
           </div>
-          <div className="conv-sidebar-path" title={selectedProject?.path}>
-            {selectedProject ? shortenHomePath(selectedProject.path) : 'Choisis un projet dans le rail'}
-          </div>
+          {selectedProject ? null : <div className="conv-sidebar-path">Choisis un projet dans le rail</div>}
         </div>
 
         {selectedProject && <ProjectLaunch key={selectedProject.id} project={selectedProject} conversationId={selectedConversation?.id} />}
@@ -715,99 +807,85 @@ export const Sidebar = memo(function Sidebar({
             aria-label={`Paramètres de ${selectedProject.name}`}
             title="Paramètres du projet"
           >
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <g stroke="currentColor" strokeWidth="1.25">
-                <circle cx="8" cy="8" r="2" />
-                <path d="M6.5 2h3l.5 2a4.5 4.5 0 0 1 1.3.8l1.9-.7 1.5 2.6-1.5 1.3a5 5 0 0 1 0 1.6l1.5 1.3-1.5 2.6-1.9-.7a4.5 4.5 0 0 1-1.3.8l-.5 2h-3l-.5-2a4.5 4.5 0 0 1-1.3-.8l-1.9.7-1.5-2.6 1.5-1.3a5 5 0 0 1 0-1.6L1.3 6.7l1.5-2.6 1.9.7A4.5 4.5 0 0 1 6 4l.5-2Z" />
-              </g>
-            </svg>
+            <Icon name="settings" />
           </button>
         ) : null}
       </div>
-      {selectedProject && <ProjectLiveLaunches key={selectedProject.id} project={selectedProject} />}
-
-      <div className="sidebar-tabs conversation-list-heading">
-        <span id="sidebar-conversations-title" title={`${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} à lire sur ${conversations.length}`}>
-          Conversations <span>{unreadConversationCount}</span>
-        </span>
-        <button type="button" className="sidebar-tabs-create" onClick={onConversationCreate} disabled={selectedProject === null} title="Démarrer une nouvelle conversation dans ce projet">
-          <span aria-hidden="true">+</span><span>Nouvelle</span>
-        </button>
-      </div>
+      {selectedProject ? (
+        <ProjectSectionSwitch
+          projectId={selectedProject.id}
+          activeSection={activeSection}
+          todoCount={todoCount}
+          onSelect={(section) => onSectionSelect?.(section)}
+        />
+      ) : null}
+      {selectedProject && (
+        <ProjectLiveLaunches
+          key={selectedProject.id}
+          project={selectedProject}
+          conversations={conversations}
+          onConversationSelect={handleConversationSelect}
+        />
+      )}
 
       <section className="sidebar-section conversations" aria-label="Conversations du projet" ref={conversationListRef}>
-          <div id="sidebar-conversations-panel" aria-labelledby="sidebar-conversations-title">
-        <div className={`conversation-filter-input${conversationScope !== 'active' ? ' has-scope' : ''}${aiMode ? ' is-ai' : ''}`}>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-              <circle cx="7" cy="7" r="4.2" />
-              <path d="m10.2 10.2 3 3" />
-            </g>
-          </svg>
-          <input
-            type="text"
-            value={filterText}
-            onChange={(event) => setFilterText(event.target.value)}
-            onKeyDown={(event) => {
-              if (!aiMode) return
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                runAiSearch()
-              } else if (event.key === 'Escape') {
-                event.preventDefault()
-                leaveAiMode()
-              }
-            }}
-            placeholder={aiMode ? 'Décris la conversation, puis Entrée…' : SCOPE_PLACEHOLDERS[conversationScope]}
-            aria-label={aiMode ? 'Rechercher une conversation avec l’IA' : 'Filtrer les conversations'}
-          />
+          <div id="sidebar-conversations-panel">
+        <div className="conversation-search-row">
+          <div className={`conversation-filter-input${conversationScope !== 'active' ? ' has-scope' : ''}${aiMode ? ' is-ai' : ''}`}>
+            <Icon name={aiMode ? 'spark' : 'search'} size={14} />
+            <input
+              type="text"
+              value={filterText}
+              onChange={(event) => setFilterText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && filterText.trim() !== '' && selectedProject !== null) {
+                  event.preventDefault()
+                  if (!aiMode) setAiMode(true)
+                  runAiSearch()
+                } else if (event.key === 'Escape') {
+                  event.preventDefault()
+                  if (aiMode) leaveAiMode()
+                  else setFilterText('')
+                }
+              }}
+              placeholder={aiMode ? 'Décris la conversation, puis Entrée…' : SCOPE_PLACEHOLDERS[conversationScope]}
+              aria-label={aiMode ? 'Rechercher une conversation avec l’IA' : 'Filtrer les conversations, Entrée pour chercher avec l’IA'}
+            />
+            {aiMode ? (
+              <button type="button" className="conversation-ai-exit" onClick={leaveAiMode} aria-label="Revenir au filtre" title="Revenir au filtre (Échap)">
+                <Icon name="close" size={13} />
+              </button>
+            ) : filterText.trim() !== '' ? (
+              <span className="conversation-filter-hint" title="Entrée lance la recherche IA dans les conversations">↵ IA</span>
+            ) : null}
+            <button
+              type="button"
+              className={`conversation-scope-toggle${conversationScope !== 'active' || conversationSortMode === 'recent' ? ' is-active' : ''}`}
+              aria-label="Périmètre et tri : actives, archives, corbeille"
+              aria-haspopup="menu"
+              aria-expanded={scopeMenuOpen}
+              title="Périmètre et tri"
+              onClick={() => setScopeMenuOpen((open) => !open)}
+            >
+              <Icon name="filter" size={14} />
+            </button>
+          </div>
           <button
             type="button"
-            className="conversation-ai-toggle"
-            aria-pressed={aiMode}
-            aria-label="Recherche IA en langage naturel"
-            title={aiMode ? 'Revenir au filtre (Échap)' : 'Recherche IA : retrouver une conversation en la décrivant'}
+            className="conversation-new-button"
+            onClick={onConversationCreate}
             disabled={selectedProject === null}
-            onClick={toggleAiMode}
+            title="Nouvelle conversation dans ce projet"
+            aria-label="Nouvelle conversation"
           >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M7 1.8 8.3 5.7 12.2 7 8.3 8.3 7 12.2 5.7 8.3 1.8 7 5.7 5.7Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
-              <path d="M12.5 10.5 13 12l1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5Z" fill="currentColor" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="conversation-scope-toggle"
-            aria-label="Choisir le périmètre : actives, archives ou corbeille"
-            aria-haspopup="menu"
-            aria-expanded={scopeMenuOpen}
-            title="Actives, archives ou corbeille"
-            onClick={() => setScopeMenuOpen((open) => !open)}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M2.5 4h11M4.5 8h7M6.5 12h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="conversation-list-controls">
-          <button
-            type="button"
-            className={`conversation-sort-toggle${conversationSortMode === 'recent' ? ' is-selected' : ''}`}
-            aria-pressed={conversationSortMode === 'recent'}
-            title={conversationSortMode === 'recent' ? 'Revenir aux groupes par contexte' : 'Afficher toutes les conversations par activité récente'}
-            onClick={toggleConversationSortMode}
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M3 4h7M3 8h5M3 12h3M12 3v9m0 0-2-2m2 2 2-2" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Récentes
+            <Icon name="plus" />
           </button>
         </div>
 
         {scopeMenuOpen ? (
           <div className="conversation-scope-anchor">
-          <div className="conversation-scope-menu" role="menu" aria-label="Périmètre des conversations">
+          <div className="conversation-scope-menu" role="menu" aria-label="Périmètre et tri des conversations">
+            <span className="conversation-scope-menu-label">Afficher</span>
             {CONVERSATION_SCOPES.map(([scope, label]) => (
               <button
                 type="button"
@@ -823,6 +901,27 @@ export const Sidebar = memo(function Sidebar({
               >
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   {conversationScope === scope ? (
+                    <path d="M2.5 8.5 6 12l7.5-8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  ) : null}
+                </svg>
+                {label}
+              </button>
+            ))}
+            <span className="conversation-scope-menu-label">Trier</span>
+            {([['context', 'Par statut et par ticket'], ['recent', 'Par activité récente']] as const).map(([mode, label]) => (
+              <button
+                type="button"
+                key={mode}
+                role="menuitemradio"
+                aria-checked={conversationSortMode === mode}
+                className={conversationSortMode === mode ? 'is-selected' : ''}
+                onClick={() => {
+                  selectConversationSortMode(mode)
+                  setScopeMenuOpen(false)
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  {conversationSortMode === mode ? (
                     <path d="M2.5 8.5 6 12l7.5-8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                   ) : null}
                 </svg>
@@ -850,56 +949,51 @@ export const Sidebar = memo(function Sidebar({
             <p className="list-empty">Sélectionnez un projet</p>
           ) : conversations.length === 0 ? (
             <p className="list-empty">Aucune conversation</p>
-          ) : (() => {
-            if (conversationGroups.length === 0) {
-              return <p className="list-empty">Aucune conversation ne correspond</p>
-            }
-            return conversationGroups.map((group) => {
+          ) : conversationGroups.length === 0 ? (
+            <p className="list-empty">Aucune conversation ne correspond</p>
+          ) : (
+            <>
+            {conversationGroups.map((group) => {
               const isCollapsed = collapsedGroups.has(group.key)
-              const unread = group.items.filter((conversation) => (
-                conversationRowState(conversation, displayedActiveConversationIds) === 'unread'
-              )).length
               const groupLinks = group.ticketKey ? ticketLinks?.get(group.ticketKey) : undefined
               const backlogCount = group.items[0]?.ticket_backlog_count ?? 0
               const ticketTitle = group.ticketKey && groupLinks?.title
                 ? ticketTitleWithoutKey(groupLinks.title, group.ticketKey)
                 : null
               const groupSentryUrl = group.sentryKey ? sentryLinks?.get(group.sentryKey) : undefined
-              const isContextual = group.key.startsWith('ticket-') || group.key.startsWith('sentry-')
+              const isContextual = group.kind === 'context'
               const isExpanded = expandedGroups.has(group.key)
-              const compactItems = isContextual && filterText.trim() === ''
-                ? compactGroupItems(group.items, alwaysVisibleConversationIds)
+              const compactItems = filterText.trim() !== '' ? group.items
+                : isContextual ? compactGroupItems(group.items, alwaysVisibleConversationIds)
+                : group.kind === 'plain' ? compactPlainItems(group.items, alwaysVisibleConversationIds)
                 : group.items
               const hiddenCount = group.items.length - compactItems.length
               const shownItems = isExpanded ? group.items : compactItems
               const repeatsTicket = group.ticketKey != null
-              const keyLabel = ticketTitle ? shortTicketKey(group.label) : group.label
               return (
-              <div className="conv-group" key={group.key}>
+              <div className={`conv-group is-${group.kind ?? 'plain'}`} key={group.key}>
                 <div className="conv-group-header">
                   <button
                     type="button"
-                    className={`conv-group-toggle${keyLabel !== group.label ? ' is-short-key' : ''}`}
+                    className="conv-group-toggle"
                     aria-expanded={!isCollapsed}
                     aria-label={`${isCollapsed ? 'Déplier' : 'Replier'} ${group.label}`}
                     onClick={() => toggleGroupCollapsed(group.key)}
                   >
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={isCollapsed ? { transform: 'rotate(-90deg)' } : undefined}>
-                      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <span className="conv-group-key" title={backlogCount || keyLabel !== group.label ? [group.label, backlogCount ? `${backlogCount} à faire` : null].filter(Boolean).join(' · ') : undefined}>{keyLabel}</span>
+                    {isContextual ? <Icon name={isCollapsed ? 'chevron-right' : 'chevron-down'} size={12} /> : null}
+                    <span className="conv-group-key" title={isContextual && backlogCount ? `${group.label} · ${backlogCount} à faire` : undefined}>{group.label}</span>
                   </button>
-                  {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
-                  {groupSentryUrl !== undefined ? <SentryLinkIcon url={groupSentryUrl} issueKey={group.sentryKey!} /> : null}
                   {ticketTitle ? (
                     <span className="conv-group-ticket-title" title={ticketTitle}>{ticketTitle}</span>
-                  ) : null}
-                  <span className="conv-group-rule" aria-hidden="true" />
-                  {(group.key.startsWith('ticket-') || group.key.startsWith('sentry-')) && onConversationCreateFromContext ? (
+                  ) : <span className="conv-group-rule" aria-hidden="true" />}
+                  {groupLinks ? <TicketLinkIcons links={groupLinks} ticketKey={group.ticketKey!} /> : null}
+                  {groupSentryUrl !== undefined ? <SentryLinkIcon url={groupSentryUrl} issueKey={group.sentryKey!} /> : null}
+                  {isContextual && onConversationCreateFromContext ? (
                     <button
                       type="button"
                       className="conv-group-create"
                       aria-label={`Nouvelle conversation dans ${group.label}`}
+                      title={`Nouvelle conversation dans ${group.label}`}
                       onClick={() => {
                         const context = group.items[0]!
                         onConversationCreateFromContext({
@@ -910,45 +1004,63 @@ export const Sidebar = memo(function Sidebar({
                           originKey: context.origin_key,
                         })
                       }}
-                    >+</button>
+                    ><Icon name="plus" size={13} /></button>
                   ) : null}
-                  {unread > 0 ? (
-                    <span className="conv-group-count is-attention">{unread} à lire</span>
-                  ) : null}
-                  {hiddenCount > 0 || isExpanded ? (
-                    <button
-                      type="button"
-                      className="conv-group-count is-toggle"
-                      aria-expanded={isExpanded}
-                      aria-label={isExpanded ? `Réduire ${group.label}` : `Afficher les ${group.items.length} conversations de ${group.label}`}
-                      title={isExpanded ? 'Réduire' : `Afficher ${hiddenCount} de plus`}
-                      onClick={() => toggleGroupExpanded(group.key)}
-                    >
-                      {group.items.length}
-                      <svg width="8" height="8" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={isExpanded ? { transform: 'rotate(180deg)' } : undefined}>
-                        <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <span className="conv-group-count">{group.items.length}</span>
-                  )}
+                  <span className={`conv-group-count${group.kind === 'waiting' ? ' is-waiting' : group.kind === 'live' ? ' is-live' : ''}`}>{group.items.length}</span>
                 </div>
                 {isCollapsed ? null : shownItems.map((conversation) => {
                 const isSelected = (workspaceView === 'conversations' || workspaceView === 'git')
                   && selectedConversation?.id === conversation.id
                 const activeItem = activeByConversation.get(conversation.id)
                 const state = conversationRowState(conversation, displayedActiveConversationIds)
+                const nudge = nudgeByConversation.get(conversation.id)
                 const branch = branchOfWorktree(conversation.worktree_path)
-                const messageCount = isSelected ? liveConversationMessageCount : undefined
                 const shownTicketKey = !repeatsTicket ? conversation.ticket_key ?? null : null
                 const shownBranch = state === 'live' ? null : workBranchLabel(conversation, branch, selectedProject?.detected_trunk)
+                const ports = applicationsForConversation(applications, conversation).slice(0, 2)
+                const portChips = ports.map((application) => (
+                  <PortChip key={application.port} application={application} projectName={selectedProject?.name ?? ''} inert />
+                ))
+                let secondLine: ReactNode = null
+                if (state === 'live') {
+                  secondLine = (
+                    <span className="conv-row-line2 is-live">
+                      <span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span>
+                      <span className="conv-row-activity-label">{activityLabel(activeItem)}</span>
+                      {portChips}
+                    </span>
+                  )
+                } else if (nudge) {
+                  secondLine = <span className="conv-row-line2 is-waiting" title={nudge.body || nudge.title}>{nudge.title}</span>
+                } else if (state === 'unread') {
+                  secondLine = (
+                    <span className="conv-row-line2 is-unread">
+                      Réponse à lire
+                      {shownTicketKey ? <span className="conv-row-ticket">{shownTicketKey}</span> : null}
+                    </span>
+                  )
+                } else if (shownTicketKey || shownBranch || ports.length > 0) {
+                  secondLine = (
+                    <span className="conv-row-line2">
+                      {shownTicketKey ? (
+                        <span className="conv-row-ticket" title={`${shownTicketKey} · ${conversation.ticket_title ?? ''}`}>{shownTicketKey}</span>
+                      ) : null}
+                      {shownBranch ? (
+                        <span className="conv-row-branch" title={shownBranch.title}>
+                          <Icon name="branch" size={12} />{shownBranch.label}
+                        </span>
+                      ) : null}
+                      {portChips}
+                    </span>
+                  )
+                }
                 return (
               <div
-                className={`navigation-row conv-row-state-${state}${conversation.origin_type === 'sentry' ? ' conv-row-sentry' : ''}${conversation.pinned ? ' is-pinned' : ''} ${isSelected ? 'is-selected' : ''}`}
+                className={`navigation-row conv-row-state-${state}${nudge ? ' is-waiting' : ''}${conversation.origin_type === 'sentry' ? ' conv-row-sentry' : ''}${conversation.pinned ? ' is-pinned' : ''} ${isSelected ? 'is-selected' : ''}`}
                 key={conversation.id}
                 data-conversation-id={conversation.id}
               >
-                <span className={`conv-row-edge ${state === 'unread' ? 'is-visible' : ''}`} aria-hidden="true" />
+                <span className={`conv-row-edge ${state === 'unread' || nudge ? 'is-visible' : ''}`} aria-hidden="true" />
                 <span className={`conv-row-land ${state === 'unread' ? 'is-visible' : ''}`} aria-hidden="true" />
                 <button
                   type="button"
@@ -956,11 +1068,10 @@ export const Sidebar = memo(function Sidebar({
                   onClick={() => handleConversationSelect(conversation)}
                 >
                   <span className="conv-row-line1">
-                    <span className={`conv-row-dot is-${state}`} aria-hidden="true" />
                     {conversation.origin_type === 'sentry' ? (
                       <ProviderMark provider="sentry" className="conv-row-mark" />
                     ) : <ProviderMark provider={conversation.provider} className="conv-row-mark" />}
-                    {conversation.pinned ? <span className="conv-row-pin" title="Épinglée"><PinIcon /></span> : null}
+                    {conversation.pinned ? <span className="conv-row-pin" title="Épinglée"><Icon name="pin" size={12} /></span> : null}
                     <span className="conv-row-title">{conversation.title}</span>
                     <span className="conv-row-time">
                       {state === 'live'
@@ -968,30 +1079,7 @@ export const Sidebar = memo(function Sidebar({
                         : shortConversationTime(conversation.updated_at)}
                     </span>
                   </span>
-                  {!repeatsTicket && conversation.ticket_key && conversation.ticket_title && ticketTitleWithoutKey(conversation.ticket_title, conversation.ticket_key) ? (
-                    <span className="conv-row-ticket-title" title={`${conversation.ticket_key} · ${conversation.ticket_title}`}>
-                      {ticketTitleWithoutKey(conversation.ticket_title, conversation.ticket_key)}
-                    </span>
-                  ) : null}
-                  {state === 'live' ? (
-                    <span className="conv-row-activity">
-                      <span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span>
-                      <span className="conv-row-activity-label">écrit la réponse</span>
-                      <span className="conv-row-count">{conversationMessageCount(conversation, messageCount)}</span>
-                    </span>
-                  ) : null}
-                  {shownTicketKey || shownBranch ? (
-                    <span className="conv-row-line2">
-                      {shownTicketKey ? (
-                        <span className="conv-row-ticket" title={`${shownTicketKey} · ${conversation.ticket_title ?? ''}`}>{shownTicketKey}</span>
-                      ) : null}
-                      {shownBranch ? (
-                        <span className="conv-row-branch" title={shownBranch.title}>
-                          <BranchIcon />{shownBranch.label}
-                        </span>
-                      ) : null}
-                    </span>
-                  ) : null}
+                  {secondLine}
                   {conversationRelation(conversation, conversations) ? (
                     <span className="conversation-link">
                       {conversationRelation(conversation, conversations)}
@@ -1007,7 +1095,7 @@ export const Sidebar = memo(function Sidebar({
                     aria-pressed={conversation.pinned}
                     title={conversation.pinned ? 'Désépingler' : 'Épingler'}
                   >
-                    <PinIcon />
+                    <Icon name="pin" size={14} />
                   </button>
                   <button
                     type="button"
@@ -1018,7 +1106,7 @@ export const Sidebar = memo(function Sidebar({
                       setOpenConversationMenu((current) => current === conversation.id ? null : conversation.id)
                     }}
                   >
-                    <span aria-hidden="true">⋯</span>
+                    <Icon name="more" size={15} />
                   </button>
                   {openConversationMenu === conversation.id ? (
                     <div className="conversation-actions-menu" role="menu">
@@ -1054,10 +1142,31 @@ export const Sidebar = memo(function Sidebar({
               </div>
                 )
                 })}
+                {!isCollapsed && (hiddenCount > 0 || isExpanded) ? (
+                  <button
+                    type="button"
+                    className="conv-group-more"
+                    aria-expanded={isExpanded}
+                    onClick={() => toggleGroupExpanded(group.key)}
+                  >
+                    <Icon name={isExpanded ? 'chevron-up' : 'chevron-down'} size={13} />
+                    {isExpanded ? 'Réduire' : `${hiddenCount} ${group.kind === 'plain' ? 'plus ancienne' : 'autre'}${hiddenCount > 1 ? 's' : ''}`}
+                  </button>
+                ) : null}
               </div>
               )
-            })
-          })()}
+            })}
+            {tidyCandidates.length > 0 && conversationSortMode === 'context' ? (
+              <div className="conversation-tidy">
+                <Icon name="archive" size={14} />
+                <span><strong>{tidyCandidates.length}</strong> sans activité depuis 7 jours</span>
+                <button type="button" onClick={() => void handleTidy()} disabled={tidying}>
+                  {tidying ? 'Rangement…' : 'Ranger'}
+                </button>
+              </div>
+            ) : null}
+            </>
+          )}
         </div>
           </div>
       </section>
@@ -1077,21 +1186,13 @@ export const Sidebar = memo(function Sidebar({
         />
       ) : null}
 
-      <div className="sidebar-footer sidebar-footer--compact">
-        {time ? (
-          <LevelCard
-            snapshot={time}
-            mode={timeMode}
-            agentRunning={agentRunning}
-            onToggle={onTimeModeToggle}
-          />
-        ) : null}
-        {quotas && quotaProviders?.length !== 0 ? (
+      {quotas && quotaProviders?.length !== 0 ? (
+        <div className="sidebar-footer sidebar-footer--compact">
           <div className="sidebar-quotas">
             <QuotaStatus snapshot={quotas} providers={quotaProviders} />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </aside>
   )
 })

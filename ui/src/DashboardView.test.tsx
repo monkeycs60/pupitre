@@ -110,8 +110,6 @@ test('rend une ligne par ticket, la colonne Déployé avec GitLab, et le bandeau
   expect(screen.getByText(/GitLab/).textContent).toContain('dégradée')
   expect(screen.getByText('Échec')).toBeTruthy()
   expect(screen.getByText('Fusionnable')).toBeTruthy()
-  fireEvent.click(screen.getByRole('tab', { name: 'Environnements' }))
-  expect(screen.getByText('preprod')).toBeTruthy()
 })
 
 test('affiche les sections disponibles et mémorise le dernier onglet du projet', async () => {
@@ -119,30 +117,13 @@ test('affiche les sections disponibles et mémorise le dernier onglet du projet'
 
   await screen.findByText('TECH-24657')
   const tabs = screen.getAllByRole('tab')
-  expect(tabs.map((tab) => tab.textContent)).toEqual([
-    'Tâches',
-    'Mes tickets',
-    'Changelog',
-    'Environnements',
-  ])
+  expect(tabs.map((tab) => tab.textContent)).toEqual(['Tâches', 'Mes tickets'])
   expect(screen.getByRole('tab', { name: 'Mes tickets' }).getAttribute('aria-selected')).toBe('true')
-  expect(screen.queryByRole('heading', { name: 'Environnements' })).toBeNull()
 
   fireEvent.keyDown(screen.getByRole('tab', { name: 'Mes tickets' }), { key: 'ArrowRight' })
-  expect(screen.getByRole('tab', { name: 'Changelog' }).getAttribute('aria-selected')).toBe('true')
-  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Changelog' }))
-
-  fireEvent.click(screen.getByRole('tab', { name: 'Environnements' }))
-
-  expect(await screen.findByRole('heading', { name: 'Environnements' })).toBeTruthy()
-  expect(screen.queryByText('TECH-24657')).toBeNull()
-  expect(window.localStorage.getItem('pupitre:dashboard-tab:p1')).toBe('environments')
-
-  cleanup()
-  mount(withGitlab)
-
-  expect(await screen.findByRole('heading', { name: 'Environnements' })).toBeTruthy()
-  expect(screen.getByRole('tab', { name: 'Environnements' }).getAttribute('aria-selected')).toBe('true')
+  expect(screen.getByRole('tab', { name: 'Tâches' }).getAttribute('aria-selected')).toBe('true')
+  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Tâches' }))
+  expect(window.localStorage.getItem('pupitre:dashboard-tab:p1')).toBe('todos')
 })
 
 test('Nouvelle conv. transmet ticket et branche ; sans GitLab la colonne Déployé disparaît', async () => {
@@ -252,62 +233,6 @@ test('traduit et colore les états GitLab ambigus', async () => {
   expect(screen.getAllByText('Échec').every((item) => item.classList.contains('is-danger'))).toBe(true)
 })
 
-test('affiche le changelog compact, son échéance au survol et permet une actualisation manuelle', async () => {
-  const nextRefresh = new Date(Date.now() + 90 * 60_000).toISOString()
-  const refreshRequests: string[] = []
-  globalThis.fetch = mock(async (input) => {
-    const url = String(input)
-    if (url.endsWith('/changelog/refresh')) {
-      refreshRequests.push(url)
-      return Response.json({
-        project_id: 'p1', status: 'running', last_started_at: new Date().toISOString(),
-        last_refreshed_at: null, next_refresh_at: nextRefresh, error: null,
-      }, { status: 202 })
-    }
-    if (url.endsWith('/changelog')) {
-      return Response.json({
-        entries: [{
-          project_id: 'p1', repository_path: '.', commit_sha: 'e8ac32b123456789', branch: 'main',
-          subject: 'feat: show undated contact events', committed_at: '2026-08-27T10:00:00Z',
-          domain_id: 'contacts', domain_name: 'Contacts',
-          product_message: 'Les événements sans date apparaissent dans la fiche contact.',
-          enrichment_status: 'enriched', imported_at: '2026-08-27T10:01:00Z', enriched_at: '2026-08-27T10:02:00Z',
-        }, {
-          project_id: 'p1', repository_path: 'apps/reactor', commit_sha: 'd887678123456789', branch: 'feature/TECH-24128',
-          subject: 'fix: type suppressed source errors', committed_at: '2026-08-26T18:31:00Z',
-          domain_id: null, domain_name: null, product_message: null,
-          enrichment_status: 'pending', imported_at: '2026-08-27T10:01:00Z', enriched_at: null,
-        }],
-        state: {
-          project_id: 'p1', status: 'idle', last_started_at: '2026-08-27T10:00:00Z',
-          last_refreshed_at: '2026-08-27T10:02:00Z', next_refresh_at: nextRefresh, error: null,
-        },
-      })
-    }
-    return Response.json(withGitlab)
-  }) as typeof fetch
-  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
-  render(createElement(DashboardView, {
-    project,
-    onConversationSelect: () => {},
-    onStartConversation: () => {},
-  }))
-
-  fireEvent.click(screen.getByRole('tab', { name: 'Changelog' }))
-  expect(await screen.findByText('Les événements sans date apparaissent dans la fiche contact.')).toBeTruthy()
-  expect(screen.getByText('feat: show undated contact events')).toBeTruthy()
-  expect(screen.getByText('main')).toBeTruthy()
-  expect(screen.getByText('e8ac32b')).toBeTruthy()
-  expect(screen.getByText('reactor')).toBeTruthy()
-
-  const menuButton = screen.getByRole('button', { name: /Changelog/ })
-  expect(menuButton.getAttribute('title')).toContain('Prochaine actualisation dans')
-  fireEvent.click(menuButton)
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Actualiser le changelog' }))
-
-  await waitFor(() => expect(refreshRequests).toHaveLength(1))
-})
-
 test('le panneau trie par numéro, mise à jour et dernière conversation', async () => {
   window.localStorage.setItem('pupitre:dashboard-tab:p1', 'tickets')
   const older = {
@@ -403,8 +328,8 @@ test('un projet sans intégration ouvre ses tâches, masque Tickets et Sentry et
     onStartConversation: () => {},
   }))
 
-  await waitFor(() => expect(requestedUrls).toHaveLength(2))
-  expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('title'))).toEqual(['Tâches', 'Changelog', 'Environnements'])
+  await waitFor(() => expect(requestedUrls).toHaveLength(1))
+  expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('title'))).toEqual(['Tâches'])
   const tasksTab = screen.getByRole('tab', { name: 'Tâches 3' })
   expect(tasksTab.getAttribute('aria-selected')).toBe('true')
   expect(screen.getByRole('tabpanel', { name: 'Tâches 3' }).textContent).toContain('Mes tâches personnelles')
@@ -413,10 +338,6 @@ test('un projet sans intégration ouvre ses tâches, masque Tickets et Sentry et
   fireEvent.click(screen.getByRole('button', { name: 'Actualiser' }))
   expect(refreshTodos).toHaveBeenCalledTimes(1)
   fireEvent.keyDown(tasksTab, { key: 'ArrowRight' })
-  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Changelog' }))
-  fireEvent.keyDown(document.activeElement!, { key: 'End' })
-  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Environnements' }))
-  fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
   expect(document.activeElement).toBe(tasksTab)
 })
 

@@ -4,6 +4,7 @@ import { pushToast } from './toasts'
 import { ConversationChangesView } from './ConversationChangesView'
 import { relativeCodeDate } from './codeFormat'
 import type { CodeConversationCommits, CodeConversationRepository } from './types'
+import { VscodeGlyph } from './Icon'
 
 const REFRESH_MS = 30_000
 
@@ -99,8 +100,10 @@ export function ConversationWorkspaceCard({ projectId, conversationId, onSendRev
         className="code-workspace-card-open is-secondary"
         onClick={() => void openChangesInEditor(conversationId)}
         title="Ouvrir le worktree dans VS Code, avec les fichiers modifiés s'ils sont 10 ou moins"
+        aria-label="Ouvrir dans VS Code"
       >
-        Ouvrir dans VS Code
+        <VscodeGlyph />
+        VS Code
       </button>
       <button type="button" className="code-workspace-card-open" onClick={() => setShowChanges(!showChanges)} aria-expanded={showChanges}>
         {showChanges ? 'Masquer les changements' : 'Voir les changements'}

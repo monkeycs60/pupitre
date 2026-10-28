@@ -1,4 +1,5 @@
 import { ThemePicker } from './ThemePicker'
+import { ReadingSettings } from './ReadingSettings'
 import { SidecarJournalCard } from './SidecarJournalCard'
 import { useEffect, useState } from 'react'
 import {
@@ -337,10 +338,20 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
       <div className="settings-card" id="settings-appearance">
         <div>
           <h2>Apparence</h2>
-          <p>Le thème s’applique tout de suite, sur cet ordinateur.</p>
+          <p>Thème, taille du texte et largeur du fil, appliqués tout de suite sur cet ordinateur.</p>
         </div>
         <ThemePicker />
+        <ReadingSettings />
       </div>
+
+      {instance?.instance === 'stable' ? (
+        <div className="settings-card" id="settings-about">
+          <div>
+            <h2>À propos</h2>
+            <p>Version stable <code>{instance.build.sha}{instance.build.dirty ? '*' : ''}</code>, sidecar démarré à {new Date(instance.startedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}.</p>
+          </div>
+        </div>
+      ) : null}
 
       {instance?.instance === 'dev' ? (
         <div className="settings-card" id="settings-instance">

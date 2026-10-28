@@ -1,15 +1,16 @@
 /* Feuilles de style de Pupitre — ordre d'import significatif :
    tokens d'abord, chrome ensuite, puis les modules de vue. */
 
+@import './fonts.css';
 @import './tokens.css';
 @import './shell.css';
 @import './rail-groups.css';
 @import './sidebar.css';
+@import './conversation-list.css';
 @import './chat.css';
 @import './composer.css';
 @import './git.css';
 @import './code.css';
-@import './structure.css';
 @import './library.css';
 @import './design.css';
 @import './workflows.css';
@@ -23,7 +24,6 @@
 @import './dialogs.css';
 @import './feedback.css';
 @import './settings.css';
-@import './applications.css';
 
 @import './conversation-workspace.css';
 

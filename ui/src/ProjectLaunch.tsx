@@ -1,17 +1,18 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { launchRequest, type RunningApplication } from './api'
 import { ExternalLink } from './externalLink'
 import {
-  ALL_LAUNCHES,
   launchUrlLabel,
   refreshProjectLaunches,
-  useLaunches,
   useProjectLaunches,
   type LaunchCommand as Command,
   type LaunchUrl,
 } from './projectLaunchStore'
 import { useRunningApplications } from './runningApplicationsStore'
-import type { Project } from './types'
+import { branchOfWorktree } from './conversationBranch'
+import { Icon } from './Icon'
+import { PortChip } from './PortChip'
+import type { Conversation, Project } from './types'
 
 function commandUrls(item: Command): LaunchUrl[] {
   if (!item.running) return []
@@ -50,44 +51,85 @@ async function stopLaunch(item: Command) {
   await refreshProjectLaunches(item.project_id)
 }
 
-function LaunchLiveRow({
-  item,
-  label = item.name,
-  actions,
-}: {
-  item: Command
-  label?: string
-  actions?: ReactNode
-}) {
+function normalizedOrigin(value: string | null | undefined): string {
+  return (value ?? '').replace(/^(?:refs\/heads\/|origin\/)/, '').replace(/\//g, '-').toLowerCase()
+}
+
+function conversationsForGroup(conversations: Conversation[], ticketKey: string | null, origin: string): Conversation[] {
+  const branch = normalizedOrigin(origin)
+  return conversations
+    .filter((conversation) => (ticketKey !== null && conversation.ticket_key === ticketKey)
+      || normalizedOrigin(branchOfWorktree(conversation.worktree_path) ?? conversation.created_on_branch) === branch)
+    .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))
+}
+
+function ManagedServerRow({ item }: { item: Command }) {
+  const [logsOpen, setLogsOpen] = useState(false)
+  const [logs, setLogs] = useState<string | null>(null)
+  const [restarting, setRestarting] = useState(false)
   const urls = commandUrls(item)
+
+  async function restart() {
+    setRestarting(true)
+    try {
+      await launchRequest(`/api/projects/${item.project_id}/launch/${item.id}/restart`, 'POST', {})
+      await refreshProjectLaunches(item.project_id)
+    } catch {
+      setLogs((current) => current ?? 'La relance a échoué : ouvre les logs pour voir la sortie.')
+    } finally {
+      setRestarting(false)
+    }
+  }
+
+  function toggleLogs() {
+    const next = !logsOpen
+    setLogsOpen(next)
+    if (!next) return
+    void launchRequest<Command>(`/api/projects/${item.project_id}/launch/${item.id}`)
+      .then((status) => setLogs(status.logs ?? ''))
+      .catch((error) => setLogs(String(error)))
+  }
+
   return (
-    <div
-      className={`launch-live-row${urls.some((url) => url.live) ? ' is-live' : ''}`}
-    >
-      <span className="launch-live-dot" aria-hidden="true" />
-      <span className="launch-live-name" title={item.command}>
-        {label}
-      </span>
-      <span className="launch-live-actions">
-        {actions}
-        <button
-          className="launch-live-stop"
-          type="button"
-          aria-label={`Arrêter ${item.name}`}
-          title={`Arrêter ${item.name}`}
-          onClick={() => void stopLaunch(item).catch(() => {})}
-        >
-          ■
-        </button>
-      </span>
-      <span className="launch-live-links">
-        <LaunchLinks urls={urls} />
-      </span>
+    <div className="servers-row is-managed">
+      <div className="servers-row-who">
+        <strong title={item.command}>{item.name}</strong>
+        <span>lancé par Pupitre</span>
+        <span className="servers-row-actions">
+          <button type="button" onClick={() => void restart()} disabled={restarting} aria-label={`Relancer ${item.name}`} title="Relancer">
+            <Icon name="refresh" size={13} />
+          </button>
+          <button type="button" onClick={toggleLogs} aria-expanded={logsOpen} aria-label={`Logs de ${item.name}`} title="Logs">
+            <Icon name="logs" size={13} />
+          </button>
+          <button type="button" onClick={() => void stopLaunch(item).catch(() => {})} aria-label={`Arrêter ${item.name}`} title="Arrêter">
+            <Icon name="stop" size={13} />
+          </button>
+        </span>
+      </div>
+      <div className="servers-row-ports">
+        {urls.length === 0 ? <span className="port-chip is-pending">Démarrage…</span> : urls.map((url) => (
+          <ExternalLink
+            key={url.url}
+            href={url.url}
+            className={`port-chip${url.live ? '' : ' is-pending'}`}
+            title={url.live ? `Ouvrir ${url.url}` : `${url.url} n’écoute pas encore`}
+          >
+            <span className="port-chip-dot" aria-hidden="true" />
+            <span className="port-chip-port">{launchUrlLabel(url.url)}</span>
+          </ExternalLink>
+        ))}
+      </div>
+      {logsOpen ? <pre className="servers-logs">{logs ?? 'Chargement…'}</pre> : null}
     </div>
   )
 }
 
-export function ProjectLiveLaunches({ project }: { project: Project }) {
+export function ProjectLiveLaunches({ project, conversations = [], onConversationSelect }: {
+  project: Project
+  conversations?: Conversation[]
+  onConversationSelect?: (conversation: Conversation) => void
+}) {
   const [expanded, setExpanded] = useState(false)
   const launches = useProjectLaunches(project.id)
   const running = launches.filter((item) => item.running)
@@ -109,61 +151,61 @@ export function ProjectLiveLaunches({ project }: { project: Project }) {
     .sort((a, b) => a.port - b.port)
   if (running.length === 0 && external.length === 0) return null
   const groups = externalGroups(external)
-  const hidden = expanded ? 0 : groups.length - 1
+  const serverCount = external.length + running.reduce((total, item) => total + Math.max(1, commandUrls(item).length), 0)
+  const branchCount = groups.length + running.length
   return (
-    <div className="launch-live-strip" aria-label="Commandes en cours">
-      {running.map((item) => (
-        <LaunchLiveRow item={item} key={item.id} />
-      ))}
-      {external.length > 0 && (
-        <div className="launch-live-row is-external">
-          <span className="launch-live-dot" aria-hidden="true" />
-          <span
-            className="launch-live-name"
-            title="Serveurs du projet lancés depuis un terminal, une autre instance ou un agent"
-          >
-            Lancé ailleurs
-          </span>
-          {groups.length > 1 && (
-            <button
-              className="launch-external-toggle"
-              type="button"
-              aria-expanded={expanded}
-              onClick={() => setExpanded(!expanded)}
-            >
-              {expanded ? 'Réduire' : `+${hidden}`}
-              <span aria-hidden="true">{expanded ? ' ▴' : ' ▾'}</span>
-            </button>
-          )}
-          <div className="launch-external-groups">
-            {(expanded ? groups : groups.slice(0, 1)).map(({ origin, ticket, items }) => (
-              <div className="launch-external-group" key={origin}>
-                <ExternalOrigin origin={origin} ticket={ticket} />
-                <span className="launch-live-links">
-                  {items.map((application) => {
-                    const href = known.get(application.port) ?? application.url
-                    return (
-                      <ExternalLink
-                        key={application.id}
-                        href={href}
-                        className="launch-link is-external"
-                        title={`${application.name} · ${application.process} (PID ${application.pid}) · ${application.cwd}`}
-                      >
-                        {launchUrlLabel(href)}
-                        <span className="launch-link-name">
-                          {' '}
-                          · {application.name.replace(/^@[^/]+\//, '')}
-                        </span>
-                        <span aria-hidden="true"> ↗</span>
-                      </ExternalLink>
-                    )
-                  })}
-                </span>
+    <div className={`servers-block${expanded ? ' is-expanded' : ''}`} aria-label="Serveurs du projet">
+      <button
+        type="button"
+        className="servers-summary"
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
+        title="Serveurs en écoute pour ce projet, lancés par Pupitre ou ailleurs"
+      >
+        <span className="servers-dot" aria-hidden="true" />
+        <strong>{serverCount} serveur{serverCount > 1 ? 's' : ''}</strong>
+        <span>sur {branchCount} branche{branchCount > 1 ? 's' : ''}</span>
+        <span className="servers-toggle">
+          {expanded ? 'Réduire' : 'Voir'}
+          <Icon name={expanded ? 'chevron-up' : 'chevron-right'} size={13} />
+        </span>
+      </button>
+      {expanded ? (
+        <div className="servers-list">
+          {running.map((item) => <ManagedServerRow item={item} key={item.id} />)}
+          {groups.map(({ origin, ticket, items }) => {
+            const related = conversationsForGroup(conversations, ticket?.key ?? null, origin)
+            return (
+              <div className="servers-row" key={origin}>
+                <div className="servers-row-who" title={ticket ? `${ticket.key} · ${ticket.title}\nBranche ${origin}` : `Branche ${origin}`}>
+                  <strong>{ticket?.key ?? origin}</strong>
+                  {ticket ? <span>{ticket.title}</span> : null}
+                  {related.length > 0 && onConversationSelect ? (
+                    <button
+                      type="button"
+                      className="servers-row-conv"
+                      onClick={() => onConversationSelect(related[0]!)}
+                      title={`Ouvrir « ${related[0]!.title} »`}
+                    >
+                      {related.length} conv.
+                    </button>
+                  ) : null}
+                </div>
+                <div className="servers-row-ports">
+                  {items.map((application) => (
+                    <PortChip
+                      key={application.id}
+                      application={application}
+                      projectName={project.name}
+                      href={known.get(application.port) ?? application.url}
+                    />
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
+            )
+          })}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -181,36 +223,6 @@ function externalGroups(applications: RunningApplication[]) {
     groups.set(origin, group)
   }
   return [...groups.values()]
-}
-
-function ExternalOrigin({
-  origin,
-  ticket,
-}: {
-  origin: string
-  ticket: RunningApplication['ticket']
-}) {
-  if (!ticket)
-    return (
-      <span className="launch-external-origin" title={`Branche ${origin}`}>
-        <span className="launch-external-branch">{origin}</span>
-      </span>
-    )
-  const label = (
-    <>
-      <span className="launch-external-key">{ticket.key}</span> {ticket.title}
-    </>
-  )
-  const title = `${ticket.key} · ${ticket.title}\nBranche ${origin}`
-  return ticket.url ? (
-    <ExternalLink href={ticket.url} className="launch-external-origin" title={title}>
-      {label}
-    </ExternalLink>
-  ) : (
-    <span className="launch-external-origin" title={title}>
-      {label}
-    </span>
-  )
 }
 
 type Suggestion = { name: string; command: string; frequency?: number }
@@ -522,88 +534,5 @@ export function ProjectLaunch({
       )}
       {error && <p role="alert">{error}</p>}
     </div>
-  )
-}
-
-function LaunchLogs({ item }: { item: Command }) {
-  const [logs, setLogs] = useState<string | null>(null)
-  return (
-    <details
-      className="managed-launch-logs"
-      onToggle={(event) => {
-        if (!event.currentTarget.open) return
-        void launchRequest<Command>(
-          `/api/projects/${item.project_id}/launch/${item.id}`,
-        )
-          .then((status) => setLogs(status.logs ?? ''))
-          .catch((error) => setLogs(String(error)))
-      }}
-    >
-      <summary>Logs</summary>
-      <pre>{logs ?? 'Chargement…'}</pre>
-    </details>
-  )
-}
-
-export function ManagedLaunches() {
-  const running = useLaunches(ALL_LAUNCHES).filter((item) => item.running)
-  const [error, setError] = useState('')
-  if (running.length === 0) return null
-  const projects = new Map<string, Command[]>()
-  for (const item of running)
-    projects.set(item.project_id, [
-      ...(projects.get(item.project_id) ?? []),
-      item,
-    ])
-  async function restart(item: Command) {
-    try {
-      await launchRequest(
-        `/api/projects/${item.project_id}/launch/${item.id}/restart`,
-        'POST',
-        {},
-      )
-      await refreshProjectLaunches(item.project_id)
-      setError('')
-    } catch (error) {
-      setError(String(error))
-    }
-  }
-  return (
-    <section
-      className="managed-launches"
-      aria-label="Commandes lancées par Pupitre"
-    >
-      <h2>
-        Lancées par Pupitre <span>{running.length}</span>
-      </h2>
-      {error && <p role="alert">{error}</p>}
-      {[...projects].map(([projectId, items]) => (
-        <div
-          className="launch-live-strip managed-launches-project"
-          key={projectId}
-        >
-          {items.map((item) => (
-            <div key={item.id}>
-              <LaunchLiveRow
-                item={item}
-                label={`${item.project_name ?? 'Projet'} · ${item.name}`}
-                actions={
-                  <button
-                    className="launch-live-restart"
-                    type="button"
-                    aria-label={`Relancer ${item.name}`}
-                    title={`Relancer ${item.name}`}
-                    onClick={() => void restart(item)}
-                  >
-                    ↻
-                  </button>
-                }
-              />
-              <LaunchLogs item={item} />
-            </div>
-          ))}
-        </div>
-      ))}
-    </section>
   )
 }

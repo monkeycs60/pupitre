@@ -5,8 +5,6 @@ import { ToastHost } from './ToastHost'
 import { NudgeStack } from './NudgeStack'
 import { useConversationNudges } from './useConversationNudges'
 import { pushToast } from './toasts'
-import { OpenInEditorButton } from './OpenInEditorButton'
-import { ReadingControls } from './ReadingControls'
 import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type InspectorView } from './WorkspaceInspector'
 import { InactiveProjectResume } from './ProjectResume'
 import { TodoList } from './TodoList'
@@ -25,7 +23,6 @@ import { Chat, type ThreadTools } from './Chat'
 import { Sidebar, ticketTitleWithoutKey } from './Sidebar'
 import { Rail } from './Rail'
 import { Titlebar, type TitlebarDestination } from './Titlebar'
-import { navigationShortcutLabel } from './navigationShortcuts'
 import { SwitchModelModal } from './SwitchModelModal'
 import type { Attachment, Conversation, ConversationContinuation, Project, UnreadConversation } from './types'
 import { useConversationEvents } from './useConversationEvents'
@@ -41,18 +38,16 @@ import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
 import type { ActionFormat } from './actionHeadings'
 import { useAppNotifications } from './useAppNotifications'
 import type { ReportTab } from './ActivityReportView'
-import { CommandPalette } from './CommandPalette'
+import { CommandPalette, type PaletteView } from './CommandPalette'
 import { createSessionSummary, createTestInventory } from './api'
 import type { SkillSummary } from './types'
 import type { AppEvent, WorkspaceView } from './types'
 import { useTimeTracking } from './useTimeTracking'
 import { useFleet, type FleetHistoryItem } from './useFleet'
-import { countConversationMessages } from './conversationMessageCount'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { branchOfWorktree } from './conversationBranch'
-import { BranchIcon } from './BranchIcon'
-import { ConversationInstruction } from './ConversationInstruction'
-import { SentryLinkIcon, TicketLinkIcons } from './TicketLinkIcons'
+import { ConversationHeader } from './ConversationHeader'
+import { LevelCard } from './LevelCard'
 import { useSentryLinks, useTicketLinks } from './ticketLinks'
 import { isAppRestartShortcut, restartApp } from './appRestart'
 import {
@@ -67,9 +62,7 @@ import { useInstance } from './useInstance'
 import { useUnreadConversations } from './useUnreadConversations'
 import { retryUntilAvailable } from './startupRetry'
 import { subscribeVisualFeedbackNavigation } from './visualFeedbackNavigation'
-import { ProjectSectionSwitch } from './ProjectSectionSwitch'
 import { createToolFileAccess, ToolFileContext } from './toolFiles'
-import { VscodeWebHost } from './VscodeWebHost'
 import {
   PROJECT_SECTIONS,
   projectNavigationIndexForShortcut,
@@ -84,8 +77,6 @@ const SettingsShell = lazy(() => import('./SettingsShell').then((module) => ({ d
 const DesignView = lazy(() => import('./DesignView').then((module) => ({ default: module.DesignView })))
 const DashboardView = lazy(() => import('./DashboardView').then((module) => ({ default: module.DashboardView })))
 const ActivityReportView = lazy(() => import('./ActivityReportView').then((module) => ({ default: module.ActivityReportView })))
-const StructureView = lazy(() => import('./StructureView').then((module) => ({ default: module.StructureView })))
-const ApplicationsView = lazy(() => import('./ApplicationsView').then((module) => ({ default: module.ApplicationsView })))
 
 const DEFAULT_SIDEBAR_WIDTH = 296
 const MIN_SIDEBAR_WIDTH = 200
@@ -201,9 +192,6 @@ function App() {
   const { events, connection, retryAt } = useConversationEvents(
     workspaceView === 'conversations' ? selectedConversation?.id ?? null : null,
   )
-  const liveConversationMessageCount = events.length > 0
-    ? countConversationMessages(events)
-    : undefined
   const quotas = useQuotas()
   const time = useTimeTracking(selectedProject?.id ?? null, selectedConversation?.id ?? null)
   const fleet = useFleet(selectedProject?.id, handleFleetSettled)
@@ -557,20 +545,6 @@ function App() {
       : createToolFileAccess(selectedProjectId, selectedConversation?.id ?? null)
   ), [selectedProjectId, selectedConversation?.id])
 
-  function openStructureFileInEditor(source: string, path: string) {
-    if (toolFileAccess === null || selectedConversation === null || source.includes('#')) {
-      pushToast({
-        tone: 'info',
-        title: 'Ouverture dans VS Code impossible',
-        detail: source.includes('#')
-          ? 'Cette branche n’a pas de worktree sur le disque.'
-          : 'Ouvre une conversation du projet pour retrouver sa fenêtre VS Code.',
-      })
-      return
-    }
-    void toolFileAccess.openInEditor([{ path: `${source}/${path}`, line: null }])
-  }
-
   function closeProjectSurface() {
     setProjectSurface(null)
     if (inspector === 'dashboard') setInspector(null)
@@ -847,12 +821,6 @@ function App() {
     setShowSwitchModel(false)
   }
 
-  function handleApplicationsSelect() {
-    if (!confirmLeaveMemory()) return
-    setWorkspaceView('applications')
-    setShowSwitchModel(false)
-  }
-
   function handleLibrarySelect() {
     if (!confirmLeaveMemory()) return
     openInspector('library')
@@ -886,7 +854,7 @@ function App() {
     if (view === 'conversations') handleConversationsSelect()
     else if (view === 'fleet') handleFleetSelect()
     else if (view === 'dashboard') handleDashboardSelect()
-    else handleDesignSelect()
+    else if (view === 'design') handleDesignSelect()
   }
 
   function handleMemorySelect() {
@@ -910,14 +878,28 @@ function App() {
     setShowSwitchModel(false)
   }
 
+  function handleAppearanceSelect() {
+    handleSettingsSelect()
+    let attempts = 0
+    const reveal = () => {
+      const card = document.getElementById('settings-appearance')
+      if (card !== null) card.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      else if (attempts++ < 20) window.setTimeout(reveal, 50)
+    }
+    window.setTimeout(reveal, 0)
+  }
+
   function handleActivityReportSelect() {
     if (!confirmLeaveMemory()) return
     setWorkspaceView('activity-report')
     setShowSwitchModel(false)
   }
 
-  function handlePaletteViewSelect(view: 'fleet' | 'routines' | 'library' | 'memory' | 'help' | 'dashboard') {
+  function handlePaletteViewSelect(view: PaletteView) {
     if (view === 'dashboard') handleDashboardSelect()
+    else if (view === 'report') handleActivityReportSelect()
+    else if (view === 'settings') handleSettingsSelect()
+    else if (view === 'design') handleDesignSelect()
     else if (view === 'fleet') handleFleetSelect()
     else if (view === 'routines') handleRoutinesSelect()
     else if (view === 'library') handleLibrarySelect()
@@ -996,7 +978,6 @@ function App() {
     : {
         git: 'Git',
         documents: 'Fichiers',
-        applications: 'Applications',
         design: 'Claude Design',
         dashboard: 'Projet',
         library: 'Skills',
@@ -1012,31 +993,19 @@ function App() {
     : inspector ?? workspaceView
 
   const destinations: TitlebarDestination[] = [
-    {
-      name: 'conversations',
-      label: 'Conversations',
-      view: 'conversations',
-      onClick: handleConversationsSelect,
-      shortcut: navigationShortcutLabel('conversations'),
-    },
-    {
-      name: 'applications',
-      label: 'Applications',
-      view: 'applications',
-      onClick: handleApplicationsSelect,
-    },
-    ...(window.__TAURI__
-      ? [{
-          name: 'design' as const,
-          label: 'Claude Design',
-          view: 'design' as const,
-          onClick: handleDesignSelect,
-          shortcut: navigationShortcutLabel('design'),
-        }]
-      : []),
-    { name: 'activity-report', label: 'Rapport', view: 'activity-report', onClick: handleActivityReportSelect },
-    { name: 'settings', label: 'Réglages', view: 'settings', onClick: handleSettingsSelect },
+    { icon: 'chart', label: 'Rapport', view: 'activity-report', onClick: handleActivityReportSelect },
+    { icon: 'settings', label: 'Réglages', view: 'settings', onClick: handleSettingsSelect },
   ]
+
+  const pendingContextBadge = selectedConversation !== null ? null
+    : conversationSeed?.originType === 'sentry' && conversationSeed.originKey ? (
+      <span className="conversation-context-badge" title={`Cette conversation sera rattachée à l'issue Sentry ${conversationSeed.originKey}`}>Pour l'issue Sentry {conversationSeed.originKey}</span>
+    ) : conversationSeed?.ticketKey ? (() => {
+      const key = conversationSeed.ticketKey
+      const title = ticketLinks.get(key)?.title
+      const label = title ? `${key} · ${ticketTitleWithoutKey(title, key)}` : key
+      return <span className="conversation-context-badge" title={`Cette conversation sera rattachée au ticket ${label}`}>Pour le ticket {label}</span>
+    })() : null
 
   const showSidebar = workspaceView === 'conversations'
 
@@ -1054,12 +1023,11 @@ function App() {
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
       <Titlebar
-        crumbs={[selectedProject?.name, titlebarView]}
+        crumbs={workspaceView === 'conversations' ? [] : [titlebarView]}
         instance={instance}
         onRestart={restartApp}
         destinations={destinations}
         workspaceView={railView}
-        hasProject={selectedProject !== null}
         island={<FleetIsland
           items={fleet.items}
           unread={attention.items}
@@ -1098,10 +1066,10 @@ function App() {
         selectedConversation={selectedConversation}
         quotas={quotas.snapshot}
         quotaProviders={quotas.visibleProviders}
-        time={time.snapshot}
-        timeMode={time.mode}
-        onTimeModeToggle={time.toggleMode}
-        agentRunning={fleet.items.length > 0}
+        nudges={nudges.items}
+        activeSection={projectSurface?.section ?? null}
+        onSectionSelect={(section) => section === null ? handleConversationsSelect() : openProjectSection(section)}
+        todoCount={todos.items.filter((item) => item.status !== 'done').length}
         onProjectSelect={stableProjectSelect}
         onConversationSelect={stableConversationSelect}
         onConversationCreate={stableConversationCreate}
@@ -1111,7 +1079,6 @@ function App() {
         onConversationRead={handleSidebarRead}
         conversationListVersion={conversationListVersion}
         runningSubtasks={runningSubtasks}
-        liveConversationMessageCount={liveConversationMessageCount}
         workspaceView={workspaceView}
         activeFleet={fleet.items}
         ticketLinks={ticketLinks}
@@ -1144,9 +1111,17 @@ function App() {
         >
         <Suspense fallback={<div className="empty-state"><p>Chargement…</p></div>}>
         {workspaceView === 'design' ? <DesignView />
-        : workspaceView === 'applications' ? <ApplicationsView />
         : workspaceView === 'settings' ? <SettingsShell instance={instance} quotas={quotas.snapshot} helpSlug={helpSlug} />
-        : workspaceView === 'activity-report' ? <ActivityReportView key={reportRequest?.nonce} initialTab={reportRequest?.tab} onOpenConversation={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)} />
+        : workspaceView === 'activity-report' ? (
+          <div className="activity-report-shell">
+            {time.snapshot ? (
+              <div className="activity-report-level">
+                <LevelCard snapshot={time.snapshot} mode={time.mode} agentRunning={fleet.items.length > 0} onToggle={time.toggleMode} />
+              </div>
+            ) : null}
+            <ActivityReportView key={reportRequest?.nonce} initialTab={reportRequest?.tab} onOpenConversation={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)} />
+          </div>
+        )
         : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
         : projectSurface?.layout === 'full' ? (
           <>
@@ -1154,24 +1129,8 @@ function App() {
               <div className="conversation-title-block">
                 <h1>{PROJECT_SECTIONS.find((section) => section.id === projectSurface.section)?.label}</h1>
               </div>
-              <div className="header-actions">
-                <ProjectSectionSwitch
-                  projectId={selectedProject.id}
-                  activeSection={projectSurface.section}
-                  todoCount={todos.items.filter((item) => item.status !== 'done').length}
-                  onSelect={(section) => section === null ? closeProjectSurface() : openProjectSection(section)}
-                />
-              </div>
             </header>
-            {projectSurface.section === 'vscode' ? null
-              : projectSurface.section === 'structure'
-              ? <StructureView
-                key={`structure-${selectedProject.id}-${selectedConversation?.id ?? 'none'}`}
-                project={selectedProject}
-                conversation={selectedConversation}
-                onOpenFile={openStructureFileInEditor}
-              />
-              : renderProjectDashboard()}
+            {renderProjectDashboard()}
           </>
         )
         : selectedConversation === null && !isCreatingConversation ? (
@@ -1180,95 +1139,15 @@ function App() {
           </div>
         ) : (
           <>
-            <header className="conversation-header">
-              <div className="conversation-title-block">
-                <h1>{selectedConversation?.title ?? 'Nouvelle conversation'}</h1>
-                {selectedConversation === null && conversationSeed?.originType === 'sentry' && conversationSeed.originKey ? (
-                  <span className="conversation-context-badge" title={`Cette conversation sera rattachée à l'issue Sentry ${conversationSeed.originKey}`}>Pour l'issue Sentry {conversationSeed.originKey}</span>
-                ) : selectedConversation === null && conversationSeed?.ticketKey ? (() => {
-                  const key = conversationSeed.ticketKey
-                  const title = ticketLinks.get(key)?.title
-                  const label = title ? `${key} · ${ticketTitleWithoutKey(title, key)}` : key
-                  return <span className="conversation-context-badge" title={`Cette conversation sera rattachée au ticket ${label}`}>Pour le ticket {label}</span>
-                })() : null}
-                {selectedConversation?.ticket_instruction ? (
-                  <ConversationInstruction instruction={selectedConversation.ticket_instruction} />
-                ) : null}
-                {(() => {
-                  if (selectedConversation === null) return null
-                  const links = (selectedConversation.ticket_key !== null && selectedConversation.ticket_key !== undefined
-                    ? ticketLinks.get(selectedConversation.ticket_key)
-                    : undefined)
-                    ?? (selectedConversation.ticket_id !== null ? ticketLinks.get(selectedConversation.ticket_id) : undefined)
-                  return links === undefined ? null : (
-                    <TicketLinkIcons
-                      links={links}
-                      ticketKey={selectedConversation.ticket_key ?? links.ticketKey}
-                    />
-                  )
-                })()}
-                {(() => {
-                  const originKey = selectedConversation?.origin_type === 'sentry'
-                    ? selectedConversation.origin_key ?? null
-                    : null
-                  const url = originKey !== null ? sentryLinks.get(originKey) : undefined
-                  return originKey !== null && url !== undefined
-                    ? <SentryLinkIcon url={url} issueKey={originKey} />
-                    : null
-                })()}
-              </div>
-              <div className="header-actions">
-                {selectedConversation !== null
-                && branchOfWorktree(selectedConversation.worktree_path) !== null ? (
-                  <span
-                    className="conversation-branch"
-                    title={`Worktrees dédiés : ${(selectedConversation.worktree_paths?.length ? selectedConversation.worktree_paths : [selectedConversation.worktree_path]).join(', ')}`}
-                  >
-                    <BranchIcon />
-                    {branchOfWorktree(selectedConversation.worktree_path)}
-                    {(selectedConversation.worktree_paths?.length ?? 0) > 1 ? ` +${selectedConversation.worktree_paths!.length - 1}` : ''}
-                  </span>
-                ) : null}
-                {selectedConversation !== null ? <OpenInEditorButton conversationId={selectedConversation.id} /> : null}
-                {threadTools !== null && threadTools.assetCount > 0 ? (
-                  <button
-                    type="button"
-                    className="header-action header-action-icon header-action-badged"
-                    onClick={threadTools.openAssets}
-                    title={`Afficher les pièces jointes (${threadTools.assetCount})`}
-                    aria-label={`Afficher les ${threadTools.assetCount} pièce${threadTools.assetCount > 1 ? 's' : ''} jointe${threadTools.assetCount > 1 ? 's' : ''}`}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path d="M2.5 4h4l1.25 1.4h5.75v7.1h-11V4Z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
-                    </svg>
-                    <span className="header-action-count">{threadTools.assetCount}</span>
-                  </button>
-                ) : null}
-                {threadTools !== null ? (
-                  <button
-                    type="button"
-                    className="header-action header-action-icon"
-                    onClick={threadTools.openSearch}
-                    title="Rechercher dans le fil (Ctrl F)"
-                    aria-label="Rechercher dans le fil"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-                        <circle cx="7" cy="7" r="4.2" />
-                        <path d="m10.2 10.2 3 3" />
-                      </g>
-                    </svg>
-                  </button>
-                ) : null}
-                {threadTools !== null ? <ReadingControls /> : null}
-                <ProjectSectionSwitch
-                  projectId={selectedProject.id}
-                  activeSection={projectSurface?.section ?? null}
-                  todoCount={todos.items.filter((item) => item.status !== 'done').length}
-                  onSelect={(section) => section === null ? closeProjectSurface() : openProjectSection(section)}
-                />
-              </div>
-            </header>
+            <ConversationHeader
+              project={selectedProject}
+              conversation={selectedConversation}
+              pendingContext={pendingContextBadge}
+              ticketLinks={ticketLinks}
+              sentryLinks={sentryLinks}
+              threadTools={threadTools}
+              onOpenAppearance={handleAppearanceSelect}
+            />
             <ToolFileContext.Provider value={toolFileAccess}>
             <Chat
               key={selectedConversation === null
@@ -1322,13 +1201,6 @@ function App() {
           </>
         )}
         </Suspense>
-        {selectedProject !== null ? (
-          <VscodeWebHost
-            active={workspaceView === 'conversations' && projectSurface?.section === 'vscode' && projectSurface.layout === 'full'}
-            conversationId={selectedConversation?.id ?? null}
-            onBackToConversation={closeProjectSurface}
-          />
-        ) : null}
         <div
           className={`workspace-inspector-slot${workspaceView === 'conversations' && inspector ? ' is-open' : ''}`}
         >

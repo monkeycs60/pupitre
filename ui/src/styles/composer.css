@@ -19,15 +19,15 @@
      être découpés par sa bordure. */
   overflow: visible;
   background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-lg);
-  box-shadow: 0 -2px 24px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-composer);
   transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 
 .composer:focus-within {
   border-color: var(--accent-border);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .composer:has(.context-gauge.is-near-limit) {
@@ -390,7 +390,7 @@
 
 .model-strip-model-cost b {
   min-width: 22px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   font-weight: 600;
   text-align: right;
@@ -398,7 +398,7 @@
 
 .model-strip-model-cost small {
   color: var(--text-faint);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
@@ -804,7 +804,7 @@
 .composer-file-kind {
   flex: none;
   color: var(--text-faint);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 9px;
 }
 
@@ -982,7 +982,7 @@
 
 .composer-palette-count {
   margin-left: auto;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
 }
 
@@ -999,7 +999,7 @@
 
 .composer-ph-key {
   color: var(--accent);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- Barre d'actions --------------------------------------------------------- */
@@ -1035,33 +1035,31 @@
   flex: none;
   gap: 6px;
   align-items: center;
-  height: 22px;
+  height: 26px;
   padding: 0 8px;
   overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
   white-space: nowrap;
-  border-radius: var(--r-full);
+  border-radius: var(--r-md);
 }
 
 .composer-model .provider-mark {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
 }
 
-.composer-model.is-claude {
+.composer-model.is-claude .provider-mark {
   color: var(--prov-claude);
-  background: var(--prov-claude-soft);
 }
 
-.composer-model.is-codex {
+.composer-model.is-codex .provider-mark {
   color: var(--prov-codex);
-  background: var(--prov-codex-soft);
 }
 
-.composer-model.is-grok {
+.composer-model.is-grok .provider-mark {
   color: var(--prov-grok);
-  background: var(--prov-grok-soft);
 }
 
 .composer-send-group {
@@ -1268,7 +1266,7 @@
 }
 
 .send-button kbd {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   opacity: 0.6;
 }
@@ -1418,7 +1416,7 @@
   margin-bottom: -1px;
   padding: 3px 10px 0;
   color: inherit;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   font-weight: 600;
   font-variant-numeric: tabular-nums;

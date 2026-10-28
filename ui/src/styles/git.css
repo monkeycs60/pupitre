@@ -60,7 +60,7 @@
 .changes-file-list button.is-active { color: var(--text-strong); font-weight: 600; background: var(--bg-active); border-left-color: var(--accent); }
 .changes-file-path { min-width: 0; overflow: hidden; font-family: var(--font-mono); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
 
-.changes-file-badges { display: flex; flex: none; gap: 4px; margin-left: auto; font-family: var(--font-mono); font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.changes-file-badges { display: flex; flex: none; gap: 4px; margin-left: auto; font-variant-numeric: tabular-nums; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .changes-file-badges i { font-style: normal; }
 .changes-file-badges .is-red { color: var(--danger); }
 .changes-file-badges .is-orange { color: var(--streak); }

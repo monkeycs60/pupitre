@@ -180,3 +180,20 @@ a.activity-outcome:focus-visible { outline: 2px solid var(--accent); outline-off
 .agenda-projects li.is-member { padding-left: 18px; font-size: 12px; }
 .agenda-projects li.is-member .agenda-dot { width: 8px; height: 8px; border-radius: 50%; }
 .agenda-projects li.is-member strong { font-weight: 500; color: var(--text-muted); }
+
+.activity-report-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.activity-report-level {
+  position: absolute;
+  z-index: 3;
+  top: var(--space-3);
+  right: var(--space-5);
+  width: 280px;
+}
