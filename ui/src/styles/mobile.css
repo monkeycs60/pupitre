@@ -1,0 +1,127 @@
+.mobile-navigation-toggle {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  body {
+    min-width: 0;
+  }
+
+  .app-shell,
+  .app-shell.app-shell--no-sidebar {
+    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-rows: 48px minmax(0, 1fr);
+    height: 100dvh;
+  }
+
+  .titlebar {
+    height: 48px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    overflow: visible;
+  }
+
+  .titlebar-drag {
+    gap: var(--space-2);
+    padding: 0 var(--space-2);
+  }
+
+  .mobile-navigation-toggle {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .titlebar-center,
+  .titlebar-crumb,
+  .titlebar-logo,
+  .sidebar-resize-handle {
+    display: none;
+  }
+
+  .titlebar-right {
+    min-width: 0;
+  }
+
+  .titlebar-nav {
+    gap: 0;
+  }
+
+  .titlebar-nav .titlebar-icon-button {
+    width: 36px;
+    height: 40px;
+  }
+
+  .app-shell > .rail,
+  .app-shell > .sidebar {
+    display: none;
+  }
+
+  .app-shell--mobile-navigation > .rail,
+  .app-shell--mobile-navigation > .sidebar {
+    display: flex;
+  }
+
+  .app-shell--mobile-navigation > .rail {
+    width: 56px;
+  }
+
+  .app-shell--mobile-navigation > .rail .rail-project-label {
+    display: none;
+  }
+
+  .app-shell--mobile-navigation > .rail .rail-project-more {
+    display: none;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .app-shell--mobile-navigation > .rail .rail-avatar {
+    grid-template-columns: 1fr;
+    width: 40px;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .app-shell > .workspace {
+    grid-column: 1 / -1;
+  }
+
+  .app-shell--mobile-navigation > .workspace {
+    display: none;
+  }
+
+  .conversation-header {
+    gap: var(--space-2);
+    padding: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .conversation-title-block {
+    flex-basis: 55%;
+  }
+
+  .composer-area {
+    padding: var(--space-2) var(--space-2) max(var(--space-2), env(safe-area-inset-bottom));
+  }
+
+  .composer textarea,
+  .composer [contenteditable] {
+    font-size: 16px;
+  }
+
+  .composer-actions,
+  .config-panel {
+    flex-wrap: wrap;
+  }
+
+  .composer-tools {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .workspace-inspector-slot.is-open {
+    width: 100%;
+  }
+}

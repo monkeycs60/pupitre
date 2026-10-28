@@ -34,10 +34,17 @@ export function mediaUrl(name: string, protocol = location.protocol): string {
   return httpUrl(`/media/${encodeURIComponent(name)}`, protocol)
 }
 
-export function absoluteSidecarUrl(path: string): string {
+export function absoluteSidecarUrl(
+  path: string,
+  current: LocationLike | undefined = typeof location === 'undefined' ? undefined : location,
+  tauriRuntime = hasTauriRuntime(),
+): string {
   if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return path
   const normalized = path.startsWith('/') ? path : `/${path}`
-  return `${httpOrigin()}${normalized}`
+  const origin = !tauriRuntime && current && /^https?:$/.test(current.protocol)
+    ? `${current.protocol}//${current.host}`
+    : httpOrigin()
+  return `${origin}${normalized}`
 }
 
 export function htmlDocumentContentUrl(

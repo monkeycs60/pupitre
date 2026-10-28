@@ -136,6 +136,7 @@ function App() {
     }
   }, [])
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null)
   const [isCreatingConversation, setIsCreatingConversation] = useState(false)
@@ -683,6 +684,7 @@ function App() {
   function handleConversationSelect(conversation: Conversation) {
     setFocusEventId(null)
     if (!confirmLeaveMemory()) return
+    setMobileNavigationOpen(false)
     setSelectedConversation(conversation)
     setEditingTodo(null)
     setConversationSeed(null)
@@ -696,6 +698,7 @@ function App() {
   function handleConversationCreate() {
     track('conversation.new', {}, selectedProject?.id ?? null)
     if (!confirmLeaveMemory()) return
+    setMobileNavigationOpen(false)
     if (selectedProject === null) return
     setSelectedConversation(null)
     setEditingTodo(null)
@@ -1043,6 +1046,7 @@ function App() {
     })() : null
 
   const showSidebar = workspaceView === 'conversations'
+  const showMobileNavigation = mobileNavigationOpen && showSidebar
 
   return (
     <ActionFormatContext.Provider value={actionFormat}>
@@ -1054,10 +1058,17 @@ function App() {
     <main
       className={`app-shell ${showSidebar ? '' : 'app-shell--no-sidebar'}${
         workspaceView === 'design' ? ' app-shell--pinned-rail' : ''
+      }${showMobileNavigation ? ' app-shell--mobile-navigation' : ''
       }`}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
       <Titlebar
+        navigationOpen={showMobileNavigation}
+        onNavigationToggle={() => {
+          if (!confirmLeaveMemory()) return
+          if (!showMobileNavigation) setWorkspaceView('conversations')
+          setMobileNavigationOpen(!showMobileNavigation)
+        }}
         crumbs={workspaceView === 'conversations' ? [] : [titlebarView]}
         instance={instance}
         onRestart={restartApp}
@@ -1104,6 +1115,7 @@ function App() {
         nudges={nudges.items}
         activeSection={projectSurface?.section ?? null}
         onSectionSelect={(section) => {
+          setMobileNavigationOpen(false)
           track('project.tab', { tab: section === null ? 'conversations' : section === 'todos' ? 'tasks' : section }, selectedProject?.id ?? null)
           if (section === null) handleConversationsSelect()
           else openProjectSection(section)

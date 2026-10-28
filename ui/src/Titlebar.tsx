@@ -28,6 +28,8 @@ interface TitlebarProps {
   workspaceView?: WorkspaceView
   /** Exécutions en cours et réponses à lire, au centre de la barre. */
   island?: ReactNode
+  navigationOpen?: boolean
+  onNavigationToggle?: () => void
 }
 
 const RESIZE_HANDLES: ReadonlyArray<[string, ResizeDirection]> = [
@@ -48,6 +50,8 @@ export function Titlebar({
   destinations = [],
   workspaceView,
   island,
+  navigationOpen = false,
+  onNavigationToggle,
 }: TitlebarProps) {
   const visibleCrumbs = (crumbs ?? []).filter(
     (crumb): crumb is string => typeof crumb === 'string' && crumb.length > 0,
@@ -59,6 +63,13 @@ export function Titlebar({
   return (
     <header className="titlebar">
       <div className="titlebar-drag" {...drag}>
+        {onNavigationToggle ? <button
+          type="button"
+          className="mobile-navigation-toggle titlebar-icon-button"
+          aria-label="Projets et conversations"
+          aria-expanded={navigationOpen}
+          onClick={onNavigationToggle}
+        ><Icon name={navigationOpen ? 'close' : 'folder'} /></button> : null}
         <span className="titlebar-app" {...drag}>
           <span className="titlebar-logo" aria-hidden="true"><i /></span>
           Pupitre
