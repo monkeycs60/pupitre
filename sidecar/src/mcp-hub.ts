@@ -1,10 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { ChildProcess } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { killGroup, spawnGroup } from "./process-group";
+import { createPupitreServer } from "./pupitre-mcp";
+import type { PupitreTarget } from "./pupitre";
 
 const DEFAULT_IDLE_MS = 10 * 60_000;
 const INITIALIZE_TIMEOUT_MS = 90_000;
@@ -66,6 +69,71 @@ function sameDefinition(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+const NPX_QUIET_FLAGS = new Set(["-y", "--yes", "-q", "--quiet"]);
+
+/**
+ * Lancement direct du binaire qu'`npx <paquet>` exécuterait depuis son cache
+ * (`~/.npm/_npx`), sans le process `npm exec` qui l'enveloppe. Null quand le
+ * paquet n'y est pas encore, quand le projet l'installe lui-même ou quand les
+ * options d'npx sortent du cas simple : npx garde alors la main.
+ */
+export function npxDirectLaunch(server: StdioServer, home = homedir()): StdioServer | null {
+  if (basename(server.command) !== "npx") return null;
+  const specIndex = server.args.findIndex((arg) => !NPX_QUIET_FLAGS.has(arg));
+  const spec = server.args[specIndex];
+  if (spec === undefined || spec.startsWith("-")) return null;
+  const at = spec.indexOf("@", 1);
+  const name = at === -1 ? spec : spec.slice(0, at);
+  const wanted = at === -1 || spec.slice(at + 1) === "latest" ? "*" : spec.slice(at + 1);
+  if (!/^[\d\s.*xX^~<>=|-]+$/.test(wanted)) return null;
+  if (existsSync(join(server.cwd, "node_modules", name))) return null;
+  const cache = join(process.env.npm_config_cache ?? join(home, ".npm"), "_npx");
+  let entries: string[];
+  try {
+    entries = readdirSync(cache);
+  } catch {
+    return null;
+  }
+  let best: { version: string; root: string; bin: unknown } | null = null;
+  for (const entry of entries) {
+    const root = join(cache, entry, "node_modules");
+    const manifest = readJson(join(root, name, "package.json"));
+    if (typeof manifest?.version !== "string") continue;
+    if (!Bun.semver.satisfies(manifest.version, wanted)) continue;
+    if (best === null || Bun.semver.order(manifest.version, best.version) > 0) {
+      best = { version: manifest.version, root, bin: manifest.bin };
+    }
+  }
+  if (best === null) return null;
+  const unscoped = name.split("/").at(-1)!;
+  const bins = typeof best.bin === "string" ? [unscoped] : Object.keys((best.bin as object | undefined) ?? {});
+  const binName = bins.length === 1 ? bins[0] : bins.find((candidate) => candidate === unscoped);
+  if (binName === undefined) return null;
+  const bin = join(best.root, ".bin", binName);
+  if (!existsSync(bin)) return null;
+  const path = server.env.PATH ?? process.env.PATH ?? "";
+  return {
+    command: bin,
+    args: server.args.slice(specIndex + 1),
+    env: { ...server.env, PATH: `${join(best.root, ".bin")}:${path}` },
+    cwd: server.cwd,
+  };
+}
+
+/**
+ * Dossier sous lequel `~/.claude.json` range la config locale de `cwd` : un
+ * worktree Git partage celle de son dépôt principal.
+ */
+function projectConfigKey(cwd: string, projects: Record<string, unknown>): string {
+  if (cwd in projects) return cwd;
+  try {
+    const pointer = readFileSync(join(cwd, ".git"), "utf8").match(/^gitdir:\s*(.+?)\s*$/m)?.[1];
+    const main = pointer?.match(/^(.*)\/\.git\/worktrees\/[^/]+$/)?.[1];
+    if (main && main in projects) return main;
+  } catch {}
+  return cwd;
+}
+
 /**
  * Serveurs que le CLI Claude démarrerait lui-même dans `cwd` sans
  * `--strict-mcp-config` : scope utilisateur, `.mcp.json` approuvé, scope local,
@@ -73,7 +141,8 @@ function sameDefinition(left: unknown, right: unknown): boolean {
  */
 export function claudeLoadedServers(cwd: string, home = homedir()): Record<string, unknown> {
   const claudeConfig = readJson(join(home, ".claude.json"));
-  const local = claudeConfig?.projects?.[cwd] ?? {};
+  const projects = claudeConfig?.projects ?? {};
+  const local = projects[projectConfigKey(cwd, projects)] ?? {};
   const settings = [
     readJson(join(home, ".claude", "settings.json")),
     readJson(join(cwd, ".claude", "settings.json")),
@@ -115,6 +184,7 @@ class Upstream {
     readonly label: string,
     private readonly server: StdioServer,
     private readonly idleMs: number,
+    private readonly home: string,
   ) {}
 
   get running(): boolean {
@@ -151,9 +221,10 @@ class Upstream {
   }
 
   private async start(protocolVersion: string): Promise<unknown> {
-    const child = spawnGroup(this.server.command, this.server.args, {
-      cwd: this.server.cwd,
-      env: { ...process.env, ...this.server.env },
+    const launch = npxDirectLaunch(this.server, this.home) ?? this.server;
+    const child = spawnGroup(launch.command, launch.args, {
+      cwd: launch.cwd,
+      env: { ...process.env, ...launch.env },
       stdio: ["pipe", "pipe", "pipe"],
     });
     this.child = child;
@@ -324,6 +395,18 @@ export class McpHub {
     return selected === null ? shared : { ...selected, ...shared };
   }
 
+  /**
+   * Pont Pupitre d'un agent Claude, servi en HTTP par le sidecar lui-même :
+   * aucun process par agent. Null quand le hub est coupé.
+   */
+  pupitreServer(target: PupitreTarget): Record<string, unknown> | null {
+    if (!this.enabled) return null;
+    return {
+      type: "http",
+      url: `http://127.0.0.1:${this.port!()}/mcp-hub/${this.token}/pupitre/${encodeURIComponent(target.conversationId)}`,
+    };
+  }
+
   /** Nombre de serveurs partagés en cours d'exécution. */
   runningCount(): number {
     return [...this.upstreams.values()].filter((upstream) => upstream.running).length;
@@ -334,7 +417,10 @@ export class McpHub {
   }
 
   async handle(request: Request): Promise<Response> {
-    const [, , token, key] = new URL(request.url).pathname.split("/");
+    const [, , token, key, conversationId] = new URL(request.url).pathname.split("/");
+    if (token === this.token && key === "pupitre" && conversationId && this.port !== null) {
+      return this.handlePupitre(request, decodeURIComponent(conversationId), this.port());
+    }
     const upstream = token === this.token && key ? this.upstreams.get(key) : undefined;
     if (!upstream) return new Response("serveur MCP inconnu", { status: 404 });
     if (request.method === "DELETE") return new Response(null, { status: 204 });
@@ -355,6 +441,17 @@ export class McpHub {
     return Response.json(Array.isArray(body) ? responses : responses[0], { headers });
   }
 
+  private async handlePupitre(request: Request, conversationId: string, port: number): Promise<Response> {
+    const server = createPupitreServer({ conversationId, port });
+    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    await server.connect(transport);
+    try {
+      return await transport.handleRequest(request);
+    } finally {
+      void server.close();
+    }
+  }
+
   shutdown(): void {
     for (const upstream of this.upstreams.values()) upstream.stop();
   }
@@ -369,7 +466,7 @@ export class McpHub {
       .digest("hex")
       .slice(0, 24);
     if (!this.upstreams.has(key)) {
-      this.upstreams.set(key, new Upstream(name, server, this.options.idleMs ?? DEFAULT_IDLE_MS));
+      this.upstreams.set(key, new Upstream(name, server, this.options.idleMs ?? DEFAULT_IDLE_MS, this.home));
     }
     return `http://127.0.0.1:${this.port!()}/mcp-hub/${this.token}/${key}`;
   }

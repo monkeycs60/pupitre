@@ -11,13 +11,13 @@ function numberFromEnv(key: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-function conversationId(explicit?: string): string {
+function envConversationId(explicit?: string): string {
   const id = explicit ?? process.env.PUPITRE_CONVERSATION_ID;
   if (!id) throw new Error("conversation Pupitre inconnue");
   return id;
 }
 
-function baseUrl(): string {
+function envBaseUrl(): string {
   return `http://127.0.0.1:${numberFromEnv("PUPITRE_PORT", defaultPort(readInstance().name))}`;
 }
 
@@ -90,7 +90,14 @@ const DESCRIPTION =
   + "Pupitre l’agrandit au clic et fait défiler tous les médias du document. L’aperçu bloque les médias chargés depuis une URL ; "
   + "une vidéo blob: ou un dessin dans un <canvas> ne s’agrandit pas.";
 
-export function createPupitreServer(): McpServer {
+export interface PupitreServerContext {
+  conversationId: string;
+  port: number;
+}
+
+export function createPupitreServer(context: PupitreServerContext | null = null): McpServer {
+  const conversationId = (explicit?: string) => context ? explicit ?? context.conversationId : envConversationId(explicit);
+  const baseUrl = () => context ? `http://127.0.0.1:${context.port}` : envBaseUrl();
   const server = new McpServer(
     { name: "pupitre", version: "0.1.0" },
     { instructions: "Publie les documents et les passages de code expliqués comme artefacts natifs de la conversation." },

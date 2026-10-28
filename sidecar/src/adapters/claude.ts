@@ -67,10 +67,13 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   // `claude --help`). Sans sélection de projet, pas de `--strict-mcp-config` :
   // les serveurs MCP que l'utilisateur a configurés lui-même restent chargés.
   const mcpServers = mcpHub.claudeServers(opts.cwd, opts.mcpServers ?? null);
+  const sharedPupitre = opts.pupitre ? mcpHub.pupitreServer(opts.pupitre) : null;
   if (opts.pupitre || opts.mcpServers || Object.keys(mcpServers).length > 0) {
     args.push(
       "--mcp-config",
-      claudeMcpConfigArg(mcpServers, opts.pupitre ?? null),
+      sharedPupitre
+        ? claudeMcpConfigArg({ pupitre: sharedPupitre, ...mcpServers })
+        : claudeMcpConfigArg(mcpServers, opts.pupitre ?? null),
     );
   }
   if (opts.mcpServers) {
