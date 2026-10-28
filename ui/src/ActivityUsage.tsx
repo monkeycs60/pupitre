@@ -7,6 +7,24 @@ const USAGE_PERIODS = [7, 30, 90] as const
 type UsagePeriod = (typeof USAGE_PERIODS)[number]
 type UsageFeatureCount = UsageReport['catalog'][number]
 
+const JARVIS_PATHS: Record<UsageReport['jarvis']['questions'][number]['path'], string> = {
+  haiku: 'Haiku 5.5 seul',
+  router: 'Routeur, puis Opus 5.5',
+  handoff: 'Haiku 5.5, puis Opus 5.5',
+  fast: 'Mode Rapide',
+  orchestrate: 'Mode Orchestrer',
+}
+
+const JARVIS_ACTIONS: Record<string, string> = {
+  open: 'Ouvrir et surligner',
+  'send-message': 'Répondre à un agent',
+  'new-conversation': 'Démarrer une conversation',
+  archive: 'Archiver',
+  pin: 'Épingler',
+  stop: 'Interrompre un tour',
+  'open-url': 'Ouvrir un serveur',
+}
+
 const formatCount = (value: number) => value.toLocaleString('fr-FR')
 const plural = (count: number, singular: string, pluralForm = `${singular}s`) => `${formatCount(count)} ${count > 1 ? pluralForm : singular}`
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
@@ -72,6 +90,47 @@ function UsageFeatures({ catalog }: { catalog: UsageFeatureCount[] }) {
   </>
 }
 
+function UsageJarvis({ jarvis }: { jarvis: UsageReport['jarvis'] }) {
+  const total = jarvis.questions.reduce((sum, row) => sum + row.count, 0)
+  const seconds = (value: number | null) => value === null ? '—' : `${value.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} s`
+  return <>
+    <h2 className="usage-section">Jarvis <small>{plural(total, 'question')}</small></h2>
+    <table className="usage-table">
+      <thead>
+        <tr><th>Qui a choisi le modèle</th><th className="is-number">Questions</th><th className="is-number">Durée médiane</th><th className="is-number">Échecs</th></tr>
+      </thead>
+      <tbody>
+        {jarvis.questions.map((row) => (
+          <tr key={row.path}>
+            <td>{JARVIS_PATHS[row.path]}</td>
+            <td className="is-number">{formatCount(row.count)}</td>
+            <td className="is-number">{seconds(row.medianSeconds)}</td>
+            <td className="is-number">{formatCount(row.failed)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    {jarvis.actions.length > 0 ? (
+      <table className="usage-table">
+        <thead>
+          <tr><th>Action proposée</th><th className="is-number">Proposée</th><th className="is-number">Exécutée</th><th className="is-number">Ignorée</th><th className="is-number">Échec</th></tr>
+        </thead>
+        <tbody>
+          {jarvis.actions.map((row) => (
+            <tr key={row.kind}>
+              <td>{JARVIS_ACTIONS[row.kind] ?? row.kind}</td>
+              <td className="is-number">{formatCount(row.proposed)}</td>
+              <td className="is-number">{formatCount(row.done)}</td>
+              <td className="is-number">{formatCount(row.ignored)}</td>
+              <td className="is-number">{formatCount(row.failed)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    ) : <p className="usage-note">Aucune action proposée sur la période.</p>}
+  </>
+}
+
 export function ActivityUsage() {
   const [days, setDays] = useState<UsagePeriod>(30)
   const [report, setReport] = useState<UsageReport | null>(null)
@@ -108,6 +167,7 @@ export function ActivityUsage() {
         {interactions
           ? <UsageFeatures catalog={report.catalog} />
           : <p className="usage-note">Aucune interaction mesurée sur la période : rien à conclure sur les fonctions suivies.</p>}
+        {report.jarvis.questions.length > 0 ? <UsageJarvis jarvis={report.jarvis} /> : null}
         <h2 className="usage-section">Travail de fond</h2>
         {report.background.length > 0 ? (
           <table className="usage-table">

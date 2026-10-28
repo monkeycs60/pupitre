@@ -141,6 +141,40 @@ test("le rapport compte le catalogue, les onglets par propriété, chaque jour l
   expect(report.background).toEqual([{ kind: "reprise", count: 5 }, { kind: "telegram", count: 1 }]);
 });
 
+test("le rapport range les questions à Jarvis par chemin, avec leur durée médiane, et suit chaque action proposée", () => {
+  const { store } = setup();
+  const at = october(28, 9).toISOString();
+  store.record(validUiEvents([
+    { at, name: "jarvis.ask", props: { mode: "auto", model: "haiku-5.5", by: "haiku", escalated: false, status: "done", seconds: 9.6, proposed: "open,send-message" } },
+    { at, name: "jarvis.ask", props: { mode: "auto", model: "haiku-5.5", by: "haiku", escalated: false, status: "done", seconds: 12.2, proposed: "open" } },
+    { at, name: "jarvis.ask", props: { mode: "auto", model: "haiku-5.5", by: "haiku", escalated: false, status: "done", seconds: 10.4, proposed: "" } },
+    { at, name: "jarvis.ask", props: { mode: "auto", model: "opus-5.5", by: "router", escalated: true, status: "done", seconds: 41, proposed: "archive,new-conversation" } },
+    { at, name: "jarvis.ask", props: { mode: "auto", model: "opus-5.5", by: "haiku", escalated: true, status: "error", seconds: 90 } },
+    { at, name: "jarvis.ask", props: { mode: "auto", model: "opus-5.5" } },
+    { at, name: "jarvis.ask", props: { mode: "fast", model: "haiku-5.5" } },
+    { at: october(20).toISOString(), name: "jarvis.ask", props: { mode: "orchestrate", model: "opus-5.5" } },
+    { at, name: "jarvis.action", props: { kind: "open", result: "fait" } },
+    { at, name: "jarvis.action", props: { kind: "send-message", result: "ignorée" } },
+    { at, name: "jarvis.action", props: { kind: "archive", result: "échec" } },
+  ]));
+
+  const { jarvis } = store.usage(7, october(28, 15));
+
+  expect(jarvis.questions).toEqual([
+    { path: "haiku", count: 3, failed: 0, medianSeconds: 10.4 },
+    { path: "router", count: 1, failed: 0, medianSeconds: 41 },
+    { path: "handoff", count: 2, failed: 1, medianSeconds: null },
+    { path: "fast", count: 1, failed: 0, medianSeconds: null },
+  ]);
+  expect(jarvis.actions).toEqual([
+    { kind: "open", proposed: 2, done: 1, failed: 0, ignored: 0 },
+    { kind: "archive", proposed: 1, done: 0, failed: 1, ignored: 0 },
+    { kind: "new-conversation", proposed: 1, done: 0, failed: 0, ignored: 0 },
+    { kind: "send-message", proposed: 1, done: 0, failed: 0, ignored: 1 },
+  ]);
+  expect(store.usage(7, october(10)).jarvis).toEqual({ questions: [], actions: [] });
+});
+
 test("sans compteur d'appels automatiques, le travail de fond est vide", () => {
   const { store } = setup();
   const report = store.usage(30, october(28));

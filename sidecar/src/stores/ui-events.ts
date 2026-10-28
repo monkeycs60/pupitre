@@ -16,6 +16,9 @@ export interface UiEventRow {
   props: string | null;
 }
 
+export type JarvisUsagePath = "haiku" | "router" | "handoff" | "fast" | "orchestrate";
+const JARVIS_PATHS: JarvisUsagePath[] = ["haiku", "router", "handoff", "fast", "orchestrate"];
+
 export interface UsageReport {
   since: string;
   until: string;
@@ -23,6 +26,24 @@ export interface UsageReport {
   events: Array<{ name: string; count: number; lastAt: string }>;
   daily: Array<{ day: string; count: number }>;
   background: Array<{ kind: string; count: number }>;
+  jarvis: {
+    questions: Array<{ path: JarvisUsagePath; count: number; failed: number; medianSeconds: number | null }>;
+    actions: Array<{ kind: string; proposed: number; done: number; failed: number; ignored: number }>;
+  };
+}
+
+function jarvisPath(props: Record<string, unknown>): JarvisUsagePath {
+  if (props.mode === "fast") return "fast";
+  if (props.mode === "orchestrate") return "orchestrate";
+  if (props.by === "router") return "router";
+  return props.escalated === true || (props.escalated === undefined && props.model === "opus-5.5") ? "handoff" : "haiku";
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;
 }
 
 function serializedProps(value: unknown): string | null {
@@ -125,7 +146,49 @@ export class UiEventStore {
     for (const day = new Date(start); day <= now; day.setDate(day.getDate() + 1)) {
       daily.push({ day: localDay(day), count: countByDay.get(localDay(day)) ?? 0 });
     }
-    return { since, until, catalog, events, daily, background: this.background(localDay(start)) };
+    return { since, until, catalog, events, daily, background: this.background(localDay(start)), jarvis: this.jarvis(since, until) };
+  }
+
+  private jarvis(since: string, until: string): UsageReport["jarvis"] {
+    const read = this.db.query("SELECT props FROM ui_events WHERE name = ? AND at >= ? AND at <= ?");
+    const rows = (name: string) => (read.all(name, since, until) as Array<{ props: string | null }>)
+      .map((row) => (row.props ? JSON.parse(row.props) as Record<string, unknown> : {}));
+    const questions = new Map<JarvisUsagePath, { count: number; failed: number; seconds: number[] }>();
+    const actions = new Map<string, { proposed: number; done: number; failed: number; ignored: number }>();
+    const action = (kind: string) => {
+      const known = actions.get(kind);
+      if (known) return known;
+      const created = { proposed: 0, done: 0, failed: 0, ignored: 0 };
+      actions.set(kind, created);
+      return created;
+    };
+    for (const props of rows("jarvis.ask")) {
+      const path = jarvisPath(props);
+      const entry = questions.get(path) ?? { count: 0, failed: 0, seconds: [] };
+      entry.count += 1;
+      if (props.status === "error" || props.status === "cancelled") entry.failed += 1;
+      else if (typeof props.seconds === "number") entry.seconds.push(props.seconds);
+      questions.set(path, entry);
+      if (typeof props.proposed === "string") {
+        for (const kind of props.proposed.split(",").filter(Boolean)) action(kind).proposed += 1;
+      }
+    }
+    for (const props of rows("jarvis.action")) {
+      if (typeof props.kind !== "string") continue;
+      const entry = action(props.kind);
+      if (props.result === "fait") entry.done += 1;
+      else if (props.result === "échec") entry.failed += 1;
+      else if (props.result === "ignorée") entry.ignored += 1;
+    }
+    return {
+      questions: JARVIS_PATHS.filter((path) => questions.has(path)).map((path) => {
+        const { count, failed, seconds } = questions.get(path)!;
+        return { path, count, failed, medianSeconds: median(seconds) };
+      }),
+      actions: [...actions]
+        .map(([kind, counts]) => ({ kind, ...counts }))
+        .sort((left, right) => right.proposed - left.proposed || right.done - left.done || left.kind.localeCompare(right.kind)),
+    };
   }
 
   private background(sinceDay: string): UsageReport["background"] {

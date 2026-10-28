@@ -247,6 +247,10 @@ export interface UsageReport {
   events: Array<{ name: string; count: number; lastAt: string }>
   daily: Array<{ day: string; count: number }>
   background: Array<{ kind: string; count: number }>
+  jarvis: {
+    questions: Array<{ path: 'haiku' | 'router' | 'handoff' | 'fast' | 'orchestrate'; count: number; failed: number; medianSeconds: number | null }>
+    actions: Array<{ kind: string; proposed: number; done: number; failed: number; ignored: number }>
+  }
 }
 export const getUsageReport = (days: number, signal?: AbortSignal): Promise<UsageReport> => fetchJson(`/api/usage?days=${days}`, { signal })
 export const postUiEvents = (events: UiEventPayload[], keepalive = false): Promise<void> => fetchVoid('/api/ui-events', { ...jsonPost({ events }), keepalive })

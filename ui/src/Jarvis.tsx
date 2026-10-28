@@ -17,7 +17,7 @@ import type { JarvisAction, JarvisJob, JarvisMode, JarvisResult } from './types'
 const POLL_MS = 500
 
 const MODES: Array<{ id: JarvisMode; label: string; hint: string }> = [
-  { id: 'auto', label: 'Auto', hint: 'Haiku 5.5 répond ; il passe la main à Opus 5.5 si la demande exige un plan.' },
+  { id: 'auto', label: 'Auto', hint: 'Un routeur rapide lit ta demande : Haiku 5.5 répond, Opus 5.5 prend la main dès qu’un plan s’impose.' },
   { id: 'fast', label: 'Rapide', hint: 'Haiku 5.5 seul : quelques secondes, pour retrouver ou faire le point.' },
   { id: 'orchestrate', label: 'Orchestrer', hint: 'Opus 5.5 directement : pour préparer plusieurs actions sur tes agents.' },
 ]
@@ -129,6 +129,8 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
       setUnseen(false)
       window.setTimeout(() => inputRef.current?.focus(), 0)
     }
+    document.documentElement.classList.toggle('jarvis-open', open)
+    return () => document.documentElement.classList.remove('jarvis-open')
   }, [open])
 
   const lastExchange = exchanges.at(-1)
@@ -153,7 +155,16 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
           .then((job) => {
             patch(exchange.id, (current) => ({ ...current, job }))
             if (job.status !== 'running') {
-              track('jarvis.ask', { mode: exchange.mode, model: job.route?.model ?? 'aucun' }, projectId)
+              track('jarvis.ask', {
+                mode: exchange.mode,
+                model: job.route?.model ?? 'aucun',
+                by: job.route?.by ?? 'aucun',
+                escalated: job.route?.escalated ?? false,
+                status: job.status,
+                seconds: job.finishedAt ? Math.round((Date.parse(job.finishedAt) - Date.parse(job.startedAt)) / 100) / 10 : 0,
+                results: job.answer?.results.length ?? 0,
+                proposed: job.answer?.actions.map((action) => action.kind).join(',') ?? '',
+              }, projectId)
               if (!open) setUnseen(true)
             }
           })
@@ -209,6 +220,8 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
   }
 
   function setActionState(exchange: Exchange, actionId: string, state: ActionState) {
+    const kind = exchange.job?.answer?.actions.find((action) => action.id === actionId)?.kind
+    if (state.status === 'skipped' && kind) track('jarvis.action', { kind, result: 'ignorée' }, projectId)
     patch(exchange.id, (current) => ({ ...current, actions: { ...current.actions, [actionId]: state } }))
   }
 
@@ -332,7 +345,7 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
         <div className={`jarvis-route is-${job.route.model === 'opus-5.5' ? 'opus' : 'haiku'}`} title={job.route.reason}>
           <Icon name={job.route.model === 'opus-5.5' ? 'orchestrate' : 'bolt'} size={13} />
           <strong>{job.route.label}</strong>
-          <span>{job.route.escalated ? `Haiku a passé la main : ${job.route.reason}` : job.route.reason}</span>
+          <span>{job.route.escalated ? `${job.route.by === 'router' ? 'Le routeur a passé la main' : 'Haiku a passé la main'} : ${job.route.reason}` : job.route.reason}</span>
         </div>
       ) : null}
 

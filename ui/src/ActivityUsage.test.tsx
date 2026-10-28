@@ -18,7 +18,7 @@ afterEach(() => {
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
 
-function usageReport(days: number, counts: Record<string, { count: number; lastAt: string }>, activeDays: Record<number, number>, background: UsageReport['background']): UsageReport {
+function usageReport(days: number, counts: Record<string, { count: number; lastAt: string }>, activeDays: Record<number, number>, background: UsageReport['background'], jarvis: UsageReport['jarvis'] = { questions: [], actions: [] }): UsageReport {
   const today = localDay(new Date())
   return {
     since: `${addDays(today, 1 - days)}T00:00:00.000Z`,
@@ -33,6 +33,7 @@ function usageReport(days: number, counts: Record<string, { count: number; lastA
     events: [],
     daily: Array.from({ length: days }, (_, index) => ({ day: addDays(today, index + 1 - days), count: activeDays[days - 1 - index] ?? 0 })),
     background,
+    jarvis,
   }
 }
 
@@ -113,4 +114,34 @@ test('changer de période recharge l’usage, et une période sans interaction n
     'Aucun appel automatique sur la période.',
   ])
   expect(view.container.querySelectorAll('.usage-table')).toHaveLength(0)
+})
+
+test('l’onglet Usage montre qui a choisi le modèle de Jarvis, en combien de temps, et ce que deviennent ses actions', async () => {
+  serve({
+    30: usageReport(30, USED, { 0: 3 }, [], {
+      questions: [
+        { path: 'haiku', count: 12, failed: 1, medianSeconds: 9.6 },
+        { path: 'router', count: 3, failed: 0, medianSeconds: 41.2 },
+        { path: 'fast', count: 1, failed: 0, medianSeconds: null },
+      ],
+      actions: [
+        { kind: 'open', proposed: 9, done: 6, failed: 0, ignored: 1 },
+        { kind: 'archive', proposed: 2, done: 0, failed: 1, ignored: 1 },
+      ],
+    }),
+  })
+  const view = render(createElement(ActivityReportView, { initialTab: 'usage', onOpenConversation: () => {} }))
+  await waitFor(() => expect(view.getByText('Qui a choisi le modèle')).toBeTruthy())
+
+  expect(texts(view.container, '.usage-section')).toContain('Jarvis 16 questions')
+  const [, paths, actions] = [...view.container.querySelectorAll('.usage-table')]
+  expect([...paths!.querySelectorAll('tbody tr')].map((row) => texts(row, 'td'))).toEqual([
+    ['Haiku 5.5 seul', '12', '9,6 s', '1'],
+    ['Routeur, puis Opus 5.5', '3', '41,2 s', '0'],
+    ['Mode Rapide', '1', '—', '0'],
+  ])
+  expect([...actions!.querySelectorAll('tbody tr')].map((row) => texts(row, 'td'))).toEqual([
+    ['Ouvrir et surligner', '9', '6', '1', '0'],
+    ['Archiver', '2', '0', '1', '1'],
+  ])
 })

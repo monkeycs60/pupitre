@@ -57,7 +57,7 @@ export interface UiEventPropsByName {
   'project.tab': { tab: ProjectTab }
   'palette.command': { command: string }
   shortcut: { key: string }
-  'jarvis.ask': { mode: string; model: string }
+  'jarvis.ask': { mode: string; model: string; by: string; escalated: boolean; status: string; seconds: number; results: number; proposed: string }
   'jarvis.action': { kind: string; result: string }
 }
 

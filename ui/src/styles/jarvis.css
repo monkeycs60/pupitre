@@ -59,6 +59,10 @@
   box-shadow: 0 0 0 3px var(--unread-soft);
 }
 
+.jarvis-open .toast-host {
+  visibility: hidden;
+}
+
 .jarvis-panel {
   position: fixed;
   z-index: 70;
