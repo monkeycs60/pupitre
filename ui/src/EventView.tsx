@@ -21,6 +21,8 @@ interface EventViewProps {
   turnFooterAction?: ReactNode
   /** Conversation du dernier tour : seul lui peut être renvoyé. */
   resendConversationId?: string
+  /** Le tour a sa ligne repliée, qui porte déjà l'état et la durée. */
+  turnFolded?: boolean
 }
 
 export function ImageGallery({
@@ -197,10 +199,11 @@ function ResendPrompt({ conversationId, prompt }: {
   )
 }
 
-function TurnFooter({ block, action, resendConversationId }: {
+function TurnFooter({ block, action, resendConversationId, folded }: {
   block: Extract<EventBlock, { kind: 'turn-footer' }>
   action?: ReactNode
   resendConversationId?: string
+  folded: boolean
 }) {
   const isRunning = block.status?.state === 'running'
   const isDone = block.status?.state === 'done'
@@ -208,7 +211,7 @@ function TurnFooter({ block, action, resendConversationId }: {
   const [mountedRunning] = useState(isRunning)
   // Synchronisation avec l'horloge système : seul effet nécessaire au compteur.
   // 100 ms en cours de tour : le dixième de seconde de formatDuration vit.
-  const now = useNow(isRunning ? 100 : 30_000)
+  const now = useNow(isRunning && !folded ? 100 : 30_000)
   const startedAt = parsedTime(block.timing?.startedAt)
   const completedAt = parsedTime(block.timing?.completedAt)
   const endAt = completedAt ?? (isRunning ? now : null)
@@ -219,6 +222,9 @@ function TurnFooter({ block, action, resendConversationId }: {
   const runningLabel = block.phase === 'ticket_context'
     ? 'prépare le tour…'
     : ACTIVITY_LABELS[block.activity ?? 'thinking']
+  const showState = !folded
+  const hasMeta = showState || block.origin !== undefined || block.subtaskCount !== undefined || action != null
+  if (!block.files && !isError && !hasMeta) return null
 
   return (
     <footer className="turn-footer">
@@ -240,13 +246,13 @@ function TurnFooter({ block, action, resendConversationId }: {
           ) : null}
         </div>
       ) : null}
-      <div className={`turn-meta${isDone ? ' turn-meta-done' : ''}`}>
+      {hasMeta ? <div className={`turn-meta${isDone ? ' turn-meta-done' : ''}`}>
         {block.origin ? (
           <span className="turn-origin" title="Tour ouvert par l’agent, sans message de ta part">
             {block.origin === 'background-task' ? 'Réaction à une tâche de fond' : 'Lancé par l’agent'}
           </span>
         ) : null}
-        {isRunning ? (
+        {showState && isRunning ? (
           <span className="running-indicator" role="status">
             <span className="running-dots" aria-hidden="true"><i /><i /><i /></span>
             <span className="running-label" key={runningLabel}>{runningLabel}</span>
@@ -255,7 +261,7 @@ function TurnFooter({ block, action, resendConversationId }: {
             ) : null}
           </span>
         ) : null}
-        {isDone ? (
+        {showState && isDone ? (
           <span className={`done-indicator${mountedRunning ? ' is-fresh' : ''}`}>
             <svg className="done-indicator-ring" width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
@@ -264,7 +270,7 @@ function TurnFooter({ block, action, resendConversationId }: {
             terminé
           </span>
         ) : null}
-        {totalMs !== null ? (
+        {showState && totalMs !== null ? (
           <span className="turn-timing" title="Durée du run">
             {formatDuration(totalMs)}
           </span>
@@ -275,7 +281,7 @@ function TurnFooter({ block, action, resendConversationId }: {
           </span>
         ) : null}
         {action}
-      </div>
+      </div> : null}
     </footer>
   )
 }
@@ -380,7 +386,7 @@ function backgroundTaskStatusLabel(status: string, plural: boolean): string {
  */
 export const EventView = memo(EventViewImpl)
 
-function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFooterAction, resendConversationId }: EventViewProps) {
+function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFooterAction, resendConversationId, turnFolded = false }: EventViewProps) {
   switch (block.kind) {
     case 'user':
       return (
@@ -444,7 +450,7 @@ function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFoot
     }
 
     case 'turn-footer': {
-      return <TurnFooter block={block} action={turnFooterAction} resendConversationId={resendConversationId} />
+      return <TurnFooter block={block} action={turnFooterAction} resendConversationId={resendConversationId} folded={turnFolded} />
     }
   }
 }

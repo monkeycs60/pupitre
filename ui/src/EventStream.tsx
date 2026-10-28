@@ -9,7 +9,7 @@ import { TestInventoryCard } from './TestInventoryCard'
 import { CodeExcerptCard } from './CodeExcerptCard'
 import { HtmlDocumentCard } from './HtmlDocumentCard'
 import { TurnWorkGroup } from './TurnWorkGroup'
-import { foldFinishedTurns } from './turnWork'
+import { foldTurns } from './turnWork'
 import { memo } from 'react'
 import type { ReactNode } from 'react'
 import type { EventBlock } from './eventBlocks'
@@ -41,7 +41,7 @@ function EventStreamImpl({
   conversationId,
 }: EventStreamProps) {
   const rendered: ReactNode[] = []
-  const blocks = foldFinishedTurns(streamBlocks)
+  const blocks = foldTurns(streamBlocks)
   const newestHtmlDocumentId = blocks.findLast((item) => item.kind === 'html-document')?.id
   const newestTurnFooter = blocks.findLast((item) => item.kind === 'turn-footer')
   const newestTurnFooterId = newestTurnFooter?.id
@@ -51,10 +51,12 @@ function EventStreamImpl({
   const lastBlock = blocks.findLast((item) => item.kind !== 'turn-footer')
   const liveReasoningId = liveFrom < blocks.length && lastBlock?.kind === 'reasoning' ? lastBlock.id : undefined
   let index = 0
+  let turnFolded = false
 
   while (index < blocks.length) {
     const block = blocks[index]
     if (block.kind === 'turn-work') {
+      turnFolded = true
       rendered.push(<TurnWorkGroup key={block.id} work={block} onImageOpen={onImageOpen} onImageLoad={onImageLoad} />)
       index += 1
       continue
@@ -108,9 +110,11 @@ function EventStreamImpl({
             onImageLoad={onImageLoad}
             turnFooterAction={block.id === newestTurnFooterId ? turnFooterAction : undefined}
             resendConversationId={block.id === newestTurnFooterId ? conversationId : undefined}
+            turnFolded={turnFolded}
           />
       ),
     )
+    if (block.kind === 'turn-footer') turnFolded = false
     index += 1
   }
   return <>{rendered}</>

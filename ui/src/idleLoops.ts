@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react'
+
 function isLoop(animation: Animation): boolean {
   return animation.effect?.getTiming().iterations === Infinity
 }
@@ -34,4 +36,24 @@ export function pauseLoopsWhileUnfocused(win: Window = window) {
   doc.addEventListener('visibilitychange', sync)
   doc.addEventListener('animationstart', pauseStarted, true)
   sync()
+}
+
+function subscribeWindowActive(listener: () => void) {
+  window.addEventListener('focus', listener)
+  window.addEventListener('blur', listener)
+  document.addEventListener('visibilitychange', listener)
+  return () => {
+    window.removeEventListener('focus', listener)
+    window.removeEventListener('blur', listener)
+    document.removeEventListener('visibilitychange', listener)
+  }
+}
+
+function windowActive(): boolean {
+  return document.visibilityState !== 'hidden' && document.hasFocus()
+}
+
+/** Même règle que `pauseLoopsWhileUnfocused`, pour les animations dessinées en canvas. */
+export function useWindowActive(): boolean {
+  return useSyncExternalStore(subscribeWindowActive, windowActive, () => true)
 }

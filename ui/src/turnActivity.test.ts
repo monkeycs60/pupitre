@@ -60,7 +60,7 @@ test('chaque réflexion prend sa place dans le fil, entre les actions qui l’en
     .toEqual(['Je lis le fichier.', 'tool', 'Puis je conclus.'])
 })
 
-test('la réflexion en cours grandit en entier, puis se replie sur sa première phrase', async () => {
+test('la ligne vivante suit la réflexion, puis l’outil qui la relaie', async () => {
   const { EventStream } = await import('./EventStream')
   const events: AppEvent[] = [
     { type: 'user-message', text: 'go', images: [] },
@@ -70,15 +70,15 @@ test('la réflexion en cours grandit en entier, puis se replie sur sa première 
   ]
   const props = { onImageOpen: () => {}, onImageLoad: () => {} }
   const { container, rerender } = render(createElement(EventStream, { ...props, blocks: groupEvents(events) }))
+  const act = () => container.querySelector('.turn-work.is-live .turn-live-act')?.textContent
 
-  expect(container.querySelector('.reasoning.is-live .reasoning-body')?.textContent)
-    .toBe('Inspecting config\n\nJe lis le fichier. Puis je regarde le thème.')
+  expect(act()).toBe('RéfléchitInspecting config')
+  expect(container.querySelector('.reasoning-body')).toBeNull()
 
   rerender(createElement(EventStream, {
     ...props,
     blocks: groupEvents([...events, { type: 'tool-start', toolId: 't', toolName: 'Read', input: { file_path: '/a.ts' } }]),
   }))
-  expect(container.querySelector('.reasoning-body')).toBeNull()
-  expect(container.querySelector('.reasoning-title')?.textContent).toBe('Inspecting config')
+  expect(act()).toBe('Lecture/a.ts')
   cleanup()
 })

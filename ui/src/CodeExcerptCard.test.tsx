@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
 import { groupEvents, type CodeExcerptBlock } from './groupEvents'
-import { foldFinishedTurns } from './turnWork'
+import { foldTurns } from './turnWork'
 import type { AppEvent } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
@@ -54,7 +54,7 @@ test('plusieurs extraits restent séparés, ordonnés et visibles après la fin 
   ]
   const blocks = groupEvents(events)
   expect(blocks.filter((item) => item.kind === 'code-excerpt').map((item) => item.excerptId)).toEqual(['1', '2'])
-  expect(foldFinishedTurns(blocks).filter((item) => item.kind === 'code-excerpt')).toHaveLength(2)
+  expect(foldTurns(blocks).filter((item) => item.kind === 'code-excerpt')).toHaveLength(2)
 });
 
 

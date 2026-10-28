@@ -137,20 +137,43 @@ test('signale une action en échec dans la ligne et dans le résumé du groupe',
   cleanup()
 })
 
-test('garde ouvert un groupe dont une action a échoué pendant le tour en cours, même instantanément', () => {
+test('le tour en cours tient sur une ligne qui devient, sur place, le résumé du tour terminé', () => {
   const user = { kind: 'user' as const, id: 'u', text: 'lance les tests', images: [], attachments: [] }
   const failed = { kind: 'tool' as const, id: 'a', toolId: 'a', toolName: 'Bash', input: { command: 'ls /x' }, output: 'No such file', isError: true, images: [] }
-  const read = { kind: 'tool' as const, id: 'b', toolId: 'b', toolName: 'Read', input: { file_path: '/tmp/a.ts' }, output: 'ok', images: [] }
-  const footer = (state: 'running' | 'done') => ({ kind: 'turn-footer' as const, id: 'f', status: { type: 'status' as const, state } })
+  const read = { kind: 'tool' as const, id: 'b', toolId: 'b', toolName: 'Read', input: { file_path: '/tmp/a.ts' }, images: [] }
+  const answer = { kind: 'assistant' as const, id: 'r', text: 'Le dossier manque.', streaming: false }
+  const timing = { startedAt: '2026-10-28T10:00:00.000Z', completedAt: '2026-10-28T10:00:09.000Z' }
+  const footer = (state: 'running' | 'done') => ({ kind: 'turn-footer' as const, id: 'f', status: { type: 'status' as const, state }, timing })
 
   const { container, rerender } = render(<EventStream {...callbacks} blocks={[user, failed, read, footer('running')]} />)
-  expect(container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(true)
-  rerender(<EventStream {...callbacks} blocks={[user, failed, read, footer('done')]} />)
-  expect(container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(true)
-  cleanup()
+  const line = container.querySelector('.turn-work')
+  expect(line?.classList.contains('is-live')).toBe(true)
+  expect(line?.classList.contains('is-open')).toBe(false)
+  expect(container.querySelectorAll('.tool-activity')).toHaveLength(0)
+  expect(line?.textContent).toContain('1 en échec')
+  expect(container.querySelector('.running-indicator')).toBeNull()
 
-  const history = render(<EventStream {...callbacks} blocks={[user, failed, read, footer('done')]} />)
-  expect(history.container.querySelector('.tool-activity-group')?.classList.contains('is-open')).toBe(false)
+  rerender(<EventStream {...callbacks} blocks={[user, failed, { ...read, output: 'ok' }, answer, footer('done')]} />)
+  expect(container.querySelector('.turn-work')).toBe(line)
+  expect(line?.classList.contains('is-live')).toBe(false)
+  expect(line?.textContent).toContain('9 s · 2 lectures')
+  expect(line?.textContent).toContain('1 en échec')
+  expect(container.querySelector('.done-indicator')).toBeNull()
+  expect(container.querySelector('.turn-done-check.is-fresh')).not.toBeNull()
+  cleanup()
+})
+
+test('le dernier message intermédiaire sert de narration à la ligne vivante', () => {
+  const user = { kind: 'user' as const, id: 'u', text: 'corrige', images: [], attachments: [] }
+  const note = { kind: 'assistant' as const, id: 'n', text: 'Le slug a **changé**, je corrige.', streaming: false }
+  const edit = { kind: 'tool' as const, id: 'e', toolId: 'e', toolName: 'Edit', input: { file_path: '/repo/src/Help.tsx', old_string: 'a', new_string: 'b' }, images: [] }
+  const { container } = render(<EventStream {...callbacks} blocks={[
+    user, note, edit, { kind: 'turn-footer', id: 'f', status: { type: 'status', state: 'running' } },
+  ]} />)
+
+  expect(container.querySelector('.turn-live-narration')?.textContent).toBe('« Le slug a changé, je corrige. »')
+  expect(container.querySelector('.turn-live-act')?.textContent).toBe('Modificationsrc/Help.tsx')
+  expect(container.querySelectorAll('.message-row')).toHaveLength(1)
   cleanup()
 })
 
