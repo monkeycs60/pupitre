@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+session="${AB_SESSION:-${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-manual}}}"
+case "${1:-} ${2:-}" in
+  'record start'|'record restart') [[ " $* " == *' --cursor '* ]] || set -- "$@" --cursor ;;
+esac
+if [ "${1:-}" = close ] && [ "$#" -ne 1 ]; then
+  echo 'ab close ferme uniquement la session de cette conversation.' >&2
+  exit 2
+fi
+exec /opt/pupitre/bin/agent-browser --executable-path /opt/pupitre/chrome/chrome --session "pupitre-$session" "$@"

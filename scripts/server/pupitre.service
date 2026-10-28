@@ -1,0 +1,40 @@
+[Unit]
+Description=Pupitre agents
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+User=pupitre
+Group=pupitre
+WorkingDirectory=/home/pupitre/app
+Environment=HOME=/home/pupitre
+Environment=PATH=/home/pupitre/.local/bin:/opt/pupitre/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PUPITRE_PORT=4820
+Environment=PUPITRE_BACKGROUND_JOBS=on
+Environment=PUPITRE_CHANGELOG_JOBS=off
+ExecStart=/opt/pupitre/bin/bun run sidecar/src/index.ts
+Restart=always
+RestartSec=5
+SuccessExitStatus=143
+TimeoutStopSec=90
+KillMode=control-group
+UMask=0077
+CPUQuota=200%
+MemoryHigh=5G
+MemoryMax=6G
+TasksMax=512
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pupitre
+InaccessiblePaths=-/home/ubuntu -/run/docker.sock
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

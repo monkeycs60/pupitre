@@ -1,0 +1,9 @@
+{
+  "name": "Pupitre",
+  "short_name": "Pupitre",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#17181c",
+  "theme_color": "#1b1d22",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

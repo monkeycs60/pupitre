@@ -7,6 +7,15 @@ import {
   webSocketUrl,
 } from "../../ui/src/transport";
 
+test("les fichiers du VPS restent sur l'origine HTTPS du téléphone", () => {
+  expect(absoluteSidecarUrl('/media/capture.png', {
+    protocol: 'https:', host: 'pupitre.example.ts.net',
+  }, false)).toBe('https://pupitre.example.ts.net/media/capture.png');
+  expect(absoluteSidecarUrl('/media/capture.png', {
+    protocol: 'http:', host: 'localhost:5173',
+  }, true)).toBe('http://127.0.0.1:4820/media/capture.png');
+});
+
 test("la webview lit le port injecté par l'instance dev", () => {
   const previousWindow = globalThis.window;
   Object.assign(globalThis, { window: { __PUPITRE__: { instance: "dev", port: 4821 } } });

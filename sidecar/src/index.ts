@@ -485,7 +485,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     conversationTicketLinker.start();
     nudges.start();
     routines.start();
-    changelog.start();
+    if (process.env.PUPITRE_CHANGELOG_JOBS !== "off") changelog.start();
     integrationsRefresher.start();
     runScheduledActivityReport();
     setInterval(() => { void semanticSearch.sync().catch(() => {}); }, 600_000).unref();

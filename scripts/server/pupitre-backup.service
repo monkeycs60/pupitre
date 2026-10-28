@@ -1,0 +1,14 @@
+[Unit]
+Description=Back up Pupitre conversations
+
+[Service]
+Type=oneshot
+User=pupitre
+Group=pupitre
+Environment=HOME=/home/pupitre
+ExecStart=/opt/pupitre/bin/bun /home/pupitre/app/scripts/server/backup.ts
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pupitre

@@ -1,5 +1,9 @@
 # Installer Pupitre — guide pour vous et votre agent
 
+Pour un serveur Linux privé accessible depuis le téléphone, voir
+[Pupitre sur un serveur privé](docs/SERVER.md). Ce mode utilise le navigateur
+et les services système ; l'installation de bureau ci-dessous ne s'y applique pas.
+
 Pupitre est une application de bureau pour **Linux et macOS 13+** (Apple Silicon et Intel). Elle utilise les CLIs Claude Code et Codex installés sur votre ordinateur. Vos projets, conversations et identifiants restent propres à votre installation.
 
 La compilation et le démarrage natif avec des données vierges ont été vérifiés en CI sur macOS 15, Apple Silicon et Intel, ainsi que l'arrêt du backend avec l'application. Les connexions réelles aux comptes, le lancement depuis Finder et Claude Design restent à vérifier sur votre Mac avec la recette ci-dessous. macOS 13 est la version minimale ciblée, pas une version testée en CI.
