@@ -136,6 +136,7 @@ import {
   type RunningApplication,
 } from "./running-applications";
 import type { McpHub } from "./mcp-hub";
+import type { JarvisService } from "./jarvis";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -215,6 +216,7 @@ export interface ServerDeps {
   googleCalendar?: GoogleCalendarService;
   sharedFiles?: SharedFilesService;
   visualFeedback?: VisualFeedbackService;
+  jarvis?: JarvisService;
   runningApplications?: (contexts: ApplicationContext[]) => RunningApplication[];
   /**
    * Arrêt propre du sidecar, déclenché par `POST /api/shutdown` : c'est ce qui
@@ -1379,6 +1381,9 @@ export function createServer(deps: ServerDeps) {
         if (request.method === "GET" && pathname === "/api/fleet") {
           return json(currentFleet());
         }
+
+        const jarvisResponse = await deps.jarvis?.handle(request, pathname);
+        if (jarvisResponse) return new Response(jarvisResponse.body, {status: jarvisResponse.status, headers: {...TAURI_CORS_HEADERS, "content-type": "application/json"}});
 
         if (pathname === "/api/automatic-calls" && request.method === "GET") return json(deps.automaticCalls?.list() ?? []);
         const telegramResponse = await deps.telegram?.handle(request, pathname);

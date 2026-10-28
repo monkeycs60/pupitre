@@ -75,6 +75,8 @@ import { PromotionAgentService } from "./promotion-agent";
 import { VisualFeedbackService } from "./visual-feedback";
 import { TicketAuditService } from "./ticket-audits";
 import { ActivityJournal, ActivityReportService, ActivityStore, DEFAULT_ACTIVITY_MODEL } from "./activity-report";
+import { fleetSnapshot } from "./fleet";
+import { claudeJarvisGenerator, JarvisService } from "./jarvis";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -225,6 +227,10 @@ if (process.argv.includes("--pupitre-mcp")) {
     const match = raw.match(/\{[\s\S]*\}/); return match ? JSON.parse(match[0]) : null;
   };
   const cheapJson = (prompt: string, cwd: string) => claudeJson("claude-haiku-5-5", prompt, cwd);
+  const actionHeadings = () => {
+    const format = actionFormat(settings.get("actionFormat"));
+    return [...format.todoHeadings, ...format.followUpHeadings];
+  };
   const nudges = new ConversationNudgeService(
     db,
     async (candidates) => parseNudgeVerdicts(
@@ -232,10 +238,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     ),
     () => settings.get<number>("nudgeIntervalMinutes") ?? 10,
     (id) => runner.isRunning(id) || runner.activity.isBusy(id),
-    () => {
-      const format = actionFormat(settings.get("actionFormat"));
-      return [...format.todoHeadings, ...format.followUpHeadings];
-    },
+    actionHeadings,
   );
   const personalEnvironments = new PersonalEnvironments(db, projects, conversations);
   personalEnvironments.onTriage = (id, prompt) => { void runner.runTurn(id, prompt, []).catch(console.error); };
@@ -324,6 +327,17 @@ if (process.argv.includes("--pupitre-mcp")) {
   const visualFeedback = new VisualFeedbackService(
     db, projects, conversations, presets, git, media, runner,
   );
+  const jarvis = new JarvisService({
+    db,
+    projects,
+    conversations,
+    semanticSearch,
+    fleet: () => fleetSnapshot({ runner, subtasks, conversations, projects, routineStore }),
+    nudges: () => nudges.list(),
+    attention: () => attention.list(),
+    actionHeadings,
+    generate: claudeJarvisGenerator(quotas),
+  });
   // Arrêt propre partagé : éviction par un sidecar plus récent (POST
   // /api/shutdown), SIGTERM de Tauri à la fermeture de l'app, Ctrl-C en dev.
   // Sans lui, l'app-server codex, les tours provider en vol et leurs flottes de
@@ -351,6 +365,7 @@ if (process.argv.includes("--pupitre-mcp")) {
       integrationsRefresher.stop();
       conversationTicketLinker.stop();
       nudges.stop();
+      jarvis.stop();
       changelog.stop();
       clearInterval(htmlDocumentSweepTimer);
       clearInterval(activityReportTimer);
@@ -447,6 +462,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     googleCalendar: new GoogleCalendarService(() => settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY)?.[GOOGLE_CALENDAR_TOKEN] ?? null),
     sharedFiles: new SharedFilesService(db, media, htmlDocuments),
     visualFeedback,
+    jarvis,
   }), port);
   void problems.resume();
   if (backgroundJobsEnabled() || instance.name === "stable") quotaRefresher.start();

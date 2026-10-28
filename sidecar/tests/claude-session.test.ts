@@ -176,6 +176,19 @@ function vivant(pid: number): boolean {
   }
 }
 
+test("un tour ponctuel arrête son process dès le résultat, sans outil ni session écrite", async () => {
+  const events = await tour({ oneShot: true });
+
+  expect(etat(events)).toEqual({ type: "status", state: "done" });
+  expect(claudeSessions.size()).toBe(0);
+  const args = readFileSync(argsFile, "utf8").split("\n");
+  expect(args[args.indexOf("--tools") + 1]).toBe("");
+  expect(args).toContain("--no-session-persistence");
+  const pid = Number(lignes(pidsFile)[0]);
+  await attendre(() => !vivant(pid), 3_000);
+  expect(vivant(pid)).toBe(false);
+}, 10_000);
+
 test("une réaction du CLI entre deux tours ouvre un tour autonome", async () => {
   process.env.PUPITRE_CLAUDE_BIN = join(import.meta.dir, "fake-bins/fake-claude-background");
   process.env.FAKE_BACKGROUND_REACT = "1";

@@ -35,6 +35,7 @@ import { TicketStore } from "../src/stores/tickets";
 import { ChangelogStore } from "../src/stores/changelog";
 import { ChangelogService } from "../src/changelog";
 import type { InstanceInfo } from "../src/instance";
+import { JarvisService, type JarvisJob } from "../src/jarvis";
 
 interface TestServer {
   baseUrl: string;
@@ -2398,4 +2399,38 @@ test("le journal des sidecars expose les démarrages et arrêts de chaque instan
   } finally {
     server.stop(true);
   }
+});
+
+test("Jarvis répond par le sidecar, avec les en-têtes de Tauri", async () => {
+  const deps = current!.deps;
+  deps.jarvis = new JarvisService({
+    db: current!.db,
+    projects: deps.projects,
+    conversations: deps.conversations,
+    fleet: () => [],
+    runningApplications: () => [],
+    generate: async () => JSON.stringify({ text: "Personne ne t'attend.", results: [], actions: [] }),
+  });
+
+  const response = await postJson("/api/jarvis/ask", {
+    question: "qui m'attend ?", projectId: null, conversationId: null, history: [], mode: "fast",
+  });
+  expect(response.status).toBe(202);
+  expect(response.headers.get("access-control-allow-origin")).toBe("tauri://localhost");
+  const { jobId } = await response.json() as { jobId: string };
+
+  let job: JarvisJob | null = null;
+  for (let attempt = 0; attempt < 200; attempt++) {
+    job = await (await fetch(`${current!.baseUrl}/api/jarvis/jobs/${jobId}`)).json() as JarvisJob;
+    if (job.status !== "running") break;
+    await Bun.sleep(10);
+  }
+  expect(job?.status).toBe("done");
+  expect(job?.answer?.text).toBe("Personne ne t'attend.");
+
+  const cancelled = await fetch(`${current!.baseUrl}/api/jarvis/jobs/${jobId}/cancel`, { method: "POST" });
+  expect(cancelled.status).toBe(204);
+  expect(cancelled.headers.get("access-control-allow-origin")).toBe("tauri://localhost");
+  expect((await fetch(`${current!.baseUrl}/api/jarvis/jobs/inconnu`)).status).toBe(404);
+  expect((await postJson("/api/jarvis/ask", { question: "" })).status).toBe(400);
 });

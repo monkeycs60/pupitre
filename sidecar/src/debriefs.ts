@@ -27,6 +27,9 @@ export interface DebriefGenerationInput {
   effort?: string;
   speed?: "standard" | "fast";
   prompt: string;
+  signal?: AbortSignal;
+  mcpServers?: Record<string, unknown>;
+  oneShot?: boolean;
 }
 
 export interface HandoffDebriefArtifact {
@@ -594,6 +597,9 @@ export async function generateWithAdapters(
     permissionMode: "plan",
     sandboxMode: "read-only" as const,
     images: [],
+    signal: input.signal,
+    mcpServers: input.mcpServers,
+    oneShot: input.oneShot,
   };
   await runProviderTurn(input.provider, options, emit);
   if (providerError !== null) throw new Error(providerError);
