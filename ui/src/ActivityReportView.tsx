@@ -13,9 +13,12 @@ import {
   type ActivityReportTicket,
 } from './api'
 import { ActivityAgenda, addDays, duration, localDay } from './ActivityAgenda'
+import { ActivityUsage } from './ActivityUsage'
 import { ExternalLink } from './externalLink'
 
-export type ReportTab = 'agenda' | 'journal' | 'recul'
+export type ReportTab = 'agenda' | 'journal' | 'recul' | 'usage'
+
+const TAB_LABEL: Record<ReportTab, string> = { agenda: 'Agenda', journal: 'Journal', recul: 'Recul', usage: 'Usage' }
 
 /** Motifs affichés par projet ; au-delà, la réserve. */
 export const TOP_MOTIFS = 10
@@ -366,9 +369,9 @@ export function ActivityReportView({ initialTab = 'agenda', onOpenConversation }
     <section className="activity-report-view">
       <header className="activity-report-header">
         <div className="report-tabs" role="tablist" aria-label="Rapport">
-          {(['agenda', 'journal', 'recul'] as const).map((item) => (
+          {(['agenda', 'journal', 'recul', 'usage'] as const).map((item) => (
             <button type="button" role="tab" key={item} aria-selected={tab === item} className={tab === item ? 'is-active' : ''} onClick={() => setTab(item)}>
-              {item === 'agenda' ? 'Agenda' : item === 'journal' ? 'Journal' : 'Recul'}
+              {TAB_LABEL[item]}
               {item === 'recul' && rising > 0 ? <span className="report-tab-badge" title={risingTitle(risingList, today)}>▲ {rising}</span> : null}
             </button>
           ))}
@@ -384,6 +387,7 @@ export function ActivityReportView({ initialTab = 'agenda', onOpenConversation }
         {tab === 'agenda' ? <ActivityAgenda onOpenConversation={onOpenConversation} onOpenDay={(day) => { setTab('journal'); void loadDay(day) }} /> : null}
         {tab === 'journal' ? <Journal index={index} day={selectedDay ?? today} report={report} onDay={(day) => void loadDay(day)} onOpenConversation={onOpenConversation} /> : null}
         {tab === 'recul' ? <Recul retro={index.retro} busy={busy} onAct={(id, action) => void act(id, action)} onTriage={() => void triage()} onOpenConversation={onOpenConversation} /> : null}
+        {tab === 'usage' ? <ActivityUsage /> : null}
       </div>
     </section>
   )

@@ -238,6 +238,18 @@ export const runActivityReport = (day: string): Promise<ActivityReport | null> =
 export const dismissActivityMotif = (id: string): Promise<ActivityMotif> => fetchJson(`/api/activity-motifs/${routeId(id)}/dismiss`, jsonPost({}))
 export const createActivityMotifTask = (id: string): Promise<{ motif: ActivityMotif }> => fetchJson(`/api/activity-motifs/${routeId(id)}/task`, jsonPost({}))
 
+export interface UiEventPayload { at: string; name: string; projectId?: string | null; props?: Record<string, string | number | boolean> }
+export interface UsageReport {
+  since: string
+  until: string
+  catalog: Array<{ feature: string; label: string; area: string; count: number; lastAt: string | null }>
+  events: Array<{ name: string; count: number; lastAt: string }>
+  daily: Array<{ day: string; count: number }>
+  background: Array<{ kind: string; count: number }>
+}
+export const getUsageReport = (days: number, signal?: AbortSignal): Promise<UsageReport> => fetchJson(`/api/usage?days=${days}`, { signal })
+export const postUiEvents = (events: UiEventPayload[], keepalive = false): Promise<void> => fetchVoid('/api/ui-events', { ...jsonPost({ events }), keepalive })
+
 export class ApiError extends Error {
   readonly status: number
 
