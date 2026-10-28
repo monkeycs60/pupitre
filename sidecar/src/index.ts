@@ -66,7 +66,6 @@ import { AttentionItemStore } from "./stores/attention-items";
 import { ConversationNudgeService, nudgePrompt, parseNudgeVerdicts } from "./conversation-nudges";
 import { ConversationLinkStore } from "./stores/conversation-links";
 import { ReviewCommentStore } from "./stores/review-comments";
-import { VscodeWebService } from "./vscode-web";
 import { ProblemService } from "./problems";
 import { backgroundJobsEnabled, readInstance } from "./instance";
 import { BACKGROUND_MODEL } from "./background-model";
@@ -130,7 +129,6 @@ if (process.argv.includes("--pupitre-mcp")) {
   const attention = new AttentionItemStore(db);
   const conversationLinks = new ConversationLinkStore(db);
   const reviewComments = new ReviewCommentStore(db);
-  const vscodeWeb = new VscodeWebService(instance.dataDir);
   const problems = new ProblemService(
     problemStore,
     projects,
@@ -239,7 +237,6 @@ if (process.argv.includes("--pupitre-mcp")) {
   );
   const personalEnvironments = new PersonalEnvironments(db, projects, conversations);
   personalEnvironments.onTriage = (id, prompt) => { void runner.runTurn(id, prompt, []).catch(console.error); };
-  if (backgroundJobsEnabled()) setInterval(() => { void personalEnvironments.scan().catch(console.error); }, 300000).unref();
   const devlog = new ProjectDevlogService(db, projects, conversations, htmlDocuments, (prompt, cwd) => generateWithAdapters({ cwd, ...BACKGROUND_MODEL, effort: "high", prompt }, quotas));
   try {
     const moved = devlog.migrateDocuments();
@@ -358,7 +355,6 @@ if (process.argv.includes("--pupitre-mcp")) {
       claudeSessions.shutdown();
       mcpHub.shutdown();
       codexAppServer.shutdown();
-      vscodeWeb.stop();
     } finally {
       process.exit(cause === "requested" ? 0 : KILLED_EXIT_CODE);
     }
@@ -436,7 +432,6 @@ if (process.argv.includes("--pupitre-mcp")) {
     nudges,
     conversationLinks,
     reviewComments,
-    vscodeWeb,
     problems,
     integrationSecrets,
     sentry,

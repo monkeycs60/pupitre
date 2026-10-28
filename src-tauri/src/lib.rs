@@ -597,7 +597,7 @@ fn build_main_popup<R: tauri::Runtime>(
 }
 
 /// Navigations qui restent dans Pupitre : coquille Vite, protocole custom,
-/// iframes de documents publiés et iframe de VS Code web (`/vscode-web`). `/media/` est exclu : WebKit affiche le fichier
+/// iframes de documents publiés. `/media/` est exclu : WebKit affiche le fichier
 /// à la place de l'interface. `localhost` sans le port Vite aussi : un lien
 /// `http://localhost:3000` collé dans une conversation n'est pas l'application.
 fn is_app_navigation(url: &tauri::Url, sidecar_port: u16) -> bool {
@@ -618,9 +618,7 @@ fn is_app_navigation(url: &tauri::Url, sidecar_port: u16) -> bool {
             }
             if (host == "127.0.0.1" || host == "localhost") && port == Some(sidecar_port) {
                 return path.starts_with("/api/documents/")
-                    || path.starts_with("/api/html-documents/")
-                    || path == "/vscode-web"
-                    || path.starts_with("/vscode-web/");
+                    || path.starts_with("/api/html-documents/");
             }
             false
         }
@@ -900,22 +898,6 @@ mod tests {
         assert!(!is_app_navigation(&url("http://localhost:3000/"), 4821));
         assert!(!is_app_navigation(&url("http://127.0.0.1:3000/"), 4821));
         assert!(!is_app_navigation(&url("https://example.com/docs"), 4821));
-    }
-
-    #[test]
-    fn sidecar_vscode_web_iframe_stays_internal() {
-        assert!(is_app_navigation(
-            &url("http://127.0.0.1:4820/vscode-web/?folder=%2Fhome%2Fclement%2Fprojet"),
-            4820
-        ));
-        assert!(is_app_navigation(
-            &url("http://localhost:4821/vscode-web/stable-abc/static/out/vs/workbench/contrib/webview/browser/pre/index.html"),
-            4821
-        ));
-        assert!(!is_app_navigation(
-            &url("http://127.0.0.1:4820/vscode-webby/"),
-            4820
-        ));
     }
 
     #[test]

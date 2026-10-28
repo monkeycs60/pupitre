@@ -112,8 +112,6 @@ import type { ConversationNudgeService } from "./conversation-nudges";
 import type { ConversationLinkStore } from "./stores/conversation-links";
 import type { ReviewCommentInput, ReviewCommentStore } from "./stores/review-comments";
 import { reviewProgress, snapshotOf } from "./review-progress";
-import { VscodeWebError, type VscodeWebService } from "./vscode-web";
-import { closeVscodeWebSocket, isVscodeWebPath, openVscodeWebSocket, proxyVscodeWeb, relayToVscodeWeb, type VscodeWebSocketData } from "./vscode-web-proxy";
 import type { ProblemService } from "./problems";
 import { buildInfo, defaultDataDir, readInstance, staleSourcesSince, type InstanceInfo } from "./instance";
 import { processLogPath, readLifecycle } from "./process-log";
@@ -204,7 +202,6 @@ export interface ServerDeps {
   nudges?: ConversationNudgeService;
   conversationLinks?: ConversationLinkStore;
   reviewComments?: ReviewCommentStore;
-  vscodeWeb?: VscodeWebService;
   problems?: ProblemService;
   integrationSecrets?: IntegrationSecretStore;
   sentry?: SentryStore;
@@ -304,7 +301,6 @@ async function createContinuationFromHandoff(
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
 // canal global `quotas`.
 type WebSocketData =
-  | VscodeWebSocketData
   | { channel: "conversation"; conversationId: string }
   | { channel: "quotas" }
   | { channel: "fleet" }
@@ -1112,10 +1108,6 @@ export function createServer(deps: ServerDeps) {
           server.timeout(request, 0);
           return await deps.mcpHub.handle(request);
         }
-        if (isVscodeWebPath(pathname)) {
-          if (!deps.vscodeWeb) throw new HttpError(503, "VS Code web indisponible");
-          return await proxyVscodeWeb(request, deps.vscodeWeb, server);
-        }
         if (request.method === "OPTIONS") {
           if (visualExtensionOrigin) return new Response(null, { status: 204, headers: {
             "access-control-allow-origin": origin!,
@@ -1607,7 +1599,7 @@ export function createServer(deps: ServerDeps) {
         }
 
         const codeAction = pathname.match(
-          /^\/api\/projects\/[^/]+\/code\/(sources|files|file|changes|conversation)$/,
+          /^\/api\/projects\/[^/]+\/code\/(sources|file|conversation)$/,
         )?.[1];
         if (request.method === "GET" && codeAction !== undefined) {
           const codeProjectId = routeId(pathname, /^\/api\/projects\/([^/]+)\/code\/[a-z]+$/)!;
@@ -1619,9 +1611,7 @@ export function createServer(deps: ServerDeps) {
           try {
             switch (codeAction) {
               case "sources": return json(await explorer.sources(codeProjectId));
-              case "files": return json(await explorer.files(codeProjectId, source));
               case "file": return json(await explorer.file(codeProjectId, source, path, url.searchParams.get("ref")));
-              case "changes": return json(await explorer.changes(codeProjectId, source));
               default: {
                 const conversationId = url.searchParams.get("conversationId");
                 if (!conversationId) throw new HttpError(400, "conversation manquante");
@@ -1710,24 +1700,6 @@ export function createServer(deps: ServerDeps) {
             ));
           } catch (error) {
             if (error instanceof GitProjectError) throw new HttpError(400, error.message);
-            throw error;
-          }
-        }
-
-        const vscodeWebConversationId = routeId(pathname, /^\/api\/conversations\/([^/]+)\/vscode-web$/);
-        if (request.method === "GET" && vscodeWebConversationId !== null) {
-          if (!deps.vscodeWeb) throw new HttpError(503, "VS Code web indisponible");
-          const conversation = deps.conversations.get(vscodeWebConversationId);
-          if (!conversation) throw new HttpError(404, "conversation inconnue");
-          const project = deps.projects.get(conversation.project_id);
-          if (!project) throw new HttpError(404, "projet inconnu");
-          const sources = deps.codeExplorer ? await deps.codeExplorer.sources(project.id).catch(() => []) : [];
-          const plan = planEditorWorkspace(project, conversation, sources);
-          const target = writeWorkspace(plan, join(deps.instance?.dataDir ?? tmpdir(), "editor-workspaces"));
-          try {
-            return json({ url: await deps.vscodeWeb.url(plan.workspace ? { workspace: target } : { folder: target }), folders: plan.folders });
-          } catch (error) {
-            if (error instanceof VscodeWebError || error instanceof EditorWorkspaceError) throw new HttpError(503, error.message);
             throw error;
           }
         }
@@ -4416,11 +4388,6 @@ export function createServer(deps: ServerDeps) {
     },
     websocket: {
       open(socket) {
-        if (socket.data.channel === "vscode-web") {
-          if (deps.vscodeWeb) openVscodeWebSocket(socket as ServerWebSocket<VscodeWebSocketData>, deps.vscodeWeb);
-          else socket.close();
-          return;
-        }
         if (socket.data.channel === "quotas") {
           quotaSockets.add(socket);
           // État courant à la connexion : pas d'attente du prochain event.
@@ -4460,10 +4427,6 @@ export function createServer(deps: ServerDeps) {
         subscribers.add(socket);
       },
       close(socket) {
-        if (socket.data.channel === "vscode-web") {
-          closeVscodeWebSocket(socket as ServerWebSocket<VscodeWebSocketData>);
-          return;
-        }
         if (socket.data.channel === "quotas") {
           quotaSockets.delete(socket);
           return;
@@ -4492,9 +4455,7 @@ export function createServer(deps: ServerDeps) {
         subscribers?.delete(socket);
         if (subscribers?.size === 0) sockets.delete(conversationId);
       },
-      message(socket, message) {
-        if (socket.data.channel === "vscode-web") relayToVscodeWeb(socket as ServerWebSocket<VscodeWebSocketData>, message);
-      },
+      message() {},
     },
   });
 }
