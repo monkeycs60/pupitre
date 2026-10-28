@@ -1,8 +1,10 @@
 # Claude Design
 
-Claude Design n'existe que sur le web : ni API, ni CLI. La vue **Claude Design**
+Claude Design n'existe que sur le web : ni API, ni CLI. La vue **Claude Design**,
+ouverte depuis la palette (Ctrl K, « Claude Design ») ou par Ctrl Maj G,
 l'affiche dans la fenêtre de Pupitre, sur la zone de contenu, le rail restant
-visible à sa gauche. Ce n'est pas un cadre HTML — claude.ai envoie
+visible à sa gauche. Quitter la vue ferme la page et libère son processus ; y
+revenir la recharge. Ce n'est pas un cadre HTML — claude.ai envoie
 `X-Frame-Options: SAMEORIGIN`, qui interdit toute intégration par iframe. C'est
 une vraie webview, posée par-dessus l'emplacement que la vue lui réserve.
 

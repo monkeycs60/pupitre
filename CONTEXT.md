@@ -34,7 +34,7 @@ _Avoid_ : vue Git (acceptable), guichet
 ### Tableau de bord
 
 **Tableau de bord** :
-La vue de projet qui présente tickets, environnements, MR à relire et backlog, chaque ligne avec ses actions d'agent.
+La vue de projet qui présente tickets, déploiements, MR à relire et backlog, chaque ligne avec ses actions d'agent.
 _Avoid_ : dashboard, agrégateur, poste
 
 **Ticket** :
@@ -42,7 +42,7 @@ L'unité de travail d'un projet, quelle que soit sa source — tâche ClickUp (`
 _Avoid_ : tâche (réservé à ClickUp), issue, carte
 
 **Commande de lancement** :
-Une commande nommée du projet, lancée sans conversation ni quota, suivie dans Applications.
+Une commande nommée du projet, lancée sans conversation ni quota, suivie dans le bloc Serveurs de la sidebar.
 
 ### Providers
 

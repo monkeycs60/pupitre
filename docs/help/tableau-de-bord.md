@@ -83,7 +83,7 @@ recherche.
 
 ## Limites
 
-Cette vue couvre **Mes tickets**, **Problématiques**, **Environnements**, **À relire**, les notes
+Cette vue couvre **Mes tickets**, **Problématiques**, **À relire**, les notes
 locales, le groupement des conversations par ticket, l'inbox **Sentry** et les
 **domaines**.
 
