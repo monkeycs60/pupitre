@@ -3023,7 +3023,7 @@ export function createServer(deps: ServerDeps) {
             }
             const currentTokens = deps.settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY) ?? {};
             for (const [name, value] of Object.entries(tokens as Record<string, unknown>)) {
-              if (name !== "clickup" && name !== "gitlab" && name !== "openai" && name !== "cerebras" && name !== GOOGLE_CALENDAR_TOKEN) {
+              if (name !== "clickup" && name !== "gitlab" && name !== "openai" && name !== "cerebras" && name !== "typesafe" && name !== GOOGLE_CALENDAR_TOKEN) {
                 throw new HttpError(400, `token ${name} inconnu`);
               }
               if (value === null || value === "") {

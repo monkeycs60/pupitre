@@ -17,7 +17,7 @@ import type { JarvisAction, JarvisJob, JarvisMode, JarvisResult } from './types'
 const POLL_MS = 500
 
 const MODES: Array<{ id: JarvisMode; label: string; hint: string }> = [
-  { id: 'auto', label: 'Auto', hint: 'Un routeur rapide lit ta demande : Haiku 5.5 répond, Opus 5.5 prend la main dès qu’un plan s’impose.' },
+  { id: 'auto', label: 'Auto', hint: 'Jev trie ta demande en un instant : Haiku 5.5 répond, Opus 5.5 prend la main dès qu’un plan s’impose.' },
   { id: 'fast', label: 'Rapide', hint: 'Haiku 5.5 seul : quelques secondes, pour retrouver ou faire le point.' },
   { id: 'orchestrate', label: 'Orchestrer', hint: 'Opus 5.5 directement : pour préparer plusieurs actions sur tes agents.' },
 ]
@@ -345,7 +345,7 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
         <div className={`jarvis-route is-${job.route.model === 'opus-5.5' ? 'opus' : 'haiku'}`} title={job.route.reason}>
           <Icon name={job.route.model === 'opus-5.5' ? 'orchestrate' : 'bolt'} size={13} />
           <strong>{job.route.label}</strong>
-          <span>{job.route.escalated ? `${job.route.by === 'router' ? 'Le routeur a passé la main' : 'Haiku a passé la main'} : ${job.route.reason}` : job.route.reason}</span>
+          <span>{job.route.escalated && job.route.by === 'haiku' ? `Haiku a passé la main : ${job.route.reason}` : job.route.reason}</span>
         </div>
       ) : null}
 

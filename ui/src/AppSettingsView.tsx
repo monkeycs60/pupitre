@@ -47,9 +47,10 @@ function nextActivityRun(hour: string): string {
   return next.toLocaleString('fr-FR', { weekday: 'long', hour: '2-digit', minute: '2-digit' })
 }
 
-const OTHER_TOKENS: Array<{ name: 'openai' | 'cerebras' | 'googleCalendar'; label: string; help: string }> = [
+const OTHER_TOKENS: Array<{ name: 'openai' | 'cerebras' | 'typesafe' | 'googleCalendar'; label: string; help: string }> = [
   { name: 'openai', label: 'OpenAI', help: 'Clé OpenAI (embeddings de la recherche IA)' },
   { name: 'cerebras', label: 'Cerebras', help: 'Clé Cerebras (tri des résultats par gpt-oss-120b)' },
+  { name: 'typesafe', label: 'TypeSafe', help: 'Clé TypeSafe : Jev trie chaque demande à Jarvis et confie les plans à Opus 5.5 d’emblée' },
   { name: 'googleCalendar', label: 'Google Agenda', help: 'Adresse secrète au format iCal (Google Agenda › Paramètres de l’agenda › Intégrer l’agenda), affichée dans l’agenda des rapports' },
 ]
 
@@ -59,6 +60,7 @@ function tokenStatus(tokens: Record<string, boolean> | undefined): Record<Integr
     gitlab: tokens?.gitlab === true,
     openai: tokens?.openai === true,
     cerebras: tokens?.cerebras === true,
+    typesafe: tokens?.typesafe === true,
     googleCalendar: tokens?.googleCalendar === true,
   }
 }
@@ -87,6 +89,7 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
     gitlab: '',
     openai: '',
     cerebras: '',
+    typesafe: '',
     googleCalendar: '',
   })
   const [promotionMission, setPromotionMission] = useState<PromotionMission | null>(null)

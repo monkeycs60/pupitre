@@ -12,10 +12,9 @@ import {
   finalizeAnswer,
   jarvisPrompt,
   parseModelJson,
-  parseRouterVerdict,
-  routerPrompt,
   sanitizeDraft,
 } from "../src/jarvis-answer";
+import { jevRouter, type JarvisRouter } from "../src/jarvis-router";
 import { JarvisContextBuilder, searchTerms, type JarvisContext } from "../src/jarvis-context";
 import {
   claudeJarvisGenerator,
@@ -195,20 +194,19 @@ function service(f: Fixture, generate: JarvisGenerator, extra: Partial<JarvisDep
   return new JarvisService({ ...f.contextDeps, generate, ...extra });
 }
 
-function recording(
-  answer: (input: JarvisGenerationInput) => unknown,
-  router: (input: JarvisGenerationInput) => unknown = () => ({ plan: false, reason: null }),
-) {
+function recording(answer: (input: JarvisGenerationInput) => unknown) {
   const calls: JarvisGenerationInput[] = [];
-  const routed: JarvisGenerationInput[] = [];
   const generate: JarvisGenerator = async (input) => {
-    const routing = input.effort === "low";
-    (routing ? routed : calls).push(input);
-    if (!routing) await Bun.sleep(1);
-    const value = routing ? router(input) : answer(input);
+    calls.push(input);
+    await Bun.sleep(1);
+    const value = answer(input);
     return typeof value === "string" ? value : JSON.stringify(value);
   };
-  return { calls, routed, generate };
+  return { calls, generate };
+}
+
+function fakeRouter(decide: JarvisRouter["decide"], ready = true): JarvisRouter {
+  return { ready: () => ready, decide };
 }
 
 async function settled(jarvis: JarvisService, id: string): Promise<JarvisJob> {
@@ -466,14 +464,17 @@ test("mode orchestration : Opus seul, avec la consigne de plan", async () => {
 
 test("auto : Haiku suffit pour une question simple", async () => {
   const f = fixture();
-  const { calls, routed, generate } = recording(() => ({ text: "Deux conversations t'attendent.", results: [], actions: [], needsOrchestration: false }));
-  const jarvis = service(f, generate);
+  const { calls, generate } = recording(() => ({ text: "Deux conversations t'attendent.", results: [], actions: [], needsOrchestration: false }));
+  const decided: Array<{ question: string; history: unknown[] }> = [];
+  const router = fakeRouter(async ({ question, history }) => {
+    decided.push({ question, history });
+    return { plan: false, probability: 0.04 };
+  });
+  const jarvis = service(f, generate, { router });
   const job = await settled(jarvis, await startJob(jarvis, { question: "qui m'attend ?" }));
 
   expect(calls.map((call) => call.model)).toEqual(["haiku-5.5"]);
-  expect(calls[0]!.effort).toBeUndefined();
-  expect(routed.map((call) => [call.model, call.cwd])).toEqual([["haiku-5.5", homedir()]]);
-  expect(routed[0]!.prompt.endsWith("DEMANDE\nqui m'attend ?")).toBe(true);
+  expect(decided).toEqual([{ question: "qui m'attend ?", history: [] }]);
   expect(job.route).toEqual({ model: "haiku-5.5", effort: "high", label: "Haiku 5.5 · rapide", reason: "Question simple : Haiku 5.5 a suffi.", escalated: false, by: "haiku" });
   expect(job.steps.map((step) => step.label)).toEqual([
     "Lire l'état des agents",
@@ -487,7 +488,7 @@ test("auto : Haiku suffit pour une question simple", async () => {
   expect(job.steps[0]!.detail).toBe("1 en cours, 2 t'attendent, 1 non lue");
   expect(job.steps[1]!.detail).toMatch(/^6 conversations, aucun mot-clé à chercher$/);
   expect(job.steps[2]!.detail).toBe("1 serveur actif");
-  expect(job.steps[3]!.detail).toMatch(/^Réponse simple : Haiku 5\.5 répond · routeur en /);
+  expect(job.steps[3]!.detail).toMatch(/^Réponse simple \(plan probable à 4 %\) : Haiku 5\.5 répond · Jev en /);
 });
 
 test("auto : Haiku demande un plan, Opus reprend avec son brouillon", async () => {
@@ -734,7 +735,6 @@ test("auto : Haiku annonce un plan dès ses premiers mots, il est coupé et Opus
   const f = fixture();
   const calls: JarvisGenerationInput[] = [];
   const generate: JarvisGenerator = async (input) => {
-    if (input.effort === "low") return JSON.stringify({ plan: false, reason: null });
     calls.push(input);
     if (input.model === "haiku-5.5") {
       const stopped = new Promise((_, reject) => input.signal.addEventListener("abort", () => reject(new Error("coupé"))));
@@ -764,7 +764,7 @@ test("la raison d'escalade se lit dès qu'elle est complète, pas avant", () => 
 
 test("la préchauffe lance le modèle du mode choisi dans le dossier du projet", async () => {
   const f = fixture();
-  const warmed: Array<{ model: string; effort: string; cwd: string }> = [];
+  const warmed: Array<{ model: string; cwd: string }> = [];
   const jarvis = service(f, recording(() => ({ text: "", results: [], actions: [] })).generate, { prewarm: (input) => warmed.push(input) });
   const warm = (body: unknown) => jarvis.handle(new Request("http://localhost/api/jarvis/warm", {
     method: "POST",
@@ -775,13 +775,12 @@ test("la préchauffe lance le modèle du mode choisi dans le dossier du projet",
   expect((await warm({ projectId: f.affilae.id, mode: "auto" }))!.status).toBe(204);
   expect((await warm({ projectId: null, mode: "orchestrate" }))!.status).toBe(204);
   expect(warmed).toEqual([
-    { model: "haiku-5.5", effort: "high", cwd: f.affilae.path },
-    { model: "haiku-5.5", effort: "low", cwd: homedir() },
-    { model: "opus-5.5", effort: "high", cwd: homedir() },
+    { model: "haiku-5.5", cwd: f.affilae.path },
+    { model: "opus-5.5", cwd: homedir() },
   ]);
 });
 
-test("auto : le routeur express voit un plan, Opus démarre sans attendre Haiku", async () => {
+test("auto : Jev voit un plan, Opus démarre sans attendre Haiku", async () => {
   const f = fixture();
   const semanticSearch = {
     search: async (): Promise<SemanticSearchResponse> => {
@@ -789,81 +788,147 @@ test("auto : le routeur express voit un plan, Opus démarre sans attendre Haiku"
       return { results: [], reranked: true };
     },
   };
-  const { calls, routed, generate } = recording(
-    () => ({ text: "Voici le plan.", results: [], actions: [] }),
-    () => '{"plan":true,"reason":"Il faut briefer deux agents."}',
-  );
-  const jarvis = service(f, generate, { semanticSearch });
+  const { calls, generate } = recording(() => ({ text: "Voici le plan.", results: [], actions: [] }));
+  const jarvis = service(f, generate, { semanticSearch, router: fakeRouter(async () => ({ plan: true, probability: 0.93 })) });
   const job = await settled(jarvis, await startJob(jarvis, { question: "lance deux agents sur la pagination", projectId: f.pupitre.id }));
 
-  expect(routed).toHaveLength(1);
   expect(calls.map((call) => call.model)).toEqual(["opus-5.5"]);
   expect(calls[0]!.prompt).toContain("MODE ORCHESTRATION");
-  expect(job.route).toMatchObject({ model: "opus-5.5", reason: "Il faut briefer deux agents.", escalated: true, by: "router" });
-  expect(job.steps.find((step) => step.label === "Choisir le modèle")?.detail).toMatch(/^Plan demandé : Opus 5\.5 prend la main · routeur en /);
+  expect(job.route).toMatchObject({ model: "opus-5.5", reason: "Jev estime à 93 % que la demande appelle un plan.", escalated: true, by: "router" });
+  expect(job.steps.find((step) => step.label === "Choisir le modèle")?.detail).toMatch(/^Plan probable à 93 % : Opus 5\.5 prend la main · Jev en /);
   expect(job.steps.some((step) => step.label === "Haiku 5.5 rédige la réponse")).toBe(false);
   expect(job.answer?.text).toBe("Voici le plan.");
 });
 
-test("auto : un plan vu par le routeur pendant que Haiku écrit coupe Haiku", async () => {
+test("auto : si Opus échoue après Jev, Haiku répond à sa place", async () => {
+  const f = fixture();
+  const semanticSearch = {
+    search: async (): Promise<SemanticSearchResponse> => {
+      await Bun.sleep(10);
+      return { results: [], reranked: true };
+    },
+  };
+  const { calls, generate } = recording(({ model }) => {
+    if (model === "opus-5.5") throw new Error("pas de réponse");
+    return { text: "Réponse de secours.", results: [], actions: [] };
+  });
+  const jarvis = service(f, generate, { semanticSearch, router: fakeRouter(async () => ({ plan: true, probability: 0.9 })) });
+  const job = await settled(jarvis, await startJob(jarvis, { question: "range tout", projectId: f.pupitre.id }));
+
+  expect(calls.map((call) => call.model)).toEqual(["opus-5.5", "haiku-5.5"]);
+  expect(job.status).toBe("done");
+  expect(job.answer?.text).toBe("Réponse de secours.");
+  expect(job.route).toMatchObject({ model: "haiku-5.5", by: "haiku", reason: "Opus 5.5 n'a pas abouti : Haiku 5.5 répond à sa place." });
+  expect(job.steps.find((step) => step.label === "Opus 5.5 prépare le plan")).toMatchObject({ state: "error", detail: "pas de réponse" });
+  expect(job.steps.find((step) => step.label === "Haiku 5.5 rédige la réponse")?.state).toBe("done");
+});
+
+test("auto : un plan vu par Jev pendant que Haiku écrit coupe Haiku", async () => {
   const f = fixture();
   const calls: JarvisGenerationInput[] = [];
   const generate: JarvisGenerator = async (input) => {
-    if (input.effort === "low") {
-      await Bun.sleep(20);
-      return '{"plan":true,"reason":"Trois conversations à archiver."}';
-    }
     calls.push(input);
     if (input.model === "haiku-5.5") {
       await new Promise((_, reject) => input.signal.addEventListener("abort", () => reject(new Error("coupé"))));
     }
     return JSON.stringify({ text: "Plan d'archivage.", results: [], actions: [] });
   };
-  const jarvis = service(f, generate);
+  const router = fakeRouter(async () => {
+    await Bun.sleep(20);
+    return { plan: true, probability: 0.81 };
+  });
+  const jarvis = service(f, generate, { router });
   const job = await settled(jarvis, await startJob(jarvis, { question: "archive les conversations terminées" }));
 
   expect(calls.map((call) => call.model)).toEqual(["haiku-5.5", "opus-5.5"]);
-  expect(job.route).toMatchObject({ model: "opus-5.5", reason: "Trois conversations à archiver.", escalated: true, by: "router" });
-  expect(job.steps.find((step) => step.label === "Haiku 5.5 rédige la réponse")?.detail).toContain("interrompu : le routeur demande un plan");
+  expect(job.route).toMatchObject({ model: "opus-5.5", reason: "Jev estime à 81 % que la demande appelle un plan.", escalated: true, by: "router" });
+  expect(job.steps.find((step) => step.label === "Haiku 5.5 rédige la réponse")?.detail).toContain("interrompu : Jev demande un plan");
   expect(job.answer?.text).toBe("Plan d'archivage.");
 });
 
-test("auto : sans verdict du routeur, Haiku répond seul et la trace dit pourquoi", async () => {
+test("auto : sans verdict de Jev, Haiku répond seul et la trace dit pourquoi", async () => {
   const f = fixture();
-  const failing = recording(() => ({ text: "ok", results: [], actions: [] }), () => {
-    throw new Error("quota épuisé");
-  });
-  const jarvis = service(f, failing.generate);
-  const job = await settled(jarvis, await startJob(jarvis, { question: "qui m'attend ?" }));
+  const { generate } = recording(() => ({ text: "ok", results: [], actions: [] }));
+  const failing = service(f, generate, { router: fakeRouter(async () => { throw new Error("TypeSafe HTTP 429"); }) });
+  const job = await settled(failing, await startJob(failing, { question: "qui m'attend ?" }));
   const choice = job.steps.find((step) => step.label === "Choisir le modèle");
   expect(job.route).toMatchObject({ model: "haiku-5.5", escalated: false, by: "haiku" });
   expect(choice?.state).toBe("skipped");
-  expect(choice?.detail).toContain("Le routeur n'a pas tranché");
+  expect(choice?.detail).toContain("Jev n'a pas répondu");
 
   let routerSignal = null as AbortSignal | null;
-  const slow = service(f, async (input) => {
-    if (input.effort === "low") {
-      routerSignal = input.signal;
-      return new Promise<string>(() => {});
-    }
-    return JSON.stringify({ text: "ok", results: [], actions: [] });
+  const slow = service(f, generate, {
+    router: fakeRouter(({ signal }) => {
+      routerSignal = signal;
+      return new Promise(() => {});
+    }),
   });
   const late = await settled(slow, await startJob(slow, { question: "qui m'attend ?" }));
-  expect(late.steps.find((step) => step.label === "Choisir le modèle")).toMatchObject({ state: "skipped", detail: "Haiku 5.5 a répondu avant le routeur." });
+  expect(late.steps.find((step) => step.label === "Choisir le modèle")).toMatchObject({ state: "skipped", detail: "Haiku 5.5 a répondu avant Jev." });
   expect(routerSignal!.aborted).toBe(true);
 });
 
-test("le routeur reçoit la demande et les derniers échanges, et sa réponse se lit même entourée", () => {
-  const prompt = routerPrompt("archive les doublons", [
-    { role: "user", text: "trouve les doublons" },
-    { role: "jarvis", text: "Trois doublons." },
-    { role: "user", text: "lesquels ?" },
-  ]);
-  expect(prompt).toContain("ÉCHANGES PRÉCÉDENTS\nJarvis : Trois doublons.\nUtilisateur : lesquels ?");
-  expect(prompt).not.toContain("trouve les doublons");
-  expect(prompt.endsWith("DEMANDE\narchive les doublons")).toBe(true);
-  expect(parseRouterVerdict('```json\n{"plan":true,"reason":" Trois archivages. "}\n```')).toEqual({ plan: true, reason: "Trois archivages." });
-  expect(parseRouterVerdict('{"plan":false,"reason":null}')).toEqual({ plan: false, reason: null });
-  expect(parseRouterVerdict('{"plan":"oui"}')).toBeNull();
-  expect(parseRouterVerdict("pas de JSON")).toBeNull();
+test("auto : sans clé TypeSafe, Jev n'est pas appelé et la trace le dit", async () => {
+  const f = fixture();
+  let asked = false;
+  const { calls, generate } = recording(() => ({ text: "ok", results: [], actions: [] }));
+  const jarvis = service(f, generate, {
+    router: fakeRouter(async () => {
+      asked = true;
+      return { plan: true, probability: 1 };
+    }, false),
+  });
+  const job = await settled(jarvis, await startJob(jarvis, { question: "qui m'attend ?" }));
+
+  expect(asked).toBe(false);
+  expect(calls.map((call) => call.model)).toEqual(["haiku-5.5"]);
+  expect(job.steps.find((step) => step.label === "Choisir le modèle")).toMatchObject({
+    state: "done",
+    detail: "Haiku 5.5 répond ; Opus 5.5 reprend si la demande appelle un plan. Sans clé TypeSafe, Jev ne trie pas la demande en amont.",
+  });
+});
+
+test("Jev reçoit la demande et les deux derniers échanges, et décide « plan » à partir de 0,6", async () => {
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  let probability: unknown = 0.6;
+  let status = 200;
+  const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+    requests.push({ url: String(url), init: init! });
+    return status === 200
+      ? Response.json({ model: "jev-1.14.0", answers: { plan: { type: "noul", noul: probability } }, usage: { input_tokens: 420, output_tokens: 1 } })
+      : new Response("trop de requêtes", { status });
+  }) as unknown as typeof fetch;
+  let key: string | null = "cle-test";
+  const router = jevRouter(() => key, fetchImpl);
+  const signal = new AbortController().signal;
+  const history = [
+    { role: "user" as const, text: "trouve les doublons" },
+    { role: "jarvis" as const, text: "Trois doublons." },
+    { role: "user" as const, text: "x".repeat(900) },
+  ];
+
+  expect(await router.decide({ question: "archive-les", history, signal })).toEqual({ plan: true, probability: 0.6 });
+  expect(requests[0]!.url).toBe("https://api.typesafe.ai/v1/systemone");
+  expect(requests[0]!.init.method).toBe("POST");
+  expect((requests[0]!.init.headers as Record<string, string>).authorization).toBe("Bearer cle-test");
+  const body = JSON.parse(String(requests[0]!.init.body)) as {
+    model: string;
+    state: { request: string; previous_exchanges: Array<{ role: string; text: string }> };
+    questions: { plan: { type: string } };
+  };
+  expect(body.model).toBe("jev-latest");
+  expect(body.state.request).toBe("archive-les");
+  expect(body.state.previous_exchanges.map((entry) => [entry.role, entry.text.length])).toEqual([["jarvis", 15], ["user", 600]]);
+  expect(body.questions.plan.type).toBe("noul");
+
+  probability = 0.59;
+  expect(await router.decide({ question: "ouvre", history: [], signal })).toEqual({ plan: false, probability: 0.59 });
+  probability = "oui";
+  await expect(router.decide({ question: "ouvre", history: [], signal })).rejects.toThrow("sans probabilité");
+  status = 429;
+  await expect(router.decide({ question: "ouvre", history: [], signal })).rejects.toThrow("TypeSafe HTTP 429");
+  expect(router.ready()).toBe(true);
+  key = null;
+  expect(router.ready()).toBe(false);
+  await expect(router.decide({ question: "ouvre", history: [], signal })).rejects.toThrow("clé TypeSafe absente");
 });

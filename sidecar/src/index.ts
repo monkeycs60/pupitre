@@ -77,6 +77,7 @@ import { TicketAuditService } from "./ticket-audits";
 import { ActivityJournal, ActivityReportService, ActivityStore, DEFAULT_ACTIVITY_MODEL } from "./activity-report";
 import { fleetSnapshot } from "./fleet";
 import { claudeJarvisGenerator, claudeJarvisPrewarm, JarvisService } from "./jarvis";
+import { jevRouter } from "./jarvis-router";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
 const KILLED_EXIT_CODE = 143;
@@ -336,6 +337,10 @@ if (process.argv.includes("--pupitre-mcp")) {
     actionHeadings,
     generate: claudeJarvisGenerator(quotas),
     prewarm: claudeJarvisPrewarm(),
+    router: jevRouter(() => {
+      const tokens = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY) ?? {};
+      return tokens.typesafe || process.env.JEV_API_KEY?.trim() || process.env.TYPESAFE_API_KEY?.trim() || null;
+    }),
   });
   // Arrêt propre partagé : éviction par un sidecar plus récent (POST
   // /api/shutdown), SIGTERM de Tauri à la fermeture de l'app, Ctrl-C en dev.

@@ -9,7 +9,7 @@ type UsageFeatureCount = UsageReport['catalog'][number]
 
 const JARVIS_PATHS: Record<UsageReport['jarvis']['questions'][number]['path'], string> = {
   haiku: 'Haiku 5.5 seul',
-  router: 'Routeur, puis Opus 5.5',
+  router: 'Jev, puis Opus 5.5',
   handoff: 'Haiku 5.5, puis Opus 5.5',
   fast: 'Mode Rapide',
   orchestrate: 'Mode Orchestrer',

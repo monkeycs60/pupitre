@@ -137,7 +137,7 @@ test('l’onglet Usage montre qui a choisi le modèle de Jarvis, en combien de t
   const [, paths, actions] = [...view.container.querySelectorAll('.usage-table')]
   expect([...paths!.querySelectorAll('tbody tr')].map((row) => texts(row, 'td'))).toEqual([
     ['Haiku 5.5 seul', '12', '9,6 s', '1'],
-    ['Routeur, puis Opus 5.5', '3', '41,2 s', '0'],
+    ['Jev, puis Opus 5.5', '3', '41,2 s', '0'],
     ['Mode Rapide', '1', '—', '0'],
   ])
   expect([...actions!.querySelectorAll('tbody tr')].map((row) => texts(row, 'td'))).toEqual([

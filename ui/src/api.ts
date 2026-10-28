@@ -1052,7 +1052,7 @@ export function updateTicketInstruction(ticketId: string, instruction: string): 
   )
 }
 
-export type IntegrationTokenName = 'clickup' | 'gitlab' | 'openai' | 'cerebras' | 'googleCalendar'
+export type IntegrationTokenName = 'clickup' | 'gitlab' | 'openai' | 'cerebras' | 'typesafe' | 'googleCalendar'
 
 export function updateIntegrationTokens(
   tokens: Partial<Record<IntegrationTokenName, string | null>>,
