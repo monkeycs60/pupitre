@@ -17,13 +17,24 @@ window.__probe = { step: 'start' };
   try {
     step('project');
     const project = await until(() => [...document.querySelectorAll('button')]
-      .find((button) => button.getAttribute('aria-label') === params.project || button.textContent.trim() === params.project));
+      .find((button) => {
+        const label = button.getAttribute('aria-label') ?? '';
+        return label === params.project || label.startsWith(`${params.project},`) || button.textContent.trim() === params.project;
+      }));
     if (!project) throw new Error(`projet introuvable : ${params.project}`);
     let conversation = null;
+    const findConversation = () => [...document.querySelectorAll('.sidebar-section.conversations *')]
+      .find((element) => element.childElementCount === 0 && element.textContent.startsWith(params.conversation));
     for (let attempt = 0; attempt < 4 && !conversation; attempt += 1) {
       project.click();
-      conversation = await until(() => [...document.querySelectorAll('.sidebar-section.conversations *')]
-        .find((element) => element.childElementCount === 0 && element.textContent.startsWith(params.conversation)), 8_000);
+      conversation = await until(findConversation, 4_000);
+      // La liste replie les conversations anciennes derrière « N autres » ; le filtre les montre toutes.
+      const filter = conversation ? null : document.querySelector('.conversation-filter-input input');
+      if (filter) {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(filter, params.conversation);
+        filter.dispatchEvent(new Event('input', { bubbles: true }));
+        conversation = await until(findConversation, 8_000);
+      }
     }
     if (!conversation) throw new Error(`conversation introuvable : ${params.conversation}`);
     step('conversation');
