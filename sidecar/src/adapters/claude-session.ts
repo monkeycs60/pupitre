@@ -51,6 +51,8 @@ export interface ClaudeTurnRequest {
   signal?: AbortSignal;
   registerSteer?: (steer: SteerFn) => void;
   openAutonomousTurn?: OpenAutonomousTurn;
+  /** Le process s'arrête dès la fin du tour : il ne resservira à aucun autre. */
+  oneShot?: boolean;
 }
 
 interface ActiveTurn {
@@ -290,7 +292,8 @@ class ClaudeSessionPool {
     try {
       await session.run(request);
     } finally {
-      this.index(session);
+      if (request.oneShot) session.destroy();
+      else this.index(session);
     }
   }
 

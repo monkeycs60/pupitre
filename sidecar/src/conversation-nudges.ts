@@ -277,7 +277,7 @@ const BLOCKER_PATTERN = new RegExp([
   "bloqué", "bloquant", "waiting for", "i need you", "can you", "could you", "please confirm",
 ].join("|"), "i");
 
-function asksForDecision(text: string, headings: string[]): boolean {
+export function asksForDecision(text: string, headings: string[]): boolean {
   if (text.includes(" OU ")) return true;
   const ending = withoutActionBlocks(text, headings).slice(-800);
   return BLOCKER_PATTERN.test(ending) || /\?\s*$/.test(ending.trim());

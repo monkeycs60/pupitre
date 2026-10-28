@@ -39,6 +39,12 @@ export interface TurnOptions {
    */
   mcpAllowed?: string[];
   /**
+   * Génération ponctuelle (Claude) : aucun outil intégré, aucune session écrite
+   * sur disque, et le process s'arrête dès le résultat, sans attendre de tour
+   * suivant.
+   */
+  oneShot?: boolean;
+  /**
    * Appelé par un adaptateur capable d'accepter des précisions pendant le tour.
    * Le runner conserve cette fonction sans exposer au serveur HTTP les ids ou
    * le protocole propres au provider.
