@@ -97,3 +97,32 @@ test("changer de ticket ne réindexe que la conversation ; changer de titre réi
   expect(search.search("zoologie")[0]?.conversationId).toBe(conversation.id);
   db.close();
 });
+
+test("compacter des milliers de deltas ne parcourt pas l'index, supprimer une réponse l'en retire", () => {
+  const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-search-compaction-")));
+  const project = new ProjectStore(db).create({ name: "Index", path: "/tmp/index" });
+  const conversations = new ConversationStore(db);
+  const archive = conversations.create({ projectId: project.id, provider: "claude", model: "test", firstMessage: "Archive" });
+  db.transaction(() => {
+    for (let index = 0; index < 4_000; index += 1) {
+      conversations.appendEvent(archive.id, { type: "text-final", text: `Réponse archivée ${index} sur le pangolin` });
+    }
+  })();
+  const conversation = conversations.create({ projectId: project.id, provider: "claude", model: "test", firstMessage: "Réflexion" });
+  db.transaction(() => {
+    for (let index = 0; index < 3_000; index += 1) {
+      conversations.appendEvent(conversation.id, { type: "reasoning-delta", text: "pense " });
+    }
+  })();
+  const answerId = conversations.appendEvent(conversation.id, { type: "text-final", text: "Le tatou conclut" });
+  const search = new SearchIndex(db);
+
+  const startedAt = performance.now();
+  expect(conversations.compactTextDeltas(conversation.id)).toBe(2_999);
+  expect(performance.now() - startedAt).toBeLessThan(1_000);
+  expect(search.search("tatou")[0]?.conversationId).toBe(conversation.id);
+
+  db.query("DELETE FROM events WHERE id = ?").run(answerId);
+  expect(search.search("tatou")).toEqual([]);
+  db.close();
+});

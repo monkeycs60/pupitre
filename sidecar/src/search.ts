@@ -167,10 +167,20 @@ export class SearchIndex {
         LEFT JOIN conversations AS parent ON parent.id = subtasks.conversation_id
         WHERE COALESCE(conversations.id, parent.id) IS NOT NULL;
       END;
-      CREATE TRIGGER IF NOT EXISTS search_events_delete AFTER DELETE ON events BEGIN
+      DROP TRIGGER IF EXISTS search_events_delete;
+      DROP TRIGGER IF EXISTS search_events_update;
+      CREATE TRIGGER search_events_delete AFTER DELETE ON events
+      WHEN json_valid(OLD.payload)
+        AND json_extract(OLD.payload, '$.type') IN ('user-message', 'text-final')
+      BEGIN
         DELETE FROM search_index WHERE kind = 'event' AND source_id = CAST(OLD.id AS TEXT);
       END;
-      CREATE TRIGGER IF NOT EXISTS search_events_update AFTER UPDATE OF payload ON events BEGIN
+      CREATE TRIGGER search_events_update AFTER UPDATE OF payload ON events
+      WHEN (json_valid(OLD.payload)
+          AND json_extract(OLD.payload, '$.type') IN ('user-message', 'text-final'))
+        OR (json_valid(NEW.payload)
+          AND json_extract(NEW.payload, '$.type') IN ('user-message', 'text-final'))
+      BEGIN
         DELETE FROM search_index WHERE kind = 'event' AND source_id = CAST(OLD.id AS TEXT);
         INSERT INTO search_index(kind, source_id, conversation_id, project_id, title, body)
         SELECT 'event', CAST(NEW.id AS TEXT),

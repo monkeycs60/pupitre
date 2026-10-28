@@ -461,6 +461,23 @@ test("la compaction fusionne la réflexion à part du texte et supprime les phas
   ]);
 });
 
+test("une sortie d'outil volumineuse coupe la suite de deltas et reste intacte", () => {
+  const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
+  const firstId = convs.appendEvent(c.id, { type: "reasoning-delta", text: "a" });
+  convs.appendEvent(c.id, { type: "reasoning-delta", text: "b" });
+  const output = "x".repeat(200_000);
+  const toolEndId = convs.appendEvent(c.id, { type: "tool-end", toolId: "outil-1", output, isError: false, images: [] });
+  const secondId = convs.appendEvent(c.id, { type: "reasoning-delta", text: "c" });
+  convs.appendEvent(c.id, { type: "reasoning-delta", text: "d" });
+
+  expect(convs.compactTextDeltas(c.id)).toBe(2);
+  expect(convs.listEvents(c.id)).toEqual([
+    { id: firstId, type: "reasoning-delta", text: "ab" },
+    { id: toolEndId, type: "tool-end", toolId: "outil-1", output, isError: false, images: [] },
+    { id: secondId, type: "reasoning-delta", text: "cd" },
+  ]);
+});
+
 test("appendEvent retourne l'id inséré, exposé par listEvents en ordre croissant", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
   const firstId = convs.appendEvent(c.id, { type: "text-delta", text: "a" });

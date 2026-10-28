@@ -62,6 +62,7 @@ export interface ConversationReference {
 }
 
 const TITLE_MAX = 120;
+const COMPACTION_PAYLOAD_MAX_BYTES = 64 * 1024;
 
 function parseWorktreePaths(raw: unknown, fallback: string | null): string[] {
   try {
@@ -567,9 +568,12 @@ export class ConversationStore {
    */
   compactTextDeltas(conversationId: string): number {
     const compact = this.db.transaction(() => {
+      // octet_length lit la taille sans charger le texte : les sorties d'outils
+      // volumineuses restent sur disque et coupent la suite comme tout autre événement.
       const rows = this.db.query(
-        "SELECT id, payload FROM events WHERE conversation_id = ? ORDER BY id",
-      ).all(conversationId) as Array<{ id: number | bigint; payload: string }>;
+        `SELECT id, CASE WHEN octet_length(payload) <= ? THEN payload END AS payload
+         FROM events WHERE conversation_id = ? ORDER BY id`,
+      ).all(COMPACTION_PAYLOAD_MAX_BYTES, conversationId) as Array<{ id: number | bigint; payload: string | null }>;
       let removed = 0;
       let run: Array<{ id: number; event: { type: "text-delta" | "reasoning-delta"; text: string } }> = [];
 
@@ -588,6 +592,10 @@ export class ConversationStore {
       };
 
       for (const row of rows) {
+        if (row.payload === null) {
+          flush();
+          continue;
+        }
         try {
           const event = JSON.parse(row.payload) as Partial<AppEvent>;
           if (event.type === "turn-phase") {
