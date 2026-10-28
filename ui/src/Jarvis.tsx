@@ -1,3 +1,4 @@
+import { track } from './analytics'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Icon, type IconName } from './Icon'
 import {
@@ -105,7 +106,10 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
         void getJarvisJob(exchange.jobId!, controller.signal)
           .then((job) => {
             patch(exchange.id, (current) => ({ ...current, job }))
-            if (job.status !== 'running' && !open) setUnseen(true)
+            if (job.status !== 'running') {
+              track('jarvis.ask', { mode: exchange.mode, model: job.route?.model ?? 'aucun' }, projectId)
+              if (!open) setUnseen(true)
+            }
           })
           .catch((error: unknown) => {
             if (controller.signal.aborted) return
@@ -146,8 +150,10 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
     patch(exchange.id, (current) => ({ ...current, actions: { ...current.actions, [action.id]: { status: 'running' } } }))
     try {
       const message = await executeJarvisAction(action, exchange.edits[action.id] ?? {}, context)
+      track('jarvis.action', { kind: action.kind, result: 'fait' }, projectId)
       patch(exchange.id, (current) => ({ ...current, actions: { ...current.actions, [action.id]: { status: 'done', message } } }))
     } catch (error) {
+      track('jarvis.action', { kind: action.kind, result: 'échec' }, projectId)
       patch(exchange.id, (current) => ({
         ...current,
         actions: { ...current.actions, [action.id]: { status: 'error', message: error instanceof Error ? error.message : String(error) } },

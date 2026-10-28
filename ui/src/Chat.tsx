@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react'
 import { EventStream } from './EventStream'
+import { track } from './analytics'
 import { useGroupedEvents } from './useGroupedEvents'
 import { retryCountdownSeconds } from './backoff'
 import { Lightbox } from './Lightbox'
@@ -498,6 +499,7 @@ export function Chat({
     function handleSearchShortcut(event: globalThis.KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
         event.preventDefault()
+        track('shortcut', { key: 'Ctrl F' })
         setSearchOpen(true)
         return
       }

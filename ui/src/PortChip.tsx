@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { track } from './analytics'
 import type { RunningApplication } from './api'
 import { branchOfWorktree } from './conversationBranch'
 import { ExternalLink } from './externalLink'
@@ -74,5 +75,9 @@ export function PortChip({ application, projectName, href, inert = false }: {
     </>
   )
   if (inert) return <span className="port-chip" title={title} style={style}>{content}</span>
-  return <ExternalLink href={url} className="port-chip" title={title} style={style}>{content}</ExternalLink>
+  return (
+    <ExternalLink href={url} className="port-chip" title={title} style={style} onClick={() => track('servers.open', { port: application.port }, application.projectId)}>
+      {content}
+    </ExternalLink>
+  )
 }

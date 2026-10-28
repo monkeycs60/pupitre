@@ -5,7 +5,7 @@ import type { UiEventPayload } from './api'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { ApiError } = await import('./api')
-const { createUsageTracker, track, USAGE_BATCH_MAX, USAGE_BUFFER_MAX, USAGE_FLUSH_MS } = await import('./analytics')
+const { createUsageTracker, track, usageTracker, USAGE_BATCH_MAX, USAGE_BUFFER_MAX, USAGE_FLUSH_MS } = await import('./analytics')
 
 const realSetTimeout = globalThis.setTimeout
 const realClearTimeout = globalThis.clearTimeout
@@ -15,6 +15,7 @@ let nextTimer = 0
 let visibility: DocumentVisibilityState = 'visible'
 
 beforeEach(() => {
+  usageTracker.reset()
   timers = []
   visibility = 'visible'
   globalThis.setTimeout = ((fn: () => void, ms: number) => {

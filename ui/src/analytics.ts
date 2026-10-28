@@ -67,7 +67,14 @@ export function createUsageTracker(send: (events: UiEventPayload[], keepalive: b
     }
   }
 
-  return { track, flush, pending: () => buffer.length }
+  function reset() {
+    if (timer !== null) clearTimeout(timer)
+    timer = null
+    buffer = []
+  }
+
+  return { track, flush, reset, pending: () => buffer.length }
 }
 
-export const { track } = createUsageTracker(postUiEvents)
+export const usageTracker = createUsageTracker(postUiEvents)
+export const { track } = usageTracker

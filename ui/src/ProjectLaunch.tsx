@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { track } from './analytics'
 import { launchRequest, type RunningApplication } from './api'
 import { ExternalLink } from './externalLink'
 import {
@@ -70,6 +71,7 @@ function ManagedServerRow({ item }: { item: Command }) {
   const urls = commandUrls(item)
 
   async function restart() {
+    track('servers.restart', {}, item.project_id)
     setRestarting(true)
     try {
       await launchRequest(`/api/projects/${item.project_id}/launch/${item.id}/restart`, 'POST', {})
@@ -85,6 +87,7 @@ function ManagedServerRow({ item }: { item: Command }) {
     const next = !logsOpen
     setLogsOpen(next)
     if (!next) return
+    track('servers.logs', {}, item.project_id)
     void launchRequest<Command>(`/api/projects/${item.project_id}/launch/${item.id}`)
       .then((status) => setLogs(status.logs ?? ''))
       .catch((error) => setLogs(String(error)))
@@ -159,7 +162,10 @@ export function ProjectLiveLaunches({ project, conversations = [], onConversatio
         type="button"
         className="servers-summary"
         aria-expanded={expanded}
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => {
+          if (!expanded) track('servers.expand', {}, project.id)
+          setExpanded(!expanded)
+        }}
         title="Serveurs en écoute pour ce projet, lancés par Pupitre ou ailleurs"
       >
         <span className="servers-dot" aria-hidden="true" />

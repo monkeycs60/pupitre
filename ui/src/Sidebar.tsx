@@ -1,4 +1,5 @@
 import { ProjectLaunch, ProjectLiveLaunches } from './ProjectLaunch'
+import { track } from './analytics'
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   listProjectConversations,
@@ -560,6 +561,7 @@ export const Sidebar = memo(function Sidebar({
   }
 
   function handleConversationSelect(conversation: Conversation) {
+    track('conversation.open', {}, conversation.project_id)
     const lastReadTurn = Math.max(conversation.last_read_turn ?? 0, conversation.answered_turn ?? 0)
     const updated = { ...conversation, last_read_turn: lastReadTurn }
     setConversations((current) => current.map((item) => item.id === conversation.id ? updated : item))
@@ -570,6 +572,7 @@ export const Sidebar = memo(function Sidebar({
   }
 
   async function handleConversationPin(conversation: Conversation) {
+    track('conversation.pin', { pinned: !conversation.pinned }, conversation.project_id)
     setError(null)
     try {
       await setConversationPinned(conversation.id, !conversation.pinned)
@@ -632,6 +635,7 @@ export const Sidebar = memo(function Sidebar({
   }
 
   async function handleArchiveToggle(conversation: Conversation) {
+    track('conversation.archive', { archived: !conversation.archived }, conversation.project_id)
     setError(null)
     try {
       const updated = await setConversationArchived(conversation.id, !conversation.archived)
@@ -691,6 +695,7 @@ export const Sidebar = memo(function Sidebar({
     aiSearchControllerRef.current?.abort()
     const controller = new AbortController()
     aiSearchControllerRef.current = controller
+    track('list.ai-search', {}, selectedProject.id)
     setAiSearch({ status: 'loading', query })
     searchConversationsWithAi(selectedProject.id, query, controller.signal)
       .then((response) => {
@@ -731,6 +736,7 @@ export const Sidebar = memo(function Sidebar({
 
   async function handleTidy() {
     if (tidying || tidyCandidates.length === 0) return
+    track('list.tidy', { count: tidyCandidates.length }, selectedProject?.id ?? null)
     setTidying(true)
     setError(null)
     const ids = new Set<string>()
@@ -836,7 +842,10 @@ export const Sidebar = memo(function Sidebar({
             <input
               type="text"
               value={filterText}
-              onChange={(event) => setFilterText(event.target.value)}
+              onChange={(event) => {
+                if (filterText === '' && event.target.value !== '') track('list.filter', {}, selectedProject?.id ?? null)
+                setFilterText(event.target.value)
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && filterText.trim() !== '' && selectedProject !== null) {
                   event.preventDefault()

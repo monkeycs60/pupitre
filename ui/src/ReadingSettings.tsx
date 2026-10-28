@@ -1,3 +1,4 @@
+import { track } from './analytics'
 import {
   READING_ZOOM_MAX,
   READING_ZOOM_MIN,
@@ -24,11 +25,11 @@ export function ReadingSettings() {
           <span>Ctrl + et Ctrl − partout, Ctrl 0 pour revenir à 100 %</span>
         </div>
         <div className="reading-zoom-stepper">
-          <button type="button" onClick={() => stepReadingZoom(-1)} disabled={zoom <= READING_ZOOM_MIN} aria-label="Réduire le texte">−</button>
+          <button type="button" onClick={() => { track('settings.text-size', { sens: 'moins' }); stepReadingZoom(-1) }} disabled={zoom <= READING_ZOOM_MIN} aria-label="Réduire le texte">−</button>
           <button type="button" className="reading-zoom-value" onClick={() => setReadingZoom(1)} title="Revenir à 100 %">
             {Math.round(zoom * 100)} %
           </button>
-          <button type="button" onClick={() => stepReadingZoom(1)} disabled={zoom >= READING_ZOOM_MAX} aria-label="Agrandir le texte">+</button>
+          <button type="button" onClick={() => { track('settings.text-size', { sens: 'plus' }); stepReadingZoom(1) }} disabled={zoom >= READING_ZOOM_MAX} aria-label="Agrandir le texte">+</button>
         </div>
       </div>
       <div className="reading-settings-row">

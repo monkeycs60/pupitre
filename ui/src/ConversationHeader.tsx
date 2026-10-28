@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { track } from './analytics'
 import type { ThreadTools } from './Chat'
 import { branchOfWorktree } from './conversationBranch'
 import { ConversationInstruction } from './ConversationInstruction'
@@ -130,13 +131,16 @@ function ConversationMenu({ threadTools, onOpenAppearance }: { threadTools: Thre
         aria-expanded={open}
         aria-label="Actions de la conversation"
         title="Rechercher dans le fil, pièces jointes, affichage"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (!open) track('header.menu')
+          setOpen((current) => !current)
+        }}
       >
         <Icon name="more" />
       </button>
       {open ? (
         <div className="conversation-menu-list" role="menu">
-          <button type="button" role="menuitem" onClick={() => run(threadTools.openSearch)}>
+          <button type="button" role="menuitem" onClick={() => { track('thread.search'); run(threadTools.openSearch) }}>
             <Icon name="search" size={15} />
             <span>Rechercher dans le fil</span>
             <kbd>Ctrl F</kbd>
@@ -145,7 +149,7 @@ function ConversationMenu({ threadTools, onOpenAppearance }: { threadTools: Thre
             type="button"
             role="menuitem"
             disabled={threadTools.assetCount === 0}
-            onClick={() => run(threadTools.openAssets)}
+            onClick={() => { track('thread.attachments'); run(threadTools.openAssets) }}
           >
             <Icon name="attachment" size={15} />
             <span>Pièces jointes</span>

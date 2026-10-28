@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { track } from './analytics'
 import { openConversationInEditor } from './api'
 import { pushToast } from './toasts'
 import { VscodeGlyph } from './Icon'
@@ -7,6 +8,7 @@ export function OpenInEditorButton({ conversationId }: { conversationId: string 
   const [opening, setOpening] = useState(false)
 
   async function open() {
+    track('header.vscode')
     setOpening(true)
     try {
       const { folders } = await openConversationInEditor(conversationId)

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { track } from './analytics'
 import type {
   ChangeEvent,
   ClipboardEvent,
@@ -508,6 +509,7 @@ export function Composer({
     event?.preventDefault()
     const trimmedMessage = message.trim()
     if ((!trimmedMessage && attachments.length === 0) || !canSubmit) return
+    track('composer.send', { nouvelle: isNewConversation })
     if (isNewConversation && !launchConfirmed && requiresLaunchConfirmation(config.model)) {
       setConfirmingLaunch(true)
       return

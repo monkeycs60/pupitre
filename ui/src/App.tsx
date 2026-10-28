@@ -1,4 +1,5 @@
 import { summarizeTurnError } from './turnError'
+import { track } from './analytics'
 import { useStableHandler } from './useStableHandler'
 import { FleetIsland } from './FleetIsland'
 import { ToastHost } from './ToastHost'
@@ -282,6 +283,7 @@ function App() {
     function handleJarvisShortcut(event: KeyboardEvent) {
       if (!event.ctrlKey || event.shiftKey || event.altKey || event.metaKey || event.code !== 'KeyJ') return
       event.preventDefault()
+      track('shortcut', { key: 'Ctrl J' })
       setJarvisOpen((open) => !open)
     }
     window.addEventListener('keydown', handleJarvisShortcut)
@@ -299,6 +301,7 @@ function App() {
       const index = projectNavigationIndexForShortcut(event)
       if (index === null) return
       event.preventDefault()
+      track('shortcut', { key: `Ctrl ${index + 1}` })
       if (index === 0) closeProjectSurface()
       else openProjectSection(PROJECT_SECTIONS[index - 1]!.id)
     }
@@ -691,6 +694,7 @@ function App() {
   }
 
   function handleConversationCreate() {
+    track('conversation.new', {}, selectedProject?.id ?? null)
     if (!confirmLeaveMemory()) return
     if (selectedProject === null) return
     setSelectedConversation(null)
@@ -829,6 +833,7 @@ function App() {
 
   function handleConversationsSelect() {
     if (!confirmLeaveMemory()) return
+    track('nav.home', {}, selectedProject?.id ?? null)
     setInspector(null)
     setProjectSurface(null)
     setWorkspaceView('conversations')
@@ -860,6 +865,7 @@ function App() {
 
   function handleDesignSelect() {
     if (!confirmLeaveMemory()) return
+    track('design.open')
     setWorkspaceView('design')
     setShowSwitchModel(false)
   }
@@ -887,6 +893,7 @@ function App() {
 
   function handleSettingsSelect() {
     if (!confirmLeaveMemory()) return
+    track('nav.settings')
     setHelpSlug(null)
     setWorkspaceView('settings')
     setShowSwitchModel(false)
@@ -905,11 +912,13 @@ function App() {
 
   function handleActivityReportSelect() {
     if (!confirmLeaveMemory()) return
+    track('nav.report')
     setWorkspaceView('activity-report')
     setShowSwitchModel(false)
   }
 
   function handlePaletteViewSelect(view: PaletteView) {
+    track('palette.command', { command: `vue ${view}` })
     if (view === 'dashboard') handleDashboardSelect()
     else if (view === 'report') handleActivityReportSelect()
     else if (view === 'settings') handleSettingsSelect()
@@ -1090,7 +1099,11 @@ function App() {
         quotaProviders={quotas.visibleProviders}
         nudges={nudges.items}
         activeSection={projectSurface?.section ?? null}
-        onSectionSelect={(section) => section === null ? handleConversationsSelect() : openProjectSection(section)}
+        onSectionSelect={(section) => {
+          track('project.tab', { tab: section === null ? 'conversations' : section === 'todos' ? 'tasks' : section }, selectedProject?.id ?? null)
+          if (section === null) handleConversationsSelect()
+          else openProjectSection(section)
+        }}
         todoCount={todos.items.filter((item) => item.status !== 'done').length}
         onProjectSelect={stableProjectSelect}
         onConversationSelect={stableConversationSelect}
@@ -1264,14 +1277,20 @@ function App() {
       </section>
       <Jarvis
         open={jarvisOpen}
-        onOpenChange={setJarvisOpen}
+        onOpenChange={(open) => {
+          if (open) track('jarvis.open')
+          setJarvisOpen(open)
+        }}
         projectId={selectedProject?.id ?? null}
         conversationId={selectedConversation?.id ?? null}
         context={jarvisContext}
       />
       <CommandPalette
         open={paletteOpen}
-        onOpenChange={setPaletteOpen}
+        onOpenChange={(open) => {
+          if (open && !paletteOpen) track('palette.open')
+          setPaletteOpen(open)
+        }}
         currentProject={selectedProject}
         currentConversation={selectedConversation}
         onProjectSelect={handleProjectSelect}
