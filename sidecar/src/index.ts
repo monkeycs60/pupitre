@@ -25,6 +25,7 @@ import { QuotaRefresher } from "./quota-refresh";
 import { authenticateQuotaProvider } from "./quota-auth";
 import { SubtaskRunner } from "./subtasks";
 import { claudeSessions } from "./adapters/claude-session";
+import { mcpHub } from "./mcp-hub";
 import { codexAppServer } from "./adapters/codex-app-server";
 import { runPupitreMcp } from "./pupitre-mcp";
 import { installProcessLog, processLogPath } from "./process-log";
@@ -355,6 +356,7 @@ if (process.argv.includes("--pupitre-mcp")) {
       clearInterval(activityReportTimer);
       runner.abortAll();
       claudeSessions.shutdown();
+      mcpHub.shutdown();
       codexAppServer.shutdown();
       vscodeWeb.stop();
     } finally {
@@ -387,6 +389,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   };
   server = await claimServer(() => createServer({
     port,
+    mcpHub,
     instance,
     promotion,
     promotionAgent,
@@ -459,5 +462,6 @@ if (process.argv.includes("--pupitre-mcp")) {
     console.log("instance dev : tâches de fond désactivées (PUPITRE_BACKGROUND_JOBS=on pour les activer)");
   }
 
+  mcpHub.attach(() => server.port ?? port);
   console.log(`pupitre sidecar prêt sur http://localhost:${server.port}`);
 }

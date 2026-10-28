@@ -135,6 +135,7 @@ import {
   type ApplicationContext,
   type RunningApplication,
 } from "./running-applications";
+import type { McpHub } from "./mcp-hub";
 
 type EventListener = (conversationId: string, event: StoredEvent) => void;
 
@@ -156,6 +157,7 @@ export class ConversationEventBus {
 }
 
 export interface ServerDeps {
+  mcpHub?: McpHub;
   launches?: ProjectLaunchService;
   resume?: ProjectResumeService;
   devlog?: ProjectDevlogService;
@@ -1105,6 +1107,10 @@ export function createServer(deps: ServerDeps) {
           && !visualExtensionOrigin
         ) {
           throw new HttpError(403, "origine interdite");
+        }
+        if (deps.mcpHub?.ownsPath(pathname)) {
+          server.timeout(request, 0);
+          return await deps.mcpHub.handle(request);
         }
         if (isVscodeWebPath(pathname)) {
           if (!deps.vscodeWeb) throw new HttpError(503, "VS Code web indisponible");

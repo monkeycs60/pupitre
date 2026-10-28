@@ -99,7 +99,7 @@ function runClaude(prompt: string, cwd: string): Promise<string> {
     const bin = process.env.PUPITRE_CLAUDE_BIN ?? "claude";
     const child = spawnGroup(
       bin,
-      ["-p", "--output-format", "json", "--model", DIGEST_MODEL, "--effort", DIGEST_EFFORT, "--", prompt],
+      ["-p", "--output-format", "json", "--model", DIGEST_MODEL, "--effort", DIGEST_EFFORT, "--strict-mcp-config", "--", prompt],
       { cwd, stdio: ["ignore", "pipe", "pipe"] },
     );
     let stdout = "";

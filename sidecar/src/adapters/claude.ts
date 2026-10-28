@@ -5,6 +5,7 @@ import { spawnJsonl } from "./spawn-jsonl";
 import type { TurnOptions, EmitFn } from "./types";
 import { claudeMcpConfigArg } from "../pupitre";
 import { aiRoots } from "../access";
+import { mcpHub } from "../mcp-hub";
 
 const CLAUDE_MODEL_IDS: Record<string, string> = {
   "fable-5.1": "claude-fable-5-1",
@@ -64,10 +65,11 @@ export function runClaudeTurn(opts: TurnOptions, emit: EmitFn): Promise<void> {
   // `--mcp-config` accepte un chemin de fichier OU un JSON inline (cf.
   // `claude --help`). Sans sélection de projet, pas de `--strict-mcp-config` :
   // les serveurs MCP que l'utilisateur a configurés lui-même restent chargés.
-  if (opts.pupitre || opts.mcpServers) {
+  const mcpServers = mcpHub.claudeServers(opts.cwd, opts.mcpServers ?? null);
+  if (opts.pupitre || opts.mcpServers || Object.keys(mcpServers).length > 0) {
     args.push(
       "--mcp-config",
-      claudeMcpConfigArg(opts.mcpServers ?? {}, opts.pupitre ?? null),
+      claudeMcpConfigArg(mcpServers, opts.pupitre ?? null),
     );
   }
   if (opts.mcpServers) {
