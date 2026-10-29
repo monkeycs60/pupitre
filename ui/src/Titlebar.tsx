@@ -31,6 +31,9 @@ interface TitlebarProps {
   island?: ReactNode
   navigationOpen?: boolean
   onNavigationToggle?: () => void
+  /** Réponses à lire : sur mobile, l'îlot central est masqué et le bouton de
+   *  navigation porte ce compte. */
+  navigationBadge?: number
 }
 
 const RESIZE_HANDLES: ReadonlyArray<[string, ResizeDirection]> = [
@@ -53,6 +56,7 @@ export function Titlebar({
   island,
   navigationOpen = false,
   onNavigationToggle,
+  navigationBadge = 0,
 }: TitlebarProps) {
   const visibleCrumbs = (crumbs ?? []).filter(
     (crumb): crumb is string => typeof crumb === 'string' && crumb.length > 0,
@@ -71,7 +75,12 @@ export function Titlebar({
           aria-label="Projets et conversations"
           aria-expanded={navigationOpen}
           onClick={onNavigationToggle}
-        ><Icon name={navigationOpen ? 'close' : 'folder'} /></button> : null}
+        >
+          <Icon name={navigationOpen ? 'close' : 'menu'} />
+          {navigationBadge > 0 && !navigationOpen ? <span className="mobile-navigation-badge" aria-hidden="true">
+            {navigationBadge > 9 ? '9+' : navigationBadge}
+          </span> : null}
+        </button> : null}
         <span className="titlebar-app" {...drag}>
           <span className="titlebar-logo" aria-hidden="true"><i /></span>
           Pupitre

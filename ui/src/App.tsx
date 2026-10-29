@@ -1064,6 +1064,7 @@ function App() {
     >
       <Titlebar
         navigationOpen={showMobileNavigation}
+        navigationBadge={attention.items.length}
         onNavigationToggle={() => {
           if (!confirmLeaveMemory()) return
           if (!showMobileNavigation) setWorkspaceView('conversations')
@@ -1173,7 +1174,7 @@ function App() {
             <ActivityReportView key={reportRequest?.nonce} initialTab={reportRequest?.tab} onOpenConversation={(projectId, conversationId) => void handleRoutineConversationSelect(projectId, conversationId)} />
           </div>
         )
-        : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p></div>
+        : selectedProject === null ? <div className="empty-state"><p>Sélectionne un projet pour commencer.</p><button type="button" className="primary-button empty-state-navigation" onClick={() => setMobileNavigationOpen(true)}>Choisir un projet</button></div>
         : projectSurface?.layout === 'full' ? (
           <>
             <header className="conversation-header project-surface-header">
