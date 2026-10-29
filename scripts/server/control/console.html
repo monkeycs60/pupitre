@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pupitre · Mises à jour et secours</title>
+  <style>
+    :root { color-scheme:light; font-family:system-ui,sans-serif; color:#242424; background:#faf9f7; font-size:16px }
+    * { box-sizing:border-box } body { margin:0 } main { max-width:760px; margin:auto; padding:24px 20px 48px }
+    header { border-bottom:1px solid #d8d6d1; padding-bottom:20px } h1 { font-size:23px; margin:12px 0 }
+    h2 { font-size:19px; margin:0 0 12px } p { line-height:1.5; margin:10px 0; color:#53524e }
+    a { color:#255d8c; text-underline-offset:3px } section { padding:24px 0; border-bottom:1px solid #d8d6d1 }
+    .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:16px }
+    button,.button { font:inherit; font-size:15px; min-height:44px; padding:10px 14px; border:1px solid #aaa8a1; background:#fff; color:#242424; border-radius:6px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center }
+    button.primary { background:#303c34; color:white; border-color:#303c34 } button:disabled { opacity:.45; cursor:default }
+    button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid #3b78a6; outline-offset:3px }
+    .warning { border-left:3px solid #b2791c; padding:12px 16px; background:#fff3da; margin:16px 0 }
+    .error { color:#a32323 } .ok { color:#2b643e } [hidden] { display:none !important }
+    dl { margin:12px 0; display:grid; grid-template-columns:145px minmax(0,1fr); gap:10px } dt { color:#66645f } dd { margin:0; overflow-wrap:anywhere }
+    code { font:14px ui-monospace,monospace } label { display:flex; gap:10px; align-items:flex-start; line-height:1.5; margin-top:16px; cursor:pointer }
+    input { margin-top:5px; min-width:18px; min-height:18px } pre { white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.5 ui-monospace,monospace; max-height:280px; overflow:auto; background:#f0eeea; padding:12px }
+    summary { cursor:pointer; padding:12px 0 } ol { padding-left:22px } li { line-height:1.5; margin:8px 0; color:#53524e }
+    small { font-size:13px; color:#65635e } .step { color:#77756f; font-size:14px; margin:0 0 6px }
+    #connection { min-height:24px; margin-bottom:0 } #job { padding-top:12px } #job:empty { display:none }
+    @media(max-width:480px) { main { padding:16px 16px 36px } h1 { font-size:22px } dl { grid-template-columns:1fr; gap:4px } dd { margin-bottom:8px } .actions>* { flex:1 1 150px } }
+  </style>
+</head>
+<body><main>
+  <header>
+    <small>Pupitre VPS</small>
+    <h1>Mises à jour et secours</h1>
+    <p>Cette page fonctionne indépendamment de Pupitre. Garder cette adresse en favori sur le téléphone.</p>
+    <a id="app" href="/" target="_blank" rel="noopener noreferrer">Ouvrir Pupitre ↗</a>
+    <p id="connection" role="status">Connexion au secours…</p>
+  </header>
+  <div id="job" role="status" aria-live="polite"></div>
+  <section id="probation" hidden>
+    <h2>Vérifier la nouvelle version</h2>
+    <div class="warning">Retour automatique à la version précédente dans <strong id="countdown"></strong> sans confirmation. Laisser cette page ouverte et tester Pupitre dans l'autre onglet.</div>
+    <p>Le retour arrière rétablit les données d'avant la mise à jour. Les données plus récentes sont conservées à part sur le VPS.</p>
+    <label><input id="tested" type="checkbox">La nouvelle version de Pupitre s'ouvre et fonctionne sur ce téléphone.</label>
+    <div class="actions"><button id="confirm" class="primary" disabled>Confirmer cette version</button><button id="cancel">Annuler la mise à jour</button></div>
+  </section>
+  <section>
+    <h2>Version en service</h2>
+    <dl><dt>Commit</dt><dd><code id="current">—</code></dd><dt>Retour disponible</dt><dd id="previous">—</dd></dl>
+    <p id="pendingState" hidden></p>
+  </section>
+  <section>
+    <p class="step">1 · Préparer</p><h2>Construire la version de test</h2>
+    <p>Dans le projet Pupitre du VPS, demander à l'agent de terminer les changements et de créer un commit. La préparation lance les vérifications sans remplacer la version en service.</p>
+    <div class="actions"><button id="prepare" class="primary" disabled>Préparer la version</button></div>
+    <details><summary>Voir les vérifications</summary><pre id="logs">Aucune vérification en cours.</pre></details>
+  </section>
+  <section>
+    <p class="step">2 · Tester puis appliquer</p><h2>Version de test</h2>
+    <p id="ready">Aucune version préparée.</p>
+    <p>Le test utilise une copie des conversations, sans les connexions Claude et Codex. Les échanges avec les agents se vérifient après application, avant confirmation.</p>
+    <div class="actions"><a id="preview" class="button" target="_blank" rel="noopener noreferrer" hidden>Ouvrir le test ↗</a><button id="apply" disabled>Appliquer la version</button></div>
+    <small>Une copie des données est créée avant application. Sans confirmation sous trois minutes, le retour arrière est automatique.</small>
+  </section>
+  <section>
+    <h2>Récupérer le contrôle</h2>
+    <p>Ces commandes restent accessibles si Pupitre ne s'ouvre plus. La version précédente et son instantané sont protégés des modifications de l'agent.</p>
+    <div class="actions"><button id="restart" disabled>Redémarrer Pupitre</button><button id="rollback" disabled>Restaurer la précédente</button></div>
+    <details><summary>Secours avancé</summary>
+      <p>La restauration remplace les conversations par leur état avant mise à jour. Le dossier remplacé reste conservé sur le VPS. Les codes et connexions des fournisseurs ne sont pas recopiés.</p>
+      <label><input id="force" type="checkbox">Autoriser l'arrêt des agents en cours, ou intervenir quand leur état est impossible à vérifier.</label>
+      <div class="actions"><button id="baseline" disabled>Restaurer la version de référence</button></div>
+      <p><small>La référence correspond à l'installation du secours. Ses données peuvent être plus anciennes. Une panne totale du VPS ou de Tailscale nécessite l'accès SSH ou la console OVH.</small></p>
+    </details>
+  </section>
+  <details><summary>Historique des opérations</summary><ol id="history"></ol></details>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  let state, connected = false, submitting = false, pendingId;
+  const short = version => version ? version.sha.slice(0, 10) : '—';
+  const date = seconds => seconds ? new Date(seconds * 1000).toLocaleString('fr-FR') : 'installation initiale';
+  function render() {
+    if (!state) return;
+    const busy = submitting || state.job?.running || !connected;
+    const pending = state.pending;
+    const probation = pending?.phase === 'probation';
+    $('current').textContent = short(state.current);
+    $('previous').textContent = state.previous ? 'Instantané du ' + date(state.previous.at) : 'Version de référence protégée';
+    $('app').href = state.appUrl;
+    $('ready').textContent = state.ready ? 'Commit ' + short(state.ready) + ' · prêt depuis ' + date(state.ready.created) : 'Aucune version préparée.';
+    $('preview').href = state.previewUrl;
+    $('preview').hidden = !state.ready;
+    $('prepare').disabled = busy || !!pending;
+    $('apply').disabled = busy || !!pending || !state.ready;
+    $('restart').disabled = busy || !!pending;
+    $('rollback').disabled = busy || (!state.previous && !pending);
+    $('baseline').disabled = busy || !!pending || !$('force').checked;
+    $('probation').hidden = !probation;
+    $('pendingState').hidden = !pending || probation;
+    $('pendingState').textContent = pending ? 'Mise à jour ou restauration en cours. Le secours surveille le redémarrage.' : '';
+    if (pendingId !== pending?.to) { $('tested').checked = false; pendingId = pending?.to; }
+    $('confirm').disabled = busy || !probation || !$('tested').checked;
+    $('cancel').disabled = busy;
+    $('job').className = state.job?.error ? 'error' : '';
+    $('job').textContent = state.job ? [state.job.name + (state.job.running ? '…' : ' — terminé'), ...state.messages, state.job.error].filter(Boolean).join(' · ') : '';
+    $('history').replaceChildren(...[...state.history].reverse().map(event => {
+      const li = document.createElement('li'); li.textContent = date(event.at) + ' · ' + event.text; return li;
+    }));
+    countdown();
+  }
+  function countdown() {
+    if (!state?.pending?.deadline) return;
+    const left = Math.max(0, Math.ceil(state.pending.deadline - (Date.now() / 1000 + (state.now - state.received))));
+    $('countdown').textContent = Math.floor(left / 60) + ' min ' + String(left % 60).padStart(2, '0') + ' s';
+    if (left === 0) $('confirm').disabled = true;
+  }
+  async function refresh() {
+    try {
+      const response = await fetch('/api/status', {cache:'no-store', signal:AbortSignal.timeout(8000)});
+      if (!response.ok) throw Error('Accès refusé ou secours momentanément indisponible.');
+      state = await response.json(); state.received = Date.now() / 1000; connected = true;
+      $('connection').textContent = 'Secours connecté'; $('connection').className = 'ok';
+      if (state.job?.running || document.querySelector('details[open] #logs')) {
+        const logs = await fetch('/api/log', {signal:AbortSignal.timeout(5000)}).then(r => r.json());
+        $('logs').textContent = logs.log;
+      }
+    } catch (error) {
+      connected = false; $('connection').textContent = 'Connexion interrompue. Vérifier Tailscale ; nouvelle tentative automatique.'; $('connection').className = 'error';
+    }
+    render();
+  }
+  async function act(action) {
+    if (!state || submitting) return;
+    const force = $('force').checked;
+    if (action === 'baseline' && !confirm('Restaurer la version de référence et ses données anciennes ? Les données remplacées seront conservées à part.')) return;
+    if (action === 'rollback' && !confirm('Restaurer la version précédente et les données d’avant sa mise à jour ? Les données remplacées seront conservées à part.')) return;
+    submitting = true; render();
+    try {
+      const response = await fetch('/api/action', {method:'POST', headers:{'Content-Type':'application/json','X-Pupitre-CSRF':state.csrf},
+        body:JSON.stringify({action, release:action === 'apply' ? state.ready?.id : state.current?.id, force}), signal:AbortSignal.timeout(10000)});
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error || 'Action refusée');
+    } catch (error) { alert(error.message); }
+    finally { submitting = false; await refresh(); }
+  }
+  for (const action of ['prepare','apply','confirm','rollback','baseline','restart']) $(action).addEventListener('click', () => act(action));
+  $('cancel').addEventListener('click', () => act('rollback'));
+  $('tested').addEventListener('change', render); $('force').addEventListener('change', render);
+  for (const details of document.querySelectorAll('details')) details.addEventListener('toggle', () => { if (details.open) refresh(); });
+  setInterval(refresh, 3000); setInterval(countdown, 1000); refresh();
+</script></body></html>

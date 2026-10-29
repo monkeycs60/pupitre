@@ -36,3 +36,9 @@ Pour une demande d’installation ou de configuration de Pupitre, lire [SETUP.md
 - À la fin de toute tâche qui modifie le dépôt, vérifie les changements et les tests pertinents, puis crée un commit descriptif avant de rendre la main.
 - Pousse le commit seulement si l’utilisateur l’a demandé explicitement ou si la tâche prévoit une publication.
 - Ne mélange pas de changements hors périmètre dans un commit sans confirmation explicite.
+
+## Instance VPS
+
+- Sur `/home/pupitre/projects/pupitre`, modifier et commiter le projet suffit pour préparer une nouvelle version depuis « Mises à jour et secours ». Ne pas lancer `bun run promote` : cette commande concerne le bureau, pas le serveur.
+- Le parcours VPS est décrit dans `docs/SERVER.md`. Il compile, teste et propose une copie isolée avant application. La confirmation passe par la console indépendante sur le port HTTPS 8443 ; sans confirmation sous trois minutes, les données et la version précédentes sont restaurées.
+- Ne pas remplacer les fichiers sous `/opt/pupitre-control`, les unités administrateur ou les versions gelées. Une mise à jour de Pupitre change uniquement le sidecar et l'interface. Le secours doit rester indépendant de la version qui est en cours de test.

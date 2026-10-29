@@ -1,0 +1,21 @@
+[Unit]
+Description=Pupitre isolated preview gateway
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+User=www-data
+Group=www-data
+RuntimeDirectory=pupitre-preview-web
+ExecStartPre=/usr/sbin/nginx -t -c /etc/pupitre/preview-nginx.conf
+ExecStart=/usr/sbin/nginx -c /etc/pupitre/preview-nginx.conf -g "daemon off;"
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/run/pupitre-preview-web
+
+[Install]
+WantedBy=multi-user.target

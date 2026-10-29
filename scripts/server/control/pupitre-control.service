@@ -1,0 +1,31 @@
+[Unit]
+Description=Pupitre independent recovery console
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=main
+WorkingDirectory=/opt/pupitre-control
+ExecStart=/usr/bin/python3 /opt/pupitre-control/controller.py
+Restart=always
+RestartSec=3
+RuntimeDirectory=pupitre-control
+RuntimeDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/run/pupitre-control /var/lib/pupitre-control /opt/pupitre/releases /var/lib/pupitre-build /var/lib/pupitre-preview /home/pupitre
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+MemoryMax=1G
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

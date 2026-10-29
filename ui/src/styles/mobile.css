@@ -48,7 +48,8 @@
     gap: 0;
   }
 
-  .titlebar-nav .titlebar-icon-button {
+  .titlebar-nav .titlebar-icon-button,
+  .titlebar-right > .titlebar-icon-button {
     width: 36px;
     height: 40px;
   }
