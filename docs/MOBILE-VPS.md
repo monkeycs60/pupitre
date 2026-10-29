@@ -19,10 +19,31 @@ l'interpréter selon ce guide et laisser les boutons du secours à Clément.
 | Commit | Enregistrer les fichiers concernés dans Git et relever le SHA | Aucune après la demande |
 | Push | Si explicitement demandé, publier la branche sur GitHub et vérifier la réussite | Aucune après la demande |
 | Promote / mettre en service | Vérifier le dépôt source et donner le lien du secours et le SHA attendu | Préparer, tester, appliquer et confirmer dans le secours |
+| Avancer develop | Si demandé après confirmation, pousser `feat/vps-web` puis avancer `develop` en avance rapide, et vérifier les deux SHA sur GitHub | Confirmer la version sur le S26, puis le demander |
 
 Le dépôt GitHub `monkeycs60/pupitre` est public. Un push publie le code sur ce
 dépôt ; il ne remplace pas l'application en service. Aucun identifiant ni fichier
 personnel ne doit entrer dans le commit.
+
+## Branches
+
+- `feat/vps-web` est la branche de travail du VPS. Le dépôt
+  `/home/pupitre/projects/pupitre` reste dessus : « Préparer la version »
+  construit son HEAD. Dans « Nouvelle conversation », laisser la branche cible
+  sur `feat/vps-web` : l'agent travaille alors directement dans ce dépôt.
+- Une autre branche cible crée un worktree séparé. Son travail n'est construit
+  qu'après intégration dans `feat/vps-web` (consigne 4) : à réserver aux essais
+  en parallèle.
+- `develop` est partagée avec le PC, les autres contributeurs et la CI. Elle ne
+  reçoit que des versions confirmées sur le S26 : `feat/vps-web` sert de sas.
+  Après confirmation, et sur demande, l'agent avance `develop` avec
+  `git push origin feat/vps-web:develop`. Git refuse ce push si `develop` a
+  divergé : ne jamais forcer.
+- Si `develop` a avancé ailleurs, l'agent l'intègre dans `feat/vps-web` avant
+  une nouvelle série, par avance rapide (`git merge --ff-only origin/develop`)
+  ou, en cas de divergence, par une fusion validée avec Clément. La promotion
+  suivante fait passer ce travail par les tests du secours.
+- `master` n'avance qu'à une release de `develop`, décidée par Clément.
 
 ## Tuto éclair sur le S26
 
@@ -76,6 +97,10 @@ si l'application affiche un écran vide.
    confirmer une mise à jour à la place de Clément.
 7. N'annoncer « nouvelle version en service » qu'après confirmation et contrôle
    de santé de cette version. Un commit, un push ou un aperçu sain ne suffit pas.
+8. Suivre la section Branches : commiter sur `feat/vps-web`, jamais sur
+   `develop` ni `master`. N'avancer `develop` jusqu'à `feat/vps-web` qu'après
+   confirmation sur le S26 et à la demande de Clément ; ne toucher à `master`
+   que pour une release qu'il a décidée.
 
 Exemple de passage de relais après une demande de push :
 
