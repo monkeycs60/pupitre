@@ -532,6 +532,18 @@ export const Sidebar = memo(function Sidebar({
     }
   }, [selectedProject?.id])
 
+  // Ouvert par l'appui long au tactile, le menu d'une ligne se ferme en
+  // touchant ailleurs, comme les autres menus.
+  useEffect(() => {
+    if (openConversationMenu === null) return
+    function closeOnOutsidePointer(event: PointerEvent) {
+      if (event.target instanceof Element && event.target.closest('.conversation-row-actions')) return
+      setOpenConversationMenu(null)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [openConversationMenu])
+
   // Revenir sur un projet, c'est reprendre son fil : la dernière conversation
   // ouverte y est retenue par projet.
   useEffect(() => {
@@ -1087,6 +1099,13 @@ export const Sidebar = memo(function Sidebar({
                 className={`navigation-row conv-row-state-${state}${nudge ? ' is-waiting' : ''}${conversation.origin_type === 'sentry' ? ' conv-row-sentry' : ''}${conversation.pinned ? ' is-pinned' : ''} ${isSelected ? 'is-selected' : ''}`}
                 key={conversation.id}
                 data-conversation-id={conversation.id}
+                onContextMenu={(event) => {
+                  // Les actions de la ligne n'apparaissent qu'au survol : au
+                  // tactile, l'appui long ouvre leur menu.
+                  if (!window.matchMedia?.('(hover: none)').matches) return
+                  event.preventDefault()
+                  setOpenConversationMenu(conversation.id)
+                }}
               >
                 <span className={`conv-row-edge ${state === 'unread' || nudge ? 'is-visible' : ''}`} aria-hidden="true" />
                 <span className={`conv-row-land ${state === 'unread' ? 'is-visible' : ''}`} aria-hidden="true" />

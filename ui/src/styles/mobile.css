@@ -1,5 +1,73 @@
-.mobile-navigation-toggle {
+/* ---------------------------------------------------------------------------
+   Téléphone (≤ 700 px) : une seule colonne. Le rail et la liste deviennent un
+   tiroir plein écran, le fil prend toute la largeur et rien ne flotte dessus.
+   Jusqu'à 900 px, Jarvis quitte le fil pour la barre du haut. Tout vit dans
+   les media queries, sauf les éléments propres au mobile, masqués par
+   défaut : au-delà de 900 px, rien ne change.
+--------------------------------------------------------------------------- */
+
+.mobile-navigation-toggle,
+.empty-state-navigation {
   display: none;
+}
+
+/* Fenêtre étroite, tablette et téléphone : posée sur le fil, la pastille
+   Jarvis masquait le texte, « Dernier message » et les menus du composer.
+   Elle devient une icône de la barre du haut, qui lui réserve sa place. */
+@media (max-width: 900px) {
+  .titlebar-right {
+    padding-right: 44px;
+  }
+
+  .jarvis-pill {
+    top: 4px;
+    right: 6px;
+    bottom: auto;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    background: transparent;
+    border-radius: var(--r-md);
+    box-shadow: none;
+  }
+
+  .jarvis-pill:hover {
+    background: var(--bg-hover);
+    box-shadow: none;
+    transform: none;
+  }
+
+  .jarvis-pill .jarvis-spark {
+    width: 18px;
+    height: 18px;
+    color: var(--accent-bright);
+  }
+
+  .jarvis-pill.is-running .jarvis-spark {
+    animation: jarvis-spin 1.4s linear infinite;
+  }
+
+  .jarvis-pill-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    white-space: nowrap;
+    clip-path: inset(50%);
+  }
+
+  .jarvis-pill kbd {
+    display: none;
+  }
+
+  .jarvis-pill-dot {
+    position: absolute;
+    top: 5px;
+    right: 4px;
+    margin: 0;
+  }
 }
 
 @media (max-width: 700px) {
@@ -8,11 +76,14 @@
   }
 
   .app-shell,
-  .app-shell.app-shell--no-sidebar {
+  .app-shell.app-shell--no-sidebar,
+  .app-shell.app-shell--pinned-rail {
     grid-template-columns: 56px minmax(0, 1fr);
     grid-template-rows: 48px minmax(0, 1fr);
     height: 100dvh;
   }
+
+  /* --- Barre du haut ------------------------------------------------------ */
 
   .titlebar {
     height: 48px;
@@ -26,11 +97,31 @@
   }
 
   .mobile-navigation-toggle {
+    position: relative;
     display: inline-flex;
     width: 40px;
     height: 40px;
     align-items: center;
     justify-content: center;
+  }
+
+  /* L'îlot central (réponses à lire) n'a pas la place : son compte passe sur
+     le bouton qui ouvre la liste où ces réponses attendent. */
+  .mobile-navigation-badge {
+    position: absolute;
+    top: 3px;
+    right: 1px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    color: var(--bg-titlebar);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    background: var(--unread);
+    border-radius: var(--r-full);
+    box-shadow: 0 0 0 2px var(--bg-titlebar);
   }
 
   .titlebar-center,
@@ -42,6 +133,7 @@
 
   .titlebar-right {
     min-width: 0;
+    padding-right: 48px;
   }
 
   .titlebar-nav {
@@ -50,9 +142,40 @@
 
   .titlebar-nav .titlebar-icon-button,
   .titlebar-right > .titlebar-icon-button {
-    width: 36px;
+    width: 40px;
     height: 40px;
   }
+
+  .titlebar-instance {
+    max-width: 88px;
+    margin: 0 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Au doigt, les boutons d'action passent de 28 à 36 px de haut. */
+  .primary-button,
+  .secondary-button {
+    min-height: 36px;
+  }
+
+  /* --- Jarvis ------------------------------------------------------------- */
+
+  .jarvis-pill {
+    width: 40px;
+    height: 40px;
+  }
+
+  .jarvis-panel {
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: 8px;
+    width: auto;
+    max-height: calc(100dvh - 64px);
+  }
+
+  /* --- Tiroir de navigation ------------------------------------------------ */
 
   .app-shell > .rail,
   .app-shell > .sidebar {
@@ -93,46 +216,412 @@
     display: none;
   }
 
+  /* L'appui long ouvre le menu de la ligne (Sidebar) : sans sélection de
+     texte ni menu du navigateur par-dessus. */
+  .sidebar-section.conversations .navigation-row {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Sans projet, l'invite seule laissait chercher le bouton du tiroir. */
+  .empty-state:has(.empty-state-navigation) {
+    align-content: center;
+    gap: var(--space-4);
+  }
+
+  .empty-state-navigation {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 var(--space-4);
+  }
+
+  /* --- En-tête de conversation --------------------------------------------- */
+
+  /* Une ligne : le titre et le menu. Branche, serveurs et modèle figurent déjà
+     dans la liste et le composer ; VS Code ne s'ouvre pas sur un téléphone. */
   .conversation-header {
-    gap: var(--space-2);
-    padding: var(--space-2);
+    flex-wrap: nowrap;
+    gap: var(--space-1);
+    min-height: 48px;
+    padding: 4px 4px 4px 12px;
+  }
+
+  .conversation-header h1 {
+    font-size: 15px;
+  }
+
+  .conversation-meta-item,
+  .conversation-meta .port-chip,
+  .header-actions .vscode-button,
+  .code-workspace-card-open.is-secondary,
+  .changes-file-open,
+  .events-list .cited-files-action {
+    display: none;
+  }
+
+  .header-icon-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .conversation-menu-list {
+    min-width: min(250px, calc(100vw - 16px));
+  }
+
+  /* --- Fil ------------------------------------------------------------------ */
+
+  .events-list {
+    padding: var(--space-4) var(--space-3) var(--space-6);
+  }
+
+  /* Le résumé d'un tour (« 6 min · 6 lectures · 17 commandes… ») passe à la
+     ligne au lieu de sortir de l'écran. */
+  .turn-work-summary {
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .turn-work-summary > span:not([class]) {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .turn-work-summary .tool-activity-failed {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .thread-jump {
+    right: 0;
+    left: 0;
+    width: max-content;
+    margin: 0 auto;
+  }
+
+  /* Document en plein écran : le titre garde sa ligne, les actions passent
+     dessous au lieu de l'écraser. */
+  .html-document-card.is-expanded .html-document-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .html-document-card.is-expanded .html-document-actions {
+    justify-content: flex-start;
+  }
+
+  /* Les pièces jointes couvrent le fil, onglet de la jauge compris. */
+  .thread-assets-backdrop {
+    z-index: 36;
+  }
+
+  .thread-assets-drawer {
+    z-index: 37;
+    width: 100%;
+  }
+
+  /* Carte « Travail de la conversation » : le titre ne se replie plus mot par
+     mot sous les boutons, l'action passe à la ligne sous le texte. */
+  .code-workspace-card {
+    padding: 10px 12px;
+  }
+
+  .code-workspace-card-main {
     flex-wrap: wrap;
   }
 
-  .conversation-title-block {
-    flex-basis: 55%;
+  .code-workspace-card-text {
+    flex-basis: calc(100% - 38px);
   }
+
+  .code-workspace-card-open {
+    height: 36px;
+    margin-left: 38px;
+  }
+
+  /* --- Composer --------------------------------------------------------------- */
 
   .composer-area {
-    padding: var(--space-2) var(--space-2) max(var(--space-2), env(safe-area-inset-bottom));
+    padding: 6px var(--space-2) max(var(--space-2), env(safe-area-inset-bottom));
   }
 
-  .composer textarea,
-  .composer [contenteditable] {
+  .composer textarea {
+    min-height: 44px;
+    padding: 10px 12px 2px;
     font-size: 16px;
   }
 
-  .composer-actions,
-  .config-panel {
-    flex-wrap: wrap;
+  .conversation-workspace .composer-placeholder {
+    top: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conversation-workspace .composer-actions {
+    flex-wrap: nowrap;
+    gap: var(--space-2);
+    min-height: 40px;
+    padding: 4px 6px 6px 8px;
   }
 
   .composer-tools {
     min-width: 0;
-    flex-wrap: wrap;
+  }
+
+  /* Pendant un tour, « Annuler le tour » et « Orienter » prennent la place :
+     la puce du modèle se resserre au lieu de passer sous les boutons. */
+  .conversation-workspace .composer-model {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  /* Nouvelle conversation : la réglette de modèle prend toute la première
+     ligne ; branche, pièce jointe et envoi partagent la seconde. */
+  .conversation-workspace .composer-actions:has(.config-panel) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    padding-top: 8px;
+  }
+
+  .composer-actions:has(.config-panel) > .composer-tools,
+  .composer-actions .config-panel {
+    display: contents;
+  }
+
+  .config-panel > .model-strip {
+    grid-column: 1 / -1;
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  .config-panel > .config-branch {
+    min-width: 0;
+  }
+
+  .config-panel > .config-branch .branch-field {
+    flex: 1;
+    height: 36px;
+  }
+
+  .send-button {
+    min-height: 36px;
+  }
+
+  .send-button kbd,
+  .composer-palette-footer {
+    display: none;
+  }
+
+  /* Nouvelle conversation : la bascule Conversation / Tâche prend sa ligne au
+     lieu de flotter sur le texte et sur les menus de modèle et de branche. */
+  .composer-topbar {
+    position: static;
+    z-index: auto;
+    justify-content: flex-start;
+    padding: var(--space-2) var(--space-2) 0;
+  }
+
+  .composer-topbar ~ .composer-input-wrap textarea {
+    padding-top: 8px;
+    padding-right: 12px;
+  }
+
+  .conversation-workspace .composer-topbar ~ .composer-input-wrap .composer-placeholder {
+    top: 8px;
+    right: 12px;
+    padding-right: 0;
+  }
+
+  /* Jauge de contexte : onglet resserré ; son menu tient dans l'écran. */
+  .context-gauge {
+    right: 12px;
+  }
+
+  .context-gauge-capacity {
+    display: none;
+  }
+
+  .context-gauge-menu,
+  .context-gauge-warning {
+    width: calc(100vw - 29px);
+  }
+
+  .context-gauge-menu-card {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .context-gauge-menu-detail,
+  .context-gauge-warning {
+    white-space: normal;
+  }
+
+  /* --- Panneaux et dialogues --------------------------------------------------- */
+
+  /* Plein écran, au-dessus de la jauge et des menus du composer qu'il couvre. */
+  .workspace-inspector-slot {
+    top: 0;
+    z-index: 50;
   }
 
   .workspace-inspector-slot.is-open {
     width: 100%;
   }
 
-  /* Le tiroir de navigation porte les jauges d'usage en bas : la pastille
-     Jarvis les masquerait. Elle revient dès que le tiroir se referme. */
-  .app-shell--mobile-navigation .jarvis-pill {
-    display: none;
+  .modal-backdrop {
+    padding: var(--space-2);
   }
 
-  .jarvis-pill kbd {
-    display: none;
+  .switch-modal,
+  .review-dialog,
+  .project-settings-dialog {
+    width: 100%;
+    max-height: calc(100dvh - 2 * var(--space-2));
+  }
+
+  /* La réglette garde sa ligne : bornée à l'écran, ses cellules rétrécissent
+     et le nom du modèle s'abrège au lieu de déborder du dialogue. */
+  .project-settings-dialog .model-strip,
+  .settings-card .model-strip {
+    max-width: 100%;
+  }
+
+  .project-settings-body {
+    padding-right: var(--space-3);
+    padding-left: var(--space-3);
+  }
+
+  .toast-host {
+    right: var(--space-2);
+    left: var(--space-2);
+    align-items: stretch;
+  }
+
+  /* --- Réglages -------------------------------------------------------------- */
+
+  .settings-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settings-sidebar {
+    flex-direction: row;
+    padding: 6px var(--space-2);
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .settings-sidebar button {
+    flex: none;
+    min-height: 36px;
+    padding: 0 var(--space-3);
+  }
+
+  .settings-sidebar button.is-selected {
+    box-shadow: inset 0 -2px var(--accent);
+  }
+
+  .settings-view {
+    padding: var(--space-4) var(--space-3) var(--space-8);
+  }
+
+  .settings-card {
+    padding: var(--space-4);
+  }
+
+  .settings-help code {
+    overflow-wrap: anywhere;
+  }
+
+  .theme-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Aide : les pages deviennent une rangée qui défile au-dessus de l'article,
+     qui retrouve toute la largeur. */
+  .help-header {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .help-header input {
+    width: 100%;
+    height: 36px;
+  }
+
+  .help-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .help-list {
+    display: flex;
+    gap: var(--space-1);
+    padding: 6px var(--space-2);
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .help-list button {
+    flex: none;
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .help-list button.is-selected {
+    box-shadow: inset 0 -2px var(--accent);
+  }
+
+  .help-article {
+    padding: var(--space-4) var(--space-3) var(--space-8);
+  }
+
+  /* --- Rapport ------------------------------------------------------------------ */
+
+  /* La carte de niveau flottait sur les onglets Agenda, Journal et Recul :
+     elle ouvre la page et défile avec elle. */
+  .activity-report-shell {
+    overflow-y: auto;
+  }
+
+  .activity-report-level {
+    position: static;
+    width: auto;
+    margin: var(--space-2) var(--space-3) 0;
+  }
+
+  .activity-report-view {
+    flex: none;
+    height: auto;
+    overflow: visible;
+    padding: var(--space-3) var(--space-3) 72px;
+  }
+
+  /* « Relancer aujourd'hui » passe au-dessus des onglets, qui gardent leur
+     soulignement sur le filet de l'en-tête. */
+  .activity-report-header {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .activity-report-header .secondary-button {
+    order: -1;
+    margin: 0 0 0 auto;
+  }
+
+  .report-tabs button {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+}
+
+@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
+  .jarvis-pill.is-running .jarvis-spark {
+    animation: none;
   }
 }

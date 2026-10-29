@@ -38,6 +38,14 @@
   border-radius: var(--r-sm);
 }
 
+/* Le libellé garde l'écart de la pastille entre « Jarvis cherche » et ses
+   points ; sous 900 px, il ne reste que l'étincelle (mobile.css). */
+.jarvis-pill-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .jarvis-pill .conv-row-dots {
   margin-left: 2px;
 }

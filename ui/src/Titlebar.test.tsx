@@ -47,3 +47,19 @@ test('montre le badge d’instance en dev et le cache en stable tant que les sou
   rerender(createElement(Titlebar, { instance: health('stable', 2), onRestart: restart }))
   expect(document.querySelector('.titlebar-instance')).not.toBeNull()
 })
+
+test('le bouton de navigation mobile porte le compte des réponses à lire, plafonné à 9+', () => {
+  const toggle = () => {}
+  const { rerender } = render(createElement(Titlebar, { onNavigationToggle: toggle, navigationBadge: 3 }))
+  const button = screen.getByRole('button', { name: 'Projets et conversations' })
+  expect(button.querySelector('.mobile-navigation-badge')?.textContent).toBe('3')
+
+  rerender(createElement(Titlebar, { onNavigationToggle: toggle, navigationBadge: 12 }))
+  expect(button.querySelector('.mobile-navigation-badge')?.textContent).toBe('9+')
+
+  rerender(createElement(Titlebar, { onNavigationToggle: toggle, navigationBadge: 12, navigationOpen: true }))
+  expect(button.querySelector('.mobile-navigation-badge')).toBeNull()
+
+  rerender(createElement(Titlebar, { onNavigationToggle: toggle, navigationBadge: 0 }))
+  expect(button.querySelector('.mobile-navigation-badge')).toBeNull()
+})

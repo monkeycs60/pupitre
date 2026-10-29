@@ -534,6 +534,39 @@ test('le menu du filtre bascule vers les archives', async () => {
   expect(screen.getByRole('menuitemradio', { name: 'Corbeille' })).toBeTruthy()
 })
 
+test('au tactile, l’appui long ouvre le menu de la ligne et toucher ailleurs le ferme', async () => {
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [startedConversation])
+  const matchMedia = window.matchMedia
+  let touch = false
+  window.matchMedia = ((query: string) => ({
+    matches: query === '(hover: none)' && touch,
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+  })) as unknown as typeof window.matchMedia
+  try {
+    renderSidebar()
+    await waitFor(() => expect(document.querySelector('.navigation-row')).not.toBeNull())
+    const row = document.querySelector('.navigation-row')!
+
+    // À la souris, le clic droit garde le menu du navigateur.
+    expect(fireEvent.contextMenu(row)).toBe(true)
+    expect(screen.queryByRole('menuitem', { name: 'Renommer' })).toBeNull()
+
+    touch = true
+    expect(fireEvent.contextMenu(row)).toBe(false)
+    expect(screen.getByRole('menuitem', { name: 'Renommer' })).toBeTruthy()
+
+    fireEvent.pointerDown(screen.getByRole('menuitem', { name: 'Renommer' }))
+    expect(screen.getByRole('menuitem', { name: 'Renommer' })).toBeTruthy()
+
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('menuitem', { name: 'Renommer' })).toBeNull()
+  } finally {
+    window.matchMedia = matchMedia
+  }
+})
+
 test('ouvrir une conversation depuis ailleurs déplie son groupe et l’amène dans la vue', async () => {
   const ticketConversation: Conversation = {
     ...startedConversation,
