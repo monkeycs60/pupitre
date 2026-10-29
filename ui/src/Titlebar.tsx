@@ -4,6 +4,7 @@ import type { InstanceHealth } from './types'
 import { InstanceBadge } from './InstanceBadge'
 import { Icon, type IconName } from './Icon'
 import type { WorkspaceView } from './types'
+import { serverControlUrl } from './transport'
 
 type ResizeDirection = Parameters<Window['startResizeDragging']>[0]
 
@@ -59,6 +60,7 @@ export function Titlebar({
   const drag = IS_TAURI ? { 'data-tauri-drag-region': true } : {}
   const showInstance = onRestart !== undefined && instance != null
     && (instance.instance !== 'stable' || instance.staleSources > 0)
+  const controlUrl = serverControlUrl()
 
   return (
     <header className="titlebar">
@@ -82,6 +84,9 @@ export function Titlebar({
       <div className="titlebar-center" {...drag}>{island}</div>
 
       <div className="titlebar-right">
+        {controlUrl ? <a className="titlebar-icon-button" href={controlUrl}
+          target="_blank" rel="noopener noreferrer" title="Mises à jour et secours"
+          aria-label="Mises à jour et secours"><Icon name="server" /></a> : null}
         {destinations.length > 0 ? (
           <nav className="titlebar-nav" aria-label="Navigation">
             {destinations.map((destination) => {

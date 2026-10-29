@@ -1,0 +1,33 @@
+[Unit]
+Description=Pupitre isolated dependency download
+
+[Service]
+Type=oneshot
+User=pupitre-build
+Group=pupitre-build
+WorkingDirectory=/var/lib/pupitre-build/work
+Environment=HOME=/var/cache/pupitre-build
+Environment=PATH=/opt/pupitre/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 /opt/pupitre-control/build.py deps
+TimeoutStartSec=10min
+TimeoutStopSec=15
+KillMode=control-group
+UMask=0077
+CPUQuota=200%
+MemoryMax=4G
+TasksMax=512
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+BindReadOnlyPaths=/run/systemd/resolve/resolv.conf:/etc/resolv.conf
+ReadWritePaths=/var/lib/pupitre-build/work /var/cache/pupitre-build
+InaccessiblePaths=/var/lib/pupitre-control /var/lib/pupitre-preview /run/tailscale
+IPAddressDeny=localhost
+IPAddressDeny=100.64.0.0/10
+IPAddressDeny=137.74.43.81/32
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes

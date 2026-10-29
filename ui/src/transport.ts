@@ -1,6 +1,18 @@
 interface PupitreRuntime {
   instance?: 'stable' | 'dev'
   port?: number
+  serverControlUrl?: string
+}
+
+export function serverControlUrl(): string | undefined {
+  const value = runtime().serverControlUrl
+  if (!value || typeof location === 'undefined' || hasTauriRuntime()) return undefined
+  try {
+    const url = new URL(value)
+    if (url.protocol === 'https:' && url.hostname === location.hostname && url.port === '8443'
+      && url.pathname === '/' && !url.username && !url.password && !url.search && !url.hash) return url.href
+  } catch {}
+  return undefined
 }
 
 function runtime(): PupitreRuntime {

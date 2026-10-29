@@ -12,7 +12,9 @@ l'identité du visiteur. Aucun port Pupitre ne doit écouter sur une interface p
   l'adresse dans Chrome. Ajouter à l'écran d'accueil si souhaité.
 - Compte Linux : `pupitre`, sans sudo et sans groupe Docker. Dossier privé
   `/home/pupitre` ; projets GitHub dans `/home/pupitre/projects`.
-- Sources exécutées : `/home/pupitre/app`. Interface compilée : `/var/www/pupitre`.
+- Projet modifiable : `/home/pupitre/projects/pupitre`. Les versions en service
+  sont compilées et protégées dans `/opt/pupitre/releases` ; le compte agent
+  ne peut pas les réécrire. `/var/www/pupitre` pointe sur leur interface.
 - Outils : `/opt/pupitre/bin/bun`, `/opt/pupitre/bin/claude`,
   `/home/pupitre/.local/bin/codex` et son compagnon `codex-code-mode-host`.
 - Chrome : `/opt/pupitre/chrome/chrome`, binaire appartenant à root. Le profil
@@ -96,17 +98,94 @@ Une copie extérieure doit être configurée séparément.
 
 ## Maintenance et retour arrière
 
+La console indépendante se trouve à
+`https://vps-139a77b3.tailfd41cd.ts.net:8443/`. La conserver en favori sur le
+téléphone : elle ne dépend ni du sidecar, ni du front, ni du Nginx de Pupitre.
+Elle possède sa propre unité `pupitre-control.service` et utilise Python fourni
+par Ubuntu. Tailscale joint son socket Unix, accessible uniquement à root.
+Les contrôles exigent l'identité Tailscale autorisée, une origine correcte et un
+jeton anti-CSRF. Ils n'acceptent aucun chemin, commande shell ou argument libre.
+Les appels provenant du VPS lui-même sont refusés : une version défaillante ne
+peut pas confirmer sa propre mise à jour. La confirmation vient du téléphone
+ou d'un autre appareil personnel connecté à Tailscale.
+
+### Depuis le S26
+
+1. Dans le projet Pupitre du VPS, demander à l'agent de modifier le projet puis
+   de créer un commit. Les modifications non commitées bloquent la préparation.
+2. Ouvrir « Mises à jour et secours » dans la barre supérieure, puis
+   « Préparer la version ». Les dépendances sont téléchargées sans leurs scripts
+   d'installation, puis types, tests et compilation tournent dans un compte
+   dédié sans réseau et sans accès à `/home` ou aux comptes des fournisseurs.
+3. « Ouvrir le test » ouvre le port HTTPS 10000. Cette instance utilise un autre
+   compte Linux et une copie des données ; les accès Claude et Codex n'y sont
+   pas copiés. Les tests UI n'ouvrent aucun socket vers le véritable sidecar.
+4. « Appliquer la version » refuse les agents encore actifs, arrête uniquement
+   Pupitre, prend un instantané complet puis bascule vers les fichiers gelés.
+5. Ouvrir Pupitre, vérifier le fonctionnement, puis confirmer dans le secours
+   sous **trois minutes**. Sans confirmation, ou après trois sondes de santé
+   en échec, le secours restaure automatiquement code et données précédents.
+
+La préparation et le test ne remplacent pas la version en service. Le système
+vérifie les empreintes de tous les fichiers avant une bascule. La confirmation
+est requise même si les sondes répondent : une interface vide peut laisser le
+backend fonctionner. Un redémarrage du secours ou du VPS pendant une mise à
+jour non confirmée déclenche également la restauration, grâce à une transaction
+enregistrée avant la première modification.
+
+### Si Pupitre est cassé
+
+Ouvrir directement le favori du secours. « Restaurer la précédente » remet la
+version et l'instantané conservés avant la dernière promotion. « Redémarrer
+Pupitre » conserve ses données. Le secours avancé permet d'arrêter les agents
+encore actifs ou d'intervenir si leur état est impossible à lire. Il permet
+aussi de restaurer la référence protégée lors de l'installation du secours.
+
+**Une restauration rétablit les conversations à la date de son instantané.**
+Le dossier remplacé est conservé sous
+`/home/pupitre/.local/share/pupitre-retained-<timestamp>` ; les messages et
+médias plus récents peuvent donc être récupérés par l'administrateur. Les
+projets Git et les caches OAuth sont en dehors de ces instantanés et ne sont
+pas remplacés. Les archives de restauration sont protégées dans
+`/var/lib/pupitre-control`, hors de portée du compte agent.
+
+Après confirmation, le redémarrage systemd et le retour manuel restent
+disponibles. Le système ne restaure pas automatiquement un ancien instantané
+plusieurs jours après une confirmation : cela remplacerait les données récentes
+sans intervention. Les versions et instantanés ne sont pas purgés automatiquement.
+La préparation refuse de démarrer quand moins de 3 Gio restent libres.
+
+Une panne totale du VPS, du système ou de Tailscale nécessite SSH ou la console
+OVH. Les sauvegardes sur ce même serveur ne couvrent pas sa perte totale.
+
+### Installer le secours sur cette architecture
+
+L'installation initiale est une opération administrateur ; une mise à jour
+normale de Pupitre ne réinstalle **jamais** le secours.
+
 ```bash
-sudo systemctl status pupitre pupitre-web
-sudo journalctl -u pupitre -n 50
-sudo systemctl restart pupitre
+sudo bash scripts/server/control/install.sh \
+  vps-139a77b3.tailfd41cd.ts.net clement.serizay@gmail.com
 ```
 
-Avant de changer les sources, attendre que `/api/fleet` soit vide et sauvegarder
-les données. Conserver l'ancienne copie des sources et de l'interface compilée.
-Installer les dépendances avec `bun install --frozen-lockfile`, compiler
-`bun run --cwd ui build`, copier `ui/dist` dans `/var/www/pupitre`, puis relancer
-uniquement le service `pupitre`. La stable du PC n'est pas concernée.
+Dans la console, préparer et ouvrir la version de référence, puis initialiser
+la bascule vers les versions protégées :
+
+```bash
+sudo python3 /opt/pupitre-control/bootstrap.py
+sudo systemctl status pupitre-control pupitre pupitre-web
+```
+
+`bootstrap.py` conserve l'ancien service et l'ancienne interface, et les rétablit
+si cette première migration échoue. Les unités preview/build n'agissent que sur
+leurs propres comptes. La production des autres applications et la stable du
+PC ne sont pas modifiées. Le port 4820 du PC reste réservé à sa stable et
+`bun run promote` reste exclusivement le parcours de promotion du bureau.
+
+```bash
+python3 -m unittest discover -s scripts/server/control -v
+sudo journalctl -u pupitre-control -u pupitre-build -n 50
+```
 
 Pour retirer l'accès web, exécuter `sudo tailscale serve --https=443 off` et
 arrêter `pupitre-web`. Les projets et conversations restent sur le disque.

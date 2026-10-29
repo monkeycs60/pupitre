@@ -1,0 +1,30 @@
+[Unit]
+Description=Pupitre isolated verification and build
+
+[Service]
+Type=oneshot
+User=pupitre-build
+Group=pupitre-build
+WorkingDirectory=/var/lib/pupitre-build/work
+Environment=HOME=/var/cache/pupitre-build
+Environment=PATH=/opt/pupitre/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 /opt/pupitre-control/build.py build
+TimeoutStartSec=20min
+TimeoutStopSec=15
+KillMode=control-group
+UMask=0077
+CPUQuota=200%
+MemoryMax=4G
+TasksMax=512
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/pupitre-build/work /var/cache/pupitre-build
+InaccessiblePaths=/var/lib/pupitre-control /var/lib/pupitre-preview /run/tailscale
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes

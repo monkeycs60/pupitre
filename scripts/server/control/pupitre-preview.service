@@ -1,0 +1,36 @@
+[Unit]
+Description=Pupitre isolated candidate preview
+StartLimitIntervalSec=0
+
+[Service]
+User=pupitre-preview
+Group=pupitre-preview
+WorkingDirectory=/opt/pupitre/releases/preview
+Environment=HOME=/var/lib/pupitre-preview
+Environment=PATH=/opt/pupitre/bin:/usr/bin:/bin
+Environment=PUPITRE_INSTANCE=dev
+Environment=PUPITRE_PORT=4822
+Environment=PUPITRE_DATA_DIR=/var/lib/pupitre-preview/data
+Environment=PUPITRE_BACKGROUND_JOBS=off
+Environment=PUPITRE_CHANGELOG_JOBS=off
+ExecStart=/opt/pupitre/releases/preview/pupitre-sidecar
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+CPUQuota=100%
+MemoryMax=2G
+TasksMax=128
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/pupitre-preview
+InaccessiblePaths=/var/lib/pupitre-control /var/lib/pupitre-build /run/tailscale
+IPAddressDeny=any
+IPAddressAllow=localhost
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes

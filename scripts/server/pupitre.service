@@ -1,19 +1,19 @@
 [Unit]
 Description=Pupitre agents
-After=network-online.target
-Wants=network-online.target
+After=network-online.target pupitre-control.service
+Wants=network-online.target pupitre-control.service
 StartLimitIntervalSec=0
 
 [Service]
 User=pupitre
 Group=pupitre
-WorkingDirectory=/home/pupitre/app
+WorkingDirectory=/opt/pupitre/releases/current
 Environment=HOME=/home/pupitre
 Environment=PATH=/home/pupitre/.local/bin:/opt/pupitre/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PUPITRE_PORT=4820
 Environment=PUPITRE_BACKGROUND_JOBS=on
 Environment=PUPITRE_CHANGELOG_JOBS=off
-ExecStart=/opt/pupitre/bin/bun run sidecar/src/index.ts
+ExecStart=/opt/pupitre/releases/current/pupitre-sidecar
 Restart=always
 RestartSec=5
 SuccessExitStatus=143
