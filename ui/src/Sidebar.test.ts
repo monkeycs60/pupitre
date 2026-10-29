@@ -1,4 +1,4 @@
-import { afterEach, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement } from 'react'
 import type { Conversation, FleetItem, Project, Workflow } from './types'
@@ -77,10 +77,23 @@ const startedConversation: Conversation = {
 }
 
 const defaultFetch = globalThis.fetch
+const DefaultSocket = globalThis.WebSocket
+
+// Les sections du projet ouvrent le canal des tickets : sans sidecar, la
+// connexion refusée remonte en erreur non gérée et casse le test en cours.
+class SilentSocket {
+  addEventListener() {}
+  close() {}
+}
+
+beforeEach(() => {
+  globalThis.WebSocket = SilentSocket as unknown as typeof WebSocket
+})
 
 afterEach(() => {
   cleanup()
   globalThis.fetch = defaultFetch
+  globalThis.WebSocket = DefaultSocket
   localStorage.clear()
 })
 
