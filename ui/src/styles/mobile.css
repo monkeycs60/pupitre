@@ -125,4 +125,14 @@
   .workspace-inspector-slot.is-open {
     width: 100%;
   }
+
+  /* Le tiroir de navigation porte les jauges d'usage en bas : la pastille
+     Jarvis les masquerait. Elle revient dès que le tiroir se referme. */
+  .app-shell--mobile-navigation .jarvis-pill {
+    display: none;
+  }
+
+  .jarvis-pill kbd {
+    display: none;
+  }
 }
