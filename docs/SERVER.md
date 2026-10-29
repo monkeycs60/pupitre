@@ -111,6 +111,9 @@ ou d'un autre appareil personnel connecté à Tailscale.
 
 ### Depuis le S26
 
+Le [guide mobile et les consignes pour l'agent](MOBILE-VPS.md) donnent la phrase
+à utiliser et précisent ce que « commit, push et promote » déclenche sur le VPS.
+
 1. Dans le projet Pupitre du VPS, demander à l'agent de modifier le projet puis
    de créer un commit. Les modifications non commitées bloquent la préparation.
 2. Ouvrir « Mises à jour et secours » dans la barre supérieure, puis
