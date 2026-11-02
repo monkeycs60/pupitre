@@ -807,6 +807,11 @@
   transition-duration: 420ms, 300ms;
 }
 
+/* Déplié pour montrer un passage : la hauteur doit être juste quand le fil y défile. */
+.turn-work.is-revealed > .tool-activity-body {
+  transition: none;
+}
+
 .tool-activity-list {
   min-height: 0;
   overflow: hidden;

@@ -31,6 +31,7 @@ import type { ConnectionState } from './useConversationEvents'
 import { useNow } from './useNow'
 import { appendDebriefQuestionPrompt } from './debriefQuestion'
 import type { DebriefBlock } from './groupEvents'
+import { HighlightedEventsContext, highlightedBlockEvents } from './highlightedEvents'
 import { TaskSelectionContext, TaskStashContext, TaskToggleContext, stashKey } from './taskToggle'
 import type { StashState, TaskAction, TaskStash } from './taskToggle'
 import { addConversationTodo } from './todos'
@@ -253,6 +254,7 @@ export function Chat({
   const [hitIndex, setHitIndex] = useState(0)
   const [hitCount, setHitCount] = useState(0)
   const hitKey = highlightEventIds?.join(',') ?? ''
+  const highlightedEvents = useMemo(() => highlightedBlockEvents(blocks, highlightEventIds ?? []), [blocks, highlightEventIds])
   useEffect(() => {
     const viewport = viewportRef.current
     if (viewport === null) return
@@ -664,16 +666,18 @@ export function Chat({
                 <TaskToggleContext.Provider value={handleTaskToggle}>
                   <TaskStashContext.Provider value={taskStash}>
                   <TaskSelectionContext.Provider value={selectedActions}>
-                    <EventStream
-                      blocks={blocks}
-                      onImageOpen={handleImageOpen}
-                      onImageLoad={keepReadingPosition}
-                      onSubtaskStatusChange={handleSubtaskStatusChange}
-                      onDebriefQuestion={handleDebriefQuestion}
-                      turnFooterAction={turnFooterAction}
-                      conversationId={conversation?.id}
-                      onSteer={providerCanSteer(conversation?.provider) ? handleSteer : undefined}
-                    />
+                    <HighlightedEventsContext.Provider value={highlightedEvents}>
+                      <EventStream
+                        blocks={blocks}
+                        onImageOpen={handleImageOpen}
+                        onImageLoad={keepReadingPosition}
+                        onSubtaskStatusChange={handleSubtaskStatusChange}
+                        onDebriefQuestion={handleDebriefQuestion}
+                        turnFooterAction={turnFooterAction}
+                        conversationId={conversation?.id}
+                        onSteer={providerCanSteer(conversation?.provider) ? handleSteer : undefined}
+                      />
+                    </HighlightedEventsContext.Provider>
                     {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
                     {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onSendReview={addReviewToComposer} /> : null}
                   </TaskSelectionContext.Provider>
