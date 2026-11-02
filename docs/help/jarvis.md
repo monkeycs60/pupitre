@@ -25,8 +25,8 @@ La pastille **Demander à Jarvis** en bas à droite l'ouvre, comme **Ctrl J**.
   conversations, serveurs, choix du modèle. La trace se replie une fois la
   réponse prête.
 - **Les conversations trouvées**, avec les passages qui répondent. Un clic
-  ouvre la conversation et surligne ces passages ; la barre en haut du fil
-  passe de l'un à l'autre.
+  ouvre la conversation et surligne ces passages, en dépliant le travail du tour
+  s'ils s'y trouvent ; la barre en haut du fil passe de l'un à l'autre.
 - **Les actions proposées** : répondre à un agent, démarrer une conversation,
   archiver, épingler, interrompre un tour, ouvrir un serveur.
 

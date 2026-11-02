@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { ThinkingOrb, type OrbState } from 'thinking-orbs'
-import type { EventBlock } from './eventBlocks'
+import { eventIdOfBlock, type EventBlock } from './eventBlocks'
 import { EventStream } from './EventStream'
 import { formatShortDuration } from './formatActiveDuration'
+import { HighlightedEventsContext } from './highlightedEvents'
 import { useWindowActive } from './idleLoops'
 import { useNow } from './useNow'
 import { useResolvedTheme } from './theme'
@@ -104,6 +105,19 @@ export function TurnWorkGroup({ work, onImageOpen, onImageLoad, onSteer }: {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [mountedLive] = useState(work.live !== undefined)
+  const highlighted = useContext(HighlightedEventsContext)
+  const revealKey = highlighted.size === 0
+    ? ''
+    : work.blocks.flatMap((block) => eventIdOfBlock(block.id) ?? []).filter((id) => highlighted.has(id)).join(',')
+  const [revealed, setRevealed] = useState('')
+  // Pendant le rendu : le message doit être là quand le fil le cherche pour le surligner.
+  if (revealKey !== revealed) {
+    setRevealed(revealKey)
+    if (revealKey !== '') {
+      setOpen(true)
+      setMounted(true)
+    }
+  }
   const tools = turnWorkTools(work)
   const notes = turnWorkNoteCount(work)
   const failedCount = tools.filter((tool) => tool.output !== undefined && tool.isError === true).length
@@ -138,7 +152,7 @@ export function TurnWorkGroup({ work, onImageOpen, onImageLoad, onSteer }: {
   )
 
   return (
-    <div className={`tool-activity-group turn-work${open ? ' is-open' : ''}${live ? ' is-live' : ''}`}>
+    <div className={`tool-activity-group turn-work${open ? ' is-open' : ''}${live ? ' is-live' : ''}${revealKey !== '' ? ' is-revealed' : ''}`}>
       <div className="turn-work-row">
         {expandable ? (
           <button
