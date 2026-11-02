@@ -4,6 +4,7 @@ const SYSTEM_ONE_URL = "https://api.typesafe.ai/v1/systemone";
 export const JEV_MODEL = "jev-latest";
 const PLAN_THRESHOLD = 0.6;
 const SEARCH_THRESHOLD = 0.5;
+const OVERVIEW_THRESHOLD = 0.75;
 const HISTORY_CHARS = 600;
 const SUMMARY_CHARS = 240;
 const NO_MATCH = "none";
@@ -15,6 +16,9 @@ export interface RouterVerdict {
   /** La demande décrit une conversation à retrouver : Jev peut la désigner sans Claude. */
   search: boolean;
   searchProbability: number;
+  /** La demande porte sur l'état général : l'état de Pupitre suffit à répondre. */
+  overview: "waiting" | "running" | null;
+  overviewProbability: number;
 }
 
 export interface SearchChoice {
@@ -53,9 +57,31 @@ const EXPLICIT_QUESTION = {
   },
 };
 
+const WAITING_QUESTION = {
+  type: "noul",
+  instructions: "Is the person only asking which conversations or agents are waiting for them right now?",
+  criteria: {
+    true: "A general question about who or what is waiting for the person: an answer, a decision, a validation.",
+    false: "It asks about what is running rather than what is waiting, asks about one precise conversation, asks why an agent waits, asks to act on waiting agents, asks for a summary, looks for a past discussion, or asks something else.",
+  },
+};
+
+const RUNNING_QUESTION = {
+  type: "noul",
+  instructions: "Is the person only asking what is running right now: which agents are working, which servers are listening?",
+  criteria: {
+    true: "A general question about what is currently running or in progress: agents at work, servers listening.",
+    false: "It asks about what is waiting rather than what is running, asks about one precise conversation, port or server, asks why something runs, asks to act on what runs, asks for a summary of the work, looks for a past discussion, or asks something else.",
+  },
+};
+
 const CHOICE_INSTRUCTIONS = "Which conversation is the person looking for? Pick the one whose content matches what the request describes. A shared word is not enough.";
 const NO_MATCH_CRITERION = "None of these conversations covers what the person is looking for.";
 const PASSAGE_INSTRUCTIONS = "Which passage of this conversation shows what the person is looking for?";
+
+function previousExchanges(history: JarvisHistoryEntry[]) {
+  return history.slice(-2).map((entry) => ({ role: entry.role, text: clipText(entry.text, HISTORY_CHARS) }));
+}
 
 function probabilityOf(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("réponse TypeSafe sans probabilité");
@@ -92,21 +118,14 @@ function passagesFrom(option: JarvisSearchOption, probabilities: Record<string, 
 
 /** Jev, le modèle de décision de TypeSafe, trie la demande et désigne une conversation en une fraction de seconde. */
 export function jevRouter(apiKey: () => string | null, fetchImpl: typeof fetch = fetch): JarvisRouter {
-  async function ask<T>(question: string, history: JarvisHistoryEntry[], questions: Record<string, unknown>, signal: AbortSignal): Promise<T> {
+  async function ask<T>(state: unknown, questions: Record<string, unknown>, signal: AbortSignal): Promise<T> {
     const key = apiKey();
     if (!key) throw new Error("clé TypeSafe absente");
     const response = await fetchImpl(SYSTEM_ONE_URL, {
       method: "POST",
       signal,
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: JEV_MODEL,
-        state: {
-          request: question,
-          previous_exchanges: history.slice(-2).map((entry) => ({ role: entry.role, text: clipText(entry.text, HISTORY_CHARS) })),
-        },
-        questions,
-      }),
+      body: JSON.stringify({ model: JEV_MODEL, state, questions }),
     });
     if (!response.ok) throw new Error(`TypeSafe HTTP ${response.status} : ${(await response.text()).slice(0, 200)}`);
     return await response.json() as T;
@@ -115,15 +134,33 @@ export function jevRouter(apiKey: () => string | null, fetchImpl: typeof fetch =
   return {
     ready: () => apiKey() !== null,
     async decide({ question, history, signal }) {
-      const body = await ask<{ answers?: { plan?: { noul?: unknown }; explicit?: { noul?: unknown } } }>(
-        question, history, { plan: PLAN_QUESTION, explicit: EXPLICIT_QUESTION }, signal,
+      type Answers = Record<"plan" | "explicit" | "waiting" | "running", { noul?: unknown } | undefined>;
+      // Seul le plan dépend de ce qui précède (« archive-les »). Montré aux autres questions,
+      // l'échange précédent leur fait rater une demande qui se suffit à elle-même.
+      const plan = { ...PLAN_QUESTION, instructions: { question: PLAN_QUESTION.instructions, previous_exchanges: previousExchanges(history) } };
+      const body = await ask<{ answers?: Partial<Answers> }>(
+        { request: question },
+        { plan, explicit: EXPLICIT_QUESTION, waiting: WAITING_QUESTION, running: RUNNING_QUESTION },
+        signal,
       );
       const probability = probabilityOf(body.answers?.plan?.noul);
       const searchProbability = Math.round((1 - probabilityOf(body.answers?.explicit?.noul)) * 100) / 100;
-      return { plan: probability >= PLAN_THRESHOLD, probability, search: searchProbability >= SEARCH_THRESHOLD, searchProbability };
+      // Les deux questions se ressemblent assez pour monter ensemble : seule la plus probable compte.
+      const waiting = probabilityOf(body.answers?.waiting?.noul);
+      const running = probabilityOf(body.answers?.running?.noul);
+      const overviewProbability = Math.max(waiting, running);
+      return {
+        plan: probability >= PLAN_THRESHOLD,
+        probability,
+        search: searchProbability >= SEARCH_THRESHOLD,
+        searchProbability,
+        overview: overviewProbability < OVERVIEW_THRESHOLD ? null : waiting >= running ? "waiting" : "running",
+        overviewProbability,
+      };
     },
     async choose({ question, history, options, signal }) {
-      const body = await ask<{ answers?: Record<string, { probabilities?: Record<string, unknown> } | undefined> }>(question, history, {
+      const state = { request: question, previous_exchanges: previousExchanges(history) };
+      const body = await ask<{ answers?: Record<string, { probabilities?: Record<string, unknown> } | undefined> }>(state, {
         best: {
           type: "choice",
           instructions: CHOICE_INSTRUCTIONS,

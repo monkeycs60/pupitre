@@ -6,6 +6,7 @@
 // [{ "q": "où on a parlé du délai", "kind": "sens", "expect": ["1a2b3c4d"] }, ...]
 // `expect` : préfixes d'identifiants acceptés ; [] si aucune conversation ne traite le sujet ;
 // absent si la demande n'est pas une recherche et doit aller à Claude.
+// `state: true` : l'état de Pupitre doit répondre sans modèle (« qui m'attend ? »).
 import { Database } from 'bun:sqlite'
 import { rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -16,7 +17,7 @@ import { QuotaTracker } from '../sidecar/src/quotas'
 import { ConversationStore } from '../sidecar/src/stores/conversations'
 import { ProjectStore } from '../sidecar/src/stores/projects'
 
-interface Query { q: string; kind: string; expect?: string[] }
+interface Query { q: string; kind: string; expect?: string[]; state?: boolean }
 
 const PRICE_PER_TOKEN = 0.042 / 1_000_000
 
@@ -90,8 +91,9 @@ async function finished(service: JarvisService, question: string, mode: 'auto' |
   }
 }
 
-function verdict(query: Query, ids: string[], answered: boolean): string {
-  if (!answered) return query.expect === undefined ? 'bien envoyée à Claude' : 'relue par Claude'
+function verdict(query: Query, ids: string[], answered: boolean, local = false): string {
+  if (local) return query.state ? 'état, à raison' : 'FAUX ÉTAT'
+  if (!answered) return query.expect === undefined && !query.state ? 'bien envoyée à Claude' : 'relue par Claude'
   if (query.expect === undefined) return 'FAUSSE RECHERCHE'
   if (query.expect.length === 0) return ids.length === 0 ? 'rien, à raison' : 'FAUX POSITIF'
   if (ids.length === 0) return 'RIEN À TORT'
@@ -117,8 +119,9 @@ for (const query of dataset) {
   tokens = 0
   const { job, ms } = await finished(auto, query.q, 'auto')
   const answered = job.route?.model === 'jev'
+  const local = job.route?.model === 'local'
   const ids = answered ? job.answer!.results.map((result) => result.conversationId) : []
-  const row = { q: query.q, kind: query.kind, ms, tokens, ...probabilities, verdict: verdict(query, ids, answered), results: ids.map(titleOf) }
+  const row = { q: query.q, kind: query.kind, ms, tokens, ...probabilities, verdict: verdict(query, ids, answered, local), results: ids.map(titleOf) }
   jevRows.push(row)
   console.log(`${String(ms).padStart(5)} ms ${row.verdict.padEnd(22)} recherche ${row.search} choix ${row.best ?? '–'} aucune ${row.none ?? '–'} | ${query.q.slice(0, 60)}${row.results[0] ? ` → ${row.results[0]}` : ''}`)
 }

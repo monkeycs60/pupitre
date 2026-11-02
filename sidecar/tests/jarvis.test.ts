@@ -214,7 +214,7 @@ function fakeRouter(
 ): JarvisRouter {
   return {
     ready: () => ready,
-    decide: async (input) => ({ search: false, searchProbability: 0, ...await decide(input) }),
+    decide: async (input) => ({ search: false, searchProbability: 0, overview: null, overviewProbability: 0, ...await decide(input) }),
     choose,
   };
 }
@@ -922,15 +922,17 @@ test("auto : sans clé TypeSafe, Jev n'est pas appelé et la trace le dit", asyn
   });
 });
 
-test("Jev reçoit la demande et les deux derniers échanges, et décide « plan » à partir de 0,6", async () => {
+test("Jev reçoit la demande, montre les deux derniers échanges au seul plan, et décide « plan » à partir de 0,6", async () => {
   const requests: Array<{ url: string; init: RequestInit }> = [];
   let probability: unknown = 0.6;
   let explicit: unknown = 0.8;
+  let waiting: unknown = 0.1;
+  let running: unknown = 0.2;
   let status = 200;
   const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
     requests.push({ url: String(url), init: init! });
     return status === 200
-      ? Response.json({ model: "jev-1.14.0", answers: { plan: { type: "noul", noul: probability }, explicit: { type: "noul", noul: explicit } }, usage: { input_tokens: 420, output_tokens: 1 } })
+      ? Response.json({ model: "jev-1.14.0", answers: { plan: { type: "noul", noul: probability }, explicit: { type: "noul", noul: explicit }, waiting: { type: "noul", noul: waiting }, running: { type: "noul", noul: running } }, usage: { input_tokens: 420, output_tokens: 1 } })
       : new Response("trop de requêtes", { status });
   }) as unknown as typeof fetch;
   let key: string | null = "cle-test";
@@ -942,29 +944,53 @@ test("Jev reçoit la demande et les deux derniers échanges, et décide « plan 
     { role: "user" as const, text: "x".repeat(900) },
   ];
 
-  expect(await router.decide({ question: "archive-les", history, signal })).toEqual({ plan: true, probability: 0.6, search: false, searchProbability: 0.2 });
+  expect(await router.decide({ question: "archive-les", history, signal })).toEqual({
+    plan: true, probability: 0.6, search: false, searchProbability: 0.2, overview: null, overviewProbability: 0.2,
+  });
   expect(requests[0]!.url).toBe("https://api.typesafe.ai/v1/systemone");
   expect(requests[0]!.init.method).toBe("POST");
   expect((requests[0]!.init.headers as Record<string, string>).authorization).toBe("Bearer cle-test");
   const body = JSON.parse(String(requests[0]!.init.body)) as {
     model: string;
-    state: { request: string; previous_exchanges: Array<{ role: string; text: string }> };
-    questions: { plan: { type: string }; explicit: { type: string } };
+    state: { request: string };
+    questions: {
+      plan: { type: string; instructions: { previous_exchanges: Array<{ role: string; text: string }> } };
+      explicit: { type: string; instructions: string };
+      waiting: { type: string; instructions: string };
+      running: { type: string; instructions: string };
+    };
   };
   expect(body.model).toBe("jev-latest");
-  expect(body.state.request).toBe("archive-les");
-  expect(body.state.previous_exchanges.map((entry) => [entry.role, entry.text.length])).toEqual([["jarvis", 15], ["user", 600]]);
+  expect(body.state).toEqual({ request: "archive-les" });
+  expect(body.questions.plan.instructions.previous_exchanges.map((entry) => [entry.role, entry.text.length])).toEqual([["jarvis", 15], ["user", 600]]);
+  for (const question of [body.questions.explicit, body.questions.waiting, body.questions.running]) {
+    expect(JSON.stringify(question)).not.toContain("trouve les doublons");
+    expect(typeof question.instructions).toBe("string");
+  }
   expect(body.questions.plan.type).toBe("noul");
   expect(body.questions.explicit.type).toBe("noul");
+  expect(body.questions.waiting.type).toBe("noul");
+  expect(body.questions.running.type).toBe("noul");
 
   probability = 0.59;
   explicit = 0.5;
-  expect(await router.decide({ question: "ouvre", history: [], signal })).toEqual({ plan: false, probability: 0.59, search: true, searchProbability: 0.5 });
+  expect(await router.decide({ question: "ouvre", history: [], signal })).toMatchObject({ plan: false, probability: 0.59, search: true, searchProbability: 0.5 });
   explicit = 0.51;
-  expect(await router.decide({ question: "ouvre", history: [], signal })).toEqual({ plan: false, probability: 0.59, search: false, searchProbability: 0.49 });
+  expect(await router.decide({ question: "ouvre", history: [], signal })).toMatchObject({ plan: false, probability: 0.59, search: false, searchProbability: 0.49 });
   explicit = undefined;
   await expect(router.decide({ question: "ouvre", history: [], signal })).rejects.toThrow("sans probabilité");
   explicit = 0.8;
+  waiting = 0.75;
+  expect(await router.decide({ question: "qui m'attend ?", history: [], signal })).toMatchObject({ overview: "waiting", overviewProbability: 0.75 });
+  waiting = 0.8;
+  running = 0.9;
+  expect(await router.decide({ question: "quels agents tournent ?", history: [], signal })).toMatchObject({ overview: "running", overviewProbability: 0.9 });
+  waiting = 0.74;
+  running = 0.7;
+  expect(await router.decide({ question: "à valider ?", history: [], signal })).toMatchObject({ overview: null, overviewProbability: 0.74 });
+  running = undefined;
+  await expect(router.decide({ question: "ouvre", history: [], signal })).rejects.toThrow("sans probabilité");
+  running = 0.2;
   probability = "oui";
   await expect(router.decide({ question: "ouvre", history: [], signal })).rejects.toThrow("sans probabilité");
   status = 429;
@@ -1348,4 +1374,65 @@ test("un raccourci inconnu est refusé", async () => {
   const { generate } = recording(() => ({ text: "x", results: [], actions: [] }));
   const response = await service(f, generate).handle(ask({ question: "ok", shortcut: "tout" }), "/api/jarvis/ask");
   expect(response!.status).toBe(400);
+});
+
+test("auto : Jev reconnaît « qui m'attend ? » tapé au clavier, et l'état de Pupitre répond sans Claude", async () => {
+  const f = fixture();
+  const { calls, generate } = recording(() => ({ text: "ne doit pas servir", results: [], actions: [] }));
+  const router = fakeRouter(async () => ({ plan: false, probability: 0.03, overview: "waiting", overviewProbability: 0.85 }));
+  const jarvis = service(f, generate, { router });
+  const job = await settled(jarvis, await startJob(jarvis, { question: "y a des agents qui m'attendent ?" }));
+
+  expect(calls).toEqual([]);
+  expect(job.route).toMatchObject({
+    model: "local",
+    effort: null,
+    by: "router",
+    reason: "Jev reconnaît une question sur l'état de Pupitre, à 85 % : aucun modèle appelé.",
+  });
+  expect(job.steps.map((step) => step.label)).toEqual(["Lire l'état des agents", "Chercher dans les conversations"]);
+  expect(job.answer?.text).toBe("2 conversations t'attendent.");
+  expect(job.answer?.results.map((result) => result.title)).toEqual(["Déploiement de la recette", "Format de l'export"]);
+  expect(job.answer?.actions.map((action) => action.kind)).toEqual(["send-message"]);
+});
+
+test("auto : Jev reconnaît « qu'est-ce qui tourne ? » tapé au clavier, avec les serveurs", async () => {
+  const f = fixture();
+  const { calls, generate } = recording(() => ({ text: "ne doit pas servir", results: [], actions: [] }));
+  const router = fakeRouter(async () => ({ plan: false, probability: 0.03, overview: "running", overviewProbability: 0.92 }));
+  const jarvis = service(f, generate, { router, now: () => NOW });
+  const job = await settled(jarvis, await startJob(jarvis, { question: "quels agents tournent ?" }));
+
+  expect(calls).toEqual([]);
+  expect(job.route).toMatchObject({ model: "local", by: "router" });
+  expect(job.steps.map((step) => step.label)).toEqual(["Lire l'état des agents", "Chercher dans les conversations", "Lire les serveurs"]);
+  expect(job.answer?.text).toBe("Un agent tourne, un serveur écoute.");
+  expect(job.answer?.actions.map((action) => action.kind)).toEqual(["open-url"]);
+});
+
+test("auto : un plan l'emporte sur l'état, et l'état sur une recherche", async () => {
+  const f = fixture();
+  const { calls, generate } = recording(() => ({ text: "Le plan.", results: [], actions: [] }));
+  const planning = service(f, generate, {
+    router: fakeRouter(async () => ({ plan: true, probability: 0.9, overview: "waiting", overviewProbability: 0.9 })),
+  });
+  const plan = await settled(planning, await startJob(planning, { question: "réponds à ceux qui m'attendent" }));
+  expect(calls.map((call) => call.model)).toEqual(["opus-5.5"]);
+  expect(plan.route?.model).toBe("opus-5.5");
+
+  let chosen = false;
+  const overview = service(f, generate, {
+    router: fakeRouter(
+      async () => ({ plan: false, probability: 0.1, search: true, searchProbability: 0.9, overview: "waiting", overviewProbability: 0.8 }),
+      true,
+      async () => {
+        chosen = true;
+        return { ranking: [], none: 1 };
+      },
+    ),
+  });
+  const state = await settled(overview, await startJob(overview, { question: "qui attend ?" }));
+  expect(chosen).toBe(false);
+  expect(state.route?.model).toBe("local");
+  expect(calls).toHaveLength(1);
 });
