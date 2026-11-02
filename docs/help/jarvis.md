@@ -37,6 +37,10 @@ aussitôt depuis l'état de Pupitre, sans aucun modèle et quel que soit le mode
 les conversations qui t'attendent avec leur question et les réponses que
 l'agent propose, les agents en cours et les serveurs qui écoutent.
 
+En mode **Auto**, taper ces questions à ta façon (« y a des agents qui
+m'attendent ? ») donne la même réponse : Jev les reconnaît. **Demander à Haiku
+5.5**, sous la réponse, reste possible si ce n'était pas ta question.
+
 ## Tu gardes la main
 
 Jarvis ne modifie rien seul. Une action qui change quelque chose demande deux

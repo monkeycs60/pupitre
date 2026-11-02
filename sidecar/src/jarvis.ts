@@ -410,28 +410,33 @@ export class JarvisService {
     );
   }
 
+  /** Répond depuis l'état de Pupitre, sans modèle : raccourci du panneau, ou demande que Jev a reconnue. */
+  private answerFromState(
+    record: JobRecord,
+    builder: JarvisContextBuilder,
+    live: JarvisLiveState,
+    shortcut: JarvisShortcut,
+    reason: string,
+    by: JarvisRoute["by"],
+  ): void {
+    let servers: JarvisServers = { applications: [], linked: new Map() };
+    if (shortcut === "running") {
+      const step = this.step(record, "Lire les serveurs");
+      servers = builder.servers();
+      step.done(count(servers.applications.length, "serveur actif", "serveurs actifs", "aucun serveur en écoute"));
+    }
+    const context = builder.assemble({ live, text: { terms: [], total: 0, ranked: [] }, candidates: [], semantic: [], servers });
+    record.job.route = { model: "local", effort: null, label: "État de Pupitre", reason, escalated: false, by };
+    this.settle(record, "done", null, finalizeAnswer(localDraft(shortcut, context), context, this.now() - record.startedMs));
+  }
+
   private runShortcut(record: JobRecord, input: JarvisAskInput, shortcut: JarvisShortcut): void {
     try {
       const builder = this.builder(input, input.projectId ? this.deps.projects.get(input.projectId)?.id ?? null : null);
-      let step = this.step(record, "Lire l'état des agents");
+      const step = this.step(record, "Lire l'état des agents");
       const live = builder.liveState();
       step.done(liveDetail(live));
-      let servers: JarvisServers = { applications: [], linked: new Map() };
-      if (shortcut === "running") {
-        step = this.step(record, "Lire les serveurs");
-        servers = builder.servers();
-        step.done(count(servers.applications.length, "serveur actif", "serveurs actifs", "aucun serveur en écoute"));
-      }
-      const context = builder.assemble({ live, text: { terms: [], total: 0, ranked: [] }, candidates: [], semantic: [], servers });
-      record.job.route = {
-        model: "local",
-        effort: null,
-        label: "État de Pupitre",
-        reason: "Réponse tirée de l'état de Pupitre : aucun modèle appelé.",
-        escalated: false,
-        by: "shortcut",
-      };
-      this.settle(record, "done", null, finalizeAnswer(localDraft(shortcut, context), context, this.now() - record.startedMs));
+      this.answerFromState(record, builder, live, shortcut, "Réponse tirée de l'état de Pupitre : aucun modèle appelé.", "shortcut");
     } catch (error) {
       if (record.job.status !== "running") return;
       console.error("[jarvis] raccourci impossible", error);
@@ -439,25 +444,28 @@ export class JarvisService {
     }
   }
 
+  /** Le tri de Jev, attendu le temps de ne pas lancer Haiku 5.5 pour rien. */
+  private async routerVerdict(record: JobRecord, run: RouterRun): Promise<RouterVerdict | null> {
+    const outcome = run.outcome ?? await Promise.race([
+      run.settled,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), this.deps.routerWaitMs ?? ROUTER_WAIT_MS).unref?.()),
+    ]);
+    this.ensureRunning(record);
+    return outcome?.verdict ?? null;
+  }
+
   /** Vrai si Jev a tranché seul ; sinon la demande suit le chemin des modèles Claude. */
   private async answeredByJev(
     record: JobRecord,
     input: JarvisAskInput,
-    run: RouterRun,
+    verdict: RouterVerdict,
     router: JarvisRouter,
     builder: JarvisContextBuilder,
     live: JarvisLiveState,
     text: JarvisTextSearch,
     candidates: string[],
   ): Promise<boolean> {
-    const outcome = run.outcome ?? await Promise.race([
-      run.settled,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), this.deps.routerWaitMs ?? ROUTER_WAIT_MS).unref?.()),
-    ]);
-    this.ensureRunning(record);
-    if (!outcome?.verdict?.search || outcome.verdict.plan) return false;
-
-    const recognized = `Recherche reconnue à ${percent(outcome.verdict.searchProbability)}`;
+    const recognized = `Recherche reconnue à ${percent(verdict.searchProbability)}`;
     const step = this.step(record, "Jev cherche la conversation", recognized);
     const options = builder.searchOptions(live, text, candidates);
     if (options.length === 0) {
@@ -495,8 +503,8 @@ export class JarvisService {
       effort: null,
       label: "Jev · sans Claude",
       reason: found
-        ? `Recherche reconnue à ${percent(outcome.verdict.searchProbability)}, conversation désignée à ${percent(best.probability)}.`
-        : `Recherche reconnue à ${percent(outcome.verdict.searchProbability)}, aucune conversation à ${percent(choice.none)}.`,
+        ? `${recognized}, conversation désignée à ${percent(best.probability)}.`
+        : `${recognized}, aucune conversation à ${percent(choice.none)}.`,
       escalated: false,
       by: "router",
     };
@@ -523,7 +531,15 @@ export class JarvisService {
         ? `${total}, ${count(candidates.length, "candidate", "candidates", "aucune candidate")}`
         : `${total}, aucun mot-clé à chercher`);
 
-      if (router && await this.answeredByJev(record, input, router, this.deps.router!, builder, live, text, candidates)) return;
+      const verdict = router ? await this.routerVerdict(record, router) : null;
+      if (verdict && !verdict.plan) {
+        if (verdict.overview) {
+          const reason = `Jev reconnaît une question sur l'état de Pupitre, à ${percent(verdict.overviewProbability)} : aucun modèle appelé.`;
+          this.answerFromState(record, builder, live, verdict.overview, reason, "router");
+          return;
+        }
+        if (verdict.search && await this.answeredByJev(record, input, verdict, this.deps.router!, builder, live, text, candidates)) return;
+      }
 
       const semantic = project && this.deps.semanticSearch ? this.semantic(input.question, project.id) : null;
       step = this.step(record, "Lire les serveurs");

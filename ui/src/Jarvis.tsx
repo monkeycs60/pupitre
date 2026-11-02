@@ -434,7 +434,7 @@ function ExchangeView({ exchange, busy, onAskHaiku, onCancel, onOpenResult, onRu
             </button>
           ))}
 
-          {job?.route?.model === 'jev' ? (
+          {job?.route && (job.route.model === 'jev' || (job.route.model === 'local' && job.route.by === 'router')) ? (
             <button type="button" className="jarvis-ghost" disabled={busy} onClick={onAskHaiku}>Demander à Haiku 5.5</button>
           ) : null}
 

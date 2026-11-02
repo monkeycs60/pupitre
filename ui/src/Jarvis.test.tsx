@@ -16,6 +16,7 @@ afterEach(() => {
 
 const JEV_ROUTE: JarvisRoute = { model: 'jev', effort: null, label: 'Jev · sans Claude', reason: 'Recherche reconnue à 93 %, conversation désignée à 82 %.', escalated: false, by: 'router' }
 const LOCAL_ROUTE: JarvisRoute = { model: 'local', effort: null, label: 'État de Pupitre', reason: 'Réponse tirée de l’état de Pupitre : aucun modèle appelé.', escalated: false, by: 'shortcut' }
+const RECOGNIZED_ROUTE: JarvisRoute = { model: 'local', effort: null, label: 'État de Pupitre', reason: 'Jev reconnaît une question sur l’état de Pupitre, à 85 % : aucun modèle appelé.', escalated: false, by: 'router' }
 const HAIKU_ROUTE: JarvisRoute = { model: 'haiku-5.5', effort: 'high', label: 'Haiku 5.5 · rapide', reason: 'Mode rapide demandé : Haiku 5.5 répond seul.', escalated: false, by: 'mode' }
 
 function job(id: string, route: JarvisRoute, answer: Partial<JarvisAnswer>): JarvisJob {
@@ -134,4 +135,28 @@ test('une réponse de Jev propose de demander à Haiku, sans lui montrer la list
     { role: 'jarvis', text: 'Première réponse.' },
   ])
   expect(view.getAllByText('le bug Stripe')).toHaveLength(2)
+})
+
+test('une question d’état reconnue par Jev garde le recours à Haiku, pas un raccourci demandé au bouton', async () => {
+  const asked = serve([
+    job('job-1', LOCAL_ROUTE, { text: 'Une conversation t’attend.' }),
+    job('job-2', RECOGNIZED_ROUTE, { text: 'Deux conversations t’attendent.' }),
+    job('job-3', HAIKU_ROUTE, { text: 'Haiku a relu.' }),
+  ])
+  const view = panel()
+  const input = view.getByLabelText('Question pour Jarvis') as HTMLTextAreaElement
+
+  fireEvent.click(shortcuts(view.container)[0]!)
+  await waitFor(() => expect(view.getByText('Une conversation t’attend.')).toBeTruthy())
+  expect(view.queryByText('Demander à Haiku 5.5')).toBeNull()
+
+  fireEvent.change(input, { target: { value: 'y a des agents qui m’attendent ?' } })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  await waitFor(() => expect(view.getByText('Deux conversations t’attendent.')).toBeTruthy())
+  expect(asked[1]!.shortcut).toBeUndefined()
+  expect(view.container.querySelectorAll('.jarvis-route')[1]!.className).toContain('is-local')
+
+  fireEvent.click(view.getByText('Demander à Haiku 5.5'))
+  await waitFor(() => expect(view.getByText('Haiku a relu.')).toBeTruthy())
+  expect(asked[2]).toMatchObject({ question: 'y a des agents qui m’attendent ?', mode: 'fast' })
 })
