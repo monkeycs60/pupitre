@@ -1,9 +1,11 @@
+import { readHead } from "./git-repositories";
 import {
   clipText,
   type JarvisContext,
   type JarvisConversationEntry,
   type JarvisConversationStatus,
   type JarvisProjectEntry,
+  type JarvisSearchOption,
 } from "./jarvis-context";
 
 export interface JarvisResult {
@@ -65,6 +67,9 @@ const MAX_MESSAGE_CHARS = 4_000;
 const MAX_PROMPT_CHARS = 8_000;
 const HISTORY_ENTRIES = 6;
 const HISTORY_CHARS = 600;
+const SEARCH_RESULTS = 5;
+const SEARCH_RESULT_FLOOR = 0.1;
+const SEARCH_PASSAGES = 3;
 const READ_ONLY_KINDS = new Set(["open", "open-url"]);
 const ACTION_KINDS = new Set(["open", "send-message", "new-conversation", "archive", "pin", "stop", "open-url"]);
 
@@ -599,4 +604,113 @@ export function finalizeAnswer(draft: JarvisDraft, context: JarvisContext, durat
     }
   });
   return { text: draft.text, results, actions, durationMs };
+}
+
+/** Réponse à une recherche que Jev a tranchée seul : la meilleure piste, et celles qui restent plausibles. */
+export function searchAnswer(
+  options: JarvisSearchOption[],
+  ranking: Array<{ alias: string; probability: number; passages?: number[] }>,
+  durationMs: number,
+): JarvisAnswer {
+  const byAlias = new Map(options.map((option) => [option.alias, option]));
+  const picked = ranking
+    .filter(({ probability }, index) => index === 0 || probability >= SEARCH_RESULT_FLOOR)
+    .slice(0, SEARCH_RESULTS)
+    .flatMap(({ alias, passages }) => {
+      const option = byAlias.get(alias);
+      return option ? [{ option, passages: passages ?? option.passages.map((passage) => passage.id) }] : [];
+    });
+  const [best, ...others] = picked.map(({ option }) => option);
+  const place = best?.current ? "la conversation ouverte" : `dans ${best?.projectName}`;
+  const text = !best
+    ? "Je n'ai trouvé aucune conversation sur ce sujet."
+    : others.length === 0
+      ? `Trouvée : « ${best.title} », ${place}.`
+      : `Meilleure piste : « ${best.title} », ${place}. ${others.length === 1 ? "Une autre conversation reste plausible." : `${others.length} autres restent plausibles.`}`;
+  return {
+    text,
+    results: picked.map(({ option, passages }): JarvisResult => ({
+      conversationId: option.id,
+      projectId: option.projectId,
+      projectName: option.projectName,
+      title: option.title,
+      status: option.status,
+      ticketKey: option.ticketKey,
+      branch: option.worktreePath ? readHead(option.worktreePath).branch : null,
+      updatedAt: option.updatedAt,
+      reason: clipText(option.summary || option.lastMessage || "", 300),
+      events: passages.slice(0, SEARCH_PASSAGES).flatMap((id) => {
+        const passage = option.passages.find((item) => item.id === id);
+        return passage ? [{ id: passage.id, at: passage.at, excerpt: passage.text }] : [];
+      }),
+    })),
+    actions: [],
+    durationMs,
+  };
+}
+
+function waitingDraft(context: JarvisContext): JarvisDraft {
+  const entries = context.conversations.filter((entry) => entry.status === "waiting");
+  const total = context.totals.waiting;
+  const unlisted = total - entries.length;
+  const text = total === 0
+    ? "Personne ne t'attend."
+    : total === 1
+      ? "Une conversation t'attend."
+      : `${total} conversations t'attendent.${unlisted > 0 ? ` Voici les ${entries.length} premières.` : ""}`;
+  return {
+    text,
+    results: entries.map((entry) => ({ conversation: entry.alias, reason: clipText(entry.waiting?.question ?? "", 300), eventIds: [] })),
+    actions: entries.flatMap((entry): JarvisDraftAction[] => (entry.waiting?.options ?? []).map((option) => ({
+      kind: "send-message",
+      conversation: entry.alias,
+      message: option.message.slice(0, MAX_MESSAGE_CHARS),
+      label: clipText(option.label, 60),
+      why: clipText(`Réponse proposée par l'agent de « ${entry.title} ».`, 240),
+    }))).slice(0, MAX_ACTIONS),
+    needsOrchestration: false,
+    orchestrationReason: null,
+    dropped: [],
+  };
+}
+
+function runningReason(running: { since: string; activity: string }, now: Date): string {
+  const since = `En cours ${elapsed(running.since, now)}`;
+  return running.activity && running.activity !== "en cours" ? `${since} : ${running.activity}` : since;
+}
+
+function runningDraft(context: JarvisContext): JarvisDraft {
+  const entries = context.conversations.filter((entry) => entry.status === "running");
+  const total = context.totals.running;
+  const titles = new Map(context.conversations.map((entry) => [entry.alias, entry.title]));
+  const agents = total === 0 ? "Aucun agent ne tourne" : total === 1 ? "Un agent tourne" : `${total} agents tournent`;
+  const servers = context.servers.length === 0
+    ? "aucun serveur n'écoute dans les projets"
+    : context.servers.length === 1 ? "un serveur écoute" : `${context.servers.length} serveurs écoutent`;
+  return {
+    text: `${agents}, ${servers}.`,
+    results: entries.map((entry) => ({
+      conversation: entry.alias,
+      reason: clipText(entry.running ? runningReason(entry.running, context.now) : "", 300),
+      eventIds: [],
+    })),
+    actions: context.servers.slice(0, MAX_ACTIONS).map((server): JarvisDraftAction => ({
+      kind: "open-url",
+      url: server.url,
+      label: clipText(`${server.name} :${server.port}`, 60),
+      why: clipText([
+        `Projet ${server.projectName}`,
+        server.branch ? `branche ${server.branch}` : null,
+        ...server.conversations.slice(0, 1).map((alias) => `lié à « ${titles.get(alias) ?? ""} »`),
+      ].filter(Boolean).join(" · "), 240),
+    })),
+    needsOrchestration: false,
+    orchestrationReason: null,
+    dropped: [],
+  };
+}
+
+/** Réponse aux raccourcis du panneau, tirée de l'état de Pupitre sans appeler de modèle. */
+export function localDraft(shortcut: "waiting" | "running", context: JarvisContext): JarvisDraft {
+  return shortcut === "waiting" ? waitingDraft(context) : runningDraft(context);
 }

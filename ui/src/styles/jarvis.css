@@ -188,6 +188,39 @@
   background: var(--bg-active);
 }
 
+.jarvis-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 8px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.jarvis-shortcuts + .jarvis-input {
+  border-top: 0;
+}
+
+.jarvis-shortcuts button {
+  padding: 4px 10px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  background: var(--bg-hover);
+  border: 0;
+  border-radius: var(--r-full);
+  cursor: pointer;
+}
+
+.jarvis-shortcuts button:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--bg-active);
+}
+
+.jarvis-shortcuts button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .jarvis-exchange {
   display: grid;
   gap: var(--space-2);
@@ -231,6 +264,12 @@
 .jarvis-route.is-opus strong {
   color: var(--accent);
   background: var(--accent-soft);
+}
+
+.jarvis-route.is-jev strong,
+.jarvis-route.is-local strong {
+  color: var(--text);
+  background: var(--bg-hover);
 }
 
 .jarvis-route span {
@@ -602,9 +641,14 @@
   cursor: pointer;
 }
 
-.jarvis-ghost:hover {
+.jarvis-ghost:hover:not(:disabled) {
   color: var(--text-strong);
   border-color: var(--border-strong);
+}
+
+.jarvis-ghost:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .jarvis-action-done,

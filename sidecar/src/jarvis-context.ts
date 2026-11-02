@@ -106,6 +106,25 @@ export interface JarvisContext {
   totals: { running: number; waiting: number; unread: number };
 }
 
+/** Une conversation que Jev peut désigner, décrite seulement par ce qu'il doit comparer. */
+export interface JarvisSearchOption {
+  alias: string;
+  id: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+  summary: string;
+  /** Dernier message, seulement quand aucun résumé ne dit de quoi parle la conversation. */
+  lastMessage: string | null;
+  status: JarvisConversationStatus;
+  /** Ouverte à l'écran : ce qu'on cherche peut s'y trouver, la réponse doit le dire. */
+  current: boolean;
+  ticketKey: string | null;
+  worktreePath: string | null;
+  updatedAt: string;
+  passages: JarvisExcerpt[];
+}
+
 export interface JarvisLiveState {
   running: Map<string, { since: string; activity: string }>;
   waiting: Map<string, { question: string; options: NudgeAction[] }>;
@@ -132,6 +151,8 @@ export interface JarvisServers {
 }
 
 export const MAX_CANDIDATES = 12;
+/** Une question « choice » de Jev admet 255 options, dont celle qui dit qu'aucune ne convient. */
+export const MAX_SEARCH_OPTIONS = 254;
 const MAX_EXCERPTS = 8;
 const MAX_MATCHED_EXCERPTS = 6;
 const MAX_TERMS = 12;
@@ -275,6 +296,17 @@ interface ConversationRow {
   worktree_path: string | null;
   ticket_key: string | null;
   ticket_url: string | null;
+}
+
+function conversationStatus(row: ConversationRow, running: boolean, waiting: boolean): JarvisConversationStatus {
+  if (running) return "running";
+  if (waiting) return "waiting";
+  if (row.archived) return "archived";
+  return row.answered_turn > row.last_read_turn ? "unread" : "idle";
+}
+
+function conversationSummary(row: ConversationRow): string {
+  return row.summary && row.summary !== row.title ? row.summary : "";
 }
 
 export class JarvisContextBuilder {
@@ -471,12 +503,7 @@ export class JarvisContextBuilder {
       if (!row) continue;
       const running = parts.live.running.get(id) ?? null;
       const waiting = parts.live.waiting.get(id) ?? null;
-      const unread = row.answered_turn > row.last_read_turn;
-      const status = running ? "running"
-        : waiting ? "waiting"
-        : row.archived ? "archived"
-        : unread ? "unread"
-        : "idle";
+      const status = conversationStatus(row, running !== null, waiting !== null);
       const lastCount = values.has("current") ? 4 : values.has("match") ? 2 : 1;
       const excerpts = new Map<number, JarvisExcerpt>();
       for (const excerpt of (matched.get(id) ?? []).slice(0, values.has("current") ? 4 : MAX_MATCHED_EXCERPTS)) {
@@ -491,7 +518,7 @@ export class JarvisContextBuilder {
         projectId: row.project_id,
         projectName: row.project_name,
         title: row.title,
-        summary: row.summary && row.summary !== row.title ? row.summary : "",
+        summary: conversationSummary(row),
         status,
         pinned: !!row.pinned,
         ticketKey: row.ticket_key,
@@ -541,6 +568,41 @@ export class JarvisContextBuilder {
       tickets,
       totals: liveTotals(parts.live),
     };
+  }
+
+  /** Ce que Jev compare : les candidates de la recherche et la conversation à l'écran, puis les plus récentes. */
+  searchOptions(live: JarvisLiveState, text: JarvisTextSearch, candidates: string[]): JarvisSearchOption[] {
+    const current = this.input.conversationId;
+    const searched = current ? [...candidates, current] : candidates;
+    const recent = this.deps.db.query(`
+      SELECT c.id FROM conversations c JOIN projects p ON p.id = c.project_id
+      WHERE c.deleted_at IS NULL AND p.removed_at IS NULL
+      ORDER BY c.updated_at DESC LIMIT ?
+    `).all(MAX_SEARCH_OPTIONS) as Array<{ id: string }>;
+    const ids = [...new Set([...searched, ...recent.map((row) => row.id)])].slice(0, MAX_SEARCH_OPTIONS);
+    const rows = this.metadata(ids);
+    const passages = this.matchedExcerpts(searched, text.terms);
+    return ids.flatMap((id, index): JarvisSearchOption[] => {
+      const row = rows.get(id);
+      if (!row) return [];
+      const summary = conversationSummary(row);
+      const last = summary ? null : this.lastEvents(id, 1)[0]?.text ?? null;
+      return [{
+        alias: `c${index + 1}`,
+        id,
+        projectId: row.project_id,
+        projectName: row.project_name,
+        title: row.title,
+        summary,
+        lastMessage: last === null ? null : plainExcerpt(last, EXCERPT_CHARS) || null,
+        status: conversationStatus(row, live.running.has(id), live.waiting.has(id)),
+        current: id === current,
+        ticketKey: row.ticket_key,
+        worktreePath: row.worktree_path,
+        updatedAt: row.updated_at,
+        passages: passages.get(id) ?? [],
+      }];
+    });
   }
 
   private metadata(ids: string[]): Map<string, ConversationRow> {

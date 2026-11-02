@@ -145,6 +145,8 @@ test("le rapport range les questions à Jarvis par chemin, avec leur durée méd
   const { store } = setup();
   const at = october(28, 9).toISOString();
   store.record(validUiEvents([
+    { at, name: "jarvis.ask", props: { mode: "auto", model: "jev", by: "router", escalated: false, status: "done", seconds: 0.4 } },
+    { at, name: "jarvis.ask", props: { mode: "fast", model: "local", by: "shortcut", escalated: false, status: "done", seconds: 0.1 } },
     { at, name: "jarvis.ask", props: { mode: "auto", model: "haiku-5.5", by: "haiku", escalated: false, status: "done", seconds: 9.6, proposed: "open,send-message" } },
     { at, name: "jarvis.ask", props: { mode: "auto", model: "haiku-5.5", by: "haiku", escalated: false, status: "done", seconds: 12.2, proposed: "open" } },
     { at, name: "jarvis.ask", props: { mode: "auto", model: "haiku-5.5", by: "haiku", escalated: false, status: "done", seconds: 10.4, proposed: "" } },
@@ -161,6 +163,8 @@ test("le rapport range les questions à Jarvis par chemin, avec leur durée méd
   const { jarvis } = store.usage(7, october(28, 15));
 
   expect(jarvis.questions).toEqual([
+    { path: "jev", count: 1, failed: 0, medianSeconds: 0.4 },
+    { path: "local", count: 1, failed: 0, medianSeconds: 0.1 },
     { path: "haiku", count: 3, failed: 0, medianSeconds: 10.4 },
     { path: "router", count: 1, failed: 0, medianSeconds: 41 },
     { path: "handoff", count: 2, failed: 1, medianSeconds: null },

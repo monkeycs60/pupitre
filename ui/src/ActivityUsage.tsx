@@ -8,6 +8,8 @@ type UsagePeriod = (typeof USAGE_PERIODS)[number]
 type UsageFeatureCount = UsageReport['catalog'][number]
 
 const JARVIS_PATHS: Record<UsageReport['jarvis']['questions'][number]['path'], string> = {
+  jev: 'Jev seul, sans Claude',
+  local: 'État de Pupitre, sans modèle',
   haiku: 'Haiku 5.5 seul',
   router: 'Jev, puis Opus 5.5',
   handoff: 'Haiku 5.5, puis Opus 5.5',

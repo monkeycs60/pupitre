@@ -50,7 +50,7 @@ function nextActivityRun(hour: string): string {
 const OTHER_TOKENS: Array<{ name: 'openai' | 'cerebras' | 'typesafe' | 'googleCalendar'; label: string; help: string }> = [
   { name: 'openai', label: 'OpenAI', help: 'Clé OpenAI (embeddings de la recherche IA)' },
   { name: 'cerebras', label: 'Cerebras', help: 'Clé Cerebras (tri des résultats par gpt-oss-120b)' },
-  { name: 'typesafe', label: 'TypeSafe', help: 'Clé TypeSafe : Jev trie chaque demande à Jarvis et confie les plans à Opus 5.5 d’emblée' },
+  { name: 'typesafe', label: 'TypeSafe', help: 'Clé TypeSafe : Jev trie chaque demande à Jarvis, retrouve seul les conversations cherchées et confie les plans à Opus 5.5 d’emblée' },
   { name: 'googleCalendar', label: 'Google Agenda', help: 'Adresse secrète au format iCal (Google Agenda › Paramètres de l’agenda › Intégrer l’agenda), affichée dans l’agenda des rapports' },
 ]
 

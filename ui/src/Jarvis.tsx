@@ -11,22 +11,33 @@ import {
   pillClearance,
   warmJarvis,
   type JarvisActionContext,
-} from './jarvis'
-import type { JarvisAction, JarvisJob, JarvisMode, JarvisResult } from './types'
+} from './jarvis.ts'
+import type { JarvisAction, JarvisJob, JarvisMode, JarvisResult, JarvisRoute, JarvisShortcut } from './types'
 
 const POLL_MS = 500
+/** Jev et les raccourcis répondent en une fraction de seconde : le premier relevé ne doit pas les retarder. */
+const FAST_POLL_MS = 100
+const FAST_POLL_WINDOW_MS = 2_000
 
 const MODES: Array<{ id: JarvisMode; label: string; hint: string }> = [
-  { id: 'auto', label: 'Auto', hint: 'Jev trie ta demande en un instant : Haiku 5.5 répond, Opus 5.5 prend la main dès qu’un plan s’impose.' },
-  { id: 'fast', label: 'Rapide', hint: 'Haiku 5.5 seul : quelques secondes, pour retrouver ou faire le point.' },
+  { id: 'auto', label: 'Auto', hint: 'Jev retrouve seul une conversation en une fraction de seconde. Pour le reste, Haiku 5.5 répond et Opus 5.5 prend la main dès qu’un plan s’impose.' },
+  { id: 'fast', label: 'Rapide', hint: 'Haiku 5.5 seul : une dizaine de secondes, pour une réponse rédigée.' },
   { id: 'orchestrate', label: 'Orchestrer', hint: 'Opus 5.5 directement : pour préparer plusieurs actions sur tes agents.' },
 ]
 
-const SUGGESTIONS = [
-  'Qui m’attend ?',
-  'Qu’est-ce qui tourne en ce moment ?',
-  'Où est l’agent qui travaille sur ',
+const SHORTCUTS: Array<{ id: JarvisShortcut; label: string }> = [
+  { id: 'waiting', label: 'Qui m’attend ?' },
+  { id: 'running', label: 'Qu’est-ce qui tourne ?' },
 ]
+
+const SUGGESTION = 'Où est l’agent qui travaille sur '
+
+const ROUTE_LOOKS: Record<JarvisRoute['model'], { tone: string; icon: IconName }> = {
+  'haiku-5.5': { tone: 'haiku', icon: 'bolt' },
+  'opus-5.5': { tone: 'opus', icon: 'orchestrate' },
+  jev: { tone: 'jev', icon: 'bolt' },
+  local: { tone: 'local', icon: 'check' },
+}
 
 const ACTION_ICONS: Record<JarvisAction['kind'], IconName> = {
   open: 'arrow-right',
@@ -106,6 +117,7 @@ function formatTime(value: string): string {
 }
 
 function seconds(ms: number): string {
+  if (ms < 100) return 'moins de 0,1 s'
   return `${(ms / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} s`
 }
 
@@ -148,6 +160,7 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
   useEffect(() => {
     const pending = exchanges.filter((exchange) => exchange.jobId !== null && (exchange.job === null || exchange.job.status === 'running'))
     if (pending.length === 0) return
+    const justAsked = pending.some((exchange) => exchange.job === null || Date.now() - Date.parse(exchange.job.startedAt) < FAST_POLL_WINDOW_MS)
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
       for (const exchange of pending) {
@@ -173,25 +186,26 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
             patch(exchange.id, (current) => ({ ...current, error: error instanceof Error ? error.message : String(error) }))
           })
       }
-    }, POLL_MS)
+    }, justAsked ? FAST_POLL_MS : POLL_MS)
     return () => {
       controller.abort()
       window.clearTimeout(timer)
     }
   }, [exchanges, open])
 
-  async function ask(question: string) {
+  async function ask(question: string, options: { mode?: JarvisMode; shortcut?: JarvisShortcut; retrying?: string } = {}) {
     const text = question.trim()
     if (text === '' || running) return
     const id = `${Date.now()}`
-    const history = exchanges.slice(-3).flatMap((exchange) => [
+    const askedMode = options.mode ?? mode
+    const history = exchanges.filter((exchange) => exchange.id !== options.retrying).slice(-3).flatMap((exchange) => [
       { role: 'user' as const, text: exchange.question },
       ...(exchange.job?.answer ? [{ role: 'jarvis' as const, text: exchange.job.answer.text }] : []),
     ])
-    setExchanges((current) => [...current, { id, question: text, mode, jobId: null, job: null, error: null, actions: {}, edits: {} }])
-    setDraft('')
+    setExchanges((current) => [...current, { id, question: text, mode: askedMode, jobId: null, job: null, error: null, actions: {}, edits: {} }])
+    if (options.shortcut === undefined && options.retrying === undefined) setDraft('')
     try {
-      const { jobId } = await askJarvis({ question: text, projectId, conversationId, history, mode })
+      const { jobId } = await askJarvis({ question: text, projectId, conversationId, history, mode: askedMode, ...(options.shortcut ? { shortcut: options.shortcut } : {}) })
       patch(id, (current) => ({ ...current, jobId }))
     } catch (error) {
       patch(id, (current) => ({ ...current, error: error instanceof Error ? error.message : String(error) }))
@@ -279,17 +293,17 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
           <div className="jarvis-empty">
             <p>Demande où est un agent, qui t’attend ou ce qui tourne. Jarvis cherche dans tous les projets, explique ce qu’il a trouvé et te propose des actions : <strong>rien ne part sans ton clic.</strong></p>
             <div className="jarvis-suggestions">
-              {SUGGESTIONS.map((suggestion) => (
-                <button key={suggestion} type="button" onClick={() => suggestion.endsWith(' ') ? (setDraft(suggestion), inputRef.current?.focus()) : void ask(suggestion)}>
-                  {suggestion.trim()}{suggestion.endsWith(' ') ? '…' : ''}
-                </button>
-              ))}
+              <button type="button" onClick={() => { setDraft(SUGGESTION); inputRef.current?.focus() }}>
+                {SUGGESTION.trim()}…
+              </button>
             </div>
           </div>
         ) : exchanges.map((exchange) => (
           <ExchangeView
             key={exchange.id}
             exchange={exchange}
+            busy={running}
+            onAskHaiku={() => void ask(exchange.question, { mode: 'fast', retrying: exchange.id })}
             onCancel={() => void cancel(exchange)}
             onOpenResult={(result) => {
               track('jarvis.action', { kind: 'open', result: 'fait' }, result.projectId)
@@ -300,6 +314,14 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
             onState={(actionId, state) => setActionState(exchange, actionId, state)}
             onEdit={(actionId, edit) => editAction(exchange, actionId, edit)}
           />
+        ))}
+      </div>
+
+      <div className="jarvis-shortcuts" role="group" aria-label="Raccourcis sans modèle">
+        {SHORTCUTS.map((shortcut) => (
+          <button key={shortcut.id} type="button" disabled={running} title="Réponse immédiate, tirée de l’état de Pupitre" onClick={() => void ask(shortcut.label, { shortcut: shortcut.id })}>
+            {shortcut.label}
+          </button>
         ))}
       </div>
 
@@ -322,8 +344,10 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
   )
 }
 
-function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit }: {
+function ExchangeView({ exchange, busy, onAskHaiku, onCancel, onOpenResult, onRun, onState, onEdit }: {
   exchange: Exchange
+  busy: boolean
+  onAskHaiku: () => void
   onCancel: () => void
   onOpenResult: (result: JarvisResult) => void
   onRun: (action: JarvisAction) => void
@@ -342,8 +366,8 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
       <p className="jarvis-question">{exchange.question}</p>
 
       {job?.route ? (
-        <div className={`jarvis-route is-${job.route.model === 'opus-5.5' ? 'opus' : 'haiku'}`} title={job.route.reason}>
-          <Icon name={job.route.model === 'opus-5.5' ? 'orchestrate' : 'bolt'} size={13} />
+        <div className={`jarvis-route is-${ROUTE_LOOKS[job.route.model].tone}`} title={job.route.reason}>
+          <Icon name={ROUTE_LOOKS[job.route.model].icon} size={13} />
           <strong>{job.route.label}</strong>
           <span>{job.route.escalated && job.route.by === 'haiku' ? `Haiku a passé la main : ${job.route.reason}` : job.route.reason}</span>
         </div>
@@ -409,6 +433,10 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
               </span>
             </button>
           ))}
+
+          {job?.route?.model === 'jev' ? (
+            <button type="button" className="jarvis-ghost" disabled={busy} onClick={onAskHaiku}>Demander à Haiku 5.5</button>
+          ) : null}
 
           {answer.actions.length > 0 ? (
             <div className="jarvis-actions">
