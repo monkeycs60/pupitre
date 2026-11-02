@@ -16,7 +16,8 @@
     "doctor": "bun run scripts/setup.ts --check",
     "setup:browser": "bun run scripts/setup-browser.ts",
     "setup:semantic-db": "bash scripts/setup-semantic-db.sh",
-    "measure:webkit": "bun run scripts/measure-webkit/measure-webkit.ts"
+    "measure:webkit": "bun run scripts/measure-webkit/measure-webkit.ts",
+    "measure:jarvis-search": "bun run scripts/measure-jarvis-search.ts"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4"
