@@ -248,7 +248,7 @@ export interface UsageReport {
   daily: Array<{ day: string; count: number }>
   background: Array<{ kind: string; count: number }>
   jarvis: {
-    questions: Array<{ path: 'haiku' | 'router' | 'handoff' | 'fast' | 'orchestrate'; count: number; failed: number; medianSeconds: number | null }>
+    questions: Array<{ path: 'jev' | 'local' | 'haiku' | 'router' | 'handoff' | 'fast' | 'orchestrate'; count: number; failed: number; medianSeconds: number | null }>
     actions: Array<{ kind: string; proposed: number; done: number; failed: number; ignored: number }>
   }
 }

@@ -175,6 +175,10 @@
     max-height: calc(100dvh - 64px);
   }
 
+  .jarvis-shortcuts button {
+    min-height: 36px;
+  }
+
   /* --- Tiroir de navigation ------------------------------------------------ */
 
   .app-shell > .rail,

@@ -120,6 +120,8 @@ test('l’onglet Usage montre qui a choisi le modèle de Jarvis, en combien de t
   serve({
     30: usageReport(30, USED, { 0: 3 }, [], {
       questions: [
+        { path: 'jev', count: 4, failed: 0, medianSeconds: 0.4 },
+        { path: 'local', count: 2, failed: 0, medianSeconds: 0.1 },
         { path: 'haiku', count: 12, failed: 1, medianSeconds: 9.6 },
         { path: 'router', count: 3, failed: 0, medianSeconds: 41.2 },
         { path: 'fast', count: 1, failed: 0, medianSeconds: null },
@@ -133,9 +135,11 @@ test('l’onglet Usage montre qui a choisi le modèle de Jarvis, en combien de t
   const view = render(createElement(ActivityReportView, { initialTab: 'usage', onOpenConversation: () => {} }))
   await waitFor(() => expect(view.getByText('Qui a choisi le modèle')).toBeTruthy())
 
-  expect(texts(view.container, '.usage-section')).toContain('Jarvis 16 questions')
+  expect(texts(view.container, '.usage-section')).toContain('Jarvis 22 questions')
   const [, paths, actions] = [...view.container.querySelectorAll('.usage-table')]
   expect([...paths!.querySelectorAll('tbody tr')].map((row) => texts(row, 'td'))).toEqual([
+    ['Jev seul, sans Claude', '4', '0,4 s', '0'],
+    ['État de Pupitre, sans modèle', '2', '0,1 s', '0'],
     ['Haiku 5.5 seul', '12', '9,6 s', '1'],
     ['Jev, puis Opus 5.5', '3', '41,2 s', '0'],
     ['Mode Rapide', '1', '—', '0'],

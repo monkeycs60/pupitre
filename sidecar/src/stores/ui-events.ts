@@ -16,8 +16,8 @@ export interface UiEventRow {
   props: string | null;
 }
 
-export type JarvisUsagePath = "haiku" | "router" | "handoff" | "fast" | "orchestrate";
-const JARVIS_PATHS: JarvisUsagePath[] = ["haiku", "router", "handoff", "fast", "orchestrate"];
+export type JarvisUsagePath = "jev" | "local" | "haiku" | "router" | "handoff" | "fast" | "orchestrate";
+const JARVIS_PATHS: JarvisUsagePath[] = ["jev", "local", "haiku", "router", "handoff", "fast", "orchestrate"];
 
 export interface UsageReport {
   since: string;
@@ -33,6 +33,8 @@ export interface UsageReport {
 }
 
 function jarvisPath(props: Record<string, unknown>): JarvisUsagePath {
+  if (props.model === "jev") return "jev";
+  if (props.model === "local") return "local";
   if (props.mode === "fast") return "fast";
   if (props.mode === "orchestrate") return "orchestrate";
   if (props.by === "router") return "router";

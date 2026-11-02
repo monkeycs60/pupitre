@@ -1154,6 +1154,7 @@ export interface SidecarJournal {
 /* --- Jarvis : contrat de /api/jarvis ------------------------------------ */
 
 export type JarvisMode = 'auto' | 'fast' | 'orchestrate'
+export type JarvisShortcut = 'waiting' | 'running'
 
 export interface JarvisStep {
   id: string
@@ -1164,12 +1165,12 @@ export interface JarvisStep {
 }
 
 export interface JarvisRoute {
-  model: 'haiku-5.5' | 'opus-5.5'
-  effort: 'high'
+  model: 'haiku-5.5' | 'opus-5.5' | 'jev' | 'local'
+  effort: 'high' | null
   label: string
   reason: string
   escalated: boolean
-  by: 'mode' | 'haiku' | 'router'
+  by: 'mode' | 'haiku' | 'router' | 'shortcut'
 }
 
 export interface JarvisResult {
@@ -1219,4 +1220,5 @@ export interface JarvisAskInput {
   conversationId: string | null
   history: Array<{ role: 'user' | 'jarvis'; text: string }>
   mode: JarvisMode
+  shortcut?: JarvisShortcut
 }
