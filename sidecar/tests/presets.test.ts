@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db";
-import { QUALITY_FABLE_52_MIGRATION_KEY } from "../src/stores/settings";
+import { FABLE_52_MIGRATION_KEY, SettingsStore } from "../src/stores/settings";
 import { PresetStore } from "../src/stores/presets";
 
 test("initialise les presets intégrés et gère les presets personnalisés", () => {
@@ -27,19 +27,27 @@ test("restaure un preset intégré et refuse sa suppression", () => {
   db.close();
 });
 
-test("passe Qualité max sur Fable 5.2 sans écraser une personnalisation", () => {
+test("Fable 5.1 quitte le catalogue : les réglages enregistrés passent sur Fable 5.2", () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-presets-"));
   let db = openDb(dir);
   expect(new PresetStore(db).get("builtin-quality")).toMatchObject({ model: "fable-5.2" });
+  const store = new PresetStore(db);
+  const custom = store.create({ name: "Fable", provider: "claude", model: "fable-5.1", effort: "high", speed: "fast", permission_mode: null });
+  const sonnet = store.create({ name: "Sonnet", provider: "claude", model: "sonnet-5.5", effort: "high", speed: null, permission_mode: null });
   db.query("UPDATE presets SET model = 'fable-5.1' WHERE id = 'builtin-quality'").run();
-  db.query("DELETE FROM settings WHERE key = ?").run(QUALITY_FABLE_52_MIGRATION_KEY);
+  const projectId = (db.query("INSERT INTO projects (id, name, path, created_at, default_launch_config) VALUES ('p1', 'p1', '/tmp/p1', '2026-11-10', ?) RETURNING id")
+    .get(JSON.stringify({ provider: "claude", model: "fable-5.1", effort: "max", speed: "standard" })) as { id: string }).id;
+  new SettingsStore(db).set("ticketAuditConfig", { provider: "claude", model: "fable-5.1", effort: "xhigh" });
+  db.query("DELETE FROM settings WHERE key = ?").run(FABLE_52_MIGRATION_KEY);
   db.close();
+
   db = openDb(dir);
-  expect(new PresetStore(db).get("builtin-quality")).toMatchObject({ model: "fable-5.2" });
-  db.query("UPDATE presets SET model = 'sonnet-5.5' WHERE id = 'builtin-quality'").run();
-  db.query("DELETE FROM settings WHERE key = ?").run(QUALITY_FABLE_52_MIGRATION_KEY);
-  db.close();
-  db = openDb(dir);
-  expect(new PresetStore(db).get("builtin-quality")).toMatchObject({ model: "sonnet-5.5" });
+  const migrated = new PresetStore(db);
+  expect(migrated.get("builtin-quality")).toMatchObject({ model: "fable-5.2", effort: "max" });
+  expect(migrated.get(custom.id)).toMatchObject({ model: "fable-5.2", effort: "high", speed: "fast" });
+  expect(migrated.get(sonnet.id)).toMatchObject({ model: "sonnet-5.5" });
+  const project = db.query("SELECT default_launch_config FROM projects WHERE id = ?").get(projectId) as { default_launch_config: string };
+  expect(JSON.parse(project.default_launch_config)).toEqual({ provider: "claude", model: "fable-5.2", effort: "max", speed: "standard" });
+  expect(new SettingsStore(db).get<Record<string, unknown>>("ticketAuditConfig")).toEqual({ provider: "claude", model: "fable-5.2", effort: "xhigh" });
   db.close();
 });

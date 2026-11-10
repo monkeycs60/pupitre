@@ -7,9 +7,9 @@ import {
   MESSAGE_COUNT_MIGRATION_KEY,
   OBSOLETE_MODELS_MIGRATION_KEY,
   SOL_61_MIGRATION_KEY,
+  FABLE_52_MIGRATION_KEY,
   PROJECT_LAUNCH_CONFIG_MIGRATION_KEY,
   QUALITY_FABLE_51_MIGRATION_KEY,
-  QUALITY_FABLE_52_MIGRATION_KEY,
   SettingsStore,
   SPEED_REVIEW_MIGRATION_KEY,
   TICKET_AUDIT_YOLO_MIGRATION_KEY,
@@ -760,18 +760,6 @@ export function openDb(dir: string = dataDir()): Database {
     `);
     new SettingsStore(db).set(QUALITY_FABLE_51_MIGRATION_KEY, true);
   }
-  // Même règle pour Fable 5.2 : seul le preset intégré resté sur une Fable
-  // antérieure suit, une personnalisation vers un autre modèle est gardée.
-  if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(QUALITY_FABLE_52_MIGRATION_KEY)) {
-    db.exec(`
-      UPDATE presets
-      SET model = 'fable-5.2'
-      WHERE id = 'builtin-quality'
-        AND provider = 'claude'
-        AND model IN ('fable-5', 'fable-5.1')
-    `);
-    new SettingsStore(db).set(QUALITY_FABLE_52_MIGRATION_KEY, true);
-  }
   const obsoleteModelsMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
     .get(OBSOLETE_MODELS_MIGRATION_KEY);
   if (!obsoleteModelsMigrated) {
@@ -790,6 +778,9 @@ export function openDb(dir: string = dataDir()): Database {
   }
   if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(SOL_61_MIGRATION_KEY)) {
     migrateSol61(db);
+  }
+  if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(FABLE_52_MIGRATION_KEY)) {
+    migrateFable52(db);
   }
   if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(TICKET_AUDIT_YOLO_MIGRATION_KEY)) {
     db.exec(`
@@ -1141,6 +1132,44 @@ function migrateProjectLaunchConfigs(db: Database): void {
     db.exec("UPDATE projects SET default_preset_id = NULL, default_scout_preset_id = NULL, default_todo_preset_id = NULL");
     const reset = db.query("UPDATE presets SET name = ?, provider = ?, model = ?, effort = ?, speed = ? WHERE id = ?");
     for (const preset of BUILT_INS) reset.run(preset.name, preset.provider, preset.model, preset.effort, preset.speed, preset.id);
+  })();
+}
+
+/** Fable 5.1 quitte le catalogue : tout réglage enregistré passe sur Fable 5.2,
+ *  même effort et même vitesse. Fable 5, déjà retiré, n'est pas touché. */
+function migrateFable52(db: Database): void {
+  const settings = new SettingsStore(db);
+  const replaceConfig = (value: string | null): string | null => {
+    if (value === null) return null;
+    try {
+      const config = JSON.parse(value) as Record<string, unknown>;
+      if (config?.provider === "claude" && config.model === "fable-5.1") {
+        return JSON.stringify({ ...config, model: "fable-5.2" });
+      }
+    } catch {
+      return value;
+    }
+    return value;
+  };
+  db.transaction(() => {
+    for (const table of ["presets", "workflows", "routines", "conversations", "subtasks"]) {
+      db.query(`UPDATE ${table} SET model = 'fable-5.2' WHERE provider = 'claude' AND model = 'fable-5.1'`).run();
+    }
+    const projects = db.query("SELECT id, default_launch_config, scout_launch_config, todo_launch_config FROM projects")
+      .all() as Array<Record<string, string | null>>;
+    const update = db.query("UPDATE projects SET default_launch_config = ?, scout_launch_config = ?, todo_launch_config = ? WHERE id = ?");
+    for (const project of projects) {
+      const columns = ["default_launch_config", "scout_launch_config", "todo_launch_config"] as const;
+      const configs = columns.map((column) => replaceConfig(project[column]));
+      if (columns.some((column, index) => configs[index] !== project[column])) {
+        update.run(...configs, project.id);
+      }
+    }
+    const audit = settings.get<Record<string, unknown>>("ticketAuditConfig");
+    if (audit?.provider === "claude" && audit.model === "fable-5.1") {
+      settings.set("ticketAuditConfig", { ...audit, model: "fable-5.2" });
+    }
+    settings.set(FABLE_52_MIGRATION_KEY, true);
   })();
 }
 

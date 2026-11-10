@@ -143,7 +143,7 @@ test('un modèle soumis à confirmation ne revient pas par la mémoire', async (
   servePresets([speedPreset])
   localStorage.setItem('pupitre:launch-config:v2:project-1', JSON.stringify({
     provider: 'claude',
-    model: 'fable-5.1',
+    model: 'fable-5.2',
     effort: 'high',
   }))
   const changes: ConversationConfig[] = []
@@ -163,7 +163,7 @@ test('un modèle soumis à confirmation ne revient pas par la mémoire', async (
 test('choisir Fable garde en mémoire le dernier modèle ordinaire', () => {
   const base = { presetId: null, effort: 'low', speed: 'standard' as const, permissionMode: null }
   writeLaunchConfig(project.id, { ...base, provider: 'codex', model: 'gpt-6.1-sol' })
-  writeLaunchConfig(project.id, { ...base, provider: 'claude', model: 'fable-5.1', effort: 'high' })
+  writeLaunchConfig(project.id, { ...base, provider: 'claude', model: 'fable-5.2', effort: 'high' })
   expect(readLaunchConfig(project.id)).toEqual(expect.objectContaining({ model: 'gpt-6.1-sol', effort: 'low' }))
 })
 
@@ -186,7 +186,7 @@ test('un réglage de projet soumis à confirmation cède la place au réglage du
   let ready = false
 
   render(createElement(ConfigPanel, {
-    project: { ...project, default_launch_config: { provider: 'claude', model: 'fable-5.1', effort: 'high', speed: 'standard' } },
+    project: { ...project, default_launch_config: { provider: 'claude', model: 'fable-5.2', effort: 'high', speed: 'standard' } },
     quotas,
     config: initialConfig,
     memoryKey: project.id,
