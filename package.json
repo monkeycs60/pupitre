@@ -1,0 +1,16 @@
+{
+  "name": "jeu-pirate",
+  "version": "0.1.0",
+  "description": "Jeu d'action pirate 3D solo (v1) : navigation sur la houle, bordées, sabre et mousquet. Three.js, sans classes.",
+  "scripts": {
+    "build": "node build.mjs --min",
+    "dev": "node build.mjs",
+    "test:start": "node test/run.mjs start"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "three": "0.159.0"
+  },
+  "private": true,
+  "type": "module"
+}
