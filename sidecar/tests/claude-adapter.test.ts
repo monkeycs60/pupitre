@@ -73,7 +73,7 @@ test("pinne Haiku 5.5 sur son identifiant Claude Code", async () => {
   expect(readFileSync(argsFile, "utf8")).toContain("--model claude-haiku-5-5");
 });
 
-test("pinne Fable 5, Fable 5.1, Opus 5.5 et Sonnet 5.5 sur les identifiants Claude Code", async () => {
+test("pinne Fable 5, Fable 5.1, Fable 5.2, Opus 5.5 et Sonnet 5.5 sur les identifiants Claude Code", async () => {
   const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
   process.env.PUPITRE_CLAUDE_BIN = FAKE;
   process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
@@ -102,6 +102,17 @@ test("pinne Fable 5, Fable 5.1, Opus 5.5 et Sonnet 5.5 sur les identifiants Clau
 
   const fable51Args = readFileSync(argsFile, "utf8");
   expect(fable51Args).toContain("--model claude-fable-5-1");
+
+  await collect({
+    cwd: "/tmp",
+    model: "fable-5.2",
+    prompt: "analyse",
+    cliSessionId: null,
+    permissionMode: "acceptEdits",
+    images: [],
+  });
+
+  expect(readFileSync(argsFile, "utf8")).toContain("--model claude-fable-5-2");
 
   await collect({
     cwd: "/tmp",

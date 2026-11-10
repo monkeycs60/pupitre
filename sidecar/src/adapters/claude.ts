@@ -8,6 +8,7 @@ import { aiRoots } from "../access";
 import { mcpHub } from "../mcp-hub";
 
 const CLAUDE_MODEL_IDS: Record<string, string> = {
+  "fable-5.2": "claude-fable-5-2",
   "fable-5.1": "claude-fable-5-1",
   "fable-5": "claude-fable-5",
   "opus-5.5": "claude-opus-5-5",

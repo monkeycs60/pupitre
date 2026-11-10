@@ -9,6 +9,7 @@ import {
   SOL_61_MIGRATION_KEY,
   PROJECT_LAUNCH_CONFIG_MIGRATION_KEY,
   QUALITY_FABLE_51_MIGRATION_KEY,
+  QUALITY_FABLE_52_MIGRATION_KEY,
   SettingsStore,
   SPEED_REVIEW_MIGRATION_KEY,
   TICKET_AUDIT_YOLO_MIGRATION_KEY,
@@ -758,6 +759,18 @@ export function openDb(dir: string = dataDir()): Database {
         AND model = 'fable-5'
     `);
     new SettingsStore(db).set(QUALITY_FABLE_51_MIGRATION_KEY, true);
+  }
+  // Même règle pour Fable 5.2 : seul le preset intégré resté sur une Fable
+  // antérieure suit, une personnalisation vers un autre modèle est gardée.
+  if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(QUALITY_FABLE_52_MIGRATION_KEY)) {
+    db.exec(`
+      UPDATE presets
+      SET model = 'fable-5.2'
+      WHERE id = 'builtin-quality'
+        AND provider = 'claude'
+        AND model IN ('fable-5', 'fable-5.1')
+    `);
+    new SettingsStore(db).set(QUALITY_FABLE_52_MIGRATION_KEY, true);
   }
   const obsoleteModelsMigrated = db.query("SELECT 1 AS present FROM settings WHERE key = ?")
     .get(OBSOLETE_MODELS_MIGRATION_KEY);

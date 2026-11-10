@@ -5,6 +5,7 @@ const MODEL_CONTEXT_WINDOWS: Partial<Record<Provider, Record<string, number>>> =
   // Valeurs de référence affichées comme estimations : aucune décision
   // automatique n'est prise à partir de cette jauge.
   claude: {
+    'fable-5.2': 1_000_000,
     'fable-5.1': 1_000_000,
     'fable-5': 200_000,
     'opus-5.5': 1_000_000,
