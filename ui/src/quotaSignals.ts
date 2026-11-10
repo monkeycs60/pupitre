@@ -6,7 +6,7 @@ import type { Provider, QuotaSnapshot, QuotaState, QuotaWindow } from './types'
 
 /** Modèles « chers » par provider : ceux que le pulse invite à consommer. */
 export const EXPENSIVE_MODELS = {
-  claude: ['fable-5.1', 'opus-5.5'],
+  claude: ['fable-5.2', 'fable-5.1', 'opus-5.5'],
   codex: ['gpt-6-astra', 'gpt-6.1-sol'],
   grok: ['grok-4.6'],
   reasonix: ['go41'],
@@ -131,7 +131,7 @@ export function windowTitle(window: QuotaWindow): string {
 /**
  * Fenêtres qui plafonnent un lancement avec `model` : les fenêtres communes du
  * provider, plus celles scopées à la famille du modèle (`seven_day_fable` pour
- * `fable-5.1`, `opus_weekly` pour `opus`).
+ * `fable-5.2`, `opus_weekly` pour `opus`).
  */
 export function launchQuotaWindows(state: QuotaState | null, model: string): QuotaWindow[] {
   if (state === null) return []

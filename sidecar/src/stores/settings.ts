@@ -8,6 +8,7 @@ import type { Database } from "bun:sqlite";
 export const MESSAGE_COUNT_MIGRATION_KEY = "conversation-message-count-v2";
 export const SPEED_REVIEW_MIGRATION_KEY = "speed-review-follows-preset-v1";
 export const QUALITY_FABLE_51_MIGRATION_KEY = "quality-preset-fable-5-1-v1";
+export const QUALITY_FABLE_52_MIGRATION_KEY = "quality-preset-fable-5-2-v1";
 export const OBSOLETE_MODELS_MIGRATION_KEY = "obsolete-models-gpt-6-opus-5-5-v1";
 export const SOL_61_MIGRATION_KEY = "gpt-6-sol-to-6-1-v1";
 export const PROJECT_LAUNCH_CONFIG_MIGRATION_KEY = "project-launch-config-v1";
@@ -25,6 +26,7 @@ const INTERNAL_KEYS = new Set([
   MESSAGE_COUNT_MIGRATION_KEY,
   SPEED_REVIEW_MIGRATION_KEY,
   QUALITY_FABLE_51_MIGRATION_KEY,
+  QUALITY_FABLE_52_MIGRATION_KEY,
   OBSOLETE_MODELS_MIGRATION_KEY,
   SOL_61_MIGRATION_KEY,
   PROJECT_LAUNCH_CONFIG_MIGRATION_KEY,

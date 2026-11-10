@@ -27,7 +27,7 @@ export const PROVIDER_SHORT_LABELS: Record<Provider, string> = {
 }
 
 export const PROVIDER_MODELS = {
-  claude: ['fable-5.1', 'opus-5.5', 'sonnet-5.5', 'haiku-5.5'],
+  claude: ['fable-5.2', 'fable-5.1', 'opus-5.5', 'sonnet-5.5', 'haiku-5.5'],
   codex: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'],
   grok: ['grok-4.6', 'grok-4.5'],
   reasonix: ['go41'],
@@ -80,6 +80,7 @@ export const WORKFLOW_DEFAULTS = {
  * d'où cette table d'affichage. À tenir à jour à chaque sortie de modèle.
  */
 export const MODEL_LABELS: Record<string, string> = {
+  'fable-5.2': 'Fable 5.2',
   'fable-5.1': 'Fable 5.1',
   'fable-5': 'Fable 5',
   'opus-5.5': 'Opus 5.5',
@@ -100,7 +101,7 @@ export const MODEL_LABELS: Record<string, string> = {
 }
 
 /** Modèles dont un lancement par inadvertance entame fortement le quota. */
-const CONFIRMED_MODELS: ReadonlySet<string> = new Set(['fable-5.1', 'fable-5', 'gpt-6-astra'])
+const CONFIRMED_MODELS: ReadonlySet<string> = new Set(['fable-5.2', 'fable-5.1', 'fable-5', 'gpt-6-astra'])
 
 export function requiresLaunchConfirmation(model: string): boolean {
   return CONFIRMED_MODELS.has(model)
@@ -129,7 +130,8 @@ export const EFFORT_HINTS: Record<string, string> = {
  * n'apprendrait rien et ferait quatre fois le même bruit.
  */
 export const MODEL_HINTS: Record<string, string> = {
-  'fable-5.1': 'le plus capable',
+  'fable-5.2': 'le plus capable',
+  'fable-5.1': 'génération précédente',
   'fable-5': 'génération précédente',
   'opus-5.5': 'raisonnement profond',
   opus: 'génération précédente',
@@ -167,7 +169,7 @@ export interface ModelPricing {
 }
 
 /**
- * Tarifs indicatifs en dollars par million de tokens, relevés le 6 septembre 2026 (Opus 5.5 et GPT-6 Luna : 22 septembre ; Sonnet 5.5 : 29 septembre ; GPT-6.1 Sol : 30 septembre).
+ * Tarifs indicatifs en dollars par million de tokens, relevés le 6 septembre 2026 (Opus 5.5 et GPT-6 Luna : 22 septembre ; Sonnet 5.5 : 29 septembre ; GPT-6.1 Sol : 30 septembre ; Fable 5.2 : 10 novembre).
  * Ils ne représentent jamais une facture d'abonnement : le sélecteur les
  * emploie seulement pour rendre le compromis coût/capacité lisible.
  */
@@ -178,6 +180,7 @@ export const MODEL_PRICING: readonly ModelPricing[] = [
   { provider: 'codex', model: 'gpt-5.6-sol', input: 5, output: 30 },
   { provider: 'codex', model: 'gpt-5.6-luna', input: 0.2, output: 1.2 },
   { provider: 'codex', model: 'gpt-5.6-terra', input: 2, output: 12 },
+  { provider: 'claude', model: 'fable-5.2', input: 8, output: 40 },
   { provider: 'claude', model: 'fable-5.1', input: 10, output: 50 },
   { provider: 'claude', model: 'fable-5', input: 10, output: 50 },
   { provider: 'claude', model: 'opus-5.5', input: 4, output: 20 },

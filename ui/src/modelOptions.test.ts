@@ -25,7 +25,7 @@ test('exprime le coût absolu et relatif des modèles à partir des tarifs API',
 })
 
 test('demande une confirmation avant de lancer les modèles les plus coûteux', () => {
-  expect(['fable-5.1', 'fable-5', 'gpt-6-astra'].every(options.requiresLaunchConfirmation)).toBe(true)
+  expect(['fable-5.2', 'fable-5.1', 'fable-5', 'gpt-6-astra'].every(options.requiresLaunchConfirmation)).toBe(true)
   expect(['opus', 'sonnet', 'gpt-5.6-sol', 'grok-4.6', 'go41'].some(options.requiresLaunchConfirmation)).toBe(false)
 })
 
