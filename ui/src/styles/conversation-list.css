@@ -286,10 +286,6 @@ a.port-chip:hover {
 }
 
 .conversation-filter-input.is-ai > .icon,
-.conversation-filter-input.has-scope .conversation-scope-toggle {
-  color: var(--accent);
-}
-
 .conversation-filter-input input {
   flex: 1;
   min-width: 0;

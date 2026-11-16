@@ -34,6 +34,7 @@ export interface Conversation {
   ticket_key?: string | null;
   ticket_backlog_count?: number;
   ticket_title?: string | null;
+  ticket_branch?: string | null;
   ticket_instruction: string | null;
   origin_type?: "sentry" | "problem" | "promotion" | "documents" | null;
   origin_key?: string | null;
@@ -225,6 +226,7 @@ export class ConversationStore {
     const rows = this.db.query(
       `SELECT c.*, t.key AS ticket_key, t.title AS ticket_title,
               (SELECT COUNT(*) FROM project_todos pt WHERE pt.project_id=c.project_id AND json_extract(pt.payload,'$.ticket_id')=t.id AND json_extract(pt.payload,'$.status')='backlog') AS ticket_backlog_count,
+              (SELECT tr.ref FROM ticket_refs tr WHERE tr.ticket_id=t.id AND tr.kind='branch' ORDER BY tr.seen_at DESC LIMIT 1) AS ticket_branch,
               COALESCE(c.origin_type, CASE WHEN st.issue_id IS NOT NULL THEN 'sentry' ELSE NULL END) AS origin_type,
               COALESCE(c.origin_key, json_extract(si.payload_json, '$.shortId')) AS origin_key
        FROM conversations c

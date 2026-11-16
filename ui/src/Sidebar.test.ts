@@ -411,8 +411,7 @@ test('affiche toutes les conversations dans un flux strictement récent', async 
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [oldest, newestTicket, middleSentry])
   renderSidebar()
 
-  fireEvent.click(await screen.findByRole('button', { name: /Périmètre et tri/ }))
-  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Par activité récente' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Grouper par ticket', pressed: true }))
 
   expect([...document.querySelectorAll('.conv-group-key')].map((element) => element.textContent)).toEqual(['Récentes'])
   expect([...document.querySelectorAll('.conv-row-title')].map((element) => element.textContent)).toEqual([
@@ -420,7 +419,46 @@ test('affiche toutes les conversations dans un flux strictement récent', async 
     'Sentry intermédiaire',
     'Ancienne sans ticket',
   ])
+  expect(localStorage.getItem('pupitre:conversation-sort:pupitre')).toBe('recent')
+  expect(screen.getByRole('button', { name: 'Grouper par ticket' }).getAttribute('aria-pressed')).toBe('false')
+})
+
+test('le tri choisi reste propre à chaque projet', async () => {
+  localStorage.setItem('pupitre:conversation-sort', 'recent')
+  localStorage.setItem('pupitre:conversation-sort:pupitre', 'context')
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [startedConversation])
+  renderSidebar()
+
+  expect((await screen.findByRole('button', { name: 'Grouper par ticket' })).getAttribute('aria-pressed')).toBe('true')
+  fireEvent.click(screen.getByRole('button', { name: 'Grouper par ticket' }))
+  expect(localStorage.getItem('pupitre:conversation-sort:pupitre')).toBe('recent')
   expect(localStorage.getItem('pupitre:conversation-sort')).toBe('recent')
+  fireEvent.click(screen.getByRole('button', { name: 'Grouper par ticket' }))
+  expect(localStorage.getItem('pupitre:conversation-sort:pupitre')).toBe('context')
+  expect(localStorage.getItem('pupitre:conversation-sort')).toBe('recent')
+})
+
+test('le « + » d’un ticket hors des tickets actifs reprend la dernière branche du ticket', async () => {
+  const oldTicket: Conversation = {
+    ...startedConversation,
+    id: 'conversation-old-ticket',
+    title: 'Ancien ticket',
+    ticket_id: 'ticket-48',
+    ticket_key: 'TECH-48',
+    ticket_branch: 'feature/TECH-48',
+    worktree_path: '/worktrees/feature-TECH-48',
+    updated_at: '2026-08-18T09:00:00.000Z',
+  }
+  installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [oldTicket])
+  const onCreate = mock(() => undefined)
+  renderSidebar([], null, undefined, onCreate, new Map())
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Nouvelle conversation dans TECH-48' }))
+  expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
+    ticketId: 'ticket-48',
+    ticketKey: 'TECH-48',
+    branch: 'feature/TECH-48',
+  }))
 })
 
 test('un tour qui quitte le flottant fait apparaître la conversation à lire', async () => {
@@ -529,7 +567,7 @@ test('le menu du filtre bascule vers les archives', async () => {
   renderSidebar()
 
   await waitFor(() => expect(document.querySelector('.navigation-row')).not.toBeNull())
-  fireEvent.click(screen.getByRole('button', { name: /Périmètre et tri/ }))
+  fireEvent.click(screen.getByRole('button', { name: /Périmètre/ }))
   expect(screen.getByRole('menuitemradio', { name: 'Actives' }).getAttribute('aria-checked')).toBe('true')
   expect(screen.getByRole('menuitemradio', { name: 'Corbeille' })).toBeTruthy()
 })
@@ -597,8 +635,7 @@ test('les conversations récentes gardent la clé du ticket et la recherche acce
   installApi([], () => Promise.reject(new Error('aucun lancement attendu')), [linked, { ...startedConversation, id: 'general', title: 'Autre travail', updated_at: now }])
   renderSidebar()
   await waitFor(() => expect(document.querySelectorAll('.navigation-row').length).toBe(2))
-  fireEvent.click(screen.getByRole('button', { name: /Périmètre et tri/ }))
-  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Par activité récente' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Grouper par ticket' }))
   expect(document.querySelector('.conv-row-ticket')?.textContent).toBe('TECH-25267')
   expect(document.querySelector('.conv-row-branch')?.textContent).toContain('feature/TECH-25267')
   fireEvent.change(screen.getByRole('textbox', { name: /Filtrer les conversations/ }), { target: { value: 'tech 25267 geographique' } })

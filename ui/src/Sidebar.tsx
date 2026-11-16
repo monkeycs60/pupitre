@@ -108,9 +108,11 @@ const conversationListCache = new Map<string, Conversation[]>()
 const LAST_CONVERSATION_KEY = 'pupitre:last-conversation:'
 const CONVERSATION_SORT_KEY = 'pupitre:conversation-sort'
 
-function readConversationSortMode(): ConversationSortMode {
+function readConversationSortMode(projectId: string | null): ConversationSortMode {
   try {
-    return localStorage.getItem(CONVERSATION_SORT_KEY) === 'recent' ? 'recent' : 'context'
+    const stored = (projectId === null ? null : localStorage.getItem(`${CONVERSATION_SORT_KEY}:${projectId}`))
+      ?? localStorage.getItem(CONVERSATION_SORT_KEY)
+    return stored === 'recent' ? 'recent' : 'context'
   } catch {
     return 'context'
   }
@@ -382,7 +384,9 @@ export const Sidebar = memo(function Sidebar({
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [error, setError] = useState<string | null>(null)
   const [conversationScope, setConversationScope] = useState<ConversationScope>('active')
-  const [conversationSortMode, setConversationSortMode] = useState<ConversationSortMode>(readConversationSortMode)
+  const projectId = selectedProject?.id ?? null
+  const [sortModeVersion, setSortModeVersion] = useState(0)
+  const conversationSortMode = useMemo(() => readConversationSortMode(projectId), [projectId, sortModeVersion])
   const [scopeMenuOpen, setScopeMenuOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -787,10 +791,11 @@ export const Sidebar = memo(function Sidebar({
   }
 
   function selectConversationSortMode(mode: ConversationSortMode) {
-    setConversationSortMode(mode)
+    if (projectId === null) return
     try {
-      localStorage.setItem(CONVERSATION_SORT_KEY, mode)
+      localStorage.setItem(`${CONVERSATION_SORT_KEY}:${projectId}`, mode)
     } catch {}
+    setSortModeVersion((version) => version + 1)
   }
 
   // Ouvrir une conversation depuis ailleurs (rapport, motif, ticket) doit la
@@ -863,7 +868,7 @@ export const Sidebar = memo(function Sidebar({
       <section className="sidebar-section conversations" aria-label="Conversations du projet" ref={conversationListRef}>
           <div id="sidebar-conversations-panel">
         <div className="conversation-search-row">
-          <div className={`conversation-filter-input${conversationScope !== 'active' ? ' has-scope' : ''}${aiMode ? ' is-ai' : ''}`}>
+          <div className={`conversation-filter-input${aiMode ? ' is-ai' : ''}`}>
             <Icon name={aiMode ? 'spark' : 'search'} size={14} />
             <input
               type="text"
@@ -895,11 +900,24 @@ export const Sidebar = memo(function Sidebar({
             ) : null}
             <button
               type="button"
-              className={`conversation-scope-toggle${conversationScope !== 'active' || conversationSortMode === 'recent' ? ' is-active' : ''}`}
-              aria-label="Périmètre et tri : actives, archives, corbeille"
+              className={`conversation-scope-toggle${conversationSortMode === 'context' ? ' is-active' : ''}`}
+              aria-label="Grouper par ticket"
+              aria-pressed={conversationSortMode === 'context'}
+              title={conversationSortMode === 'context'
+                ? 'Groupées par statut et par ticket · cliquer pour trier par activité récente'
+                : 'Triées par activité récente · cliquer pour grouper par ticket'}
+              disabled={selectedProject === null}
+              onClick={() => selectConversationSortMode(conversationSortMode === 'context' ? 'recent' : 'context')}
+            >
+              <Icon name="ticket" size={14} />
+            </button>
+            <button
+              type="button"
+              className={`conversation-scope-toggle${conversationScope !== 'active' ? ' is-active' : ''}`}
+              aria-label="Périmètre : actives, archives, corbeille"
               aria-haspopup="menu"
               aria-expanded={scopeMenuOpen}
-              title="Périmètre et tri"
+              title="Périmètre"
               onClick={() => setScopeMenuOpen((open) => !open)}
             >
               <Icon name="filter" size={14} />
@@ -919,7 +937,7 @@ export const Sidebar = memo(function Sidebar({
 
         {scopeMenuOpen ? (
           <div className="conversation-scope-anchor">
-          <div className="conversation-scope-menu" role="menu" aria-label="Périmètre et tri des conversations">
+          <div className="conversation-scope-menu" role="menu" aria-label="Périmètre des conversations">
             <span className="conversation-scope-menu-label">Afficher</span>
             {CONVERSATION_SCOPES.map(([scope, label]) => (
               <button
@@ -936,27 +954,6 @@ export const Sidebar = memo(function Sidebar({
               >
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   {conversationScope === scope ? (
-                    <path d="M2.5 8.5 6 12l7.5-8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  ) : null}
-                </svg>
-                {label}
-              </button>
-            ))}
-            <span className="conversation-scope-menu-label">Trier</span>
-            {([['context', 'Par statut et par ticket'], ['recent', 'Par activité récente']] as const).map(([mode, label]) => (
-              <button
-                type="button"
-                key={mode}
-                role="menuitemradio"
-                aria-checked={conversationSortMode === mode}
-                className={conversationSortMode === mode ? 'is-selected' : ''}
-                onClick={() => {
-                  selectConversationSortMode(mode)
-                  setScopeMenuOpen(false)
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  {conversationSortMode === mode ? (
                     <path d="M2.5 8.5 6 12l7.5-8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                   ) : null}
                 </svg>
@@ -1039,7 +1036,7 @@ export const Sidebar = memo(function Sidebar({
                         onConversationCreateFromContext({
                           ticketId: context.ticket_id,
                           ticketKey: context.ticket_key,
-                          branch: context.origin_type === 'sentry' ? null : groupLinks?.branch ?? null,
+                          branch: context.origin_type === 'sentry' ? null : groupLinks?.branch ?? context.ticket_branch ?? null,
                           originType: context.origin_type === 'sentry' || context.origin_type === 'problem' ? context.origin_type : null,
                           originKey: context.origin_key,
                         })

@@ -187,6 +187,20 @@ test("notes et liaison de conversation", () => {
   expect(conversations.listByProject(projectId)[0]?.ticket_key).toBe("TECH-5");
 });
 
+test("une conversation rend la dernière branche vue de son ticket", async () => {
+  const ticket = tickets.upsert(projectId, { key: "TECH-6", source: "git", title: "b", status: "", externalUrl: null });
+  conversations.create({ projectId, provider: "claude", model: "m", firstMessage: "x", ticketId: ticket.id });
+  expect(conversations.listByProject(projectId)[0]?.ticket_branch).toBeNull();
+
+  tickets.upsertRef(ticket.id, { kind: "branch", ref: "TECH-6", payload: {} });
+  await Bun.sleep(5);
+  tickets.upsertRef(ticket.id, { kind: "branch", ref: "feature/TECH-6", payload: {} });
+  tickets.upsertRef(ticket.id, { kind: "mr", ref: "reactor!1", payload: {} });
+
+  expect(conversations.listByProject(projectId)[0]?.ticket_branch).toBe("feature/TECH-6");
+  expect(conversations.listByProject(projectId)[0]?.ticket_branch).toBe(tickets.branchesOf(ticket.id)[0]);
+});
+
 test("une instruction est unique et modifiable par ticket", () => {
   const ticket = tickets.upsert(projectId, {
     key: "TECH-INSTRUCTION",
