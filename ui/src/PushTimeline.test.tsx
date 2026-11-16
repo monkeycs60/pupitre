@@ -63,7 +63,7 @@ test('déplie le diff du push sous sa carte, fichier par fichier, puis le replie
   fireEvent.click((await screen.findByText('premier')).closest('button')!)
 
   await screen.findByText('lib/new.js')
-  const cards = [...document.querySelectorAll('.push-card')]
+  const cards = [...document.querySelectorAll('.push-row')]
   const view = document.querySelector('.changes-view')!
   expect(cards[0]!.compareDocumentPosition(view) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(view.compareDocumentPosition(cards[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -72,4 +72,31 @@ test('déplie le diff du push sous sa carte, fichier par fichier, puis le replie
 
   fireEvent.click(screen.getByText('Masquer le diff').closest('button')!)
   expect(document.querySelector('.changes-view')).toBeNull()
+}, 30_000)
+
+test('replie une longue série de pushes et les acquitte tous d’un coup', async () => {
+  const acknowledged: string[] = []
+  const pushes = ['a1', 'b2', 'c3', 'd4', 'e5'].map((sha, index) => ({
+    sha: sha.repeat(4), subject: `push ${index + 1}`, authoredAt: '', parent: 'parent', remoteUrl: null, repositoryPath: '/repo',
+  }))
+  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith('/pushes') && !init?.method) return Response.json(pushes)
+    const ack = url.match(/\/pushes\/([^/]+)\/ack$/)
+    if (ack && init?.method === 'POST') { acknowledged.push(ack[1]!); return Response.json({ ok: true }) }
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+
+  render(createElement(PushTimeline, { projectId: 'project-1', conversationId: 'conversation-1' }))
+  const toggle = (await screen.findByText('5 pushes')).closest('button')!
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  expect(document.querySelectorAll('.push-row')).toHaveLength(0)
+  expect(screen.getByText('dernier : push 5')).toBeTruthy()
+
+  fireEvent.click(toggle)
+  expect(document.querySelectorAll('.push-row')).toHaveLength(5)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Tout acquitter' }))
+  await waitFor(() => expect(document.querySelector('.push-timeline')).toBeNull())
+  expect(acknowledged.sort()).toEqual(pushes.map((push) => push.sha).sort())
 }, 30_000)

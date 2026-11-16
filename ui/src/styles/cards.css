@@ -862,23 +862,29 @@
   border-radius: var(--r-sm);
 }
 
-.push-timeline { display: grid; gap: var(--space-2); margin: var(--space-4) 0; }
-.push-card { position: relative; overflow: hidden; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-md); }
-.push-card-main { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-3); align-items: center; width: 100%; padding: var(--space-3) 52px var(--space-3) var(--space-4); color: var(--text); text-align: left; background: transparent; border: 0; cursor: pointer; }
-.push-card-main:hover:not(:disabled) { background: var(--bg-hover); }
-.push-card-main > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }
-.push-card-main strong { overflow: hidden; color: var(--text-strong); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
-.push-card-main small { color: var(--text-muted); font: var(--text-xs) var(--font-sans); }
-.push-card-icon { color: var(--ok); font-size: 18px; }
-.push-card-open { color: var(--accent-text); font-size: var(--text-xs); }
-.push-card-ack { position: absolute; top: 10px; right: 12px; display: grid; place-items: center; width: 28px; height: 28px; color: var(--ok); font-size: 15px; background: var(--bg-raised); border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--border)); border-radius: var(--r-sm); cursor: pointer; }
+.push-timeline { margin: var(--space-4) 0; overflow: hidden; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-md); }
+.push-timeline-head { display: flex; gap: var(--space-3); align-items: center; padding-right: var(--space-3); }
+.push-timeline-toggle { display: flex; flex: 1; gap: var(--space-2); align-items: center; min-width: 0; padding: var(--space-2) var(--space-3); color: var(--text); text-align: left; background: transparent; border: 0; cursor: pointer; }
+.push-timeline-toggle:hover { background: var(--bg-hover); }
+.push-timeline-toggle strong { flex-shrink: 0; color: var(--text-strong); font-size: var(--text-sm); }
+.push-timeline-latest { overflow: hidden; color: var(--text-muted); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.push-timeline-chevron { margin-left: auto; color: var(--text-muted); font-size: var(--text-xs); }
+.push-timeline-list { max-height: 360px; overflow-y: auto; border-top: 1px solid var(--border-subtle); }
+.push-timeline-list.has-diff { max-height: none; }
+.push-row { display: flex; gap: var(--space-3); align-items: center; padding-right: var(--space-3); }
+.push-row + .push-row { border-top: 1px solid var(--border-subtle); }
+.push-row-main { display: flex; flex: 1; gap: var(--space-3); align-items: baseline; min-width: 0; padding: 6px var(--space-3); color: var(--text); text-align: left; background: transparent; border: 0; cursor: pointer; }
+.push-row-main:hover:not(:disabled) { background: var(--bg-hover); }
+.push-row-main strong { flex: 1; overflow: hidden; color: var(--text); font-size: var(--text-xs); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.push-row-main code { flex-shrink: 0; color: var(--text-muted); font-size: var(--text-xs); }
+.push-card-icon { color: var(--ok); font-size: 15px; }
+.push-card-open { flex-shrink: 0; color: var(--accent-text); font-size: var(--text-xs); }
+.push-card-ack { display: grid; flex-shrink: 0; place-items: center; width: 22px; height: 22px; color: var(--ok); font-size: 12px; background: var(--bg-raised); border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--border)); border-radius: var(--r-sm); cursor: pointer; }
 .push-card-ack:hover:not(:disabled) { color: var(--text-strong); background: var(--ok-soft); border-color: var(--ok); }
 .push-card-ack:disabled { cursor: default; opacity: .55; }
-.push-card footer { display: flex; gap: var(--space-3); padding: var(--space-2) var(--space-4); border-top: 1px solid var(--border-subtle); }
-.push-card footer a,
-.push-card-link { padding: 0; color: var(--text-muted); font-size: var(--text-xs); text-decoration: none; background: none; border: 0; cursor: pointer; }
-.push-card footer a:hover,
-.push-card-link:hover { color: var(--text); }
+.push-card-link { flex-shrink: 0; padding: 0; color: var(--text-muted); font-size: var(--text-xs); text-decoration: none; background: none; border: 0; cursor: pointer; }
+.push-card-link:hover:not(:disabled) { color: var(--text); }
+.push-card-link:disabled { cursor: default; opacity: .55; }
 
 .media-lightbox {
   position: fixed;
