@@ -1,8 +1,8 @@
 # Le multi-branches vit dans la conversation, pas dans des projets jumeaux
 
-Status: accepted — implémenté le 2026-08-12
+Status: accepted — implémenté le 2026-08-12, conséquences revues le 2026-11-20
 
-Pour travailler plusieurs branches d'un même dépôt en parallèle (workflow « un ticket = une branche »), l'isolation est portée par la conversation : une conversation peut naître sur une branche, Pupitre crée et gère alors un worktree git dédié (`git worktree add` dans un dossier géré par Pupitre), et tous les agents de cette conversation y travaillent. Le projet reste indivisible — un dépôt = un projet, un nom, une icône ; l'atelier Git gagne un sélecteur de worktree au lieu de se dupliquer.
+Pour travailler plusieurs branches d'un même dépôt en parallèle (workflow « un ticket = une branche »), l'isolation est portée par la conversation : une conversation peut naître sur une branche, Pupitre crée alors un worktree git dédié à cette branche (`git worktree add` dans un dossier géré par Pupitre), partagé par toutes les conversations de la branche, et tous leurs agents y travaillent. Le projet reste indivisible — un dépôt = un projet, un nom, une icône ; la conversation affiche sa branche et son travail dans la carte de travail du fil au lieu de dupliquer le projet.
 
 ## Considered Options
 
@@ -14,4 +14,4 @@ Pour travailler plusieurs branches d'un même dépôt en parallèle (workflow «
 - `conversations` porte un `worktree_path` nullable ; null = dossier principal du projet, donc le workflow mono-branche (tout sur master) ne change pas.
 - Tout spawn (tours, sous-tâches, reviews, tests) résout son cwd via la conversation, plus directement via `projects.path`.
 - Les reviews et `commit_links` sont naturellement scopés au worktree de leur conversation.
-- Pupitre possède le cycle de vie des worktrees qu'il crée (création à la demande, proposition de suppression après merge) ; les worktrees créés à la main restent utilisables via le même sélecteur.
+- Pupitre crée ses worktrees à la demande mais n'en propose pas la suppression : ils pèsent quelques Mo, restent attachés à leurs conversations, et `removeWorktree` refuse ceux qu'une conversation vivante occupe. Le ménage des worktrees d'application (`apps/<app>-<tâche>` d'affilae-mono) relève d'`ae` et du skill ticket-stack.
