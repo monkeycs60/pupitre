@@ -10,10 +10,6 @@ l'identité du visiteur. Aucun port Pupitre ne doit écouter sur une interface p
 - Adresse : `https://<machine>.<tailnet>.ts.net/`.
 - Accès depuis le téléphone : Tailscale connecté au compte personnel, puis ouvrir
   l'adresse dans Chrome. Ajouter à l'écran d'accueil si souhaité.
-- Partage Android : une fois l'app installée depuis Chrome (menu → Installer
-  l'application), « Partager → Pupitre » sur une vidéo YouTube ouvre une
-  conversation du projet Veille, créé au premier partage, qui lance `$youtube`.
-  YouTube refuse l'IP du VPS : sans source autorisée, l'agent y signale l'échec.
 - Compte Linux : `pupitre`, sans sudo et sans groupe Docker. Dossier privé
   `/home/pupitre` ; projets GitHub dans `/home/pupitre/projects`.
 - Projet modifiable : `/home/pupitre/projects/pupitre`. Les versions en service

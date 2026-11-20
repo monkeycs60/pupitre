@@ -6,7 +6,6 @@ import { ToastHost } from './ToastHost'
 import { NudgeStack } from './NudgeStack'
 import { useConversationNudges } from './useConversationNudges'
 import { pushToast } from './toasts'
-import { readShareLaunch, startYoutubeShare } from './share'
 import { WorkspaceInspector, inspectorGroupOf, storedInspectorWidth, type InspectorView } from './WorkspaceInspector'
 import { InactiveProjectResume } from './ProjectResume'
 import { TodoList } from './TodoList'
@@ -165,8 +164,6 @@ function App() {
   const readSyncKeyRef = useRef<string | null>(null)
   const navigationShortcutRef = useRef<(view: NavigationShortcutView) => void>(() => {})
   const [projectListVersion, setProjectListVersion] = useState(0)
-  const [shareLaunch] = useState(() => readShareLaunch(window.location))
-  const shareStarted = useRef(false)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpSlug, setHelpSlug] = useState<string | null>(null)
@@ -454,7 +451,7 @@ function App() {
   useEffect(() => {
     let ignore = false
     const savedLocation = readLastActiveLocation(window.localStorage)
-    if (savedLocation === null || shareLaunch !== null) {
+    if (savedLocation === null) {
       setLocationRestored(true)
       return () => {
         ignore = true
@@ -542,29 +539,6 @@ function App() {
       setSidebarWidth(maxSidebarWidth())
     }
   }
-
-  useEffect(() => {
-    if (shareLaunch === null || shareStarted.current) return
-    shareStarted.current = true
-    window.history.replaceState(null, '', '/')
-    const { youtubeUrl } = shareLaunch
-    if (youtubeUrl === null) {
-      pushToast({ tone: 'danger', title: 'Partage ignoré', detail: 'Le contenu partagé ne contient pas de lien YouTube.' })
-      return
-    }
-    void startYoutubeShare(youtubeUrl)
-      .then(async ({ projectId, conversationId }) => {
-        setProjectListVersion((current) => current + 1)
-        setConversationListVersion((current) => current + 1)
-        await openFleetConversationRef.current(projectId, conversationId)
-      })
-      .catch((error: unknown) => pushToast({
-        tone: 'danger',
-        title: 'Fiche YouTube non lancée',
-        detail: error instanceof Error ? error.message : String(error),
-        durationMs: 12_000,
-      }))
-  }, [shareLaunch])
 
   useEffect(() => {
     function syncHelpHash() {

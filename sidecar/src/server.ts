@@ -115,7 +115,6 @@ import type { ReviewCommentInput, ReviewCommentStore } from "./stores/review-com
 import { reviewProgress, snapshotOf } from "./review-progress";
 import type { ProblemService } from "./problems";
 import { buildInfo, defaultDataDir, readInstance, staleSourcesSince, type InstanceInfo } from "./instance";
-import { ensureShareProject } from "./share";
 import { processLogPath, readLifecycle } from "./process-log";
 import { PromotionConflictError, type PromotionRunner } from "./promotion";
 import {
@@ -1595,17 +1594,6 @@ export function createServer(deps: ServerDeps) {
           }
           deps.skills.refresh();
           return json(project, 201);
-        }
-
-        if (request.method === "POST" && pathname === "/api/share/project") {
-          const { project, created } = ensureShareProject(deps.projects, instance.dataDir);
-          if (!created) return json(project);
-          const appFilesystemScope = deps.settings.get<unknown>("filesystemScope");
-          if (FILESYSTEM_SCOPES.includes(appFilesystemScope as FilesystemScope)) {
-            deps.projects.setFilesystemScope(project.id, appFilesystemScope as FilesystemScope);
-          }
-          deps.skills.refresh();
-          return json(deps.projects.get(project.id), 201);
         }
 
         if (request.method === "GET" && pathname === "/api/skills") {

@@ -1126,10 +1126,6 @@ export function createConversation(
   return fetchJson('/api/conversations', jsonPost(input))
 }
 
-export function ensureShareProject(): Promise<Project> {
-  return fetchJson('/api/share/project', { method: 'POST' })
-}
-
 export function createSidequest(
   sourceConversationId: string,
   input: { instruction: string; model?: string },
