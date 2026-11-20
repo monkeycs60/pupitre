@@ -26,10 +26,11 @@ L'indicateur de la barre de titre qui nomme l'instance, le SHA du sidecar et la
 présence éventuelle de sources périmées.
 
 
-**Atelier Git** :
-La vue Code du rail, deux onglets : Changements (diff de la conversation et
-commit) et Historique (commits de la branche).
-_Avoid_ : vue Git (acceptable), guichet
+**Carte de travail** :
+La carte du fil qui montre le travail d'une conversation, ou à défaut celui de
+son Ticket : commits par dépôt, diffs à relire et ouverture dans VS Code. C'est
+là qu'on relit un Ticket.
+_Avoid_ : Atelier Git, vue Code (surfaces retirées), guichet
 
 ### Éditeur
 
