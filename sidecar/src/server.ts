@@ -1835,8 +1835,7 @@ export function createServer(deps: ServerDeps) {
               return json({ ...opened, folders: plan.folders, changed: changed.length, openedFiles: changed.length <= MAX_CHANGED_FILES_OPENED ? changed.length : 0 });
             }
             if (files.length > 0) {
-              const worktrees = sources.filter((source) => source.ref === null).map((source) => source.path);
-              return json({ ...openEditorFiles(plan, files, directory, worktrees), folders: plan.folders });
+              return json({ ...openEditorFiles(plan, files, directory), folders: plan.folders });
             }
             return json({ ...openEditorWorkspace(plan, directory), folders: plan.folders });
           } catch (error) {

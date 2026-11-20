@@ -24,9 +24,10 @@ function repository(path: string) {
 const mono = join(root, "mono");
 repository(mono);
 writeFileSync(join(mono, "mono.code-workspace"), JSON.stringify({
-  folders: [{ path: "." }, { path: "apps/reactor" }, { path: "apps/hapigator" }],
+  folders: [{ path: "." }, { path: "apps/reactor" }, { path: "apps/hapigator" }, { path: "apps/submodule-vide" }],
   settings: { "editor.tabSize": 2 },
 }));
+mkdirSync(join(mono, "apps/submodule-vide"), { recursive: true });
 const reactor = join(mono, "apps/reactor");
 const hapigator = join(mono, "apps/hapigator");
 repository(reactor);
@@ -66,8 +67,44 @@ test("assemble le monorepo et les worktrees de la branche de la conversation", (
     ["reactor", join(mono, "apps/reactor-tech123")],
     ["hapigator", join(mono, "apps/hapigator-tech123")],
   ]);
-  expect(plan.workspace?.fileName).toBe("mono-feature-TECH-123.code-workspace");
-  expect(plan.workspace?.content.settings).toEqual({ "editor.tabSize": 2 });
+  expect(plan.workspace?.fileName).toBe("mono-ticket.code-workspace");
+  expect(plan.workspace?.content.settings).toEqual({
+    "editor.tabSize": 2,
+    "git.repositoryScanMaxDepth": 1,
+    "files.watcherExclude": { "**/node_modules/**": true },
+    "window.title": "${dirty}TECH-123${separator}${activeEditorShort}",
+  });
+});
+
+test("la fenêtre Ticket porte la clé et le nom du ticket, quel que soit le ticket", () => {
+  const titled = (ticket_title: string) => planEditorWorkspace(project, {
+    id: "c", worktree_path: monoWorktree, worktree_paths: [monoWorktree], ticket_key: "TECH-123", ticket_title,
+  } as Conversation, sources).workspace;
+
+  expect(titled("Carte des audiences")?.content.settings).toMatchObject({
+    "window.title": "${dirty}TECH-123 · Carte des audiences${separator}${activeEditorShort}",
+  });
+  const long = titled("x".repeat(80))?.content.settings as Record<string, string>;
+  expect(long["window.title"]).toBe("${dirty}TECH-123 · " + "x".repeat(59) + "…${separator}${activeEditorShort}");
+  expect(titled("Autre")?.fileName).toBe("mono-ticket.code-workspace");
+});
+
+test("les réglages viennent du workspace du dépôt principal, pas de la copie de la branche", () => {
+  writeFileSync(join(monoWorktree, "mono.code-workspace"), JSON.stringify({
+    folders: [{ path: "." }],
+    settings: { "editor.tabSize": 8, "git.repositoryScanMaxDepth": 2 },
+  }));
+  const plan = planEditorWorkspace(project, { id: "c", worktree_path: monoWorktree, worktree_paths: [monoWorktree] } as Conversation, sources);
+  rmSync(join(monoWorktree, "mono.code-workspace"));
+
+  expect(plan.workspace?.content.settings).toMatchObject({ "editor.tabSize": 2, "git.repositoryScanMaxDepth": 1 });
+});
+
+test("sans ticket ni worktree, la conversation ouvre la fenêtre du projet", () => {
+  const plan = planEditorWorkspace(project, { id: "c", worktree_path: null } as Conversation, sources);
+
+  expect(plan.workspace).toBeNull();
+  expect(plan.folders[0]?.path).toBe(mono);
 });
 
 test("sans worktree, un projet sans fichier workspace ouvre son dossier", () => {

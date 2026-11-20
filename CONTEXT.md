@@ -31,6 +31,20 @@ La vue Code du rail, deux onglets : Changements (diff de la conversation et
 commit) et Historique (commits de la branche).
 _Avoid_ : vue Git (acceptable), guichet
 
+### Éditeur
+
+**Fenêtre Ticket** :
+La fenêtre VS Code unique où Pupitre montre un Ticket, ses worktrees dans
+chaque dépôt, et qu'il réutilise d'un Ticket à l'autre ; son titre porte la clé
+et le nom du Ticket.
+_Avoid_ : fenêtre de conversation, fenêtre du worktree
+
+**Fenêtre du projet** :
+La fenêtre VS Code ouverte sur le dossier principal du projet, vue d'ensemble de
+tous ses dépôts ; Pupitre y ouvre des fichiers mais ne la bascule jamais sur un
+Ticket.
+_Avoid_ : fenêtre principale, workspace
+
 ### Tableau de bord
 
 **Tableau de bord** :

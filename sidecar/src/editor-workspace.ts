@@ -102,7 +102,7 @@ export function planEditorWorkspace(
     });
   }
 
-  const template = readTemplate(root.path, projectName) ?? readTemplate(projectPath, projectName);
+  const template = readTemplate(projectPath, projectName) ?? readTemplate(root.path, projectName);
   const folders: EditorFolder[] = [];
   const placed = new Set<string>();
   if (template) {
@@ -117,7 +117,7 @@ export function planEditorWorkspace(
       if (repository) {
         folders.push(folder.name ? { ...repository, name: folder.name } : repository);
         placed.add(target);
-      } else if (existsSync(target)) {
+      } else if (existsSync(target) && readdirSync(target).length > 0) {
         folders.push({ name: folder.name ?? basename(target), path: target, branch: null });
       }
     }
@@ -130,18 +130,39 @@ export function planEditorWorkspace(
     if (!placed.has(repositoryPath) && ownBranch) folders.push(folder);
   }
 
-  if (folders.length === 1 && !template) return { workspace: null, folders };
-  const label = (branch ?? key ?? conversation.id.slice(0, 8)).replace(/[^\w.-]+/g, "-");
+  const ticket = ticketLabel(conversation, key, branch);
+  if (!ticket) return { workspace: null, folders: [root, ...folders.filter((folder) => folder !== root)] };
+  const settings = (template?.rest.settings ?? {}) as Record<string, unknown>;
   return {
     workspace: {
-      fileName: `${projectName}-${label}.code-workspace`,
+      fileName: `${projectName}-ticket.code-workspace`,
       content: {
         folders: folders.map((folder) => ({ name: folder.name, path: folder.path })),
         ...(template?.rest ?? {}),
+        settings: {
+          ...settings,
+          "git.repositoryScanMaxDepth": 1,
+          "files.watcherExclude": {
+            ...(settings["files.watcherExclude"] as Record<string, boolean> | undefined),
+            "**/node_modules/**": true,
+          },
+          "window.title": "${dirty}" + ticket + "${separator}${activeEditorShort}",
+        },
       },
     },
     folders,
   };
+}
+
+const TICKET_TITLE_MAX = 60;
+
+/** Clé et nom du Ticket de la conversation, ou nul quand elle travaille sur le dépôt principal sans ticket. */
+function ticketLabel(conversation: Conversation, key: string | null, branch: string | null): string | null {
+  const name = key ?? branch ?? (conversation.worktree_path ? basename(conversation.worktree_path) : null);
+  if (!name) return null;
+  const title = conversation.ticket_title?.trim();
+  if (!title || title === name) return name;
+  return `${name} · ${title.length > TICKET_TITLE_MAX ? `${title.slice(0, TICKET_TITLE_MAX - 1).trimEnd()}…` : title}`;
 }
 
 export function editorCommand(): string {
@@ -197,11 +218,14 @@ export async function writeRevision(directory: string, repositoryPath: string, c
   return target;
 }
 
-/** Ouvre VS Code dans une nouvelle fenêtre ; les fenêtres déjà ouvertes ne bougent pas. */
+/**
+ * Ouvre la fenêtre Ticket, que VS Code réutilise tant que le fichier
+ * `.code-workspace` garde son chemin ; sans Ticket, la fenêtre du projet.
+ */
 export function openEditorWorkspace(plan: EditorWorkspacePlan, directory: string): { target: string } {
   const command = editorCommand();
   const target = writeWorkspace(plan, directory);
-  Bun.spawn([command, "--new-window", target], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
+  Bun.spawn([command, target], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
   return { target };
 }
 
@@ -241,17 +265,14 @@ export interface EditorFileTarget {
 }
 
 /**
- * Une fenêtre VS Code par worktree : chaque fichier s'ouvre en onglet dans la
- * fenêtre de la conversation si elle est ouverte, sinon dans une fenêtre déjà
- * ouverte sur son worktree, sinon dans une nouvelle fenêtre de la conversation.
- * Un fichier d'un worktree étranger à la conversation (`otherWorktrees`) ouvre
- * la fenêtre de ce worktree.
+ * Deux fenêtres au plus : un fichier du Ticket s'ouvre dans la fenêtre Ticket,
+ * un autre dans une fenêtre déjà ouverte qui le contient, sinon dans la
+ * fenêtre Ticket.
  */
 export function openEditorFiles(
   plan: EditorWorkspacePlan,
   files: EditorFileTarget[],
   directory: string,
-  otherWorktrees: string[] = [],
   windows = openEditorWindows(),
 ): { targets: string[] } {
   const command = editorCommand();
@@ -259,21 +280,11 @@ export function openEditorFiles(
   const groups = new Map<string, string[]>();
   for (const file of files) {
     const path = resolve(file.path);
-    let target = conversationTarget;
-    const worktree = plan.folders
-      .filter((folder) => path.startsWith(`${folder.path}/`))
-      .sort((left, right) => right.path.length - left.path.length)[0]?.path
-      ?? otherWorktrees
-        .filter((other) => path.startsWith(`${other}/`))
-        .sort((left, right) => right.length - left.length)[0];
-    const foreign = worktree !== undefined && !plan.folders.some((folder) => folder.path === worktree);
-    if (foreign || !windows.has(conversationTarget)) {
-      const owner = [...windows]
-        .filter((opened) => path.startsWith(`${opened}/`))
-        .sort((left, right) => right.length - left.length)[0];
-      if (owner && (!worktree || owner.length >= worktree.length)) target = owner;
-      else if (foreign) target = worktree;
-    }
+    const inTicket = plan.folders.some((folder) => path.startsWith(`${folder.path}/`));
+    const owner = inTicket ? undefined : [...windows]
+      .filter((opened) => path.startsWith(`${opened}/`))
+      .sort((left, right) => right.length - left.length)[0];
+    const target = owner ?? conversationTarget;
     const list = groups.get(target) ?? [];
     list.push(file.line ? `${path}:${file.line}` : path);
     groups.set(target, list);
