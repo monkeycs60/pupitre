@@ -306,7 +306,7 @@ test('une conversation en cours passe dans « En cours » avec son action du mom
   expect(document.querySelector('.conv-row-line2.is-live .conv-row-activity-label')?.textContent).toBe('écrit la réponse')
 })
 
-test('place les groupes ticket et Sentry selon leur dernière activité', async () => {
+test('place les groupes ticket, Sentry et « Sans ticket » selon leur dernière activité', async () => {
   const todayAtNine = new Date()
   todayAtNine.setHours(9, 0, 0, 0)
   const ticketYesterday: Conversation = {
@@ -358,13 +358,13 @@ test('place les groupes ticket et Sentry selon leur dernière activité', async 
 
   await waitFor(() => expect(document.querySelectorAll('.conv-group-header').length).toBe(3))
   const headers = [...document.querySelectorAll('.conv-group-key')].map((element) => element.textContent)
-  expect(headers).toEqual(['Sentry · REACTOR-B4S', 'TECH-1', 'Sans ticket'])
+  expect(headers).toEqual(['Sentry · REACTOR-B4S', 'Sans ticket', 'TECH-1'])
   const ticketTitle = document.querySelector('.conv-group-ticket-title')
   expect(ticketTitle?.textContent).toBe('Corriger les pipelines de déploiement')
   expect(ticketTitle?.getAttribute('title')).toBe('Corriger les pipelines de déploiement')
   const ticketIcons = document.querySelector('.conv-group.is-context .ticket-link-icons')
   expect(ticketTitle?.compareDocumentPosition(ticketIcons!) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-  const ticketGroup = () => document.querySelectorAll('.conv-group')[1]!
+  const ticketGroup = () => [...document.querySelectorAll('.conv-group.is-context')].find((group) => group.querySelector('.conv-group-key')?.textContent === 'TECH-1')!
   expect(ticketGroup().querySelectorAll('.navigation-row')).toHaveLength(1)
   fireEvent.click(screen.getByRole('button', { name: '1 autre' }))
   expect(ticketGroup().querySelectorAll('.navigation-row')).toHaveLength(2)
@@ -640,6 +640,21 @@ test('les conversations récentes gardent la clé du ticket et la recherche acce
   expect(document.querySelector('.conv-row-branch')?.textContent).toContain('feature/TECH-25267')
   fireEvent.change(screen.getByRole('textbox', { name: /Filtrer les conversations/ }), { target: { value: 'tech 25267 geographique' } })
   expect([...document.querySelectorAll('.conv-row-title')].map((item) => item.textContent)).toEqual(['Travail en cours'])
+})
+
+test('« Sans ticket » se range entre les tickets selon sa conversation la plus récente', () => {
+  const now = Date.parse('2026-10-02T12:00:00.000Z')
+  const at = (id: string, hoursAgo: number, ticketKey: string | null = null): Conversation => ({
+    ...startedConversation,
+    id,
+    ticket_id: ticketKey,
+    ticket_key: ticketKey,
+    updated_at: new Date(now - hoursAgo * 3_600_000).toISOString(),
+  })
+  const items = [at('old-plain', 300), at('fresh', 1, 'TECH-1'), at('stale', 48, 'TECH-2'), at('just-done', 5)]
+  const groups = groupConversationsByStatus(items, new Map(), new Map())
+  expect(groups.map((group) => group.label)).toEqual(['TECH-1', 'Sans ticket', 'TECH-2'])
+  expect(groups[1]!.items.map((item) => item.id)).toEqual(['just-done', 'old-plain'])
 })
 
 test('un groupe de ticket replié montre au plus deux conversations de moins de 24 h', () => {

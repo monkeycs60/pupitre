@@ -300,21 +300,9 @@ export function compactWaitingItems(items: Conversation[], asking: ReadonlySet<s
   return items.filter((conversation) => asking.has(conversation.id) || recentUnread.has(conversation.id) || conversation.id === selectedId)
 }
 
-const PLAIN_GROUP_LIMIT = 8
-const PLAIN_GROUP_WINDOW_MS = 7 * 86_400_000
 export const TIDY_AFTER_MS = 7 * 86_400_000
 
-/** « Sans ticket » montre la semaine en cours, huit au plus, plus les lignes à ne jamais masquer. */
-export function compactPlainItems(items: Conversation[], alwaysVisible: Set<string>, now = Date.now()): Conversation[] {
-  const recent = new Set(items
-    .filter((conversation) => now - Date.parse(conversation.updated_at) < PLAIN_GROUP_WINDOW_MS)
-    .slice(0, PLAIN_GROUP_LIMIT)
-    .map((conversation) => conversation.id))
-  if (recent.size === 0 && items[0]) recent.add(items[0].id)
-  return items.filter((conversation) => recent.has(conversation.id) || alwaysVisible.has(conversation.id))
-}
-
-/** Statut d'abord : ce qui attend l'utilisateur, ce qui tourne, puis le reste par ticket.
+/** Statut d'abord : ce qui attend l'utilisateur, ce qui tourne, puis les tickets et « Sans ticket » par dernière activité.
  *  Les deux tables donnent le début de l'attente ou du tour, en millisecondes. */
 export function groupConversationsByStatus(
   items: Conversation[],
@@ -334,12 +322,17 @@ export function groupConversationsByStatus(
   const pinned = rest.filter((conversation) => conversation.pinned)
   if (pinned.length > 0) groups.push({ kind: 'pinned', key: 'pinned', label: 'Épinglées', items: pinned })
   const others = rest.filter((conversation) => !conversation.pinned)
-  const contextual = groupConversations(others).filter((group) => group.ticketKey || group.sentryKey)
+  const byActivity: ConversationGroup[] = groupConversations(others)
+    .filter((group) => group.ticketKey || group.sentryKey)
+    .map((group) => ({ ...group, kind: 'context' as const }))
   const plain = others
-    .filter((conversation) => !contextual.some((group) => group.items.includes(conversation)))
+    .filter((conversation) => !byActivity.some((group) => group.items.includes(conversation)))
     .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))
-  groups.push(...contextual.map((group) => ({ ...group, kind: 'context' as const })))
-  if (plain.length > 0) groups.push({ kind: 'plain', key: 'plain', label: 'Sans ticket', items: plain })
+  if (plain.length > 0) {
+    byActivity.push({ kind: 'plain', key: 'plain', label: 'Sans ticket', items: plain, latestUpdatedAt: Date.parse(plain[0]!.updated_at) })
+    byActivity.sort((left, right) => (right.latestUpdatedAt ?? 0) - (left.latestUpdatedAt ?? 0))
+  }
+  groups.push(...byActivity)
   return groups
 }
 
@@ -996,8 +989,7 @@ export const Sidebar = memo(function Sidebar({
               const isContextual = group.kind === 'context'
               const isExpanded = expandedGroups.has(group.key)
               const compactItems = filterText.trim() !== '' ? group.items
-                : isContextual ? compactGroupItems(group.items, alwaysVisibleConversationIds)
-                : group.kind === 'plain' ? compactPlainItems(group.items, alwaysVisibleConversationIds)
+                : isContextual || group.kind === 'plain' ? compactGroupItems(group.items, alwaysVisibleConversationIds)
                 : group.kind === 'waiting' ? compactWaitingItems(group.items, askingConversationIds, selectedConversation?.id ?? null)
                 : group.items
               const hiddenCount = group.items.length - compactItems.length
