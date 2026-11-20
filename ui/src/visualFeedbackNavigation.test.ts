@@ -6,4 +6,6 @@ test('accepte uniquement une destination de conversation complète', () => {
     .toEqual({ projectId: 'p1', conversationId: 'c1' })
   expect(navigationEventFromMessage('{"type":"open-conversation","conversationId":"c1"}')).toBeNull()
   expect(navigationEventFromMessage('non-json')).toBeNull()
+  expect(navigationEventFromMessage('{"type":"open-conversation","projectId":"p1","conversationId":"c2","fromConversationId":"c1"}'))
+    .toEqual({ projectId: 'p1', conversationId: 'c2', fromConversationId: 'c1' })
 })

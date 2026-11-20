@@ -1128,6 +1128,13 @@ export function createSidequest(
   return fetchJson(`/api/conversations/${routeId(sourceConversationId)}/sidequests`, jsonPost(input))
 }
 
+export function continueInNewConversation(
+  sourceConversationId: string,
+  instruction: string,
+): Promise<void> {
+  return fetchVoid(`/api/conversations/${routeId(sourceConversationId)}/continue`, jsonPost({ instruction }))
+}
+
 export function sendMessage(
   conversationId: string,
   input: SendMessageInput,

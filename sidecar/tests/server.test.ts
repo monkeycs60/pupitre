@@ -1615,6 +1615,55 @@ test("une conversation créée depuis un handoff reprend le worktree de sa sourc
   expect(elsewhere.worktree_path).not.toBe(source.worktree_path);
 });
 
+test("@continue fait rédiger le brief dans la source, puis ouvre la suite avec ce brief", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const source = await (await postJson("/api/conversations", {
+    projectId: project.id, provider: "claude", model: "haiku", message: "source",
+  })).json() as { id: string; title: string };
+  await waitForRunnerIdle(source.id);
+
+  const navigation: Array<Record<string, unknown>> = [];
+  const socket = new WebSocket(`${current.baseUrl.replace("http", "ws")}/ws?channel=navigation`);
+  cleanups.push(() => socket.close());
+  socket.addEventListener("message", (message) => navigation.push(JSON.parse(String(message.data))));
+  await new Promise((resolve) => socket.addEventListener("open", resolve));
+
+  const stdinFile = join(mkdtempSync(join(tmpdir(), "pupitre-continue-")), "stdin.jsonl");
+  process.env.FAKE_CLAUDE_STDIN_FILE = stdinFile;
+  cleanups.push(() => { delete process.env.FAKE_CLAUDE_STDIN_FILE; });
+  const started = await postJson(`/api/conversations/${source.id}/continue`, { instruction: "fais le bilan et exécute" });
+  expect(started.status).toBe(202);
+  const busy = await postJson(`/api/conversations/${source.id}/continue`, { instruction: "encore" });
+  expect(busy.status).toBe(409);
+
+  expect(await waitFor(() => navigation.length === 1, 3_000)).toBe(true);
+  const continuation = current.deps.conversations.listByProject(project.id)
+    .find((conversation) => conversation.continued_from === source.id);
+  expect(continuation).toBeDefined();
+  expect(navigation[0]).toEqual({
+    type: "open-conversation",
+    projectId: project.id,
+    conversationId: continuation!.id,
+    fromConversationId: source.id,
+  });
+
+  const sourceMessages = current.deps.conversations.listEvents(source.id)
+    .filter((event) => event.type === "user-message");
+  expect(sourceMessages.at(-1)).toEqual(expect.objectContaining({ text: "@continue fais le bilan et exécute" }));
+
+  const briefPrompt = readFileSync(stdinFile, "utf8").split("\n")[0]!;
+  expect(briefPrompt).toContain("[Passation — @continue]");
+  expect(briefPrompt).toContain("« fais le bilan et exécute »");
+
+  const seed = await waitForPersistedEvent(continuation!.id, (event) => event.type === "user-message");
+  const text = (seed as { text: string }).text;
+  expect(text).toContain(`(id : ${source.id})`);
+  expect(text).toContain("Le dossier courant est vide (aucun fichier ni sous-dossier).");
+  expect(text.endsWith("[Demande de l'utilisateur]\nfais le bilan et exécute")).toBe(true);
+  await waitForRunnerIdle(continuation!.id);
+});
+
 test("le changelog projet se consulte et se déclenche sans créer de conversation", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());

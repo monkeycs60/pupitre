@@ -9,6 +9,7 @@ import { conversationCwd, projectCwd } from "./workspace";
 import { changedFiles, EditorWorkspaceError, MAX_CHANGED_FILES_OPENED, openEditorFiles, openEditorWorkspace, planEditorWorkspace, writeRevision, writeWorkspace } from "./editor-workspace";
 import { resolveCitations, touchedFiles } from "./file-citations";
 import { conversationChanges, conversationWork } from "./conversation-changes";
+import { CONTINUE_DIRECTIVE, continuationMessage, continueBriefPreamble } from "./continue-directive";
 import { tmpdir } from "node:os";
 import type { SharedFilesService } from "./shared-files";
 import { TodoError, worktreeBranch, type TodoService } from "./todos";
@@ -301,6 +302,47 @@ async function createContinuationFromHandoff(
     deps.conversations.deleteFailedContinuation(continuation.id);
     throw error;
   }
+}
+
+const DEFAULT_CONTINUE_INSTRUCTION = "Reprends là où la conversation s'est arrêtée.";
+
+async function continueInNewConversation(
+  deps: ServerDeps,
+  source: Conversation,
+  instruction: string,
+  open: (conversation: Conversation) => void,
+): Promise<void> {
+  const outcome = await deps.runner.runTurn(
+    source.id,
+    `${CONTINUE_DIRECTIVE} ${instruction}`,
+    [],
+    [],
+    { preamble: continueBriefPreamble(instruction) },
+  );
+  if (outcome.state !== "done" || outcome.cancelled) return;
+  const brief = deps.conversations.latestTurnAnswer(source.id)?.trim();
+  if (!brief) return;
+  const origin = deps.conversations.get(source.id) ?? source;
+  const conversation = deps.conversations.create({
+    projectId: origin.project_id,
+    provider: origin.provider,
+    model: origin.model,
+    presetId: origin.preset_id,
+    effort: origin.effort,
+    speed: origin.speed,
+    permissionMode: origin.permission_mode,
+    continuedFrom: origin.id,
+    worktreePath: origin.worktree_path,
+    worktreePaths: origin.worktree_paths,
+    createdOnBranch: origin.created_on_branch,
+    ticketId: origin.ticket_id,
+    ticketInstruction: origin.ticket_instruction,
+    originType: origin.origin_type,
+    originKey: origin.origin_key,
+    firstMessage: instruction,
+  });
+  open(conversation);
+  await deps.runner.runTurn(conversation.id, continuationMessage(origin, brief, instruction), []);
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -3430,6 +3472,28 @@ export function createServer(deps: ServerDeps) {
             origin: deps.conversationLinks.byTarget(conversationSidequestsId),
             sidequests: deps.conversationLinks.fromSource(conversationSidequestsId),
           });
+        }
+
+        const continueConversationId = routeId(pathname, /^\/api\/conversations\/([^/]+)\/continue$/);
+        if (continueConversationId !== null && request.method === "POST") {
+          const source = deps.conversations.get(continueConversationId);
+          if (!source) throw new HttpError(404, "conversation inconnue");
+          if (source.handoff_pending) throw new HttpError(409, "passation en cours sur cette conversation");
+          const body = await readObject(request);
+          const instruction = optionalTrimmed(body, "instruction") || DEFAULT_CONTINUE_INSTRUCTION;
+          if (deps.runner.isRunning(source.id) || deps.runner.activity.isBusy(source.id)) {
+            throw new HttpError(409, "un tour est déjà en cours");
+          }
+          void continueInNewConversation(deps, source, instruction, (conversation) => {
+            const message = JSON.stringify({
+              type: "open-conversation",
+              projectId: conversation.project_id,
+              conversationId: conversation.id,
+              fromConversationId: source.id,
+            });
+            for (const socket of navigationSockets) socket.send(message);
+          }).catch((error) => console.error("Échec de @continue", error));
+          return json({ delivery: "started" }, 202);
         }
 
         const conversationModelId = routeId(

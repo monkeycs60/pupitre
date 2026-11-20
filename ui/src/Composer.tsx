@@ -12,6 +12,7 @@ import {
   ApiError,
   cancelConversation,
   createConversation,
+  continueInNewConversation,
   createSidequest,
   importMediaPath,
   sendMessage,
@@ -35,6 +36,7 @@ import { mediaUrl } from './transport'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { parseSidequestDirective } from './sidequestDirective'
+import { parseContinueDirective } from './continueDirective'
 
 interface ComposerProps {
   /** Mode tâche d'une nouvelle conversation : le même formulaire alimente la
@@ -554,6 +556,13 @@ export function Composer({
         setSidecarStalled(null)
         onConversationCreated(conversation)
       } else {
+        const continuation = parseContinueDirective(trimmedMessage)
+        if (continuation) {
+          await continueInNewConversation(conversationId, continuation.instruction)
+          onMessageChange('')
+          setAttachments([])
+          return
+        }
         const sidequest = parseSidequestDirective(trimmedMessage)
         if (sidequest) {
           const created = await createSidequest(conversationId, sidequest)

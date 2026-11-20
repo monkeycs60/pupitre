@@ -3,6 +3,7 @@ import { webSocketUrl } from './transport'
 export interface VisualFeedbackNavigation {
   projectId: string
   conversationId: string
+  fromConversationId?: string
 }
 
 export function navigationEventFromMessage(raw: string): VisualFeedbackNavigation | null {
@@ -11,7 +12,11 @@ export function navigationEventFromMessage(raw: string): VisualFeedbackNavigatio
     return value.type === 'open-conversation'
       && typeof value.projectId === 'string'
       && typeof value.conversationId === 'string'
-      ? { projectId: value.projectId, conversationId: value.conversationId }
+      ? {
+          projectId: value.projectId,
+          conversationId: value.conversationId,
+          ...(typeof value.fromConversationId === 'string' ? { fromConversationId: value.fromConversationId } : {}),
+        }
       : null
   } catch {
     return null

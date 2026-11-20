@@ -374,6 +374,27 @@ export class ConversationStore {
     return { first: texts[0] ?? "", latest: texts.slice(-recent) };
   }
 
+  /** Dernier message final de l'agent depuis le dernier message utilisateur. */
+  latestTurnAnswer(id: string): string | null {
+    const row = this.db.query(
+      `SELECT payload FROM events
+       WHERE conversation_id = ?1
+         AND json_valid(payload)
+         AND json_extract(payload, '$.type') = 'text-final'
+         AND id > COALESCE((
+           SELECT MAX(id) FROM events
+           WHERE conversation_id = ?1
+             AND json_valid(payload)
+             AND json_extract(payload, '$.type') = 'user-message'
+         ), 0)
+       ORDER BY id DESC
+       LIMIT 1`
+    ).get(id) as { payload: string } | null;
+    if (!row) return null;
+    const text = (JSON.parse(row.payload) as { text?: unknown }).text;
+    return typeof text === "string" ? text : null;
+  }
+
   setArchived(id: string, archived: boolean): Conversation | null {
     this.db.query("UPDATE conversations SET archived = ?, updated_at = ? WHERE id = ?")
       .run(archived ? 1 : 0, new Date().toISOString(), id);

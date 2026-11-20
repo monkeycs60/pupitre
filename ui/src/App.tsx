@@ -230,8 +230,13 @@ function App() {
 
   useEffect(() => {
     const openConversation = (event: Event) => {
-      const conversationId = (event as CustomEvent<{ conversationId?: string }>).detail?.conversationId
+      const detail = (event as CustomEvent<{ conversationId?: string; fromConversationId?: string }>).detail
+      const conversationId = detail?.conversationId
       if (!conversationId) return
+      if (detail.fromConversationId && selectedConversation?.id !== detail.fromConversationId) {
+        setConversationListVersion((current) => current + 1)
+        return
+      }
       void listProjects().then(async (projects) => {
         for (const project of projects) {
           const conversations = await listProjectConversations(project.id)
