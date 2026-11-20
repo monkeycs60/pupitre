@@ -302,9 +302,16 @@ export function compactWaitingItems(items: Conversation[], asking: ReadonlySet<s
 
 export const TIDY_AFTER_MS = 7 * 86_400_000
 
-/** « Sans ticket » replié montre sa conversation la plus récente, plus les lignes à ne jamais masquer. */
+const PLAIN_EXPANDED_WINDOW_MS = 3 * 86_400_000
+
 export function compactPlainItems(items: Conversation[], alwaysVisible: Set<string>): Conversation[] {
   return items.filter((conversation, index) => index === 0 || alwaysVisible.has(conversation.id))
+}
+
+export function expandedPlainItems(items: Conversation[], alwaysVisible: Set<string>, now = Date.now()): Conversation[] {
+  return items.filter((conversation, index) => index === 0
+    || alwaysVisible.has(conversation.id)
+    || now - Date.parse(conversation.updated_at) < PLAIN_EXPANDED_WINDOW_MS)
 }
 
 /** Statut d'abord : ce qui attend l'utilisateur, ce qui tourne, « Sans ticket », puis les tickets par dernière activité.
@@ -993,12 +1000,15 @@ export const Sidebar = memo(function Sidebar({
                 : group.kind === 'plain' ? compactPlainItems(group.items, alwaysVisibleConversationIds)
                 : group.kind === 'waiting' ? compactWaitingItems(group.items, askingConversationIds, selectedConversation?.id ?? null)
                 : group.items
-              const hiddenCount = group.items.length - compactItems.length
+              const expandableItems = group.kind === 'plain' && filterText.trim() === ''
+                ? expandedPlainItems(group.items, alwaysVisibleConversationIds)
+                : group.items
+              const hiddenCount = expandableItems.length - compactItems.length
               const plural = hiddenCount > 1 ? 's' : ''
-              const moreLabel = group.kind === 'plain' ? `plus ancienne${plural}`
+              const moreLabel = group.kind === 'plain' ? `autre${plural} des 3 derniers jours`
                 : group.kind === 'waiting' ? `autre${plural} non lue${plural}`
                 : `autre${plural}`
-              const shownItems = isExpanded ? group.items : compactItems
+              const shownItems = isExpanded ? expandableItems : compactItems
               const repeatsTicket = group.ticketKey != null
               return (
               <div className={`conv-group is-${group.kind ?? 'plain'}`} key={group.key}>
