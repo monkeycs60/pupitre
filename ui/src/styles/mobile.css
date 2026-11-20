@@ -270,6 +270,30 @@
     min-width: min(250px, calc(100vw - 16px));
   }
 
+  .notes-chip {
+    line-height: 24px;
+  }
+
+  .notes-popover {
+    right: var(--space-2);
+    left: var(--space-2);
+    width: auto;
+    max-width: none;
+    max-height: min(70dvh, 520px);
+  }
+
+  .note-row {
+    min-height: 40px;
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+  }
+
+  .notes-add-input,
+  .note-edit {
+    min-height: 40px;
+    font-size: var(--text-md);
+  }
+
   /* --- Fil ------------------------------------------------------------------ */
 
   .events-list {

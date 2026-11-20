@@ -40,7 +40,9 @@ import type {
   SkillSummary,
   StoredEvent,
   SubtaskResult,
-  TicketNote,
+  ConversationNotes,
+  Note,
+  NoteScope,
   TestInventory,
   TestScope,
   Workflow,
@@ -1033,16 +1035,22 @@ export function deleteProjectIntegration(
   return fetchVoid(`/api/projects/${routeId(projectId)}/integrations/${type}`, { method: 'DELETE' })
 }
 
-export function listTicketNotes(ticketId: string): Promise<TicketNote[]> {
-  return fetchJson(`/api/tickets/${routeId(ticketId)}/notes`)
+export function listConversationNotes(conversationId: string, signal?: AbortSignal): Promise<ConversationNotes> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/notes`, { signal })
 }
 
-export function createTicketNote(ticketId: string, body: string): Promise<TicketNote> {
-  return fetchJson(`/api/tickets/${routeId(ticketId)}/notes`, jsonPost({ body }))
+export function createConversationNote(conversationId: string, body: string, scope: NoteScope): Promise<Note> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/notes`, jsonPost({ body, scope }))
 }
 
-export function deleteTicketNote(noteId: string): Promise<void> {
-  return fetchVoid(`/api/ticket-notes/${routeId(noteId)}`, { method: 'DELETE' })
+export function updateNote(noteId: string, changes: { body?: string; done?: boolean }): Promise<Note> {
+  return fetchJson(`/api/notes/${routeId(noteId)}`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(changes),
+  })
+}
+
+export function deleteNote(noteId: string): Promise<void> {
+  return fetchVoid(`/api/notes/${routeId(noteId)}`, { method: 'DELETE' })
 }
 
 export function updateTicketInstruction(ticketId: string, instruction: string): Promise<void> {

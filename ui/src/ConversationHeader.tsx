@@ -3,6 +3,7 @@ import { track } from './analytics'
 import type { ThreadTools } from './Chat'
 import { branchOfWorktree } from './conversationBranch'
 import { ConversationInstruction } from './ConversationInstruction'
+import { ConversationNotesChip } from './ConversationNotes'
 import { Icon } from './Icon'
 import { modelLabel } from './modelOptions'
 import { OpenInEditorButton } from './OpenInEditorButton'
@@ -60,6 +61,13 @@ export function ConversationHeader({
               <strong>{shownTicketKey}</strong>
               {ticketTitle ? <span className="conversation-meta-ticket-title" title={ticketTitle}>{ticketTitle}</span> : null}
             </span>
+          ) : null}
+          {conversation ? (
+            <ConversationNotesChip
+              conversationId={conversation.id}
+              projectId={conversation.project_id}
+              ticketId={conversation.ticket_id}
+            />
           ) : null}
           {sentryKey !== null && sentryUrl !== undefined ? (
             <span className="conversation-meta-ticket">

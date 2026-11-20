@@ -377,11 +377,24 @@ export interface TicketRef {
   seen_at: string
 }
 
-export interface TicketNote {
+export type NoteAuthor = 'user' | 'agent'
+export type NoteScope = 'ticket' | 'project'
+
+/** Point à ne pas oublier avant un déploiement ; `ticket_id` nul = note du projet. */
+export interface Note {
   id: string
-  ticket_id: string
+  project_id: string
+  ticket_id: string | null
   body: string
+  author: NoteAuthor
+  conversation_id: string | null
+  done_at: string | null
   created_at: string
+}
+
+export interface ConversationNotes {
+  ticket: { id: string; key: string; title: string } | null
+  notes: Note[]
 }
 
 export interface TicketConversationSummary {
