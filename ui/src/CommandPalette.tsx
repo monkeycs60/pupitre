@@ -6,6 +6,7 @@ import {
   listProjectWorkflows,
   listProjects,
   listSkills,
+  listViewedConversations,
   runWorkflow,
   searchGlobal,
 } from './api'
@@ -15,6 +16,7 @@ import type {
   Project,
   SearchResult,
   SkillSummary,
+  ViewedConversation,
   Workflow,
 } from './types'
 import { useDesignPanelSuspend } from './useDesignPanelSuspend'
@@ -83,6 +85,7 @@ export function CommandPalette({
   const [query, setQuery] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
+  const [viewed, setViewed] = useState<ViewedConversation[]>([])
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [skills, setSkills] = useState<SkillSummary[]>([])
   const [results, setResults] = useState<SearchResult[]>([])
@@ -109,6 +112,9 @@ export function CommandPalette({
     inputRef.current?.focus()
     setError(null)
     let ignore = false
+    void listViewedConversations(9)
+      .then((loaded) => { if (!ignore) setViewed(loaded) })
+      .catch(() => {})
     void listProjects()
       .then(async (loadedProjects) => {
         const [conversationGroups, workflowGroups, loadedSkills] = await Promise.all([
@@ -155,6 +161,20 @@ export function CommandPalette({
   const items = useMemo<PaletteItem[]>(() => {
     const next: PaletteItem[] = []
     const add = (item: PaletteItem) => next.push(item)
+    const recentlyViewed = viewed
+      .filter((conversation) => conversation.id !== currentConversation?.id)
+      .slice(0, 8)
+      .filter((conversation) => matches(query, conversation.title, conversation.project_name, conversation.summary))
+    for (const conversation of recentlyViewed) {
+      add({
+        id: `viewed-${conversation.id}`,
+        group: 'Lues récemment',
+        label: conversation.title,
+        detail: `${conversation.project_name} · ${conversation.summary || 'Sans résumé'}`,
+        run: () => onConversationSelect(conversation.project_id, conversation.id),
+      })
+    }
+    const shownConversationIds = new Set(recentlyViewed.map((conversation) => conversation.id))
     if (instance?.instance === 'dev' && onPromotionSelect && matches(query, 'Promouvoir cette version', 'Instance stable')) {
       add({
         id: 'action-promote',
@@ -198,18 +218,6 @@ export function CommandPalette({
     for (const project of projects.filter((item) => matches(query, item.name, item.path)).slice(0, 8)) {
       add({ id: `project-${project.id}`, group: 'Projet', label: project.name, detail: project.path, run: () => onProjectSelect(project) })
     }
-    if (!query.trim()) {
-      for (const conversation of conversations.slice(0, 10)) {
-        const project = projects.find((item) => item.id === conversation.project_id)
-        add({
-          id: `conversation-${conversation.id}`,
-          group: 'Conversation récente',
-          label: conversation.title,
-          detail: `${conversation.summary || 'Sans résumé'} · ${project?.name ?? 'Projet'} · ${conversation.provider} ${conversation.model}`,
-          run: () => onConversationSelect(conversation.project_id, conversation.id),
-        })
-      }
-    }
     const groupedResults = new Map<string, SearchResult[]>()
     for (const result of results) {
       const group = groupedResults.get(result.conversationId) ?? []
@@ -218,7 +226,7 @@ export function CommandPalette({
     }
     for (const resultGroup of groupedResults.values()) {
       const firstResult = resultGroup[0]
-      if (!firstResult) continue
+      if (!firstResult || shownConversationIds.has(firstResult.conversationId)) continue
       const project = projects.find((item) => item.id === firstResult.projectId)
       const conversation = conversations.find((item) => item.id === firstResult.conversationId)
       const kinds = [...new Set(resultGroup.map((result) => result.kind))]
@@ -261,7 +269,7 @@ export function CommandPalette({
       }
     }
     return next
-  }, [conversations, currentConversation, currentProject, instance, onAction, onConversationSelect, onProjectSelect, onPromotionSelect, onSkillLaunch, onViewSelect, projects, query, results, skills, workflows])
+  }, [conversations, currentConversation, currentProject, instance, onAction, onConversationSelect, onProjectSelect, onPromotionSelect, onSkillLaunch, onViewSelect, projects, query, results, skills, viewed, workflows])
 
   async function execute(item: PaletteItem) {
     if (busyId) return

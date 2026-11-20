@@ -81,8 +81,6 @@
 .project-task-empty strong { font-size: 13px; font-weight: 500; }
 .project-task-empty p { color: var(--text-muted); font-size: 12px; line-height: 1.7; max-width: 330px; }
 .project-task-empty em { font-style: normal; color: var(--accent-bright); }
-.conversation-list-heading > span { color: var(--text-muted); font-size: 12px; display: flex; align-items: baseline; gap: 6px; }
-.conversation-list-heading > span > span { color: var(--text-faint); font-variant-numeric: tabular-nums; font-size: 10px; }
 .project-sections-list button { border-radius: var(--r-sm); }
 @media (prefers-reduced-motion: reduce) { .project-task-check, .project-task-row, .project-task-pulse, .project-task-spinner { transition: none; animation: none; } }
 

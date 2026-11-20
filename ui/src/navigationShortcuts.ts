@@ -20,3 +20,13 @@ export function navigationViewForShortcut(event: KeyboardEvent): NavigationShort
   if (!event.ctrlKey || !event.shiftKey || event.altKey || event.metaKey) return null
   return NAVIGATION_SHORTCUTS.find((shortcut) => shortcut.key === event.key.toLocaleLowerCase())?.view ?? null
 }
+
+type ShortcutKeys = Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>
+
+export function isRecentConversationsShortcut(event: ShortcutKeys): boolean {
+  return event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.key.toLocaleLowerCase() === 'l'
+}
+
+export function isPreviousConversationShortcut(event: ShortcutKeys): boolean {
+  return event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && event.key === 'Tab'
+}

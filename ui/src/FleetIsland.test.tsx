@@ -1,12 +1,12 @@
 import { afterEach, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement, useState } from 'react'
-import { FleetIsland } from './FleetIsland'
+import { FleetIsland, type BoardTab } from './FleetIsland'
 import type { FleetItem, UnreadConversation, ViewedConversation } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
-const { cleanup, fireEvent, render, screen, within } = await import('@testing-library/react')
+const { cleanup, fireEvent, render, screen, waitFor, within } = await import('@testing-library/react')
 const defaultFetch = globalThis.fetch
 
 afterEach(() => {
@@ -51,17 +51,22 @@ function Harness({ items = [], unread = [], currentConversationId = null, onOpen
   onOpenViewed?: (item: ViewedConversation) => void
 }) {
   const [open, setOpen] = useState(false)
-  return createElement(FleetIsland, {
+  const [requestedTab, setRequestedTab] = useState<BoardTab | null>(null)
+  return createElement('div', null, createElement('button', {
+    type: 'button',
+    onClick: () => { setRequestedTab('viewed'); setOpen(true) },
+  }, 'Raccourci'), createElement(FleetIsland, {
     items,
     unread,
     open,
+    requestedTab,
     currentConversationId,
-    onOpenChange: setOpen,
+    onOpenChange: (next: boolean) => { setOpen(next); if (!next) setRequestedTab(null) },
     onOpenRunning: () => {},
     onOpenUnread: () => {},
     onOpenViewed,
     onReadAll: async () => {},
-  })
+  }))
 }
 
 test("sans activité, l'île reste visible et ouvre directement les huit dernières lues, hors conversation affichée", async () => {
@@ -102,4 +107,33 @@ test("avec de l'activité, l'île s'ouvre sur l'activité et l'onglet des lues s
   await within(section).findByText('Conversation 3')
   const rows = within(section).getAllByRole('button')
   expect(rows.map((row) => row.querySelector('.activity-board-viewed-state')?.textContent ?? null)).toEqual(['en cours', 'nouvelle réponse', null])
+})
+
+test("le raccourci ouvre les lues récemment malgré l'activité, focus sur la première, flèches pour descendre", async () => {
+  stubViewed([viewed(1), viewed(2), viewed(3)])
+  const running: FleetItem = {
+    id: 'turn-9', kind: 'turn', projectId: 'p1', projectName: 'pupitre', conversationId: 'c9',
+    title: 'Conversation 9', provider: 'claude', model: 'opus', startedAt: minutesAgo(1), lastEvent: 'Lecture',
+  }
+  const opened: string[] = []
+  render(createElement(Harness, { items: [running], onOpenViewed: (item) => opened.push(item.id) }))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Raccourci' }))
+
+  expect(screen.getByRole('tab', { name: /Lues récemment/ }).getAttribute('aria-selected')).toBe('true')
+  const section = await screen.findByRole('region', { name: 'Lues récemment' })
+  await within(section).findByText('Conversation 1')
+  const rows = within(section).getAllByRole('button')
+  await waitFor(() => expect(document.activeElement).toBe(rows[0]!))
+
+  fireEvent.keyDown(rows[0]!, { key: 'ArrowDown' })
+  fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(rows[2]!)
+  fireEvent.keyDown(rows[2]!, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(rows[2]!)
+  fireEvent.keyDown(rows[2]!, { key: 'ArrowUp' })
+  expect(document.activeElement).toBe(rows[1]!)
+
+  fireEvent.click(document.activeElement!)
+  expect(opened).toEqual(['c2'])
 })
