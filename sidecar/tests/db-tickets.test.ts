@@ -12,7 +12,7 @@ function tables(db: ReturnType<typeof openDb>): string[] {
 test("crée les tables du Tableau de bord et la colonne ticket_id", () => {
   const db = openDb(mkdtempSync(join(tmpdir(), "pupitre-db-tickets-")));
   const names = tables(db);
-  expect(names).toEqual(expect.arrayContaining(["project_integrations", "tickets", "ticket_refs", "ticket_notes"]));
+  expect(names).toEqual(expect.arrayContaining(["project_integrations", "tickets", "ticket_refs", "notes"]));
   const columns = (db.query("PRAGMA table_info(conversations)").all() as Array<{ name: string }>).map((c) => c.name);
   expect(columns).toContain("ticket_id");
 });

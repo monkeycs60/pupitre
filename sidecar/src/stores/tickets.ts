@@ -37,13 +37,6 @@ export interface TicketStatusChange {
   changed_at: string;
 }
 
-export interface TicketNote {
-  id: string;
-  ticket_id: string;
-  body: string;
-  created_at: string;
-}
-
 export interface TicketConversationSummary {
   id: string;
   title: string;
@@ -288,30 +281,6 @@ export class TicketStore {
       .map((ref) => ref.ref);
   }
 
-  addNote(ticketId: string, body: string): TicketNote {
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
-    this.db.query(
-      "INSERT INTO ticket_notes (id, ticket_id, body, created_at) VALUES (?, ?, ?, ?)",
-    ).run(id, ticketId, body, now);
-    return { id, ticket_id: ticketId, body, created_at: now };
-  }
-
-  notesByTicket(ticketId: string): TicketNote[] {
-    return this.db.query(
-      "SELECT * FROM ticket_notes WHERE ticket_id = ? ORDER BY created_at",
-    ).all(ticketId) as TicketNote[];
-  }
-
-  deleteNote(id: string): { id: string; ticket_id: string } | null {
-    const existing = this.db.query(
-      "SELECT id, ticket_id FROM ticket_notes WHERE id = ?",
-    ).get(id) as { id: string; ticket_id: string } | null;
-    if (!existing) return null;
-    this.db.query("DELETE FROM ticket_notes WHERE id = ?").run(id);
-    return existing;
-  }
-
   linkConversation(conversationId: string, ticketId: string | null): void {
     this.db.query(
       "UPDATE conversations SET ticket_id = ? WHERE id = ?",
@@ -335,7 +304,7 @@ export class TicketStore {
     return rows.map((row) => {
       const ticket = hydrateTicket(row);
       const notes = this.db.query(
-        "SELECT COUNT(*) AS n FROM ticket_notes WHERE ticket_id = ?",
+        "SELECT COUNT(*) AS n FROM notes WHERE ticket_id = ? AND done_at IS NULL",
       ).get(ticket.id) as { n: number };
       return {
         ...ticket,

@@ -205,13 +205,18 @@ export function openDb(dir: string = dataDir()): Database {
       changed_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_ticket_status_changes_project ON ticket_status_changes(project_id, changed_at);
-    CREATE TABLE IF NOT EXISTS ticket_notes (
+    CREATE TABLE IF NOT EXISTS notes (
       id TEXT PRIMARY KEY,
-      ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      ticket_id TEXT NULL REFERENCES tickets(id) ON DELETE CASCADE,
       body TEXT NOT NULL,
+      author TEXT NOT NULL DEFAULT 'user' CHECK (author IN ('user', 'agent')),
+      conversation_id TEXT NULL REFERENCES conversations(id) ON DELETE SET NULL,
+      done_at TEXT NULL,
       created_at TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_ticket_notes_ticket ON ticket_notes(ticket_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(project_id, ticket_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_notes_ticket ON notes(ticket_id, done_at);
     CREATE TABLE IF NOT EXISTS problem_captures (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -823,6 +828,7 @@ export function openDb(dir: string = dataDir()): Database {
   const changelogColumns = db.query("PRAGMA table_info(project_changelog_entries)").all() as Array<{ name: string }>;
   if (changelogColumns.some((column) => column.name === "domain_id")) db.exec("ALTER TABLE project_changelog_entries DROP COLUMN domain_id");
   db.exec("DROP TABLE IF EXISTS conversation_domains; DROP TABLE IF EXISTS domain_changes; DROP TABLE IF EXISTS domain_publications; DROP TABLE IF EXISTS domains;");
+  migrateTicketNotes(db);
   removeChantiers(db);
   db.exec("DELETE FROM project_todos WHERE json_extract(payload, '$.proposed') = 1 AND json_extract(payload, '$.origin.kind') = 'harvest' AND json_extract(payload, '$.status') = 'backlog'");
   db.exec("PRAGMA foreign_keys = ON");
@@ -856,7 +862,7 @@ function removeChantiers(db: Database): void {
       }
       db.query("UPDATE project_todos SET payload = json_set(payload, '$.ticket_id', NULL) WHERE json_extract(payload, '$.ticket_id') = ?").run(chantier.id);
       if (hasCaptures) db.query("UPDATE telegram_captures SET ticket_id = NULL WHERE ticket_id = ?").run(chantier.id);
-      for (const table of ["ticket_refs", "ticket_status_changes", "ticket_notes", "ticket_audits"]) {
+      for (const table of ["ticket_refs", "ticket_status_changes", "notes", "ticket_audits"]) {
         db.query(`DELETE FROM ${table} WHERE ticket_id = ?`).run(chantier.id);
       }
       for (const table of ["problems", "sentry_triages"]) {
@@ -866,6 +872,25 @@ function removeChantiers(db: Database): void {
     }
     db.exec("DROP TABLE IF EXISTS chantier_reviews; DROP TABLE IF EXISTS chantier_sequences; DROP TABLE IF EXISTS removed_chantiers;");
     db.exec("DELETE FROM settings WHERE key = 'chantierIdleDays' OR key LIKE 'chantiers.%'");
+  })();
+}
+
+/**
+ * Copie `ticket_notes` dans `notes` puis supprime la table dans la même
+ * transaction : conservée, elle réinjecterait au démarrage suivant chaque note
+ * supprimée entre-temps.
+ */
+function migrateTicketNotes(db: Database): void {
+  const legacy = db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ticket_notes'").get();
+  if (!legacy) return;
+  db.transaction(() => {
+    db.exec(`
+      INSERT OR IGNORE INTO notes (id, project_id, ticket_id, body, author, conversation_id, done_at, created_at)
+      SELECT ticket_notes.id, tickets.project_id, ticket_notes.ticket_id, ticket_notes.body, 'user', NULL, NULL, ticket_notes.created_at
+      FROM ticket_notes
+      JOIN tickets ON tickets.id = ticket_notes.ticket_id;
+      DROP TABLE ticket_notes;
+    `);
   })();
 }
 

@@ -41,6 +41,10 @@ _Avoid_ : dashboard, agrégateur, poste
 L'unité de travail d'un projet, quelle que soit sa source — tâche ClickUp (`TECH-XXXXX`), item Notion, ou simple branche. Agrège branche, MR, pipeline, déploiements, conversations et notes.
 _Avoid_ : tâche (réservé à ClickUp), issue, carte
 
+**Note** :
+Un point court à ne pas oublier avant un déploiement ou un merge, épinglé sur un ticket ou sur le projet et visible dans toutes leurs conversations : pastille de l'en-tête, et bloc injecté au premier tour. L'utilisateur comme l'agent en ajoutent ; elle se coche une fois faite.
+_Avoid_ : mémo, rappel, tâche (réservé à la pile Pupitre), instruction (la consigne du ticket)
+
 **Commande de lancement** :
 Une commande nommée du projet, lancée sans conversation ni quota, suivie dans le bloc Serveurs de la sidebar.
 

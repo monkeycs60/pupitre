@@ -55,6 +55,7 @@ import { INTEGRATION_TOKENS_KEY } from "./stores/settings";
 import { GOOGLE_CALENDAR_TOKEN, GoogleCalendarService } from "./google-calendar";
 import { ConversationTicketLinker } from "./conversation-ticket-linker";
 import { TicketStore } from "./stores/tickets";
+import { NoteStore } from "./stores/notes";
 import { ChangelogStore } from "./stores/changelog";
 import { ChangelogService } from "./changelog";
 import { IntegrationSecretStore } from "./stores/integration-secrets";
@@ -125,6 +126,7 @@ if (process.argv.includes("--pupitre-mcp")) {
   const memory = new MemoryStore();
   const integrations = new IntegrationStore(db);
   const tickets = new TicketStore(db);
+  const notes = new NoteStore(db);
   const integrationSecrets = new IntegrationSecretStore(db);
   const sentry = new SentryStore(db);
   const problemStore = new ProblemStore(db);
@@ -220,6 +222,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     undefined,
     () => actionFormat(settings.get("actionFormat")),
     problemAxisRuns,
+    { notes, tickets },
   );
   const automaticCalls = new AutomaticCalls(db);
   const claudeJson = async (model: string, prompt: string, cwd: string, effort = "low"): Promise<unknown> => {
@@ -458,6 +461,7 @@ if (process.argv.includes("--pupitre-mcp")) {
     memory,
     integrations,
     tickets,
+    notes,
     changelog,
     problemStore,
     problemMissions,

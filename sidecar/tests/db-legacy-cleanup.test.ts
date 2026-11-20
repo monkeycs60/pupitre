@@ -30,14 +30,14 @@ test("retire les chantiers en gardant leurs conversations et leurs TODO", async 
   first.query(
     "INSERT INTO tickets (id, project_id, key, source, title, status, payload_json, created_at, updated_at, last_seen_at) VALUES ('ch1', ?, 'CH-1', 'chantier', 'Moteur Rust', '', '{}', ?, ?, ?)",
   ).run(project.id, now, now, now);
-  first.query("INSERT INTO ticket_notes (id, ticket_id, body, created_at) VALUES ('n1', 'ch1', 'Note', ?)").run(now);
+  first.query("INSERT INTO notes (id, project_id, ticket_id, body, created_at) VALUES ('n1', ?, 'ch1', 'Note', ?)").run(project.id, now);
   first.query("UPDATE conversations SET ticket_id = 'ch1', ticket_locked = 1 WHERE id = ?").run(conversation.id);
   first.query("INSERT INTO project_todos (id, project_id, payload) VALUES ('t1', ?, json_object('ticket_id', 'ch1', 'title', 'Tâche'))").run(project.id);
   first.close();
 
   const db = openDb(dir);
   expect(db.query("SELECT COUNT(*) AS n FROM tickets").get()).toEqual({ n: 0 });
-  expect(db.query("SELECT COUNT(*) AS n FROM ticket_notes").get()).toEqual({ n: 0 });
+  expect(db.query("SELECT COUNT(*) AS n FROM notes").get()).toEqual({ n: 0 });
   expect(db.query("SELECT ticket_id, ticket_locked FROM conversations WHERE id = ?").get(conversation.id)).toEqual({ ticket_id: null, ticket_locked: 0 });
   expect(db.query("SELECT json_extract(payload, '$.ticket_id') AS ticket, json_extract(payload, '$.title') AS title FROM project_todos").get()).toEqual({ ticket: null, title: "Tâche" });
   expect(db.query("SELECT name FROM sqlite_master WHERE name = 'removed_chantiers'").get()).toBeNull();

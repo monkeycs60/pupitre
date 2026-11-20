@@ -30,6 +30,7 @@ import { MemoryStore } from "../src/memory";
 import { HtmlDocumentService } from "../src/html-documents";
 import { IntegrationStore } from "../src/stores/integrations";
 import { TicketStore } from "../src/stores/tickets";
+import { NoteStore } from "../src/stores/notes";
 import { IntegrationsRefresher } from "../src/integrations/refresher";
 import { ProblemStore } from "../src/stores/problems";
 import { ProblemService } from "../src/problems";
@@ -165,6 +166,8 @@ beforeEach(() => {
     events.broadcast,
   );
   const quotas = new QuotaTracker(db);
+  const tickets = new TicketStore(db);
+  const notes = new NoteStore(db);
   const runner = new ConversationRunner(
     conversations,
     projects,
@@ -172,6 +175,14 @@ beforeEach(() => {
     events.broadcast,
     quotas,
     () => 4321,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { notes, tickets },
   );
   const subtasks = new SubtaskRunner(db, conversations, projects, events.broadcast, quotas);
   const presets = new PresetStore(db);
@@ -218,7 +229,6 @@ beforeEach(() => {
     notifications,
   );
   const integrations = new IntegrationStore(db);
-  const tickets = new TicketStore(db);
   const integrationsRefresher = new IntegrationsRefresher(
     { integrations, tickets, conversations, projects },
     { clickUpClient: () => null, gitLabClient: () => null },
@@ -268,6 +278,7 @@ beforeEach(() => {
     htmlDocuments,
     integrations,
     tickets,
+    notes,
     integrationsRefresher,
     problemStore,
     problemMissions,
@@ -830,4 +841,102 @@ test("POST /api/notifications rattache l'alerte à la conversation de la session
 
   const listed = await fetch(`${current!.baseUrl}/api/notifications?after=0`).then((response) => response.json());
   expect(listed).toHaveLength(2);
+});
+
+async function patchJson(path: string, body: unknown): Promise<Response> {
+  if (!current) throw new Error("serveur de test non démarré");
+  return fetch(`${current.baseUrl}${path}`, {
+    method: "PATCH",
+    headers: jsonHeaders(),
+    body: JSON.stringify(body),
+  });
+}
+
+test("notes : portée par défaut, coche, modification, suppression et diffusion WS au projet", async () => {
+  const project = await createProject("/tmp/dash-notes");
+  const ticket = current!.deps.tickets.upsert(project.id, { key: "TECH-9", source: "clickup", title: "Alia", status: "", externalUrl: null });
+  const withTicket = current!.deps.conversations.create({ projectId: project.id, provider: "claude", model: "m", firstMessage: "x", ticketId: ticket.id });
+  const withoutTicket = current!.deps.conversations.create({ projectId: project.id, provider: "claude", model: "m", firstMessage: "y" });
+
+  const empty = await fetch(`${current!.baseUrl}/api/conversations/${withTicket.id}/notes`).then((response) => response.json());
+  expect(empty).toEqual({ ticket: { id: ticket.id, key: "TECH-9", title: "Alia" }, notes: [] });
+
+  const socket = webSocketEventWaiter(
+    `${current!.baseUrl.replace("http", "ws")}/ws?channel=notes&project=${project.id}`,
+    (event) => event.type === "notes-changed",
+  );
+  await socket.opened;
+  const created = await postJson(`/api/conversations/${withTicket.id}/notes`, { body: "  Brancher le vrai worker  ", author: "agent" });
+  expect(created.status).toBe(201);
+  const note = await created.json() as { id: string; ticket_id: string | null; author: string; body: string; conversation_id: string };
+  expect(note).toMatchObject({ ticket_id: ticket.id, author: "agent", body: "Brancher le vrai worker", conversation_id: withTicket.id });
+  expect(await socket.event).toEqual({ type: "notes-changed", projectId: project.id, ticketId: ticket.id });
+
+  const projectNote = await postJson(`/api/conversations/${withoutTicket.id}/notes`, { body: "Relancer la doc" }).then((response) => response.json()) as { id: string; ticket_id: string | null; author: string };
+  expect(projectNote).toMatchObject({ ticket_id: null, author: "user" });
+  expect((await postJson(`/api/conversations/${withoutTicket.id}/notes`, { body: "x", scope: "ticket" })).status).toBe(400);
+  expect((await postJson(`/api/conversations/${withTicket.id}/notes`, { body: "x", scope: "global" })).status).toBe(400);
+  expect((await postJson(`/api/conversations/${withTicket.id}/notes`, { body: "   " })).status).toBe(400);
+  expect((await postJson(`/api/conversations/${withTicket.id}/notes`, { body: "x".repeat(501) })).status).toBe(400);
+  expect((await postJson(`/api/conversations/inconnue/notes`, { body: "x" })).status).toBe(404);
+
+  const listed = await fetch(`${current!.baseUrl}/api/conversations/${withTicket.id}/notes`).then((response) => response.json()) as { notes: Array<{ id: string }> };
+  expect(listed.notes.map((item) => item.id)).toEqual([note.id, projectNote.id]);
+  const unrelated = await fetch(`${current!.baseUrl}/api/conversations/${withoutTicket.id}/notes`).then((response) => response.json()) as { ticket: null; notes: Array<{ id: string }> };
+  expect(unrelated.ticket).toBeNull();
+  expect(unrelated.notes.map((item) => item.id)).toEqual([projectNote.id]);
+
+  const dashboardBefore = await fetch(`${current!.baseUrl}/api/projects/${project.id}/dashboard`).then((response) => response.json()) as { tickets: Array<{ id: string; notes_count: number }> };
+  expect(dashboardBefore.tickets.find((row) => row.id === ticket.id)?.notes_count).toBe(1);
+  const done = await patchJson(`/api/notes/${note.id}`, { done: true });
+  expect(done.status).toBe(200);
+  expect((await done.json() as { done_at: string | null }).done_at).not.toBeNull();
+  const dashboardAfter = await fetch(`${current!.baseUrl}/api/projects/${project.id}/dashboard`).then((response) => response.json()) as { tickets: Array<{ id: string; notes_count: number }> };
+  expect(dashboardAfter.tickets.find((row) => row.id === ticket.id)?.notes_count).toBe(0);
+
+  const edited = await patchJson(`/api/notes/${note.id}`, { body: "Brancher le worker d'Incubator", done: false }).then((response) => response.json()) as { body: string; done_at: string | null };
+  expect(edited).toMatchObject({ body: "Brancher le worker d'Incubator", done_at: null });
+  expect((await patchJson(`/api/notes/${note.id}`, {})).status).toBe(400);
+  expect((await patchJson(`/api/notes/${note.id}`, { done: "oui" })).status).toBe(400);
+  expect((await patchJson(`/api/notes/inconnue`, { done: true })).status).toBe(404);
+
+  expect((await fetch(`${current!.baseUrl}/api/notes/${note.id}`, { method: "DELETE" })).status).toBe(204);
+  expect((await fetch(`${current!.baseUrl}/api/notes/${note.id}`, { method: "DELETE" })).status).toBe(404);
+});
+
+test("le premier tour d'une conversation reçoit les notes ouvertes de son ticket et de son projet, pas les suivants", async () => {
+  const repoPath = mkdtempSync(join(tmpdir(), "pupitre-dashboard-notes-"));
+  const project = await createProject(repoPath);
+  const ticket = current!.deps.tickets.upsert(project.id, { key: "TECH-11", source: "clickup", title: "t", status: "", externalUrl: null });
+  const notes = current!.deps.notes!;
+  const open = notes.create({ projectId: project.id, ticketId: ticket.id, body: "Brancher le vrai worker", author: "user", conversationId: null });
+  const projectWide = notes.create({ projectId: project.id, ticketId: null, body: "Relancer la doc", author: "agent", conversationId: null });
+  const done = notes.create({ projectId: project.id, ticketId: ticket.id, body: "Déjà réglé", author: "user", conversationId: null });
+  notes.update(done.id, { done: true });
+  const promptLog = join(repoPath, "prompts.log");
+  process.env.PUPITRE_FAKE_PROMPT_LOG = promptLog;
+
+  const created = await postJson("/api/conversations", {
+    projectId: project.id,
+    provider: "claude",
+    model: "claude-fable-5",
+    message: "On reprend",
+    ticketId: ticket.id,
+  });
+  expect(created.status).toBe(201);
+  const conversation = await created.json() as { id: string };
+  await waitForRunnerIdle(conversation.id);
+  const first = readFileSync(promptLog, "utf8");
+  expect(first).toContain("## Notes ouvertes avant déploiement");
+  expect(first).toContain(`Ticket TECH-11 · Brancher le vrai worker (id ${open.id})`);
+  expect(first).toContain(`Projet · Relancer la doc (id ${projectWide.id})`);
+  expect(first).not.toContain("Déjà réglé");
+
+  writeFileSync(promptLog, "");
+  expect((await postJson(`/api/conversations/${conversation.id}/messages`, { message: "Et ensuite ?" })).status).toBeLessThan(300);
+  await Bun.sleep(50);
+  await waitForRunnerIdle(conversation.id);
+  const second = readFileSync(promptLog, "utf8");
+  expect(second).toContain("Et ensuite ?");
+  expect(second).not.toContain("Notes ouvertes avant déploiement");
 });

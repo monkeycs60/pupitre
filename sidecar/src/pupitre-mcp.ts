@@ -52,6 +52,13 @@ function renderConversationBrief(brief: ConversationBrief): string {
   return lines.join("\n").trim();
 }
 
+interface NoteResponse {
+  id: string;
+  ticket_id: string | null;
+  body: string;
+  done_at: string | null;
+}
+
 const FULL_DISCUSSION_MAX = 120_000;
 
 const run = promisify(execFile);
@@ -282,6 +289,68 @@ export function createPupitreServer(context: PupitreServerContext | null = null)
       return text(`Tâche ajoutée au backlog de ${created.project} : ${created.title}`);
     } catch (error) {
       return text(`Ajout impossible : ${error instanceof Error ? error.message : String(error)}`, true);
+    }
+  });
+  server.registerTool("add_note", {
+    title: "Noter un point à ne pas oublier avant déploiement",
+    description: "Épingle une note courte sur le ticket de cette conversation (ou sur le projet), visible dans toutes les conversations concernées. "
+      + "À utiliser quand l'utilisateur demande de noter quelque chose pour plus tard, ou de ta propre initiative seulement pour un point reporté "
+      + "qu'il faudra faire avant un déploiement ou un merge (contournement temporaire, pièce manquante). "
+      + "Une phrase courte à l'impératif, jamais un récapitulatif.",
+    inputSchema: {
+      body: z.string().min(1).max(300).describe("La note : une phrase courte à l'impératif."),
+      scope: z.enum(["ticket", "project"]).optional().describe("Portée : ticket (par défaut quand la conversation en a un) ou projet."),
+    },
+  }, async (args: { body: string; scope?: "ticket" | "project" }) => {
+    try {
+      const response = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(conversationId())}/notes`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: args.body, author: "agent", ...(args.scope ? { scope: args.scope } : {}) }),
+      });
+      if (response.status !== 201) throw new Error(await errorMessage(response));
+      const note = await response.json() as NoteResponse;
+      return text(`Note ajoutée ${note.ticket_id ? "au ticket" : "au projet"} (id ${note.id}) : ${note.body}`);
+    } catch (error) {
+      return text(`Ajout impossible : ${error instanceof Error ? error.message : String(error)}`, true);
+    }
+  });
+  server.registerTool("list_notes", {
+    title: "Lister les notes avant déploiement",
+    description: "Liste les notes ouvertes du ticket de cette conversation et de son projet, avec leur id.",
+    inputSchema: {},
+  }, async () => {
+    try {
+      const response = await fetch(`${baseUrl()}/api/conversations/${encodeURIComponent(conversationId())}/notes`);
+      if (!response.ok) throw new Error(await errorMessage(response));
+      const { ticket, notes } = await response.json() as { ticket: { key: string } | null; notes: NoteResponse[] };
+      const open = notes.filter((note) => note.done_at === null);
+      const done = notes.length - open.length;
+      if (open.length === 0) return text(`Aucune note ouverte${done > 0 ? ` (${done} faite${done > 1 ? "s" : ""})` : ""}.`);
+      return text([
+        ...open.map((note) => `- ${note.ticket_id ? `Ticket ${ticket?.key ?? ""}`.trim() : "Projet"} · ${note.body} (id ${note.id})`),
+        ...(done > 0 ? [`${done} note${done > 1 ? "s" : ""} déjà faite${done > 1 ? "s" : ""}.`] : []),
+      ].join("\n"));
+    } catch (error) {
+      return text(`Lecture impossible : ${error instanceof Error ? error.message : String(error)}`, true);
+    }
+  });
+  server.registerTool("complete_note", {
+    title: "Marquer une note comme faite",
+    description: "Coche une note avant déploiement dont le point est réglé. L'id vient de `list_notes` ou du bloc « Notes ouvertes avant déploiement ».",
+    inputSchema: { id: z.string().min(1).describe("Id de la note.") },
+  }, async ({ id }: { id: string }) => {
+    try {
+      const response = await fetch(`${baseUrl()}/api/notes/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ done: true }),
+      });
+      if (!response.ok) throw new Error(await errorMessage(response));
+      const note = await response.json() as NoteResponse;
+      return text(`Note marquée comme faite : ${note.body}`);
+    } catch (error) {
+      return text(`Impossible de cocher la note : ${error instanceof Error ? error.message : String(error)}`, true);
     }
   });
   server.registerTool("report_incident_triage", {

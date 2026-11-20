@@ -100,6 +100,7 @@ import type { IntegrationsRefresher } from "./integrations/refresher";
 import { compileBranchPattern, DEFAULT_BRANCH_PATTERN, extractTicketKey } from "./ticket-key";
 import type { IntegrationStore, IntegrationType } from "./stores/integrations";
 import type { Ticket, TicketStore } from "./stores/tickets";
+import { isNoteAuthor, isNoteScope, NOTE_MAX_CHARS, type Note, type NoteStore } from "./stores/notes";
 import type { IntegrationSecretStore } from "./stores/integration-secrets";
 import type { SentryStore } from "./stores/sentry";
 import { redactSentryValue } from "./sentry-redaction";
@@ -196,6 +197,7 @@ export interface ServerDeps {
   memory: MemoryStore;
   integrations: IntegrationStore;
   tickets: TicketStore;
+  notes?: NoteStore;
   changelog?: ChangelogService;
   problemStore?: ProblemStore;
   problemMissions?: ProblemMissionStore;
@@ -309,6 +311,7 @@ type WebSocketData =
   | { channel: "quotas" }
   | { channel: "fleet" }
   | { channel: "tickets"; projectId: string }
+  | { channel: "notes"; projectId: string }
   | { channel: "navigation" };
 
 const EFFORTS_BY_PROVIDER = {
@@ -380,6 +383,13 @@ async function readObject(request: Request, maxBytes?: number): Promise<Record<s
     if (error instanceof HttpError) throw error;
     throw new HttpError(400, "corps JSON invalide");
   }
+}
+
+function noteBody(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) throw new HttpError(400, "texte de note requis");
+  const body = value.trim();
+  if (body.length > NOTE_MAX_CHARS) throw new HttpError(400, `note trop longue (${NOTE_MAX_CHARS} caractères au plus)`);
+  return body;
 }
 
 function requiredString(
@@ -1033,6 +1043,7 @@ export function createServer(deps: ServerDeps) {
   const quotaSockets = new Set<ServerWebSocket<WebSocketData>>();
   const fleetSockets = new Set<ServerWebSocket<WebSocketData>>();
   const ticketSockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
+  const noteSockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   const navigationSockets = new Set<ServerWebSocket<WebSocketData>>();
   let fleetTimer: ReturnType<typeof setInterval> | null = null;
   let lastFleetMessage: string | null = null;
@@ -1065,6 +1076,23 @@ export function createServer(deps: ServerDeps) {
       }
     }
     if (subscribers.size === 0) ticketSockets.delete(projectId);
+  };
+  const broadcastNotes = (note: Pick<Note, "project_id" | "ticket_id">) => {
+    const subscribers = noteSockets.get(note.project_id);
+    if (!subscribers) return;
+    const message = JSON.stringify({ type: "notes-changed", projectId: note.project_id, ticketId: note.ticket_id });
+    for (const socket of subscribers) {
+      try {
+        socket.send(message);
+      } catch {
+        subscribers.delete(socket);
+      }
+    }
+    if (subscribers.size === 0) noteSockets.delete(note.project_id);
+  };
+  const requireNotes = (): NoteStore => {
+    if (!deps.notes) throw new HttpError(501, "notes non câblées");
+    return deps.notes;
   };
   deps.problems?.subscribe(broadcastDashboard);
   deps.events.subscribe((conversationId, event) => {
@@ -3049,16 +3077,33 @@ export function createServer(deps: ServerDeps) {
           return json(publicSettings(deps));
         }
 
-        const ticketNotesId = routeId(pathname, /^\/api\/tickets\/([^/]+)\/notes$/);
-        if (ticketNotesId !== null && (request.method === "GET" || request.method === "POST")) {
-          const ticket = deps.tickets.get(ticketNotesId);
-          if (!ticket) throw new HttpError(404, "ticket inconnu");
+        const conversationNotesId = routeId(pathname, /^\/api\/conversations\/([^/]+)\/notes$/);
+        if (conversationNotesId !== null && (request.method === "GET" || request.method === "POST")) {
+          const notes = requireNotes();
+          const conversation = deps.conversations.get(conversationNotesId);
+          if (!conversation) throw new HttpError(404, "conversation inconnue");
+          const ticket = conversation.ticket_id ? deps.tickets.get(conversation.ticket_id) : null;
           if (request.method === "GET") {
-            return json(deps.tickets.notesByTicket(ticket.id));
+            return json({
+              ticket: ticket ? { id: ticket.id, key: ticket.key, title: ticket.title } : null,
+              notes: notes.listFor(conversation.project_id, ticket?.id ?? null),
+            });
           }
           const body = await readObject(request);
-          const note = deps.tickets.addNote(ticket.id, requiredString(body, "body").trim());
-          broadcastDashboard(ticket.project_id);
+          const text = noteBody(body.body);
+          const scope = body.scope ?? (ticket ? "ticket" : "project");
+          if (!isNoteScope(scope)) throw new HttpError(400, "portée invalide : ticket ou project");
+          if (scope === "ticket" && !ticket) throw new HttpError(400, "cette conversation n'est rattachée à aucun ticket");
+          const author = body.author ?? "user";
+          if (!isNoteAuthor(author)) throw new HttpError(400, "auteur invalide : user ou agent");
+          const note = notes.create({
+            projectId: conversation.project_id,
+            ticketId: scope === "ticket" ? ticket!.id : null,
+            body: text,
+            author,
+            conversationId: conversation.id,
+          });
+          broadcastNotes(note);
           return json(note, 201);
         }
 
@@ -3074,13 +3119,25 @@ export function createServer(deps: ServerDeps) {
           return json(updated);
         }
 
-        const ticketNoteId = routeId(pathname, /^\/api\/ticket-notes\/([^/]+)$/);
-        if (request.method === "DELETE" && ticketNoteId !== null) {
-          const deleted = deps.tickets.deleteNote(ticketNoteId);
-          if (!deleted) throw new HttpError(404, "note inconnue");
-          const ticket = deps.tickets.get(deleted.ticket_id);
-          if (ticket) broadcastDashboard(ticket.project_id);
-          return empty(204);
+        const noteId = routeId(pathname, /^\/api\/notes\/([^/]+)$/);
+        if (noteId !== null && (request.method === "PATCH" || request.method === "DELETE")) {
+          const notes = requireNotes();
+          if (request.method === "DELETE") {
+            const deleted = notes.delete(noteId);
+            if (!deleted) throw new HttpError(404, "note inconnue");
+            broadcastNotes(deleted);
+            return empty(204);
+          }
+          const body = await readObject(request);
+          if (body.done !== undefined && typeof body.done !== "boolean") throw new HttpError(400, "done doit être un booléen");
+          if (body.done === undefined && body.body === undefined) throw new HttpError(400, "rien à modifier");
+          const updated = notes.update(noteId, {
+            ...(body.body !== undefined ? { body: noteBody(body.body) } : {}),
+            ...(typeof body.done === "boolean" ? { done: body.done } : {}),
+          });
+          if (!updated) throw new HttpError(404, "note inconnue");
+          broadcastNotes(updated);
+          return json(updated);
         }
 
         if (request.method === "POST" && pathname === "/api/conversations") {
@@ -4369,6 +4426,14 @@ export function createServer(deps: ServerDeps) {
             if (server.upgrade(request, { data: { channel: "tickets", projectId } })) return;
             throw new HttpError(400, "upgrade WebSocket refusé");
           }
+          if (channel === "notes") {
+            const projectId = url.searchParams.get("project");
+            if (!projectId || !deps.projects.get(projectId)) {
+              throw new HttpError(404, "projet inconnu");
+            }
+            if (server.upgrade(request, { data: { channel: "notes", projectId } })) return;
+            throw new HttpError(400, "upgrade WebSocket refusé");
+          }
           if (channel === "navigation") {
             if (server.upgrade(request, { data: { channel: "navigation" } })) return;
             throw new HttpError(400, "upgrade WebSocket refusé");
@@ -4438,6 +4503,16 @@ export function createServer(deps: ServerDeps) {
           socket.send(JSON.stringify(dashboardPayload(projectId, deps.integrations, deps.tickets, deps.problemStore)));
           return;
         }
+        if (socket.data.channel === "notes") {
+          const { projectId } = socket.data;
+          let subscribers = noteSockets.get(projectId);
+          if (!subscribers) {
+            subscribers = new Set();
+            noteSockets.set(projectId, subscribers);
+          }
+          subscribers.add(socket);
+          return;
+        }
         if (socket.data.channel === "navigation") {
           navigationSockets.add(socket);
           return;
@@ -4468,6 +4543,13 @@ export function createServer(deps: ServerDeps) {
           const subscribers = ticketSockets.get(projectId);
           subscribers?.delete(socket);
           if (subscribers?.size === 0) ticketSockets.delete(projectId);
+          return;
+        }
+        if (socket.data.channel === "notes") {
+          const { projectId } = socket.data;
+          const subscribers = noteSockets.get(projectId);
+          subscribers?.delete(socket);
+          if (subscribers?.size === 0) noteSockets.delete(projectId);
           return;
         }
         if (socket.data.channel === "navigation") {

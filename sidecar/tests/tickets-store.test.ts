@@ -162,7 +162,7 @@ test("archiveStale archive aussi un ticket vu exactement il y a 14 jours", () =>
   expect(tickets.get(ticket.id)?.archived_at).toBe("2026-02-01T00:00:00.000Z");
 });
 
-test("notes et liaison de conversation", () => {
+test("liaison de conversation", () => {
   const ticket = tickets.upsert(projectId, {
     key: "TECH-5",
     source: "git",
@@ -170,9 +170,6 @@ test("notes et liaison de conversation", () => {
     status: "",
     externalUrl: null,
   });
-
-  const note = tickets.addNote(ticket.id, "penser au cache");
-  expect(tickets.notesByTicket(ticket.id)).toEqual([note]);
 
   const conversation = conversations.create({
     projectId,

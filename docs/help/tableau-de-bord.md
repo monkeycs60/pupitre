@@ -34,6 +34,16 @@ cas, Pupitre retrouve ou crée le **worktree partagé** de la branche, injecte u
 brief de reprise court, puis laisse l'agent creuser une conversation soeur au
 besoin avec `read_sibling_conversation`.
 
+## Notes avant déploiement
+
+La pastille épinglée de l'en-tête d'une conversation compte les **notes
+ouvertes** de son ticket et de son projet : ce qu'il ne faut pas oublier avant
+un merge ou une mise en prod. Un clic ouvre la liste : cocher une note la range
+dans **Faites**, cliquer son texte le modifie, **Entrée** ajoute une note au
+ticket ou au projet. L'agent peut en ajouter avec l'outil `add_note` et les
+cocher avec `complete_note` ; une nouvelle conversation reçoit les notes
+ouvertes à son premier tour.
+
 ## Capturer des problématiques
 
 Le bouton **Capturer** accepte un collage brut : bugs, retours, questions et

@@ -23,6 +23,8 @@ import {
   resolveAttachmentImages,
 } from "./assistant-media";
 import type { ProblemAxisRunStore } from "./stores/problem-axis-runs";
+import { openNotesPreamble, type NoteStore } from "./stores/notes";
+import type { TicketStore } from "./stores/tickets";
 
 type BroadcastFn = (conversationId: string, event: StoredEvent) => void;
 
@@ -114,8 +116,15 @@ export class ConversationRunner {
     /** Lu à chaque tour : le réglage peut changer sans redémarrer le sidecar. */
     private actionFormat: () => ActionFormat = () => DEFAULT_ACTION_FORMAT,
     private problemAxisRuns?: ProblemAxisRunStore,
+    private notes?: { notes: NoteStore; tickets: TicketStore },
   ) {
     sweepOrphanedRuns(convs);
+  }
+
+  private openNotesPreamble(projectId: string, ticketId: string | null): string | null {
+    if (!this.notes) return null;
+    const ticketKey = ticketId ? this.notes.tickets.get(ticketId)?.key ?? null : null;
+    return openNotesPreamble(this.notes.notes.listFor(projectId, ticketId), ticketKey);
   }
 
   isRunning(conversationId: string): boolean {
@@ -352,7 +361,8 @@ export class ConversationRunner {
         emit({ type: "status", state: "error", error: "annulé" });
         return outcome;
       }
-      const preamble = [requestedPreamble, workspacePreamble].filter(Boolean).join("\n\n");
+      const notesPreamble = conv.cli_session_id ? null : this.openNotesPreamble(conv.project_id, conv.ticket_id);
+      const preamble = [requestedPreamble, notesPreamble, workspacePreamble].filter(Boolean).join("\n\n");
       const providerPrompt = (preamble
         ? `${preamble}\n\n---\n\n`
         : "")

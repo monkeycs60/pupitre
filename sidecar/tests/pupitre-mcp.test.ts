@@ -70,6 +70,9 @@ test("publish_html_document transmet un document au sidecar local", async () => 
     "read_sibling_conversation",
     "read_conversation",
     "add_todo",
+    "add_note",
+    "list_notes",
+    "complete_note",
     "report_incident_triage",
     "report_sentry_triage",
     "git_commit",
@@ -245,4 +248,61 @@ test("publish_code abandonne un sidecar muet et demande de ne pas relancer", asy
   expect(Date.now() - started).toBeLessThan(5_000);
   expect(result.isError).toBe(true);
   expect(result.content[0]?.text).toContain("Ne relance pas l’outil");
+});
+
+test("add_note, list_notes et complete_note passent par l'API des notes de la conversation", async () => {
+  const requests: Array<{ method: string; path: string; body: unknown }> = [];
+  const note = { id: "note-1", ticket_id: "ticket-1", body: "Brancher le vrai worker", done_at: null };
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    async fetch(request) {
+      const { pathname } = new URL(request.url);
+      const body = request.method === "GET" ? null : await request.json();
+      requests.push({ method: request.method, path: pathname, body });
+      if (request.method === "POST") return Response.json(note, { status: 201 });
+      if (request.method === "PATCH") return Response.json({ ...note, done_at: "2026-11-20T15:00:00.000Z" });
+      return Response.json({
+        ticket: { id: "ticket-1", key: "TECH-25148", title: "Alia" },
+        notes: [
+          note,
+          { id: "note-2", ticket_id: null, body: "Relancer la doc", done_at: null },
+          { id: "note-3", ticket_id: null, body: "Fait", done_at: "2026-11-19T10:00:00.000Z" },
+        ],
+      });
+    },
+  });
+  servers.push(server);
+  const client = new Client({ name: "test-pupitre", version: "0.0.0" });
+  clients.push(client);
+  await client.connect(new StdioClientTransport({
+    command: process.execPath,
+    args: [pupitreMcpPath()],
+    env: { PATH: process.env.PATH ?? "", PUPITRE_PORT: String(server.port), PUPITRE_CONVERSATION_ID: "conversation-1" },
+  }));
+
+  const { tools } = await client.listTools();
+  expect(tools.find((tool) => tool.name === "add_note")?.description).toContain("jamais un récapitulatif");
+
+  const added = await client.callTool({ name: "add_note", arguments: { body: "Brancher le vrai worker" } }) as { content: Array<{ text?: string }>; isError?: boolean };
+  expect(added.isError).toBeFalsy();
+  expect(added.content[0]?.text).toBe("Note ajoutée au ticket (id note-1) : Brancher le vrai worker");
+  await client.callTool({ name: "add_note", arguments: { body: "Relancer la doc", scope: "project" } });
+
+  const listed = await client.callTool({ name: "list_notes", arguments: {} }) as { content: Array<{ text?: string }> };
+  expect(listed.content[0]?.text).toBe([
+    "- Ticket TECH-25148 · Brancher le vrai worker (id note-1)",
+    "- Projet · Relancer la doc (id note-2)",
+    "1 note déjà faite.",
+  ].join("\n"));
+
+  const completed = await client.callTool({ name: "complete_note", arguments: { id: "note-1" } }) as { content: Array<{ text?: string }> };
+  expect(completed.content[0]?.text).toBe("Note marquée comme faite : Brancher le vrai worker");
+
+  expect(requests).toEqual([
+    { method: "POST", path: "/api/conversations/conversation-1/notes", body: { body: "Brancher le vrai worker", author: "agent" } },
+    { method: "POST", path: "/api/conversations/conversation-1/notes", body: { body: "Relancer la doc", author: "agent", scope: "project" } },
+    { method: "GET", path: "/api/conversations/conversation-1/notes", body: null },
+    { method: "PATCH", path: "/api/notes/note-1", body: { done: true } },
+  ]);
 });
