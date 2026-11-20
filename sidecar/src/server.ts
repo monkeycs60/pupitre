@@ -304,18 +304,27 @@ async function createContinuationFromHandoff(
 }
 
 const DEFAULT_CONTINUE_INSTRUCTION = "Reprends là où la conversation s'est arrêtée.";
+const CONTINUE_IDLE_POLL_MS = 250;
+
+interface ContinueRequest {
+  instruction: string;
+  images: string[];
+  attachments: MediaAttachment[];
+}
 
 async function continueInNewConversation(
   deps: ServerDeps,
   source: Conversation,
-  instruction: string,
+  request: ContinueRequest,
   open: (conversation: Conversation) => void,
 ): Promise<void> {
+  while (deps.runner.activity.isBusy(source.id)) await Bun.sleep(CONTINUE_IDLE_POLL_MS);
+  const { instruction, images, attachments } = request;
   const outcome = await deps.runner.runTurn(
     source.id,
     `${CONTINUE_DIRECTIVE} ${instruction}`,
-    [],
-    [],
+    images,
+    attachments,
     { preamble: continueBriefPreamble(instruction) },
   );
   if (outcome.state !== "done" || outcome.cancelled) return;
@@ -341,7 +350,7 @@ async function continueInNewConversation(
     firstMessage: instruction,
   });
   open(conversation);
-  await deps.runner.runTurn(conversation.id, continuationMessage(origin, brief, instruction), []);
+  await deps.runner.runTurn(conversation.id, continuationMessage(origin, brief, instruction), images, attachments);
 }
 
 // Deux canaux WS sur la même route : par conversation (défaut historique) et le
@@ -1076,6 +1085,7 @@ export function createServer(deps: ServerDeps) {
   const fleetSockets = new Set<ServerWebSocket<WebSocketData>>();
   const ticketSockets = new Map<string, Set<ServerWebSocket<WebSocketData>>>();
   const navigationSockets = new Set<ServerWebSocket<WebSocketData>>();
+  const pendingContinuations = new Set<string>();
   let fleetTimer: ReturnType<typeof setInterval> | null = null;
   let lastFleetMessage: string | null = null;
   const currentFleet = () => fleetSnapshot(deps);
@@ -3474,10 +3484,20 @@ export function createServer(deps: ServerDeps) {
           if (source.handoff_pending) throw new HttpError(409, "passation en cours sur cette conversation");
           const body = await readObject(request);
           const instruction = optionalTrimmed(body, "instruction") || DEFAULT_CONTINUE_INSTRUCTION;
-          if (deps.runner.isRunning(source.id) || deps.runner.activity.isBusy(source.id)) {
-            throw new HttpError(409, "un tour est déjà en cours");
+          const { images, attachments } = messageWithAttachments({ ...body, message: instruction }, deps.media);
+          if (pendingContinuations.has(source.id)) {
+            throw new HttpError(409, "un @continue est déjà en cours sur cette conversation");
           }
-          void continueInNewConversation(deps, source, instruction, (conversation) => {
+          const queued = deps.runner.activity.isBusy(source.id);
+          pendingContinuations.add(source.id);
+          let released = false;
+          const release = () => {
+            if (released) return;
+            released = true;
+            pendingContinuations.delete(source.id);
+          };
+          void continueInNewConversation(deps, source, { instruction, images, attachments }, (conversation) => {
+            release();
             const message = JSON.stringify({
               type: "open-conversation",
               projectId: conversation.project_id,
@@ -3485,8 +3505,10 @@ export function createServer(deps: ServerDeps) {
               fromConversationId: source.id,
             });
             for (const socket of navigationSockets) socket.send(message);
-          }).catch((error) => console.error("Échec de @continue", error));
-          return json({ delivery: "started" }, 202);
+          })
+            .catch((error) => console.error("Échec de @continue", error))
+            .finally(release);
+          return json({ delivery: queued ? "queued" : "started" }, 202);
         }
 
         const conversationModelId = routeId(

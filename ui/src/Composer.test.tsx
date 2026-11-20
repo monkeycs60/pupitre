@@ -159,3 +159,36 @@ test('transmet la conversation source d’un handoff au contrat de création', (
   expect(input.continuedFrom).toBe('source-1')
   expect(input.branch).toBeNull()
 })
+
+test('@continue pendant un tour se met en file et l’annonce jusqu’à la fin du tour', async () => {
+  const { fireEvent, waitFor } = await import('@testing-library/react')
+  const defaultFetch = globalThis.fetch
+  const continueBodies: unknown[] = []
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes('/api/conversations/conversation-1/continue')) {
+      continueBodies.push(JSON.parse(String(init?.body)))
+      return Response.json({ delivery: 'queued' }, { status: 202 })
+    }
+    return Response.json([])
+  }) as typeof fetch
+  try {
+    function Harness({ isRunning }: { isRunning: boolean }) {
+      const [message, setMessage] = useState('@continue fais le bilan')
+      return createElement(Composer, { ...composerProps(isRunning), message, onMessageChange: setMessage })
+    }
+    const view = render(createElement(Harness, { isRunning: true }))
+    const send = screen.getByRole('button', { name: /Mettre en file/ })
+    fireEvent.click(send)
+
+    const notice = await screen.findByRole('status')
+    expect(notice.textContent).toContain('@continue en file')
+    expect(continueBodies).toEqual([{ instruction: 'fais le bilan', images: [], attachments: [] }])
+    await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(''))
+    expect(screen.getByRole('button', { name: /Orienter/ })).toBeDefined()
+
+    view.rerender(createElement(Harness, { isRunning: false }))
+    expect(screen.queryByText(/@continue en file/)).toBeNull()
+  } finally {
+    globalThis.fetch = defaultFetch
+  }
+})

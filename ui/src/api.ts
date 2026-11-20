@@ -1135,9 +1135,9 @@ export function createSidequest(
 
 export function continueInNewConversation(
   sourceConversationId: string,
-  instruction: string,
-): Promise<void> {
-  return fetchVoid(`/api/conversations/${routeId(sourceConversationId)}/continue`, jsonPost({ instruction }))
+  input: { instruction: string; images: string[]; attachments: Attachment[] },
+): Promise<{ delivery: 'started' | 'queued' }> {
+  return fetchJson(`/api/conversations/${routeId(sourceConversationId)}/continue`, jsonPost(input))
 }
 
 export function sendMessage(

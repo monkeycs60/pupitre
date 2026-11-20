@@ -1664,6 +1664,43 @@ test("@continue fait rédiger le brief dans la source, puis ouvre la suite avec 
   await waitForRunnerIdle(continuation!.id);
 });
 
+test("@continue envoyé pendant un tour attend sa fin, puis transmet les pièces jointes à la suite", async () => {
+  if (!current) throw new Error("serveur de test non démarré");
+  const project = await createProject(tmpdir());
+  const upload = await fetch(`${current.baseUrl}/api/media`, {
+    method: "POST",
+    headers: { "content-type": "image/png" },
+    body: new Uint8Array([0, 137, 80, 78, 71, 255]),
+  });
+  const { name } = await upload.json() as { name: string };
+  const source = await (await postJson("/api/conversations", {
+    projectId: project.id, provider: "claude", model: "haiku", message: "DECONNECTE_WS",
+  })).json() as { id: string };
+  expect(current.runner.isRunning(source.id)).toBe(true);
+
+  const queued = await postJson(`/api/conversations/${source.id}/continue`, { instruction: "reprends", images: [name] });
+  expect(queued.status).toBe(202);
+  expect(await queued.json()).toEqual({ delivery: "queued" });
+  const duplicate = await postJson(`/api/conversations/${source.id}/continue`, { instruction: "doublon" });
+  expect(duplicate.status).toBe(409);
+
+  expect(await waitFor(() => current!.deps.conversations.listByProject(project.id)
+    .some((conversation) => conversation.continued_from === source.id), 4_000)).toBe(true);
+  const continuation = current.deps.conversations.listByProject(project.id)
+    .find((conversation) => conversation.continued_from === source.id)!;
+
+  const events = current.deps.conversations.listEvents(source.id);
+  const firstDone = events.findIndex((event) => event.type === "status" && event.state === "done");
+  const continueAt = events.findIndex((event) => event.type === "user-message" && event.text.startsWith("@continue"));
+  expect(firstDone).toBeGreaterThan(-1);
+  expect(continueAt).toBeGreaterThan(firstDone);
+  expect(events[continueAt]).toEqual(expect.objectContaining({ text: "@continue reprends", images: [name] }));
+
+  const seed = await waitForPersistedEvent(continuation.id, (event) => event.type === "user-message");
+  expect((seed as { images: string[] }).images).toEqual([name]);
+  await waitForRunnerIdle(continuation.id);
+});
+
 test("le changelog projet se consulte et se déclenche sans créer de conversation", async () => {
   if (!current) throw new Error("serveur de test non démarré");
   const project = await createProject(tmpdir());

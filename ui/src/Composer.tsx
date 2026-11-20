@@ -273,6 +273,8 @@ export function Composer({
   const [finish, setFinish] = useState<TodoFinish>(initialFinish)
   const isTodoMode = isNewConversation && todoMode && onTodoModeChange !== undefined
   const [toast, setToast] = useState<string | null>(null)
+  const [queuedContinueFor, setQueuedContinueFor] = useState<string | null>(null)
+  if (queuedContinueFor !== null && (!isRunning || queuedContinueFor !== conversationId)) setQueuedContinueFor(null)
   const [sidecarStalled, setSidecarStalled] = useState<'stalled' | 'restarting' | null>(null)
   const restartingSidecarRef = useRef(false)
   const [trigger, setTrigger] = useState<ComposerPaletteTrigger | null>(null)
@@ -283,6 +285,7 @@ export function Composer({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importPathsRef = useRef<(paths: string[]) => void>(() => {})
   const canSteer = conversationId !== null && isRunning && providerCanSteer(provider)
+  const continuesElsewhere = parseContinueDirective(message) !== null
   const canSubmit =
     (message.trim().length > 0 || attachments.length > 0) &&
     pendingUploads === 0 &&
@@ -558,7 +561,12 @@ export function Composer({
       } else {
         const continuation = parseContinueDirective(trimmedMessage)
         if (continuation) {
-          await continueInNewConversation(conversationId, continuation.instruction)
+          const { delivery } = await continueInNewConversation(conversationId, {
+            instruction: continuation.instruction,
+            images: imageNames,
+            attachments: attachmentInputs,
+          })
+          setQueuedContinueFor(delivery === 'queued' ? conversationId : null)
           onMessageChange('')
           setAttachments([])
           return
@@ -682,6 +690,11 @@ export function Composer({
           >
             {sidecarStalled === 'restarting' ? 'Relance…' : 'Relancer le sidecar'}
           </button>
+        </div>
+      ) : null}
+      {queuedContinueFor !== null && toast === null ? (
+        <div className="composer-toast is-info" role="status">
+          <span>@continue en file : à la fin du tour, l’agent rédige le brief puis ouvre la suite.</span>
         </div>
       ) : null}
       {toast !== null ? (
@@ -889,7 +902,7 @@ export function Composer({
             <button type="submit" className={`send-button${isRunning ? ' is-running' : ''}${isTodoMode ? ' is-todo' : ''}`} disabled={!canSubmit}>
               {isSubmitting
                 ? isTodoMode ? (editingTodoId ? 'Enregistrement…' : 'Ajout…') : isNewConversation ? 'Création…' : 'Envoi…'
-                : isTodoMode ? (editingTodoId ? 'Enregistrer' : 'Empiler') : canSteer ? 'Orienter' : 'Envoyer'}
+                : isTodoMode ? (editingTodoId ? 'Enregistrer' : 'Empiler') : canSteer ? (continuesElsewhere ? 'Mettre en file' : 'Orienter') : 'Envoyer'}
               {!isSubmitting ? <kbd aria-hidden="true">⏎</kbd> : null}
             </button>
           </div>

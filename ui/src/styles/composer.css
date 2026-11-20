@@ -1347,6 +1347,11 @@
   box-shadow: var(--shadow-popover);
 }
 
+.composer-toast.is-info {
+  color: var(--text-strong);
+  border-left-color: var(--accent);
+}
+
 .composer-toast button {
   width: 21px;
   height: 21px;
