@@ -26,7 +26,7 @@ export interface ContextProbe {
 function probeTurn(cwd: string, model: string, mcpConfig: string | null): Promise<number> {
   return new Promise((resolve, reject) => {
     const bin = process.env.PUPITRE_CLAUDE_BIN ?? "claude";
-    const args = ["-p", "--output-format", "json", "--model", model];
+    const args = ["-p", "--output-format", "json", "--no-session-persistence", "--model", model];
     if (mcpConfig !== null) args.push("--strict-mcp-config", "--mcp-config", mcpConfig);
     args.push("--", PROBE_PROMPT);
 

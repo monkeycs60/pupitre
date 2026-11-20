@@ -105,6 +105,7 @@ function claudeTurnArgs(opts: TurnOptions): string[] {
   if (permissionMode === "bypassPermissions") args.push("--dangerously-skip-permissions");
   if (opts.effort) args.push("--effort", opts.effort);
   if (opts.oneShot) args.push("--tools", "", "--no-session-persistence");
+  else if (opts.persistSession === false) args.push("--no-session-persistence");
   // `--mcp-config` accepte un chemin de fichier OU un JSON inline (cf.
   // `claude --help`). Sans sélection de projet, pas de `--strict-mcp-config` :
   // les serveurs MCP que l'utilisateur a configurés lui-même restent chargés.

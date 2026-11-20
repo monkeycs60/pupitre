@@ -616,6 +616,7 @@ function generationTurnOptions(input: DebriefGenerationInput) {
     signal: input.signal,
     mcpServers: input.mcpServers,
     oneShot: input.oneShot,
+    persistSession: false,
   };
 }
 

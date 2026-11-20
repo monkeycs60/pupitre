@@ -45,6 +45,11 @@ export interface TurnOptions {
    */
   oneShot?: boolean;
   /**
+   * `false` (Claude) : session non écrite sur disque, outils conservés. Sans
+   * lui, une génération de fond s'ajoute à l'historique Claude du projet.
+   */
+  persistSession?: boolean;
+  /**
    * Appelé par un adaptateur capable d'accepter des précisions pendant le tour.
    * Le runner conserve cette fonction sans exposer au serveur HTTP les ids ou
    * le protocole propres au provider.
