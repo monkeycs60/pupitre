@@ -11,7 +11,7 @@ import {
   pillClearance,
   warmJarvis,
   type JarvisActionContext,
-} from './jarvis'
+} from './jarvisActions'
 import type { JarvisAction, JarvisJob, JarvisMode, JarvisResult } from './types'
 
 const POLL_MS = 500

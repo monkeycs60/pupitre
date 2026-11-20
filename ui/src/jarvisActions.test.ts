@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { pillClearance } from './jarvis.ts'
+import { pillClearance } from './jarvisActions.ts'
 
 const box = (left: number, top: number, right: number) => ({ left, top, right })
 
