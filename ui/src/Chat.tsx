@@ -108,6 +108,46 @@ function contentOffset(viewport: HTMLElement, element: Element): number {
   return element.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop
 }
 
+const READABLE_SELECTOR = 'p, li, pre, tr, h1, h2, h3, h4, blockquote, .tool-activity, .tool-activity-summary, .turn-meta'
+
+type ReadingPosition = { eventId: number; rowOffset: number; text: string | null; textOffset: number }
+
+const readingPositions = new Map<string, ReadingPosition>()
+
+function eventRows(viewport: HTMLElement): HTMLElement[] {
+  return [...viewport.querySelectorAll<HTMLElement>('[data-event-id]')]
+    .filter((row) => Number.isFinite(Number(row.dataset.eventId)))
+}
+
+function readableText(element: Element): string {
+  return (element.textContent ?? '').trim().slice(0, 120)
+}
+
+function readingPositionOf(viewport: HTMLElement): ReadingPosition | null {
+  const rows = eventRows(viewport)
+  const top = viewport.getBoundingClientRect().top
+  let low = 0
+  let high = rows.length - 1
+  let first = rows.length
+  while (low <= high) {
+    const middle = (low + high) >> 1
+    if (rows[middle]!.getBoundingClientRect().bottom > top) {
+      first = middle
+      high = middle - 1
+    } else {
+      low = middle + 1
+    }
+  }
+  const row = rows[first]
+  if (row === undefined) return null
+  const rowOffset = row.getBoundingClientRect().top - top
+  const readable = [...row.querySelectorAll(READABLE_SELECTOR)]
+    .find((element) => element.getBoundingClientRect().top >= top && readableText(element) !== '')
+  return readable === undefined
+    ? { eventId: Number(row.dataset.eventId), rowOffset, text: null, textOffset: 0 }
+    : { eventId: Number(row.dataset.eventId), rowOffset, text: readableText(readable), textOffset: readable.getBoundingClientRect().top - top }
+}
+
 function lastStatusIsRunning(events: AppEvent[]): boolean {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]
@@ -215,7 +255,10 @@ export function Chat({
   const isRunning = lastStatusIsRunning(events)
   const unsummarized = useMemo(() => hasUnsummarizedWork(events), [events])
   const viewportRef = useRef<HTMLDivElement>(null)
-  const followsBottomRef = useRef(true)
+  const pendingPositionRef = useRef(conversation === null || focusEventId !== null
+    ? undefined
+    : readingPositions.get(conversation.id))
+  const followsBottomRef = useRef(pendingPositionRef.current === undefined)
   const manualScrollIntentRef = useRef(false)
   const scrollFrameRef = useRef<number | null>(null)
   const onConversationReadRef = useRef(onConversationRead)
@@ -230,7 +273,7 @@ export function Chat({
   const [searchOpen, setSearchOpen] = useState(false)
   const [assetsOpen, setAssetsOpen] = useState(false)
   const [conversationDocuments, setConversationDocuments] = useState<import('./types').HtmlDocument[]>([])
-  const [atBottom, setAtBottom] = useState(true)
+  const [atBottom, setAtBottom] = useState(pendingPositionRef.current === undefined)
   const reading = useReadingPrefs()
   const [hudZoom, setHudZoom] = useState(reading.zoom)
   const [zoomTouched, setZoomTouched] = useState(false)
@@ -409,6 +452,24 @@ export function Chat({
     anchor.offset = offset
   }, [])
 
+  useLayoutEffect(() => {
+    const pending = pendingPositionRef.current
+    const viewport = viewportRef.current
+    if (pending === undefined || viewport === null) return
+    const row = eventRows(viewport).findLast((element) => Number(element.dataset.eventId) <= pending.eventId)
+    if (row === undefined) return
+    pendingPositionRef.current = undefined
+    const exact = Number(row.dataset.eventId) === pending.eventId
+    const readable = exact && pending.text !== null
+      ? [...row.querySelectorAll(READABLE_SELECTOR)].find((element) => readableText(element) === pending.text)
+      : undefined
+    viewport.scrollTop = readable !== undefined
+      ? contentOffset(viewport, readable) - pending.textOffset
+      : contentOffset(viewport, row) - (exact ? pending.rowOffset : 0)
+    captureReadingAnchor()
+    readingAnchorRef.current ??= { element: row, offset: contentOffset(viewport, row) }
+  }, [blocks])
+
   useLayoutEffect(keepReadingPosition, [blocks, keepReadingPosition])
 
   useEffect(() => {
@@ -444,7 +505,7 @@ export function Chat({
     for (let y = box.top + 16; y < box.top + Math.min(box.height, 320); y += 16) {
       const hit = document.elementFromPoint(box.left + box.width / 2, y)
       if (hit === null || !viewport.contains(hit)) continue
-      const element = hit.closest('p, li, pre, tr, h1, h2, h3, h4, blockquote, .tool-activity, .tool-activity-summary, .turn-meta')
+      const element = hit.closest(READABLE_SELECTOR)
       if (element !== null && element.getBoundingClientRect().top >= box.top) {
         readingAnchorRef.current = { element, offset: contentOffset(viewport, element) }
         return
@@ -484,6 +545,11 @@ export function Chat({
       }
       manualScrollIntentRef.current = false
       if (followsBottom) onConversationReadRef.current?.()
+      if (conversation !== null && pendingPositionRef.current === undefined) {
+        const position = followsBottomRef.current ? null : readingPositionOf(viewport)
+        if (position === null) readingPositions.delete(conversation.id)
+        else readingPositions.set(conversation.id, position)
+      }
     })
   }
 
