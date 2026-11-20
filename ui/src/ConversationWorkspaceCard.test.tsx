@@ -5,7 +5,7 @@ import type { CodeConversationCommits } from './types'
 
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
-const { cleanup, fireEvent, render, screen } = await import('@testing-library/react')
+const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { ConversationWorkspaceCard } = await import('./ConversationWorkspaceCard')
 const defaultFetch = globalThis.fetch
 
@@ -56,7 +56,7 @@ test('résume les commits de la conversation par dépôt et déplie leurs change
   expect(screen.getByText('gate adaptative')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Voir les changements' }))
   expect(await screen.findByText('1 fichier modifié')).toBeTruthy()
-  expect([...document.querySelectorAll('.changes-diff-line')].map((line) => line.className.replace('changes-diff-line is-', ''))).toEqual(['context', 'deletion', 'addition'])
+  await waitFor(() => expect([...document.querySelectorAll('.changes-diff-line')].map((line) => line.className.replace('changes-diff-line is-', ''))).toEqual(['context', 'deletion', 'addition']))
   expect(screen.getByText('feature/T-1')).toBeTruthy()
 })
 
