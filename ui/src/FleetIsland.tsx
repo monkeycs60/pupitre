@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { FleetItem, UnreadConversation, ViewedConversation } from './types'
-import { listViewedConversations } from './api'
 import { ProviderMark } from './ProviderMark'
 import { useNow } from './useNow'
 import { formatShortDuration } from './formatActiveDuration'
@@ -13,7 +12,6 @@ const KIND_LABELS: Record<FleetItem['kind'], string> = {
 }
 
 const BOARD_WIDTH = 440
-const VIEWED_LIMIT = 8
 
 export type BoardTab = 'activity' | 'viewed'
 
@@ -45,13 +43,16 @@ function moveRowFocus(root: HTMLElement | null, event: ReactKeyboardEvent) {
   rows[next]!.focus()
 }
 
-export function FleetIsland({ items, unread, open, requestedTab = null, currentConversationId, onOpenChange, onOpenRunning, onOpenUnread, onOpenViewed, onReadAll }: {
+export function FleetIsland({ items, unread, recent, recentError = false, open, requestedTab = null, switchIndex = null, onOpenChange, onRecentRefresh, onOpenRunning, onOpenUnread, onOpenViewed, onReadAll }: {
   items: FleetItem[]
   unread: UnreadConversation[]
+  recent: ViewedConversation[] | null
+  recentError?: boolean
   open: boolean
   requestedTab?: BoardTab | null
-  currentConversationId?: string | null
+  switchIndex?: number | null
   onOpenChange: (open: boolean) => void
+  onRecentRefresh?: () => void
   onOpenRunning: (item: FleetItem) => void
   onOpenUnread: (item: UnreadConversation) => void
   onOpenViewed: (item: ViewedConversation) => void
@@ -61,49 +62,43 @@ export function FleetIsland({ items, unread, open, requestedTab = null, currentC
   const rootRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
   const [position, setPosition] = useState<CSSProperties | null>(null)
-  const [tab, setTab] = useState<BoardTab>('activity')
+  const [chosenTab, setChosenTab] = useState<BoardTab>('activity')
   const openKey = open ? `open:${requestedTab ?? ''}` : 'closed'
   const [previousOpenKey, setPreviousOpenKey] = useState(openKey)
-  const [viewed, setViewed] = useState<ViewedConversation[] | null>(null)
-  const [viewedFresh, setViewedFresh] = useState(false)
-  const [viewedError, setViewedError] = useState(false)
   const [focusFirstRow, setFocusFirstRow] = useState(false)
   const now = useNow(1000)
   const lead = items[0]
   const busy = items.length > 0 || unread.length > 0
+  const switching = switchIndex !== null
+  const boardOpen = open || switching
+  const tab = switching ? 'viewed' : chosenTab
 
   if (openKey !== previousOpenKey) {
     setPreviousOpenKey(openKey)
     if (open) {
-      setTab(requestedTab ?? (busy ? 'activity' : 'viewed'))
-      setViewedFresh(false)
+      setChosenTab(requestedTab ?? (busy ? 'activity' : 'viewed'))
       setFocusFirstRow(requestedTab !== null)
     }
   }
 
   useLayoutEffect(() => {
-    if (!open || pillRef.current === null) return setPosition(null)
+    if (!boardOpen || pillRef.current === null) return setPosition(null)
     const box = pillRef.current.getBoundingClientRect()
     const centered = box.left + box.width / 2 - BOARD_WIDTH / 2
     setPosition({ left: Math.max(8, Math.min(centered, window.innerWidth - BOARD_WIDTH - 8)), top: box.bottom + 8 })
-  }, [open, busy])
+  }, [boardOpen, busy])
 
   useEffect(() => {
-    if (!open || tab !== 'viewed') return
-    const controller = new AbortController()
-    listViewedConversations(VIEWED_LIMIT + 1, controller.signal)
-      .then((next) => { setViewed(next); setViewedFresh(true); setViewedError(false) })
-      .catch(() => { if (!controller.signal.aborted) setViewedError(true) })
-    return () => controller.abort()
-  }, [open, tab])
+    if (boardOpen && tab === 'viewed') onRecentRefresh?.()
+  }, [boardOpen, tab, onRecentRefresh])
 
   useEffect(() => {
-    if (!open || !focusFirstRow || (tab === 'viewed' && !viewedFresh)) return
+    if (!open || !focusFirstRow) return
     const firstRow = rootRef.current?.querySelector<HTMLButtonElement>('.activity-board-row')
     if (!firstRow) return
     setFocusFirstRow(false)
     firstRow.focus()
-  }, [open, tab, focusFirstRow, viewedFresh, position])
+  }, [open, focusFirstRow, position, recent])
 
   useEffect(() => {
     if (!open) return
@@ -123,10 +118,9 @@ export function FleetIsland({ items, unread, open, requestedTab = null, currentC
 
   const runningIds = new Set(items.map((item) => item.conversationId))
   const unreadIds = new Set(unread.map((item) => item.id))
-  const recent = (viewed ?? []).filter((item) => item.id !== currentConversationId).slice(0, VIEWED_LIMIT)
 
   return (
-    <div className="fleet-island-wrap" ref={rootRef} onKeyDown={open ? (event) => moveRowFocus(rootRef.current, event) : undefined}>
+    <div className="fleet-island-wrap" ref={rootRef} onKeyDown={open && !switching ? (event) => moveRowFocus(rootRef.current, event) : undefined}>
       <button
         ref={pillRef}
         type="button"
@@ -134,7 +128,7 @@ export function FleetIsland({ items, unread, open, requestedTab = null, currentC
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        title="Activité : en cours, à lire et lues récemment (Ctrl Maj L) · Ctrl Tab : conversation précédente"
+        title="Activité : en cours, à lire et lues récemment (Ctrl Maj L) · Ctrl Tab : conversation précédente, Ctrl maintenu pour parcourir"
       >
         {lead ? (
           <>
@@ -152,28 +146,33 @@ export function FleetIsland({ items, unread, open, requestedTab = null, currentC
         {items.length > 1 ? <span className="fleet-island-badge is-running" title={`${items.length} en cours`}>{items.length}</span> : null}
         {unread.length > 0 ? <span className="fleet-island-badge is-unread" title={`${unread.length} à lire`}>{unread.length}</span> : null}
       </button>
-      {open && position ? (
+      {boardOpen && position ? (
         <div className="activity-board" role="dialog" aria-label="Activité" style={position}>
           <div className="activity-board-tabs" role="tablist" aria-label="Afficher">
-            <button type="button" role="tab" aria-selected={tab === 'activity'} onClick={() => setTab('activity')}>
+            <button type="button" role="tab" aria-selected={tab === 'activity'} onClick={() => setChosenTab('activity')}>
               Activité{busy ? <span>{items.length + unread.length}</span> : null}
             </button>
-            <button type="button" role="tab" aria-selected={tab === 'viewed'} onClick={() => setTab('viewed')} title="Ctrl Maj L">
+            <button type="button" role="tab" aria-selected={tab === 'viewed'} onClick={() => setChosenTab('viewed')} title="Ctrl Maj L">
               Lues récemment
             </button>
           </div>
           {tab === 'viewed' ? (
             <section className="activity-board-section" aria-label="Lues récemment">
-              {viewed === null && !viewedError ? <p className="activity-board-empty">Chargement…</p>
-                : viewedError && viewed === null ? <p className="activity-board-empty">Historique indisponible.</p>
+              {recent === null ? <p className="activity-board-empty">{recentError ? 'Historique indisponible.' : 'Chargement…'}</p>
                 : recent.length === 0 ? <p className="activity-board-empty">Aucune autre conversation lue.</p>
-                : recent.map((item) => (
-                  <button key={item.id} type="button" className="activity-board-row" onClick={() => { onOpenChange(false); onOpenViewed(item) }}>
+                : recent.map((item, index) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`activity-board-row${index === switchIndex ? ' is-switch-target' : ''}`}
+                    aria-current={index === switchIndex ? 'true' : undefined}
+                    onClick={() => { onOpenChange(false); onOpenViewed(item) }}
+                  >
                     <ProviderMark provider={item.provider} className="activity-board-provider" />
                     <span className="activity-board-text">
                       <strong>{item.title}</strong>
                       <span className="activity-board-meta">
-                        <span className="activity-board-viewed-project">{item.project_name}</span>
+                        {item.project_name ? <span className="activity-board-viewed-project">{item.project_name}</span> : null}
                         {runningIds.has(item.id) ? <span className="activity-board-viewed-state is-running">en cours</span>
                           : unreadIds.has(item.id) ? <span className="activity-board-viewed-state is-unread">nouvelle réponse</span> : null}
                         {item.summary && item.summary !== item.title ? <> · {item.summary}</> : null}
@@ -182,6 +181,7 @@ export function FleetIsland({ items, unread, open, requestedTab = null, currentC
                     <span className="activity-board-time">il y a {since(item.viewed_at, now)}</span>
                   </button>
                 ))}
+              {switching ? <p className="activity-board-hint"><kbd>Tab</kbd> suivante · relâcher <kbd>Ctrl</kbd> pour ouvrir · <kbd>Échap</kbd> annuler</p> : null}
             </section>
           ) : (
             <>

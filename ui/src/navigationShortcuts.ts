@@ -27,6 +27,7 @@ export function isRecentConversationsShortcut(event: ShortcutKeys): boolean {
   return event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.key.toLocaleLowerCase() === 'l'
 }
 
-export function isPreviousConversationShortcut(event: ShortcutKeys): boolean {
-  return event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && event.key === 'Tab'
+export function conversationSwitchStep(event: ShortcutKeys & Partial<Pick<KeyboardEvent, 'code'>>): 1 | -1 | null {
+  if (!event.ctrlKey || event.altKey || event.metaKey || (event.key !== 'Tab' && event.code !== 'Tab')) return null
+  return event.shiftKey ? -1 : 1
 }

@@ -6,7 +6,6 @@ import {
   listProjectWorkflows,
   listProjects,
   listSkills,
-  listViewedConversations,
   runWorkflow,
   searchGlobal,
 } from './api'
@@ -37,6 +36,7 @@ interface CommandPaletteProps {
   onAction: (action: PaletteAction) => void | Promise<void>
   instance?: InstanceHealth | null
   onPromotionSelect?: () => void
+  recentConversations?: ViewedConversation[]
 }
 
 interface PaletteItem {
@@ -77,6 +77,7 @@ export function CommandPalette({
   onAction,
   instance,
   onPromotionSelect,
+  recentConversations = [],
 }: CommandPaletteProps) {
   // La palette est globale, donc elle peut s'ouvrir par-dessus le panneau Claude
   // Design. Ce panneau est une webview, une surface de l'OS : sans ce masquage,
@@ -85,7 +86,6 @@ export function CommandPalette({
   const [query, setQuery] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [viewed, setViewed] = useState<ViewedConversation[]>([])
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [skills, setSkills] = useState<SkillSummary[]>([])
   const [results, setResults] = useState<SearchResult[]>([])
@@ -112,9 +112,6 @@ export function CommandPalette({
     inputRef.current?.focus()
     setError(null)
     let ignore = false
-    void listViewedConversations(9)
-      .then((loaded) => { if (!ignore) setViewed(loaded) })
-      .catch(() => {})
     void listProjects()
       .then(async (loadedProjects) => {
         const [conversationGroups, workflowGroups, loadedSkills] = await Promise.all([
@@ -161,9 +158,7 @@ export function CommandPalette({
   const items = useMemo<PaletteItem[]>(() => {
     const next: PaletteItem[] = []
     const add = (item: PaletteItem) => next.push(item)
-    const recentlyViewed = viewed
-      .filter((conversation) => conversation.id !== currentConversation?.id)
-      .slice(0, 8)
+    const recentlyViewed = recentConversations
       .filter((conversation) => matches(query, conversation.title, conversation.project_name, conversation.summary))
     for (const conversation of recentlyViewed) {
       add({
@@ -269,7 +264,7 @@ export function CommandPalette({
       }
     }
     return next
-  }, [conversations, currentConversation, currentProject, instance, onAction, onConversationSelect, onProjectSelect, onPromotionSelect, onSkillLaunch, onViewSelect, projects, query, results, skills, viewed, workflows])
+  }, [conversations, currentConversation, currentProject, instance, onAction, onConversationSelect, onProjectSelect, onPromotionSelect, onSkillLaunch, onViewSelect, projects, query, recentConversations, results, skills, workflows])
 
   async function execute(item: PaletteItem) {
     if (busyId) return

@@ -309,6 +309,22 @@
 .activity-board-viewed-state { margin-left: 6px; font-weight: 600; }
 .activity-board-viewed-state.is-running { color: var(--accent-bright); }
 .activity-board-viewed-state.is-unread { color: var(--unread); }
+.activity-board-row.is-switch-target { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.activity-board-hint {
+  margin: var(--space-2) 0 0;
+  padding: 0 var(--space-2);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.activity-board-hint kbd {
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 10px;
+}
 
 .activity-board-time {
   flex: none;

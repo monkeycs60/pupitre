@@ -2,6 +2,9 @@ import { summarizeTurnError } from './turnError'
 import { track } from './analytics'
 import { useStableHandler } from './useStableHandler'
 import { FleetIsland, type BoardTab } from './FleetIsland'
+import { mergeRecentConversations, visitOf } from './recentConversations'
+import { useConversationSwitcher } from './useConversationSwitcher'
+import { useViewedConversations } from './useViewedConversations'
 import { ToastHost } from './ToastHost'
 import { NudgeStack } from './NudgeStack'
 import { useConversationNudges } from './useConversationNudges'
@@ -25,7 +28,7 @@ import { Sidebar, ticketTitleWithoutKey } from './Sidebar'
 import { Rail } from './Rail'
 import { Titlebar, type TitlebarDestination } from './Titlebar'
 import { SwitchModelModal } from './SwitchModelModal'
-import type { Attachment, Conversation, ConversationContinuation, Project, UnreadConversation } from './types'
+import type { Attachment, Conversation, ConversationContinuation, Project, UnreadConversation, ViewedConversation } from './types'
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import {
@@ -34,7 +37,6 @@ import {
   listProjects,
   markConversationRead,
   markConversationViewed,
-  listViewedConversations,
   setAppVisibility,
 } from './api'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
@@ -63,7 +65,6 @@ import {
   writeLastActiveLocation,
 } from './restoreLocation'
 import {
-  isPreviousConversationShortcut,
   isRecentConversationsShortcut,
   navigationViewForShortcut,
   type NavigationShortcutView,
@@ -96,11 +97,6 @@ const MIN_SIDEBAR_WIDTH = 200
 const SIDEBAR_WIDTH_RATIO = 0.6
 const SIDEBAR_WIDTH_STORAGE_KEY = 'pupitre.sidebar-width'
 const CONVERSATION_VIEW_DWELL_MS = 3_000
-
-interface ConversationVisit {
-  projectId: string
-  conversationId: string
-}
 
 function maxSidebarWidth(viewport = window.innerWidth): number {
   return Math.max(MIN_SIDEBAR_WIDTH, Math.round(viewport * SIDEBAR_WIDTH_RATIO))
@@ -174,7 +170,7 @@ function App() {
   const [railReadVersion, setRailReadVersion] = useState(0)
   const readSyncKeyRef = useRef<string | null>(null)
   const navigationShortcutRef = useRef<(view: NavigationShortcutView) => void>(() => {})
-  const conversationShortcutRef = useRef<(shortcut: 'recent' | 'previous') => void>(() => {})
+  const recentShortcutRef = useRef<() => void>(() => {})
   const [projectListVersion, setProjectListVersion] = useState(0)
   const [showSwitchModel, setShowSwitchModel] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -185,15 +181,18 @@ function App() {
   const [activityOpen, setActivityOpen] = useState(false)
   const [activityTab, setActivityTab] = useState<BoardTab | null>(null)
   const [conversationVisits, setConversationVisits] = useState<{
-    current: ConversationVisit | null
-    previous: ConversationVisit | null
+    current: ViewedConversation | null
+    previous: ViewedConversation | null
   }>({ current: null, previous: null })
-  if (selectedConversation !== null && selectedConversation.id !== conversationVisits.current?.conversationId) {
+  if (selectedConversation !== null && selectedConversation.id !== conversationVisits.current?.id) {
+    const at = new Date().toISOString()
+    const projectName = selectedProject?.id === selectedConversation.project_id ? selectedProject.name : ''
     setConversationVisits({
-      current: { projectId: selectedConversation.project_id, conversationId: selectedConversation.id },
-      previous: conversationVisits.current,
+      current: visitOf(selectedConversation, projectName, at),
+      previous: conversationVisits.current === null ? null : { ...conversationVisits.current, viewed_at: at },
     })
   }
+  const viewedConversations = useViewedConversations()
   const [jarvisOpen, setJarvisOpen] = useState(false)
   const [jarvisHighlight, setJarvisHighlight] = useState<{ conversationId: string; eventIds: number[] } | null>(null)
   const [projectSurface, setProjectSurface] = useState<{
@@ -301,10 +300,9 @@ function App() {
 
   useEffect(() => {
     function handleNavigationShortcut(event: KeyboardEvent) {
-      const conversationShortcut = isRecentConversationsShortcut(event) ? 'recent' : isPreviousConversationShortcut(event) ? 'previous' : null
-      if (conversationShortcut !== null) {
+      if (isRecentConversationsShortcut(event)) {
         event.preventDefault()
-        conversationShortcutRef.current(conversationShortcut)
+        recentShortcutRef.current()
         return
       }
       const view = navigationViewForShortcut(event)
@@ -358,6 +356,17 @@ function App() {
   const digestTitle = digest?.title
   const digestSummary = digest?.summary
   const selectedConversationId = selectedConversation?.id
+  const refreshViewedConversations = viewedConversations.refresh
+  const onConversationView = workspaceView === 'conversations' && selectedConversation !== null
+  const pinnedConversation = onConversationView ? conversationVisits.previous : conversationVisits.current
+  const recentConversations = viewedConversations.items === null && pinnedConversation === null
+    ? null
+    : mergeRecentConversations(viewedConversations.items ?? [], pinnedConversation, onConversationView ? selectedConversationId : null)
+  const conversationSwitcher = useConversationSwitcher(recentConversations ?? [], (item) => {
+    track('shortcut', { key: 'Ctrl Tab' })
+    handleActivityOpenChange(false)
+    void handleRoutineConversationSelect(item.project_id, item.id)
+  })
   const selectedConversationAnsweredTurn = selectedConversation?.answered_turn ?? 0
   const selectedConversationLastReadTurn = selectedConversation?.last_read_turn ?? 0
   useEffect(() => {
@@ -391,7 +400,9 @@ function App() {
     function armViewTimer() {
       window.clearTimeout(timer)
       if (document.visibilityState !== 'visible') return
-      timer = window.setTimeout(() => void markConversationViewed(conversationId).catch(() => {}), CONVERSATION_VIEW_DWELL_MS)
+      timer = window.setTimeout(() => {
+        void markConversationViewed(conversationId).then(refreshViewedConversations).catch(() => {})
+      }, CONVERSATION_VIEW_DWELL_MS)
     }
     armViewTimer()
     document.addEventListener('visibilitychange', armViewTimer)
@@ -399,7 +410,7 @@ function App() {
       window.clearTimeout(timer)
       document.removeEventListener('visibilitychange', armViewTimer)
     }
-  }, [workspaceView, selectedConversationId])
+  }, [workspaceView, selectedConversationId, refreshViewedConversations])
   // Un tour qui se termine rend la conversation à lire pour tout le monde ;
   // celui qui l'a sous les yeux, fenêtre au premier plan, l'a justement lue.
   useEffect(() => {
@@ -916,22 +927,15 @@ function App() {
     handleActivityOpenChange(!activityOpen)
   }
 
-  async function handlePreviousConversation() {
-    const onConversation = workspaceView === 'conversations' && selectedConversation !== null
-    const target = onConversation ? conversationVisits.previous : conversationVisits.current
-    if (target !== null && await handleRoutineConversationSelect(target.projectId, target.conversationId)) return
-    const viewed = await listViewedConversations(2).catch(() => [])
-    const fallback = viewed.find((item) => item.id !== selectedConversation?.id)
-    if (fallback) await handleRoutineConversationSelect(fallback.project_id, fallback.id)
+  recentShortcutRef.current = () => {
+    track('shortcut', { key: 'Ctrl Maj L' })
+    handleActivityOpenChange(!(activityOpen && activityTab === 'viewed'), 'viewed')
   }
 
-  conversationShortcutRef.current = (shortcut) => {
-    track('shortcut', { key: shortcut === 'recent' ? 'Ctrl Maj L' : 'Ctrl Tab' })
-    if (shortcut === 'previous') {
-      void handlePreviousConversation()
-      return
-    }
-    handleActivityOpenChange(!(activityOpen && activityTab === 'viewed'), 'viewed')
+  function handleRecentOpen(item: ViewedConversation) {
+    conversationSwitcher.cancel()
+    handleActivityOpenChange(false)
+    void handleRoutineConversationSelect(item.project_id, item.id)
   }
 
   async function handleAttentionOpen(item: UnreadConversation) {
@@ -1153,13 +1157,16 @@ function App() {
         island={<FleetIsland
           items={fleet.items}
           unread={attention.items}
+          recent={recentConversations}
+          recentError={viewedConversations.error}
           open={activityOpen}
           requestedTab={activityTab}
-          currentConversationId={workspaceView === 'conversations' ? selectedConversationId : null}
+          switchIndex={conversationSwitcher.state?.visible ? conversationSwitcher.state.index : null}
           onOpenChange={handleActivityOpenChange}
+          onRecentRefresh={refreshViewedConversations}
           onOpenRunning={(item) => void handleRoutineConversationSelect(item.projectId, item.conversationId)}
           onOpenUnread={(item) => void handleAttentionOpen(item)}
-          onOpenViewed={(item) => void handleRoutineConversationSelect(item.project_id, item.id)}
+          onOpenViewed={handleRecentOpen}
           onReadAll={async () => {
             await attention.readAll()
             setRailReadVersion((current) => current + 1)
@@ -1383,7 +1390,10 @@ function App() {
       <CommandPalette
         open={paletteOpen}
         onOpenChange={(open) => {
-          if (open && !paletteOpen) track('palette.open')
+          if (open && !paletteOpen) {
+            track('palette.open')
+            void refreshViewedConversations()
+          }
           setPaletteOpen(open)
         }}
         currentProject={selectedProject}
@@ -1395,6 +1405,7 @@ function App() {
         onAction={handlePaletteAction}
         instance={instance}
         onPromotionSelect={handleSettingsSelect}
+        recentConversations={recentConversations ?? []}
       />
       {projectSettingsOpen && selectedProject ? (
         <ProjectSettingsDialog

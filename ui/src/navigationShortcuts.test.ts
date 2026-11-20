@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { isPreviousConversationShortcut, isRecentConversationsShortcut, navigationViewForShortcut, NAVIGATION_SHORTCUTS } from './navigationShortcuts'
+import { conversationSwitchStep, isRecentConversationsShortcut, navigationViewForShortcut, NAVIGATION_SHORTCUTS } from './navigationShortcuts'
 
 function key(overrides: Partial<KeyboardEvent>): KeyboardEvent {
   return {
@@ -25,11 +25,13 @@ test('associe Ctrl+Maj aux cinq vues de travail par leur lettre', () => {
   expect(navigationViewForShortcut(key({ ctrlKey: true, altKey: true, shiftKey: true, key: 't' }))).toBeNull()
 })
 
-test('Ctrl Maj L ouvre les lues récemment et Ctrl Tab seul rappelle la conversation précédente', () => {
+test('Ctrl Maj L ouvre les lues récemment ; Ctrl Tab avance et Ctrl Maj Tab recule dans le sélecteur', () => {
   expect(isRecentConversationsShortcut(key({ ctrlKey: true, shiftKey: true, key: 'L' }))).toBe(true)
   expect(isRecentConversationsShortcut(key({ ctrlKey: true, key: 'l' }))).toBe(false)
   expect(navigationViewForShortcut(key({ ctrlKey: true, shiftKey: true, key: 'L' }))).toBeNull()
-  expect(isPreviousConversationShortcut(key({ ctrlKey: true, key: 'Tab' }))).toBe(true)
-  expect(isPreviousConversationShortcut(key({ ctrlKey: true, shiftKey: true, key: 'Tab' }))).toBe(false)
-  expect(isPreviousConversationShortcut(key({ key: 'Tab' }))).toBe(false)
+  expect(conversationSwitchStep(key({ ctrlKey: true, key: 'Tab' }))).toBe(1)
+  expect(conversationSwitchStep(key({ ctrlKey: true, shiftKey: true, key: 'Tab' }))).toBe(-1)
+  expect(conversationSwitchStep(key({ ctrlKey: true, shiftKey: true, key: 'Unidentified', code: 'Tab' }))).toBe(-1)
+  expect(conversationSwitchStep(key({ key: 'Tab' }))).toBeNull()
+  expect(conversationSwitchStep(key({ ctrlKey: true, altKey: true, key: 'Tab' }))).toBeNull()
 })

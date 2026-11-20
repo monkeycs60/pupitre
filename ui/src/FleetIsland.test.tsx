@@ -1,4 +1,4 @@
-import { afterEach, expect, mock, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { createElement, useState } from 'react'
 import { FleetIsland, type BoardTab } from './FleetIsland'
@@ -7,11 +7,9 @@ import type { FleetItem, UnreadConversation, ViewedConversation } from './types'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor, within } = await import('@testing-library/react')
-const defaultFetch = globalThis.fetch
 
 afterEach(() => {
   cleanup()
-  globalThis.fetch = defaultFetch
 })
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
@@ -33,22 +31,18 @@ function viewed(index: number, overrides: Partial<ViewedConversation> = {}): Vie
   }
 }
 
-function stubViewed(rows: ViewedConversation[]) {
-  const requested: string[] = []
-  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
-    const url = String(input)
-    requested.push(url)
-    if (url.includes('/api/conversations/viewed')) return Response.json(rows)
-    return Response.json({})
-  }) as unknown as typeof fetch
-  return requested
+const running: FleetItem = {
+  id: 'turn-1', kind: 'turn', projectId: 'p1', projectName: 'pupitre', conversationId: 'c1',
+  title: 'Conversation 1', provider: 'claude', model: 'opus', startedAt: minutesAgo(1), lastEvent: 'Lecture',
 }
 
-function Harness({ items = [], unread = [], currentConversationId = null, onOpenViewed = () => {} }: {
+function Harness({ items = [], unread = [], recent, switchIndex = null, onOpenViewed = () => {}, onRecentRefresh = () => {} }: {
   items?: FleetItem[]
   unread?: UnreadConversation[]
-  currentConversationId?: string | null
+  recent: ViewedConversation[] | null
+  switchIndex?: number | null
   onOpenViewed?: (item: ViewedConversation) => void
+  onRecentRefresh?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [requestedTab, setRequestedTab] = useState<BoardTab | null>(null)
@@ -58,10 +52,12 @@ function Harness({ items = [], unread = [], currentConversationId = null, onOpen
   }, 'Raccourci'), createElement(FleetIsland, {
     items,
     unread,
+    recent,
     open,
     requestedTab,
-    currentConversationId,
+    switchIndex,
     onOpenChange: (next: boolean) => { setOpen(next); if (!next) setRequestedTab(null) },
+    onRecentRefresh,
     onOpenRunning: () => {},
     onOpenUnread: () => {},
     onOpenViewed,
@@ -69,63 +65,50 @@ function Harness({ items = [], unread = [], currentConversationId = null, onOpen
   }))
 }
 
-test("sans activité, l'île reste visible et ouvre directement les huit dernières lues, hors conversation affichée", async () => {
-  const requested = stubViewed(Array.from({ length: 9 }, (_, index) => viewed(index)))
+const recentRows = () => within(screen.getByRole('region', { name: 'Lues récemment' })).queryAllByRole('button')
+const rowTitles = () => recentRows().map((row) => row.querySelector('strong')?.textContent)
+
+test("sans activité, l'île reste visible et s'ouvre directement sur les lues récemment", () => {
   const opened: string[] = []
-  render(createElement(Harness, { currentConversationId: 'c0', onOpenViewed: (item) => opened.push(item.id) }))
+  let refreshes = 0
+  render(createElement(Harness, {
+    recent: [viewed(1), viewed(2), viewed(3)],
+    onOpenViewed: (item) => opened.push(item.id),
+    onRecentRefresh: () => { refreshes += 1 },
+  }))
 
   fireEvent.click(screen.getByRole('button', { name: /Lues récemment/ }))
 
   expect(screen.getByRole('tab', { name: /Lues récemment/ }).getAttribute('aria-selected')).toBe('true')
-  const section = await screen.findByRole('region', { name: 'Lues récemment' })
-  await within(section).findByText('Conversation 1')
-  const titles = within(section).getAllByRole('button').map((row) => row.querySelector('strong')?.textContent)
-  expect(titles).toEqual(['Conversation 1', 'Conversation 2', 'Conversation 3', 'Conversation 4', 'Conversation 5', 'Conversation 6', 'Conversation 7', 'Conversation 8'])
-  expect(requested.some((url) => url.endsWith('/api/conversations/viewed?limit=9'))).toBe(true)
+  expect(rowTitles()).toEqual(['Conversation 1', 'Conversation 2', 'Conversation 3'])
+  expect(refreshes).toBe(1)
 
-  fireEvent.click(within(section).getByText('Conversation 3'))
+  fireEvent.click(screen.getByText('Conversation 3'))
   expect(opened).toEqual(['c3'])
   expect(screen.queryByRole('dialog')).toBeNull()
 })
 
-test("avec de l'activité, l'île s'ouvre sur l'activité et l'onglet des lues signale celles qui ont bougé", async () => {
-  const requested = stubViewed([viewed(1), viewed(2), viewed(3)])
-  const running: FleetItem = {
-    id: 'turn-1', kind: 'turn', projectId: 'p1', projectName: 'pupitre', conversationId: 'c1',
-    title: 'Conversation 1', provider: 'claude', model: 'opus', startedAt: minutesAgo(1), lastEvent: 'Lecture',
-  }
+test("avec de l'activité, l'île s'ouvre sur l'activité et l'onglet des lues signale celles qui ont bougé", () => {
   const unread: UnreadConversation = { ...viewed(2), answered_turn: 2, last_read_turn: 1 }
-  render(createElement(Harness, { items: [running], unread: [unread] }))
+  render(createElement(Harness, { items: [running], unread: [unread], recent: [viewed(1), viewed(2), viewed(3)] }))
 
   fireEvent.click(screen.getByRole('button', { name: /pupitre/ }))
   expect(screen.getByRole('tab', { name: /Activité/ }).getAttribute('aria-selected')).toBe('true')
   expect(screen.getByText('En cours')).toBeTruthy()
-  expect(requested.some((url) => url.includes('/api/conversations/viewed'))).toBe(false)
 
   fireEvent.click(screen.getByRole('tab', { name: /Lues récemment/ }))
-  const section = await screen.findByRole('region', { name: 'Lues récemment' })
-  await within(section).findByText('Conversation 3')
-  const rows = within(section).getAllByRole('button')
-  expect(rows.map((row) => row.querySelector('.activity-board-viewed-state')?.textContent ?? null)).toEqual(['en cours', 'nouvelle réponse', null])
+  expect(recentRows().map((row) => row.querySelector('.activity-board-viewed-state')?.textContent ?? null)).toEqual(['en cours', 'nouvelle réponse', null])
 })
 
 test("le raccourci ouvre les lues récemment malgré l'activité, focus sur la première, flèches pour descendre", async () => {
-  stubViewed([viewed(1), viewed(2), viewed(3)])
-  const running: FleetItem = {
-    id: 'turn-9', kind: 'turn', projectId: 'p1', projectName: 'pupitre', conversationId: 'c9',
-    title: 'Conversation 9', provider: 'claude', model: 'opus', startedAt: minutesAgo(1), lastEvent: 'Lecture',
-  }
   const opened: string[] = []
-  render(createElement(Harness, { items: [running], onOpenViewed: (item) => opened.push(item.id) }))
+  render(createElement(Harness, { items: [running], recent: [viewed(1), viewed(2), viewed(3)], onOpenViewed: (item) => opened.push(item.id) }))
 
   fireEvent.click(screen.getByRole('button', { name: 'Raccourci' }))
 
   expect(screen.getByRole('tab', { name: /Lues récemment/ }).getAttribute('aria-selected')).toBe('true')
-  const section = await screen.findByRole('region', { name: 'Lues récemment' })
-  await within(section).findByText('Conversation 1')
-  const rows = within(section).getAllByRole('button')
+  const rows = recentRows()
   await waitFor(() => expect(document.activeElement).toBe(rows[0]!))
-
   fireEvent.keyDown(rows[0]!, { key: 'ArrowDown' })
   fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
   expect(document.activeElement).toBe(rows[2]!)
@@ -136,4 +119,15 @@ test("le raccourci ouvre les lues récemment malgré l'activité, focus sur la p
 
   fireEvent.click(document.activeElement!)
   expect(opened).toEqual(['c2'])
+})
+
+test("pendant Ctrl Tab, l'île affiche les lues récemment avec la cible surlignée, même fermée et en pleine activité", () => {
+  const { rerender } = render(createElement(Harness, { items: [running], recent: [viewed(1), viewed(2), viewed(3)], switchIndex: 1 }))
+
+  expect(screen.getByRole('tab', { name: /Lues récemment/ }).getAttribute('aria-selected')).toBe('true')
+  expect(recentRows().map((row) => row.getAttribute('aria-current'))).toEqual([null, 'true', null])
+  expect(screen.getByText(/pour ouvrir/)).toBeTruthy()
+
+  rerender(createElement(Harness, { items: [running], recent: [viewed(1), viewed(2), viewed(3)], switchIndex: null }))
+  expect(screen.queryByRole('dialog')).toBeNull()
 })
