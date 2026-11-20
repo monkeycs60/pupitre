@@ -131,13 +131,20 @@ export function planEditorWorkspace(
   }
 
   const ticket = ticketLabel(conversation, key, branch);
-  if (!ticket) return { workspace: null, folders: [root, ...folders.filter((folder) => folder !== root)] };
+  // VS Code ne réaffiche pas dans Source Control les dépôts qui reviennent après un
+  // changement de Ticket quand un autre dépôt était déjà affiché : un checkout
+  // principal commun à deux Tickets suffit à masquer tous les autres.
+  const ticketFolders = folders.filter((folder) => typeof folder.location === "string"
+    && folder.path !== resolve(projectPath, folder.location));
+  if (!ticket || ticketFolders.length === 0) {
+    return { workspace: null, folders: [root, ...folders.filter((folder) => folder !== root)] };
+  }
   const settings = (template?.rest.settings ?? {}) as Record<string, unknown>;
   return {
     workspace: {
       fileName: `${projectName}-ticket.code-workspace`,
       content: {
-        folders: folders.map((folder) => ({ name: folder.name, path: folder.path })),
+        folders: ticketFolders.map((folder) => ({ name: folder.name, path: folder.path })),
         ...(template?.rest ?? {}),
         settings: {
           ...settings,
@@ -277,10 +284,13 @@ export function openEditorFiles(
 ): { targets: string[] } {
   const command = editorCommand();
   const conversationTarget = writeWorkspace(plan, directory);
+  const windowFolders = plan.workspace
+    ? (plan.workspace.content.folders as Array<{ path: string }>).map((folder) => folder.path)
+    : plan.folders.map((folder) => folder.path);
   const groups = new Map<string, string[]>();
   for (const file of files) {
     const path = resolve(file.path);
-    const inTicket = plan.folders.some((folder) => path.startsWith(`${folder.path}/`));
+    const inTicket = windowFolders.some((folder) => path.startsWith(`${folder}/`));
     const owner = inTicket ? undefined : [...windows]
       .filter((opened) => path.startsWith(`${opened}/`))
       .sort((left, right) => right.length - left.length)[0];

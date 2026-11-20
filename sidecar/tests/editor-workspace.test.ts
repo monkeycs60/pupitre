@@ -89,6 +89,22 @@ test("la fenêtre Ticket porte la clé et le nom du ticket, quel que soit le tic
   expect(titled("Autre")?.fileName).toBe("mono-ticket.code-workspace");
 });
 
+test("la fenêtre Ticket ne montre que les worktrees du ticket, jamais un checkout principal", () => {
+  const ticketWorktree = join(root, "worktrees/feature-TECH-456");
+  git(mono, "worktree", "add", "-q", "-b", "feature/TECH-456", ticketWorktree);
+  git(reactor, "worktree", "add", "-q", "-b", "feature/TECH-456", join(mono, "apps/reactor-tech456"));
+  const withTicket = [
+    ...sources,
+    source(mono, ticketWorktree, "feature/TECH-456"),
+    source(reactor, join(mono, "apps/reactor-tech456"), "feature/TECH-456"),
+  ];
+  const plan = planEditorWorkspace(project, { id: "c", worktree_path: ticketWorktree, worktree_paths: [ticketWorktree] } as Conversation, withTicket);
+
+  expect((plan.workspace?.content.folders as Array<{ path: string }>).map((folder) => folder.path))
+    .toEqual([ticketWorktree, join(mono, "apps/reactor-tech456")]);
+  expect(plan.folders.map((folder) => folder.path)).toContain(hapigator);
+});
+
 test("les réglages viennent du workspace du dépôt principal, pas de la copie de la branche", () => {
   writeFileSync(join(monoWorktree, "mono.code-workspace"), JSON.stringify({
     folders: [{ path: "." }],
