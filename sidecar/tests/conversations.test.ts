@@ -374,6 +374,33 @@ test("liste les conversations non lues de tous les projets avec leur projet", ()
   ]);
 });
 
+test("liste les conversations consultées de la plus récente à la plus ancienne, tous projets confondus", () => {
+  const otherProjectId = new ProjectStore(db).create({ name: "Autre projet", path: "/tmp/autre" }).id;
+  const first = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "première" });
+  const second = convs.create({ projectId: otherProjectId, provider: "codex", model: "gpt-5", firstMessage: "seconde" });
+  convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "jamais ouverte" });
+  convs.markViewed(first.id, "2026-11-20T10:00:00.000Z");
+  convs.markViewed(second.id, "2026-11-20T10:05:00.000Z");
+  convs.markViewed(first.id, "2026-11-20T10:09:00.000Z");
+
+  expect(convs.listViewed(8).map((row) => [row.title, row.project_name, row.viewed_at])).toEqual([
+    ["première", "p", "2026-11-20T10:09:00.000Z"],
+    ["seconde", "Autre projet", "2026-11-20T10:05:00.000Z"],
+  ]);
+  expect(convs.listViewed(1).map((row) => row.id)).toEqual([first.id]);
+});
+
+test("écarte des consultations les conversations archivées ou supprimées", () => {
+  const kept = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "gardée" });
+  const archived = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "archivée" });
+  const deleted = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "supprimée" });
+  for (const conversation of [kept, archived, deleted]) convs.markViewed(conversation.id);
+  db.query("UPDATE conversations SET archived = 1 WHERE id = ?").run(archived.id);
+  db.query("UPDATE conversations SET deleted_at = ? WHERE id = ?").run(new Date().toISOString(), deleted.id);
+
+  expect(convs.listViewed(8).map((row) => row.id)).toEqual([kept.id]);
+});
+
 test("un tour répondu rend la conversation à lire, sans attendre le digest", () => {
   const c = convs.create({ projectId, provider: "claude", model: "opus", firstMessage: "x" });
   convs.appendEvent(c.id, { type: "user-message", text: "x", images: [] });

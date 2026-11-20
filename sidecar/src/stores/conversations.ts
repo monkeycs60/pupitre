@@ -54,6 +54,10 @@ export interface UnreadConversation {
   updated_at: string;
 }
 
+export interface ViewedConversation extends UnreadConversation {
+  viewed_at: string;
+}
+
 export interface ConversationReference {
   id: string;
   project_id: string;
@@ -285,6 +289,29 @@ export class ConversationStore {
         AND c.answered_turn > c.last_read_turn
       ORDER BY c.updated_at DESC
     `).all() as UnreadConversation[];
+    return rows.map((row) => ({ ...row, summary: row.summary || row.title }));
+  }
+
+  markViewed(id: string, at = new Date().toISOString()): void {
+    this.db.query(`
+      INSERT INTO conversation_views (conversation_id, viewed_at) VALUES (?, ?)
+      ON CONFLICT(conversation_id) DO UPDATE SET viewed_at = excluded.viewed_at
+    `).run(id, at);
+  }
+
+  listViewed(limit: number): ViewedConversation[] {
+    const rows = this.db.query(`
+      SELECT c.id, c.project_id, p.name AS project_name, c.title, c.summary,
+             c.provider, c.model, c.answered_turn, c.last_read_turn, c.updated_at,
+             v.viewed_at
+      FROM conversation_views v
+      JOIN conversations c ON c.id = v.conversation_id
+      JOIN projects p ON p.id = c.project_id
+      WHERE c.deleted_at IS NULL
+        AND c.archived = 0
+      ORDER BY v.viewed_at DESC
+      LIMIT ?
+    `).all(limit) as ViewedConversation[];
     return rows.map((row) => ({ ...row, summary: row.summary || row.title }));
   }
 

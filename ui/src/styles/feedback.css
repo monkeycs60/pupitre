@@ -85,6 +85,8 @@
 .fleet-island-title strong { color: var(--text); font-weight: 600; }
 
 .fleet-island.is-idle { border-color: color-mix(in srgb, var(--unread) 40%, var(--border)); }
+.fleet-island.is-quiet { color: var(--text-faint); }
+.fleet-island-history { flex: none; }
 
 .fleet-island-badge {
   flex: none;
@@ -117,6 +119,37 @@
   transform-origin: top center;
   animation: pop-in var(--dur) var(--ease-out);
 }
+
+.activity-board-tabs {
+  display: flex;
+  gap: 2px;
+  justify-self: start;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-full);
+  background: var(--bg-input);
+}
+
+.activity-board-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.activity-board-tabs button:hover { color: var(--text); }
+.activity-board-tabs button[aria-selected='true'] { background: var(--bg-raised); color: var(--text-strong); }
+.activity-board-tabs button span { color: var(--text-faint); font-variant-numeric: tabular-nums; font-size: 10px; }
 
 .activity-board-section { display: grid; gap: 2px; }
 
@@ -272,6 +305,10 @@
 
 .activity-board-text strong { font-size: var(--text-sm); font-weight: 500; }
 .activity-board-meta { color: var(--text-faint); font-size: var(--text-xs); }
+.activity-board-viewed-project { color: var(--accent-bright); font-weight: 600; }
+.activity-board-viewed-state { margin-left: 6px; font-weight: 600; }
+.activity-board-viewed-state.is-running { color: var(--accent-bright); }
+.activity-board-viewed-state.is-unread { color: var(--unread); }
 
 .activity-board-time {
   flex: none;

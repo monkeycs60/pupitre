@@ -169,7 +169,7 @@ export function CommandPalette({
       ['report', 'Rapport', 'Rapport d’activité, usage des fonctions'],
       ['settings', 'Réglages', 'Apparence, taille du texte, modèles, intégrations'],
       ...(window.__TAURI__ ? [['design', 'Claude Design', 'claude.ai/design dans la fenêtre'] as const] : []),
-      ['fleet', 'Activité', 'En cours et à lire, tous projets'],
+      ['fleet', 'Activité', 'En cours, à lire et lues récemment, tous projets'],
       ['routines', 'Automatisations', 'Planifiées et à la demande'],
       ['library', 'Skills', 'Compétences et prompts disponibles'],
       ['memory', 'Mémoire', 'Fichiers de mémoire persistante Claude'],

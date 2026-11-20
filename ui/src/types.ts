@@ -245,6 +245,10 @@ export interface UnreadConversation {
   updated_at: string
 }
 
+export interface ViewedConversation extends UnreadConversation {
+  viewed_at: string
+}
+
 export interface Project {
   trunk_branch?: string | null
   detected_trunk?: string | null

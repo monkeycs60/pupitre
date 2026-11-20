@@ -34,6 +34,7 @@ import {
   listProjectConversations,
   listProjects,
   markConversationRead,
+  markConversationViewed,
   setAppVisibility,
 } from './api'
 import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
@@ -89,6 +90,7 @@ const MIN_SIDEBAR_WIDTH = 200
    gardant toujours de quoi s'afficher. */
 const SIDEBAR_WIDTH_RATIO = 0.6
 const SIDEBAR_WIDTH_STORAGE_KEY = 'pupitre.sidebar-width'
+const CONVERSATION_VIEW_DWELL_MS = 3_000
 
 function maxSidebarWidth(viewport = window.innerWidth): number {
   return Math.max(MIN_SIDEBAR_WIDTH, Math.round(viewport * SIDEBAR_WIDTH_RATIO))
@@ -356,6 +358,22 @@ function App() {
       .then(() => setRailReadVersion((current) => current + 1))
       .catch(() => {})
   }, [workspaceView, selectedConversationId, selectedConversationAnsweredTurn, selectedConversationLastReadTurn])
+  useEffect(() => {
+    if (workspaceView !== 'conversations' || selectedConversationId === undefined) return
+    const conversationId = selectedConversationId
+    let timer: number | undefined
+    function armViewTimer() {
+      window.clearTimeout(timer)
+      if (document.visibilityState !== 'visible') return
+      timer = window.setTimeout(() => void markConversationViewed(conversationId).catch(() => {}), CONVERSATION_VIEW_DWELL_MS)
+    }
+    armViewTimer()
+    document.addEventListener('visibilitychange', armViewTimer)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', armViewTimer)
+    }
+  }, [workspaceView, selectedConversationId])
   // Un tour qui se termine rend la conversation à lire pour tout le monde ;
   // celui qui l'a sous les yeux, fenêtre au premier plan, l'a justement lue.
   useEffect(() => {
@@ -1110,9 +1128,11 @@ function App() {
           items={fleet.items}
           unread={attention.items}
           open={activityOpen}
+          currentConversationId={workspaceView === 'conversations' ? selectedConversationId : null}
           onOpenChange={setActivityOpen}
           onOpenRunning={(item) => void handleRoutineConversationSelect(item.projectId, item.conversationId)}
           onOpenUnread={(item) => void handleAttentionOpen(item)}
+          onOpenViewed={(item) => void handleRoutineConversationSelect(item.project_id, item.id)}
           onReadAll={async () => {
             await attention.readAll()
             setRailReadVersion((current) => current + 1)

@@ -35,6 +35,7 @@ import type {
   AttentionItem,
   ConversationNudge,
   UnreadConversation,
+  ViewedConversation,
   ConversationReference,
   SkillDetail,
   SkillSummary,
@@ -1092,6 +1093,14 @@ export function getUnreadConversationCounts(): Promise<Record<string, number>> {
 
 export function listUnreadConversations(signal?: AbortSignal): Promise<UnreadConversation[]> {
   return fetchJson('/api/conversations/unread', { signal })
+}
+
+export function listViewedConversations(limit: number, signal?: AbortSignal): Promise<ViewedConversation[]> {
+  return fetchJson(`/api/conversations/viewed?limit=${limit}`, { signal })
+}
+
+export function markConversationViewed(conversationId: string): Promise<{ ok: true }> {
+  return fetchJson(`/api/conversations/${routeId(conversationId)}/viewed`, jsonPost({}))
 }
 
 export function listConversationReferences(

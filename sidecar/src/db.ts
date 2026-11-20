@@ -684,6 +684,11 @@ export function openDb(dir: string = dataDir()): Database {
   addColumn(db, "conversations", "message_count INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "last_read_turn INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "conversations", "answered_turn INTEGER NOT NULL DEFAULT 0");
+  db.exec(`CREATE TABLE IF NOT EXISTS conversation_views (
+    conversation_id TEXT PRIMARY KEY,
+    viewed_at TEXT NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_conversation_views_at ON conversation_views(viewed_at DESC)");
   db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_project_state
     ON conversations(project_id, archived, deleted_at, pinned, updated_at DESC)`);
   addColumn(db, "conversations", "created_on_branch TEXT NULL");

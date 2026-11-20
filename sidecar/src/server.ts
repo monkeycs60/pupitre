@@ -2588,6 +2588,11 @@ export function createServer(deps: ServerDeps) {
           return json(deps.conversations.listUnread());
         }
 
+        if (request.method === "GET" && pathname === "/api/conversations/viewed") {
+          const limit = Number(url.searchParams.get("limit") ?? 8);
+          return json(deps.conversations.listViewed(Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 8));
+        }
+
         const projectCostsId = routeId(pathname, /^\/api\/projects\/([^/]+)\/costs$/);
         if (request.method === "GET" && projectCostsId !== null) {
           if (!deps.projects.get(projectCostsId)) throw new HttpError(404, "projet inconnu");
@@ -3574,6 +3579,18 @@ export function createServer(deps: ServerDeps) {
             throw new HttpError(400, "lastReadTurn invalide");
           }
           return json(deps.conversations.markRead(conversationReadId, lastReadTurn));
+        }
+
+        const conversationViewedId = routeId(
+          pathname,
+          /^\/api\/conversations\/([^/]+)\/viewed$/,
+        );
+        if (request.method === "POST" && conversationViewedId !== null) {
+          if (!deps.conversations.get(conversationViewedId)) {
+            throw new HttpError(404, "conversation inconnue");
+          }
+          deps.conversations.markViewed(conversationViewedId);
+          return json({ ok: true });
         }
 
         const conversationDebriefId = routeId(
