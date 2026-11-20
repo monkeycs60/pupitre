@@ -7,7 +7,7 @@ import { formatActiveDuration } from './formatActiveDuration'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
-const { Sidebar, compactGroupItems, compactWaitingItems, groupConversationsByStatus, workBranchLabel } = await import('./Sidebar')
+const { Sidebar, compactGroupItems, compactPlainItems, compactWaitingItems, groupConversationsByStatus, workBranchLabel } = await import('./Sidebar')
 const { WorkflowsView } = await import('./WorkflowsView')
 
 const project: Project = {
@@ -306,7 +306,7 @@ test('une conversation en cours passe dans « En cours » avec son action du mom
   expect(document.querySelector('.conv-row-line2.is-live .conv-row-activity-label')?.textContent).toBe('écrit la réponse')
 })
 
-test('place les groupes ticket, Sentry et « Sans ticket » selon leur dernière activité', async () => {
+test('place « Sans ticket » en tête, puis les groupes ticket et Sentry selon leur dernière activité', async () => {
   const todayAtNine = new Date()
   todayAtNine.setHours(9, 0, 0, 0)
   const ticketYesterday: Conversation = {
@@ -358,7 +358,7 @@ test('place les groupes ticket, Sentry et « Sans ticket » selon leur dernière
 
   await waitFor(() => expect(document.querySelectorAll('.conv-group-header').length).toBe(3))
   const headers = [...document.querySelectorAll('.conv-group-key')].map((element) => element.textContent)
-  expect(headers).toEqual(['Sentry · REACTOR-B4S', 'Sans ticket', 'TECH-1'])
+  expect(headers).toEqual(['Sans ticket', 'Sentry · REACTOR-B4S', 'TECH-1'])
   const ticketTitle = document.querySelector('.conv-group-ticket-title')
   expect(ticketTitle?.textContent).toBe('Corriger les pipelines de déploiement')
   expect(ticketTitle?.getAttribute('title')).toBe('Corriger les pipelines de déploiement')
@@ -642,7 +642,7 @@ test('les conversations récentes gardent la clé du ticket et la recherche acce
   expect([...document.querySelectorAll('.conv-row-title')].map((item) => item.textContent)).toEqual(['Travail en cours'])
 })
 
-test('« Sans ticket » se range entre les tickets selon sa conversation la plus récente', () => {
+test('« Sans ticket » passe avant tous les tickets et ne montre replié que sa conversation la plus récente', () => {
   const now = Date.parse('2026-10-02T12:00:00.000Z')
   const at = (id: string, hoursAgo: number, ticketKey: string | null = null): Conversation => ({
     ...startedConversation,
@@ -651,10 +651,14 @@ test('« Sans ticket » se range entre les tickets selon sa conversation la plus
     ticket_key: ticketKey,
     updated_at: new Date(now - hoursAgo * 3_600_000).toISOString(),
   })
-  const items = [at('old-plain', 300), at('fresh', 1, 'TECH-1'), at('stale', 48, 'TECH-2'), at('just-done', 5)]
+  const ids = (items: Conversation[]) => items.map((item) => item.id)
+  const items = [at('old-plain', 300), at('fresh', 1, 'TECH-1'), at('stale', 48, 'TECH-2'), at('older-plain', 200)]
   const groups = groupConversationsByStatus(items, new Map(), new Map())
-  expect(groups.map((group) => group.label)).toEqual(['TECH-1', 'Sans ticket', 'TECH-2'])
-  expect(groups[1]!.items.map((item) => item.id)).toEqual(['just-done', 'old-plain'])
+  expect(groups.map((group) => group.label)).toEqual(['Sans ticket', 'TECH-1', 'TECH-2'])
+  const plain = groups[0]!.items
+  expect(ids(plain)).toEqual(['older-plain', 'old-plain'])
+  expect(ids(compactPlainItems(plain, new Set()))).toEqual(['older-plain'])
+  expect(ids(compactPlainItems(plain, new Set(['old-plain'])))).toEqual(['older-plain', 'old-plain'])
 })
 
 test('un groupe de ticket replié montre au plus deux conversations de moins de 24 h', () => {
@@ -731,6 +735,7 @@ test('le provider s’affiche sur la première ligne et la seconde n’existe qu
     { ...startedConversation, id: 'work', title: 'Sur une branche', created_on_branch: 'feature/agenda', worktree_path: null, updated_at: now },
   ])
   renderSidebar()
+  fireEvent.click(await screen.findByRole('button', { name: '1 plus ancienne' }))
   await waitFor(() => expect(document.querySelectorAll('.conv-row-title')).toHaveLength(2))
   const row = (id: string) => document.querySelector(`[data-conversation-id="${id}"]`)!
   expect(row('trunk').querySelector('.conv-row-line1 .conv-row-mark')).not.toBeNull()

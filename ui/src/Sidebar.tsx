@@ -302,7 +302,12 @@ export function compactWaitingItems(items: Conversation[], asking: ReadonlySet<s
 
 export const TIDY_AFTER_MS = 7 * 86_400_000
 
-/** Statut d'abord : ce qui attend l'utilisateur, ce qui tourne, puis les tickets et « Sans ticket » par dernière activité.
+/** « Sans ticket » replié montre sa conversation la plus récente, plus les lignes à ne jamais masquer. */
+export function compactPlainItems(items: Conversation[], alwaysVisible: Set<string>): Conversation[] {
+  return items.filter((conversation, index) => index === 0 || alwaysVisible.has(conversation.id))
+}
+
+/** Statut d'abord : ce qui attend l'utilisateur, ce qui tourne, « Sans ticket », puis les tickets par dernière activité.
  *  Les deux tables donnent le début de l'attente ou du tour, en millisecondes. */
 export function groupConversationsByStatus(
   items: Conversation[],
@@ -322,17 +327,12 @@ export function groupConversationsByStatus(
   const pinned = rest.filter((conversation) => conversation.pinned)
   if (pinned.length > 0) groups.push({ kind: 'pinned', key: 'pinned', label: 'Épinglées', items: pinned })
   const others = rest.filter((conversation) => !conversation.pinned)
-  const byActivity: ConversationGroup[] = groupConversations(others)
-    .filter((group) => group.ticketKey || group.sentryKey)
-    .map((group) => ({ ...group, kind: 'context' as const }))
+  const contextual = groupConversations(others).filter((group) => group.ticketKey || group.sentryKey)
   const plain = others
-    .filter((conversation) => !byActivity.some((group) => group.items.includes(conversation)))
+    .filter((conversation) => !contextual.some((group) => group.items.includes(conversation)))
     .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))
-  if (plain.length > 0) {
-    byActivity.push({ kind: 'plain', key: 'plain', label: 'Sans ticket', items: plain, latestUpdatedAt: Date.parse(plain[0]!.updated_at) })
-    byActivity.sort((left, right) => (right.latestUpdatedAt ?? 0) - (left.latestUpdatedAt ?? 0))
-  }
-  groups.push(...byActivity)
+  if (plain.length > 0) groups.push({ kind: 'plain', key: 'plain', label: 'Sans ticket', items: plain })
+  groups.push(...contextual.map((group) => ({ ...group, kind: 'context' as const })))
   return groups
 }
 
@@ -989,7 +989,8 @@ export const Sidebar = memo(function Sidebar({
               const isContextual = group.kind === 'context'
               const isExpanded = expandedGroups.has(group.key)
               const compactItems = filterText.trim() !== '' ? group.items
-                : isContextual || group.kind === 'plain' ? compactGroupItems(group.items, alwaysVisibleConversationIds)
+                : isContextual ? compactGroupItems(group.items, alwaysVisibleConversationIds)
+                : group.kind === 'plain' ? compactPlainItems(group.items, alwaysVisibleConversationIds)
                 : group.kind === 'waiting' ? compactWaitingItems(group.items, askingConversationIds, selectedConversation?.id ?? null)
                 : group.items
               const hiddenCount = group.items.length - compactItems.length
