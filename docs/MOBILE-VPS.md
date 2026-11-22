@@ -47,12 +47,12 @@ personnel ne doit entrer dans le commit.
 
 ## Tuto éclair sur le S26
 
-1. Activer Tailscale avec le compte personnel, puis ouvrir
-   [Pupitre VPS](https://<machine>.<tailnet>.ts.net/).
+1. Activer Tailscale avec le compte personnel, puis ouvrir Pupitre à
+   `https://<machine>.<tailnet>.ts.net/`, gardé en favori.
 2. Choisir le projet **pupitre**, formuler le changement et attendre la fin du
    travail de l'agent. Les autres agents doivent avoir fini avant l'application.
 3. Ouvrir l'icône **Mises à jour et secours** de la barre supérieure, ou son
-   [favori direct](https://<machine>.<tailnet>.ts.net:8443/).
+   favori direct, `https://<machine>.<tailnet>.ts.net:8443/`.
 4. Toucher **Préparer la version**, attendre la fin des contrôles, puis comparer
    le commit affiché à celui annoncé par l'agent.
 5. Toucher **Ouvrir le test** et vérifier l'interface. Cette copie est isolée des
@@ -88,7 +88,9 @@ si l'application affiche un écran vide.
    lorsque les historiques le permettent. Ne pas utiliser de reset ou de
    checkout forcé pour contourner un écart. Vérifier ensuite le SHA exact.
 5. Terminer le tour et donner à Clément le SHA attendu, le résultat réel du
-   push, le lien du secours et les boutons à toucher. L'agent encore actif peut
+   push, le lien du secours et les boutons à toucher. Le dépôt ne contient pas
+   l'adresse du serveur : la lire dans `server_name` de `/etc/pupitre/nginx.conf` ;
+   le secours répond sur le port 8443. L'agent encore actif peut
    bloquer l'application : ne pas attendre que Clément applique pendant ce tour.
 6. Ne lancer ni `bun run promote`, ni la mission de promotion du bureau, ni un
    redémarrage direct du service pour promouvoir depuis le VPS. Ne modifier ni
@@ -117,7 +119,7 @@ Exemple de passage de relais après une demande de push :
   le VPS et peuvent être récupérées ; elles ne réapparaissent pas automatiquement.
 - Les projets Git et les caches OAuth ne sont pas remplacés. Une restauration
   de Pupitre n'annule donc pas les commits ou le push sur GitHub.
-- Une panne totale du VPS ou de Tailscale relève de SSH ou de la console OVH.
+- Une panne totale du VPS ou de Tailscale relève de SSH ou de la console de l'hébergeur.
 
 Les détails administrateur, l'installation du secours et les limites des
 sauvegardes sont dans [docs/SERVER.md](SERVER.md).

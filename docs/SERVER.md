@@ -5,10 +5,11 @@ L'interface compilée fonctionne dans un navigateur. Le sidecar reste sur
 WebSocket sur `127.0.0.1:4880`. Tailscale Serve termine HTTPS et fournit
 l'identité du visiteur. Aucun port Pupitre ne doit écouter sur une interface publique.
 
-## Installation OVH de Clément
+## Disposition sur le serveur
 
-- Adresse : `https://<machine>.<tailnet>.ts.net/`.
-- Accès depuis le téléphone : Tailscale connecté au compte personnel, puis ouvrir
+- Adresse : `https://<machine>.<tailnet>.ts.net/`, le nom DNS Tailscale de la machine. Le dépôt ne
+  la contient pas ; sur le serveur, `server_name` dans `/etc/pupitre/nginx.conf` la donne.
+- Accès depuis le téléphone : Tailscale connecté au compte autorisé, puis ouvrir
   l'adresse dans Chrome. Ajouter à l'écran d'accueil si souhaité.
 - Compte Linux : `pupitre`, sans sudo et sans groupe Docker. Dossier privé
   `/home/pupitre` ; projets GitHub dans `/home/pupitre/projects`.
@@ -32,12 +33,12 @@ Installer les fichiers `scripts/server/*.service` et `*.timer` dans
 Le sidecar redémarre après une sortie, y compris après un crash.
 
 Le compte agent est limité à deux cœurs CPU et 6 Gio de RAM, navigateur et
-processus enfants compris. Il ne peut pas lire `/home/ubuntu`, les données
-Coolify ou le socket Docker. Ces limites protègent les applications déjà hébergées.
+processus enfants compris. Il ne peut lire ni le dossier du compte administrateur
+(`/home/ubuntu`) ni le socket Docker. Ces limites protègent les autres applications hébergées.
 
 `PUPITRE_BACKGROUND_JOBS=on` conserve les routines et le suivi habituel.
 `PUPITRE_CHANGELOG_JOBS=off` évite d'analyser automatiquement tout l'historique Git
-des dix nouveaux dépôts. Le rafraîchissement demandé explicitement reste disponible.
+des dépôts du serveur. Le rafraîchissement demandé explicitement reste disponible.
 
 ## Gateway et Tailscale
 
@@ -109,7 +110,7 @@ Les appels provenant du VPS lui-même sont refusés : une version défaillante n
 peut pas confirmer sa propre mise à jour. La confirmation vient du téléphone
 ou d'un autre appareil personnel connecté à Tailscale.
 
-### Depuis le S26
+### Depuis le téléphone
 
 Le [guide mobile et les consignes pour l'agent](MOBILE-VPS.md) donnent la phrase
 à utiliser et précisent ce que « commit, push et promote » déclenche sur le VPS.
@@ -159,7 +160,7 @@ sans intervention. Les versions et instantanés ne sont pas purgés automatiquem
 La préparation refuse de démarrer quand moins de 3 Gio restent libres.
 
 Une panne totale du VPS, du système ou de Tailscale nécessite SSH ou la console
-OVH. Les sauvegardes sur ce même serveur ne couvrent pas sa perte totale.
+de l'hébergeur. Les sauvegardes sur ce même serveur ne couvrent pas sa perte totale.
 
 ### Installer le secours sur cette architecture
 
