@@ -1,5 +1,7 @@
 # Pupitre
 
+[![Desktop Linux et macOS](https://github.com/monkeycs60/pupitre/actions/workflows/desktop.yml/badge.svg?branch=master)](https://github.com/monkeycs60/pupitre/actions/workflows/desktop.yml?query=branch%3Amaster) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A desktop app to run many Claude Code and Codex agents in parallel, across all your projects, on the subscriptions you already pay for.
 
 Pupitre drives the real CLIs, not an API: your `CLAUDE.md`, `AGENTS.md`, skills, hooks and MCP servers apply unchanged, and every turn counts against your Claude or ChatGPT plan. It adds what a terminal lacks once five agents run at once: who is waiting for you, one branch per conversation, diffs to review, and reports, code walkthroughs and videos rendered in the thread.
@@ -122,7 +124,7 @@ bun run promote                 # build, wait for running turns, swap the stable
 bun run promote -- --rollback   # back to the previous release (three are kept)
 ```
 
-Tests: `cd sidecar && bun test` (969 tests) and `cd ui && bun test` (437 tests, happy-dom). CI runs them on Ubuntu 24.04, macOS 15 Apple Silicon and macOS 15 Intel, then builds the app on all three and starts it once on macOS.
+Tests: `cd sidecar && bun test` (972 tests) and `cd ui && bun test` (438 tests, happy-dom). CI runs them on Ubuntu 24.04, macOS 15 Apple Silicon and macOS 15 Intel, then builds the app on all three and starts it once on macOS.
 
 Further reading, in French: [CONTEXT.md](CONTEXT.md) (glossary), [docs/help](docs/help) (in-app help pages), [docs/adr](docs/adr) (architecture decisions).
 
