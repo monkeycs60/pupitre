@@ -646,7 +646,9 @@ export class GitProjectService {
   private snapshotHeads(projectPath: string, conversationCwd: string | null): HeadSnapshot {
     const repositories = discoverRepositories(projectPath);
     const conversationRepository = conversationCwd ? repositoryOfWorktree(conversationCwd) : null;
-    if (conversationRepository && !repositories.includes(conversationRepository)) repositories.push(conversationRepository);
+    if (conversationRepository && !repositories.some((repository) => canonicalPath(repository) === canonicalPath(conversationRepository))) {
+      repositories.push(conversationRepository);
+    }
     const snapshot: HeadSnapshot = { heads: new Map(), repositoryOf: new Map(), remoteRefs: new Map() };
     for (const repository of repositories) {
       snapshot.remoteRefs.set(repository, readRemoteRefs(repository));

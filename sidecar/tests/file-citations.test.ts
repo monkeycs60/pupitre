@@ -137,3 +137,13 @@ test("signale un fichier présent sur une autre branche, ou supprimé et renomm�
   const earlier = await resolveCitations(["lib/old.js"], [{ name: "history", path: repository, branch: "main" }], repository, [], new Set(), { ...context, since: "2999-01-01" });
   expect(earlier["lib/old.js"]).toEqual({ status: "missing" });
 });
+
+test("reconnaît aussi les fichiers lus dans les dossiers temporaires et volumes de macOS", () => {
+  const touched = touchedFiles([
+    { file_path: "/var/folders/9d/T/pupitre-x/src/a.ts" },
+    { file_path: "/private/tmp/b.ts" },
+    { command: "cat /Volumes/Disque/projet/c.ts" },
+  ]);
+
+  expect([...touched]).toEqual(["/var/folders/9d/T/pupitre-x/src/a.ts", "/private/tmp/b.ts", "/Volumes/Disque/projet/c.ts"]);
+});

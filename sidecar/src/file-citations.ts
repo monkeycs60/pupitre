@@ -84,7 +84,7 @@ function listFiles(folder: string): Promise<string[]> {
 export function touchedFiles(toolInputs: unknown[]): Set<string> {
   const found = new Set<string>();
   for (const input of toolInputs) {
-    for (const match of JSON.stringify(input ?? null).matchAll(/(\/(?:home|Users|tmp)\/[^\s"'`\\]+\.[A-Za-z]{1,6})/g)) {
+    for (const match of JSON.stringify(input ?? null).matchAll(/(\/(?:home|Users|tmp|private|var\/folders|Volumes)\/[^\s"'`\\]+\.[A-Za-z]{1,6})/g)) {
       found.add(resolve(match[1]!));
     }
   }

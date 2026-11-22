@@ -2,6 +2,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileS
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { CodeSource } from "./code-explorer";
+import { canonicalPath } from "./filesystem-path";
 import { readHead, repositoryOfWorktree, ticketKeyOf } from "./git-repositories";
 import type { Conversation } from "./stores/conversations";
 import type { Project } from "./stores/projects";
@@ -316,8 +317,13 @@ export async function gitOutput(cwd: string, args: string[], acceptedExitCodes =
 
 /** Dossier de la fenêtre VS Code qui porte ce dépôt : son worktree pour la conversation. */
 export function folderOfRepository(plan: EditorWorkspacePlan, repositoryPath: string): EditorFolder | undefined {
-  return plan.folders.find((candidate) => candidate.location !== undefined && candidate.location !== null
-    && repositoryOfWorktree(candidate.path) === resolve(repositoryPath));
+  // git écrit le chemin résolu (macOS : /private/var) dans le `.git` des worktrees.
+  const target = canonicalPath(repositoryPath);
+  return plan.folders.find((candidate) => {
+    if (candidate.location === undefined || candidate.location === null) return false;
+    const repository = repositoryOfWorktree(candidate.path);
+    return repository !== null && canonicalPath(repository) === target;
+  });
 }
 
 /** Fichier → première ligne modifiée, dans l'ordre du diff ; le premier diff qui cite un fichier l'emporte. */

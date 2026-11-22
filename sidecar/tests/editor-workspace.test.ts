@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CodeSource } from "../src/code-explorer";
@@ -158,4 +158,16 @@ test("liste les fichiers modifiés par la conversation à leur première ligne c
     { path: join(worktree, "src/draft.ts"), line: null },
     { path: join(worktree, "src/map.ts"), line: 2 },
   ]);
+});
+
+test("retrouve le dépôt des commits quand son chemin passe par un lien symbolique", async () => {
+  const alias = join(root, "reactor-alias");
+  symlinkSync(reactor, alias);
+  const worktree = join(mono, "apps/reactor-tech123");
+  const sha = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: worktree, stdout: "pipe" }).stdout.toString().trim();
+
+  const plan = planEditorWorkspace(project, { id: "c", worktree_path: monoWorktree, worktree_paths: [monoWorktree] } as Conversation, sources);
+  const files = await changedFiles(plan, [{ repositoryPath: alias, shas: [sha] }], []);
+
+  expect(files.map((file) => file.path)).toContain(join(worktree, "src/map.ts"));
 });

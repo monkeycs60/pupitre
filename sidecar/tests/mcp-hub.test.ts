@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { claudeLoadedServers, McpHub, npxDirectLaunch } from "../src/mcp-hub";
@@ -64,8 +64,8 @@ test("deux agents partagent un seul process et reçoivent chacun leur réponse s
     second(1, "echo", { text: "second" }),
   ]);
 
-  expect(slow.body).toEqual({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: `premier|${home}|global` }] } });
-  expect(quick.body).toEqual({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: `second|${home}|global` }] } });
+  expect(slow.body).toEqual({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: `premier|${realpathSync(home)}|global` }] } });
+  expect(quick.body).toEqual({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: `second|${realpathSync(home)}|global` }] } });
   expect(spawns()).toBe(1);
   expect(hub.runningCount()).toBe(1);
 });
@@ -133,7 +133,7 @@ test("les serveurs du projet tournent dans le dossier de l'agent, un par dossier
     projects: { [project]: { mcpServers: { local: { ...fake, env: { ...fake.env, FAKE_MCP_TAG: "local" } } } } },
   }));
   const tool = await connect(hub, urlOf(hub.claudeServers(project, null), "local"));
-  expect((await tool(1, "echo", { text: "x" })).body.result.content[0].text).toBe(`x|${project}|local`);
+  expect((await tool(1, "echo", { text: "x" })).body.result.content[0].text).toBe(`x|${realpathSync(project)}|local`);
 });
 
 test("hub coupé, sans port ou jeton inconnu : comportement natif du CLI", async () => {
