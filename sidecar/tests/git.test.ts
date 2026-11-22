@@ -332,3 +332,13 @@ test("un push acquitté disparaît durablement de la conversation", () => {
   expect(() => gitView.acknowledgeConversationPush(projectId, conversationId, "inconnu"))
     .toThrow("push inconnu");
 });
+
+test("un second relevé de fin de tour ne renotifie pas les commits déjà rattachés", () => {
+  const notified: string[][] = [];
+  const unsubscribe = gitView.subscribeCommits((_projectId, shas) => notified.push(shas));
+  gitView.recordCommitLinks(projectId, conversationId, ["f".repeat(40)]);
+  gitView.recordCommitLinks(projectId, conversationId, ["f".repeat(40)]);
+  unsubscribe();
+
+  expect(notified).toEqual([["f".repeat(40)]]);
+});

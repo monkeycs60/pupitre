@@ -13,6 +13,7 @@ interface ConversationWorkspaceCardProps {
   conversationId: string
   /** Dépose la consigne de relecture dans le composer de la conversation. */
   onSendReview?: (message: string) => void
+  turnRunning?: boolean
 }
 
 function repositoryName(label: string): string {
@@ -56,7 +57,7 @@ async function openChangesInEditor(conversationId: string) {
 }
 
 /** Ce que la conversation a commité, dépôt par dépôt ; à défaut, le travail du ticket qu'elle partage. */
-export function ConversationWorkspaceCard({ projectId, conversationId, onSendReview }: ConversationWorkspaceCardProps) {
+export function ConversationWorkspaceCard({ projectId, conversationId, onSendReview, turnRunning = false }: ConversationWorkspaceCardProps) {
   const [data, setData] = useState<CodeConversationCommits | null>(null)
   const [showChanges, setShowChanges] = useState(false)
 
@@ -73,7 +74,7 @@ export function ConversationWorkspaceCard({ projectId, conversationId, onSendRev
       controller.abort()
       window.clearInterval(timer)
     }
-  }, [projectId, conversationId])
+  }, [projectId, conversationId, turnRunning])
 
   if (!data) return null
   const ticket = data.ticket

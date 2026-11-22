@@ -214,3 +214,22 @@ test('montre l’avancement des commentaires envoyés sous leurs lignes et dans 
     ['Traité', 'is-treated'], ['En attente', 'is-pending'],
   ])
 })
+
+test('se recharge dès la fin du tour, sans attendre le prochain relevé', async () => {
+  let commits: ReturnType<typeof commit>[] = []
+  globalThis.fetch = mock(async () => Response.json({
+    conversationId: 'conversation-1',
+    total: commits.length,
+    repositories: commits.length > 0 ? [{ repositoryPath: '/repo', repositoryLabel: 'repo', commits }] : [],
+    ticket: null,
+  } satisfies CodeConversationCommits)) as unknown as typeof fetch
+
+  const view = render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'conversation-1', turnRunning: true }))
+  await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1))
+  expect(screen.queryByText('1 commit sur 1 dépôt')).toBeNull()
+
+  commits = [commit('d', 'option --version')]
+  view.rerender(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'conversation-1', turnRunning: false }))
+
+  expect(await screen.findByText('1 commit sur 1 dépôt')).toBeTruthy()
+})

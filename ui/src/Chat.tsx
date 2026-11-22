@@ -741,7 +741,7 @@ export function Chat({
                       onSteer={providerCanSteer(conversation?.provider) ? handleSteer : undefined}
                     />
                     {conversation ? <PushTimeline projectId={project.id} conversationId={conversation.id} /> : null}
-                    {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onSendReview={addReviewToComposer} /> : null}
+                    {conversation ? <ConversationWorkspaceCard projectId={project.id} conversationId={conversation.id} onSendReview={addReviewToComposer} turnRunning={isRunning} /> : null}
                   </TaskSelectionContext.Provider>
                   </TaskStashContext.Provider>
                 </TaskToggleContext.Provider>

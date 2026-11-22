@@ -71,11 +71,17 @@ cat "${fixture}"
   process.env.PUPITRE_CLAUDE_BIN = fake;
   process.env.FAKE_REPO = repo;
   const gitView = new GitProjectService(db, projects);
+  const linkedOf = () => gitView.snapshot(project.id).commits.filter(
+    (commit) => commit.conversations.some((item) => item.id === conversation.id),
+  ).length;
+  let linkedWhenDone = null as number | null;
   const trackedRunner = new ConversationRunner(
     convs,
     projects,
     new MediaStore(dataDir),
-    () => {},
+    (_conversationId, event) => {
+      if (event.type === "status" && event.state !== "running") linkedWhenDone = linkedOf();
+    },
     new QuotaTracker(db),
     () => 4321,
     gitView,
@@ -90,6 +96,7 @@ cat "${fixture}"
     expect(linked.every((commit) =>
       commit.conversations.some((item) => item.id === conversation.id),
     )).toBe(true);
+    expect(linkedWhenDone).toBe(2);
   } finally {
     delete process.env.FAKE_REPO;
   }

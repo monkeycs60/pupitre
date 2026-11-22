@@ -669,10 +669,11 @@ export class GitProjectService {
         VALUES (?, ?, ?, ?)
       `);
       const now = new Date().toISOString();
-      for (const sha of shas) insert.run(sha, projectId, conversationId, now);
+      return shas.filter((sha) => insert.run(sha, projectId, conversationId, now).changes > 0);
     });
-    record();
-    for (const listener of this.commitListeners) listener(projectId, shas);
+    const linked = record();
+    if (linked.length === 0) return;
+    for (const listener of this.commitListeners) listener(projectId, linked);
   }
 
   /** Un COUNT plutôt que des stats détaillées : l'ancienne version lançait

@@ -214,6 +214,15 @@ export class ConversationRunner {
     } catch {
       // Un projet hors Git ne doit jamais empêcher le tour.
     }
+    const trackCommits = () => {
+      try {
+        if (this.git && gitTracking) this.git.finishTurn(gitTracking, conversationId);
+      } catch (error) {
+        // J1 est volontairement best effort : une lecture Git cassée ne change
+        // ni le résultat provider ni le statut terminal du tour.
+        console.error("Traçage des commits impossible", error);
+      }
+    };
     const controller = new AbortController();
     const startedAt = new Date().toISOString();
     let finish!: () => void;
@@ -297,6 +306,7 @@ export class ConversationRunner {
         });
       }
       if (event.type === "status" && event.state !== "running") {
+        trackCommits();
         outcome = { state: event.state, ...(event.error ? { error: event.error } : {}) };
         persist({
           type: "turn-timing",
@@ -390,13 +400,7 @@ export class ConversationRunner {
       };
       await runProviderTurn(conv.provider, opts, emit);
     } finally {
-      try {
-        if (this.git && gitTracking) this.git.finishTurn(gitTracking, conversationId);
-      } catch (error) {
-        // J1 est volontairement best effort : une lecture Git cassée ne change
-        // ni le résultat provider ni le statut terminal du tour.
-        console.error("Traçage des commits impossible", error);
-      }
+      trackCommits();
       try {
         this.convs.compactTextDeltas(conversationId);
       } catch (error) {
