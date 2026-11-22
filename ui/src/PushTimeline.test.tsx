@@ -68,7 +68,7 @@ test('déplie le diff du push sous sa carte, fichier par fichier, puis le replie
   expect(cards[0]!.compareDocumentPosition(view) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(view.compareDocumentPosition(cards[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect([...view.querySelectorAll('.changes-file-path')].map((path) => path.textContent)).toEqual(['lib/a.js', 'lib/new.js'])
-  expect(view.querySelectorAll('.changes-diff-line.is-addition')).toHaveLength(2)
+  await waitFor(() => expect(view.querySelectorAll('.changes-diff-line.is-addition')).toHaveLength(2))
 
   fireEvent.click(screen.getByText('Masquer le diff').closest('button')!)
   expect(document.querySelector('.changes-view')).toBeNull()
