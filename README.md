@@ -129,3 +129,7 @@ Further reading, in French: [CONTEXT.md](CONTEXT.md) (glossary), [docs/help](doc
 ## Status
 
 Pupitre is a personal tool, used every day by its author since August 2026. Expect rough edges and a French interface. Linux is the main platform. macOS 13 or later is supported: the app builds and starts in CI on macOS 15, but sees less daily use. There are no prebuilt binaries: the setup builds from source.
+
+## License
+
+MIT
