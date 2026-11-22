@@ -434,7 +434,7 @@ test("le process est partagé entre deux tours puis relancé s'il meurt", async 
   expect(Number(readFileSync(files.pid, "utf8"))).toBe(firstPid); // même process
 
   process.kill(firstPid, "SIGKILL");
-  await Bun.sleep(50);
+  await until(() => !alive(firstPid));
 
   const events = await collect(client);
   const secondPid = Number(readFileSync(files.pid, "utf8"));
@@ -465,7 +465,7 @@ test("un process qui meurt pendant un tour termine le tour en erreur", async () 
 
   const events: AppEvent[] = [];
   const turn = client.runTurn(turnOptions(), (event) => events.push(event));
-  await Bun.sleep(300);
+  await until(() => existsSync(files.pid) && events.some((e) => e.type === "text-delta"));
   process.kill(Number(readFileSync(files.pid, "utf8")), "SIGKILL");
   await turn;
 
@@ -489,7 +489,7 @@ test("annulation : envoie turn/interrupt et termine en erreur « annulé »", as
 
   expect(events.at(-1)).toEqual({ type: "status", state: "error", error: "annulé" });
   // L'interruption part en fire-and-forget : on laisse le fake la journaliser.
-  await Bun.sleep(100);
+  await waitForRequest(files.log, "turn/interrupt");
   const interrupt = sentRequests(files.log).find((r) => r.method === "turn/interrupt")!;
   expect(interrupt.params).toMatchObject({ threadId: "fake-thread-0001" });
   expect(typeof interrupt.params.turnId).toBe("string");
@@ -533,7 +533,7 @@ test("shutdown pendant un tour : le tour est résolu en erreur, pas suspendu", a
 test("requête JSON-RPC sans réponse : timeout → status error", async () => {
   useFake();
   process.env.FAKE_APP_SERVER_SILENT = "turn/start";
-  process.env.PUPITRE_APPSERVER_TIMEOUT_MS = "200";
+  process.env.PUPITRE_APPSERVER_TIMEOUT_MS = "1500";
 
   const events = await collect(newClient());
 
@@ -653,10 +653,9 @@ test("shutdown tue aussi les serveurs MCP enfants de l'app-server", async () => 
   expect(() => process.kill(childPid, 0)).not.toThrow(); // l'enfant MCP tourne
 
   client.shutdown();
-  await Bun.sleep(200);
   // Sans kill du groupe de process, l'enfant survivrait orphelin (le bloat
   // observé : des dizaines de serveurs MCP npx accumulés au fil des sessions).
-  expect(() => process.kill(childPid, 0)).toThrow();
+  expect(await until(() => !alive(childPid))).toBe(true);
 });
 
 test("le watchdog d'inactivité tue aussi les serveurs MCP enfants", async () => {
