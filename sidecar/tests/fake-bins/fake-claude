@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Rejoue la fixture ; enregistre les args reçus pour les assertions.
 # Le résumé automatique tourne en arrière-plan avec --output-format json :
-# il ne doit pas écraser la capture du tour stream-json testé.
-if [[ " $* " == *" --input-format stream-json "* ]]; then
+# il ne doit écraser aucune capture (args, stdin, consigne) du tour stream-json testé.
+turn=0
+[[ " $* " == *" --input-format stream-json "* ]] && turn=1
+if (( turn )); then
   echo "$@" > "${FAKE_CLAUDE_ARGS_FILE:-/dev/null}"
 fi
 IFS= read -r initial
-if [[ -n "${FAKE_CLAUDE_STDIN_FILE:-}" ]]; then
+if (( turn )) && [[ -n "${FAKE_CLAUDE_STDIN_FILE:-}" ]]; then
   printf '%s\n' "$initial" > "$FAKE_CLAUDE_STDIN_FILE"
 fi
 if [[ -n "${PUPITRE_FAKE_PROMPT_LOG:-}" ]]; then
@@ -14,6 +16,6 @@ if [[ -n "${PUPITRE_FAKE_PROMPT_LOG:-}" ]]; then
 fi
 if [[ "${FAKE_CLAUDE_HANG:-}" == "1" ]]; then
   IFS= read -r steering
-  printf '%s\n' "$steering" > "${FAKE_CLAUDE_STEER_FILE:-/dev/null}"
+  if (( turn )); then printf '%s\n' "$steering" > "${FAKE_CLAUDE_STEER_FILE:-/dev/null}"; fi
 fi
 cat "$(dirname "$0")/../fixtures/claude-basic.jsonl"

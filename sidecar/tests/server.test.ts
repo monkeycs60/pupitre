@@ -3,6 +3,7 @@ import type { Database } from "bun:sqlite";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { claudeSessions } from "../src/adapters/claude-session";
 import { openDb } from "../src/db";
 import type { AppEvent, StoredEvent } from "../src/events";
 import { MediaStore } from "../src/media";
@@ -369,6 +370,7 @@ const cleanups: Array<() => void> = [];
 
 afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
+  claudeSessions.shutdown();
   current?.server.stop(true);
   current?.db.close();
   current = undefined;
@@ -1035,9 +1037,13 @@ test("CRUD et exécution immédiate d'une routine avec notification", async () =
   const startedRun = await run.json() as { conversation_id: string; status: string };
   expect(startedRun).toMatchObject({ status: "running", conversation_id: expect.any(String) });
   await waitForRunnerIdle(startedRun.conversation_id);
-  await Bun.sleep(20);
-  const notifications = await fetch(`${current.baseUrl}/api/notifications?after=0`);
-  expect(await notifications.json()).toEqual([
+  let notifications: unknown[] = [];
+  const deadline = Date.now() + 3_000;
+  while (notifications.length === 0 && Date.now() < deadline) {
+    notifications = await (await fetch(`${current.baseUrl}/api/notifications?after=0`)).json() as unknown[];
+    if (notifications.length === 0) await Bun.sleep(20);
+  }
+  expect(notifications).toEqual([
     expect.objectContaining({ kind: "routine", conversation_id: expect.any(String) }),
   ]);
   const cursor = await fetch(`${current.baseUrl}/api/notifications/cursor`);
@@ -2002,9 +2008,22 @@ test("publie, isole, conserve puis supprime un document HTML via l'API", async (
     expect.objectContaining({ id: published.id, matchCount: expect.any(Number) }),
   ]);
 
+  const fakeChrome = join(projectPath, "fake-chrome");
+  writeFileSync(fakeChrome, `#!/usr/bin/env bash
+for argument in "$@"; do case "$argument" in --screenshot=*) out="\${argument#--screenshot=}";; esac; done
+printf '\\x89PNG\\r\\n\\x1a\\n' > "$out"
+head -c 200 /dev/zero >> "$out"
+`);
+  chmodSync(fakeChrome, 0o755);
+  const previousChrome = process.env.PUPITRE_CHROME_BIN;
+  process.env.PUPITRE_CHROME_BIN = fakeChrome;
+  cleanups.push(() => {
+    if (previousChrome === undefined) delete process.env.PUPITRE_CHROME_BIN;
+    else process.env.PUPITRE_CHROME_BIN = previousChrome;
+  });
   const thumbnail = await fetch(`${current.baseUrl}/api/documents/${published.id}/thumbnail`);
   expect(thumbnail.status).toBe(200);
-  expect(thumbnail.headers.get("content-type")).toMatch(/^image\/(png|svg\+xml)$/);
+  expect(thumbnail.headers.get("content-type")).toBe("image/png");
   expect((await thumbnail.arrayBuffer()).byteLength).toBeGreaterThan(100);
 
   const exportedPath = join(projectPath, "audit-export.html");

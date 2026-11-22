@@ -614,7 +614,8 @@ test("deux tours sur le même thread : le second termine en erreur explicite", a
     turnOptions({ cliSessionId: "thread-abc", signal: controller.signal }),
     (event) => first.push(event),
   );
-  await Bun.sleep(200);
+  const deadline = Date.now() + 5_000;
+  while (!first.some((e) => e.type === "text-delta") && Date.now() < deadline) await Bun.sleep(10);
 
   const second = await collect(client, { cliSessionId: "thread-abc" });
   expect(second.at(-1)).toMatchObject({
