@@ -161,8 +161,12 @@ test('commente une ligne du diff puis dépose la relecture dans le composer', as
 
   render(createElement(ConversationWorkspaceCard, { projectId: 'p1', conversationId: 'conversation-1', onSendReview: (message: string) => sentToComposer.push(message) }))
   fireEvent.click(await screen.findByRole('button', { name: 'Voir les changements' }))
-  await screen.findByText('1 fichier modifié')
-  fireEvent.mouseOver(document.querySelector('.changes-diff-line[data-side="new"][data-line="2"]')!)
+  const line = await waitFor(() => {
+    const element = document.querySelector('.changes-diff-line[data-side="new"][data-line="2"]')
+    if (!element) throw new Error('ligne 2 du diff pas encore rendue')
+    return element
+  })
+  fireEvent.mouseOver(line)
   expect(document.querySelectorAll('.changes-diff-comment-add')).toHaveLength(1)
   fireEvent.click(screen.getByRole('button', { name: 'Commenter la ligne 2' }))
   const field = screen.getByRole('textbox', { name: 'Commentaire, ligne 2' })

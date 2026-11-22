@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 
 export type ZoomedMedia = {
@@ -217,7 +217,7 @@ export function MediaLightbox({ gallery, onClose }: { gallery: MediaGallery; onC
     setCompare(false)
   }, [count])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Capture : ces touches pilotent la visionneuse avant le fil et le document plein écran dessous.
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
