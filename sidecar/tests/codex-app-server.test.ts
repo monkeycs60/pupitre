@@ -5,6 +5,21 @@ import { homedir, tmpdir } from "node:os";
 import { CodexAppServerClient, requestTimeoutMs } from "../src/adapters/codex-app-server";
 import type { AppEvent } from "../src/events";
 import type { TurnOptions } from "../src/adapters/types";
+
+async function until(predicate: () => boolean, timeoutMs = 5_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate() && Date.now() < deadline) await Bun.sleep(10);
+  return predicate();
+}
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 import type { SteerFn } from "../src/adapters/types";
 
 const FAKE = join(import.meta.dir, "fake-bins/fake-codex-app-server");
@@ -435,8 +450,7 @@ test("le watchdog arrête l'app-server inactif puis le relance au tour suivant",
   await collect(client);
   const firstPid = Number(readFileSync(files.pid, "utf8"));
 
-  await Bun.sleep(120);
-  expect(() => process.kill(firstPid, 0)).toThrow();
+  expect(await until(() => !alive(firstPid))).toBe(true);
 
   const events = await collect(client);
   const secondPid = Number(readFileSync(files.pid, "utf8"));
@@ -469,8 +483,7 @@ test("annulation : envoie turn/interrupt et termine en erreur « annulé »", as
     turnOptions({ signal: controller.signal }),
     (event) => events.push(event),
   );
-  await Bun.sleep(300);
-  expect(events.some((e) => e.type === "text-delta")).toBe(true);
+  expect(await until(() => events.some((e) => e.type === "text-delta"))).toBe(true);
   controller.abort();
   await turn;
 
@@ -508,8 +521,7 @@ test("shutdown pendant un tour : le tour est résolu en erreur, pas suspendu", a
 
   const events: AppEvent[] = [];
   const turn = client.runTurn(turnOptions(), (event) => events.push(event));
-  await Bun.sleep(200);
-  expect(events.some((e) => e.type === "text-delta")).toBe(true);
+  expect(await until(() => events.some((e) => e.type === "text-delta"))).toBe(true);
 
   client.shutdown();
   // Sans le cleanup dans shutdown(), ce await ne se résoudrait jamais.
@@ -614,8 +626,7 @@ test("deux tours sur le même thread : le second termine en erreur explicite", a
     turnOptions({ cliSessionId: "thread-abc", signal: controller.signal }),
     (event) => first.push(event),
   );
-  const deadline = Date.now() + 5_000;
-  while (!first.some((e) => e.type === "text-delta") && Date.now() < deadline) await Bun.sleep(10);
+  await until(() => first.some((e) => e.type === "text-delta"));
 
   const second = await collect(client, { cliSessionId: "thread-abc" });
   expect(second.at(-1)).toMatchObject({
@@ -658,8 +669,7 @@ test("le watchdog d'inactivité tue aussi les serveurs MCP enfants", async () =>
   await collect(client);
   const childPid = Number(readFileSync(childPidFile, "utf8"));
 
-  await Bun.sleep(200);
-  expect(() => process.kill(childPid, 0)).toThrow();
+  expect(await until(() => !alive(childPid))).toBe(true);
 });
 
 test("handshake initialize en erreur : status error et pas de process orphelin", async () => {
@@ -670,8 +680,7 @@ test("handshake initialize en erreur : status error et pas de process orphelin",
   expect(events.at(-1)).toMatchObject({ type: "status", state: "error" });
 
   const pid = Number(readFileSync(files.pid, "utf8"));
-  await Bun.sleep(200);
-  expect(() => process.kill(pid, 0)).toThrow(); // ESRCH : le process a bien été tué
+  expect(await until(() => !alive(pid))).toBe(true);
 });
 
 test("depuis un worktree, le dépôt principal reste accessible au bac à sable", async () => {
