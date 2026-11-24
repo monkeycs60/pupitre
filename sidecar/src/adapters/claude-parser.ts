@@ -56,10 +56,18 @@ export function parseClaudeLine(line: string, provider: Provider = "claude"): Ap
     }
     case "user": {
       const content = (obj.message as any)?.content ?? [];
+      if (typeof content === "string") {
+        const superseded = stopHookFeedback(content);
+        if (superseded) out.push(superseded);
+        break;
+      }
       if (!Array.isArray(content)) break;
       for (const block of content) {
         if (!block || typeof block !== "object") continue;
-        if (block.type === "tool_result") {
+        if (block.type === "text" && typeof block.text === "string") {
+          const superseded = stopHookFeedback(block.text);
+          if (superseded) out.push(superseded);
+        } else if (block.type === "tool_result") {
           const blocks = Array.isArray(block.content) ? block.content : [];
           const inlineImages = blocks.flatMap((item: any) => {
             const source = item?.type === "image" ? item.source : null;
@@ -166,6 +174,13 @@ export function createClaudeLineParser(
     if (obj?.type === "result" && queued.size > 0) return [];
     return parseClaudeLine(line, provider);
   };
+}
+
+const STOP_HOOK_FEEDBACK = "Stop hook feedback:";
+
+function stopHookFeedback(text: string): AppEvent | null {
+  if (!text.startsWith(STOP_HOOK_FEEDBACK)) return null;
+  return { type: "reply-superseded", reason: text.slice(STOP_HOOK_FEEDBACK.length).trim() };
 }
 
 function numberOrZero(value: unknown): number {

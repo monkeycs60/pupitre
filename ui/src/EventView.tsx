@@ -1,5 +1,6 @@
 import { CitedFilesAction } from './FileCitation'
-import { memo, useState, type ReactNode } from 'react'
+import { memo, useContext, useState, type ReactNode } from 'react'
+import { ActionFormatContext } from './actionHeadings'
 import Markdown from './Markdown'
 import { ConversationMentionText } from './ConversationMentionText'
 import { eventIdOfBlock, type EventBlock } from './eventBlocks'
@@ -369,6 +370,27 @@ function ToolActivity({ block, onImageOpen, onImageLoad }: {
   )
 }
 
+function SupersededReply({ block, onImageOpen, onImageLoad }: {
+  block: Extract<EventBlock, { kind: 'assistant' }>
+  onImageOpen: EventViewProps['onImageOpen']
+  onImageLoad: EventViewProps['onImageLoad']
+}) {
+  const format = useContext(ActionFormatContext)
+  return (
+    <article className="message-row message-row-assistant" data-event-id={eventIdOfBlock(block.id)}>
+      <details className="superseded-reply">
+        <summary>Première version, remplacée par la réponse suivante</summary>
+        {block.supersededReason ? <p className="superseded-reply-reason">{block.supersededReason}</p> : null}
+        <ActionFormatContext.Provider value={{ ...format, todoHeadings: [], followUpHeadings: [] }}>
+          <div className="message-bubble assistant-message">
+            <Markdown scope={block.id} onImageOpen={onImageOpen} onImageLoad={onImageLoad}>{block.text}</Markdown>
+          </div>
+        </ActionFormatContext.Provider>
+      </details>
+    </article>
+  )
+}
+
 function backgroundTaskStatusLabel(status: string, plural: boolean): string {
   const s = plural ? 's' : ''
   switch (status) {
@@ -410,6 +432,9 @@ function EventViewImpl({ block, live = false, onImageOpen, onImageLoad, turnFoot
       )
 
     case 'assistant':
+      if (block.supersededReason !== undefined) {
+        return <SupersededReply block={block} onImageOpen={onImageOpen} onImageLoad={onImageLoad} />
+      }
       return (
         <article className="message-row message-row-assistant" data-event-id={eventIdOfBlock(block.id)}>
           {/* Le caret de streaming est un ::after du dernier bloc rendu : il

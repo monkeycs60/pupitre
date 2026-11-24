@@ -14,6 +14,8 @@ export type AppEvent =
     }
   | { type: "text-delta"; text: string }
   | { type: "text-final"; text: string }
+  /** Un hook Stop a renvoyé la réponse précédente du tour : le texte suivant la remplace. */
+  | { type: "reply-superseded"; reason: string }
   /** Réflexion du modèle, fusionnée à la compaction et relisible sous le tour. */
   | { type: "reasoning-delta"; text: string }
   /** Phase brute annoncée par le provider (ReasonX : starting, implementing…). */

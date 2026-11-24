@@ -143,3 +143,15 @@ test("marque en échec un résultat d'outil signalé is_error", () => {
     { type: "tool-end", toolId: "bash-1", output: "Exit code 1", images: [], isError: true },
   ]);
 });
+
+test("le retour d'un hook Stop marque la réponse précédente comme remplacée", () => {
+  const line = JSON.stringify({
+    type: "user",
+    message: { role: "user", content: [{ type: "text", text: "Stop hook feedback:\nRéponse trop longue." }] },
+  });
+  expect(parseClaudeLine(line)).toEqual([{ type: "reply-superseded", reason: "Réponse trop longue." }]);
+  const plain = JSON.stringify({ type: "user", message: { role: "user", content: "Stop hook feedback:\nRéécris." } });
+  expect(parseClaudeLine(plain)).toEqual([{ type: "reply-superseded", reason: "Réécris." }]);
+  const other = JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text: "bonjour" }] } });
+  expect(parseClaudeLine(other)).toEqual([]);
+});

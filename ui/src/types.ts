@@ -961,6 +961,7 @@ export type AppEvent =
   | { type: 'user-message'; text: string; images: string[]; attachments?: Attachment[]; steering?: boolean; queued?: boolean }
   | { type: 'text-delta'; text: string }
   | { type: 'text-final'; text: string }
+  | { type: 'reply-superseded'; reason: string }
   | { type: 'reasoning-delta'; text: string }
   | { type: 'turn-phase'; phase: string }
   | { type: 'background-task'; status: string; summary: string }

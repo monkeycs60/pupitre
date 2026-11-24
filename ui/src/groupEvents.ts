@@ -308,6 +308,12 @@ export function groupEvents(
         }
         assistant = null
         break
+      case 'reply-superseded': {
+        assistant = null
+        const previous = blocks.findLast((block) => block.kind === 'assistant' || block.kind === 'user')
+        if (previous?.kind === 'assistant') previous.supersededReason = event.reason
+        break
+      }
       case 'tool-start': {
         assistant = null
         ensureTurnFooter().activity = 'tool'

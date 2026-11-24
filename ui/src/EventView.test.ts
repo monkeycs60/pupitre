@@ -83,3 +83,40 @@ test('pendant le chargement du contexte du ticket, le tour se prépare au lieu d
   expect(indicator.textContent).not.toContain('réfléchit')
   cleanup()
 })
+
+test('une réponse renvoyée par un hook Stop reste repliée et sans cases à cocher', async () => {
+  const { groupEvents } = await import('./groupEvents')
+  const blocks = groupEvents([
+    { type: 'user-message', text: 'corrige le bug', images: [] },
+    { type: 'text-final', text: 'Version longue.\n\n*TODO*\n1. Relire la version longue' },
+    { type: 'reply-superseded', reason: 'Contrôle de longueur : réécris plus court.' },
+    { type: 'text-final', text: 'Version courte.\n\n*TODO*\n1. Relire la version courte' },
+  ])
+  const answers = blocks.filter((block) => block.kind === 'assistant')
+  expect(answers).toHaveLength(2)
+  expect(answers[0].kind === 'assistant' && answers[0].supersededReason).toBe('Contrôle de longueur : réécris plus court.')
+  expect(answers[1].kind === 'assistant' && answers[1].supersededReason).toBeUndefined()
+
+  cleanup()
+  render(createElement('div', null, answers.map((block) => createElement(EventView, {
+    key: block.id, block, onImageOpen: () => {}, onImageLoad: () => {},
+  }))))
+  const details = document.querySelector('details.superseded-reply') as HTMLDetailsElement
+  expect(details.open).toBe(false)
+  expect(screen.getByText('Première version, remplacée par la réponse suivante')).toBeTruthy()
+  expect(details.querySelectorAll('input[type="checkbox"]')).toHaveLength(0)
+  expect(document.querySelectorAll('input[type="checkbox"]').length).toBeGreaterThan(0)
+  expect(document.querySelectorAll('details.superseded-reply')).toHaveLength(1)
+})
+
+test('un retour de hook sans réponse dans le tour ne remonte pas au tour précédent', async () => {
+  const { groupEvents } = await import('./groupEvents')
+  const blocks = groupEvents([
+    { type: 'user-message', text: 'premier', images: [] },
+    { type: 'text-final', text: 'Réponse au premier tour.' },
+    { type: 'user-message', text: 'second', images: [] },
+    { type: 'reply-superseded', reason: 'motif' },
+  ])
+  const first = blocks.find((block) => block.kind === 'assistant')
+  expect(first?.kind === 'assistant' && first.supersededReason).toBeUndefined()
+})

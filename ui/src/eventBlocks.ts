@@ -15,6 +15,8 @@ interface AssistantBlock {
   id: string
   text: string
   streaming: boolean
+  /** Motif du hook Stop qui a renvoyé ce texte : la réponse suivante le remplace. */
+  supersededReason?: string
 }
 
 interface ToolBlock {
