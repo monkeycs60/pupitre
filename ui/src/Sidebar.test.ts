@@ -7,7 +7,7 @@ import { formatActiveDuration } from './formatActiveDuration'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
-const { Sidebar, compactGroupItems, compactPlainItems, compactWaitingItems, expandedPlainItems, groupConversationsByStatus, workBranchLabel } = await import('./Sidebar')
+const { Sidebar, compactGroupItems, compactPlainItems, compactWaitingItems, expandedPlainItems, groupConversationsByStatus, revealedGroupItems, workBranchLabel } = await import('./Sidebar')
 const { WorkflowsView } = await import('./WorkflowsView')
 
 const project: Project = {
@@ -688,6 +688,16 @@ test('un groupe de ticket replié montre au plus deux conversations de moins de 
   expect(ids(compactGroupItems([at('a', 1), at('b', 30), at('c', 50)], new Set(), now))).toEqual(['a'])
   expect(ids(compactGroupItems([at('a', 30), at('b', 50)], new Set(), now))).toEqual(['a'])
   expect(ids(compactGroupItems(busy, new Set(['e']), now))).toEqual(['a', 'b', 'e'])
+})
+
+test('un groupe de ticket se déplie par paliers, dans l’ordre du groupe, sans répéter le compact', () => {
+  const item = (id: string): Conversation => ({ ...startedConversation, id })
+  const ids = (items: Conversation[]) => items.map((entry) => entry.id)
+  const items = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(item)
+  const compact = [items[0]!, items[5]!]
+  expect(ids(revealedGroupItems(items, compact, 0))).toEqual(['a', 'f'])
+  expect(ids(revealedGroupItems(items, compact, 4))).toEqual(['a', 'b', 'c', 'd', 'e', 'f'])
+  expect(ids(revealedGroupItems(items, compact, 8))).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'])
 })
 
 test('« À toi » garde chaque question d’agent et les cinq non-lues les plus récentes', () => {

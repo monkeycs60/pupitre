@@ -511,6 +511,15 @@ a.port-chip:hover {
   background: var(--bg-hover);
 }
 
+.conv-group-more-row {
+  display: flex;
+  align-items: center;
+}
+
+.conv-group-more + .conv-group-more {
+  padding-left: 8px;
+}
+
 /* --- Lignes de conversation --------------------------------------------- */
 
 .navigation-row {

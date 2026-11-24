@@ -289,6 +289,19 @@ export function compactGroupItems(items: Conversation[], alwaysVisible: Set<stri
   return items.filter((conversation) => visible.has(conversation.id) || alwaysVisible.has(conversation.id))
 }
 
+export const GROUP_REVEAL_STEP = 4
+
+export function revealedGroupItems(items: Conversation[], compact: Conversation[], revealed: number): Conversation[] {
+  const compactIds = new Set(compact.map((conversation) => conversation.id))
+  let remaining = revealed
+  return items.filter((conversation) => {
+    if (compactIds.has(conversation.id)) return true
+    if (remaining <= 0) return false
+    remaining -= 1
+    return true
+  })
+}
+
 const WAITING_UNREAD_LIMIT = 5
 
 export function compactWaitingItems(items: Conversation[], asking: ReadonlySet<string>, selectedId: string | null): Conversation[] {
@@ -389,7 +402,7 @@ export const Sidebar = memo(function Sidebar({
   const conversationSortMode = useMemo(() => readConversationSortMode(projectId), [projectId, sortModeVersion])
   const [scopeMenuOpen, setScopeMenuOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [revealedByGroup, setRevealedByGroup] = useState<Map<string, number>>(new Map())
   const [filterText, setFilterText] = useState('')
   const [aiMode, setAiMode] = useState(false)
   const [aiSearch, setAiSearch] = useState<AiSearchState>({ status: 'idle' })
@@ -559,11 +572,14 @@ export const Sidebar = memo(function Sidebar({
     }
   }, [selectedProject?.id, selectedConversation?.id])
 
-  function toggleGroupExpanded(groupKey: string) {
-    setExpandedGroups((current) => {
-      const next = new Set(current)
-      if (next.has(groupKey)) next.delete(groupKey)
-      else next.add(groupKey)
+  function revealGroupItems(groupKey: string, count: number) {
+    setRevealedByGroup((current) => new Map(current).set(groupKey, (current.get(groupKey) ?? 0) + count))
+  }
+
+  function resetGroupItems(groupKey: string) {
+    setRevealedByGroup((current) => {
+      const next = new Map(current)
+      next.delete(groupKey)
       return next
     })
   }
@@ -994,7 +1010,8 @@ export const Sidebar = memo(function Sidebar({
                 : null
               const groupSentryUrl = group.sentryKey ? sentryLinks?.get(group.sentryKey) : undefined
               const isContextual = group.kind === 'context'
-              const isExpanded = expandedGroups.has(group.key)
+              const revealed = revealedByGroup.get(group.key) ?? 0
+              const isExpanded = revealed > 0
               const compactItems = filterText.trim() !== '' ? group.items
                 : isContextual ? compactGroupItems(group.items, alwaysVisibleConversationIds)
                 : group.kind === 'plain' ? compactPlainItems(group.items, alwaysVisibleConversationIds)
@@ -1003,12 +1020,15 @@ export const Sidebar = memo(function Sidebar({
               const expandableItems = group.kind === 'plain' && filterText.trim() === ''
                 ? expandedPlainItems(group.items, alwaysVisibleConversationIds)
                 : group.items
-              const hiddenCount = expandableItems.length - compactItems.length
-              const plural = hiddenCount > 1 ? 's' : ''
-              const moreLabel = group.kind === 'plain' ? `autre${plural} des 3 derniers jours`
-                : group.kind === 'waiting' ? `autre${plural} non lue${plural}`
-                : `autre${plural}`
-              const shownItems = isExpanded ? expandableItems : compactItems
+              const shownItems = isContextual ? revealedGroupItems(group.items, compactItems, revealed)
+                : isExpanded ? expandableItems : compactItems
+              const hiddenCount = expandableItems.length - shownItems.length
+              const nextCount = isContextual ? Math.min(GROUP_REVEAL_STEP, hiddenCount) : hiddenCount
+              const plural = nextCount > 1 ? 's' : ''
+              const moreLabel = group.kind === 'plain' ? `${nextCount} autre${plural} des 3 derniers jours`
+                : group.kind === 'waiting' ? `${nextCount} autre${plural} non lue${plural}`
+                : hiddenCount > nextCount ? `${nextCount} autres sur ${hiddenCount}`
+                : `${nextCount} autre${plural}`
               const repeatsTicket = group.ticketKey != null
               return (
               <div className={`conv-group is-${group.kind ?? 'plain'}`} key={group.key}>
@@ -1190,15 +1210,29 @@ export const Sidebar = memo(function Sidebar({
                 )
                 })}
                 {!isCollapsed && (hiddenCount > 0 || isExpanded) ? (
-                  <button
-                    type="button"
-                    className="conv-group-more"
-                    aria-expanded={isExpanded}
-                    onClick={() => toggleGroupExpanded(group.key)}
-                  >
-                    <Icon name={isExpanded ? 'chevron-up' : 'chevron-down'} size={13} />
-                    {isExpanded ? 'Réduire' : `${hiddenCount} ${moreLabel}`}
-                  </button>
+                  <div className="conv-group-more-row">
+                    {hiddenCount > 0 ? (
+                      <button
+                        type="button"
+                        className="conv-group-more"
+                        onClick={() => revealGroupItems(group.key, nextCount)}
+                      >
+                        <Icon name="chevron-down" size={13} />
+                        {moreLabel}
+                      </button>
+                    ) : null}
+                    {isExpanded ? (
+                      <button
+                        type="button"
+                        className="conv-group-more"
+                        aria-expanded
+                        onClick={() => resetGroupItems(group.key)}
+                      >
+                        <Icon name="chevron-up" size={13} />
+                        Réduire
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
               )
