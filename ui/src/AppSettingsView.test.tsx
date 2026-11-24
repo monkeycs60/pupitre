@@ -253,3 +253,36 @@ test('réordonne les jauges et affiche le pourcentage utilisé', async () => {
   }])
   window.removeEventListener('pupitre:quota-providers', listener)
 })
+
+test('active le rappel de longueur puis enregistre la cible normalisée', async () => {
+  const writes: Array<{ actionFormat?: Record<string, unknown> }> = []
+  let settings: Record<string, unknown> = {
+    actionFormat: { enabled: true, todoHeadings: ['TODO'], followUpHeadings: ['FOLLOW-UP'], commitBlock: 'styled' },
+  }
+  globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input)
+    const method = init?.method ?? 'GET'
+    if (!url.endsWith('/api/settings')) return json({})
+    if (method === 'GET') return json(settings)
+    const body = JSON.parse(String(init?.body ?? '{}')) as { actionFormat?: Record<string, unknown> }
+    writes.push(body)
+    const next = { ...(settings.actionFormat as Record<string, unknown>), ...body.actionFormat }
+    next.lengthTargetWords = Math.min(600, Math.max(40, Number(next.lengthTargetWords ?? 120)))
+    settings = { ...settings, actionFormat: next }
+    return json(settings)
+  }) as typeof fetch
+
+  render(createElement(AppSettingsView))
+
+  const target = await screen.findByLabelText('Mots visés pour le corps de la réponse') as HTMLInputElement
+  expect(target.disabled).toBe(true)
+
+  fireEvent.click(screen.getByLabelText('Rappeler une longueur cible à chaque message'))
+  await waitFor(() => expect(writes.at(-1)?.actionFormat?.lengthReminder).toBe(true))
+  await waitFor(() => expect(target.disabled).toBe(false))
+
+  fireEvent.change(target, { target: { value: '9000' } })
+  fireEvent.blur(target)
+  await waitFor(() => expect(writes.at(-1)?.actionFormat?.lengthTargetWords).toBe(9000))
+  await waitFor(() => expect(target.value).toBe('600'))
+})

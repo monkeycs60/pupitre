@@ -57,3 +57,28 @@ test("désactivé, le prompt part intact", () => {
   expect(withActionFormat("corrige le bug", { ...DEFAULT_ACTION_FORMAT, enabled: false }))
     .toBe("corrige le bug");
 });
+
+test("le rappel de longueur est éteint par défaut et la cible reste bornée", () => {
+  expect(actionFormat({}).lengthReminder).toBe(false);
+  expect(actionFormat({ lengthTargetWords: 5 }).lengthTargetWords).toBe(40);
+  expect(actionFormat({ lengthTargetWords: 5000 }).lengthTargetWords).toBe(600);
+  expect(actionFormat({ lengthTargetWords: "beaucoup" }).lengthTargetWords).toBe(120);
+  expect(actionFormatPreamble(DEFAULT_ACTION_FORMAT)).not.toContain("Longueur :");
+});
+
+test("le rappel de longueur porte la cible et exclut les blocs d'actions", () => {
+  const preamble = actionFormatPreamble(actionFormat({ lengthReminder: true, lengthTargetWords: 150 }));
+  expect(preamble).toContain("hors blocs *TODO* et *FOLLOW-UP*, tableaux et code, vise 150 mots");
+  expect(preamble).toContain("Il dépasse 300 mots seulement");
+  expect(preamble).not.toContain("\n\n");
+});
+
+test("le rappel de longueur s'envoie seul quand les blocs d'actions sont coupés", () => {
+  const prompt = withActionFormat(
+    "corrige le bug",
+    actionFormat({ enabled: false, lengthReminder: true }),
+  );
+  expect(prompt.startsWith("[Format de réponse — Pupitre]\nLongueur : le corps de la réponse, hors tableaux et code")).toBe(true);
+  expect(prompt).not.toContain("Termine par un bloc");
+  expect(prompt.endsWith("\n\ncorrige le bug")).toBe(true);
+});

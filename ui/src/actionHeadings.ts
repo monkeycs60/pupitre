@@ -8,6 +8,10 @@ export interface ActionFormat {
   followUpHeadings: string[]
   /** Bloc ```commit proposé par l'agent d'une tâche : carte dans le fil, ou masqué. */
   commitBlock: 'styled' | 'hidden'
+  /** Rappelle à chaque tour une longueur cible pour le corps de la réponse. */
+  lengthReminder: boolean
+  /** Mots visés pour le corps de la réponse, hors blocs d'actions, tableaux et code. */
+  lengthTargetWords: number
 }
 
 export const DEFAULT_ACTION_FORMAT: ActionFormat = {
@@ -15,6 +19,8 @@ export const DEFAULT_ACTION_FORMAT: ActionFormat = {
   todoHeadings: ['TODO', 'DO THIS', 'NEXT STEPS', 'PROCHAINES ÉTAPES', 'À FAIRE'],
   followUpHeadings: ['FOLLOW-UP', 'FOLLOW UP', 'PISTES', 'POUR ALLER PLUS LOIN'],
   commitBlock: 'styled',
+  lengthReminder: false,
+  lengthTargetWords: 120,
 }
 
 export const ActionFormatContext = createContext<ActionFormat>(DEFAULT_ACTION_FORMAT)

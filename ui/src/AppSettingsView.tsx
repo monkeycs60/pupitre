@@ -81,6 +81,7 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
   const [followUpDraft, setFollowUpDraft] = useState(
     DEFAULT_ACTION_FORMAT.followUpHeadings.join(', '),
   )
+  const [lengthDraft, setLengthDraft] = useState(String(DEFAULT_ACTION_FORMAT.lengthTargetWords))
   const [tokenSaving, setTokenSaving] = useState(false)
   const [tokenSaved, setTokenSaved] = useState(false)
   const [integrationTokens, setIntegrationTokens] = useState<Record<IntegrationTokenName, boolean>>(() => tokenStatus(undefined))
@@ -123,6 +124,7 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
         setFormat(stored)
         setTodoDraft(stored.todoHeadings.join(', '))
         setFollowUpDraft(stored.followUpHeadings.join(', '))
+        setLengthDraft(String(stored.lengthTargetWords))
         setIntegrationTokens(tokenStatus(settings.integrationTokens))
       })
       .catch((loadError: unknown) => {
@@ -202,6 +204,7 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
       // champs sur ce qu'il a réellement retenu.
       setTodoDraft(stored.todoHeadings.join(', '))
       setFollowUpDraft(stored.followUpHeadings.join(', '))
+      setLengthDraft(String(stored.lengthTargetWords))
       setSaved(true)
     } catch (saveError: unknown) {
       setError(errorMessage(saveError))
@@ -615,6 +618,34 @@ export function AppSettingsView({ instance = null, quotas = EMPTY_QUOTAS }: {
         <p className="settings-help">
           Quand une tâche se termine par un commit, l’agent propose son message dans un
           bloc <code>```commit</code> que la file reprend tel quel.
+        </p>
+        <label className="settings-checkbox-label">
+          <input
+            type="checkbox"
+            checked={format.lengthReminder}
+            disabled={loading || saving}
+            onChange={(event) => void handleFormatChange({ lengthReminder: event.target.checked })}
+          />
+          Rappeler une longueur cible à chaque message
+        </label>
+        <label className="settings-select-label" htmlFor="app-length-target">
+          Mots visés pour le corps de la réponse
+          <input
+            id="app-length-target"
+            type="number"
+            min={40}
+            max={600}
+            step={10}
+            value={lengthDraft}
+            disabled={loading || saving || !format.lengthReminder}
+            onChange={(event) => setLengthDraft(event.target.value)}
+            onBlur={() => void handleFormatChange({ lengthTargetWords: Number(lengthDraft) })}
+          />
+        </label>
+        <p className="settings-help">
+          Ajoute à chaque message une consigne de longueur pour le corps de la réponse,
+          hors blocs d’actions, tableaux et code. L’agent ne la dépasse du double que si
+          on lui demande une explication ou un texte long.
         </p>
       </div>
 
