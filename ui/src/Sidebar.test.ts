@@ -7,7 +7,7 @@ import { formatActiveDuration } from './formatActiveDuration'
 if (typeof document === 'undefined') GlobalRegistrator.register()
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
-const { Sidebar, compactGroupItems, compactPlainItems, compactWaitingItems, expandedPlainItems, groupConversationsByStatus, revealedGroupItems, workBranchLabel } = await import('./Sidebar')
+const { Sidebar, compactGroupItems, compactPlainItems, compactWaitingItems, groupConversationsByStatus, revealedGroupItems, workBranchLabel } = await import('./Sidebar')
 const { WorkflowsView } = await import('./WorkflowsView')
 
 const project: Project = {
@@ -642,7 +642,7 @@ test('les conversations récentes gardent la clé du ticket et la recherche acce
   expect([...document.querySelectorAll('.conv-row-title')].map((item) => item.textContent)).toEqual(['Travail en cours'])
 })
 
-test('« Sans ticket » passe avant tous les tickets et ne montre replié que sa conversation la plus récente', () => {
+test('« Sans ticket » passe avant tous les tickets et garde replié au moins sa conversation la plus récente', () => {
   const now = Date.parse('2026-10-02T12:00:00.000Z')
   const at = (id: string, hoursAgo: number, ticketKey: string | null = null): Conversation => ({
     ...startedConversation,
@@ -657,11 +657,11 @@ test('« Sans ticket » passe avant tous les tickets et ne montre replié que sa
   expect(groups.map((group) => group.label)).toEqual(['Sans ticket', 'TECH-1', 'TECH-2'])
   const plain = groups[0]!.items
   expect(ids(plain)).toEqual(['older-plain', 'old-plain'])
-  expect(ids(compactPlainItems(plain, new Set()))).toEqual(['older-plain'])
-  expect(ids(compactPlainItems(plain, new Set(['old-plain'])))).toEqual(['older-plain', 'old-plain'])
+  expect(ids(compactPlainItems(plain, new Set(), now))).toEqual(['older-plain'])
+  expect(ids(compactPlainItems(plain, new Set(['old-plain']), now))).toEqual(['older-plain', 'old-plain'])
 })
 
-test('« Sans ticket » déplié s’arrête aux trois derniers jours', () => {
+test('« Sans ticket » replié montre les trois derniers jours', () => {
   const now = Date.parse('2026-10-02T12:00:00.000Z')
   const at = (id: string, hoursAgo: number): Conversation => ({
     ...startedConversation,
@@ -670,9 +670,9 @@ test('« Sans ticket » déplié s’arrête aux trois derniers jours', () => {
   })
   const ids = (items: Conversation[]) => items.map((item) => item.id)
   const plain = [at('a', 2), at('b', 30), at('c', 71), at('d', 73), at('e', 200)]
-  expect(ids(expandedPlainItems(plain, new Set(), now))).toEqual(['a', 'b', 'c'])
-  expect(ids(expandedPlainItems(plain, new Set(['e']), now))).toEqual(['a', 'b', 'c', 'e'])
-  expect(ids(expandedPlainItems([at('old', 100), at('older', 200)], new Set(), now))).toEqual(['old'])
+  expect(ids(compactPlainItems(plain, new Set(), now))).toEqual(['a', 'b', 'c'])
+  expect(ids(compactPlainItems(plain, new Set(['e']), now))).toEqual(['a', 'b', 'c', 'e'])
+  expect(ids(compactPlainItems([at('old', 100), at('older', 200)], new Set(), now))).toEqual(['old'])
 })
 
 test('un groupe de ticket replié montre au plus deux conversations de moins de 24 h', () => {
@@ -759,7 +759,6 @@ test('le provider s’affiche sur la première ligne et la seconde n’existe qu
     { ...startedConversation, id: 'work', title: 'Sur une branche', created_on_branch: 'feature/agenda', worktree_path: null, updated_at: now },
   ])
   renderSidebar()
-  fireEvent.click(await screen.findByRole('button', { name: '1 autre des 3 derniers jours' }))
   await waitFor(() => expect(document.querySelectorAll('.conv-row-title')).toHaveLength(2))
   const row = (id: string) => document.querySelector(`[data-conversation-id="${id}"]`)!
   expect(row('trunk').querySelector('.conv-row-line1 .conv-row-mark')).not.toBeNull()

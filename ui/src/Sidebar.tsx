@@ -315,16 +315,12 @@ export function compactWaitingItems(items: Conversation[], asking: ReadonlySet<s
 
 export const TIDY_AFTER_MS = 7 * 86_400_000
 
-const PLAIN_EXPANDED_WINDOW_MS = 3 * 86_400_000
+const PLAIN_COMPACT_WINDOW_MS = 3 * 86_400_000
 
-export function compactPlainItems(items: Conversation[], alwaysVisible: Set<string>): Conversation[] {
-  return items.filter((conversation, index) => index === 0 || alwaysVisible.has(conversation.id))
-}
-
-export function expandedPlainItems(items: Conversation[], alwaysVisible: Set<string>, now = Date.now()): Conversation[] {
+export function compactPlainItems(items: Conversation[], alwaysVisible: Set<string>, now = Date.now()): Conversation[] {
   return items.filter((conversation, index) => index === 0
     || alwaysVisible.has(conversation.id)
-    || now - Date.parse(conversation.updated_at) < PLAIN_EXPANDED_WINDOW_MS)
+    || now - Date.parse(conversation.updated_at) < PLAIN_COMPACT_WINDOW_MS)
 }
 
 /** Statut d'abord : ce qui attend l'utilisateur, ce qui tourne, « Sans ticket », puis les tickets par dernière activité.
@@ -1017,16 +1013,13 @@ export const Sidebar = memo(function Sidebar({
                 : group.kind === 'plain' ? compactPlainItems(group.items, alwaysVisibleConversationIds)
                 : group.kind === 'waiting' ? compactWaitingItems(group.items, askingConversationIds, selectedConversation?.id ?? null)
                 : group.items
-              const expandableItems = group.kind === 'plain' && filterText.trim() === ''
-                ? expandedPlainItems(group.items, alwaysVisibleConversationIds)
-                : group.items
-              const shownItems = isContextual ? revealedGroupItems(group.items, compactItems, revealed)
-                : isExpanded ? expandableItems : compactItems
-              const hiddenCount = expandableItems.length - shownItems.length
-              const nextCount = isContextual ? Math.min(GROUP_REVEAL_STEP, hiddenCount) : hiddenCount
+              const revealsByStep = isContextual || group.kind === 'plain'
+              const shownItems = revealsByStep ? revealedGroupItems(group.items, compactItems, revealed)
+                : isExpanded ? group.items : compactItems
+              const hiddenCount = group.items.length - shownItems.length
+              const nextCount = revealsByStep ? Math.min(GROUP_REVEAL_STEP, hiddenCount) : hiddenCount
               const plural = nextCount > 1 ? 's' : ''
-              const moreLabel = group.kind === 'plain' ? `${nextCount} autre${plural} des 3 derniers jours`
-                : group.kind === 'waiting' ? `${nextCount} autre${plural} non lue${plural}`
+              const moreLabel = group.kind === 'waiting' ? `${nextCount} autre${plural} non lue${plural}`
                 : hiddenCount > nextCount ? `${nextCount} autres sur ${hiddenCount}`
                 : `${nextCount} autre${plural}`
               const repeatsTicket = group.ticketKey != null
