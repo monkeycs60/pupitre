@@ -20,6 +20,7 @@ import {
   cerebrasJarvisGenerator,
   claudeJarvisGenerator,
   JarvisService,
+  type JarvisCost,
   type JarvisDeps,
   type JarvisGenerationInput,
   type JarvisGenerator,
@@ -908,7 +909,11 @@ test("Jev reçoit la demande et les deux derniers échanges, et décide « plan 
     { role: "user" as const, text: "x".repeat(900) },
   ];
 
-  expect(await router.decide({ question: "archive-les", history, signal })).toEqual({ plan: true, probability: 0.6 });
+  expect(await router.decide({ question: "archive-les", history, signal })).toEqual({
+    plan: true,
+    probability: 0.6,
+    usage: { model: "jev-latest", inputTokens: 420, outputTokens: 1 },
+  });
   expect(requests[0]!.url).toBe("https://api.typesafe.ai/v1/systemone");
   expect(requests[0]!.init.method).toBe("POST");
   expect((requests[0]!.init.headers as Record<string, string>).authorization).toBe("Bearer cle-test");
@@ -923,7 +928,7 @@ test("Jev reçoit la demande et les deux derniers échanges, et décide « plan 
   expect(body.questions.plan.type).toBe("noul");
 
   probability = 0.59;
-  expect(await router.decide({ question: "ouvre", history: [], signal })).toEqual({ plan: false, probability: 0.59 });
+  expect(await router.decide({ question: "ouvre", history: [], signal })).toMatchObject({ plan: false, probability: 0.59 });
   probability = "oui";
   await expect(router.decide({ question: "ouvre", history: [], signal })).rejects.toThrow("sans probabilité");
   status = 429;
@@ -1029,4 +1034,55 @@ test("le générateur Cerebras demande du JSON à qwen-3.8-27b et remonte les re
   status = 429;
   await expect(generate(input)).rejects.toThrow("Cerebras HTTP 429 : quota");
   await expect(cerebrasJarvisGenerator(() => null, fetchImpl)(input)).rejects.toThrow("clé Cerebras absente");
+});
+
+test("le coût de chaque appel payant s'ajoute au job : recherche, Jev, puis le modèle qui répond", async () => {
+  const f = fixture();
+  const billing = f.conversations.get(f.billing.id)!;
+  const semanticSearch = {
+    search: async (): Promise<SemanticSearchResponse> => ({
+      results: [{ conversation: billing, reason: "Factures.", match: "strong", score: 88 }],
+      reranked: true,
+      usage: [
+        { model: "text-embedding-3-small", inputTokens: 12, outputTokens: 0 },
+        { model: "gpt-oss-120b", inputTokens: 4_000, outputTokens: 300 },
+      ],
+    }),
+  };
+  const router = fakeRouter(async () => ({ plan: false, probability: 0.05, usage: { model: "jev-latest", inputTokens: 300, outputTokens: 20 } }));
+  const generate: JarvisGenerator = async ({ onCost }) => {
+    onCost?.({ label: "Qwen 3.8 · réponse", inputTokens: 8_000, outputTokens: 400, usd: 0.0085, billing: "api" });
+    return JSON.stringify({ text: "C'est ici.", results: [], actions: [] });
+  };
+  const jarvis = service(f, generate, { semanticSearch, router, fastModel: () => "qwen-3.8" });
+  const job = await settled(jarvis, await startJob(jarvis, { question: "les factures", projectId: f.pupitre.id }));
+
+  expect(job.costs.map((cost) => cost.label).sort()).toEqual([
+    "Jev · tri de la demande",
+    "Qwen 3.8 · réponse",
+    "Recherche · classement par gpt-oss-120b",
+    "Recherche · vecteur de la question",
+  ]);
+  const rerank = job.costs.find((cost) => cost.label.includes("gpt-oss"))!;
+  expect(rerank.usd).toBeCloseTo((4_000 * 0.35 + 300 * 0.75) / 1_000_000, 12);
+  expect(job.costs.find((cost) => cost.label.startsWith("Jev"))!.usd).toBeCloseTo(300 * 0.042 / 1_000_000, 12);
+  expect(job.costs.every((cost) => cost.billing === "api")).toBe(true);
+});
+
+test("Cerebras facture les jetons annoncés au tarif de Qwen 3.8", async () => {
+  const fetchImpl = (async () => Response.json({
+    choices: [{ message: { content: '{"text":"ok"}' } }],
+    usage: { prompt_tokens: 1_000, completion_tokens: 200, total_tokens: 1_200 },
+  })) as unknown as typeof fetch;
+  const costs: JarvisCost[] = [];
+  await cerebrasJarvisGenerator(() => "clé", fetchImpl)({
+    model: "qwen-3.8",
+    prompt: "Bonjour",
+    cwd: "/",
+    signal: new AbortController().signal,
+    onCost: (cost) => costs.push(cost),
+  });
+  expect(costs).toHaveLength(1);
+  expect(costs[0]).toMatchObject({ label: "Qwen 3.8 · réponse", inputTokens: 1_000, outputTokens: 200, billing: "api" });
+  expect(costs[0]!.usd).toBeCloseTo((1_000 * 0.99 + 200 * 1.49) / 1_000_000, 12);
 });

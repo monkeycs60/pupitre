@@ -134,6 +134,7 @@ export function parseClaudeLine(line: string, provider: Provider = "claude"): Ap
           outputTokens: numberOrZero(usage.output_tokens),
           ...(contextTokens > 0 ? { contextTokens } : {}),
           ...(contextWindowTokens > 0 ? { contextWindowTokens } : {}),
+          ...(typeof obj.total_cost_usd === "number" && Number.isFinite(obj.total_cost_usd) ? { costUsd: obj.total_cost_usd } : {}),
         });
       }
       out.push(

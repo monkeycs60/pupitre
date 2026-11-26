@@ -1,3 +1,4 @@
+import { typesafeUsage, type ApiUsage } from "./jarvis-cost";
 import { clipText, type JarvisHistoryEntry } from "./jarvis-context";
 
 const SYSTEM_ONE_URL = "https://api.typesafe.ai/v1/systemone";
@@ -8,6 +9,7 @@ const HISTORY_CHARS = 600;
 export interface RouterVerdict {
   plan: boolean;
   probability: number;
+  usage?: ApiUsage;
 }
 
 export interface JarvisRouter {
@@ -48,7 +50,8 @@ export function jevRouter(apiKey: () => string | null, fetchImpl: typeof fetch =
       const body = await response.json() as { answers?: { plan?: { noul?: unknown } } };
       const probability = body.answers?.plan?.noul;
       if (typeof probability !== "number" || !Number.isFinite(probability)) throw new Error("réponse TypeSafe sans probabilité");
-      return { plan: probability >= PLAN_THRESHOLD, probability };
+      const usage = typesafeUsage(JEV_MODEL, body);
+      return { plan: probability >= PLAN_THRESHOLD, probability, ...(usage ? { usage } : {}) };
     },
   };
 }

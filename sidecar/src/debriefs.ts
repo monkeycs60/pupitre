@@ -33,6 +33,7 @@ export interface DebriefGenerationInput {
   oneShot?: boolean;
   /** Texte reçu jusqu'ici, à chaque fragment : de quoi couper un modèle dès qu'on sait la suite inutile. */
   onText?: (text: string) => void;
+  onUsage?: (usage: Extract<AppEvent, { type: "usage" }>) => void;
 }
 
 export interface HandoffDebriefArtifact {
@@ -592,6 +593,7 @@ export async function generateWithAdapters(
       }
     }
     if (event.type === "text-final") final = event.text;
+    if (event.type === "usage") input.onUsage?.(event);
     if (event.type === "status" && event.state === "error") {
       providerError = event.error ?? "échec du modèle";
     }

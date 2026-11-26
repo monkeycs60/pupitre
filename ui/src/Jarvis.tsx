@@ -11,7 +11,7 @@ import {
   warmJarvis,
   type JarvisActionContext,
 } from './jarvisActions'
-import type { JarvisAction, JarvisJob, JarvisMode, JarvisPreview, JarvisResult } from './types'
+import type { JarvisAction, JarvisCost, JarvisJob, JarvisMode, JarvisPreview, JarvisResult } from './types'
 
 const POLL_MS = 500
 
@@ -99,6 +99,37 @@ function formatTime(value: string): string {
 
 function seconds(ms: number): string {
   return `${(ms / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} s`
+}
+
+function dollars(usd: number): string {
+  if (usd === 0) return '0 $'
+  if (usd < 0.0001) return '< 0,0001 $'
+  return `${Number(usd.toPrecision(2)).toLocaleString('fr-FR', { maximumFractionDigits: 6 })} $`
+}
+
+function billed(costs: JarvisCost[]): number {
+  return costs.reduce((total, cost) => cost.billing === 'api' ? total + cost.usd : total, 0)
+}
+
+function CostList({ costs }: { costs: JarvisCost[] }) {
+  return (
+    <div className="jarvis-costs" aria-label="Coût de la demande">
+      <p className="jarvis-costs-head">Coût · {dollars(billed(costs))} facturés</p>
+      <ul>
+        {costs.map((cost, index) => (
+          <li key={index} className={`is-${cost.billing}`}>
+            <span className="jarvis-cost-label">{cost.label}</span>
+            <span className="jarvis-cost-usd">
+              {cost.billing === 'subscription' ? `≈ ${dollars(cost.usd)} · abonnement` : dollars(cost.usd)}
+            </span>
+            <span className="jarvis-cost-tokens">
+              {cost.inputTokens.toLocaleString('fr-FR')} jetons lus · {cost.outputTokens.toLocaleString('fr-FR')} écrits
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 export function Jarvis({ open, onOpenChange, projectId, conversationId, context }: JarvisProps) {
@@ -356,6 +387,7 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
   const job = exchange.job
   const isRunning = exchange.error === null && (job === null || job.status === 'running')
   const answer = job?.answer ?? null
+  const costs = job?.costs ?? []
   const [traceOpen, setTraceOpen] = useState(false)
   const previewing = isRunning && (job?.preview.length ?? 0) > 0
   const stepsShown = traceOpen || (isRunning && !previewing)
@@ -381,7 +413,7 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
               <Icon name={traceOpen ? 'chevron-down' : 'chevron-right'} size={12} />
               {isRunning
                 ? <>{job.steps.at(-1)!.label}<span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span></>
-                : <>Ce que j’ai fait · {job.steps.length} étape{job.steps.length > 1 ? 's' : ''}{answer ? ` · ${seconds(answer.durationMs)}` : ''}</>}
+                : <>Ce que j’ai fait · {job.steps.length} étape{job.steps.length > 1 ? 's' : ''}{answer ? ` · ${seconds(answer.durationMs)}` : ''}{costs.length > 0 ? ` · ${dollars(billed(costs))}` : ''}</>}
             </button>
           ) : null}
           {stepsShown ? (
@@ -397,6 +429,7 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
               ))}
             </ol>
           ) : null}
+          {traceOpen && !isRunning && costs.length > 0 ? <CostList costs={costs} /> : null}
         </div>
       ) : isRunning ? (
         <p className="jarvis-waiting"><span className="jarvis-spinner" aria-hidden="true" />Jarvis prépare la recherche…</p>

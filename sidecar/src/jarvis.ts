@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { generateWithAdapters, prewarmWithAdapters } from "./debriefs";
+import { apiCost, openAiUsage, type JarvisCost } from "./jarvis-cost";
 import {
   draftJson,
   escalationReason,
@@ -27,6 +28,7 @@ import { SemanticSearchUnavailable, type SemanticSearch, type SemanticSearchHit 
 import { projectCwd } from "./workspace";
 
 export type { JarvisAction, JarvisAnswer, JarvisResult } from "./jarvis-answer";
+export type { JarvisCost } from "./jarvis-cost";
 
 export type JarvisMode = "auto" | "fast" | "orchestrate";
 export type JarvisModel = "qwen-3.8" | "haiku-5.5" | "opus-5.5";
@@ -73,6 +75,7 @@ export interface JarvisJob {
   steps: JarvisStep[];
   route: JarvisRoute | null;
   preview: JarvisPreview[];
+  costs: JarvisCost[];
   answer: JarvisAnswer | null;
   error: string | null;
   startedAt: string;
@@ -85,6 +88,7 @@ export interface JarvisGenerationInput {
   cwd: string;
   signal: AbortSignal;
   onText?: (text: string) => void;
+  onCost?: (cost: JarvisCost) => void;
 }
 
 export type JarvisGenerator = (input: JarvisGenerationInput) => Promise<string>;
@@ -130,7 +134,7 @@ const MODELS: Record<JarvisModel, { name: string; label: string; timeoutMs: numb
  * le champ manquait.
  */
 export function claudeJarvisGenerator(quotas: QuotaTracker): JarvisGenerator {
-  return ({ model, prompt, cwd, signal, onText }) => generateWithAdapters({
+  return ({ model, prompt, cwd, signal, onText, onCost }) => generateWithAdapters({
     cwd,
     provider: "claude",
     model,
@@ -140,11 +144,21 @@ export function claudeJarvisGenerator(quotas: QuotaTracker): JarvisGenerator {
     mcpServers: {},
     oneShot: true,
     onText,
+    onUsage: (usage) => {
+      if (usage.costUsd === undefined) return;
+      onCost?.({
+        label: `${MODELS[model].name} · ${model === "opus-5.5" ? "plan" : "réponse"}`,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        usd: usage.costUsd,
+        billing: "subscription",
+      });
+    },
   }, quotas);
 }
 
 export function cerebrasJarvisGenerator(apiKey: () => string | null, fetchImpl: typeof fetch = fetch): JarvisGenerator {
-  return async ({ prompt, signal }) => {
+  return async ({ prompt, signal, onCost }) => {
     const key = apiKey();
     if (!key) throw new Error("clé Cerebras absente");
     const response = await fetchImpl(CEREBRAS_CHAT_URL, {
@@ -160,6 +174,8 @@ export function cerebrasJarvisGenerator(apiKey: () => string | null, fetchImpl: 
     });
     if (!response.ok) throw new Error(`Cerebras HTTP ${response.status} : ${(await response.text()).slice(0, 200)}`);
     const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const usage = openAiUsage(CEREBRAS_MODEL, body);
+    if (usage) onCost?.(apiCost(usage));
     return body.choices?.[0]?.message?.content ?? "";
   };
 }
@@ -296,6 +312,7 @@ export class JarvisService {
       steps: [],
       route: null,
       preview: [],
+      costs: [],
       answer: null,
       error: null,
       startedAt: new Date(startedMs).toISOString(),
@@ -446,7 +463,7 @@ export class JarvisService {
         new Date(this.now()),
       );
       let step = this.step(record, "Lire l'état des agents");
-      const semantic = project && this.deps.semanticSearch ? this.semantic(input.question, project.id) : null;
+      const semantic = project && this.deps.semanticSearch ? this.semantic(record, input.question, project.id) : null;
       const live = builder.liveState();
       step.done(liveDetail(live));
 
@@ -630,7 +647,10 @@ export class JarvisService {
         if (!stop.signal.aborted && !record.controller.signal.aborted) console.error("[jarvis] routeur Jev", error);
         return null;
       })
-      .then((verdict) => (run.outcome = { verdict, ms: this.now() - started }));
+      .then((verdict) => {
+        if (verdict?.usage) record.job.costs.push(apiCost(verdict.usage));
+        return (run.outcome = { verdict, ms: this.now() - started });
+      });
     return run;
   }
 
@@ -650,7 +670,14 @@ export class JarvisService {
     const signals = [record.controller.signal, timeout, ...(extra.signal ? [extra.signal] : [])];
     let raw: string;
     try {
-      raw = await this.deps.generate({ model, prompt, cwd, signal: AbortSignal.any(signals), onText: extra.onText });
+      raw = await this.deps.generate({
+        model,
+        prompt,
+        cwd,
+        signal: AbortSignal.any(signals),
+        onText: extra.onText,
+        onCost: (cost) => record.job.costs.push(cost),
+      });
     } catch (error) {
       this.ensureRunning(record);
       if (extra.signal?.aborted) {
@@ -682,10 +709,13 @@ export class JarvisService {
     return row?.key ?? null;
   }
 
-  private semantic(question: string, projectId: string): Promise<{ hits: SemanticSearchHit[] } | { reason: string }> {
+  private semantic(record: JobRecord, question: string, projectId: string): Promise<{ hits: SemanticSearchHit[] } | { reason: string }> {
     const timeoutMs = this.deps.semanticTimeoutMs ?? SEMANTIC_TIMEOUT_MS;
     const search = this.deps.semanticSearch!.search(question, projectId)
-      .then((response) => ({ hits: response.results }))
+      .then((response) => {
+        for (const usage of response.usage ?? []) record.job.costs.push(apiCost(usage));
+        return { hits: response.results };
+      })
       .catch((error: unknown) => ({
         reason: error instanceof SemanticSearchUnavailable ? error.message : `indisponible : ${messageOf(error)}`,
       }));

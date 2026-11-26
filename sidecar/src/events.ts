@@ -44,6 +44,8 @@ export type AppEvent =
       type: "usage";
       inputTokens: number;
       outputTokens: number;
+      /** Coût du tour en dollars au tarif API, tel que le CLI Claude l'annonce. */
+      costUsd?: number;
       /** Snapshot du contexte courant, distinct de l'usage facturé cumulé. */
       contextTokens?: number;
       contextWindowTokens?: number;

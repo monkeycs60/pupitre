@@ -100,3 +100,30 @@ test('la réponse remplace l’aperçu et garde la certitude de chaque résultat
   expect(results).toHaveLength(1)
   expect(results[0]!.querySelector('.jarvis-certainty')?.textContent).toBe('92 %')
 })
+
+test('la trace annonce le coût facturé et le détaille appel par appel', async () => {
+  const done = job('done', { text: 'Personne ne t’attend.', results: [], actions: [], durationMs: 2100 })
+  done.costs = [
+    { label: 'Recherche · classement par gpt-oss-120b', inputTokens: 4000, outputTokens: 300, usd: 0.001625, billing: 'api' },
+    { label: 'Qwen 3.8 · réponse', inputTokens: 8000, outputTokens: 400, usd: 0.008516, billing: 'api' },
+    { label: 'Opus 5.5 · plan', inputTokens: 12, outputTokens: 900, usd: 0.21, billing: 'subscription' },
+  ]
+  stubJarvis([done])
+  renderJarvis(true)
+  ask('qui m’attend ?')
+
+  const toggle = await waitFor(() => screen.getByRole('button', { name: /Ce que j’ai fait/ }), { timeout: 4000 })
+  expect(toggle.textContent).toContain('2,1 s · 0,01 $')
+  fireEvent.click(toggle)
+  const list = screen.getByLabelText('Coût de la demande')
+  expect(list.querySelector('.jarvis-costs-head')?.textContent).toBe('Coût · 0,01 $ facturés')
+  const lines = [...list.querySelectorAll('li')].map((line) => [
+    line.querySelector('.jarvis-cost-label')?.textContent,
+    line.querySelector('.jarvis-cost-usd')?.textContent,
+  ])
+  expect(lines).toEqual([
+    ['Recherche · classement par gpt-oss-120b', '0,0016 $'],
+    ['Qwen 3.8 · réponse', '0,0085 $'],
+    ['Opus 5.5 · plan', '≈ 0,21 $ · abonnement'],
+  ])
+})

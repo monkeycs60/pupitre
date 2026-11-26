@@ -320,6 +320,50 @@
   font-size: var(--text-xs);
 }
 
+.jarvis-costs {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  background: var(--bg-hover);
+  border-radius: var(--r-md);
+}
+
+.jarvis-costs-head {
+  margin: 0 0 4px;
+  color: var(--text-strong);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.jarvis-costs ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jarvis-costs li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  font-size: var(--text-sm);
+}
+
+.jarvis-cost-usd {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.jarvis-costs li.is-subscription .jarvis-cost-usd {
+  color: var(--text-faint);
+}
+
+.jarvis-cost-tokens {
+  grid-column: 1 / -1;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
 .jarvis-spinner {
   display: inline-block;
   width: 11px;

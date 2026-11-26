@@ -30,6 +30,7 @@ test("émet au moins un tool-start (le ls de la fixture) et l'usage final", () =
   expect(usage.outputTokens).toBeGreaterThan(0);
   expect(usage.contextTokens).toBe(33_295);
   expect(usage.contextWindowTokens).toBe(200_000);
+  expect(usage.costUsd).toBe(0.0381026);
   const status = evts.filter((e) => e.type === "status").at(-1) as any;
   expect(status.state).toBe("done");
 });

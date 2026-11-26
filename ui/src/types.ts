@@ -1221,12 +1221,21 @@ export interface JarvisAnswer {
   durationMs: number
 }
 
+export interface JarvisCost {
+  label: string
+  inputTokens: number
+  outputTokens: number
+  usd: number
+  billing: 'api' | 'subscription'
+}
+
 export interface JarvisJob {
   id: string
   status: 'running' | 'done' | 'error' | 'cancelled'
   steps: JarvisStep[]
   route: JarvisRoute | null
   preview: JarvisPreview[]
+  costs?: JarvisCost[]
   answer: JarvisAnswer | null
   error: string | null
   startedAt: string

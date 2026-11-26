@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { SQL } from "bun";
 import { createHash } from "node:crypto";
 import type { InstanceName } from "./instance";
+import { openAiUsage, type ApiUsage } from "./jarvis-cost";
 import type { Conversation, ConversationStore } from "./stores/conversations";
 
 export const EMBEDDING_MODEL = "text-embedding-3-small";
@@ -38,6 +39,7 @@ export interface SemanticSearchHit {
 export interface SemanticSearchResponse {
   results: SemanticSearchHit[];
   reranked: boolean;
+  usage?: ApiUsage[];
 }
 
 export class SemanticSearchUnavailable extends Error {}
@@ -134,7 +136,8 @@ export class SemanticSearch {
     const keys = this.readKeys();
     if (!keys.openai) throw new SemanticSearchUnavailable("Clé OpenAI absente : renseigne-la dans Réglages › Tokens d’intégration.");
     const trimmed = query.trim().slice(0, 500);
-    const [, vector] = await Promise.all([this.sync(projectId), this.queryVector(trimmed, keys.openai)]);
+    const usage: ApiUsage[] = [];
+    const [, vector] = await Promise.all([this.sync(projectId), this.queryVector(trimmed, keys.openai, usage)]);
     const sql = await this.connection();
     const rows = await sql`
       SELECT conversation_id, content, embedding <=> ${vectorLiteral(vector)}::vector AS distance
@@ -177,17 +180,17 @@ export class SemanticSearch {
       }
     }
     for (const row of rows) admit(row.conversation_id, row.content);
-    if (candidates.length === 0) return { results: [], reranked: false };
+    if (candidates.length === 0) return { results: [], reranked: false, usage };
 
     if (keys.cerebras) {
-      const ranked = await this.rerank(trimmed, candidates, keys.cerebras).catch((error: unknown) => {
+      const ranked = await this.rerank(trimmed, candidates, keys.cerebras, usage).catch((error: unknown) => {
         console.error("[semantic-search] rerank Cerebras", error);
         return null;
       });
-      if (ranked && ranked.length > 0) return { results: ranked, reranked: true };
-      if (ranked) return { results: this.nearest(candidates, NEAREST_FALLBACK), reranked: true };
+      if (ranked && ranked.length > 0) return { results: ranked, reranked: true, usage };
+      if (ranked) return { results: this.nearest(candidates, NEAREST_FALLBACK), reranked: true, usage };
     }
-    return { results: this.nearest(candidates, MAX_RESULTS), reranked: false };
+    return { results: this.nearest(candidates, MAX_RESULTS), reranked: false, usage };
   }
 
   private nearest(candidates: Array<{ conversation: Conversation }>, limit: number): SemanticSearchHit[] {
@@ -315,17 +318,17 @@ export class SemanticSearch {
     };
   }
 
-  private async queryVector(query: string, apiKey: string): Promise<number[]> {
+  private async queryVector(query: string, apiKey: string, usage: ApiUsage[]): Promise<number[]> {
     const key = query.toLowerCase().replace(/\s+/g, " ");
     const cached = this.queryVectors.get(key);
     if (cached) return cached;
-    const [vector] = await this.embed([key], apiKey);
+    const [vector] = await this.embed([key], apiKey, usage);
     if (this.queryVectors.size >= QUERY_CACHE_MAX) this.queryVectors.delete(this.queryVectors.keys().next().value!);
     this.queryVectors.set(key, vector!);
     return vector!;
   }
 
-  private async embed(texts: string[], apiKey: string): Promise<number[][]> {
+  private async embed(texts: string[], apiKey: string, usage?: ApiUsage[]): Promise<number[][]> {
     const response = await this.fetchImpl(OPENAI_EMBEDDINGS_URL, {
       method: "POST",
       signal: AbortSignal.timeout(30_000),
@@ -337,6 +340,8 @@ export class SemanticSearch {
     }
     const body = await response.json() as { data?: Array<{ index: number; embedding: number[] }> };
     if (!body.data || body.data.length !== texts.length) throw new SemanticSearchUnavailable("Réponse d’embeddings OpenAI incomplète");
+    const spent = openAiUsage(EMBEDDING_MODEL, body);
+    if (usage && spent) usage.push(spent);
     return [...body.data].sort((a, b) => a.index - b.index).map((item) => item.embedding);
   }
 
@@ -344,6 +349,7 @@ export class SemanticSearch {
     query: string,
     candidates: Array<{ conversation: Conversation; excerpts: string[] }>,
     apiKey: string,
+    usage: ApiUsage[],
   ): Promise<SemanticSearchHit[]> {
     const listing = candidates.map(({ conversation, excerpts }, index) => [
       `### c${index + 1}`,
@@ -409,6 +415,8 @@ export class SemanticSearch {
     });
     if (!response.ok) throw new Error(`Cerebras HTTP ${response.status} : ${(await response.text()).slice(0, 200)}`);
     const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const spent = openAiUsage(RERANK_MODEL, body);
+    if (spent) usage.push(spent);
     const parsed = JSON.parse(body.choices?.[0]?.message?.content ?? "") as {
       results: Array<{ id: string; match: "forte" | "partielle"; reason: string; score?: unknown }>;
     };
