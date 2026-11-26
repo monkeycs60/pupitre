@@ -32,15 +32,14 @@ import type { Attachment, Conversation, ConversationContinuation, Project, Unrea
 import { useConversationEvents } from './useConversationEvents'
 import { useQuotas } from './useQuotas'
 import {
-  getSettings,
   listProjectConversations,
   listProjects,
   markConversationRead,
   markConversationViewed,
   setAppVisibility,
 } from './api'
-import { ActionFormatContext, DEFAULT_ACTION_FORMAT } from './actionHeadings'
-import type { ActionFormat } from './actionHeadings'
+import { ActionFormatContext } from './actionHeadings'
+import { useActionFormat } from './useActionFormat'
 import { useAppNotifications } from './useAppNotifications'
 import type { ReportTab } from './ActivityReportView'
 import { CommandPalette, type PaletteView } from './CommandPalette'
@@ -215,7 +214,7 @@ function App() {
   const [runningSubtasks, setRunningSubtasks] = useState(0)
   // Intitulés reconnus pour les blocs d'actions : chargés une fois, diffusés à
   // tout le rendu Markdown.
-  const [actionFormat, setActionFormat] = useState<ActionFormat>(DEFAULT_ACTION_FORMAT)
+  const actionFormat = useActionFormat()
   /** Configuration du projet ouverte depuis le diagnostic de contexte. */
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false)
   const [restartStatus, setRestartStatus] = useState<'idle' | 'running' | 'error'>('idle')
@@ -469,23 +468,6 @@ function App() {
     }
     window.addEventListener('resize', clampToViewport)
     return () => window.removeEventListener('resize', clampToViewport)
-  }, [])
-
-  useEffect(() => {
-    let ignore = false
-    void getSettings()
-      .then((settings) => {
-        if (ignore) return
-        if (settings.actionFormat) {
-          setActionFormat({ ...DEFAULT_ACTION_FORMAT, ...settings.actionFormat })
-        }
-      })
-      // Les intitulés par défaut suffisent : un réglage illisible ne doit pas
-      // priver le chat de ses cases à cocher.
-      .catch(() => {})
-    return () => {
-      ignore = true
-    }
   }, [])
 
   useEffect(() => {
