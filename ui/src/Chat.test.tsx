@@ -156,3 +156,52 @@ test('la piste ★ de la dernière réponse laisse le composer vide et décoché
   expect(boxes.map((box) => box.checked)).toEqual([false, false])
   expect(composer.value).toBe('')
 })
+
+test('les passages Jarvis recentrent le fil au clic, pas quand le fil se met à jour', async () => {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('/api/presets')) return Response.json([])
+    if (url.includes('/documents')) return Response.json([])
+    if (url.includes('/api/projects/project-1/git')) {
+      return Response.json({ branches: [], worktrees: [], commits: [], currentBranch: 'main' })
+    }
+    return Response.json({ error: 'route inattendue' }, { status: 404 })
+  }) as typeof fetch
+  const centered: Element[] = []
+  const original = HTMLElement.prototype.scrollIntoView
+  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { centered.push(this) }
+  try {
+    const events = [
+      { id: 1, type: 'user-message' as const, text: 'Où en est la facture ?', images: [] },
+      { id: 2, type: 'status' as const, state: 'running' as const },
+      { id: 3, type: 'text-final' as const, text: 'La facture part demain.' },
+      { id: 4, type: 'status' as const, state: 'done' as const },
+    ]
+    const props = {
+      events,
+      connection: 'open' as const,
+      retryAt: null,
+      conversation: { id: 'conv-hits', project_id: 'project-1', title: 'Factures', provider: 'claude', model: 'haiku' } as never,
+      project,
+      quotas,
+      onConversationCreated: () => undefined,
+      reviewStatus: null,
+      onOpenCode: () => undefined,
+      highlightEventIds: [3],
+    }
+    const { rerender } = render(createElement(Chat, props))
+    await screen.findByText('Jarvis · 1 / 1 passage')
+    const first = centered.filter((element) => element.classList.contains('is-jarvis-hit')).length
+    expect(first).toBe(1)
+
+    rerender(createElement(Chat, { ...props, events: [...events, { id: 5, type: 'user-message' as const, text: 'Merci', images: [] }] }))
+    rerender(createElement(Chat, { ...props, events: [...events] }))
+    expect(centered.filter((element) => element.classList.contains('is-jarvis-hit'))).toHaveLength(1)
+    expect(document.querySelectorAll('.is-jarvis-hit.is-jarvis-current')).toHaveLength(1)
+
+    rerender(createElement(Chat, { ...props, highlightEventIds: [3] }))
+    expect(centered.filter((element) => element.classList.contains('is-jarvis-hit'))).toHaveLength(2)
+  } finally {
+    HTMLElement.prototype.scrollIntoView = original
+  }
+})

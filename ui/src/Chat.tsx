@@ -61,7 +61,10 @@ interface ChatProps {
   initialFinish?: TodoFinish
   /** Événement à faire défiler et surligner à l’ouverture (retour depuis un fichier partagé). */
   focusEventId?: number | null
-  /** Passages trouvés par Jarvis : surlignés jusqu'à ce que l'utilisateur ferme la barre. */
+  /**
+   * Passages trouvés par Jarvis : surlignés jusqu'à ce que l'utilisateur ferme la barre.
+   * Chaque nouveau tableau recentre le fil sur le premier passage : un tableau recréé à chaque rendu le recentre à chaque frappe.
+   */
   highlightEventIds?: number[] | null
   onClearHighlight?: () => void
   events: AppEvent[]
@@ -295,7 +298,9 @@ export function Chat({
   }, [focusEventId, blocks])
   const [hitIndex, setHitIndex] = useState(0)
   const [hitCount, setHitCount] = useState(0)
-  const hitKey = highlightEventIds?.join(',') ?? ''
+  const hitIndexRef = useRef(0)
+  hitIndexRef.current = hitIndex
+  const centeredHitsRef = useRef<number[] | null>(null)
   useEffect(() => {
     const viewport = viewportRef.current
     if (viewport === null) return
@@ -317,14 +322,17 @@ export function Chat({
     const ordered = rows.filter((row) => targets.has(row.element)).map((row) => row.element)
     ordered.forEach((element) => element.classList.add('is-jarvis-hit'))
     setHitCount(ordered.length)
-    setHitIndex(0)
-    const first = ordered[0]
-    if (first) {
-      followsBottomRef.current = false
-      first.classList.add('is-jarvis-current')
-      first.scrollIntoView({ block: 'center' })
+    if (ordered.length === 0) return
+    if (centeredHitsRef.current === highlightEventIds) {
+      ordered[Math.min(hitIndexRef.current, ordered.length - 1)]!.classList.add('is-jarvis-current')
+      return
     }
-  }, [hitKey, blocks])
+    centeredHitsRef.current = highlightEventIds
+    setHitIndex(0)
+    followsBottomRef.current = false
+    ordered[0]!.classList.add('is-jarvis-current')
+    ordered[0]!.scrollIntoView({ block: 'center' })
+  }, [highlightEventIds, blocks])
 
   function moveHit(direction: 1 | -1) {
     const viewport = viewportRef.current
