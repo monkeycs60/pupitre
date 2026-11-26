@@ -1171,12 +1171,23 @@ export interface JarvisStep {
 }
 
 export interface JarvisRoute {
-  model: 'haiku-5.5' | 'opus-5.5'
+  model: 'qwen-3.8' | 'haiku-5.5' | 'opus-5.5'
   effort: 'high'
   label: string
   reason: string
   escalated: boolean
-  by: 'mode' | 'haiku' | 'router'
+  by: 'mode' | 'fast' | 'router'
+}
+
+/** Conversation trouvée par la recherche sémantique, avant la réponse du modèle. */
+export interface JarvisPreview {
+  conversationId: string
+  projectId: string
+  projectName: string
+  title: string
+  reason: string
+  /** Certitude de 0 à 100. */
+  score: number | null
 }
 
 export interface JarvisResult {
@@ -1189,6 +1200,7 @@ export interface JarvisResult {
   branch: string | null
   updatedAt: string
   reason: string
+  score: number | null
   events: Array<{ id: number; at: string; excerpt: string }>
 }
 
@@ -1214,6 +1226,7 @@ export interface JarvisJob {
   status: 'running' | 'done' | 'error' | 'cancelled'
   steps: JarvisStep[]
   route: JarvisRoute | null
+  preview: JarvisPreview[]
   answer: JarvisAnswer | null
   error: string | null
   startedAt: string

@@ -16,6 +16,8 @@ export interface JarvisResult {
   branch: string | null;
   updatedAt: string;
   reason: string;
+  /** Certitude de la recherche sémantique, de 0 à 100. */
+  score: number | null;
   events: Array<{ id: number; at: string; excerpt: string }>;
 }
 
@@ -224,7 +226,7 @@ export function jarvisPrompt(context: JarvisContext, options: JarvisPromptOption
       ? `ÉCHANGES PRÉCÉDENTS AVEC TOI\n${context.history.slice(-HISTORY_ENTRIES).map((entry) => `${entry.role === "user" ? "Utilisateur" : "Jarvis"} : ${clipText(entry.text, HISTORY_CHARS)}`).join("\n")}`
       : null,
     options.draft
-      ? `BROUILLON DU PREMIER PASSAGE\nHaiku 5.5 a préparé ce brouillon et juge qu'il faut un plan : « ${options.draft.reason} ». Repars de la demande et des données : garde ce qui est juste, corrige le reste, complète le plan.\n${options.draft.json}`
+      ? `BROUILLON DU PREMIER PASSAGE\nUn premier modèle a préparé ce brouillon et juge qu'il faut un plan : « ${options.draft.reason} ». Repars de la demande et des données : garde ce qui est juste, corrige le reste, complète le plan.\n${options.draft.json}`
       : null,
     `QUESTION\n${context.question}`,
   ];
@@ -513,22 +515,26 @@ export function sanitizeDraft(
 
 const EARLY_ESCALATION = /^\s*(?:```(?:json)?\s*)?\{\s*"needsOrchestration"\s*:\s*true\s*,\s*"orchestrationReason"\s*:\s*("(?:[^"\\]|\\.)*"|null)/;
 
-/** Raison d'escalade lisible dès le début du JSON de Haiku, avant la fin de sa réponse ; null tant qu'elle n'y est pas. */
-export function earlyEscalation(text: string): string | null {
+function planVerdict(model: string): string {
+  return `${model} juge que la demande appelle un plan.`;
+}
+
+/** Raison d'escalade lisible dès le début du JSON du premier modèle, avant la fin de sa réponse ; null tant qu'elle n'y est pas. */
+export function earlyEscalation(text: string, model: string): string | null {
   const match = EARLY_ESCALATION.exec(text);
   if (!match) return null;
-  if (match[1] === "null") return "Haiku 5.5 juge que la demande appelle un plan.";
+  if (match[1] === "null") return planVerdict(model);
   try {
     const reason = JSON.parse(match[1]!) as unknown;
-    return typeof reason === "string" && reason.trim() ? clipText(reason.trim(), 200) : "Haiku 5.5 juge que la demande appelle un plan.";
+    return typeof reason === "string" && reason.trim() ? clipText(reason.trim(), 200) : planVerdict(model);
   } catch {
     return null;
   }
 }
 
-/** Pourquoi le brouillon de Haiku doit passer à Opus, ou null s'il se suffit. */
-export function escalationReason(draft: JarvisDraft): string | null {
-  if (draft.needsOrchestration) return draft.orchestrationReason ?? "Haiku 5.5 juge que la demande appelle un plan.";
+/** Pourquoi le brouillon du premier modèle doit passer à Opus, ou null s'il se suffit. */
+export function escalationReason(draft: JarvisDraft, model: string): string | null {
+  if (draft.needsOrchestration) return draft.orchestrationReason ?? planVerdict(model);
   const changes = draft.actions.filter((action) => !READ_ONLY_KINDS.has(action.kind));
   if (changes.some((action) => action.kind === "new-conversation")) return "Il faut rédiger le travail d'un nouvel agent.";
   if (changes.some((action) => action.kind === "archive" && action.conversations.length > 1)) {
@@ -562,6 +568,7 @@ export function finalizeAnswer(draft: JarvisDraft, context: JarvisContext, durat
       branch: conversation.branch,
       updatedAt: conversation.updatedAt,
       reason: result.reason,
+      score: conversation.semanticScore,
       events: ids.flatMap((id) => {
         const excerpt = conversation.excerpts.find((item) => item.id === id);
         return excerpt ? [{ id: excerpt.id, at: excerpt.at, excerpt: excerpt.text }] : [];

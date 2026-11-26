@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { useToastClearance } from './composerClearance'
 import { dismissToast, removeToast, useToasts, type Toast } from './toasts'
 
 function ToneIcon({ tone }: { tone: Toast['tone'] }) {
@@ -25,6 +26,7 @@ function ToneIcon({ tone }: { tone: Toast['tone'] }) {
 
 export function ToastHost({ children }: { children?: ReactNode }) {
   const toasts = useToasts()
+  useToastClearance()
   if (toasts.length === 0 && !children) return null
 
   return (

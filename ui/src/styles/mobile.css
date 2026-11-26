@@ -1,73 +1,13 @@
 /* ---------------------------------------------------------------------------
    Téléphone (≤ 700 px) : une seule colonne. Le rail et la liste deviennent un
    tiroir plein écran, le fil prend toute la largeur et rien ne flotte dessus.
-   Jusqu'à 900 px, Jarvis quitte le fil pour la barre du haut. Tout vit dans
-   les media queries, sauf les éléments propres au mobile, masqués par
-   défaut : au-delà de 900 px, rien ne change.
+   Tout vit dans les media queries, sauf les éléments propres au mobile,
+   masqués par défaut : au-delà de 700 px, rien ne change.
 --------------------------------------------------------------------------- */
 
 .mobile-navigation-toggle,
 .empty-state-navigation {
   display: none;
-}
-
-/* Fenêtre étroite, tablette et téléphone : posée sur le fil, la pastille
-   Jarvis masquait le texte, « Dernier message » et les menus du composer.
-   Elle devient une icône de la barre du haut, qui lui réserve sa place. */
-@media (max-width: 900px) {
-  .titlebar-right {
-    padding-right: 44px;
-  }
-
-  .jarvis-pill {
-    top: 4px;
-    right: 6px;
-    bottom: auto;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    gap: 0;
-    justify-content: center;
-    background: transparent;
-    border-radius: var(--r-md);
-    box-shadow: none;
-  }
-
-  .jarvis-pill:hover {
-    background: var(--bg-hover);
-    box-shadow: none;
-    transform: none;
-  }
-
-  .jarvis-pill .jarvis-spark {
-    width: 18px;
-    height: 18px;
-    color: var(--accent-bright);
-  }
-
-  .jarvis-pill.is-running .jarvis-spark {
-    animation: jarvis-spin 1.4s linear infinite;
-  }
-
-  .jarvis-pill-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    white-space: nowrap;
-    clip-path: inset(50%);
-  }
-
-  .jarvis-pill kbd {
-    display: none;
-  }
-
-  .jarvis-pill-dot {
-    position: absolute;
-    top: 5px;
-    right: 4px;
-    margin: 0;
-  }
 }
 
 @media (max-width: 700px) {
@@ -162,17 +102,21 @@
 
   /* --- Jarvis ------------------------------------------------------------- */
 
-  .jarvis-pill {
-    width: 40px;
-    height: 40px;
+  .jarvis-bubble {
+    top: 4px;
+    min-width: 36px;
+    height: 36px;
   }
 
-  .jarvis-panel {
+  .jarvis-panel,
+  .jarvis-panel.has-exchanges {
+    top: 50px;
     right: 8px;
     bottom: max(8px, env(safe-area-inset-bottom));
     left: 8px;
     width: auto;
-    max-height: calc(100dvh - 64px);
+    height: auto;
+    max-height: none;
   }
 
   /* --- Tiroir de navigation ------------------------------------------------ */
@@ -620,8 +564,3 @@
   }
 }
 
-@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
-  .jarvis-pill.is-running .jarvis-spark {
-    animation: none;
-  }
-}

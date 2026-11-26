@@ -76,7 +76,7 @@ import { VisualFeedbackService } from "./visual-feedback";
 import { TicketAuditService } from "./ticket-audits";
 import { ActivityJournal, ActivityReportService, ActivityStore, DEFAULT_ACTIVITY_MODEL } from "./activity-report";
 import { fleetSnapshot } from "./fleet";
-import { claudeJarvisGenerator, claudeJarvisPrewarm, JarvisService } from "./jarvis";
+import { claudeJarvisPrewarm, jarvisGenerator, JarvisService } from "./jarvis";
 import { jevRouter } from "./jarvis-router";
 
 /** 128 + SIGTERM, la convention shell pour « terminé par un signal ». */
@@ -114,11 +114,15 @@ if (process.argv.includes("--pupitre-mcp")) {
   const notifications = new NotificationStore(db);
   const routineStore = new RoutineStore(db);
   const search = new SearchIndex(db);
+  const cerebrasKey = () => {
+    const tokens = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY) ?? {};
+    return tokens.cerebras ?? process.env.CEREBRAS_API_KEY?.trim() ?? null;
+  };
   const semanticSearch = new SemanticSearch(db, conversations, () => {
     const tokens = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY) ?? {};
     return {
       openai: tokens.openai ?? process.env.OPENAI_API_KEY?.trim() ?? null,
-      cerebras: tokens.cerebras ?? process.env.CEREBRAS_API_KEY?.trim() ?? null,
+      cerebras: cerebrasKey(),
     };
   }, semanticDatabaseUrl(instance.name));
   const costs = new CostStore(db);
@@ -335,7 +339,8 @@ if (process.argv.includes("--pupitre-mcp")) {
     nudges: () => nudges.list(),
     attention: () => attention.list(),
     actionHeadings,
-    generate: claudeJarvisGenerator(quotas),
+    generate: jarvisGenerator(quotas, cerebrasKey),
+    fastModel: () => cerebrasKey() ? "qwen-3.8" : "haiku-5.5",
     prewarm: claudeJarvisPrewarm(),
     router: jevRouter(() => {
       const tokens = settings.get<Record<string, string>>(INTEGRATION_TOKENS_KEY) ?? {};

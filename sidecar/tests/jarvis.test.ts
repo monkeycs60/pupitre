@@ -17,6 +17,7 @@ import {
 import { jevRouter, type JarvisRouter } from "../src/jarvis-router";
 import { JarvisContextBuilder, searchTerms, type JarvisContext } from "../src/jarvis-context";
 import {
+  cerebrasJarvisGenerator,
   claudeJarvisGenerator,
   JarvisService,
   type JarvisDeps,
@@ -475,7 +476,7 @@ test("auto : Haiku suffit pour une question simple", async () => {
 
   expect(calls.map((call) => call.model)).toEqual(["haiku-5.5"]);
   expect(decided).toEqual([{ question: "qui m'attend ?", history: [] }]);
-  expect(job.route).toEqual({ model: "haiku-5.5", effort: "high", label: "Haiku 5.5 · rapide", reason: "Question simple : Haiku 5.5 a suffi.", escalated: false, by: "haiku" });
+  expect(job.route).toEqual({ model: "haiku-5.5", effort: "high", label: "Haiku 5.5 · rapide", reason: "Question simple : Haiku 5.5 a suffi.", escalated: false, by: "fast" });
   expect(job.steps.map((step) => step.label)).toEqual([
     "Lire l'état des agents",
     "Chercher dans les conversations",
@@ -524,7 +525,7 @@ test("auto : Haiku demande un plan, Opus reprend avec son brouillon", async () =
     label: "Opus 5.5 · orchestration",
     reason: "Il faut rédiger deux briefs d'agents.",
     escalated: true,
-    by: "haiku",
+    by: "fast",
   });
   expect(job.answer?.text).toBe("Voici le plan en deux conversations.");
   expect(job.answer?.actions.map((action) => action.kind)).toEqual(["new-conversation", "new-conversation"]);
@@ -569,7 +570,7 @@ test("auto : si Opus échoue, la réponse de Haiku est gardée", async () => {
     label: "Haiku 5.5 · rapide",
     reason: "Opus 5.5 n'a pas abouti : la réponse de Haiku 5.5 est conservée.",
     escalated: false,
-    by: "haiku",
+    by: "fast",
   });
   expect(job.steps.find((step) => step.label === "Opus 5.5 prépare le plan")).toMatchObject({ state: "error", detail: "quota épuisé" });
 });
@@ -590,7 +591,7 @@ test("la recherche sémantique du projet ouvert ajoute ses candidates, et s'effa
   const billing = f.conversations.get(f.billing.id)!;
   const semanticSearch = {
     search: async (): Promise<SemanticSearchResponse> => ({
-      results: [{ conversation: billing, reason: "Parle des factures du mois.", match: "strong" }],
+      results: [{ conversation: billing, reason: "Parle des factures du mois.", match: "strong", score: 88 }],
       reranked: true,
     }),
   };
@@ -750,16 +751,16 @@ test("auto : Haiku annonce un plan dès ses premiers mots, il est coupé et Opus
   expect(calls.map((call) => call.model)).toEqual(["haiku-5.5", "opus-5.5"]);
   expect(calls[1]!.prompt).not.toContain("BROUILLON DU PREMIER PASSAGE");
   expect(job.status).toBe("done");
-  expect(job.route).toMatchObject({ model: "opus-5.5", reason: "Deux agents à briefer.", escalated: true, by: "haiku" });
+  expect(job.route).toMatchObject({ model: "opus-5.5", reason: "Deux agents à briefer.", escalated: true, by: "fast" });
   expect(job.steps.find((step) => step.label === "Haiku 5.5 rédige la réponse")?.detail).toContain("passe la main à Opus 5.5");
   expect(job.answer?.text).toBe("Voici le plan.");
 });
 
 test("la raison d'escalade se lit dès qu'elle est complète, pas avant", () => {
-  expect(earlyEscalation('{"needsOrchestration":true,"orchestrationReason":"Deux agents')).toBeNull();
-  expect(earlyEscalation('```json\n{"needsOrchestration":true,"orchestrationReason":"Deux agents.",')).toBe("Deux agents.");
-  expect(earlyEscalation('{"needsOrchestration":true,"orchestrationReason":null,')).toBe("Haiku 5.5 juge que la demande appelle un plan.");
-  expect(earlyEscalation('{"needsOrchestration":false,"orchestrationReason":null,')).toBeNull();
+  expect(earlyEscalation('{"needsOrchestration":true,"orchestrationReason":"Deux agents', "Haiku 5.5")).toBeNull();
+  expect(earlyEscalation('```json\n{"needsOrchestration":true,"orchestrationReason":"Deux agents.",', "Haiku 5.5")).toBe("Deux agents.");
+  expect(earlyEscalation('{"needsOrchestration":true,"orchestrationReason":null,', "Haiku 5.5")).toBe("Haiku 5.5 juge que la demande appelle un plan.");
+  expect(earlyEscalation('{"needsOrchestration":false,"orchestrationReason":null,', "Haiku 5.5")).toBeNull();
 });
 
 test("la préchauffe lance le modèle du mode choisi dans le dossier du projet", async () => {
@@ -818,7 +819,7 @@ test("auto : si Opus échoue après Jev, Haiku répond à sa place", async () =>
   expect(calls.map((call) => call.model)).toEqual(["opus-5.5", "haiku-5.5"]);
   expect(job.status).toBe("done");
   expect(job.answer?.text).toBe("Réponse de secours.");
-  expect(job.route).toMatchObject({ model: "haiku-5.5", by: "haiku", reason: "Opus 5.5 n'a pas abouti : Haiku 5.5 répond à sa place." });
+  expect(job.route).toMatchObject({ model: "haiku-5.5", by: "fast", reason: "Opus 5.5 n'a pas abouti : Haiku 5.5 répond à sa place." });
   expect(job.steps.find((step) => step.label === "Opus 5.5 prépare le plan")).toMatchObject({ state: "error", detail: "pas de réponse" });
   expect(job.steps.find((step) => step.label === "Haiku 5.5 rédige la réponse")?.state).toBe("done");
 });
@@ -852,7 +853,7 @@ test("auto : sans verdict de Jev, Haiku répond seul et la trace dit pourquoi", 
   const failing = service(f, generate, { router: fakeRouter(async () => { throw new Error("TypeSafe HTTP 429"); }) });
   const job = await settled(failing, await startJob(failing, { question: "qui m'attend ?" }));
   const choice = job.steps.find((step) => step.label === "Choisir le modèle");
-  expect(job.route).toMatchObject({ model: "haiku-5.5", escalated: false, by: "haiku" });
+  expect(job.route).toMatchObject({ model: "haiku-5.5", escalated: false, by: "fast" });
   expect(choice?.state).toBe("skipped");
   expect(choice?.detail).toContain("Jev n'a pas répondu");
 
@@ -931,4 +932,101 @@ test("Jev reçoit la demande et les deux derniers échanges, et décide « plan 
   key = null;
   expect(router.ready()).toBe(false);
   await expect(router.decide({ question: "ouvre", history: [], signal })).rejects.toThrow("clé TypeSafe absente");
+});
+
+test("Qwen 3.8 sur Cerebras répond en premier quand il est le modèle rapide", async () => {
+  const f = fixture();
+  const { calls, generate } = recording(() => ({ text: "Personne ne t'attend.", results: [], actions: [], needsOrchestration: false }));
+  const jarvis = service(f, generate, { fastModel: () => "qwen-3.8" });
+  const job = await settled(jarvis, await startJob(jarvis, { question: "qui m'attend ?" }));
+
+  expect(calls.map((call) => call.model)).toEqual(["qwen-3.8"]);
+  expect(job.route).toEqual({ model: "qwen-3.8", effort: "high", label: "Qwen 3.8 · Cerebras", reason: "Question simple : Qwen 3.8 a suffi.", escalated: false, by: "fast" });
+  expect(job.steps.map((step) => step.label)).toContain("Qwen 3.8 rédige la réponse");
+});
+
+test("Cerebras en échec : Haiku 5.5 prend le relais et la trace garde l'erreur", async () => {
+  const f = fixture();
+  const calls: string[] = [];
+  const generate: JarvisGenerator = async ({ model }) => {
+    calls.push(model);
+    if (model === "qwen-3.8") throw new Error("Cerebras HTTP 429 : trop de requêtes");
+    return JSON.stringify({ text: "ok", results: [], actions: [], needsOrchestration: false });
+  };
+  const jarvis = service(f, generate, { fastModel: () => "qwen-3.8" });
+  const job = await settled(jarvis, await startJob(jarvis, { question: "qui m'attend ?" }));
+
+  expect(job.status).toBe("done");
+  expect(calls).toEqual(["qwen-3.8", "haiku-5.5"]);
+  expect(job.route).toMatchObject({ model: "haiku-5.5", reason: "Question simple : Haiku 5.5 a suffi.", by: "fast" });
+  expect(job.steps.find((step) => step.label === "Qwen 3.8 rédige la réponse")).toMatchObject({ state: "error", detail: "Cerebras HTTP 429 : trop de requêtes" });
+  expect(job.steps.find((step) => step.label === "Haiku 5.5 rédige la réponse")).toMatchObject({ state: "done" });
+});
+
+test("les conversations proches s'affichent avec leur certitude avant la réponse du modèle", async () => {
+  const f = fixture();
+  const billing = f.conversations.get(f.billing.id)!;
+  const semanticSearch = {
+    search: async (): Promise<SemanticSearchResponse> => ({
+      results: [{ conversation: billing, reason: "Parle des factures du mois.", match: "strong", score: 91 }],
+      reranked: true,
+    }),
+  };
+  let release!: () => void;
+  const answered = new Promise<void>((resolve) => { release = resolve; });
+  const generate: JarvisGenerator = async ({ prompt }) => {
+    await answered;
+    return JSON.stringify({ text: "C'est ici.", results: [{ conversation: aliasIn(prompt, "Ancienne facturation") }], actions: [] });
+  };
+  const jarvis = service(f, generate, { semanticSearch });
+  const id = await startJob(jarvis, { question: "les factures du mois", projectId: f.pupitre.id, mode: "fast" });
+  for (let attempt = 0; attempt < 200 && jarvis.get(id)!.preview.length === 0; attempt++) await Bun.sleep(5);
+
+  const running = jarvis.get(id)!;
+  expect(running.status).toBe("running");
+  expect(running.preview).toEqual([{
+    conversationId: billing.id,
+    projectId: f.pupitre.id,
+    projectName: "Pupitre",
+    title: billing.title,
+    reason: "Parle des factures du mois.",
+    score: 91,
+  }]);
+
+  release();
+  const job = await settled(jarvis, id);
+  expect(job.answer?.results.map((result) => [result.conversationId, result.score])).toEqual([[billing.id, 91]]);
+});
+
+test("la préchauffe ne lance rien quand Qwen 3.8 répond en premier, sauf Opus en orchestration", async () => {
+  const f = fixture();
+  const warmed: Array<{ model: string; cwd: string }> = [];
+  const jarvis = service(f, recording(() => ({ text: "", results: [], actions: [] })).generate, { prewarm: (input) => warmed.push(input), fastModel: () => "qwen-3.8" });
+  jarvis.warm(f.affilae.id, "auto");
+  jarvis.warm(f.affilae.id, "fast");
+  jarvis.warm(null, "orchestrate");
+  expect(warmed).toEqual([{ model: "opus-5.5", cwd: homedir() }]);
+});
+
+test("le générateur Cerebras demande du JSON à qwen-3.8-27b et remonte les refus", async () => {
+  const sent: Array<{ url: string; auth: string | null; body: Record<string, unknown> }> = [];
+  let status = 200;
+  const fetchImpl = (async (url: string, init: RequestInit) => {
+    sent.push({ url, auth: new Headers(init.headers).get("authorization"), body: JSON.parse(String(init.body)) });
+    return status === 200
+      ? Response.json({ choices: [{ message: { content: '{"text":"ok"}' } }] })
+      : new Response("quota", { status });
+  }) as unknown as typeof fetch;
+  const generate = cerebrasJarvisGenerator(() => "clé", fetchImpl);
+  const input = { model: "qwen-3.8" as const, prompt: "Bonjour", cwd: "/", signal: new AbortController().signal };
+
+  expect(await generate(input)).toBe('{"text":"ok"}');
+  expect(sent[0]).toMatchObject({
+    url: "https://api.cerebras.ai/v1/chat/completions",
+    auth: "Bearer clé",
+    body: { model: "qwen-3.8-27b", response_format: { type: "json_object" }, messages: [{ role: "user", content: "Bonjour" }] },
+  });
+  status = 429;
+  await expect(generate(input)).rejects.toThrow("Cerebras HTTP 429 : quota");
+  await expect(cerebrasJarvisGenerator(() => null, fetchImpl)(input)).rejects.toThrow("clé Cerebras absente");
 });

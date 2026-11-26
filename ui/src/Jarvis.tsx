@@ -1,5 +1,5 @@
 import { track } from './analytics'
-import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Icon, type IconName } from './Icon'
 import {
   actionEffect,
@@ -8,17 +8,16 @@ import {
   cancelJarvisJob,
   executeJarvisAction,
   getJarvisJob,
-  pillClearance,
   warmJarvis,
   type JarvisActionContext,
 } from './jarvisActions'
-import type { JarvisAction, JarvisJob, JarvisMode, JarvisResult } from './types'
+import type { JarvisAction, JarvisJob, JarvisMode, JarvisPreview, JarvisResult } from './types'
 
 const POLL_MS = 500
 
 const MODES: Array<{ id: JarvisMode; label: string; hint: string }> = [
-  { id: 'auto', label: 'Auto', hint: 'Jev trie ta demande en un instant : Haiku 5.5 répond, Opus 5.5 prend la main dès qu’un plan s’impose.' },
-  { id: 'fast', label: 'Rapide', hint: 'Haiku 5.5 seul : quelques secondes, pour retrouver ou faire le point.' },
+  { id: 'auto', label: 'Auto', hint: 'Qwen 3.8 sur Cerebras répond en deux secondes ; Opus 5.5 prend la main dès qu’un plan s’impose.' },
+  { id: 'fast', label: 'Rapide', hint: 'Qwen 3.8 seul, sans passage à Opus : pour retrouver ou faire le point.' },
   { id: 'orchestrate', label: 'Orchestrer', hint: 'Opus 5.5 directement : pour préparer plusieurs actions sur tes agents.' },
 ]
 
@@ -67,38 +66,31 @@ interface JarvisProps {
   context: JarvisActionContext
 }
 
-function usePillClearance(pillRef: RefObject<HTMLButtonElement | null>) {
-  useEffect(() => {
-    const root = document.documentElement
-    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => place())
-    let composer: Element | null = null
-    let applied: number | null = null
-    function place() {
-      const pill = pillRef.current
-      if (!pill) return
-      const current = document.querySelector('.composer-area .composer')
-      if (current !== composer) {
-        if (composer) resize?.unobserve(composer)
-        if (current) resize?.observe(current)
-        composer = current
-      }
-      const boxes = composer ? [composer, ...composer.querySelectorAll('.context-gauge')].map((element) => element.getBoundingClientRect()) : []
-      const bottom = pillClearance(boxes, pill.getBoundingClientRect(), window.innerHeight)
-      if (bottom === applied) return
-      applied = bottom
-      if (bottom === null) root.style.removeProperty('--jarvis-pill-bottom')
-      else root.style.setProperty('--jarvis-pill-bottom', `${bottom}px`)
-    }
-    place()
-    const timer = window.setInterval(place, 1000)
-    window.addEventListener('resize', place)
-    return () => {
-      window.clearInterval(timer)
-      window.removeEventListener('resize', place)
-      resize?.disconnect()
-      root.style.removeProperty('--jarvis-pill-bottom')
-    }
-  }, [pillRef])
+type Phase = 'closed' | 'open' | 'closing'
+
+const MORPH_IN = { duration: 460, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+const MORPH_OUT = { duration: 220, easing: 'cubic-bezier(0.4, 0, 1, 1)' }
+
+/** Le clip-path ramène le panneau à la taille de la bulle sans le déformer : son contenu garde sa mise en page pendant l'ouverture. */
+function morph(panel: HTMLElement, bubble: HTMLElement, direction: 'in' | 'out'): Animation | null {
+  if (typeof panel.animate !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return null
+  const from = bubble.getBoundingClientRect()
+  const to = panel.getBoundingClientRect()
+  const bubbleFrame = {
+    transform: `translate(${Math.round(from.right - to.right)}px, ${Math.round(from.top - to.top)}px)`,
+    clipPath: `inset(0px 0px ${Math.max(0, Math.round(to.height - from.height))}px ${Math.max(0, Math.round(to.width - from.width))}px round ${from.height / 2}px)`,
+    opacity: 0.4,
+  }
+  const panelFrame = { transform: 'translate(0px, 0px)', clipPath: 'inset(-60px -60px -60px -60px round 14px)', opacity: 1 }
+  const content = [...panel.children].map((child) => child.animate(
+    direction === 'in' ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 1 }, { opacity: 0 }],
+    direction === 'in' ? { duration: 220, delay: 120, fill: 'backwards' } : { duration: 120, fill: 'forwards' },
+  ))
+  const frame = direction === 'in'
+    ? panel.animate([bubbleFrame, panelFrame], MORPH_IN)
+    : panel.animate([panelFrame, bubbleFrame], { ...MORPH_OUT, fill: 'forwards' })
+  frame.addEventListener('cancel', () => content.forEach((animation) => animation.cancel()))
+  return frame
 }
 
 function formatTime(value: string): string {
@@ -114,10 +106,13 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
   const [draft, setDraft] = useState('')
   const [mode, setMode] = useState<JarvisMode>('auto')
   const [unseen, setUnseen] = useState(false)
+  const [phase, setPhase] = useState<Phase>(open ? 'open' : 'closed')
+  if (open && phase !== 'open') setPhase('open')
+  if (!open && phase === 'open') setPhase('closing')
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const pillRef = useRef<HTMLButtonElement>(null)
-  usePillClearance(pillRef)
+  const bubbleRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
   const running = exchanges.some((exchange) => exchange.job === null ? exchange.error === null : exchange.job.status === 'running')
 
   function patch(id: string, update: (exchange: Exchange) => Exchange) {
@@ -125,13 +120,22 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
   }
 
   useEffect(() => {
-    if (open) {
-      setUnseen(false)
-      window.setTimeout(() => inputRef.current?.focus(), 0)
-    }
-    document.documentElement.classList.toggle('jarvis-open', open)
-    return () => document.documentElement.classList.remove('jarvis-open')
+    if (!open) return
+    setUnseen(false)
+    window.setTimeout(() => inputRef.current?.focus(), 0)
   }, [open])
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    const bubble = bubbleRef.current
+    if (phase === 'closed' || !panel || !bubble) return
+    const animation = morph(panel, bubble, phase === 'open' ? 'in' : 'out')
+    if (phase === 'closing') {
+      if (animation) animation.addEventListener('finish', () => setPhase('closed'))
+      else setPhase('closed')
+    }
+    return () => animation?.cancel()
+  }, [phase])
 
   const lastExchange = exchanges.at(-1)
   const lastSettled = lastExchange?.job?.status !== undefined && lastExchange.job.status !== 'running'
@@ -239,18 +243,27 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
     }
   }
 
-  if (!open) {
-    return (
-      <button ref={pillRef} type="button" className={`jarvis-pill${running ? ' is-running' : ''}`} onClick={() => onOpenChange(true)} title="Demander à Jarvis · Ctrl J">
-        <Icon name="spark" size={14} className="jarvis-spark" />
-        <span className="jarvis-pill-label">{running ? <>Jarvis cherche<span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span></> : 'Jarvis'}</span>
-        {unseen ? <span className="jarvis-pill-dot" aria-label="Réponse prête" /> : <kbd>Ctrl J</kbd>}
-      </button>
-    )
-  }
+  const bubble = (
+    <button
+      ref={bubbleRef}
+      type="button"
+      className={`jarvis-bubble${running ? ' is-running' : ''}${unseen ? ' has-answer' : ''}${open ? ' is-open' : ''}`}
+      onClick={() => onOpenChange(!open)}
+      aria-expanded={open}
+      aria-label={running ? 'Jarvis cherche' : unseen ? 'Jarvis a répondu' : 'Jarvis'}
+      title={`${running ? 'Jarvis cherche…' : 'Demander à Jarvis'} · Ctrl J`}
+    >
+      <Icon name="spark" size={15} className="jarvis-spark" />
+      {unseen && !open ? <span className="jarvis-bubble-note">Réponse prête</span> : null}
+    </button>
+  )
+
+  if (phase === 'closed') return bubble
 
   return (
-    <section className="jarvis-panel" aria-label="Jarvis" role="dialog">
+    <>
+    {bubble}
+    <section ref={panelRef} className={`jarvis-panel${exchanges.length > 0 ? ' has-exchanges' : ''}${phase === 'closing' ? ' is-closing' : ''}`} aria-label="Jarvis" role="dialog">
       <header className="jarvis-top">
         <Icon name="spark" size={15} className="jarvis-spark" />
         <strong>Jarvis</strong>
@@ -294,7 +307,7 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
             onOpenResult={(result) => {
               track('jarvis.action', { kind: 'open', result: 'fait' }, result.projectId)
               onOpenChange(false)
-              void context.openConversation(result.projectId, result.conversationId, result.events.map((event) => event.id))
+              void context.openConversation(result.projectId, result.conversationId, 'events' in result ? result.events.map((event) => event.id) : [])
             }}
             onRun={(action) => void run(exchange, action)}
             onState={(actionId, state) => setActionState(exchange, actionId, state)}
@@ -319,13 +332,23 @@ export function Jarvis({ open, onOpenChange, projectId, conversationId, context 
         </button>
       </footer>
     </section>
+    </>
+  )
+}
+
+function Certainty({ score }: { score: number | null }) {
+  if (score === null) return null
+  return (
+    <span className={`jarvis-certainty is-${score >= 80 ? 'high' : score >= 60 ? 'mid' : 'low'}`} title="Certitude de la recherche sémantique">
+      {score} %
+    </span>
   )
 }
 
 function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit }: {
   exchange: Exchange
   onCancel: () => void
-  onOpenResult: (result: JarvisResult) => void
+  onOpenResult: (result: JarvisResult | JarvisPreview) => void
   onRun: (action: JarvisAction) => void
   onState: (actionId: string, state: ActionState) => void
   onEdit: (actionId: string, edit: { message?: string; prompt?: string }) => void
@@ -334,6 +357,8 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
   const isRunning = exchange.error === null && (job === null || job.status === 'running')
   const answer = job?.answer ?? null
   const [traceOpen, setTraceOpen] = useState(false)
+  const previewing = isRunning && (job?.preview.length ?? 0) > 0
+  const stepsShown = traceOpen || (isRunning && !previewing)
   const pending = (answer?.actions ?? []).filter((action) => !actionIsHarmless(action)
     && (exchange.actions[action.id]?.status ?? 'idle') === 'idle')
 
@@ -342,22 +367,24 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
       <p className="jarvis-question">{exchange.question}</p>
 
       {job?.route ? (
-        <div className={`jarvis-route is-${job.route.model === 'opus-5.5' ? 'opus' : 'haiku'}`} title={job.route.reason}>
+        <div className={`jarvis-route is-${job.route.model === 'opus-5.5' ? 'opus' : 'fast'}`} title={job.route.reason}>
           <Icon name={job.route.model === 'opus-5.5' ? 'orchestrate' : 'bolt'} size={13} />
           <strong>{job.route.label}</strong>
-          <span>{job.route.escalated && job.route.by === 'haiku' ? `Haiku a passé la main : ${job.route.reason}` : job.route.reason}</span>
+          <span>{job.route.escalated && job.route.by === 'fast' ? `Le modèle rapide a passé la main : ${job.route.reason}` : job.route.reason}</span>
         </div>
       ) : null}
 
       {job && job.steps.length > 0 ? (
-        <div className={`jarvis-trace${isRunning || traceOpen ? ' is-open' : ''}`}>
-          {!isRunning ? (
+        <div className={`jarvis-trace${stepsShown ? ' is-open' : ''}`}>
+          {!isRunning || previewing ? (
             <button type="button" className="jarvis-trace-toggle" aria-expanded={traceOpen} onClick={() => setTraceOpen(!traceOpen)}>
               <Icon name={traceOpen ? 'chevron-down' : 'chevron-right'} size={12} />
-              Ce que j’ai fait · {job.steps.length} étape{job.steps.length > 1 ? 's' : ''}{answer ? ` · ${seconds(answer.durationMs)}` : ''}
+              {isRunning
+                ? <>{job.steps.at(-1)!.label}<span className="conv-row-dots" aria-hidden="true"><i /><i /><i /></span></>
+                : <>Ce que j’ai fait · {job.steps.length} étape{job.steps.length > 1 ? 's' : ''}{answer ? ` · ${seconds(answer.durationMs)}` : ''}</>}
             </button>
           ) : null}
-          {isRunning || traceOpen ? (
+          {stepsShown ? (
             <ol className="jarvis-steps">
               {job.steps.map((step) => (
                 <li key={step.id} className={`is-${step.state}`}>
@@ -373,6 +400,23 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
         </div>
       ) : isRunning ? (
         <p className="jarvis-waiting"><span className="jarvis-spinner" aria-hidden="true" />Jarvis prépare la recherche…</p>
+      ) : null}
+
+      {isRunning && job && job.preview.length > 0 ? (
+        <div className="jarvis-preview" aria-label="Conversations proches">
+          <p className="jarvis-preview-head">Conversations proches, par certitude · la réponse arrive</p>
+          {job.preview.map((hit) => (
+            <button key={hit.conversationId} type="button" className="jarvis-result is-preview" onClick={() => onOpenResult(hit)}>
+              <span className="jarvis-result-head">
+                <strong>{hit.title}</strong>
+                <Certainty score={hit.score} />
+              </span>
+              <span className="jarvis-result-meta">{hit.projectName}</span>
+              {hit.reason ? <span className="jarvis-result-reason">{hit.reason}</span> : null}
+              <span className="jarvis-result-go">Ouvrir la conversation<Icon name="arrow-right" size={13} /></span>
+            </button>
+          ))}
+        </div>
       ) : null}
 
       {isRunning && exchange.jobId !== null ? (
@@ -391,6 +435,7 @@ function ExchangeView({ exchange, onCancel, onOpenResult, onRun, onState, onEdit
             <button key={result.conversationId} type="button" className="jarvis-result" onClick={() => onOpenResult(result)}>
               <span className="jarvis-result-head">
                 <strong>{result.title}</strong>
+                <Certainty score={result.score} />
                 <span className={`jarvis-status is-${result.status}`}>{STATUS_LABELS[result.status]}</span>
               </span>
               <span className="jarvis-result-meta">

@@ -136,7 +136,7 @@ test('l’onglet Usage montre qui a choisi le modèle de Jarvis, en combien de t
   expect(texts(view.container, '.usage-section')).toContain('Jarvis 16 questions')
   const [, paths, actions] = [...view.container.querySelectorAll('.usage-table')]
   expect([...paths!.querySelectorAll('tbody tr')].map((row) => texts(row, 'td'))).toEqual([
-    ['Haiku 5.5 seul', '12', '9,6 s', '1'],
+    ['Modèle rapide seul', '12', '9,6 s', '1'],
     ['Jev, puis Opus 5.5', '3', '41,2 s', '0'],
     ['Mode Rapide', '1', '—', '0'],
   ])

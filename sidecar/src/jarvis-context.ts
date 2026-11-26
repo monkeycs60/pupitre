@@ -62,6 +62,7 @@ export interface JarvisConversationEntry {
   running: { since: string; activity: string } | null;
   waiting: { question: string; options: NudgeAction[] } | null;
   semanticReason: string | null;
+  semanticScore: number | null;
   excerpts: JarvisExcerpt[];
 }
 
@@ -460,7 +461,7 @@ export class JarvisContextBuilder {
     }
 
     const rows = this.metadata([...tags.keys()]);
-    const semanticReasons = new Map(parts.semantic.map((hit) => [hit.conversation.id, hit.reason.trim() || null]));
+    const semanticHits = new Map(parts.semantic.map((hit) => [hit.conversation.id, hit]));
     const matched = this.matchedExcerpts(
       [...tags].filter(([, values]) => values.has("match") || values.has("current")).map(([id]) => id),
       parts.text.terms,
@@ -501,7 +502,8 @@ export class JarvisContextBuilder {
         tags: [...values],
         running,
         waiting,
-        semanticReason: semanticReasons.get(id) ?? null,
+        semanticReason: semanticHits.get(id)?.reason.trim() || null,
+        semanticScore: semanticHits.get(id)?.score ?? null,
         excerpts: [...excerpts.values()].sort((left, right) => left.id - right.id).slice(-MAX_EXCERPTS),
       });
     }
