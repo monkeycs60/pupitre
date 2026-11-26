@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { getQuotas, getSettings, updateSettings } from './api'
+import { getQuotas, getSettings, updateSettings, type Settings } from './api'
 import { reconnectDelayMs } from './backoff'
+import { retryUntilAvailable } from './startupRetry'
 import { webSocketUrl } from './transport'
 import {
   DEFAULT_QUOTA_THRESHOLDS,
@@ -17,6 +18,7 @@ const EMPTY_SNAPSHOT: QuotaSnapshot = { claude: null, codex: null, grok: null, r
 // Clés d'alertes déjà poussées, persistées pour ne pas re-notifier au rechargement.
 const NOTIFIED_KEY = 'pupitre.quota-notified'
 const NOTIFIED_MAX = 50
+const DISPLAYED_PROVIDERS_KEY = 'pupitre.quota-displayed-providers'
 
 function loadNotifiedKeys(): string[] {
   try {
@@ -41,17 +43,40 @@ export interface Quotas {
   visibleProviders: Provider[]
 }
 
+async function readSettingsOnceAvailable(signal: AbortSignal): Promise<Settings> {
+  const settings = await retryUntilAvailable(() => getSettings(signal), { cancelled: () => signal.aborted })
+  if (settings === null) throw new DOMException('Lecture des réglages annulée', 'AbortError')
+  return settings
+}
+
+function loadDisplayedProviders(): Provider[] {
+  try {
+    const raw = localStorage.getItem(DISPLAYED_PROVIDERS_KEY)
+    if (raw === null) return [...QUOTA_PROVIDERS]
+    const stored: unknown = JSON.parse(raw)
+    return displayedQuotaProviders({ quotaVisibleProviders: stored, quotaProviderOrder: stored })
+  } catch {
+    return [...QUOTA_PROVIDERS]
+  }
+}
+
 function useVisibleQuotaProviders(): Provider[] {
-  const [providers, setProviders] = useState<Provider[]>(() => [...QUOTA_PROVIDERS])
+  const [providers, setProviders] = useState<Provider[]>(loadDisplayedProviders)
 
   useEffect(() => {
     const controller = new AbortController()
-    void getSettings(controller.signal)
-      .then((settings) => setProviders(displayedQuotaProviders(settings)))
+    function show(next: Provider[]) {
+      setProviders(next)
+      try {
+        localStorage.setItem(DISPLAYED_PROVIDERS_KEY, JSON.stringify(next))
+      } catch {}
+    }
+    void readSettingsOnceAvailable(controller.signal)
+      .then((settings) => show(displayedQuotaProviders(settings)))
       .catch(() => {})
     function handleChange(event: Event) {
       const detail = (event as CustomEvent<unknown>).detail
-      setProviders(displayedQuotaProviders({ quotaVisibleProviders: detail, quotaProviderOrder: detail }))
+      show(displayedQuotaProviders({ quotaVisibleProviders: detail, quotaProviderOrder: detail }))
     }
     window.addEventListener(QUOTA_PROVIDERS_EVENT, handleChange)
     return () => {
@@ -86,7 +111,7 @@ export function useQuotas(): Quotas {
     notifiedRef.current ??= new Set(loadNotifiedKeys())
     const notified = notifiedRef.current
     const thresholds = loadQuotaThresholds(
-      () => getSettings(abortController.signal),
+      () => readSettingsOnceAvailable(abortController.signal),
       updateSettings,
       localStorage,
     ).catch((error: unknown) => {
