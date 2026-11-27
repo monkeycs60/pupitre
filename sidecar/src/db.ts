@@ -7,6 +7,7 @@ import {
   MESSAGE_COUNT_MIGRATION_KEY,
   OBSOLETE_MODELS_MIGRATION_KEY,
   SOL_61_MIGRATION_KEY,
+  MODEL_CATALOG_62_MIGRATION_KEY,
   PROJECT_LAUNCH_CONFIG_MIGRATION_KEY,
   QUALITY_FABLE_51_MIGRATION_KEY,
   SettingsStore,
@@ -783,6 +784,9 @@ export function openDb(dir: string = dataDir()): Database {
   if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(SOL_61_MIGRATION_KEY)) {
     migrateSol61(db);
   }
+  if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(MODEL_CATALOG_62_MIGRATION_KEY)) {
+    migrateModelCatalog62(db);
+  }
   if (!db.query("SELECT 1 AS present FROM settings WHERE key = ?").get(TICKET_AUDIT_YOLO_MIGRATION_KEY)) {
     db.exec(`
       UPDATE conversations
@@ -1176,6 +1180,44 @@ function migrateTrunkTickets(db: Database): void {
       db.query("DELETE FROM tickets WHERE id = ?").run(id);
     }
     new SettingsStore(db).set(TRUNK_TICKETS_MIGRATION_KEY, true);
+  })();
+}
+
+function migrateModelCatalog62(db: Database): void {
+  const settings = new SettingsStore(db);
+  const replacements = [
+    { provider: "claude", previous: "fable-5.1", model: "fable-5.2" },
+    { provider: "codex", previous: "gpt-6-astra", model: "gpt-6.2-astra" },
+  ];
+  const replaceConfig = (value: string | null): string | null => {
+    if (value === null) return null;
+    try {
+      const config = JSON.parse(value) as Record<string, unknown>;
+      const replacement = replacements.find((item) => item.provider === config?.provider && item.previous === config?.model);
+      return replacement ? JSON.stringify({ ...config, model: replacement.model }) : value;
+    } catch {
+      return value;
+    }
+  };
+  db.transaction(() => {
+    for (const table of ["presets", "workflows", "routines", "conversations", "subtasks"]) {
+      for (const replacement of replacements) {
+        db.query(`UPDATE ${table} SET model = ? WHERE provider = ? AND model = ?`)
+          .run(replacement.model, replacement.provider, replacement.previous);
+      }
+    }
+    const projects = db.query("SELECT id, default_launch_config, scout_launch_config, todo_launch_config FROM projects")
+      .all() as Array<Record<string, string | null>>;
+    const update = db.query("UPDATE projects SET default_launch_config = ?, scout_launch_config = ?, todo_launch_config = ? WHERE id = ?");
+    for (const project of projects) {
+      const columns = ["default_launch_config", "scout_launch_config", "todo_launch_config"] as const;
+      const configs = columns.map((column) => replaceConfig(project[column]));
+      if (columns.some((column, index) => configs[index] !== project[column])) update.run(...configs, project.id);
+    }
+    const audit = settings.get<Record<string, unknown>>("ticketAuditConfig");
+    const replacement = replacements.find((item) => item.provider === audit?.provider && item.previous === audit?.model);
+    if (replacement) settings.set("ticketAuditConfig", { ...audit, model: replacement.model });
+    settings.set(MODEL_CATALOG_62_MIGRATION_KEY, true);
   })();
 }
 

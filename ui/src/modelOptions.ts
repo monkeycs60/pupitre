@@ -27,8 +27,8 @@ export const PROVIDER_SHORT_LABELS: Record<Provider, string> = {
 }
 
 export const PROVIDER_MODELS = {
-  claude: ['fable-5.1', 'opus-5.5', 'sonnet-5.5', 'haiku-5.5'],
-  codex: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'],
+  claude: ['fable-5.2', 'opus-5.5', 'sonnet-5.5', 'haiku-5.5'],
+  codex: ['gpt-6.1-sol', 'gpt-6.2-sol', 'gpt-6.2-astra', 'gpt-6-luna'],
   grok: ['grok-4.6', 'grok-4.5'],
   reasonix: ['go41'],
 } as const satisfies Record<Provider, readonly string[]>
@@ -80,6 +80,7 @@ export const WORKFLOW_DEFAULTS = {
  * d'où cette table d'affichage. À tenir à jour à chaque sortie de modèle.
  */
 export const MODEL_LABELS: Record<string, string> = {
+  'fable-5.2': 'Fable 5.2',
   'fable-5.1': 'Fable 5.1',
   'fable-5': 'Fable 5',
   'opus-5.5': 'Opus 5.5',
@@ -90,6 +91,8 @@ export const MODEL_LABELS: Record<string, string> = {
   haiku: 'Haiku 4.5',
   'gpt-6-astra': 'GPT-6 Astra',
   'gpt-6.1-sol': 'GPT-6.1 Sol',
+  'gpt-6.2-sol': 'GPT-6.2 Sol',
+  'gpt-6.2-astra': 'GPT-6.2 Astra',
   'gpt-6-luna': 'GPT-6 Luna',
   'gpt-5.6-sol': 'GPT-5.6 Sol',
   'gpt-5.6-luna': 'GPT-5.6 Luna',
@@ -100,7 +103,7 @@ export const MODEL_LABELS: Record<string, string> = {
 }
 
 /** Modèles dont un lancement par inadvertance entame fortement le quota. */
-const CONFIRMED_MODELS: ReadonlySet<string> = new Set(['fable-5.1', 'fable-5', 'gpt-6-astra'])
+const CONFIRMED_MODELS: ReadonlySet<string> = new Set(['fable-5.2', 'fable-5.1', 'fable-5', 'gpt-6.2-astra', 'gpt-6-astra'])
 
 export function requiresLaunchConfirmation(model: string): boolean {
   return CONFIRMED_MODELS.has(model)
@@ -129,6 +132,7 @@ export const EFFORT_HINTS: Record<string, string> = {
  * n'apprendrait rien et ferait quatre fois le même bruit.
  */
 export const MODEL_HINTS: Record<string, string> = {
+  'fable-5.2': 'nouvelle génération',
   'fable-5.1': 'le plus capable',
   'fable-5': 'génération précédente',
   'opus-5.5': 'raisonnement profond',
@@ -139,6 +143,8 @@ export const MODEL_HINTS: Record<string, string> = {
   haiku: 'rapide et économe',
   'gpt-6-astra': 'le plus capable',
   'gpt-6.1-sol': 'proche d’Astra',
+  'gpt-6.2-sol': 'nouvelle génération',
+  'gpt-6.2-astra': 'nouvelle génération',
   'gpt-6-luna': 'rapide et économe',
   'gpt-5.6-sol': 'génération précédente',
   'gpt-5.6-luna': 'génération précédente',

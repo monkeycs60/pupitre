@@ -186,6 +186,18 @@ test("un prompt ressemblant à une option passe par stdin", async () => {
   expect(readFileSync(stdinFile, "utf8")).toContain('"text":"--danger"');
 });
 
+test("transmet Fable 5.2 et chacun de ses efforts au CLI", async () => {
+  const argsFile = join(mkdtempSync(join(tmpdir(), "pupitre-")), "args");
+  process.env.PUPITRE_CLAUDE_BIN = FAKE;
+  process.env.FAKE_CLAUDE_ARGS_FILE = argsFile;
+  for (const effort of ["low", "medium", "high", "xhigh", "max"]) {
+    await collect({ cwd: "/tmp", model: "fable-5.2", effort, prompt: "analyse", cliSessionId: null, permissionMode: "acceptEdits", images: [] });
+    const args = readFileSync(argsFile, "utf8");
+    expect(args).toContain("--model claude-fable-5-2");
+    expect(args).toContain(`--effort ${effort}`);
+  }
+});
+
 test("injecte une précision et une image dans le tour actif", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pupitre-"));
   const steerFile = join(dir, "steer");

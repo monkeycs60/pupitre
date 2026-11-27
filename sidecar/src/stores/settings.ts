@@ -10,6 +10,7 @@ export const SPEED_REVIEW_MIGRATION_KEY = "speed-review-follows-preset-v1";
 export const QUALITY_FABLE_51_MIGRATION_KEY = "quality-preset-fable-5-1-v1";
 export const OBSOLETE_MODELS_MIGRATION_KEY = "obsolete-models-gpt-6-opus-5-5-v1";
 export const SOL_61_MIGRATION_KEY = "gpt-6-sol-to-6-1-v1";
+export const MODEL_CATALOG_62_MIGRATION_KEY = "model-catalog-fable-5-2-codex-6-2-v1";
 export const PROJECT_LAUNCH_CONFIG_MIGRATION_KEY = "project-launch-config-v1";
 export const TICKET_AUDIT_YOLO_MIGRATION_KEY = "ticket-audit-yolo-v1";
 export const TRUNK_TICKETS_MIGRATION_KEY = "trunk-branch-tickets-v1";
@@ -27,6 +28,7 @@ const INTERNAL_KEYS = new Set([
   QUALITY_FABLE_51_MIGRATION_KEY,
   OBSOLETE_MODELS_MIGRATION_KEY,
   SOL_61_MIGRATION_KEY,
+  MODEL_CATALOG_62_MIGRATION_KEY,
   PROJECT_LAUNCH_CONFIG_MIGRATION_KEY,
   TICKET_AUDIT_YOLO_MIGRATION_KEY,
   TRUNK_TICKETS_MIGRATION_KEY,

@@ -97,13 +97,13 @@ test('confirme une passation Claude après une sélection dans le même sélecte
   // appartiennent à la conversation et ont leurs propres routes.
   expect(screen.queryByRole('button', { name: 'Réglages du tour' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Modèle' }))
-  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Fable 5.1' }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Fable 5.2' }))
   fireEvent.click(screen.getByRole('button', { name: 'Passer à claude' }))
 
   await waitFor(() => expect(handoffs).toEqual([nextConversation]))
   expect(handoffPayload).toEqual({
     provider: 'claude',
-    model: 'fable-5.1',
+    model: 'fable-5.2',
     effort: 'medium',
     speed: null,
   })
