@@ -19,6 +19,14 @@ export interface UiEventRow {
 export type JarvisUsagePath = "haiku" | "router" | "handoff" | "fast" | "orchestrate";
 const JARVIS_PATHS: JarvisUsagePath[] = ["haiku", "router", "handoff", "fast", "orchestrate"];
 
+export interface JarvisCostReport {
+  billedUsd: number;
+  subscriptionUsd: number;
+  questions: number;
+  daily: Array<{ day: string; questions: number; billedUsd: number; subscriptionUsd: number }>;
+  lines: Array<{ label: string; billing: "api" | "subscription"; calls: number; usd: number }>;
+}
+
 export interface UsageReport {
   since: string;
   until: string;
@@ -29,6 +37,7 @@ export interface UsageReport {
   jarvis: {
     questions: Array<{ path: JarvisUsagePath; count: number; failed: number; medianSeconds: number | null }>;
     actions: Array<{ kind: string; proposed: number; done: number; failed: number; ignored: number }>;
+    costs: JarvisCostReport;
   };
 }
 
@@ -188,6 +197,48 @@ export class UiEventStore {
       actions: [...actions]
         .map(([kind, counts]) => ({ kind, ...counts }))
         .sort((left, right) => right.proposed - left.proposed || right.done - left.done || left.kind.localeCompare(right.kind)),
+      costs: this.jarvisCosts(since, until),
+    };
+  }
+
+  private jarvisCosts(since: string, until: string): JarvisCostReport {
+    const rows = this.db.query("SELECT job_id, at, label, billing, usd FROM jarvis_costs WHERE at >= ? AND at <= ? ORDER BY at")
+      .all(since, until) as Array<{ job_id: string; at: string; label: string; billing: "api" | "subscription"; usd: number }>;
+    const days = new Map<string, { jobs: Set<string>; billedUsd: number; subscriptionUsd: number }>();
+    const lines = new Map<string, JarvisCostReport["lines"][number]>();
+    const jobs = new Set<string>();
+    let billedUsd = 0;
+    let subscriptionUsd = 0;
+    for (const row of rows) {
+      jobs.add(row.job_id);
+      const day = localDay(new Date(row.at));
+      const entry = days.get(day) ?? { jobs: new Set<string>(), billedUsd: 0, subscriptionUsd: 0 };
+      entry.jobs.add(row.job_id);
+      if (row.billing === "api") {
+        entry.billedUsd += row.usd;
+        billedUsd += row.usd;
+      } else {
+        entry.subscriptionUsd += row.usd;
+        subscriptionUsd += row.usd;
+      }
+      days.set(day, entry);
+      const key = `${row.billing} ${row.label}`;
+      const line = lines.get(key) ?? { label: row.label, billing: row.billing, calls: 0, usd: 0 };
+      line.calls += 1;
+      line.usd += row.usd;
+      lines.set(key, line);
+    }
+    return {
+      billedUsd,
+      subscriptionUsd,
+      questions: jobs.size,
+      daily: [...days].map(([day, entry]) => ({
+        day,
+        questions: entry.jobs.size,
+        billedUsd: entry.billedUsd,
+        subscriptionUsd: entry.subscriptionUsd,
+      })),
+      lines: [...lines.values()].sort((left, right) => right.usd - left.usd || left.label.localeCompare(right.label)),
     };
   }
 

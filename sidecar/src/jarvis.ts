@@ -648,7 +648,7 @@ export class JarvisService {
         return null;
       })
       .then((verdict) => {
-        if (verdict?.usage) record.job.costs.push(apiCost(verdict.usage));
+        if (verdict?.usage) this.charge(record, apiCost(verdict.usage));
         return (run.outcome = { verdict, ms: this.now() - started });
       });
     return run;
@@ -676,7 +676,7 @@ export class JarvisService {
         cwd,
         signal: AbortSignal.any(signals),
         onText: extra.onText,
-        onCost: (cost) => record.job.costs.push(cost),
+        onCost: (cost) => this.charge(record, cost),
       });
     } catch (error) {
       this.ensureRunning(record);
@@ -703,6 +703,18 @@ export class JarvisService {
     return sanitizeDraft(parsed, context, (projectId, key) => this.ticketKey(projectId, key));
   }
 
+  private charge(record: JobRecord, cost: JarvisCost): void {
+    record.job.costs.push(cost);
+    try {
+      this.deps.db.query(`
+        INSERT INTO jarvis_costs (job_id, at, label, billing, input_tokens, output_tokens, usd)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(record.job.id, new Date(this.now()).toISOString(), cost.label, cost.billing, cost.inputTokens, cost.outputTokens, cost.usd);
+    } catch (error) {
+      console.error("[jarvis] coût non enregistré", error);
+    }
+  }
+
   private ticketKey(projectId: string, key: string): string | null {
     const row = this.deps.db.query("SELECT key FROM tickets WHERE project_id = ? AND UPPER(key) = UPPER(?)")
       .get(projectId, key.trim()) as { key: string } | null;
@@ -713,7 +725,7 @@ export class JarvisService {
     const timeoutMs = this.deps.semanticTimeoutMs ?? SEMANTIC_TIMEOUT_MS;
     const search = this.deps.semanticSearch!.search(question, projectId)
       .then((response) => {
-        for (const usage of response.usage ?? []) record.job.costs.push(apiCost(usage));
+        for (const usage of response.usage ?? []) this.charge(record, apiCost(usage));
         return { hits: response.results };
       })
       .catch((error: unknown) => ({

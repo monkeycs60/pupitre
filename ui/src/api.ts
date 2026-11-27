@@ -251,6 +251,13 @@ export interface UsageReport {
   jarvis: {
     questions: Array<{ path: 'haiku' | 'router' | 'handoff' | 'fast' | 'orchestrate'; count: number; failed: number; medianSeconds: number | null }>
     actions: Array<{ kind: string; proposed: number; done: number; failed: number; ignored: number }>
+    costs?: {
+      billedUsd: number
+      subscriptionUsd: number
+      questions: number
+      daily: Array<{ day: string; questions: number; billedUsd: number; subscriptionUsd: number }>
+      lines: Array<{ label: string; billing: 'api' | 'subscription'; calls: number; usd: number }>
+    }
   }
 }
 export const getUsageReport = (days: number, signal?: AbortSignal): Promise<UsageReport> => fetchJson(`/api/usage?days=${days}`, { signal })

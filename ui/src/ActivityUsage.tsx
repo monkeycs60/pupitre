@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { getUsageReport, type UsageReport } from './api'
 import { absoluteCodeDate, relativeCodeDate } from './codeFormat'
+import { dollars } from './dollars'
 import { USAGE_AREAS } from './usageCatalog'
 
 const USAGE_PERIODS = [7, 30, 90] as const
 type UsagePeriod = (typeof USAGE_PERIODS)[number]
 type UsageFeatureCount = UsageReport['catalog'][number]
+type JarvisCosts = NonNullable<UsageReport['jarvis']['costs']>
 
 const JARVIS_PATHS: Record<UsageReport['jarvis']['questions'][number]['path'], string> = {
   haiku: 'Modèle rapide seul',
@@ -90,6 +92,48 @@ function UsageFeatures({ catalog }: { catalog: UsageFeatureCount[] }) {
   </>
 }
 
+function UsageJarvisCosts({ costs }: { costs: JarvisCosts }) {
+  if (costs.questions === 0) {
+    return <p className="usage-note">Aucun coût enregistré sur la période : le suivi a commencé le 27 novembre 2026.</p>
+  }
+  const days = [...costs.daily].reverse()
+  return <>
+    <p className="usage-note">
+      {dollars(costs.billedUsd)} facturés pour {plural(costs.questions, 'question')}, soit {dollars(costs.billedUsd / costs.questions)} par question
+      {costs.subscriptionUsd > 0 ? `, plus ≈ ${dollars(costs.subscriptionUsd)} couverts par l’abonnement Claude` : ''}.
+    </p>
+    <table className="usage-table">
+      <thead>
+        <tr><th>Jour</th><th className="is-number">Questions</th><th className="is-number">Facturé</th><th className="is-number">Abonnement</th></tr>
+      </thead>
+      <tbody>
+        {days.map((day) => (
+          <tr key={day.day}>
+            <td>{capitalize(new Date(`${day.day}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }))}</td>
+            <td className="is-number">{formatCount(day.questions)}</td>
+            <td className="is-number">{dollars(day.billedUsd)}</td>
+            <td className="is-number is-muted">{day.subscriptionUsd > 0 ? `≈ ${dollars(day.subscriptionUsd)}` : '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    <table className="usage-table">
+      <thead>
+        <tr><th>Poste</th><th className="is-number">Appels</th><th className="is-number">Coût</th></tr>
+      </thead>
+      <tbody>
+        {costs.lines.map((line) => (
+          <tr key={`${line.billing} ${line.label}`}>
+            <td>{line.label}{line.billing === 'subscription' ? <span className="is-muted"> · abonnement</span> : null}</td>
+            <td className="is-number">{formatCount(line.calls)}</td>
+            <td className="is-number">{line.billing === 'subscription' ? `≈ ${dollars(line.usd)}` : dollars(line.usd)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </>
+}
+
 function UsageJarvis({ jarvis }: { jarvis: UsageReport['jarvis'] }) {
   const total = jarvis.questions.reduce((sum, row) => sum + row.count, 0)
   const seconds = (value: number | null) => value === null ? '—' : `${value.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} s`
@@ -128,6 +172,10 @@ function UsageJarvis({ jarvis }: { jarvis: UsageReport['jarvis'] }) {
         </tbody>
       </table>
     ) : <p className="usage-note">Aucune action proposée sur la période.</p>}
+    {jarvis.costs ? <>
+      <h3 className="usage-subsection">Coût</h3>
+      <UsageJarvisCosts costs={jarvis.costs} />
+    </> : null}
   </>
 }
 
@@ -167,7 +215,7 @@ export function ActivityUsage() {
         {interactions
           ? <UsageFeatures catalog={report.catalog} />
           : <p className="usage-note">Aucune interaction mesurée sur la période : rien à conclure sur les fonctions suivies.</p>}
-        {report.jarvis.questions.length > 0 ? <UsageJarvis jarvis={report.jarvis} /> : null}
+        {report.jarvis.questions.length > 0 || (report.jarvis.costs?.questions ?? 0) > 0 ? <UsageJarvis jarvis={report.jarvis} /> : null}
         <h2 className="usage-section">Travail de fond</h2>
         {report.background.length > 0 ? (
           <table className="usage-table">

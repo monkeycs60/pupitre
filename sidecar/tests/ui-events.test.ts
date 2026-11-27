@@ -172,7 +172,37 @@ test("le rapport range les questions à Jarvis par chemin, avec leur durée méd
     { kind: "new-conversation", proposed: 1, done: 0, failed: 0, ignored: 0 },
     { kind: "send-message", proposed: 1, done: 0, failed: 0, ignored: 1 },
   ]);
-  expect(store.usage(7, october(10)).jarvis).toEqual({ questions: [], actions: [] });
+  expect(store.usage(7, october(10)).jarvis).toEqual({
+    questions: [],
+    actions: [],
+    costs: { billedUsd: 0, subscriptionUsd: 0, questions: 0, daily: [], lines: [] },
+  });
+});
+
+test("le coût de Jarvis se cumule par jour local et par poste, l'abonnement à part", () => {
+  const { db, store } = setup();
+  const insert = db.query("INSERT INTO jarvis_costs (job_id, at, label, billing, input_tokens, output_tokens, usd) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  insert.run("j1", october(27, 9).toISOString(), "Qwen 3.8 · réponse", "api", 12_000, 2_000, 0.015);
+  insert.run("j1", october(27, 9).toISOString(), "Jev · tri de la demande", "api", 400, 20, 0.00002);
+  insert.run("j2", october(28, 23, 30).toISOString(), "Qwen 3.8 · réponse", "api", 11_000, 1_800, 0.013);
+  insert.run("j2", october(28, 23, 30).toISOString(), "Opus 5.5 · plan", "subscription", 20, 900, 0.21);
+  insert.run("j3", october(28, 0, 10).toISOString(), "Qwen 3.8 · réponse", "api", 9_000, 1_500, 0.011);
+  insert.run("j0", october(10).toISOString(), "Qwen 3.8 · réponse", "api", 9_000, 1_500, 0.5);
+
+  const { costs } = store.usage(7, october(28, 23, 59)).jarvis;
+
+  expect(costs.questions).toBe(3);
+  expect(costs.billedUsd).toBeCloseTo(0.03902, 10);
+  expect(costs.subscriptionUsd).toBeCloseTo(0.21, 10);
+  expect(costs.daily.map((day) => [day.day, day.questions, Number(day.billedUsd.toFixed(5)), day.subscriptionUsd])).toEqual([
+    ["2026-10-27", 1, 0.01502, 0],
+    ["2026-10-28", 2, 0.024, 0.21],
+  ]);
+  expect(costs.lines.map((line) => [line.label, line.billing, line.calls, Number(line.usd.toFixed(5))])).toEqual([
+    ["Opus 5.5 · plan", "subscription", 1, 0.21],
+    ["Qwen 3.8 · réponse", "api", 3, 0.039],
+    ["Jev · tri de la demande", "api", 1, 0.00002],
+  ]);
 });
 
 test("sans compteur d'appels automatiques, le travail de fond est vide", () => {

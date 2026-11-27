@@ -145,3 +145,41 @@ test('l’onglet Usage montre qui a choisi le modèle de Jarvis, en combien de t
     ['Archiver', '2', '0', '1', '1'],
   ])
 })
+
+test('l’onglet Usage chiffre ce que Jarvis a coûté, jour par jour et poste par poste', async () => {
+  const today = localDay(new Date())
+  serve({
+    30: usageReport(30, USED, { 0: 3 }, [], {
+      questions: [{ path: 'haiku', count: 3, failed: 0, medianSeconds: 2.4 }],
+      actions: [],
+      costs: {
+        billedUsd: 0.039,
+        subscriptionUsd: 0.21,
+        questions: 3,
+        daily: [
+          { day: addDays(today, -1), questions: 1, billedUsd: 0.015, subscriptionUsd: 0 },
+          { day: today, questions: 2, billedUsd: 0.024, subscriptionUsd: 0.21 },
+        ],
+        lines: [
+          { label: 'Opus 5.5 · plan', billing: 'subscription', calls: 1, usd: 0.21 },
+          { label: 'Qwen 3.8 · réponse', billing: 'api', calls: 3, usd: 0.039 },
+        ],
+      },
+    }),
+  })
+  const view = render(createElement(ActivityReportView, { initialTab: 'usage', onOpenConversation: () => {} }))
+  await waitFor(() => expect(view.container.querySelector('.usage-subsection')?.textContent).toBe('Coût'))
+
+  expect(view.container.querySelector('.usage-subsection + .usage-note')?.textContent)
+    .toBe('0,039 $ facturés pour 3 questions, soit 0,013 $ par question, plus ≈ 0,21 $ couverts par l’abonnement Claude.')
+  const tables = [...view.container.querySelectorAll('.usage-table')]
+  const [days, lines] = tables.slice(-2)
+  expect([...days!.querySelectorAll('tbody tr')].map((row) => texts(row, 'td').slice(1))).toEqual([
+    ['2', '0,024 $', '≈ 0,21 $'],
+    ['1', '0,015 $', '—'],
+  ])
+  expect([...lines!.querySelectorAll('tbody tr')].map((row) => texts(row, 'td'))).toEqual([
+    ['Opus 5.5 · plan · abonnement', '1', '≈ 0,21 $'],
+    ['Qwen 3.8 · réponse', '3', '0,039 $'],
+  ])
+})

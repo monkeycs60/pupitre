@@ -183,6 +183,8 @@ a.activity-outcome:focus-visible { outline: 2px solid var(--accent); outline-off
 .usage-table .is-number { text-align: right; font-variant-numeric: tabular-nums; }
 .usage-table .is-muted { color: var(--text-muted); white-space: nowrap; }
 .usage-note { margin: 0 0 26px; font-size: var(--text-base); color: var(--text-muted); }
+.usage-subsection { margin: 0 0 6px; font-size: var(--text-base); font-weight: 600; color: var(--text-strong); }
+.usage-subsection + .usage-note { margin-bottom: 12px; }
 
 @media (max-width: 900px) {
   .agenda-body { grid-template-columns: 1fr; }

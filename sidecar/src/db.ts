@@ -613,6 +613,17 @@ export function openDb(dir: string = dataDir()): Database {
       props TEXT NULL CHECK (props IS NULL OR json_valid(props))
     );
     CREATE INDEX IF NOT EXISTS idx_ui_events_name_at ON ui_events(name, at);
+    CREATE TABLE IF NOT EXISTS jarvis_costs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id TEXT NOT NULL,
+      at TEXT NOT NULL,
+      label TEXT NOT NULL,
+      billing TEXT NOT NULL CHECK (billing IN ('api', 'subscription')),
+      input_tokens INTEGER NOT NULL,
+      output_tokens INTEGER NOT NULL,
+      usd REAL NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_jarvis_costs_at ON jarvis_costs(at);
   `);
   migrateProjectChangelogEntries(db);
   dropEventsForeignKey(db);

@@ -1067,6 +1067,9 @@ test("le coût de chaque appel payant s'ajoute au job : recherche, Jev, puis le 
   expect(rerank.usd).toBeCloseTo((4_000 * 0.35 + 300 * 0.75) / 1_000_000, 12);
   expect(job.costs.find((cost) => cost.label.startsWith("Jev"))!.usd).toBeCloseTo(300 * 0.042 / 1_000_000, 12);
   expect(job.costs.every((cost) => cost.billing === "api")).toBe(true);
+  const stored = f.db.query("SELECT job_id, label, usd FROM jarvis_costs ORDER BY id").all() as Array<{ job_id: string; label: string; usd: number }>;
+  expect(stored.map((row) => row.job_id)).toEqual(job.costs.map(() => job.id));
+  expect(stored.map((row) => row.label)).toEqual(job.costs.map((cost) => cost.label));
 });
 
 test("Cerebras facture les jetons annoncés au tarif de Qwen 3.8", async () => {

@@ -1,5 +1,6 @@
 import { track } from './analytics'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { dollars } from './dollars'
 import { Icon, type IconName } from './Icon'
 import {
   actionEffect,
@@ -99,12 +100,6 @@ function formatTime(value: string): string {
 
 function seconds(ms: number): string {
   return `${(ms / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} s`
-}
-
-function dollars(usd: number): string {
-  if (usd === 0) return '0 $'
-  if (usd < 0.0001) return '< 0,0001 $'
-  return `${Number(usd.toPrecision(2)).toLocaleString('fr-FR', { maximumFractionDigits: 6 })} $`
 }
 
 function billed(costs: JarvisCost[]): number {
